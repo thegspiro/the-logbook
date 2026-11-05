@@ -30,7 +30,9 @@ import {
   Info,
   Printer,
   Search,
+  ShieldCheck,
 } from 'lucide-react';
+import ChiefOverrideControl from '../components/training/ChiefOverrideControl';
 import { trainingService } from '../services/api';
 import type { ComplianceMatrix } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
@@ -195,6 +197,10 @@ const ComplianceMatrixTab: React.FC = () => {
   const [onlyBehind, setOnlyBehind] = useState(() => searchParams.get('status') === 'noncompliant');
   const [classFilter, setClassFilter] = useState<ClassFilter>(() => parseClassFilter(searchParams.get('class')));
 
+  // Bumped after a Chief's override changes a member's standing.
+  const [reloadKey, setReloadKey] = useState(0);
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
@@ -212,7 +218,7 @@ const ComplianceMatrixTab: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
   const clearStatusFilter = useCallback(() => {
     setOnlyBehind(false);
@@ -429,8 +435,12 @@ const ComplianceMatrixTab: React.FC = () => {
     cell: EvaluatedCell;
     /** Present only where there is a real page to open. */
     href?: string;
+    memberId: string;
+    memberName: string;
   }> = activeMember
     ? activeMember.cells.map((c) => ({
+        memberId: activeMember.member.user_id,
+        memberName: activeMember.member.member_name,
         key: c.cell.requirement_id,
         title: c.cell.requirement_name,
         // The date is the row's last column here, so it must not repeat in
@@ -443,6 +453,8 @@ const ComplianceMatrixTab: React.FC = () => {
         if (!c) return [];
         return [
           {
+            memberId: m.member.user_id,
+            memberName: m.member.member_name,
             key: m.member.user_id,
             title: m.member.member_name,
             sub: [m.member.membership_type, c.dateLabel].filter(Boolean).join(' · '),
@@ -859,6 +871,22 @@ const ComplianceMatrixTab: React.FC = () => {
                             <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                             {row.cell.waiverNote}
                           </p>
+                        )}
+                        {row.cell.overrideNote && (
+                          <p className="alert-info mt-2 flex items-center gap-1.5 px-2.5 py-1.5 text-xs">
+                            <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                            {row.cell.overrideNote}
+                          </p>
+                        )}
+                        {row.cell.requirement?.can_override && (
+                          <ChiefOverrideControl
+                            requirementId={row.cell.cell.requirement_id}
+                            memberId={row.memberId}
+                            memberName={row.memberName}
+                            windowStart={row.cell.cell.window_start}
+                            windowEnd={row.cell.cell.window_end}
+                            onChanged={reload}
+                          />
                         )}
                       </div>
                     ))

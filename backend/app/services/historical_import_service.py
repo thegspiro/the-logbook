@@ -13,7 +13,7 @@ import copy
 import csv
 import io
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Tuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -30,6 +30,7 @@ from app.models.admin_hours import (
     AdminHoursEntryMethod,
     AdminHoursEntryStatus,
 )
+from app.models.event import Event, EventType
 from app.models.historical_import import (
     HistoricalImport,
     HistoricalImportRow,
@@ -43,8 +44,12 @@ from app.models.shift_history_import import (
     ShiftHistoryImportStatus,
 )
 from app.models.training import (
+    RequirementType,
     TrainingCourse,
     TrainingRecord,
+    TrainingRequirement,
+    TrainingSession,
+    TrainingSessionRequirement,
     TrainingStatus,
     TrainingType,
 )
@@ -979,6 +984,29 @@ class HistoricalImportService:
             if action is not None and action not in engine.UNMATCHED_ACTIONS:
                 raise ValueError("Choose to import or skip the unmatched rows.")
             current.unmatched_provider_action = action
+        drill_column = payload.get("drill_column")
+        if drill_column is not None:
+            if drill_column and drill_column not in headers:
+                raise ValueError(f"'{drill_column}' is not a column in the file.")
+            current.drill_column = str(drill_column)
+        if payload.get("drill_min_members") is not None:
+            current.drill_min_members = min(
+                max(int(payload["drill_min_members"]), 1),
+                engine.MAX_DRILL_MIN_MEMBERS,
+            )
+        if payload.get("drill_requirement_ids") is not None:
+            wanted = list(
+                dict.fromkeys(str(i) for i in payload["drill_requirement_ids"])
+            )
+            options = {
+                r.id
+                for r in await self._attendance_requirements(record.organization_id)
+            }
+            if any(i not in options for i in wanted):
+                raise ValueError(
+                    "Choose session-attendance requirements of this department."
+                )
+            current.drill_requirement_ids = wanted
         changes = payload.get("subject_courses")
         if changes:
             course_ids = {c.id for c in await self._courses(record.organization_id)}
@@ -1332,6 +1360,327 @@ class HistoricalImportService:
             org_id,
         )
         return counts
+
+    # ------------------------------------------------------------------
+    # Company drills: held training sessions from the CompanyDrill rows
+    # ------------------------------------------------------------------
+
+    async def _attendance_requirements(
+        self, organization_id: str
+    ) -> List[TrainingRequirement]:
+        result = await self.db.execute(
+            select(TrainingRequirement)
+            .where(
+                TrainingRequirement.organization_id == str(organization_id),
+                TrainingRequirement.requirement_type
+                == RequirementType.SESSION_ATTENDANCE,
+                TrainingRequirement.active.is_(True),
+            )
+            .order_by(TrainingRequirement.name)
+        )
+        return list(result.scalars().all())
+
+    async def _drill_days(
+        self, record: HistoricalImport
+    ) -> Tuple[engine.TrainingSettings, List[engine.DrillDay]]:
+        """Every date the CompanyDrill rows name, oldest first.
+
+        Read from every training row, imported or not: the drills attach the
+        records the training step wrote, so a row already imported is exactly
+        the one that matters here.
+        """
+        training = self.training_settings(record)
+        if not training.drill_column:
+            return training, []
+        rows, routings = await self.route(record)
+        raw_by_id = {r.id: r.raw for r in rows}
+        members = await self._member_resolver(record)
+        days: Dict[date, engine.DrillDay] = {}
+        for routing in routings:
+            for item in routing.items:
+                if item.record_type not in engine.TRAINING_TYPES_ROUTED:
+                    continue
+                raw = raw_by_id.get(item.row_id, {})
+                if item.local_date is None or not engine.is_drill_row(raw, training):
+                    continue
+                resolution = members.resolve(raw, item)
+                if resolution is None:
+                    continue
+                day = days.setdefault(
+                    item.local_date, engine.DrillDay(day=item.local_date)
+                )
+                day.member_keys.add(resolution.key)
+                day.source_ids.append((item.source_id, resolution.key))
+                if item.start_cell:
+                    day.start_cells.append(item.start_cell)
+                day.minutes.append(item.minutes)
+        return training, sorted(days.values(), key=lambda d: d.day)
+
+    async def _ledger(
+        self, record: HistoricalImport, source_ids: List[str], kind: str
+    ) -> Dict[str, str]:
+        """source_id -> record_id for this source system's ledger entries."""
+        found: Dict[str, str] = {}
+        for start in range(0, len(source_ids), 1000):
+            result = await self.db.execute(
+                select(
+                    ImportedSourceRecord.source_id, ImportedSourceRecord.record_id
+                ).where(
+                    ImportedSourceRecord.organization_id == record.organization_id,
+                    ImportedSourceRecord.source_system == record.source_system,
+                    ImportedSourceRecord.record_kind == kind,
+                    ImportedSourceRecord.source_id.in_(
+                        source_ids[start : start + 1000]
+                    ),
+                )
+            )
+            found.update({str(s): str(r) for s, r in result.all()})
+        return found
+
+    async def drill_preview(
+        self, record: HistoricalImport, *, offset: int = 0, limit: int = 100
+    ) -> Dict[str, Any]:
+        training, days = await self._drill_days(record)
+        qualifying = [d for d in days if d.qualifies(training.drill_min_members)]
+        created = await self._ledger(
+            record,
+            [engine.drill_source_id(d.day) for d in qualifying],
+            ImportedRecordKind.TRAINING_SESSION.value,
+        )
+        results = record.results if isinstance(record.results, dict) else {}
+        training_committed = isinstance(results.get("training"), dict)
+        newest_first = list(reversed(qualifying))
+        return {
+            "settings": training.to_stored(),
+            "headers": list(record.headers or []),
+            "drill_rows": sum(len(d.source_ids) for d in days),
+            "drill_dates": len(days),
+            "qualifying_dates": len(qualifying),
+            "qualifying_rows": sum(len(d.source_ids) for d in qualifying),
+            "sessions_created": len(created),
+            "dates": [
+                {
+                    "date": d.day,
+                    "members": len(d.member_keys),
+                    "session_created": engine.drill_source_id(d.day) in created,
+                }
+                for d in newest_first[offset : offset + limit]
+            ],
+            "requirements": [
+                {
+                    "id": r.id,
+                    "name": r.name,
+                    "required_attendance_pct": r.required_attendance_pct,
+                }
+                for r in await self._attendance_requirements(record.organization_id)
+            ],
+            "training_committed": training_committed,
+            "can_commit": training_committed
+            and bool(qualifying)
+            and bool(training.drill_requirement_ids),
+            "result": results.get("drills"),
+        }
+
+    async def commit_drills(
+        self, organization_id: str, import_id: str, committed_by: str
+    ) -> Dict[str, int]:
+        """Make each qualifying drill date a held session and attach its records.
+
+        Runs after the training step, whose records it attaches: one past,
+        finalized training session per date, linked to the chosen
+        session-attendance requirements, and each member's imported record of
+        that date pointed at it by ``source_event_id``, which is how the
+        attendance rule finds who attended. Ledgered per date, so running it
+        again creates nothing twice; it re-links the sessions it made to the
+        requirements chosen now, and attaches records imported since.
+        """
+        record = await self.get(organization_id, import_id, for_update=True)
+        results = (
+            copy.deepcopy(record.results) if isinstance(record.results, dict) else {}
+        )
+        if not isinstance(results.get("training"), dict):
+            raise HistoricalImportNotReady(
+                "Import the training rows first: the drills attach the records "
+                "that step writes."
+            )
+        training, days = await self._drill_days(record)
+        qualifying = [d for d in days if d.qualifies(training.drill_min_members)]
+        if not qualifying:
+            raise HistoricalImportNotReady(
+                "No drill date has enough members to count as a held drill."
+            )
+        valid = {
+            r.id for r in await self._attendance_requirements(record.organization_id)
+        }
+        requirement_ids = [i for i in training.drill_requirement_ids if i in valid]
+        if not requirement_ids:
+            raise HistoricalImportNotReady(
+                "Choose the session-attendance requirements the drills count toward."
+            )
+
+        org_id = record.organization_id
+        now = datetime.now(timezone.utc)
+        tz = ZoneInfo(record.timezone)
+        sessions = await self._ledger(
+            record,
+            [engine.drill_source_id(d.day) for d in qualifying],
+            ImportedRecordKind.TRAINING_SESSION.value,
+        )
+        record_ids = await self._ledger(
+            record,
+            [sid for d in qualifying for sid, _ in d.source_ids],
+            ImportedRecordKind.TRAINING_RECORD.value,
+        )
+        counts = {"sessions_created": 0, "sessions_relinked": 0, "records_attached": 0}
+        note = f"Imported from {record.source_filename}"
+        for day in qualifying:
+            source_id = engine.drill_source_id(day.day)
+            session_id = sessions.get(source_id)
+            if session_id is None:
+                session = self._drill_session(
+                    org_id, day, tz, now, str(committed_by), note
+                )
+                self.db.add(
+                    ImportedSourceRecord(
+                        id=generate_uuid(),
+                        organization_id=org_id,
+                        source_system=record.source_system,
+                        source_id=source_id,
+                        record_kind=ImportedRecordKind.TRAINING_SESSION.value,
+                        record_id=session.id,
+                        historical_import_id=record.id,
+                    )
+                )
+                await self.db.flush()
+                session_id = session.id
+                event_id = session.event_id
+                counts["sessions_created"] += 1
+            else:
+                existing = await self.db.get(TrainingSession, session_id)
+                if existing is None or existing.organization_id != org_id:
+                    # Deleted since: the ledger keeps it from being recreated
+                    # behind the department's back.
+                    continue
+                event_id = existing.event_id
+                counts["sessions_relinked"] += 1
+            await self.db.execute(
+                delete(TrainingSessionRequirement).where(
+                    TrainingSessionRequirement.session_id == session_id
+                )
+            )
+            for requirement_id in requirement_ids:
+                self.db.add(
+                    TrainingSessionRequirement(
+                        organization_id=org_id,
+                        session_id=session_id,
+                        requirement_id=requirement_id,
+                    )
+                )
+            counts["records_attached"] += await self._attach_drill_records(
+                org_id,
+                event_id,
+                [record_ids[sid] for sid, _ in day.source_ids if sid in record_ids],
+            )
+            await self.db.flush()
+
+        results["drills"] = {
+            **counts,
+            "requirement_ids": requirement_ids,
+            "committed_at": now.isoformat(),
+            "committed_by": str(committed_by),
+        }
+        record.results = results
+        await self.db.commit()
+        logger.info(
+            "Historical import {} made {} drill sessions for org {}",
+            record.id,
+            counts["sessions_created"],
+            org_id,
+        )
+        return counts
+
+    def _drill_session(
+        self,
+        org_id: str,
+        day: engine.DrillDay,
+        tz: ZoneInfo,
+        now: datetime,
+        created_by: str,
+        note: str,
+    ) -> TrainingSession:
+        """A held drill: a past Training event with its attendance closed."""
+        starts = [
+            t for t in (shift_engine.parse_clock(c) for c in day.start_cells) if t
+        ]
+        # The drill's evening as the members logged it; 19:00 when nobody
+        # wrote a time. Only the date grades the requirement.
+        start_local = datetime.combine(day.day, min(starts) if starts else time(19))
+        start = start_local.replace(tzinfo=tz).astimezone(timezone.utc)
+        minutes = sorted(day.minutes)
+        typical = minutes[len(minutes) // 2] if minutes else 120
+        event = Event(
+            id=generate_uuid(),
+            organization_id=org_id,
+            title="Company Drill",
+            description=note,
+            event_type=EventType.TRAINING,
+            start_datetime=start,
+            end_datetime=start + timedelta(minutes=max(typical, 1)),
+            requires_rsvp=False,
+            send_reminders=False,
+            created_by=created_by,
+            attendance_finalized_at=now,
+            attendance_finalized_by=created_by,
+        )
+        self.db.add(event)
+        session = TrainingSession(
+            id=generate_uuid(),
+            organization_id=org_id,
+            event_id=event.id,
+            course_name="Company Drill",
+            training_type=TrainingType.CONTINUING_EDUCATION,
+            credit_hours=round(typical / 60, 2),
+            auto_create_records=False,
+            is_finalized=True,
+            finalized_at=now,
+            finalized_by=created_by,
+            created_by=created_by,
+        )
+        self.db.add(session)
+        return session
+
+    async def _attach_drill_records(
+        self, org_id: str, event_id: str, record_ids: List[str]
+    ) -> int:
+        """Point a drill's imported records at its event; how many were.
+
+        One record per member per event (uq_training_record_event_user): a
+        member with two rows for the evening attended once, so their second
+        record stays unattached. A record already attached to another event
+        is left where it is.
+        """
+        if not record_ids:
+            return 0
+        result = await self.db.execute(
+            select(TrainingRecord)
+            .where(
+                TrainingRecord.organization_id == org_id,
+                TrainingRecord.id.in_(record_ids),
+            )
+            .order_by(TrainingRecord.id)
+        )
+        records = list(result.scalars().all())
+        taken = {str(r.user_id) for r in records if r.source_event_id == event_id}
+        attached = 0
+        for training_record in records:
+            if training_record.source_event_id is not None:
+                continue
+            if str(training_record.user_id) in taken:
+                continue
+            training_record.source_event_id = event_id
+            taken.add(str(training_record.user_id))
+            attached += 1
+        return attached
 
     # ------------------------------------------------------------------
     # Members, shared by the administrative and training steps

@@ -66,6 +66,7 @@ from app.models.inventory import (
     InventoryLabelPrint,
     InventoryLot,
     InventoryLotRecall,
+    InventoryNfcScanAction,
     InventoryVendor,
     InventoryVendorContact,
     IssuanceAllowance,
@@ -108,6 +109,7 @@ from app.models.user import (
 )
 from app.schemas.inventory import is_inspection_type
 from app.schemas.user import resolve_profile_visibility
+from app.services.inventory_sightings import add_sighting, record_creation_sightings
 from app.utils.color_names import canonical_color, normalize_color
 from app.utils.garment_styles import (
     FIT_NEUTRAL,
@@ -119,6 +121,7 @@ from app.utils.garment_styles import (
     style_combinations,
 )
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
+from app.utils.item_dates import item_date_error, touches_item_dates
 from app.utils.label_renderer import (
     SYMBOLOGY_CODE128,
     LabelSpec,
@@ -129,6 +132,7 @@ from app.utils.label_renderer import (
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates, reject_null_for_required
 from app.utils.name_matching import best_matches, normalize_name
+from app.utils.org_locks import INVENTORY_CATEGORY_NAMES, lock_organization_scope
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.org_timezone import resolve_org_today, scheduling_timezone
 from app.utils.sql_results import rows_affected
@@ -136,6 +140,13 @@ from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # How many of a low-stock category's items a report names.
 LOW_STOCK_ITEMS_PER_CATEGORY = 5
+
+# Not quoting the name: a 255-character name would push the detail past
+# sanitize_error_message's length cap and the officer would read nothing.
+CATEGORY_NAME_TAKEN = (
+    "A category with this name already exists at this level. "
+    "Choose a different name."
+)
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -1013,6 +1024,113 @@ class InventoryService:
     # Category Management
     # ============================================
 
+    @staticmethod
+    def _category_sibling_key(
+        name: Optional[str], parent_id: Any, item_type: Any
+    ) -> Tuple[str, str, bool]:
+        """What makes two categories siblings with the same name.
+
+        Same parent (top level counts as one parent), same domain, and the
+        name trimmed and case-folded — "Radios" and " radios" read as one
+        category in a picker. The domain is medical or gear, not the exact
+        item type: the gear page lists every non-medical type together, so a
+        "Radios" filed as electronics and one filed as equipment would sit side
+        by side there, while the medical page never shows a gear row at all.
+        """
+        try:
+            medical = ItemType(InventoryService._enum_value(item_type)) in (
+                MEDICAL_ITEM_TYPES
+            )
+        except ValueError:
+            medical = False
+        return (
+            (name or "").strip().casefold(),
+            str(parent_id) if parent_id else "",
+            medical,
+        )
+
+    async def _assert_category_name_free(
+        self,
+        organization_id: UUID | str,
+        name: Optional[str],
+        parent_id: Any,
+        item_type: Any,
+        exclude_id: Optional[str] = None,
+    ) -> None:
+        """Refuse a name an active sibling already uses (owner decision 2026-11-01).
+
+        A read-then-insert, so it runs under the department's category-name
+        lock, and the sibling read is itself a locking read: a plain SELECT
+        answers from the transaction's first-read snapshot and would miss a
+        sibling committed while this request waited (Pitfall #27). The lock is
+        per department rather than on the parent row because top-level
+        categories have no parent row to lock.
+
+        No database constraint backs this: installations already hold
+        duplicates, which the owner chose to keep and flag rather than rewrite.
+        Deactivated categories do not hold a name — they appear in no picker,
+        and the setup presets treat them the same way.
+        """
+        await lock_organization_scope(
+            self.db, organization_id, INVENTORY_CATEGORY_NAMES
+        )
+        wanted = self._category_sibling_key(name, parent_id, item_type)
+        query = select(
+            InventoryCategory.id,
+            InventoryCategory.name,
+            InventoryCategory.parent_category_id,
+            InventoryCategory.item_type,
+        ).where(
+            InventoryCategory.organization_id == str(organization_id),
+            InventoryCategory.active.is_(True),
+        )
+        if parent_id:
+            query = query.where(InventoryCategory.parent_category_id == str(parent_id))
+        else:
+            query = query.where(InventoryCategory.parent_category_id.is_(None))
+        if exclude_id:
+            query = query.where(InventoryCategory.id != str(exclude_id))
+        result = await self.db.execute(query.with_for_update())
+        for row in result.all():
+            key = self._category_sibling_key(
+                row.name, row.parent_category_id, row.item_type
+            )
+            if key == wanted:
+                raise ValueError(CATEGORY_NAME_TAKEN)
+
+    async def flag_duplicate_category_names(
+        self, organization_id: UUID | str, categories: Iterable[InventoryCategory]
+    ) -> None:
+        """Stamp ``duplicate_name`` on each category that shares its name.
+
+        For the duplicates stored before names were checked: they are kept,
+        and the list marks them so an officer can rename one. Counted over
+        every active category in the department, not just the rows being
+        returned, so a type-filtered list still flags a duplicate whose twin is
+        filtered out. A deactivated category is never flagged.
+        """
+        result = await self.db.execute(
+            select(
+                InventoryCategory.name,
+                InventoryCategory.parent_category_id,
+                InventoryCategory.item_type,
+            ).where(
+                InventoryCategory.organization_id == str(organization_id),
+                InventoryCategory.active.is_(True),
+            )
+        )
+        counts: Dict[Tuple[str, str, bool], int] = {}
+        for row in result.all():
+            key = self._category_sibling_key(
+                row.name, row.parent_category_id, row.item_type
+            )
+            counts[key] = counts.get(key, 0) + 1
+        for category in categories:
+            key = self._category_sibling_key(
+                category.name, category.parent_category_id, category.item_type
+            )
+            category.duplicate_name = bool(category.active) and counts.get(key, 0) > 1
+
     async def create_category(
         self,
         organization_id: UUID | str,
@@ -1032,6 +1150,12 @@ class InventoryService:
                 organization_id,
                 allow_none=True,
                 label="parent category",
+            )
+            await self._assert_category_name_free(
+                organization_id,
+                category_data.get("name"),
+                category_data.get("parent_category_id"),
+                category_data.get("item_type"),
             )
             category = InventoryCategory(
                 organization_id=organization_id, created_by=created_by, **category_data
@@ -1170,6 +1294,35 @@ class InventoryService:
                         update_data["parent_category_id"],
                         organization_id,
                     )
+
+            # Checked only when the edit moves the category onto a name it did
+            # not already hold — a rename, a new parent, a change of domain, or
+            # reactivation. The edit form resends the unchanged name on every
+            # save, and a duplicate stored before this rule must stay editable
+            # (owner decision 2026-11-01: grandfather existing duplicates).
+            new_name = update_data.get("name") or category.name
+            new_parent = update_data.get(
+                "parent_category_id", category.parent_category_id
+            )
+            new_type = update_data.get("item_type") or category.item_type
+            new_active = (
+                update_data["active"]
+                if update_data.get("active") is not None
+                else category.active
+            )
+            moved = self._category_sibling_key(
+                new_name, new_parent, new_type
+            ) != self._category_sibling_key(
+                category.name, category.parent_category_id, category.item_type
+            )
+            if new_active and (moved or not category.active):
+                await self._assert_category_name_free(
+                    organization_id,
+                    new_name,
+                    new_parent,
+                    new_type,
+                    exclude_id=category.id,
+                )
 
             apply_updates(category, update_data, skip={"id", "organization_id"})
 
@@ -2017,6 +2170,17 @@ class InventoryService:
     ) -> Tuple[Optional[InventoryItem], Optional[str]]:
         """Create a new inventory item"""
         try:
+            date_err = (
+                item_date_error(
+                    item_data,
+                    today=await resolve_org_today(self.db, organization_id),
+                )
+                if touches_item_dates(item_data)
+                else None
+            )
+            if date_err:
+                return None, date_err
+
             # Validate category requirements
             cat_err = await self._validate_category_requirements(
                 item_data, organization_id
@@ -2079,6 +2243,7 @@ class InventoryService:
                 organization_id=organization_id, created_by=created_by, **item_data
             )
             self.db.add(item)
+            await record_creation_sightings(self.db, [item], str(created_by))
             await self.db.commit()
             await self.db.refresh(item)
             return item, None
@@ -3602,6 +3767,26 @@ class InventoryService:
                 item = await self.get_item_by_id(item_id, organization_id)
             if not item:
                 return None, "Item not found"
+
+            # Only the dates this update changes are checked, each against the
+            # stored other half of its pair: an item saved with a bad pair
+            # before the rule existed stays editable for every other field.
+            date_err = (
+                item_date_error(
+                    update_data,
+                    {
+                        "purchase_date": item.purchase_date,
+                        "warranty_expiration": item.warranty_expiration,
+                        "last_inspection_date": item.last_inspection_date,
+                        "next_inspection_due": item.next_inspection_due,
+                    },
+                    today=await resolve_org_today(self.db, organization_id),
+                )
+                if touches_item_dates(update_data)
+                else None
+            )
+            if date_err:
+                return None, date_err
 
             # Validate category requirements if category is changing
             if "category_id" in update_data:
@@ -6983,6 +7168,7 @@ class InventoryService:
         area_id: UUID | str,
         item_ids: Iterable[UUID | str],
         organization_id: UUID | str,
+        barcode_scanned_by: Optional[UUID | str] = None,
     ) -> Optional[Dict[str, Any]]:
         """File scanned items under one storage area.
 
@@ -6991,6 +7177,19 @@ class InventoryService:
         alone. Each moved item also takes the area's location — inherited from
         the nearest ancestor that has one — so the item lists under the room
         its shelf is in; an area with no location leaves the item's as it was.
+
+        ``barcode_scanned_by`` is set only by the barcode put-away endpoint: a
+        barcode put-away counts as seeing each item it moved or found already
+        there (owner decision, 2026-11-01), the same sighting an NFC put-away
+        records. The NFC put-away and the shelf-audit move record their own tap
+        and leave it unset, so no move is ever counted twice. A skipped item is
+        not sighted, matching the NFC put-away, which refuses it before logging.
+
+        A retried request records a second sighting for the same items, and
+        that is harmless rather than merely tolerated: a sighting is evidence
+        for a last-seen time, the report reads only the latest per item, and
+        the retry moves nothing (every item is already here). The cost is one
+        more "Seen on" line in the item's trail.
         """
         org_id = str(organization_id)
         area = await self.db.scalar(
@@ -7047,12 +7246,35 @@ class InventoryService:
             ):
                 already_here.append(item.id)
                 continue
+            from_area_id = item.storage_area_id
             item.storage_area_id = area.id
             if location_id is not None:
                 item.location_id = location_id
             moved.append(item.id)
+            if barcode_scanned_by is not None:
+                add_sighting(
+                    self.db,
+                    organization_id=org_id,
+                    item_id=item.id,
+                    action=InventoryNfcScanAction.BARCODE_PUT_AWAY,
+                    seen_by=str(barcode_scanned_by),
+                    storage_area_id=area.id,
+                    from_storage_area_id=from_area_id,
+                )
 
-        if moved:
+        if barcode_scanned_by is not None:
+            for item_id in already_here:
+                add_sighting(
+                    self.db,
+                    organization_id=org_id,
+                    item_id=item_id,
+                    action=InventoryNfcScanAction.BARCODE_PUT_AWAY,
+                    seen_by=str(barcode_scanned_by),
+                    storage_area_id=area.id,
+                    from_storage_area_id=area.id,
+                )
+
+        if moved or (barcode_scanned_by is not None and already_here):
             await self.db.commit()
         return {
             "storage_area_id": area.id,
@@ -8294,6 +8516,7 @@ class InventoryService:
             self.db.add(item)
             items_created.append(item)
 
+        await record_creation_sightings(self.db, items_created, str(created_by))
         await self.db.commit()
         for item in items_created:
             await self.db.refresh(item)
@@ -9886,6 +10109,9 @@ class InventoryService:
             self.db.add(item)
             items.append(item)
 
+        await record_creation_sightings(
+            self.db, items, str(created_by) if created_by else None
+        )
         await self.db.commit()
         for item in items:
             await self.db.refresh(item)
@@ -14062,20 +14288,26 @@ class InventoryService:
         }
         return {**counts, "is_complete": all(value > 0 for value in counts.values())}
 
-    async def _taken_category_names(self, organization_id: UUID | str) -> set[str]:
+    async def _taken_category_names(
+        self, organization_id: UUID | str, *, for_update: bool = False
+    ) -> set[str]:
         """Case-folded names of the org's *active* categories.
 
         Active only: `delete_category` deactivates rather than deleting, so
         matching every row would let one retired "Turnout Gear" mark the preset
         as already-added forever — shown as done in the workflow, absent from
         the category list beside it, and impossible to re-create from here.
+
+        ``for_update`` makes it a locking read, for a caller that inserts on
+        the answer while holding the category-name lock (Pitfall #27).
         """
-        existing = await self.db.execute(
-            select(InventoryCategory.name).where(
-                InventoryCategory.organization_id == str(organization_id),
-                InventoryCategory.active.is_(True),
-            )
+        query = select(InventoryCategory.name).where(
+            InventoryCategory.organization_id == str(organization_id),
+            InventoryCategory.active.is_(True),
         )
+        if for_update:
+            query = query.with_for_update()
+        existing = await self.db.execute(query)
         return {name.strip().lower() for name in existing.scalars().all() if name}
 
     async def get_category_presets(
@@ -14115,11 +14347,15 @@ class InventoryService:
         if unknown:
             return [], [], f"Unknown category preset: {unknown[0]}"
 
-        taken = await self._taken_category_names(organization_id)
-
         created: List[InventoryCategory] = []
         skipped: List[str] = []
         try:
+            # The same lock create_category's sibling-name check takes, so a
+            # preset and a hand-made category of one name cannot both land.
+            await lock_organization_scope(
+                self.db, organization_id, INVENTORY_CATEGORY_NAMES
+            )
+            taken = await self._taken_category_names(organization_id, for_update=True)
             for key in requested:
                 preset = by_key[key]
                 if preset["name"].strip().lower() in taken:

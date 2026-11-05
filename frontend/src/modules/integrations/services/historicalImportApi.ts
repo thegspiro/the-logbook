@@ -19,6 +19,7 @@ import type {
   HistoricalImportSettingsUpdate,
   HistoricalImportSummary,
   ShiftBatch,
+  DrillPreview,
   TrainingPreview,
   TrainingSettingsUpdate,
 } from '../types/historicalImport';
@@ -120,6 +121,20 @@ export const historicalImportService = {
 
   async commitTraining(importId: string): Promise<TrainingPreview> {
     const response = await api.post<TrainingPreview>(`${BASE}/${importId}/training/commit`, null, { timeout: 0 });
+    return response.data;
+  },
+
+  async getDrillPreview(importId: string, params: { offset?: number; limit?: number } = {}): Promise<DrillPreview> {
+    const response = await api.get<DrillPreview>(`${BASE}/${importId}/drills`, {
+      params: { offset: params.offset ?? 0, limit: params.limit ?? 100 },
+      timeout: 0,
+    });
+    return response.data;
+  },
+
+  /** Make each held drill a session linked to the chosen requirements; safe to run again. */
+  async commitDrills(importId: string): Promise<DrillPreview> {
+    const response = await api.post<DrillPreview>(`${BASE}/${importId}/drills/commit`, null, { timeout: 0 });
     return response.data;
   },
 

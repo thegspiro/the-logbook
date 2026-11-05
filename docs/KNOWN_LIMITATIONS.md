@@ -216,6 +216,15 @@ on one install are closed on that basis.
 - Should skills-evaluation, checklist and knowledge-test requirements stop matching records by name, as certifications did? _Decision:_ Extend the cut-off (Apply the same rule to fallback types). From "Training — Credit From Event Attendance (2026-09-29)".
 - What should happen to the older, duplicate training-enrollment endpoint? _Decision:_ Remove it (Delete the route). From "Training — `POST /training/enrollments` Duplicates, and Lags, the Fixed Enrollment Path (2026-10-06)".
 
+## Fundraising — The Donations List's Receipt Column Is Never Filled (2026-11-05)
+
+The Donations list shows a Receipt column read from `receipt_sent`, but nothing
+in the application sends a donor receipt or sets the flag, so it shows a dash
+for every gift (workflow review W69). **Owner decision (2026-11-05): leave
+it as it is for now.** The column is kept rather than hidden, and no manual
+"mark sent" control is added. Receipts are issued outside the application until
+the department decides how it wants them sent.
+
 ## History — Decisions the Module Ships With (2026-11-03)
 
 The History module's first phase (past members, the Honor Roll, titles, family
@@ -1151,18 +1160,19 @@ guides can point at one place and an owner can decide it.
   information that `members.view` reads; what is gated is the assembled,
   scannable badge.
 
-## Inventory — Input Rules Deliberately Left Open (2026-10-20)
+## Inventory — Input Rules Deliberately Left Open (2026-10-20, resolved 2026-11-05)
 
 Found by driving the module end to end. The rest of that pass (blank names,
 numbers a column cannot hold, duplicate identifiers, a tracking-mode change
 under a live assignment, the assign URL/body mismatch, category loops) is fixed;
-these were left because each is a policy choice or needs a schema change.
+these were left because each is a policy choice or needs a schema change. The
+owner decided all three on 2026-11-01, and they were built on 2026-11-05.
 
-| Item                                                  | Status        | Detail                                                                                                                                                                                                                                                                    |
-| ----------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Duplicate category names                              | Open decision | `inventory_categories` has no uniqueness on `(organization_id, name)`, so "Radios" and "radios" can both exist. A rule has to decide what to do with duplicates installations already hold (merge, rename or grandfather), and whether it spans parents or only siblings. |
-| Date plausibility on items                            | Open decision | A warranty expiring before the purchase date, and a purchase date of `0001-01-01`, are accepted. Enforcing it on update would also refuse unrelated edits to rows that already hold such a pair unless it only applies when a date field changes.                         |
-| Unassign takes effect on one click, with no condition | Open decision | `ItemDetailPage` unassigns with no confirmation and records no return condition, though `unassign_item` accepts one. The Returns screen captures it; whether the detail page should is a product call.                                                                    |
+| Item                                                  | Status                                                                                                 | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duplicate category names                              | ✅ Resolved (owner decision 2026-11-01: unique among siblings, grandfather existing; built 2026-11-05) | Creating, renaming, moving or reactivating a category onto a name an active sibling already uses is refused with a 400 ("A category with this name already exists at this level"). Siblings share an organization, a parent (top level counts as one) and a domain — medical or gear, the split the two category pages already draw — and names are compared trimmed and case-insensitively. The check runs under a per-department lock (`INVENTORY_CATEGORY_NAMES` in `app/utils/org_locks.py`) with a locking read, so two simultaneous creates cannot both land; the setup presets take the same lock. Deactivated categories hold no name. Existing duplicates were left as they are — no data migration and no database constraint, since installations hold them — and stay editable; the gear and medical category lists now send `duplicate_name` and show a **Duplicate name** badge on each so an officer can rename one. |
+| Date plausibility on items                            | ✅ Resolved (owner decision 2026-11-01: check only when a date changes; built 2026-11-05)              | `app/utils/item_dates.py` refuses a warranty expiring before the purchase date, and any purchase, warranty or inspection date outside 1900 to 100 years past the current year, naming the field. A create checks every date it writes. An update checks only a date whose value differs from the stored one — the edit form resends every field, so presence alone would not do — and compares a changed side of the pair with the stored other side. A row already holding a bad pair therefore saves for unrelated edits, and is refused once someone changes either date without fixing it. The item form shows the refusal beside the dates as well as in the toast.                                                                                                                                                                                                                                                            |
+| Unassign takes effect on one click, with no condition | ✅ Resolved (owner decision 2026-11-01: confirm and ask condition; built 2026-11-05)                   | **Unassign** on `ItemDetailPage` opens a dialog that names the member and asks for the return condition, from the Returns screen's own list (`RETURN_CONDITION_OPTIONS`: excellent, good, fair, poor, damaged), with optional notes; nothing is sent until a condition is chosen, and **Keep it assigned** backs out. No API change: `POST /inventory/items/{id}/unassign` already stored `return_condition` and `return_notes` on the assignment and applied the condition to the item (poor or damaged sends it to maintenance). The field stays optional there, so other clients that omit it keep working, and the item then keeps its stored condition as before.                                                                                                                                                                                                                                                              |
 
 ## Medical Supplies — Automatic Reorders Land in a Queue the EMS Officer Cannot Open (2026-10-11)
 
@@ -1578,8 +1588,9 @@ What the application cannot promise, and why each is left as it is:
   error handling. **A proxy the operator runs in front of these is outside the
   repository** — Unraid's SWAG or Nginx Proxy Manager, an AWS load balancer's
   access logs, Cloudflare — and records the IP and the second unless it is
-  configured the same way. `docs/deployment/aws.md` and
-  `docs/deployment/azure.md` show how for the host nginx they document.
+  configured the same way. `docs/deployment/aws.md`,
+  `docs/deployment/azure.md`, `docs/deployment/gcp.md` and
+  `docs/deployment/digitalocean.md` show how for the host nginx they document.
 - **Someone with server access can still correlate by time.** The reviewers'
   notification email is sent — and logged to `message_history` — at
   submission time, their in-app notification rows carry an exact `sent_at`,
@@ -7266,6 +7277,31 @@ also checked in the browser before sending). Removing asks first. Covered by
 `EventAttachmentsList.test.tsx`.
 
 ## Inventory — NFC Tags and Items Not Seen: Open Decisions (2026-09-30)
+
+> ✅ **Four of five resolved (owner decision 2026-11-01, built 2026-11-05).**
+>
+> - **W44-2, as the owner chose: count creation.** Every path that creates an
+>   item (the form, CSV import, bulk add, size variants) writes a `created`
+>   sighting in the same transaction, through one writer,
+>   `app/services/inventory_sightings.py`. Existing items were **not**
+>   backfilled: the decision is that _new_ items start as seen, so an older
+>   item never handled still reads "Never".
+> - **W44-3, as the owner chose: show the barcode.** Tag Items in Bulk shows
+>   each item's barcode beside its serial and asset tag, and nothing for a
+>   legacy item without one.
+> - **W44-4, as the owner chose: hide deleted areas.** Items Not Seen (and Tag
+>   Items in Bulk) name a storage area only while it is active, as
+>   `Name (Label)`, the item page's rule, now shared as
+>   `active_storage_area_names`.
+> - **Barcode put-away, as the owner chose: count it.** The barcode put-away
+>   records a `barcode_put_away` sighting for each item it filed or found
+>   already on the shelf; a skipped item is not sighted, as with NFC. A
+>   retried put-away moves nothing and adds a second sighting of the same
+>   shelf, which only refreshes the last-seen time.
+>
+> Migration `d1165a97b48e` adds the two values to `inventory_nfc_scans.action`.
+> Covered by `tests/test_inventory_sightings.py`. The last bullet, an unlocked
+> written tag, was not among the decisions and is unchanged.
 
 Workflow review W44 (`docs/workflow-review/W44-nfc.md`) and the NFC design left
 these for the owner. None is a defect in the sense of code doing something it

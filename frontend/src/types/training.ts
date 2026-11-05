@@ -767,6 +767,8 @@ export interface TrainingRequirement {
   required_refusals?: number | null;
   /** Session attendance: the share (1-100) of linked sessions to attend. */
   required_attendance_pct?: number | null;
+  /** Session attendance: may the Chief override it for a member? */
+  allows_chief_override?: boolean;
   /** Evaluated shifts: count only evaluations with no item at the form's lowest rating. */
   evaluation_excludes_lowest_rating?: boolean;
   required_call_types?: string[];
@@ -834,6 +836,7 @@ export interface TrainingRequirementCreate {
   required_transports?: number | null | undefined;
   required_refusals?: number | null | undefined;
   required_attendance_pct?: number | null | undefined;
+  allows_chief_override?: boolean | undefined;
   evaluation_excludes_lowest_rating?: boolean | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
@@ -889,6 +892,7 @@ export interface TrainingRequirementUpdate {
   required_transports?: number | null | undefined;
   required_refusals?: number | null | undefined;
   required_attendance_pct?: number | null | undefined;
+  allows_chief_override?: boolean | undefined;
   evaluation_excludes_lowest_rating?: boolean | undefined;
   required_call_types?: string[] | undefined;
   required_skills?: string[] | undefined;
@@ -3617,4 +3621,26 @@ export interface OutsideShiftAwaitingEvaluation {
   evaluation_status: 'needed' | 'draft';
   /** The evaluation to open first: the first one not yet submitted. */
   scope_key: string;
+}
+
+/** A Chief's override of a session-attendance requirement for one member. */
+export interface RequirementOverride {
+  id: string;
+  requirement_id: string;
+  user_id: string;
+  member_name: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
+  granted_by_name?: string | null;
+  granted_at: string;
+  revoked_at?: string | null;
+  revoked_by_name?: string | null;
+}
+
+export interface RequirementOverrideCreate {
+  user_id: string;
+  start_date: string;
+  end_date: string;
+  reason: string;
 }

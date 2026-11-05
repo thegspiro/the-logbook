@@ -1622,12 +1622,25 @@ and who may see the list, is covered in
 | **Visibility**       | Which event types and categories appear as filters (**Event Type Visibility**) |
 | **Categories**       | Your **Custom Event Categories** and their colours                             |
 | **Attendance**       | _"Who sees who's going; who takes requests"_                                   |
-| **Outreach Types**   | The kinds of outreach the public can request                                   |
 | **Hour Tracking**    | Mapping events to admin hours                                                  |
-| **Pipeline**         | _"How requests are handled"_ — the public request pipeline                     |
-| **Email**            | Request email triggers and templates                                           |
-| **Public Form**      | The public event-request form                                                  |
+| **Public Requests**  | Everything about outreach events the public asks for — see below               |
 | **Headline Metrics** | The four numbers at the top of the page                                        |
+
+**Public Requests** is the one section with pages of its own, listed in the
+order a request moves through them. It applies only to requests from the
+public, never to events your members create:
+
+| Page              | What it holds                                                                   |
+| ----------------- | ------------------------------------------------------------------------------- |
+| **Overview**      | **Accept Public Requests**, **Minimum Lead Time**, and where each step stands   |
+| **Request form**  | The public event-request form                                                   |
+| **Types & roles** | The kinds of outreach the public can request, and the roles members sign up for |
+| **Handling**      | The default coordinator and the **Request Checklist**                           |
+| **Emails**        | Automatic request emails and email templates                                    |
+
+The **Overview** lists the four steps with a one-line status each (for example
+_"1 in draft, not yet published"_ or _"No default coordinator"_); select a step
+to open its page.
 
 On a phone the sections become a scrollable strip of tabs, and every control
 is a full-size touch target.
@@ -2187,33 +2200,34 @@ scheduling and communication.
    plans change.
 6. **After the event, the coordinator marks it completed.**
 
-### Setting Up the Pipeline
+### Setting Up Public Requests
 
 **Who can do this:** officers who can manage events.
 
-1. Go to **Manage Events → Settings**.
-2. Under **Pipeline**, switch on **Accept Public Requests**. It controls
+1. Go to **Manage Events → Settings → Public Requests**. It opens on the
+   **Overview**.
+2. On the **Overview**, switch on **Accept Public Requests**. It controls
    **both** ways a request arrives: the public request form and any Forms
    form set up as an event request form. While it is off, those forms stop
    creating requests. Publishing such a form from the Forms screen while it
    is off asks **Publish this form?** and says so. Choose **Not yet**, turn
-   this on, and publish again.
-3. Under **Outreach Types**, add the kinds of outreach you offer. Select **Add
+   this on, and publish again. Set **Minimum Lead Time** here too.
+3. Under **Types & roles**, add the kinds of outreach you offer. Select **Add
    Type** and enter a short key (for example `fire_safety_demo`) and a label
    (for example "Fire Safety Demonstration"). These are the choices on the
    public form.
-4. Also under **Pipeline** (**Request Pipeline**), set:
+4. Under **Handling** (**Request Handling**), set:
    - **Default Coordinator** — the member assigned every new request. The
      list shows each member's rank by name ("Jordan Avery — Firefighter").
-   - **Pipeline Tasks** — your checklist steps, such as "Chief Approval",
+   - **Request Checklist** — your checklist steps, such as "Chief Approval",
      "Email Volunteer Signup" or "Prep Equipment". Use the up and down arrows
      to reorder them.
-   - **Public Progress Visibility** — whether the requester sees task
-     progress on their status page. Off by default.
-5. Under **Email**, set the **triggers** — which status changes send an email
+   - **Show Checklist Progress to the Requester** — whether the requester
+     sees checklist progress on their status page. Off by default.
+5. Under **Emails**, set the **Automatic Emails** — which status changes send an email
    (for example on submitted, scheduled or postponed), and whether each goes
    to the requester, the coordinator, or both.
-6. Also under **Email**, write **Email Templates** — reusable messages, such
+6. Also under **Emails**, write **Email Templates** — reusable messages, such
    as "How to Find Our Building" with directions and parking.
    - Templates can use fill-in fields: `{{contact_name}}`, `{{event_date}}`,
      `{{organization_name}}` and `{{outreach_type}}`. Type them with double
@@ -2254,7 +2268,7 @@ A request can also be **declined** or **cancelled**.
 ### Public Request Form
 
 The quickest way to make the public form is **Manage Events → Settings →
-Public Form** → **Generate Event Request Form**. It creates a public form
+Public Requests → Request form** → **Generate Event Request Form**. It creates a public form
 already connected to the request pipeline.
 
 You can also build one in **Forms**:
@@ -2266,7 +2280,7 @@ You can also build one in **Forms**:
    to the pipeline.
 4. Share the form's link on your website, social media or flyers.
 
-**The Public Form section** lists your department's request forms, grouped as
+**The Request form page** lists your department's request forms, grouped as
 published, draft and archived, each with its public link. It lists only forms
 connected to the pipeline — one made by the generate button, or any form
 given an **Event Request** integration. Your other published forms (a
@@ -2274,10 +2288,10 @@ near-miss report, a gear-sizing survey) never appear there. Answers to a form
 without that integration are kept as form submissions; they do not open
 requests.
 
-Officers who can manage events see this section without needing any Forms
+Officers who can manage events see this page without needing any Forms
 permission.
 
-![Events Settings > Public Form: the generated outreach form listed as published and accepting submissions, with its public URL](./images/19-24-outreach-form-section.png)
+![Events Settings > Public Requests > Request form: the generated outreach form listed as published and accepting submissions, with its public URL](./images/19-24-outreach-form-section.png)
 
 The form collects:
 
@@ -2338,9 +2352,9 @@ setup:
 - **Outreach Types:** Fire Safety Demonstration, Station Tour, School Visit,
   CPR/First Aid Class
 - **Default Coordinator:** Lt. Sarah Chen (Community Outreach Officer)
-- **Pipeline Tasks:** Chief Approval → Confirm Volunteers → Prep Equipment →
+- **Request Checklist:** Chief Approval → Confirm Volunteers → Prep Equipment →
   Pre-Event Email
-- **Email Triggers:** on submitted (to the coordinator), on scheduled (to the
+- **Automatic Emails:** on submitted (to the coordinator), on scheduled (to the
   requester), on completed (to the requester)
 - **Email Templates:** "Directions & Parking" and "What to Expect"
 
@@ -2509,7 +2523,7 @@ Scheduled Date: October 7, 9:00 AM
 | Pre-Event | Gets the "What to Expect" email                   | Sends the template from the request                                       |
 | Complete  | Gets the completion email; status page shows done | Selects Mark as Completed; the request is closed                          |
 
-> **Hint:** With **Public Progress Visibility** switched on, Maria would also
+> **Hint:** With **Show Checklist Progress to the Requester** switched on, Maria would also
 > see the pipeline tasks on her status page. That is open, but some
 > departments prefer to keep their internal steps private.
 
@@ -2556,13 +2570,13 @@ Scheduled Date: October 7, 9:00 AM
 | Training records not created from an event                | Records are written when a **Training** event's attendance is **finalized** — not at check-in, and not for other event types. A member with no time to credit is named in the finalize message. If the session needs officer confirmation, records complete when a training officer approves |
 | End Event button is missing                               | It shows only while the event is running. After the scheduled end, use **Finalize Attendance**                                                                                                                                                                                               |
 | Minutes not showing attendees                             | Minutes made from an event take attendees from check-ins, not RSVPs. Make sure members checked in                                                                                                                                                                                            |
-| Event request form not showing outreach types             | Add outreach types under **Manage Events → Settings → Outreach Types**. At least one is needed                                                                                                                                                                                               |
-| A published request form is not creating requests         | Switch on **Accept Public Requests** under **Settings → Pipeline**                                                                                                                                                                                                                           |
+| Event request form not showing outreach types             | Add outreach types under **Manage Events → Settings → Public Requests → Types & roles**. At least one is needed                                                                                                                                                                                               |
+| A published request form is not creating requests         | Switch on **Accept Public Requests** under **Settings → Public Requests → Overview**                                                                                                                                                                                                                      |
 | Submitted request not appearing for coordinator           | The coordinator needs permission to manage events. Check their position in Role Management                                                                                                                                                                                                   |
 | Room double-booking error when scheduling or saving       | Another event already has that room at that time. Choose a different room or time                                                                                                                                                                                                            |
 | Email template shows `{{something}}` instead of a value   | Use double curly braces with no spaces, and one of the supported fields: `{{contact_name}}`, `{{event_date}}`, `{{organization_name}}`, `{{outreach_type}}`                                                                                                                                  |
 | Requester cannot cancel from the status page              | A completed, declined or cancelled request cannot be changed                                                                                                                                                                                                                                 |
-| Pipeline tasks not visible to the requester               | **Public Progress Visibility** is off by default. Turn it on under **Settings → Pipeline**                                                                                                                                                                                                   |
+| Pipeline tasks not visible to the requester               | **Show Checklist Progress to the Requester** is off by default. Turn it on under **Settings → Public Requests → Handling**                                                                                                                                                                                              |
 | Custom categories not on the event form or as filter tabs | Add them under **Event settings → Categories**, then switch each one on under **Visibility**                                                                                                                                                                                                 |
 | Calendar view not showing events                          | Check the month — use the arrows. The calendar also follows the type filter                                                                                                                                                                                                                  |
 | Attendance Trends shows no data                           | You need the **View analytics and dashboards** permission. Widen the **Period**                                                                                                                                                                                                              |

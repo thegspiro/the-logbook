@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
-import { Megaphone, Plus, Search, X, DollarSign, Calendar, Loader2 } from 'lucide-react';
+import { Megaphone, Plus, Search, X, DollarSign, Calendar, Loader2, Pencil } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fundraisingService } from '../services/api';
 import type { FundraisingCampaign } from '../types';
@@ -18,6 +18,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
 import { CampaignRestrictionControl } from '../components/CampaignRestrictionControl';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { blankToNull } from '@/utils/formValues';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -82,6 +83,21 @@ const INITIAL_FORM: CreateFormData = {
   restriction_purpose: '',
 };
 
+/**
+ * The form as an existing campaign fills it, for editing. Status and the
+ * restriction keep their own controls on each card, so the edit form leaves
+ * them out rather than offer two ways to change the same thing.
+ */
+const formFromCampaign = (campaign: FundraisingCampaign): CreateFormData => ({
+  ...INITIAL_FORM,
+  name: campaign.name,
+  description: campaign.description ?? '',
+  campaign_type: campaign.campaignType,
+  goal_amount: String(campaign.goalAmount),
+  start_date: (campaign.startDate ?? '').slice(0, 10),
+  end_date: (campaign.endDate ?? '').slice(0, 10),
+});
+
 const inputClass =
   'form-input px-3 text-sm placeholder:text-theme-text-secondary focus:border-red-500 focus:ring-red-500';
 
@@ -117,6 +133,21 @@ const CampaignsPage: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState<CreateFormData>(INITIAL_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // The campaign being edited, or null when the form creates one.
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const closeForm = () => {
+    setShowCreateForm(false);
+    setEditingId(null);
+    setFormData(INITIAL_FORM);
+  };
+
+  const startEdit = (campaign: FundraisingCampaign) => {
+    setFormData(formFromCampaign(campaign));
+    setEditingId(campaign.id);
+    setShowCreateForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // ---- Data fetching ----
 
@@ -192,6 +223,30 @@ const CampaignsPage: React.FC = () => {
       return;
     }
 
+    if (editingId) {
+      try {
+        setIsSubmitting(true);
+        // Every field this form owns goes on an update; an emptied
+        // description or end date is sent as null so it is cleared.
+        await fundraisingService.updateCampaign(editingId, {
+          name: formData.name.trim(),
+          description: blankToNull(formData.description),
+          campaignType: formData.campaign_type as FundraisingCampaign['campaignType'],
+          goalAmount: Number(formData.goal_amount),
+          startDate: formData.start_date,
+          endDate: blankToNull(formData.end_date),
+        });
+        toast.success('Campaign updated');
+        closeForm();
+        void loadCampaigns();
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to update campaign'));
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     if (formData.is_restricted && !formData.restriction_purpose.trim()) {
       toast.error('Say what the donors to a restricted fund are giving for');
       return;
@@ -234,7 +289,7 @@ const CampaignsPage: React.FC = () => {
         </div>
         {canManage && (
           <button
-            onClick={() => setShowCreateForm((prev) => !prev)}
+            onClick={() => (showCreateForm ? closeForm() : setShowCreateForm(true))}
             className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
           >
             {showCreateForm ? (
@@ -255,7 +310,9 @@ const CampaignsPage: React.FC = () => {
       {/* Inline Create Form */}
       {canManage && showCreateForm && (
         <form onSubmit={(e) => void handleCreateSubmit(e)} className="card space-y-4 p-5">
-          <h2 className="text-theme-text-primary text-lg font-semibold">New Campaign</h2>
+          <h2 className="text-theme-text-primary text-lg font-semibold">
+            {editingId ? 'Edit Campaign' : 'New Campaign'}
+          </h2>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {/* Name */}
@@ -346,25 +403,27 @@ const CampaignsPage: React.FC = () => {
               />
             </div>
 
-            {/* Status */}
-            <div>
-              <label htmlFor="create-status" className={labelClass}>
-                Status
-              </label>
-              <select
-                id="create-status"
-                name="status"
-                value={formData.status}
-                onChange={handleFormChange}
-                className={selectClass}
-              >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>
-                    {STATUS_LABELS[s] ?? s}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Status: set on the card once a campaign exists */}
+            {!editingId && (
+              <div>
+                <label htmlFor="create-status" className={labelClass}>
+                  Status
+                </label>
+                <select
+                  id="create-status"
+                  name="status"
+                  value={formData.status}
+                  onChange={handleFormChange}
+                  className={selectClass}
+                >
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {STATUS_LABELS[s] ?? s}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Description (full width) */}
             <div className="md:col-span-2">
@@ -382,47 +441,46 @@ const CampaignsPage: React.FC = () => {
               />
             </div>
 
-            {/* Restricted fund (full width) */}
-            <div className="md:col-span-2">
-              <label className="text-theme-text-primary touch:min-h-11 flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="form-checkbox"
-                  checked={formData.is_restricted}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, is_restricted: e.target.checked }))}
-                />
-                Restricted fund — donors are giving for a stated purpose
-              </label>
-              {formData.is_restricted && (
-                <div className="mt-2">
-                  <label htmlFor="create-restriction-purpose" className={labelClass}>
-                    What the donors are giving for *
-                  </label>
-                  <textarea
-                    id="create-restriction-purpose"
-                    name="restriction_purpose"
-                    rows={2}
-                    value={formData.restriction_purpose}
-                    onChange={handleFormChange}
-                    placeholder="e.g. Replacing Engine 2"
-                    className={inputClass}
+            {/* Restricted fund: changed through the card's own control once a campaign exists */}
+            {!editingId && (
+              <div className="md:col-span-2">
+                <label className="text-theme-text-primary touch:min-h-11 flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={formData.is_restricted}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, is_restricted: e.target.checked }))}
                   />
-                  <p className="text-theme-text-secondary mt-1 text-xs">
-                    Finance requests can be charged to a restricted fund, and no more than it has received can be spent
-                    from it.
-                  </p>
-                </div>
-              )}
-            </div>
+                  Restricted fund — donors are giving for a stated purpose
+                </label>
+                {formData.is_restricted && (
+                  <div className="mt-2">
+                    <label htmlFor="create-restriction-purpose" className={labelClass}>
+                      What the donors are giving for *
+                    </label>
+                    <textarea
+                      id="create-restriction-purpose"
+                      name="restriction_purpose"
+                      rows={2}
+                      value={formData.restriction_purpose}
+                      onChange={handleFormChange}
+                      placeholder="e.g. Replacing Engine 2"
+                      className={inputClass}
+                    />
+                    <p className="text-theme-text-secondary mt-1 text-xs">
+                      Finance requests can be charged to a restricted fund, and no more than it has received can be
+                      spent from it.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
               type="button"
-              onClick={() => {
-                setShowCreateForm(false);
-                setFormData(INITIAL_FORM);
-              }}
+              onClick={closeForm}
               className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
             >
               Cancel
@@ -433,7 +491,7 @@ const CampaignsPage: React.FC = () => {
               className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-50"
             >
               {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Create Campaign
+              {editingId ? 'Save Changes' : 'Create Campaign'}
             </button>
           </div>
         </form>
@@ -526,7 +584,20 @@ const CampaignsPage: React.FC = () => {
               <div key={campaign.id} className="card space-y-3 p-5">
                 {/* Campaign Name & Badges */}
                 <div>
-                  <h3 className="text-theme-text-primary text-lg font-bold">{campaign.name}</h3>
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-theme-text-primary text-lg font-bold">{campaign.name}</h3>
+                    {canManage && (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(campaign)}
+                        className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone shrink-0 rounded p-1 transition-colors"
+                        title="Edit campaign"
+                        aria-label={`Edit ${campaign.name}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CAMPAIGN_TYPE_COLORS[campaign.campaignType] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}

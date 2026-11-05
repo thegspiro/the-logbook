@@ -278,12 +278,12 @@ const BudgetVsActual: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYe
           data && (
             <>
               <div
-                className="overflow-x-auto print:overflow-visible"
+                className="rwd-table-container overflow-x-auto print:overflow-visible"
                 tabIndex={0}
                 role="region"
                 aria-label="Budget lines"
               >
-                <table className="rwd-table w-full">
+                <table className="rwd-table rwd-table-wide w-full">
                   <thead className="border-theme-surface-border border-b text-left">
                     <tr>
                       <th className={thClass}>Budget line</th>
@@ -334,16 +334,32 @@ const BudgetVsActual: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYe
                     ))}
                   </tbody>
                   <tfoot className="border-theme-surface-border border-t-2 font-semibold">
+                    {/* Labelled like the body cells: in the card layout a footer
+                        cell without a data-label is hidden, and the totals with it. */}
                     <tr>
-                      <td className={tdClass}>Total</td>
-                      <td className={numClass}>{formatCurrency(data.totals.originalBudget)}</td>
-                      <td className={numClass}>{formatCurrency(data.totals.amendments)}</td>
-                      <td className={numClass}>{formatCurrency(data.totals.budget)}</td>
-                      <td className={numClass}>{formatCurrency(data.totals.spent)}</td>
+                      <td data-label="Total" className={`rwd-table-lead ${tdClass}`}>
+                        Total
+                      </td>
+                      <td data-label="Original" className={numClass}>
+                        {formatCurrency(data.totals.originalBudget)}
+                      </td>
+                      <td data-label="Amendments" className={numClass}>
+                        {formatCurrency(data.totals.amendments)}
+                      </td>
+                      <td data-label="Budget" className={numClass}>
+                        {formatCurrency(data.totals.budget)}
+                      </td>
+                      <td data-label="Spent" className={numClass}>
+                        {formatCurrency(data.totals.spent)}
+                      </td>
                       {data.includesCommitted && (
-                        <td className={numClass}>{formatCurrency(data.totals.committed ?? null)}</td>
+                        <td data-label="Committed" className={numClass}>
+                          {formatCurrency(data.totals.committed ?? null)}
+                        </td>
                       )}
-                      <td className={numClass}>{formatCurrency(data.totals.remaining)}</td>
+                      <td data-label="Remaining" className={numClass}>
+                        {formatCurrency(data.totals.remaining)}
+                      </td>
                       <td />
                     </tr>
                   </tfoot>
@@ -400,12 +416,12 @@ const AmendmentLog: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYear
           data && (
             <>
               <div
-                className="overflow-x-auto print:overflow-visible"
+                className="rwd-table-container overflow-x-auto print:overflow-visible"
                 tabIndex={0}
                 role="region"
                 aria-label="Budget amendments"
               >
-                <table className="rwd-table w-full">
+                <table className="rwd-table rwd-table-wide w-full">
                   <thead className="border-theme-surface-border border-b text-left">
                     <tr>
                       <th className={thClass}>Entered</th>
@@ -551,12 +567,12 @@ const PaymentsRegister: React.FC = () => {
         ) : (
           data && (
             <div
-              className="overflow-x-auto print:overflow-visible"
+              className="rwd-table-container overflow-x-auto print:overflow-visible"
               tabIndex={0}
               role="region"
               aria-label="Transactions"
             >
-              <table className="rwd-table w-full">
+              <table className="rwd-table rwd-table-wide w-full">
                 <thead className="border-theme-surface-border border-b text-left">
                   <tr>
                     <th className={thClass}>Date</th>
@@ -603,7 +619,9 @@ const PaymentsRegister: React.FC = () => {
                     <td className={tdClass} colSpan={6}>
                       Total
                     </td>
-                    <td className={numClass}>{formatCurrency(data.total)}</td>
+                    <td data-label="Total" className={numClass}>
+                      {formatCurrency(data.total)}
+                    </td>
                   </tr>
                 </tfoot>
               </table>
@@ -829,12 +847,12 @@ const Advances: React.FC = () => {
         ) : (
           <>
             <div
-              className="overflow-x-auto print:overflow-visible"
+              className="rwd-table-container overflow-x-auto print:overflow-visible"
               tabIndex={0}
               role="region"
               aria-label="Cash advances"
             >
-              <table className="rwd-table w-full">
+              <table className="rwd-table rwd-table-wide w-full">
                 <thead className="border-theme-surface-border border-b text-left">
                   <tr>
                     <th className={thClass}>Advance</th>
@@ -886,13 +904,17 @@ const Advances: React.FC = () => {
                     <td className={tdClass} colSpan={7}>
                       Outstanding
                     </td>
-                    <td className={numClass}>{formatCurrency(data.outstanding)}</td>
+                    <td data-label="Outstanding" className={numClass}>
+                      {formatCurrency(data.outstanding)}
+                    </td>
                   </tr>
                   <tr>
                     <td className={tdClass} colSpan={7}>
                       Of which overdue
                     </td>
-                    <td className={numClass}>{formatCurrency(data.overdueOutstanding)}</td>
+                    <td data-label="Of which overdue" className={numClass}>
+                      {formatCurrency(data.overdueOutstanding)}
+                    </td>
                   </tr>
                 </tfoot>
               </table>
@@ -944,12 +966,12 @@ const LateSubstantiation: React.FC = () => {
           data && (
             <>
               <div
-                className="overflow-x-auto print:overflow-visible"
+                className="rwd-table-container overflow-x-auto print:overflow-visible"
                 tabIndex={0}
                 role="region"
                 aria-label="Reimbursements paid"
               >
-                <table className="rwd-table w-full">
+                <table className="rwd-table rwd-table-wide w-full">
                   <thead className="border-theme-surface-border border-b text-left">
                     <tr>
                       <th className={thClass}>Paid</th>
@@ -1002,7 +1024,9 @@ const LateSubstantiation: React.FC = () => {
                       <td className={tdClass} colSpan={6}>
                         Total
                       </td>
-                      <td className={numClass}>{formatCurrency(data.total)}</td>
+                      <td data-label="Total" className={numClass}>
+                        {formatCurrency(data.total)}
+                      </td>
                     </tr>
                   </tfoot>
                 </table>

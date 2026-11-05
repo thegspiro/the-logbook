@@ -34,6 +34,7 @@ from app.api.dependencies import (
     can_view_officer_training_data,
     get_current_user,
     require_permission,
+    user_has_permission,
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
@@ -65,6 +66,8 @@ from app.schemas.training import (
     DuplicateWarning,
     HistoricalImportConfirmRequest,
     RequirementChangeScope,
+    RequirementOverrideCreate,
+    RequirementOverrideResponse,
     RequirementProgress,
     TrainingCategoryCreate,
     TrainingCategoryResponse,
@@ -88,6 +91,11 @@ from app.services.integration_services.notification_dispatch import (
 )
 from app.services.member_supervisor_service import MemberSupervisorService
 from app.services.qualification_service import QualificationService
+from app.services.requirement_override_service import (
+    RequirementOverrideService,
+    accepts_override,
+    holds_chief_position,
+)
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     STANDING_NOT_APPLICABLE,
@@ -1998,6 +2006,200 @@ async def delete_requirement(
         )
 
 
+# Chief overrides of session-attendance requirements
+
+
+async def _override_responses(
+    service: RequirementOverrideService, overrides: list
+) -> list[RequirementOverrideResponse]:
+    names = await service.names(
+        [o.user_id for o in overrides]
+        + [o.granted_by for o in overrides]
+        + [o.revoked_by for o in overrides]
+    )
+    return [
+        RequirementOverrideResponse(
+            id=o.id,
+            requirement_id=o.requirement_id,
+            user_id=o.user_id,
+            member_name=names.get(str(o.user_id), "Unknown member"),
+            start_date=o.start_date,
+            end_date=o.end_date,
+            reason=o.reason,
+            granted_by_name=names.get(str(o.granted_by)) if o.granted_by else None,
+            granted_at=o.granted_at,
+            revoked_at=o.revoked_at,
+            revoked_by_name=names.get(str(o.revoked_by)) if o.revoked_by else None,
+        )
+        for o in overrides
+    ]
+
+
+async def _override_requirement(
+    service: RequirementOverrideService, current_user: User, requirement_id: UUID
+) -> TrainingRequirement:
+    requirement = await service.get_requirement(
+        str(current_user.organization_id), str(requirement_id)
+    )
+    if requirement is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
+        )
+    return requirement
+
+
+def _require_chief(current_user: User) -> None:
+    # A position, not a permission: see requirement_override_service.
+    if not holds_chief_position(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the Chief can override a requirement",
+        )
+
+
+@router.get(
+    "/requirements/{requirement_id}/overrides",
+    response_model=list[RequirementOverrideResponse],
+)
+async def list_requirement_overrides(
+    requirement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The Chief's overrides of a session-attendance requirement, revoked ones
+    included, newest first.
+
+    Readable by the Chief and by holders of training.manage, who need to see
+    why a member reads as meeting a requirement they fall short of.
+
+    **Authentication required**
+    """
+    service = RequirementOverrideService(db)
+    await _override_requirement(service, current_user, requirement_id)
+    if not (
+        holds_chief_position(current_user)
+        or user_has_permission(current_user, "training.manage")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to view overrides",
+        )
+    overrides = await service.list_overrides(
+        str(current_user.organization_id), str(requirement_id)
+    )
+    return await _override_responses(service, overrides)
+
+
+@router.post(
+    "/requirements/{requirement_id}/overrides",
+    response_model=RequirementOverrideResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def grant_requirement_override(
+    requirement_id: UUID,
+    body: RequirementOverrideCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Record a Chief's override: the member counts as meeting this
+    session-attendance requirement whenever it is graded as of a date from
+    start_date to end_date.
+
+    Only a member holding a Chief position, and only on a requirement that
+    allows overrides. 400 when the rules refuse it (another live override on
+    those dates, a member of another department, dates out of order).
+
+    **Authentication required**
+    """
+    _require_chief(current_user)
+    service = RequirementOverrideService(db)
+    requirement = await _override_requirement(service, current_user, requirement_id)
+    try:
+        override = await service.grant(
+            str(current_user.organization_id),
+            requirement,
+            str(body.user_id),
+            body.start_date,
+            body.end_date,
+            body.reason,
+            str(current_user.id),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    # Ids and dates only: the reason may be medical.
+    await log_audit_event(
+        db=db,
+        event_type="training_requirement_override_granted",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "override_id": str(override.id),
+            "requirement_id": str(requirement_id),
+            "member_id": str(body.user_id),
+            "start_date": body.start_date.isoformat(),
+            "end_date": body.end_date.isoformat(),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    await db.refresh(override)
+    return (await _override_responses(service, [override]))[0]
+
+
+@router.post(
+    "/requirements/{requirement_id}/overrides/{override_id}/revoke",
+    response_model=RequirementOverrideResponse,
+)
+async def revoke_requirement_override(
+    requirement_id: UUID,
+    override_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Revoke a Chief's override. The record stays, marked revoked; revoking one
+    already revoked changes nothing.
+
+    Only a member holding a Chief position.
+
+    **Authentication required**
+    """
+    _require_chief(current_user)
+    service = RequirementOverrideService(db)
+    await _override_requirement(service, current_user, requirement_id)
+    override = await service.revoke(
+        str(current_user.organization_id),
+        str(requirement_id),
+        str(override_id),
+        str(current_user.id),
+    )
+    if override is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Override not found"
+        )
+    await log_audit_event(
+        db=db,
+        event_type="training_requirement_override_revoked",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "override_id": str(override_id),
+            "requirement_id": str(requirement_id),
+            "member_id": str(override.user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    await db.commit()
+    await db.refresh(override)
+    return (await _override_responses(service, [override]))[0]
+
+
 # Statistics and Reports
 
 
@@ -3050,6 +3252,8 @@ class RequirementStatusItem(BaseModel):
     as_of: str | None = None
     # Set with status "catch_up": the date the existing member has until.
     catch_up_deadline: str | None = None
+    # Met by a Chief's override rather than by the count.
+    overridden: bool = False
 
 
 class MemberComplianceRow(BaseModel):
@@ -3081,6 +3285,8 @@ class MatrixRequirementItem(BaseModel):
     frequency: str | None = None
     target: float | None = None
     target_unit: str | None = None
+    # The viewer may record a Chief's override on this requirement.
+    can_override: bool = False
 
 
 def _enum_value(value) -> str | None:
@@ -3332,6 +3538,7 @@ async def get_compliance_matrix(
 
     # Batch-fetch all active waivers / leaves for the org
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
+    viewer_is_chief = holds_chief_position(current_user)
 
     matrix = []
     # The evaluation cut-off can differ per requirement (each may override
@@ -3384,6 +3591,7 @@ async def get_compliance_matrix(
                     window_end=ev.window_end,
                     as_of=ev.as_of,
                     catch_up_deadline=ev.catch_up_deadline,
+                    overridden=ev.overridden,
                 )
             )
 
@@ -3429,6 +3637,7 @@ async def get_compliance_matrix(
                 frequency=_enum_value(r.frequency),
                 target=_requirement_target(r),
                 target_unit=_requirement_target_unit(r),
+                can_override=viewer_is_chief and accepts_override(r),
             ).model_dump()
             for r in requirements
         ],

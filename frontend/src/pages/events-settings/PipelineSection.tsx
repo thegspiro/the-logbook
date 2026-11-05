@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Trash2, ChevronUp, ChevronDown, Calendar, UserCheck, Globe } from 'lucide-react';
+import { Plus, Trash2, ChevronUp, ChevronDown, UserCheck, Globe } from 'lucide-react';
 import type { PipelineTaskConfig } from '../../types/event';
 import type { PipelineSectionProps } from './types';
 import { useRanks } from '../../hooks/useRanks';
@@ -9,10 +9,8 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
   settings,
   saving,
   members,
-  onUpdateLeadTime,
   onUpdateDefaultAssignee,
   onTogglePublicVisibility,
-  onToggleAcceptPublicRequests,
   onAddTask,
   onRemoveTask,
   onReorderTask,
@@ -28,8 +26,11 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-theme-text-primary text-lg font-semibold">Request Pipeline</h2>
-        <p className="text-theme-text-muted mt-1 text-sm">Configure how event requests are processed.</p>
+        <h2 className="text-theme-text-primary text-lg font-semibold">Request Handling</h2>
+        <p className="text-theme-text-muted mt-1 text-sm">
+          What happens to a public event request once it arrives: who picks it up, and the steps your team works through
+          before it becomes a scheduled event.
+        </p>
       </div>
 
       {/* Default assignee */}
@@ -38,7 +39,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
           <UserCheck className="text-theme-text-muted h-4 w-4" />
           <p className="text-theme-text-primary text-sm font-medium">Default Coordinator</p>
         </div>
-        <p className="text-theme-text-muted mb-3 text-xs">All new requests will be auto-assigned to this person.</p>
+        <p className="text-theme-text-muted mb-3 text-xs">Every new public request is assigned to this person.</p>
         <select
           value={pipeline.default_assignee_id || ''}
           onChange={(e) => onUpdateDefaultAssignee(e.target.value || null)}
@@ -55,42 +56,15 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
         </select>
       </div>
 
-      {/* Accept public requests — the gate everything else here sits behind */}
-      <div className="border-theme-surface-border flex items-center justify-between border-t py-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Globe className="text-theme-text-muted h-4 w-4" />
-            <p className="text-theme-text-primary text-sm font-medium">Accept Public Requests</p>
-          </div>
-          <p className="text-theme-text-muted mt-0.5 ml-6 text-xs">
-            Let anyone submit an outreach request from your public page. While this is off, the public request form is
-            closed and only staff can create requests.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onToggleAcceptPublicRequests}
-          disabled={saving}
-          className={`focus:ring-theme-focus-ring toggle-track-md ${
-            pipeline.accept_public_requests ? 'bg-green-500' : 'bg-theme-surface-hover'
-          }`}
-          role="switch"
-          aria-checked={pipeline.accept_public_requests}
-          aria-label="Accept public event requests"
-        >
-          <span className={`toggle-knob-sm ${pipeline.accept_public_requests ? 'translate-x-6' : 'translate-x-1'}`} />
-        </button>
-      </div>
-
       {/* Public progress visibility */}
       <div className="border-theme-surface-border flex items-center justify-between border-t py-3">
         <div>
           <div className="flex items-center gap-2">
             <Globe className="text-theme-text-muted h-4 w-4" />
-            <p className="text-theme-text-primary text-sm font-medium">Public Progress Visibility</p>
+            <p className="text-theme-text-primary text-sm font-medium">Show Checklist Progress to the Requester</p>
           </div>
           <p className="text-theme-text-muted mt-0.5 ml-6 text-xs">
-            Show pipeline task progress on the public status page
+            Show the requester how far through your checklist their request is, on the request&apos;s public status page
           </p>
         </div>
         <button
@@ -108,42 +82,12 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
         </button>
       </div>
 
-      {/* Lead time */}
-      <div className="border-theme-surface-border border-t pt-4">
-        <div className="mb-2 flex items-center gap-2">
-          <Calendar className="text-theme-text-muted h-4 w-4" />
-          <p className="text-theme-text-primary text-sm font-medium">Minimum Lead Time</p>
-        </div>
-        <p className="text-theme-text-muted mb-3 text-xs">
-          How far in advance must requests be submitted? A public submission naming a date sooner than this is refused;
-          one arriving through a public form is accepted and flagged as short notice for the coordinator. Set to 0 to
-          accept any date.
-        </p>
-        <div className="flex items-center gap-3">
-          <input
-            type="number"
-            min={0}
-            max={365}
-            value={pipeline.min_lead_time_days}
-            onChange={(e) => {
-              const val = parseInt(e.target.value, 10);
-              if (!isNaN(val) && val >= 0 && val <= 365) {
-                onUpdateLeadTime(val);
-              }
-            }}
-            className="form-input w-20"
-          />
-          <span className="text-theme-text-muted text-sm">
-            days ({Math.floor(pipeline.min_lead_time_days / 7)} weeks)
-          </span>
-        </div>
-      </div>
-
       {/* Pipeline tasks with reorder */}
       <div className="border-theme-surface-border border-t pt-4">
-        <h3 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">Pipeline Tasks</h3>
+        <h3 className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">Request Checklist</h3>
         <p className="text-theme-text-muted mb-3 text-xs">
-          Checklist items your team uses when processing requests. Use arrows to reorder.
+          The steps your team checks off on each request, in order — for example, chief approval or confirming apparatus
+          availability. Use the arrows to reorder.
         </p>
         <div className="mb-4 space-y-2">
           {pipeline.tasks.map((task: PipelineTaskConfig, idx: number) => (
@@ -192,7 +136,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
           ))}
           {pipeline.tasks.length === 0 && (
             <p className="text-theme-text-muted py-4 text-center text-sm italic">
-              No pipeline tasks configured. Add tasks below.
+              No checklist steps yet. Add one below.
             </p>
           )}
         </div>
@@ -200,7 +144,7 @@ const PipelineSection: React.FC<PipelineSectionProps> = ({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex-1">
             <label htmlFor="new-task-label" className="text-theme-text-muted mb-1 block text-xs font-medium">
-              Task Name
+              Step Name
             </label>
             <input
               id="new-task-label"

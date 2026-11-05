@@ -169,6 +169,7 @@ const UNCACHEABLE_SUBSTRINGS = [
   // cached copy would stay readable for 90s after an organizer restricts the
   // event's attendee visibility.
   '/rsvp-history', // per-member attendance/decline history (PII) — not matched by '/rsvps'
+  '/overrides', // a Chief's requirement overrides: member names and reasons that may be medical (PHI)
   '/attendance-petitions', // members' requests to be marked present: names and
   // their free-text reasons (PII), and a pending/decided state that a 30s-stale
   // copy would misreport right after the organizer acts on it.

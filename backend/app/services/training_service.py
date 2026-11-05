@@ -685,6 +685,7 @@ class TrainingService:
         blocks_activity = False
         month_breakdown: Optional[List[Dict]] = None
         attendance_met: Optional[bool] = None
+        attendance_overridden = False
 
         # ---- HOURS ----
         if req_type == RequirementType.HOURS.value:
@@ -823,6 +824,7 @@ class TrainingService:
             adjusted_required = float(tally.needed)
             base_required = float(tally.base_needed)
             attendance_met = tally.met
+            attendance_overridden = tally.overridden
 
         # ---- Fallback ----
         else:
@@ -999,6 +1001,8 @@ class TrainingService:
             "completed_hours": completed_value,
             "progress_percentage": round(pct, 1),
             "is_met": is_met,
+            # Met by a Chief's override rather than by the count.
+            "overridden": attendance_overridden,
             "due_date": str(effective_due_date) if effective_due_date else None,
             "days_until_due": days_until_due,
             "waived_months": waived_months,

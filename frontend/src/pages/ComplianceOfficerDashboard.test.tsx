@@ -38,6 +38,26 @@ vi.mock('../services/trainingServices', () => ({
 }));
 
 import ComplianceOfficerDashboard from './ComplianceOfficerDashboard';
+import { useAuthStore } from '../stores/authStore';
+import type { CurrentUser } from '../types/auth';
+
+const signedInWith = (permissions: string[]): CurrentUser => ({
+  id: 'u-1',
+  username: 'officer',
+  email: 'officer@example.test',
+  organization_id: 'org-1',
+  timezone: 'UTC',
+  roles: [],
+  positions: [],
+  rank: null,
+  membership_type: null,
+  permissions,
+  is_active: true,
+  email_verified: true,
+  mfa_enabled: false,
+  password_expired: false,
+  must_change_password: false,
+});
 
 const mockAnnualReport = {
   year: 2026,
@@ -124,12 +144,49 @@ describe('ComplianceOfficerDashboard', () => {
     });
     mockGetAttestations.mockResolvedValue([]);
     mockGetComplianceForecast.mockResolvedValue([]);
+    // A compliance officer: the hub's training.manage plus the grant the
+    // configuration page needs.
+    useAuthStore.setState({ user: signedInWith(['training.manage', 'compliance.manage']) });
   });
 
   it('renders the Configure action', () => {
     renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
 
     expect(screen.getByText('Configure')).toBeInTheDocument();
+  });
+
+  describe('the Configure action', () => {
+    it('opens the compliance configuration page', async () => {
+      window.history.replaceState({}, '', '/training/admin?page=compliance&tab=annual-report');
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Configure' }));
+
+      expect(window.location.pathname).toBe('/training/compliance-config');
+    });
+
+    it('is offered on settings.manage as well', () => {
+      useAuthStore.setState({ user: signedInWith(['training.manage', 'settings.manage']) });
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
+
+      expect(screen.getByRole('button', { name: 'Configure' })).toBeInTheDocument();
+    });
+
+    // The hub admits training.manage, but the configuration page and
+    // PUT /compliance/config do not; the button would open a refusal.
+    it('is not offered on training.manage alone', () => {
+      useAuthStore.setState({ user: signedInWith(['training.manage']) });
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
+
+      expect(screen.queryByRole('button', { name: 'Configure' })).not.toBeInTheDocument();
+    });
+
+    it('is not offered before the signed-in user has loaded', () => {
+      useAuthStore.setState({ user: null });
+      renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
+
+      expect(screen.queryByRole('button', { name: 'Configure' })).not.toBeInTheDocument();
+    });
   });
 
   it('shows loading state initially', () => {
