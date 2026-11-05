@@ -14,7 +14,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { BellRing, CheckCircle2, Download, RefreshCw, ShieldAlert } from 'lucide-react';
+import { BellRing, CheckCircle2, Download, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   securityAlertsService,
@@ -31,6 +31,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { EmptyState, PromptDialog } from '../components/ux';
 import { useTablist } from '../hooks/useTablist';
 import { StatGrid } from '../components/ux/StatGrid';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 
 type Tab = 'alerts' | 'exports';
 
@@ -185,26 +186,22 @@ const SecurityAlertsPage: React.FC = () => {
 
   return (
     <div className="mx-auto min-h-screen max-w-7xl p-4 sm:p-6">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold sm:text-3xl">
-            <ShieldAlert className="h-7 w-7 text-red-700 dark:text-red-400" aria-hidden="true" />
-            Security Alerts
-          </h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">
-            What the security monitor has flagged for your department, and every data export it recorded.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void reload()}
-          className="btn-secondary btn-md inline-flex items-center gap-1.5 text-sm"
-          aria-label="Refresh security alerts"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
-          Refresh
-        </button>
-      </div>
+      <AdminPageHeader
+        title="Security Alerts"
+        description="What the security monitor has flagged for your department, and every data export it recorded."
+        className="mb-6"
+        actions={
+          <button
+            type="button"
+            onClick={() => void reload()}
+            className="btn-secondary btn-md inline-flex items-center gap-1.5 text-sm"
+            aria-label="Refresh security alerts"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+            Refresh
+          </button>
+        }
+      />
 
       <StatGrid columns={4} className="mb-6">
         <div className="card p-4">

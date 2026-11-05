@@ -52,6 +52,7 @@ import {
 } from './formConstants';
 import { useTablist } from '../hooks/useTablist';
 import { StatGrid } from '../components/ux/StatGrid';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 
 type FormCategory = 'all' | 'Safety' | 'Operations' | 'Administration' | 'Training';
 
@@ -497,37 +498,30 @@ const FormsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Page Header */}
-        <div className="page-header mb-8 gap-3 sm:items-center">
-          <div className="page-header-title flex items-center space-x-3">
-            <div className="shrink-0 rounded-lg bg-red-800 p-2">
-              <FormInput className="h-6 w-6 text-white" aria-hidden="true" />
-            </div>
-            <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Custom Forms</h1>
-              <p className="text-theme-text-muted text-sm">
-                Build forms, share them publicly, and send responses to other modules
-              </p>
-            </div>
-          </div>
-          <div className="page-header-actions flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => {
-                void loadData();
-              }}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover min-h-11 min-w-11 rounded-lg p-2 transition-colors"
-              aria-label="Refresh forms"
-            >
-              <RefreshCw className="h-5 w-5" aria-hidden="true" />
-            </button>
-            {canManage && (
-              <button onClick={() => setShowCreateModal(true)} className="btn-primary inline-flex items-center gap-2">
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                <span>Create Form</span>
+        <AdminPageHeader
+          title="Forms"
+          description="Build forms, share them publicly, and send responses to other modules"
+          actions={
+            <>
+              <button
+                onClick={() => {
+                  void loadData();
+                }}
+                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover min-h-11 min-w-11 rounded-lg p-2 transition-colors"
+                aria-label="Refresh forms"
+              >
+                <RefreshCw className="h-5 w-5" aria-hidden="true" />
               </button>
-            )}
-          </div>
-        </div>
+              {canManage && (
+                <button onClick={() => setShowCreateModal(true)} className="btn-primary inline-flex items-center gap-2">
+                  <Plus className="h-4 w-4" aria-hidden="true" />
+                  <span>Create Form</span>
+                </button>
+              )}
+            </>
+          }
+          className="mb-8"
+        />
 
         {/* Stats. Drawn while they load, placeholders where the figures go:
             appearing with the figures pushed the tabs and the list ~330px down

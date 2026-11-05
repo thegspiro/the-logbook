@@ -24,7 +24,6 @@ import {
   CheckCircle,
   Clock,
   RefreshCw,
-  Shield,
   BarChart3,
   Send,
   X,
@@ -52,7 +51,7 @@ import type {
   ComplianceReportGenerate,
 } from '../types/training';
 import { useOverlaySurface } from '../hooks/useOverlaySurface';
-import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 
 // Shared form input classes
 const inputClass = 'form-input';
@@ -553,11 +552,13 @@ export default function ComplianceRequirementsConfigPage() {
   // the tabs landed ~220px from where its box had been.
   const pageTop = (
     <>
-      <TrainingPageHeader
-        icon={Shield}
-        title="Compliance Requirements Configuration"
-        subtitle="Define what makes members compliant, configure profiles, and schedule reports"
+      {/* Named as the links into it name it ("Open compliance settings"), and
+          drawn with the Administration header like the hub it hangs from. */}
+      <AdminPageHeader
+        title="Compliance Settings"
+        description="Define what makes members compliant, configure profiles, and schedule reports"
         underHub="/training/admin"
+        className="mb-6"
       />
 
       {/* Tabs */}

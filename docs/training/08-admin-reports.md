@@ -58,7 +58,7 @@ names it the way the **Role Management** screen lists it — for example
 20. [Governance: Legal Documents](#governance-legal-documents)
 21. [Governance: Organizational Chart](#governance-organizational-chart)
 22. [Testing Checklist Module](#testing-checklist-module)
-23. [Compliance Requirements Configuration](#compliance-requirements-configuration)
+23. [Compliance Settings](#compliance-settings)
 24. [Medical Screening and Equipment Checks](#medical-screening-and-equipment-checks)
 25. [Realistic Example: Generating the Annual Training Summary Report](#realistic-example-generating-the-annual-training-summary-report)
 26. [Realistic Example: First-Time Department Setup](#realistic-example-first-time-department-setup)
@@ -1366,7 +1366,7 @@ in the dashboard's **Needs you** panel with an **Acknowledge** button.
 ### Department Messages
 
 Officers who manage notification rules (**notifications.manage**) post
-department announcements from **Administration > Forms & Comms > Messages**.
+department announcements from **Administration > Forms & Comms > Department Messages**.
 Messages can be escalated by email or text message according to priority, can
 require acknowledgement with a report of who has not acknowledged, can be
 scheduled, and can be edited after posting.
@@ -2568,7 +2568,7 @@ blocked), and `n` jumps to the next page with no mark.
 
 ---
 
-## Compliance Requirements Configuration
+## Compliance Settings
 
 **Who can open it:** officers with **settings.manage** or **compliance.manage**
 ("Manage compliance records"), with the Training module turned on. Generating a
@@ -2834,7 +2834,7 @@ county's submission. **Print / PDF** gives her a copy for the board packet.
 ### Step 4: Following Up
 
 1. **Foster and Harris** — she sends a department message (**Administration >
-   Forms & Comms > Messages**) reminding them of the minimum and asking them to
+   Forms & Comms > Department Messages**) reminding them of the minimum and asking them to
    plan make-up training in the first quarter.
 2. **Brooks** — she notes to follow up in February about CPR renewal.
 3. She saves the Annual Training Report as a **saved report** with the period

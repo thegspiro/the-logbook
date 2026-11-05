@@ -185,7 +185,7 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['members.manage'],
-    expectText: 'Waiver Management',
+    expectText: 'Waivers',
   },
   // The edit page reads the member through `/users/:id/with-roles`, the
   // audit history through `/users/:id/roles`; the catch-all `{}` has

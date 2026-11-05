@@ -1,6 +1,7 @@
 import React, { useId } from 'react';
 import { Link, useLocation } from 'react-router';
 import { Breadcrumbs } from '../ux/Breadcrumbs';
+import AdminPageHeader from '../admin/AdminPageHeader';
 import type { BreadcrumbItem } from '../ux/Breadcrumbs';
 import { ScrollCueRow } from '../ux/ScrollCueRow';
 import { BREADCRUMB_ROUTES, canLinkCrumb } from '../ux/breadcrumbRoutes';
@@ -137,6 +138,15 @@ export interface PageHeaderProps {
    * below a section, the heading shows as usual.
    */
   titleInStrip?: boolean | undefined;
+  /**
+   * Draw the title the way every Administration page does — the
+   * "Administration" eyebrow, a 2xl heading, no icon, the trail ending at the
+   * parent — while keeping this group's section strip above it. For the
+   * officer-only settings screens inside a section group (Election, Minutes and
+   * Facility Settings), so they read as the admin pages they are rather than as
+   * one more member-facing section page. `title` must then be a string.
+   */
+  adminHeader?: boolean | undefined;
 }
 
 interface SectionPageHeaderProps extends PageHeaderProps {
@@ -173,6 +183,7 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
   underHub,
   section,
   titleInStrip = false,
+  adminHeader = false,
 }) => {
   const { pathname } = useLocation();
   const checkPermission = useSectionPermission();
@@ -193,6 +204,20 @@ export const SectionPageHeader: React.FC<SectionPageHeaderProps> = ({
   const trail: BreadcrumbItem[] =
     leading.length > 0 ? [...leading, ...(parentCrumbs ?? []), ...(pageLabel ? [{ label: pageLabel }] : [])] : [];
   const hideTitle = titleInStrip && items.length >= 2 && active !== undefined && isSectionPage(active, pathname);
+
+  if (adminHeader && typeof title === 'string') {
+    return (
+      <div>
+        <SectionNav items={items} active={active} label={stripLabel} accent={accent} />
+        {/* The URL-generated trail, ending at the parent as on every admin
+            page: the <h1> directly below already names this one. An explicit
+            trail cannot do that (its last crumb is always the current page),
+            and these settings screens sit directly under their module's
+            registered route, so the generated trail links back to it. */}
+        <AdminPageHeader title={title} description={subtitle} actions={actions} className="mb-8" />
+      </div>
+    );
+  }
 
   return (
     <div>

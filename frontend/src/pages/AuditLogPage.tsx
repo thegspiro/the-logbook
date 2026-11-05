@@ -20,6 +20,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
 import { Pagination, EmptyState, SkeletonText } from '../components/ux';
+import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
 
 const SEVERITY_BADGE: Record<AuditSeverity, string> = {
@@ -137,25 +138,21 @@ const AuditLogPage: React.FC = () => {
 
   return (
     <div className="mx-auto min-h-screen max-w-7xl p-4 sm:p-6">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-theme-text-primary flex items-center gap-2 text-2xl font-bold sm:text-3xl">
-            <ShieldCheck className="h-7 w-7 text-red-600 dark:text-red-400" aria-hidden="true" />
-            Audit Log
-          </h1>
-          <p className="text-theme-text-secondary mt-1 text-sm">
-            A tamper-evident record of administrative and security events in your organization.
-          </p>
-        </div>
-        <button
-          onClick={() => void load()}
-          className="btn-secondary btn-md inline-flex items-center gap-1.5 text-sm"
-          aria-label="Refresh audit log"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
-          Refresh
-        </button>
-      </div>
+      <AdminPageHeader
+        title="Audit Log"
+        description="A tamper-evident record of administrative and security events in your organization."
+        className="mb-6"
+        actions={
+          <button
+            onClick={() => void load()}
+            className="btn-secondary btn-md inline-flex items-center gap-1.5 text-sm"
+            aria-label="Refresh audit log"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+            Refresh
+          </button>
+        }
+      />
 
       {/* Stats. Drawn while they load, placeholders where the figures go:
           appearing with them pushed the filters and the log ~190px down. */}
