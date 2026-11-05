@@ -1537,6 +1537,28 @@ account lockout and the suspicious-IP throttle already cover the cross-account
 case. Until then, with Redis running, the cost is a member asked to wait a
 minute.
 
+### Still open: the sign-in screen's own back-off is per tab (W02-8, 2026-11-05)
+
+The server is now per account, but the browser is not. `authStore.login`
+(`frontend/src/stores/authStore.ts`) keeps one failed-attempt counter per tab
+in `sessionStorage`. From the fifth failure it disables Sign in for
+`2s × 2^(n−5)`, capped at five minutes, whatever username is typed. The
+counter resets only on a successful sign-in.
+
+Driven in the workflow review's W02 second pass: after 11 failures across two
+members in one tab, a third member typing their own name saw "Wait 60s". At a
+station computer that is one member's mistakes holding the next at the
+sign-in screen, which is what the 2026-11-01 decision set out to stop. It is
+a defence-in-depth control, not the limit: the server still counts per
+account and answers `429` with `Retry-After`, which the screen already
+honours.
+
+**Owner decision needed:**
+
+- **Key the counter by the typed account**, the way the server counts. The countdown then follows the name in the field.
+- **Drop the client back-off** and rely on the server's `429` / `Retry-After` and the account lockout alone.
+- **Keep it per tab, as it is**, and accept that a shared station computer can make the next member wait.
+
 ## Suggestion Boxes — What Anonymity Does and Does Not Cover (2026-09-23)
 
 **Accepted.** An anonymous suggestion is stored with no record of its author:

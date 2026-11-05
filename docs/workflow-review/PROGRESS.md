@@ -184,6 +184,11 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 - **Integrations, a later pass** — the `integration.connected` and
   `integration.disconnected` audit rows carry no IP address (W75).
+- **Member administration, a later pass** — most audit rows `users.py`
+  writes for an administrator's action on a member carry no IP address or
+  user agent: `account_unlocked`, the password, MFA and passkey resets,
+  role changes and deletes. Only the data-export, anonymize, visibility and
+  consent rows pass `get_client_ip` (W02 second pass).
 
 - **Public portal, a later pass** — public events are only `public_education`
   events, and their location is the free-text `location` alone, so an event
@@ -201,6 +206,41 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### W02 second pass — Sign in after the November security work — 2026-11-05
+
+Every activity was ✅, so the owner asked for the next after onboarding again.
+Driven as `member`, `member2`, `admin` and anonymous, at 1280×900 and
+390×844, on the W01 third pass's install, re-seeded.
+
+Held:
+
+- deep links survive sign-in, MFA sign-in included;
+- sign-out revokes the session server-side;
+- no account enumeration;
+- the idle timeout warns, then signs out;
+- the server's per-account sign-in limit counts down from `Retry-After`.
+
+Three earlier findings are confirmed resolved:
+
+- W02-3: sign-in, failure, lock, unlock and sign-out all reach the audit log;
+- W02-4: Members shows "Sign-in locked until …" with an Unlock that holds after a reload;
+- W02-5: `/login` targets are 44px.
+
+MFA sign-in was driven for the first time.
+
+Fixed:
+
+- W02-7 (MED): a wrong password under eight characters got a 422 "password: Value is too short" instead of the generic refusal, and never counted toward lockout. `UserLogin` no longer applies a length floor.
+- W02-9 (LOW): the seven controls at the foot of the phone menu, Logout among them, were 36px tall.
+- W02-10 (LOW): a correct authenticator code typed "123 456" was refused as too long.
+
+Flagged:
+
+- W02-8 (MED): the sign-in screen's own back-off counts every name tried in a tab, so one member's failures hold the next at a station computer for up to five minutes, against the 2026-11-01 per-account decision. Mirrored to KNOWN_LIMITATIONS.
+- W02-11 (NIT): "Logout" beside "Sign in".
+
+New lead: admin actions on a member are audited without an IP. Gate: typecheck and lint clean, flake8, black and isort clean on the backend files, and 188 backend and 202 frontend tests pass; each new test failed before its fix. Next: none pending; the rotation remains complete.
 
 ### Lead — Reports printed ISO dates — 2026-11-03
 

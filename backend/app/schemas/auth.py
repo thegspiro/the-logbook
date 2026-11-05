@@ -35,10 +35,14 @@ class UserLogin(BaseModel):
     Security:
     - Username restricted to alphanumeric, dots, underscores, hyphens
     - Also accepts email format for login flexibility
+    - Password is bounded, not policy-checked: sign-in verifies a stored
+      password, and a length floor here answered a short attempt with a 422
+      instead of the generic refusal, kept it out of the lockout count, and
+      shut out any password shorter than the floor (W02-7)
     """
 
     username: str = Field(..., min_length=3, max_length=100)
-    password: str = Field(..., min_length=8, max_length=128)
+    password: str = Field(..., min_length=1, max_length=128)
 
     @field_validator("username")
     @classmethod

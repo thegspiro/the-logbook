@@ -167,11 +167,24 @@ describe('LoginPage second-factor step', () => {
         ? Promise.resolve({ data: { needs_onboarding: false } })
         : Promise.reject(new Error('not mocked'))
     );
+    mockCompleteMfaLogin.mockReset();
+    mockCompleteMfaLogin.mockResolvedValue(undefined);
     mockMfaRequired = true;
   });
 
   afterEach(() => {
     mockMfaRequired = false;
+  });
+
+  // Authenticator apps show the code in two groups ("123 456"), and the
+  // server takes exactly six characters, so a correct code typed as shown
+  // was refused with "code: Value is too long" (workflow review W02-10).
+  it('sends an authenticator code typed with a space as six digits', async () => {
+    renderLogin();
+    fireEvent.change(await screen.findByLabelText('Authenticator code'), { target: { value: ' 123 456 ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
+
+    await waitFor(() => expect(mockCompleteMfaLogin).toHaveBeenCalledWith('123456'));
   });
 
   // Recovery codes are four groups of five (mfa_service.generate_recovery_codes).

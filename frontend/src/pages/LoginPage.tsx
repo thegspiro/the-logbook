@@ -306,7 +306,9 @@ export const LoginPage: React.FC = () => {
       if (useRecoveryCode) {
         await completeMfaLogin(undefined, value);
       } else {
-        await completeMfaLogin(value);
+        // Authenticator apps show the code as "123 456"; the server takes
+        // exactly six digits, so the grouping space is dropped (W02-10).
+        await completeMfaLogin(value.replace(/\s+/g, ''));
       }
       redirectAfterAuth();
     } catch (_err) {

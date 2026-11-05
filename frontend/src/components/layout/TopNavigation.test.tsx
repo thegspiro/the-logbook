@@ -93,6 +93,26 @@ describe('TopNavigation mobile menu', () => {
     renderNav();
     expect(screen.queryByTestId('mobile-menu-backdrop')).not.toBeInTheDocument();
   });
+
+  // Workflow review W02-9: the controls at the foot of the phone menu were
+  // 36px tall, under the 44px touch minimum the menu's own entries meet, and
+  // Logout is the one a member reaches for on a shared station phone.
+  it('gives the account and sign-out controls at its foot a touch-size target', () => {
+    renderNav();
+    fireMoreEvent();
+    const menu = within(mobileMenu() as HTMLElement);
+
+    const footer = [
+      menu.getByRole('link', { name: /My Account/ }),
+      menu.getByRole('link', { name: /Evaluations/ }),
+      menu.getByRole('button', { name: /^Theme:/ }),
+      menu.getByRole('button', { name: /High contrast/ }),
+      menu.getByRole('button', { name: 'Logout' }),
+    ];
+    for (const control of footer) {
+      expect(control).toHaveClass('touch:min-h-11');
+    }
+  });
 });
 
 describe('TopNavigation overflow into More', () => {

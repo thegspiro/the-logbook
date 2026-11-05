@@ -103,3 +103,131 @@ The server ends a session after 15 idle minutes, so every session the seed saved
 | black --check            | ✅                                                                                              |
 | frontend tests (touched) | ✅ `postLoginRedirect`, `errorHandling`, `authStore`, `LoginPage` — the new cases failed before |
 | backend tests (touched)  | n/a — backend change is a docstring                                                             |
+
+---
+
+## Second pass — sign-in as it stands after the November security work (2026-11-05)
+
+**Driven:** 2026-11-05 · **As:** `member`, `member2`, `admin`, anonymous visitor · **Viewports:** 1280×900, 390×844
+**Commit:** `905bd6c` plus this pass's fixes (each re-driven) · **Database:** re-seeded by `seed.mjs` on the W01 third pass's install; no reset
+
+Every activity in the rotation was ✅, so this pass took the activity after
+onboarding again. Since the first pass, sign-in gained audit rows (W02-3), an
+administrator's Unlock (W02-4), larger touch targets (W02-5, via W79-1) and,
+on 2026-11-03, per-account sign-in limits (5 a minute per account at an
+address, 30 a minute per address). MFA sign-in, never driven before, was
+driven this time.
+
+### What was driven
+
+1. Opened `/events?view=calendar#today` signed out, then signed in with Enter.
+2. Signed out through the header's Logout, then checked cookies, local storage, Back, and the old access token against `GET /auth/me`.
+3. Submitted an empty form, then a wrong password for `member`, then an unknown username. Read the audit rows each attempt wrote.
+4. Locked `member2` with five wrong passwords, then entered the right one. Used the administrator's Unlock under Members, then reloaded. Signed in as `member2` again.
+5. Idle timeout with Playwright's fake clock: 14 minutes idle, then 70 more seconds.
+6. Enrolled TOTP for `member2` through the API. Signed in with a wrong code, then a right one, then a right one typed `123 456`. Disabled MFA again afterwards.
+7. At 390×844: overflow, tap-target sizes and Tab order on `/login`. Signed in, then signed out through the More menu.
+
+Not driven: sign-out on one device leaving another signed in (unchanged
+since the first pass), Google and Microsoft sign-in (not configured), and
+the suspicious-IP block.
+
+### Held up ✅
+
+- **Deep links survive sign-in,** with their query and anchor (W02-1): landed on `/events?view=calendar#today`. MFA sign-in returned to `/members` the same way.
+- **Sign-out:** confirms first, clears every auth cookie, and Back stays on the sign-in screen. The old access token gets `401` from the server.
+- **No account enumeration:** a wrong password and an unknown name both get "Incorrect username or password (Error code: LB-AUTH-006)".
+- **The audit trail (W02-3, resolved):** each step wrote its row:
+  - `login` with `method` `password` or `password+totp`, and `logout`;
+  - `login_failed` with a reason: `invalid_password`, `unknown_user`, `account_locked` or `invalid_second_factor`;
+  - `account_locked` after the fifth failure, and `account_unlocked` naming the administrator and the member.
+
+  A failure against an unknown name is written with no member and no organization, as designed.
+
+- **A lock an administrator can see and lift (W02-4, resolved):**
+  - Members shows "Sign-in locked until 10:20 PM" under the member's status, with an **Unlock** button;
+  - Unlock clears the lock, and it stays cleared after a reload;
+  - the member still sees only "Incorrect username or password", by design (`ACCOUNT_LOCKOUT_REVEAL` off).
+- **The server's limit is per account:** the sixth attempt for one name in a minute got `429`, and the screen counted down "Wait 59s" from `Retry-After`.
+- **Idle timeout:** at 14 minutes a toast warns that the session ends in 60 seconds. At 15 the member is signed out with no cookies left, and the sign-in screen says "You were signed out after a period of inactivity. Sign in again."
+- **MFA sign-in:** the second step labels its field "Authenticator code" (`one-time-code`, numeric keypad) and offers a recovery code and Back. A wrong code gets "Invalid verification code".
+- **Phone `/login` (W02-5, resolved):** no sideways scroll. The fields, Forgot your password?, Sign in, Privacy and Terms are all 44px tall. Tab order is unchanged.
+
+### W02-7 — MED — A wrong password under eight characters was refused as a validation error — ✅ FIXED
+
+**Did:** entered `wrong-1` (seven characters) for `member2`, five times.
+**Saw:**
+
+- each attempt answered `422`, shown as "password: Value is too short. (Error code: LB-VAL-001)", where every other wrong password gets "Incorrect username or password";
+- the five attempts never reached the password check, so none counted toward the lockout;
+- the sixth, with the right password, was refused `429` by the rate limit, which had counted them.
+
+**Where:** `UserLogin.password` (`backend/app/schemas/auth.py`) carried `min_length=8`.
+
+- The message disclosed part of the password policy to anyone guessing.
+- A member whose password is shorter than eight characters could not sign in at all. `PASSWORD_MIN_LENGTH` is configurable, and passwords set under a lower policy remain valid.
+- `PasswordChange.current_password`, which also verifies a stored password, already had no floor.
+
+**Fix:** `min_length=1`; the 128-character ceiling (the Argon2 cost guard) stays. Re-driven: `wrong-1` now gets `401` "Incorrect username or password" and writes a `login_failed` row. Test: `tests/test_sign_in_short_password.py`, whose three short-password cases failed before the fix.
+**Behaviour change:** a short wrong password now counts toward the five-failure lockout, like any other wrong password.
+
+### W02-8 — MED — The sign-in screen's own back-off counts every name tried in the tab — FLAGGED
+
+**Did:** made 11 failed attempts in one tab across `member` and `member2`, then typed `review_member` in the same tab.
+**Saw:** the Sign in button read "Wait 60s" and was disabled for `member`, who had made no recent attempt. `sessionStorage.login_lockout` held `{"loginAttempts":11,...}`.
+**Where:** `authStore.login` (`frontend/src/stores/authStore.ts`) keeps one counter per tab. From the fifth failure it holds the button for `2s × 2^(n−5)`, capped at five minutes, whatever username is typed. The counter resets only on a successful sign-in.
+**Why it matters:** on a station computer, one member's mistyped passwords hold the next member at the sign-in screen for up to five minutes. The owner's 2026-11-01 decision moved the server to per-account limits so that "one station's members don't block each other". The client-side counter still does.
+**Why not fixed:** it is an authentication control. Keying it by account changes how the countdown behaves as someone edits the username field, and dropping it in favour of the server's `Retry-After` alone is also a fair choice. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+
+### W02-9 — LOW — The account and sign-out controls at the foot of the phone menu were 36px tall — ✅ FIXED
+
+**Did:** at 390×844, opened More and measured every control.
+**Saw:** Notifications, Evaluations, My Account, My ID Card, Theme, High contrast and Logout were 36px tall. The menu's entries above them were 44px.
+**Where:** `TopNavigation.tsx`, the footer group of `#mobile-menu`: `px-3 py-2` with no touch minimum.
+**Fix:** `touch:min-h-11` on all seven controls. Re-driven: nothing in the open menu is under 44px. Test: `TopNavigation.test.tsx`, "gives the account and sign-out controls at its foot a touch-size target", which failed before the fix.
+
+### W02-10 — LOW — A correct authenticator code typed as the app shows it was refused — ✅ FIXED
+
+**Did:** at the second step, typed the current code as `123 456`, the way authenticator apps group it.
+**Saw:** `422`, shown as "code: Value is too long. (Error code: LB-VAL-001)".
+**Where:** `MFALogin.code` takes exactly six characters, and `LoginPage.handleMfaSubmit` sent the field trimmed but with its inner space.
+**Fix:** the page drops whitespace from an authenticator code before sending it. Recovery codes are sent as typed, as before. Re-driven: `123 456` signs in. Test: `LoginPage.test.tsx`, "sends an authenticator code typed with a space as six digits", which failed before the fix.
+
+### W02-11 — NIT — "Logout" beside "Sign in" — FLAGGED
+
+The header, the More menu and the confirmation dialog say "Logout" (title "Confirm Logout", button "Logout"). The idle warning says "stay logged in". The sign-in screen, its inactivity notice and the password-change notice in My Updates say "Sign in" and "signed out". Settling on one pair, and "Log out" as a verb rather than the noun "Logout", is a wording call. The label is also a selector in `e2e/auth.spec.ts`, `e2e/mobile-landscape.spec.ts` and this harness, so the rename would go with those. Left as it is.
+
+### Seen in passing
+
+- **Administrator actions on a member** (`users.py`): `account_unlocked`, like the password, MFA and passkey resets beside it, is audited with no IP address or user agent. Only the data-export, anonymize, visibility and consent rows pass `get_client_ip`. Added to the leads.
+- After an Unlock, the member's own attempts still count in the per-account rate window. A member who tried several times just before calling may wait up to a minute more. Expected, but the Unlock gives no hint of it.
+
+### Harness
+
+This pass cleared the rate-limit and `suspicious_ip:*` keys it created, reset
+`failed_login_attempts` and `locked_until` for `member` and `member2`, and
+turned `member2`'s MFA back off, so `wr.as("member2")` still signs in with a
+password alone.
+
+### Checklist
+
+| Section                 | Result                                                                                   |
+| ----------------------- | ---------------------------------------------------------------------------------------- |
+| 1. The job gets done    | ✅ sign in, out, MFA, deep-link return; W02-10 fixed                                     |
+| 2. The right people     | ✅ revoked token refused; no enumeration; Unlock gated to `members.manage`               |
+| 3. Wrong input, failure | ✅ after W02-7; W02-8 flagged                                                            |
+| 4. Browser signals      | ✅ only the expected 401s, the deliberate 429s, and the 422s that W02-7 and W02-10 fixed |
+| 5. Coming back to it    | ✅ Back after sign-out stays out; lock state survives a reload                           |
+| 6. On a phone           | ✅ `/login` clean; W02-9 fixed                                                           |
+| 7. Everyone can use it  | ✅ labels, autocomplete, numeric keypad for the code, errors in `role=alert`             |
+| 8. What happens around  | ✅ every step audited (W02-3 resolved); IP missing on admin rows (lead)                  |
+
+### Completion gate
+
+| Check                  | Result                                                                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| npm run typecheck      | ✅ clean                                                                                                                                               |
+| npm run lint           | ✅ clean (run with an 8 GB heap, per the W77 tooling lead)                                                                                             |
+| flake8 / black / isort | ✅ `app/schemas/auth.py`, `tests/test_sign_in_short_password.py`                                                                                       |
+| backend tests          | ✅ 188 passed: the new test and the sign-in, audit, per-account limit, MFA and security-alert suites; the new cases failed before the fix              |
+| frontend tests         | ✅ 202 passed across 19 files: `LoginPage`, `components/layout/*`, `authStore` and `touchTargetIntegrity`; the two new cases failed before their fixes |

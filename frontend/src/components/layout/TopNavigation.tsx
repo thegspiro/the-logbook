@@ -988,7 +988,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                       href="/notifications?tab=inbox"
                       onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
                       aria-current={notificationsActive ? 'page' : undefined}
-                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                         notificationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                       }`}
                     >
@@ -1008,7 +1008,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                       href={EVALUATIONS_HOME_PATH}
                       onClick={(e) => handleNavigation(EVALUATIONS_HOME_PATH, e)}
                       aria-current={evaluationsActive ? 'page' : undefined}
-                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                         evaluationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                       }`}
                     >
@@ -1020,7 +1020,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                     href="/account"
                     onClick={(e) => handleNavigation('/account', e)}
                     aria-current={accountActive ? 'page' : undefined}
-                    className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                    className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                       accountActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                     }`}
                   >
@@ -1032,7 +1032,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                       href={myIdCardPath}
                       onClick={(e) => handleNavigation(myIdCardPath, e)}
                       aria-current={myIdCardActive ? 'page' : undefined}
-                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                         myIdCardActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
                       }`}
                     >
@@ -1042,7 +1042,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   )}
                   <button
                     onClick={cycleTheme}
-                    className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
+                    className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
                   >
                     <ThemeIcon className="h-4 w-4" aria-hidden="true" />
                     <span>Theme: {themeLabel}</span>
@@ -1050,7 +1050,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   <button
                     onClick={toggleHighContrast}
                     aria-pressed={theme === 'high-contrast'}
-                    className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                    className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
                       theme === 'high-contrast' ? 'text-amber-700 dark:text-amber-400' : 'text-theme-text-secondary'
                     }`}
                   >
@@ -1059,7 +1059,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                   </button>
                   <button
                     onClick={onLogout}
-                    className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
+                    className="text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring touch:min-h-11 flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
                   >
                     <LogOut className="h-4 w-4" aria-hidden="true" />
                     <span>Logout</span>
