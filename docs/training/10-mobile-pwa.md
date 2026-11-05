@@ -413,6 +413,15 @@ The chips, the claim button and the reasons it can be missing are described in
   roomy columns rather than three cramped ones.
 - **Small buttons keep their icon beside the label.**
 - **Names wrap** rather than being cut off.
+- **Wide tables become cards when their own card is narrow** _(2026-11-05)_.
+  Tables with many columns (the member roster, inventory items, dues, finance
+  approvals, training history, the ID card tap log, the pledges table and others)
+  switch to stacked cards based on the width of their card, not the screen, so a
+  tablet with the side menu open reads cleanly. Totals rows are screen-only and
+  stay with the table.
+- **Switches are true pills.** Toggle switches no longer draw as ovals on touch
+  screens, and the remaining purple switches use the red theme accent.
+- **Evaluation header buttons** share one width and fill the row on a phone.
 
 ### The Check-In Station on a Tablet
 
@@ -670,6 +679,8 @@ that message, in two cases:
 
 - **Your session has expired** and The Logbook cannot renew it. The app
   returns you to the sign-in page, and unsent work on the device is deleted.
+  The one exception is unsent skills evaluations, which stay for 7 days for the
+  same examiner (see [Skills Testing](./09-skills-testing.md)).
 - **A different member signs in** on the same device. Whatever the previous
   member left is deleted first.
 
