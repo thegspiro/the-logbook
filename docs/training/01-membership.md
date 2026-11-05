@@ -316,6 +316,7 @@ member in without showing their card.
 | Section                       | What it shows                                                                                                    | Who sees it                                                  |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | **Training & Certifications** | A green, yellow or red compliance summary, requirements met, hours this year, certifications and recent training | The member, and officers who can manage training records     |
+| **Shift & Call History**      | Shift hours and calls by month and year, on-call hours, and hours with other departments                         | The member, and officers who can see scheduling reports      |
 | **Administrative Hours**      | The member's administrative hours                                                                                | The member, and officers who can manage administrative hours |
 | **Assigned Inventory**        | Equipment currently signed out to the member                                                                     | The member, and officers who can manage gear and equipment   |
 
@@ -335,6 +336,24 @@ member in without showing their card.
 
 Date of birth is restricted the same way as emergency contacts.
 
+**Shift & Call History** _(2026-11-04)_ shows, for the member, the same
+figures as their own **My Hours** screen in Scheduling: hours, shifts and calls
+this month, for the year you pick and for all time, with how many of those
+hours were on call (recall) and how many were worked with other departments.
+Shifts brought in by a
+[Historical Data Import](./16-integrations.md#historical-data-import) count
+here once committed. It appears only when Scheduling is turned on. A member
+sees their own; officers who can see scheduling reports (by default the
+chiefs, captains, lieutenants, the President and the Scheduling Officer) see
+anyone's. The member adds their own outside shifts on **My Hours**, not here.
+
+**Membership status and Member since** _(2026-11-04)_. The membership status
+reads in your department's own tier names ("Senior Member"), for every member
+who opens the profile. **Member since** is the date the member's
+[credited service](#auto-advancement) runs from, not their hire date: the hire
+date for a member who never left, and later for one who returned after a
+break. The ID card's **Member Since** year uses the same date.
+
 **Contact Information.** If nothing is visible to you on a colleague's
 profile, the panel says: "No contact details shared. This member has not
 added any, or your department keeps them private."
@@ -351,12 +370,22 @@ assignment** leaves the member with no supervisor as of today. A member cannot
 supervise themselves, and the supervisor must be a current member of the
 department.
 
-**My Crew** _(2026-11-04)_. A current supervisor gets a **My Crew** entry in the
-navigation. It lists the members who report to them with their training standing,
-training records and released evaluations. It shows no medical or other health
-information. A time-off request from a crew member now notifies the supervisor,
-who may decide it alongside scheduling officers. Assigning a supervisor that
-would create a loop (A supervises B who supervises A) is refused.
+_(2026-11-04)_ An assignment that would make a loop is refused: a member cannot
+report to someone they supervise, directly or through others. The message names
+the chain, for example _"This would create a supervision loop: Dana would report
+to Lee, who reports to Dana. Dana cannot report to someone they supervise,
+directly or through others."_
+
+**What a supervisor can do** _(2026-11-04)_. A member who supervises someone
+today gets **My Crew** in their menu. It lists each member who reports to them,
+with the date they started, their training standing ("_n_ of _m_ requirements
+met") and a **Training records** button, and below that the **Evaluations**
+written about the crew, each opening once it is released to the member. It
+shows no medical records or contact details. A member who supervises nobody
+does not see the link; opening the page anyway reads **Nobody reports to you**.
+A supervisor is also emailed when a member of their crew asks for time off, and
+can approve or deny the request from Scheduling's requests list alongside the
+scheduling officers. See [Scheduling](./03-scheduling.md).
 
 **Shift & Call History** _(2026-11-04)_. The profile shows the member's hours,
 calls and outside-agency hours by month, year and all time (the same figures My
@@ -1575,6 +1604,9 @@ department's own membership tiers** by name. The shipped ladder's "Active
 Member" rung is the regular status under that name, so it appears once; a rung
 such as "Senior Member" is a standing of its own. A tier a member reaches by
 years of service shows here exactly as one an officer set by hand.
+_(2026-11-04)_ Every member sees the department's tier names, in the member
+directory's membership-status filter (the one that starts at **All Membership
+Statuses**) and on profiles, not only officers who manage members.
 
 On the edit page, both controls sit in **Department Information**: **Member
 class** beside the hire date, **Membership status** below it. Each has a line
@@ -1590,8 +1622,10 @@ spreadsheet import may still give `membershipType`; the `memberClass` and
 `memberStatus` columns state the pair directly and win when both are given.
 
 When you convert an applicant into a member, the conversion dialog asks for
-**Member class** and **Starting status** directly. An administrative member's
-ID card shows **Member Class** where other cards show **Rank**.
+**Member class** and **Starting status** directly. _(2026-11-04)_ **Starting
+status** offers Probationary, Regular and your department's own tiers by name.
+An administrative member's ID card shows **Member Class** where other cards
+show **Rank**.
 
 > **A member with no class.** A member who was moved onto a department tier
 > before the class existed may show **Not set** for their class. They are
@@ -2224,6 +2258,14 @@ _"These tiers have not been saved yet — nothing reads them until you do."_
 | **Can hold elected office**                          | When cleared, members at this tier cannot be nominated, accept a nomination or be added as a candidate |
 | **Must meet a meeting-attendance threshold to vote** | Members must have attended a set share of meetings over a set number of months before they can vote    |
 | **Exempt from training requirements**                | Members at this tier are not graded for training compliance at all                                     |
+
+_(2026-11-04)_ These rights follow each member's **Membership status**, whatever
+their class, on every screen that reads them: who may vote and stand for
+office, the ballot check, the turnout count, training exemption, and which
+members an event mandatory for a tier expects. An administrative or social
+member on a tier gets that tier's rights. Before 2026-11-04 some of these
+checks went by the older single membership type, which named such a member by
+their class and so missed their tier.
 
 **Counts as** _(2026-10-29)_ sits on the row of any tier whose id is not one
 of the built-in statuses. A member's tier is their membership status, and some

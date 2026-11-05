@@ -36,16 +36,17 @@ Most members never open this page. The parts a member may meet are the
    - [Microsoft 365 — Member Accounts](#microsoft-365--member-accounts)
 10. [Calendar Integrations](#calendar-integrations)
 11. [Messaging Integrations](#messaging-integrations)
-12. [Weather Alerts](#weather-alerts)
-13. [EMS & Fire Reporting](#ems--fire-reporting)
-14. [Generic Webhooks](#generic-webhooks)
-15. [NFC ID Cards](#nfc-id-cards--tap-in-attendance)
-16. [Training Provider Integrations](#training-provider-integrations)
-17. [Claude (MCP)](#claude-mcp--asking-questions-of-your-logbook)
-18. [Monitoring Integration Health](#monitoring-integration-health)
-19. [Troubleshooting](#troubleshooting)
-20. [Realistic Example](#realistic-example-connecting-slack-and-the-shift-feed)
-21. [If You Learned an Older Version](#if-you-learned-an-older-version)
+12. [Historical Data Import](#historical-data-import)
+13. [Weather Alerts](#weather-alerts)
+14. [EMS & Fire Reporting](#ems--fire-reporting)
+15. [Generic Webhooks](#generic-webhooks)
+16. [NFC ID Cards](#nfc-id-cards--tap-in-attendance)
+17. [Training Provider Integrations](#training-provider-integrations)
+18. [Claude (MCP)](#claude-mcp--asking-questions-of-your-logbook)
+19. [Monitoring Integration Health](#monitoring-integration-health)
+20. [Troubleshooting](#troubleshooting)
+21. [Realistic Example](#realistic-example-connecting-slack-and-the-shift-feed)
+22. [If You Learned an Older Version](#if-you-learned-an-older-version)
 
 ---
 
@@ -881,14 +882,19 @@ the system the department used before The Logbook: shifts on a unit, on-call
 
 1. **Upload** the export and name the source system. Use the same name every
    time; rows already brought in are then recognised and skipped.
-2. **Say how to read it**: confirm the detected columns, then mark each hours
-   column as shift, on-call, training or administrative.
-3. **Check how the rows sorted.** Recorded hours win over the clock; times such
-   as `2445` roll to the next day.
-4. **Send shifts to review.** Shift and on-call rows become monthly review
-   batches in the shift history import, where you match members, units and
-   crews and commit. Administrative hours import as administrative hours.
-5. **Download the log**: one line per row saying what became of it.
+2. **1. How to read the file**: confirm the detected columns, then mark each
+   hours column as shift, on-call, training or administrative.
+3. **2. How the rows sorted.** Recorded hours win over the clock; times such
+   as `2445` roll to the next day. The **Imported by** column says which step
+   below takes each kind of row.
+4. **3. Shifts and on-call time.** **Send to shift review** turns shift and
+   on-call rows into monthly review batches in the shift history import,
+   where you match members, units and crews and commit.
+5. **4. Administrative hours.** **Set up administrative hours**, choose each
+   row's category, and import. Entries arrive approved and marked _Imported_.
+6. **5. Training** _(2026-11-04)_. See [Importing training](#importing-training)
+   below.
+7. **Download log**: one line per row saying what became of it.
 
 **Training rows** _(2026-11-04)_ become completed training records in one commit.
 Set up the subject, instructor and "taught the class" columns; map each subject
@@ -900,13 +906,61 @@ synced record matches. Rows a synced record already covers are left out.
 when enough members logged it (three by default, 1 to 50). Each held drill
 becomes one past, finalized training session linked to the session attendance
 requirements you choose, with each member's imported record attached, so
-[session attendance](./02-training.md#session-attendance-requirements) grades
+[session attendance](./02-training.md#session-attendance--attend-a-share-of-the-linked-drills-2026-11-04) grades
 correctly. A date fewer members logged stays an ordinary record. The step runs
 after the training commit and is safe to run again. Its confirmation is a plain
 confirmation, not a red delete warning, because it only creates sessions.
 
 Running the same file twice is safe. Full detail is in the wiki page
 [Historical Data Import](../../wiki/Integration-Historical-Data-Import.md).
+
+### Importing training
+
+_(2026-11-04)_ Training rows become **completed** training records in one
+step, credited with their recorded hours. Select **Set up training** (it is
+greyed out until a column is marked as training hours), then:
+
+- **Subject**, **Instructor** and **Taught the class** name the columns that
+  hold them. They are detected from the header row; change any that were
+  guessed wrong, or choose **Not in this file**.
+- **Subjects.** Each distinct subject is listed once, with its record count
+  and hours. Subjects that differ only in capitals and punctuation count as
+  one. Pick a library course for a subject and its records take that course's
+  name, type and category, exactly as a Target Solutions record mapped to the
+  course would. **Accept all suggestions** maps every subject whose name
+  closely matches a course; **Use** _course_ beside one subject accepts just
+  that suggestion. A subject left on **Import as written** keeps its own name,
+  as continuing education.
+- **Instructor.** The instructor is kept as the file names them. On a row
+  where **Taught the class** is set, an instructor written as "me" (or left
+  blank) becomes the member's own name, and the record notes that they taught
+  the class.
+- **Training provider rows.** A row whose instructor names Target Solutions or
+  Vector Solutions may already be in The Logbook through the provider sync
+  (see [Training Provider Integrations](#training-provider-integrations)). A
+  synced record for the same member within a day means the row is left out
+  automatically, so nothing is counted twice. For rows nothing synced matches,
+  choose once: **Import them as ordinary training records**, or **Leave them
+  out — the sync is the record**. **Import training records** stays greyed out
+  until you choose.
+- **Members** lists everyone in the file The Logbook could not match. Map each
+  to an existing member, or choose **Create as an archived former member**
+  (**Create all unmatched as archived** does every one at once).
+
+**Import training records** asks first, saying how many records it will write.
+There is no batch undo: a wrong record is corrected on its own. Rows already
+imported are counted and skipped, so running it again adds only what is new.
+
+### Where the imported hours show up
+
+_(2026-11-04)_ Committed shift and on-call rows count in each member's
+**My Hours** and in the **Shift & Call History** section of their profile:
+hours by month and year, how many of them were on call, calls, and hours and
+calls with other departments. The member sees their own; officers who can see
+scheduling reports see anyone's. See
+[Member Profiles](./01-membership.md#member-profiles). Imported training
+appears in the member's training records, and administrative hours in their
+**Administrative Hours**.
 
 ## Weather Alerts
 

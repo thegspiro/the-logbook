@@ -879,9 +879,12 @@ of **Manage Events**.
 **Mandatory attendance.** Ticking **Mandatory attendance** opens **Mandatory
 for**, a checklist of your department's membership types. The form will not
 save until at least one is ticked. The event is mandatory only for members
-whose membership type is ticked. A member is not counted as required to
-attend if they were hired after the event date, were on approved leave that
-day, or have no membership type recorded.
+whose membership type is ticked. _(2026-11-04)_ A member's type here is their
+**Membership status** — their tier on the department's ladder — whatever their
+class, so an administrative member on the Life tier is expected at an event
+mandatory for Life members. A member with no standing recorded at all counts
+as a regular member. A member is not counted as required to attend if they were
+hired after the event date or were on approved leave that day.
 
 ![Create Event form with type, title, date, location, and reminder fields](./images/04-05-create-event.png)
 
@@ -1392,7 +1395,7 @@ the events list. On any occurrence's page:
 ### Calendar View
 
 A training session that counts toward a
-[session attendance requirement](./02-training.md#session-attendance-requirements)
+[session attendance requirement](./02-training.md#session-attendance--attend-a-share-of-the-linked-drills-2026-11-04)
 carries a **Counts toward attendance** badge beside **Mandatory** here, on the
 events list and on the event page _(2026-11-04)_.
 

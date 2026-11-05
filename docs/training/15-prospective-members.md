@@ -743,11 +743,13 @@ When an applicant has completed the pipeline, convert them to a member.
    created. Select **Continue**.
 3. **Step 2 — Set Up Account** collects the details of the new member record:
    - **Member class** (Operational, Administrative or Social) and **Starting
-     status** (Probationary or Regular). Both are filled in from the pipeline's
-     **When an Applicant Becomes a Member** setting for the applicant's desired
-     type: "Pre-filled from this pipeline's conversion settings. Changing it here
-     affects this applicant only." **Convert to Member** stays disabled until
-     both are set. Choosing Administrative clears and disables **Rank**.
+     status** (Probationary or Regular, or _(2026-11-04)_ one of your
+     department's own membership tiers, under its own name). Both are filled
+     in from the pipeline's **When an Applicant Becomes a Member** setting for
+     the applicant's desired type: "Pre-filled from this pipeline's conversion
+     settings. Changing it here affects this applicant only."
+     **Convert to Member** stays disabled until both are set. Choosing
+     Administrative clears and disables **Rank**.
    - **Rank** — starting rank, typed in (for example, Firefighter).
    - **Station** — assigned station, typed in.
    - **Target Role** — filled in from the application and changeable here:

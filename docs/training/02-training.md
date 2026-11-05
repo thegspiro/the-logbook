@@ -478,10 +478,14 @@ later"** — the way most officers describe a schedule out loud.
 1. Open **Training Admin → Records → Course Cohorts**.
 2. Select **New cohort**. The wizard has five steps.
 3. **Course** — pick the course and name the cohort, such as "Recruit School —
-   Fall 2026".
+   Fall 2026". _(2026-11-04)_ You may also add a **Description**, which
+   everyone on the cohort sees on its page, and **Notes**, which only training
+   officers see.
 4. **Schedule** — set the start date. You may also choose the meeting days, a
-   default start time, and what happens when a class lands on a day you do
-   not train:
+   default start time, a **Default class length (minutes)** _(2026-11-04)_ —
+   a whole number from 1 to 1440, used only for classes with no length of
+   their own — and what happens when a class lands on a day you do not
+   train:
    - _Keep the computed date_ — leave it where it falls.
    - _Move weekends to the next weekday_.
    - _Move to the next meeting day_ — uses the meeting days you chose.
@@ -504,7 +508,11 @@ later"** — the way most officers describe a schedule out loud.
 7. **Generate** — review the summary. If the course has no pipeline yet,
    **Build a matching pipeline** is ticked for you (untick it if you do not want
    one); if it already has one, members are enrolled in that pipeline instead.
-   Then select **Generate N classes**.
+   _(2026-11-04)_ Two more boxes, both ticked to start with: **Ask members to
+   RSVP** (each class event asks the roster to confirm attendance) and **Start
+   an in-progress training record when members check in** (records are
+   completed when attendance is finalized either way). Then select **Generate
+   N classes**.
 
 Generating creates **one training event per class**, each with a linked
 training session. Students see the classes on their calendar, sign in and out
@@ -514,7 +522,10 @@ with the QR code as usual, and the hours flow into their program.
 
 ### Running a Cohort
 
-Open a cohort to see its **Classes** timeline and its **Roster**.
+Open a cohort to see its **Classes** timeline and its **Roster**. The
+cohort's description, and for training officers its notes, show above the
+tabs _(2026-11-04)_. There is no screen to edit them after the cohort is
+generated.
 
 The class timeline numbers each class. It shows the class's date and start
 time, status, credit hours, instructor, how many members signed up, and an
@@ -560,10 +571,10 @@ For each class, choose:
 
 Once a class is credited, you cannot undo the decision from this panel.
 
-> **Students cannot open a cohort page.** Cohort pages are for officers only.
-> A member who follows a cohort link sees **Access Denied**. Members do not see
-> their classmates' names, progress or attendance. Tell recruits their schedule
-> through the class events on their calendar, which they can already see.
+> **What students see on a cohort page.** A member on the roster opens the
+> cohort from **My classes** on My Training and sees its class schedule and
+> its description — not the roster, the notes, classmates' names, progress or
+> attendance. A member who is not on the roster cannot open it.
 
 ### Cohorts vs. Recurring Sessions
 
@@ -613,9 +624,9 @@ same list, so an officer sees the programs that already exist first. **New
 Pipeline** (or **Create Your First Pipeline**) opens the wizard in the same
 tab, and choosing **Programs** in the hub returns to the list. _(2026-10-25)_
 **Import from Registry** (NFPA, Pro Board, NREMT) now lives on **Curriculum →
-Requirements**; the standalone Training Programs page keeps it too. _(2026-11-05)_
-On both, the panel sits **below** the requirements list, so your own
-requirements start at the top of the page.
+Requirements**; the standalone Training Programs page keeps it too. On both,
+the panel sits **below** the requirements list _(2026-11-04)_, so the
+department's own requirements come first.
 For training officers, the page's breadcrumb starts at **Training
 Administration**, one tap back to the admin page. Other members do not see that
 link.
@@ -1196,7 +1207,9 @@ officer planning a session for one phase should say so in its description.
 **Who can do this:** training officers.
 
 Open **Training Admin → Curriculum → Requirements** to manage the department's
-training requirements.
+training requirements. The **Import from Registry** panel is below the list
+_(2026-11-04)_ (see
+[NCCR Recertification Standards](#nccr-recertification-standards)).
 
 **Deleting a requirement.** A requirement that anything references (a
 pipeline, member progress, tests, sessions, waivers or compliance profiles) is
@@ -1206,20 +1219,81 @@ happened.
 
 ### Requirement Types
 
-| Type                                  | What the member must do                                           | What you enter                                                                                      |
-| ------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **Hours**                             | Build up a number of training hours                               | Required hours                                                                                      |
-| **Courses**                           | Complete a specific list of courses                               | Courses picked from the course library                                                              |
-| **Certification**                     | Get or keep a specific certification                              | Courses that earn it, from the course library (**Certification earned by**)                         |
-| **Shifts**                            | Complete a number of qualifying shifts                            | Required shifts                                                                                     |
-| **Calls**                             | Respond to a number of qualifying calls                           | Required calls                                                                                      |
-| **Skills Evaluation**                 | Pass a hands-on skills evaluation                                 | —                                                                                                   |
-| **Checklist**                         | Complete a set of check-off items                                 | Checklist items                                                                                     |
-| **Knowledge Test**                    | Pass a written test                                               | Passing score (%), optional max attempts                                                            |
-| **Session Attendance** _(2026-11-04)_ | Attend a share of the linked training sessions held in the window | **Sessions to Attend (%)**; see [Session attendance requirements](#session-attendance-requirements) |
+| Type                                  | What the member must do                                           | What you enter                                                              |
+| ------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **Hours**                             | Build up a number of training hours                               | Required hours                                                              |
+| **Courses**                           | Complete a specific list of courses                               | Courses picked from the course library                                      |
+| **Certification**                     | Get or keep a specific certification                              | Courses that earn it, from the course library (**Certification earned by**) |
+| **Shifts**                            | Complete a number of qualifying shifts                            | Required shifts                                                             |
+| **Calls**                             | Respond to a number of qualifying calls                           | Required calls                                                              |
+| **Skills Evaluation**                 | Pass a hands-on skills evaluation                                 | —                                                                           |
+| **Checklist**                         | Complete a set of check-off items                                 | Checklist items                                                             |
+| **Knowledge Test**                    | Pass a written test                                               | Passing score (%), optional max attempts                                    |
+| **Session Attendance** _(2026-11-04)_ | Attend a share of the training sessions linked to the requirement | **Sessions to Attend (%)**                                                  |
 
 The form shows the right value box for the type you choose, and checks it
 before saving.
+
+### Session Attendance — Attend a Share of the Linked Drills _(2026-11-04)_
+
+Use a **Session Attendance** requirement when the rule is "attend 60% of the
+department's drills", not a number of hours. It counts sessions, so a two-hour
+drill and a four-hour drill count the same.
+
+**Creating one:**
+
+1. Open **Training Admin → Curriculum → Requirements** and create a
+   requirement.
+2. Set **Requirement Type** to **Session Attendance**. The **Training Type** and
+   **Required Hours** boxes disappear: this type reads neither.
+3. Enter **Sessions to Attend (%)**, from 1 to 100. It is required; the form
+   refuses to save without it ("Attendance percentage must be set for a session
+   attendance requirement").
+4. Set the frequency and who it applies to as for any requirement, and save.
+
+**Linking the sessions it counts.** Only sessions linked to the requirement
+count. A session linked to none is optional and counts against nobody. One
+session can count toward several attendance requirements at once — the same
+drills graded at 60% for active members and 30% for senior members, say.
+
+- **When you create the session.** On the create form's **Training Info** step,
+  under **Counts toward attendance**, tick each attendance requirement the
+  session counts toward. The box appears only once the department has a
+  Session Attendance requirement. For a recurring session, the ticks apply to
+  every session in the series. Leave them all unticked to make the session
+  optional.
+- **Afterwards, from the event page.** The event's **Requirements & Programs**
+  card has a **Counts toward attendance** section listing the linked
+  requirements, or "Optional: not counted against anyone." Officers who can
+  manage events select **Change**, tick or untick, and **Save**. Unlike the
+  card's other links, this can be changed after attendance is finalized; it
+  changes how the session is graded, not any record. That is how you link
+  drills held before the requirement existed.
+
+**Who sees which sessions count.** A session linked to an attendance
+requirement carries a **Counts toward attendance** badge on its event card in
+the events list, on the calendar and on its event page, so members know which
+drills they are expected at.
+
+**How compliance counts it.** For each member, in the requirement's current
+period:
+
+- A session counts once its attendance is **finalized** and its event was not
+  cancelled. An open session does not yet count for or against anyone.
+- Sessions held before the member joined are not charged to them.
+- A member attended a session when finalizing it gave them a **completed**
+  training record. Under **Require instructor confirmation** that is after an
+  officer approves the attendance.
+- A session on a day covered by a training waiver or leave of absence (one
+  covering this requirement, or every requirement) is not charged — unless the
+  member attended anyway, in which case it counts.
+- The member needs the percentage of the sessions charged to them, rounded up:
+  60% of 5 sessions is 3, 60% of 4 is 3.
+- With no linked session held yet in the period, or every one excused, the
+  requirement reads met.
+
+The Compliance Matrix describes the requirement as, for example, "60% of
+sessions", and counts a member's progress in sessions.
 
 > **A requirement must apply to someone.** If **Applies to all members** is
 > unticked, choose at least one member category. The form will not save a
@@ -1237,33 +1311,9 @@ them either way, so tick them yourself if the requirement covers them too.
 
 ![A new requirement's Member Categories with Applies to all members unticked and Operational members selected: its check mark, and Active, Probationary, Life and Retired ticked while Administrative and Honorary are not](./images/02-135-requirement-operational-members.png)
 
-### Session attendance requirements
+### The Chief's override of a session attendance requirement
 
-_Added 2026-11-04._ A **Session Attendance** requirement is met by attending a
-share of the training sessions linked to it that were held in its window, for
-example "attend 60% of the company drills this year". Use it for drills where
-what matters is turning up, not the hours logged. It counts against standing on
-every compliance screen: the Compliance Matrix reads _"2 of 3 sessions"_ and
-_"Annual · 60% of sessions"_, and My Training and the reports follow.
-
-- **The form** shows **Sessions to Attend (%)** and hides **Training Type** and
-  **Required Hours**, which this type does not read.
-- **A session counts only if it is linked.** One drill can count toward several
-  requirements (the same drills at 60% for active members and 30% for senior
-  members). A session linked to none is optional and charges nobody.
-- **Held means finalized and not cancelled**, dated on the department's calendar.
-  A member is charged only for drills held since they joined. A waiver or leave
-  covering the day excuses the drill unless they attended anyway. With nothing
-  charged yet the requirement reads as met, not as 0%.
-- **Link sessions when you create them.** Under **Connect to Requirements &
-  Programs** there is a tick box for each session attendance requirement, for a
-  single session or a recurring series. You can still change the links later
-  from the event page's **Counts toward attendance** editor, even after
-  attendance is finalized, since links change only how the session is graded.
-- **Members can see it.** A **Counts toward attendance** badge appears beside
-  **Mandatory** on the events list, the calendar and the event page.
-
-**The Chief's override.** Waiving a missed drill stays routine and goes through
+Waiving a missed drill stays routine and goes through
 a [training waiver](#waiver-management). An override is the rare exception: the
 Chief counts a member as meeting the requirement over dates the Chief chooses,
 however short their attendance, with a reason on record.
@@ -1686,17 +1736,19 @@ The areas are:
 | **Compliance Reporting** | Annual Report, ISO Readiness, Record Quality, Attestations, Forecast, and **Configure**                                            |
 | **Settings & Data**      | Manual Entry Rules, Practical Skills, Shift Evaluations, Compliance Settings, Integrations, Import Past Training, Headline Metrics |
 
-**Compliance Settings** _(2026-11-05)_. The compliance configuration
-(thresholds, profiles, **Months on leave**) is now also listed under **Settings
-& Data**; its panel says what is set there and opens the same page as
-**Compliance Reporting → Configure**. Saving needs **Manage settings** or
-**Manage compliance**; **Manage training** alone opens the hub but does not
-show **Configure** or offer the link, so an officer is not sent to a page that
-refuses them.
-
 **Evaluations** shows **Skill Evaluations** or **Skills Test Templates** and
 **Skills Test Records**, depending on which practical-skills system your
 department runs (see [Skills Testing](#skills-testing)).
+
+**Compliance Settings** _(2026-11-04)_ is listed under **Settings & Data** only
+for an officer who can also change the department's settings or holds
+"Manage compliance records", because only they can save it. It lists what the
+compliance settings hold — the department-wide threshold, compliance profiles
+for membership types and positions, and scheduled compliance reports — and
+**Open compliance settings** opens **Compliance Requirements Configuration**,
+the same page **Configure** opens from **Compliance Reporting**. The
+requirements members are graded against are not set there but under
+**Curriculum → Requirements**.
 
 Three of the four headline figures are your department's choice. The fourth is
 always the count the **Needs attention** list is about, so the page cannot hide
@@ -1934,7 +1986,10 @@ Programs**. All are optional:
 - the **Training Category** its hours count under;
 - the **Requirement** attendance credits directly;
 - the **Training Program** whose enrolled members it advances, with an
-  optional **Program Phase**.
+  optional **Program Phase**;
+- _(2026-11-04)_ under **Counts toward attendance**, the **Session
+  Attendance** requirements whose members are expected to attend it (see
+  [Session Attendance](#session-attendance--attend-a-share-of-the-linked-drills-2026-11-04)).
 
 ![Step 2 of the training-session wizard: an existing course selected, and the category, requirement and program links under a plain-language line saying what attendance will advance](./images/19-29-training-session-linkage.png)
 
@@ -1954,7 +2009,7 @@ Programs**. All are optional:
   allowed.
 
 - **Counts toward attendance** _(2026-11-04)_. When the department has
-  [session attendance requirements](#session-attendance-requirements), a tick box
+  [session attendance requirements](#the-chiefs-override-of-a-session-attendance-requirement), a tick box
   for each appears here, so the session is linked the moment it is created.
 
 The same pickers appear on the event page as **Requirements & Programs**. That
@@ -1963,7 +2018,8 @@ the wrong pipeline. The card also lets you **add training details** to a
 Training event made from **Events → Create Event**. Changes apply the next
 time the event's attendance is finalized, which rewrites the members' records
 under the new links. While attendance is finalized, the links are locked;
-reopen attendance to change them.
+reopen attendance to change them. The one exception is **Counts toward
+attendance** _(2026-11-04)_, which can be changed at any time.
 
 ---
 
@@ -1987,7 +2043,7 @@ _"Lapsed 41 days ago"_, _"Expires in 26 days"_.
   window it was judged against.
 - A cell met by an override reads **Met by the Chief's override**; a Chief sees
   the **Chief override** control on a requirement that allows it (see
-  [Session attendance requirements](#session-attendance-requirements)).
+  [Session attendance requirements](#the-chiefs-override-of-a-session-attendance-requirement)).
 - **By requirement** turns it around: requirements grouped by how many members
   are behind on them.
 - Arriving from the dashboard's non-compliant link filters the list and shows a
@@ -2052,9 +2108,23 @@ the same rules, so their figures agree:
 - **A Certification requirement is credited through the course picked on it,
   the training type or the registry code.** It does not match a course just
   because the course's name _contains_ the requirement's name (a "CPR
-  Refresher" event counting for "CPR"). That name match still applies to older
-  requirements, but only for records completed before the requirement was
-  upgraded. Link the course on any requirement you rely on.
+  Refresher" event counting for "CPR"). A registry code counts only at the
+  **start** of the certification number _(2026-11-04)_: "NFPA 1001" matches
+  "NFPA-1001-0042", not "TX-NFPA-1001". Link the course on any requirement you
+  rely on.
+- **Matching by name is for older records only, and must be the same name**
+  _(2026-11-04)_. On a requirement that existed before its upgrade, a record
+  completed by the upgrade still counts by course name — but only when the
+  name is the same as the requirement's once capitals, spaces and punctuation
+  are ignored: "CPR", "cpr" and "C.P.R." match, "CPR Recertification" does not.
+  This covers **Certification** requirements (cut off on the day the
+  2026-10-05 upgrade was installed) and, from 2026-11-04, **Skills
+  Evaluation**, **Checklist** and **Knowledge Test** requirements (cut off on
+  the day the 2026-11-04 upgrade was installed), which otherwise need their
+  **Training Type**. A requirement created since never
+  matches by name. **A member can lose credit on upgrade** if a name like that
+  was their only match; link the course on the requirement, or set its
+  training type, to credit them.
 
 ![The Compliance Matrix triage rail with a Not applicable group beneath Compliant holding the one member no requirement asks anything of, and that member's detail panel saying nothing grades them](./images/02-125-compliance-matrix-not-applicable.png)
 
@@ -2080,7 +2150,9 @@ position, not only to membership types. Use it when two groups share a class
 and status but owe different training — for example, life members who still
 ride and life members who have stopped.
 
-1. Open **Training Admin → Compliance Reporting** and select **Configure**.
+1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+   **Open compliance settings** _(2026-11-04)_. (**Configure** under
+   **Compliance Reporting** opens the same page.)
 2. Open the **Profiles** tab and select **Add Profile** (or **Edit** on an
    existing profile).
 3. Under **Applies to Members Holding a Position**, tick one or more positions.
@@ -2190,7 +2262,9 @@ like any other training, and the monthly hours show it under the month's
 **Who can do this:** compliance officers (`compliance.manage`) or
 administrators (`settings.manage`).
 
-1. Open **Training Admin → Compliance Reporting** and select **Configure**.
+1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+   **Open compliance settings** _(2026-11-04)_. (**Configure** under
+   **Compliance Reporting** opens the same page.)
 2. On the **Thresholds** tab, find **Months on leave**.
 3. Choose one:
 
@@ -2239,8 +2313,10 @@ month or stops at the end of last month.
 
 ### Setting the Department Default
 
-1. Open **Training Admin → Compliance Reporting** and select **Configure**.
-   This opens **Compliance Requirements Configuration**.
+1. Open **Training Admin → Settings & Data → Compliance Settings** and select
+   **Open compliance settings** _(2026-11-04)_. This opens **Compliance
+   Requirements Configuration**. (**Configure** under **Compliance Reporting**
+   opens the same page.)
 2. On the **Thresholds** tab, find **Evaluation Period**.
 3. Leave **Count the current (in-progress) month in compliance calculations**
    ticked to measure members against this month's training (the default). Or
@@ -2640,6 +2716,16 @@ A shift report moves through these stages:
 - **A report signs its skills off once.** Approving the same report again does
   not add another sign-off or move the trainee up another competency level.
   Competency moves only with a new sign-off from a new report.
+- **Editing an approved report corrects its credit** _(2026-11-04)_. With
+  review off, an edit to an approved report that changes its hours, calls,
+  call types, skills observed or program enrollment recalculates what the
+  report credits the trainee: each requirement holds the report's latest
+  figure once, however many times it is edited; a requirement the report no
+  longer feeds loses the report's credit; and a sign-off for a skill no longer
+  listed is removed. Two things do not go back: a requirement the report had
+  already completed stays completed even if the new figure falls short, and a
+  competency level is not lowered. With review on, the edited report goes
+  back to review, and the corrected credit applies when it is approved again.
 - If the officer who filed a draft has been permanently deleted, someone who
   can **Manage training records** can complete it. **Complete Draft** appears
   only on drafts you are allowed to complete.
@@ -3293,6 +3379,10 @@ deleting the program afterwards leaves them in your requirement list.
 
 Open **Training Admin → Settings & Data → Import Past Training** to bring in past
 training records from a CSV file.
+Training hours that sit in a previous records system's all-hours export,
+alongside shifts and administrative time, come in through **Integrations →
+Historical Data Import** instead — see
+[Training Hours from a Previous System's Export](#training-hours-from-a-previous-systems-export-2026-11-04).
 
 1. **Choose how members are matched** — by **Membership Number** (the default,
    and more reliable) or **Email Address**. Choose this _before_ uploading. A
@@ -3329,6 +3419,55 @@ record's stored name, which is what the record editor saves. A row left
 unmatched shows the name from the file.
 
 ![The historical-import wizard on its Preview step: parsed rows, matched members, and the confirm button](./images/02-02-historical-import-preview.png)
+
+### Training Hours from a Previous System's Export _(2026-11-04)_
+
+**Who can do this:** the IT Manager by default — anyone holding the Historical
+Data Import permission (`integrations.historical_import`).
+
+A department moving from another records system usually has one export with
+every kind of hours in it. **Integrations → Historical Data Import** reads that
+export (see
+[Historical Data Import](./16-integrations.md#historical-data-import)
+for uploading it and marking its columns). Once a column is marked as
+**training** hours, its rows are imported as training records from the
+**5. Training** section of the import's page:
+
+1. Select **Set up training**. The button is available only when a column is
+   marked as training hours.
+2. Check the three detected columns, and change any that are wrong:
+   - **Subject** — what the class was. It becomes the record's course name
+     unless you map it.
+   - **Instructor** — kept as the file writes it.
+   - **Taught the class** — a yes/no column. On a row where it is set and the
+     instructor is "me" (or blank), the record names the member as the
+     instructor and its notes say they taught the class.
+3. **Map subjects to courses.** Each distinct subject is listed once —
+   spellings that differ only in capitals and punctuation count as one — with
+   its number of records and hours. For each, choose a library course or leave
+   **Import as written**. A mapped subject takes the course's name, code,
+   training type and category, so its records count toward requirements that
+   name the course. An unmapped subject is imported under its own name, as
+   continuing education. Where a subject's name closely matches a course,
+   **Use** _course_ offers it; **Accept all suggestions** maps every such
+   subject at once. **Find a subject** searches the list.
+4. **Decide the training provider rows.** A row whose instructor names Target
+   Solutions or Vector Solutions may already be in The Logbook through the
+   provider's own sync. A row with a synced record for the same member within
+   a day is left out automatically, so it is not counted twice. For rows no
+   synced record matches, choose **Import them as ordinary training records**
+   or **Leave them out — the sync is the record**. The import waits until you
+   choose.
+5. **Settle the members** nothing matched, under **Members (N to decide)**: map
+   each to an existing member, or **Create as an archived former member**
+   (**Create all unmatched as archived** does every one).
+6. Select **Import training records** and confirm. Every row becomes a
+   **completed** training record dated the day in the file. There is no batch
+   undo; records are corrected one at a time.
+
+Running the same export again leaves out the rows already imported, as long as
+you named the same source system. Rows flagged as company drills come in as
+ordinary training records; they are not recorded as drill attendance.
 
 ---
 
@@ -3582,7 +3721,9 @@ views: **Annual Report**, **ISO Readiness**, **Record Quality**,
 **Attestations** and **Forecast**. The **Configure** button at the top right
 opens **Compliance Requirements Configuration** — thresholds, compliance
 profiles, automatic reports and report history (see
-[Setting the Department Default](#setting-the-department-default)).
+[Setting the Department Default](#setting-the-department-default)). Its usual
+home is now **Settings & Data → Compliance Settings → Open compliance
+settings** _(2026-11-04)_; both open the same page.
 
 ### ISO Readiness
 
@@ -3717,18 +3858,20 @@ Configuration**).
 
 ### Compliance Calculation
 
-| What happened                                                                 | What it means                                                                                                                                                                                                                                                                         |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The member's membership tier has **Exempt from training requirements** ticked | The member is exempt from all training requirements and shows green whatever their hours. _(2026-10-29)_ The tier is found from the member's **Membership status**, whatever their class, so an administrative or social Life member gets the Life tier's exemption _(2026-11-01)_.   |
-| The membership tier is exempt from some training types                        | The member is exempt only from requirements of those types. Other requirements still apply.                                                                                                                                                                                           |
-| The membership tier's settings cannot be read                                 | The member is treated as **not** exempt and must meet every requirement. Officers may see unexpected non-compliance for senior members; check the tier under **Members Admin → Settings → Membership Tiers**.                                                                         |
-| A **Courses** requirement with no courses picked                              | Nobody can meet it: it reads as not started (0%) until you pick the courses on the requirement.                                                                                                                                                                                       |
-| A **Certification** requirement                                               | Credited through a course linked on the requirement, the training type, or the registry code in the certification number. Older requirements also match by course name, but only for records completed before they were upgraded. If nothing matches, the member shows non-compliant. |
-| An **Every 2 Years** requirement with an expired certification                | Even with enough hours, the expired certification sets progress back to 0 until it is renewed.                                                                                                                                                                                        |
-| The member joined before an **Exempt existing members** cutoff                | The requirement does not grade that member anywhere. Join date is the hire date, else the date the account was created.                                                                                                                                                               |
-| The same, with a catch-up deadline not yet passed                             | Shown as catching up, due on the deadline. It counts neither for nor against the member until the deadline passes; then it counts normally.                                                                                                                                           |
-| The department has no requirements                                            | Department compliance reads **Not set up** / "no requirements set up yet", not 100%.                                                                                                                                                                                                  |
-| A **One Time** requirement                                                    | No date window: every training record the member has ever had counts. (**Every 2 Years** counts the requirement's year and the year before.)                                                                                                                                          |
+| What happened                                                                           | What it means                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The member's membership tier has **Exempt from training requirements** ticked           | The member is exempt from all training requirements and shows green whatever their hours. _(2026-10-29)_ The tier is found from the member's **Membership status**, whatever their class, so an administrative or social Life member gets the Life tier's exemption _(2026-11-01)_.                                                                                                                     |
+| The membership tier is exempt from some training types                                  | The member is exempt only from requirements of those types. Other requirements still apply.                                                                                                                                                                                                                                                                                                             |
+| The membership tier's settings cannot be read                                           | The member is treated as **not** exempt and must meet every requirement. Officers may see unexpected non-compliance for senior members; check the tier under **Members Admin → Settings → Membership Tiers**.                                                                                                                                                                                           |
+| A **Courses** requirement with no courses picked                                        | Nobody can meet it: it reads as not started (0%) until you pick the courses on the requirement.                                                                                                                                                                                                                                                                                                         |
+| A **Certification** requirement                                                         | Credited through a course linked on the requirement, the training type, or the registry code at the start of the certification number. Older requirements also match by course name, but only for records completed before they were upgraded, and _(2026-11-04)_ only when the name is the same once capitals, spaces and punctuation are ignored. If nothing matches, the member shows non-compliant. |
+| A **Skills Evaluation**, **Checklist** or **Knowledge Test** requirement _(2026-11-04)_ | Credited through the requirement's training type. A requirement that existed when the 2026-11-04 upgrade was installed also matches a record completed by that day whose course name is the same as the requirement's (capitals, spaces and punctuation ignored); a newer record, or a newer requirement, never matches by name.                                                                        |
+| A **Session Attendance** requirement _(2026-11-04)_                                     | Counts finalized, linked sessions the member attended, against the percentage of those held in the period since they joined. See [Session Attendance](#session-attendance--attend-a-share-of-the-linked-drills-2026-11-04).                                                                                                                                                                             |
+| An **Every 2 Years** requirement with an expired certification                          | Even with enough hours, the expired certification sets progress back to 0 until it is renewed.                                                                                                                                                                                                                                                                                                          |
+| The member joined before an **Exempt existing members** cutoff                          | The requirement does not grade that member anywhere. Join date is the hire date, else the date the account was created.                                                                                                                                                                                                                                                                                 |
+| The same, with a catch-up deadline not yet passed                                       | Shown as catching up, due on the deadline. It counts neither for nor against the member until the deadline passes; then it counts normally.                                                                                                                                                                                                                                                             |
+| The department has no requirements                                                      | Department compliance reads **Not set up** / "no requirements set up yet", not 100%.                                                                                                                                                                                                                                                                                                                    |
+| A **One Time** requirement                                                              | No date window: every training record the member has ever had counts. (**Every 2 Years** counts the requirement's year and the year before.)                                                                                                                                                                                                                                                            |
 
 ### Waiver Behavior
 
@@ -3959,8 +4102,10 @@ department imports only what it staffs:
 | **AEMT**      | Advanced Emergency Medical Technician |
 | **Paramedic** | Paramedic                             |
 
-Import them the same way as NFPA and Pro Board: on **Training > Programs**,
-open the **Requirements** tab and use the **Import from Registry** panel. Each
+Import them the same way as NFPA and Pro Board: on **Training Admin →
+Curriculum → Requirements** (or the **Requirements** tab of **Training >
+Programs**), scroll past the requirements list to the **Import from Registry**
+panel _(2026-11-04)_. Each
 registry is its own button; then tick the requirements you want. Each registry
 names its NCCR topic areas (Airway, Cardiology, Trauma, Medical, Operations)
 sets a total hours target for the level, and sets a minimum number of hours in
@@ -4533,11 +4678,22 @@ evaluations**, and a strip across the top offers **Evaluations I conduct** (or
 permission. A member with no evaluation permission sees no strip. **Reports**
 no longer lights up while you are on an evaluation page.
 
+_(2026-11-04)_ The strip's links carry a count when something is waiting:
+**My evaluations** shows how many of your own evaluations are waiting on you,
+and the conduct list how many of those you can see there are overdue. On a
+tablet or computer the strip names the page you are on, so the page's large
+title is not repeated above it; on a phone the title still shows. On
+**Templates & periods**, **New review period** (evaluation managers) and **New
+template** (those who configure evaluations) are at the top of the page,
+beside the title, not in the Templates and Review periods sections below.
+
 **First-time setup.** A chief opening an empty evaluations area gets a **Getting
 started** checklist, a **preview** of how the form will look to the member, the
 evaluator and the officer, and two starter templates, an **Annual Member
-Evaluation** (weighted to 100, with suggested ratings from training hours,
-required training and meeting attendance) and a **Probationary Check-in**.
+Evaluation** (graded by section _(2026-11-04)_: each section's ratings give a
+score out of 5 and a grade, and the sections' weights, adding to 100, give the
+overall; with suggested ratings from training hours, required training and
+meeting attendance) and a **Probationary Check-in**.
 Choosing a starter fills the first draft; both publish as they stand, and
 neither includes an officer-only section, since that needs your own ranks.
 
@@ -4640,12 +4796,15 @@ have moved, been renamed or work differently.
   Settings & Data. There is no **Setup** or **Advanced** area. Requirements,
   the Course Library and Programs are under **Curriculum**; Knowledge Tests and
   Skill Evaluations under **Evaluations**; Integrations, Import Past Training, Manual
-  Entry Rules and Practical Skills under **Settings & Data**; Recertification,
+  Entry Rules, Practical Skills, Shift Evaluations and Compliance Settings under
+  **Settings & Data**; Recertification,
   Competency, Instructors, Effectiveness, Multi-Agency and Reports under
   **Program Management**. Old links still open the right page.
-- **Compliance settings** are reached from **Compliance Reporting →
-  Configure** or **Settings & Data → Compliance Settings**, not a "Compliance
-  Requirements" tab.
+- **Compliance settings** are reached from **Settings & Data → Compliance
+  Settings → Open compliance settings** _(2026-11-04)_, or from **Compliance
+  Reporting → Configure**, not a "Compliance Requirements" tab.
+- **Import from Registry** sits **below** the requirements list on **Curriculum
+  → Requirements**, not above it _(2026-11-04)_.
 - **Closing out a shift** uses **Close out shift**, not "Finalize Shift". The
   steps are in the [scheduling guide](./03-scheduling.md#closing-out-a-shift).
 - **New programs** start from **New Pipeline**, and the wizard ends with
@@ -4681,8 +4840,11 @@ have moved, been renamed or work differently.
   Courses requirement made long ago with typed course names showed everyone as
   incomplete. Reopen it and pick the courses.
 - **A Certification requirement no longer credits a course just because its
-  name contains the requirement's name**, except for older records on older
-  requirements. Link the course.
+  name contains the requirement's name** — not even for older records, since
+  2026-11-04. An older record on an older requirement counts by name only when
+  the name is the same, ignoring capitals, spaces and punctuation. Skills
+  Evaluation, Checklist and Knowledge Test requirements follow the same rule
+  from 2026-11-04. Link the course, or set the training type.
 - **Rolling requirements** count whole calendar months, and a rolling hours
   requirement has no due date.
 - **A month of leave no longer needs 15 days to count** _(2026-11-02)_. By
@@ -4717,8 +4879,8 @@ have moved, been renamed or work differently.
 - **Shift report hours** are the shift's length, not the crew's total. Check
   the hours on reports filed long ago — a three-person 12-hour shift could have
   credited each rider 35.6 hours.
-- **Students cannot open cohort pages.** They follow their classes on the
-  calendar.
+- **Students open their own cohort's class schedule** from **My classes** on
+  My Training, not the officer's cohort page with its roster.
 - **Older notes describing these screens were wrong:** a Proceed-anyway
   warning for attending a later phase, a "Filtered to shift members" badge, a
   "Process Alerts" button on Expiring Certs, a renewal section on My Training,

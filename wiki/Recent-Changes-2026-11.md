@@ -10,6 +10,24 @@ new page. The engineering audit behind each pass is in
 The engineering audit is
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).
 
+- **Scheduling** can require approval before a member from another department
+  takes a shift, and open swaps now reach members through the bell.
+- **Session Attendance** is a new training requirement: attend a share of
+  sessions rather than log hours.
+- **Compliance Settings** moved to Training Admin → Settings & Data.
+- **Historical Data Import** now brings in training records, and the member
+  profile shows imported shift and call history.
+- **Membership tiers** apply by membership status, every member shows a tier
+  name, and **My Crew** lists the members you supervise.
+- **Medical screening** grace periods now count, and a record only counts
+  toward the requirement it is linked to.
+- **Dashboard** sections say plainly when there is nothing to show.
+
+## Recent changes: November 5, 2026 (later merges)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-5-2026-later-merges).
+
 - **Drill attendance can be a requirement.** A Session Attendance requirement
   (for example 60% of company drills this year) counts the drills a member
   attended. Drills are marked when created, and a badge tells members which count.

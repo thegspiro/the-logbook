@@ -19,9 +19,10 @@ Logbook records each result, tracks when it expires, and shows who is behind.
 **Members:** read only
 [What Members See on Their Own Dashboard](#what-members-see-on-their-own-dashboard).
 
-**Officers:** read the whole guide. Pay special attention to the
-[Grace Period](#grace-period) section: the setting is saved but does not yet
-change anyone's compliance.
+**Officers:** read the whole guide. Pay special attention to
+[Grace Period](#grace-period) and to linking each record to its requirement
+(see [How Compliance Is Calculated](#how-compliance-is-calculated)): both
+changed on 2026-11-04 and can change who reads as compliant.
 
 ---
 
@@ -66,30 +67,39 @@ says how many, for example "2 screenings expiring in the next 30 days".
 ### Permissions
 
 Three permissions control this module. Role Management lists them under
-Compliance as **View member medical screenings**, **View member screening
-details** _(2026-11-04)_ and **Manage member medical screenings**.
+Compliance as **View member medical screenings**, **View the clinical detail
+of medical screenings (provider, results, notes)** and **Manage member medical
+screenings**.
 
-| What you want to do                                                  | Who can do it                                       |
-| -------------------------------------------------------------------- | --------------------------------------------------- |
-| See requirements, records and compliance status                      | Roles that can **view** member medical screenings   |
-| See the clinical narrative: provider, result summary and data, notes | Roles that can **view details**                     |
-| Add, edit or delete requirements                                     | Roles that can **manage** member medical screenings |
-| Add, edit or delete screening records                                | Roles that can **manage** member medical screenings |
-| See **your own** screening counts on the dashboard                   | Every signed-in member                              |
+| What you want to do                                                       | Who can do it                                                                 |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| See requirements, records and compliance                                  | Roles that can **view** member medical screenings                             |
+| Read a record's **Provider / Facility**, **Result Summary** and **Notes** | Roles that can view the **clinical detail**, or **manage** medical screenings |
+| Add, edit or delete requirements                                          | Roles that can **manage** member medical screenings                           |
+| Add, edit or delete screening records                                     | Roles that can **manage** member medical screenings                           |
+| See **your own** screening counts on the dashboard                        | Every signed-in member                                                        |
 
-The last row is the only part of this module a member sees without either
-permission. It shows counts only. See
+The last row is the only part of this module a member sees without any of
+these permissions. It shows counts only. See
 [What Members See on Their Own Dashboard](#what-members-see-on-their-own-dashboard).
 
+**Status or detail** _(2026-11-04)_. The view permission on its own shows
+compliance status: who is due, the dates, the requirement, and the outcome
+(passed, failed or waived). The provider, result summary and notes on a record
+are clinical detail, shown only to roles that also hold the clinical-detail
+permission (or the manage permission, whose edit form writes them). Without
+it, the Records tab leaves the provider out of each row and the record form
+does not show those three fields. When this arrived, every role that could
+view screenings was given the clinical-detail permission too, so nobody lost
+access. To make a role status-only, such as a scheduler's, remove the
+clinical-detail permission from it in Role Management. Roles holding the
+clinical-detail permission must use MFA, as for the other two.
+
 > **Important — this is protected health information.** Screening records are
-> private health information under HIPAA. Give the two permissions only to
-> roles that truly need them, such as chief officers, the health and safety
-> officer or HR administrators. **View** shows every member's compliance status
-> (met, expiring, not compliant). The provider, result summary, result data and
-> notes need the separate **view details** permission, so a role that only
-> tracks who is compliant never reads the clinical narrative. On upgrade, every
-> position that held **view** was given **view details** as well, so nobody lost
-> access; remove it from positions that should see status only.
+> private health information under HIPAA. Give these permissions only to roles
+> that truly need them, such as chief officers, the health and safety officer
+> or HR administrators. A role that only needs to know who is due needs the
+> view permission without the clinical-detail one.
 
 > **What is recorded in the audit log?** Adding, editing and deleting
 > requirements and records is logged. So is every screen that shows someone's
@@ -134,7 +144,7 @@ the **Requirements** tab to see them. Each row shows the name, **Active** or
 | **One-time requirement (not recurring)**   | Tick for a screening needed only once. Leave unticked for a repeating one                                                     |
 | **Frequency (months)**                     | How often it repeats. Shown only for repeating requirements; must be at least 1                                               |
 | **Applies to Positions (comma-separated)** | Members are graded on this only if they hold one of these positions — see [Role-Based Requirements](#role-based-requirements) |
-| **Grace Period (days past expiration)**    | Days after the expiration date that still count as compliant — see [Grace Period](#grace-period)                              |
+| **Grace Period (days past expiration)**    | How many days a member stays compliant after a screening falls due — see [Grace Period](#grace-period)                        |
 | **Active**                                 | Only active requirements count toward compliance                                                                              |
 
 ### One-Time vs Recurring Requirements
@@ -216,19 +226,26 @@ a blank list, such as a CPR card.
 
 ### Grace Period
 
-_Applied from 2026-11-04._ **Grace Period (days past expiration)** now extends
-the deadline. A screening that has passed its expiration date but is still
-inside the grace period keeps counting as compliant. The compliance list shows
-it as **Past due N days** with **Grace period until** the date it ends, and it
-appears on the expiring list. Once the grace period ends the member becomes
-**Not compliant**. Every screen uses the same due-date rule, so the dashboard,
-the department list, the expiring list and the assistant agree.
+_(2026-11-04)_ **Grace Period (days past expiration)** is applied. A member
+stays compliant for that many days after a screening falls due, whether the
+due date is the record's own expiration date or one worked out from the
+frequency. The field says so: _"Members stay compliant this many days after a
+screening falls due, shown as past due. Enter 0 to mark them non-compliant the
+day after."_
 
-- The field is required. Enter **0** for no grace period; a blank is refused
-  rather than quietly saved as 30. A new requirement starts at 30.
-- A record counts only for its **linked requirement**. On upgrade, an unlinked
-  record was linked where exactly one requirement of its type exists; ambiguous
-  ones stay unlinked, so open them and choose the requirement.
+- A new requirement starts at 30 days, and every requirement that existed
+  before 2026-11-04 holds 30 days too. Members who had lapsed within that window
+  read compliant again after the upgrade.
+- **During the grace period** the screening still counts, but it is not hidden.
+  The member's compliance panel reads **Past due — grace period until _date_**,
+  the expiring list reads **Past due _n_ days** with **Grace period until
+  _date_**, and it is counted as expiring soon.
+- The day after the grace period ends, the member reads **Not compliant**.
+- **Enter 0** for a requirement that must be renewed before the due date. The
+  field is required, so leave it at 0 rather than blank.
+
+Plan renewals before the due date anyway: the
+[Expiring Screenings](#expiring-screenings) list gives you 60 days' notice.
 
 ---
 
@@ -237,8 +254,11 @@ the department list, the expiring list and the assistant agree.
 A record holds the **result** of one screening: who, when, what type, the
 outcome, and who reviewed it. Open the **Records** tab to see them.
 
-Each row shows the screening type, the status, the person's name, the
-provider, the scheduled date and the expiration date.
+Each row shows the screening type, the status, the person's name, the linked
+requirement, the provider (only to roles that can read the clinical detail),
+the scheduled date and the expiration date. A record linked to no requirement
+carries an amber **Not linked to a requirement** badge _(2026-11-04)_: it
+counts toward nothing until you link it.
 
 ![Medical screening records tab listing completed screenings](./images/13-03-records-tab.png)
 
@@ -261,18 +281,22 @@ provider, the scheduled date and the expiration date.
 
 ### Record Fields
 
-| Field                             | What it means                                                                             |
-| --------------------------------- | ----------------------------------------------------------------------------------------- |
-| **Record is for** (required)      | **Member** or **Prospect**, and the person. See [Prospect Screening](#prospect-screening) |
-| **Linked Requirement (optional)** | The requirement this result is for. Choosing one fills in the screening type              |
-| **Screening Type**                | The type of screening done                                                                |
-| **Status**                        | See the table above                                                                       |
-| **Scheduled Date**                | When it was booked                                                                        |
-| **Completed Date**                | When it was actually done                                                                 |
-| **Expiration Date**               | When this result runs out                                                                 |
-| **Provider / Facility**           | The doctor, clinic or lab                                                                 |
-| **Result Summary**                | A short result, such as "Cleared for full duty"                                           |
-| **Notes**                         | Anything else                                                                             |
+| Field                             | What it means                                                                                         |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Record is for** (required)      | **Member** or **Prospect**, and the person. See [Prospect Screening](#prospect-screening)             |
+| **Linked Requirement (optional)** | The requirement this result counts toward, and the only one. Choosing one fills in the screening type |
+| **Screening Type**                | The type of screening done                                                                            |
+| **Status**                        | See the table above                                                                                   |
+| **Scheduled Date**                | When it was booked                                                                                    |
+| **Completed Date**                | When it was actually done                                                                             |
+| **Expiration Date**               | When this result runs out                                                                             |
+| **Provider / Facility**           | The doctor, clinic or lab. Clinical detail                                                            |
+| **Result Summary**                | A short result, such as "Cleared for full duty". Clinical detail                                      |
+| **Notes**                         | Anything else. Clinical detail                                                                        |
+
+The three fields marked clinical detail appear on the form only for roles that
+can read the clinical detail (see [Permissions](#permissions)). A manager
+without it edits the rest of the record and leaves those three as they were.
 
 The Logbook also records who reviewed the result and when, and whether the
 record is **Self-recorded** (see below).
@@ -317,8 +341,11 @@ Things to know about the form:
   suspended. Former members are not listed.
 - The prospect list holds only prospects still open in the pipeline (Active or
   On Hold).
-- **Linked Requirement** appears only when you add a record. Editing a record
-  never changes who it belongs to or which requirement it is linked to.
+- **Link the record to its requirement.** Under **Linked Requirement** the
+  form says: _"A record counts only toward the requirement it is linked to.
+  With none, it counts toward no requirement."_ _(2026-11-04)_ You can set or
+  change the link when you edit a record too. Editing never changes who the
+  record belongs to.
 
 ![The Add Screening Record dialog with Record is for set to Member and a member chosen, above Linked Requirement and Screening Type](./images/13-07-add-record-linkage-notice.png)
 
@@ -370,12 +397,12 @@ Scheduled → Completed → Pending Review → Passed / Failed
 
 **What if …?**
 
-| What happened                                      | What it means                                                                                      |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| A record has no linked requirement                 | It still counts. Compliance matches records to requirements by **screening type**, not by the link |
-| The expiration date is already past when you save  | The record saves. It does not count toward compliance                                              |
-| The completed date is after the expiration date    | The record saves. Nothing checks this, so look for a typing mistake                                |
-| A row reads **Not linked to a member or prospect** | It belongs to nobody and counts for nobody. Re-enter it for the right person, then delete it       |
+| What happened                                      | What it means                                                                                                       |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| A record has no linked requirement                 | It counts toward nothing and carries **Not linked to a requirement**. Edit it and choose its **Linked Requirement** |
+| The expiration date is already past when you save  | The record saves. It does not count toward compliance                                                               |
+| The completed date is after the expiration date    | The record saves. Nothing checks this, so look for a typing mistake                                                 |
+| A row reads **Not linked to a member or prospect** | It belongs to nobody and counts for nobody. Re-enter it for the right person, then delete it                        |
 
 ---
 
@@ -391,12 +418,12 @@ whose screenings expire soon.
 Under **Department compliance**, four counts cover every current member and
 open prospect:
 
-| Count             | What it counts                                                         |
-| ----------------- | ---------------------------------------------------------------------- |
-| **Requirements**  | Active screening requirements                                          |
-| **Compliant**     | People who meet every requirement, with none expiring within 30 days   |
-| **Not compliant** | People with any requirement not met — expired or never recorded        |
-| **Expiring soon** | People who meet every requirement but have one expiring within 30 days |
+| Count             | What it counts                                                                                              |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Requirements**  | Active screening requirements                                                                               |
+| **Compliant**     | People who meet every requirement, with none expiring within 30 days                                        |
+| **Not compliant** | People with any requirement not met — lapsed or never recorded                                              |
+| **Expiring soon** | People who meet every requirement but have one expiring within 30 days, or past due inside its grace period |
 
 Below the counts is one row per person. Each row shows "_n_ of _m_ met", how
 many are not met or expiring soon, and their standing. Prospects are marked
@@ -442,42 +469,47 @@ or, when one runs out within 60 days:
 For each active requirement, The Logbook grades every current member and open
 prospect:
 
-1. **Find the latest result.** It looks at the person's records of the same
-   **screening type** with a status of **Passed**, **Completed**, **Waived**
+1. **Find the latest result.** It looks at the person's records **linked to
+   that requirement** with a status of **Passed**, **Completed**, **Waived**
    or **Failed**. It takes the one with the latest **Completed Date**.
-   Scheduled, Pending Review and Expired records are ignored.
+   Scheduled, Pending Review and Expired records are ignored. _(2026-11-04)_ A
+   record counts only toward the requirement it is linked to, so one physical
+   no longer satisfies two physical requirements with different frequencies,
+   and a record linked to nothing counts toward nothing.
 2. **A Failed result is not met.** The requirement stays not met until a
    newer Passed, Completed or Waived record is added. The member's panel shows
    _"Failed — not cleared"_.
-3. **Otherwise, check the expiration date** against today's date in your department's
+3. **Otherwise, check the due date** against today's date in your department's
    time zone (set under **Organization Settings → Profile**):
    - Expiration date is today or later: **met**.
    - No expiration date: the record falls due by **frequency**, that many
-     months after its **Completed Date**. The frequency is the one on the
-     requirement the record is linked to, or else on the requirement it is
-     graded against. With no frequency (a one-time requirement) or no Completed
-     Date, it is **met** for good.
-   - Expiration date has passed: **not met**.
+     months after its **Completed Date**, using the frequency of the
+     requirement it is linked to. With no frequency (a one-time requirement)
+     or no Completed Date, it is **met** for good.
+   - Due date has passed, but not by more than the requirement's
+     [grace period](#grace-period): **met**, shown as past due.
+   - Due date and grace period have both passed: **not met**.
 4. **No result at all:** **not met**.
 
 Which requirements apply to a member is set by
-[Role-Based Requirements](#role-based-requirements); the grace period plays no
-part. See [Grace Period](#grace-period).
+[Role-Based Requirements](#role-based-requirements).
 
 **What if …?**
 
-| What happened                                 | What it means                                                          |
-| --------------------------------------------- | ---------------------------------------------------------------------- |
-| A person has several records of the same type | Only the result with the latest Completed Date counts                  |
-| A Passed record, then a newer Failed one      | Not met. The older Passed record no longer counts                      |
-| A Failed record, then a newer Passed one      | Met: the newer pass clears the failure                                 |
-| Two results on the same day                   | The one entered later counts                                           |
-| A record has no Completed Date                | It is treated as the oldest, so any dated record of the same type wins |
-| A requirement is not Active                   | It is left out of compliance completely                                |
-| A record with no expiration date              | Due by the requirement's frequency; met for good if it has none        |
-| A Waived record with no expiration date       | The same: due by frequency, or met for good                            |
-| A Waived record with an expiration date       | Met until that date                                                    |
-| The screening expires today                   | Still met, and counted as expiring soon                                |
+| What happened                                    | What it means                                                              |
+| ------------------------------------------------ | -------------------------------------------------------------------------- |
+| A person has several records for one requirement | Only the result with the latest Completed Date counts                      |
+| A Passed record, then a newer Failed one         | Not met. The older Passed record no longer counts                          |
+| A Failed record, then a newer Passed one         | Met: the newer pass clears the failure                                     |
+| Two results on the same day                      | The one entered later counts                                               |
+| A record has no Completed Date                   | It is treated as the oldest, so any dated record for that requirement wins |
+| A requirement is not Active                      | It is left out of compliance completely                                    |
+| A record with no expiration date                 | Due by the requirement's frequency; met for good if it has none            |
+| A Waived record with no expiration date          | The same: due by frequency, or met for good                                |
+| A Waived record with an expiration date          | Met until that date                                                        |
+| The screening expires today                      | Still met, and counted as expiring soon                                    |
+| Past the due date, inside the grace period       | Still met, shown as past due, and counted as expiring soon                 |
+| A record linked to no requirement                | Counts toward nothing                                                      |
 
 ### Per-Member Compliance
 
@@ -490,8 +522,8 @@ person. It shows:
   it is graded on, and its expiry. A date worked out from the frequency reads
   "due _date_ (by frequency)" rather than "expires _date_".
 - A verdict for each: **Met**, **Expires in _n_ days**, **Expires today**,
-  **Expired** or **No qualifying record**. "Expires in" shows for anything due
-  within 30 days.
+  **Past due — grace period until _date_**, **Expired** or **No qualifying
+  record**. "Expires in" shows for anything due within 30 days.
 - The **Self-recorded** badge on a record the person filed themselves.
 
 With no active requirements, the panel says so rather than reporting the person
@@ -513,7 +545,9 @@ days left and the expiration date. The soonest is at the top. A waiver about
 to run out is listed too, with a **Waived** badge, because renewing it is
 different work from booking a screening. A record with no expiration date of
 its own is listed when it falls due by frequency, and reads "Due _date_ (by
-frequency)" instead of "Expires _date_".
+frequency)" instead of "Expires _date_". A screening past its due date but
+inside its grace period is listed too _(2026-11-04)_, at the top, reading
+**Past due _n_ days** with **Grace period until _date_**.
 
 | Icon and colour | When            |
 | --------------- | --------------- |
@@ -529,7 +563,7 @@ When nothing is due, it reads _"No screenings expire in the next 60 days."_
 
 | Record                                   | Why                                                |
 | ---------------------------------------- | -------------------------------------------------- |
-| Already expired                          | It shows as not met in the compliance list instead |
+| Past its due date and its grace period   | It shows as not met in the compliance list instead |
 | No expiration date and no frequency      | One-time screenings never expire                   |
 | Status Scheduled, Pending Review, Failed | They do not count toward compliance either         |
 | Passed, then a newer Failed record       | The failure is the result that counts              |
@@ -675,7 +709,7 @@ selects **View** on each row. Seven members have no current physical:
 1. **FF James Kowalski** — physical expired 2026-04-15.
 2. **FF/EMT Priya Patel** — physical expired 2026-05-28.
 3. **Lt. Mike Chen** — no physical on record.
-4. **FF Rosa Martinez** — physical expired 2026-06-01, 26 days ago.
+4. **FF Rosa Martinez** — physical expired 2026-05-20, 38 days ago.
 5. **FF David Kim** — no physical on record (joined 2026-06-01).
 6. **FF/Paramedic Amy Larson** — on leave; physical expired 2026-02-01.
 7. **Probie Chris Washington** — probationary; no physical on record.
@@ -686,10 +720,11 @@ What she does:
   records.
 - **Lt. Chen:** his physical was done by a different provider. She enters it
   as **Passed**.
-- **Martinez:** her physical expired 26 days ago, inside the requirement's
-  30-day grace period, so she still counts and reads **Past due 26 days** with
-  the date her grace period ends. Captain Alvarez books her physical for the
-  following week, before it runs out.
+- **Martinez:** the requirement's grace period is 30 days, and her physical
+  expired 38 days ago, so the grace period has run out and Martinez reads
+  **Expired**. (Had it expired 26 days ago, she would still count as compliant,
+  reading **Past due — grace period until** the 30th day, and would not be in
+  this list.) Captain Alvarez books her physical for the following week.
 - **Kim and Washington:** books their first department physicals.
 - **Larson:** on leave. The physical will be needed when she returns to duty.
 
@@ -746,12 +781,13 @@ everyone expiring in September.
 
 1. **Requirements drive compliance.** Set them once; The Logbook grades
    everyone.
-2. **Renew before the expiration date.** There is no grace period in effect,
-   so a member is not compliant from the day after expiry.
+2. **Renew before the expiration date.** The grace period keeps a member
+   compliant for a while after it, but they show as past due meanwhile, and
+   are not compliant the day after it ends.
 3. **One-time requirements suit pre-employment checks.** One qualifying record
    with no expiration date satisfies them.
-4. **Prospects can be screened before they join** — but re-record what is
-   needed once they become members.
+4. **Prospects can be screened before they join.** Their records go with them
+   when they become members, so nothing needs re-recording.
 5. **Use the 60-day list.** Colour-coded warnings give you time to book
    renewals before anyone falls behind.
 
@@ -759,22 +795,23 @@ everyone expiring in September.
 
 ## Troubleshooting
 
-| Problem                                               | What to do                                                                                                                                                                 |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Medical Screening is not in the menu                  | An administrator must turn it on under **Organization Settings → Modules → Additional Modules**. Your role also needs to view member medical screenings                    |
-| You get a permission message when viewing records     | Your role needs **View member medical screenings**. Ask your administrator                                                                                                 |
-| You get a permission message when adding or editing   | Your role needs **Manage member medical screenings**. Ask your administrator                                                                                               |
-| A member shows not compliant but has a passing record | Check the record's expiration date — it may have passed. Check the status is Passed, Completed or Waived, and that its screening type matches the requirement              |
-| A member shows not compliant inside the grace period  | Check the requirement's Grace Period (days) and that the record is linked to that requirement. See [Grace Period](#grace-period)                                           |
-| A member is not graded on a requirement               | Check the requirement's **Applies to Positions**: it applies only to members who hold one of the positions listed. See [Role-Based Requirements](#role-based-requirements) |
-| The counts do not match your own count                | Check which requirements are **Active**. A member is graded only on the active requirements that apply to their positions; prospects are graded on all of them             |
-| The expiring list is empty                            | Nothing Passed, Completed or Waived expires or falls due in the next 60 days                                                                                               |
-| A record still says Passed after it expired           | Expected. The status does not change by itself. Add a new record with the new result and expiration date                                                                   |
-| A drug screening counts as compliant for ever         | Expected for a one-time requirement with no expiration date. To require re-testing, give the requirement a frequency                                                       |
-| A new member's prospect screenings do not count       | Expected. Prospect records do not move to the member. Record them again against the member                                                                                 |
-| The Add Record button stays grey                      | Choose **Member** or **Prospect** and pick a person first                                                                                                                  |
-| A row reads **Not linked to a member or prospect**    | Re-enter the record for the right person, then delete the unlinked one                                                                                                     |
-| The data looks out of date                            | Compliance is worked out each time you open it. Refresh the page                                                                                                           |
+| Problem                                               | What to do                                                                                                                                                                                      |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Medical Screening is not in the menu                  | An administrator must turn it on under **Organization Settings → Modules → Additional Modules**. Your role also needs to view member medical screenings                                         |
+| You get a permission message when viewing records     | Your role needs **View member medical screenings**. Ask your administrator                                                                                                                      |
+| You get a permission message when adding or editing   | Your role needs **Manage member medical screenings**. Ask your administrator                                                                                                                    |
+| A member shows not compliant but has a passing record | Check the record's expiration date and the requirement's grace period — both may have passed. Check the status is Passed, Completed or Waived, and that the record is linked to the requirement |
+| A record carries **Not linked to a requirement**      | It counts toward nothing. Edit it and choose its **Linked Requirement**                                                                                                                         |
+| A member shows past due but compliant                 | Expected inside the grace period. See [Grace Period](#grace-period)                                                                                                                             |
+| A member is not graded on a requirement               | Check the requirement's **Applies to Positions**: it applies only to members who hold one of the positions listed. See [Role-Based Requirements](#role-based-requirements)                      |
+| The counts do not match your own count                | Check which requirements are **Active**. A member is graded only on the active requirements that apply to their positions; prospects are graded on all of them                                  |
+| The expiring list is empty                            | Nothing Passed, Completed or Waived expires or falls due in the next 60 days, and nothing is in its grace period                                                                                |
+| A record still says Passed after it expired           | Expected. The status does not change by itself. Add a new record with the new result and expiration date                                                                                        |
+| A drug screening counts as compliant for ever         | Expected for a one-time requirement with no expiration date. To require re-testing, give the requirement a frequency                                                                            |
+| A new member's prospect screenings do not count       | They move to the member at conversion. Check each one is linked to a requirement: a record with **Not linked to a requirement** counts toward nothing                                           |
+| The Add Record button stays grey                      | Choose **Member** or **Prospect** and pick a person first                                                                                                                                       |
+| A row reads **Not linked to a member or prospect**    | Re-enter the record for the right person, then delete the unlinked one                                                                                                                          |
+| The data looks out of date                            | Compliance is worked out each time you open it. Refresh the page                                                                                                                                |
 
 ---
 
@@ -790,9 +827,19 @@ If you are following older notes or an SOP, these things work differently.
   for** choice existed may belong to nobody. They read **Not linked to a member
   or prospect** and count for nobody. Re-enter them for the right person and
   delete the unlinked copy.
-- **The grace period was described as working.** Older versions of this guide
-  said a member stays compliant during the grace period. They do not; see
+- **The grace period is applied** _(2026-11-04)_. Until 2026-11-04 it was
+  saved but not used, and a member was not compliant the day after expiry.
+  Now a member stays compliant through the grace period; see
   [Grace Period](#grace-period).
+- **A record counts only toward its linked requirement** _(2026-11-04)_. It
+  used to count toward every requirement of its screening type. The upgrade
+  linked each unlinked record to its department's one requirement of that
+  type. Where two or more requirements share a type, it could not choose, and
+  left the record unlinked, so it stopped counting. Look for **Not linked to a
+  requirement** on the Records tab and link each one from its Edit dialog.
+- **Provider, result summary and notes need the clinical-detail permission**
+  _(2026-11-04)_. Viewing screenings used to show them to every role that
+  could view; see [Permissions](#permissions).
 - **Applies to Roles was described as working, and now does.** It is renamed
   **Applies to Positions** and limits a requirement to the members who hold one
   of the positions listed; see
