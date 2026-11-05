@@ -64,10 +64,15 @@ department, not by the size of the fix.
 
 ### F-1 — HIGH — A member can save a blank first or last name
 
-**Status: fixed.** `UserUpdate` now strips both names and refuses a blank one
-or an explicit `null`, and `/account` marks them required and refuses a blank
-name before saving. Tests: `tests/test_member_name_required_on_update.py`,
-`UserSettingsPage.test.tsx` ("legal name is required").
+**Status: fixed**, under the owner's rule of 2026-11-05 (save with an error,
+resolve it before submitting; see `docs/KNOWN_LIMITATIONS.md`). `UserUpdate`
+strips both names and refuses a blank one or an explicit `null`, so no request
+can wipe a name. `/account` and the officer's edit-member page leave a blank
+name out of the request, so the rest of the form still saves and the stored
+name is kept; a name that was never recorded stays flagged on its field, with
+a message, until it is entered. Tests:
+`tests/test_member_name_required_on_update.py`, `UserSettingsPage.test.tsx`
+and `MemberAdminEditPage.test.tsx`.
 
 **Driven:** as `member` on `/account`, emptied First Name and pressed Save
 Profile. The toast said **"Profile saved"**; after a reload the field was empty

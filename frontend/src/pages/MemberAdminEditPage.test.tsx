@@ -441,3 +441,59 @@ describe('MemberAdminEditPage — preferred name', () => {
     expect(JSON.parse(JSON.stringify(payload()))).toHaveProperty('preferred_name', null);
   });
 });
+
+// Forms review F-1, with the owner's rule of 2026-11-05: an officer's save
+// goes through with a blank legal name, the stored name is kept, and the
+// blank field stays flagged until a name is entered.
+describe('MemberAdminEditPage — blank legal name', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetLocations.mockReset();
+    mockGetLocations.mockResolvedValue([]);
+    mockUpdateUserProfile.mockReset();
+    mockUpdateUserProfile.mockResolvedValue({});
+    mockChangeMembershipType.mockResolvedValue({});
+    mockGetTierConfig.mockReset();
+    mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
+    mockGetUserWithRoles.mockReset();
+    mockGetUserWithRoles.mockResolvedValue(member({ middle_name: 'Lee' }));
+  });
+
+  it('saves the other changes and keeps the stored name', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+
+    const first = screen.getByLabelText(/^First Name/);
+    await user.clear(first);
+    expect(first).toHaveAccessibleDescription('Enter a first name.');
+    const middle = screen.getByDisplayValue('Lee');
+    await user.clear(middle);
+    await user.type(middle, 'Quinn');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalledTimes(1));
+    const payload = mockUpdateUserProfile.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('first_name');
+    expect(payload).toHaveProperty('middle_name', 'Quinn');
+    expect(await screen.findByText(/saved first name was kept/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^First Name/)).toHaveValue('Dana');
+  });
+
+  it('flags a name that was never recorded and still saves', async () => {
+    mockGetUserWithRoles.mockResolvedValue(member({ middle_name: 'Lee', last_name: '' }));
+    const user = userEvent.setup();
+    await renderPage();
+
+    const last = screen.getByLabelText(/^Last Name/);
+    expect(last).toHaveAttribute('aria-invalid', 'true');
+    const middle = screen.getByDisplayValue('Lee');
+    await user.clear(middle);
+    await user.type(middle, 'Quinn');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(mockUpdateUserProfile).toHaveBeenCalledTimes(1));
+    expect(mockUpdateUserProfile.mock.calls[0]?.[1]).not.toHaveProperty('last_name');
+    expect(await screen.findByText(/last name is still missing/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Last Name/)).toHaveAttribute('aria-invalid', 'true');
+  });
+});

@@ -221,8 +221,15 @@ export const MemberAdminEditPage: React.FC = () => {
       const profileUpdate: UserProfileUpdate = {};
       let hasProfileChanges = false;
 
+      // A blank legal name is left out rather than sent: the server refuses
+      // one, an omitted key keeps the stored name, and the rest still saves
+      // (owner rule 2026-11-05: save with an error, flag it until resolved).
+      const firstName = form.first_name.trim();
+      const lastName = form.last_name.trim();
+      const blankedNames: string[] = [];
       if (form.first_name !== initialForm.first_name) {
-        profileUpdate.first_name = form.first_name;
+        if (firstName) profileUpdate.first_name = firstName;
+        else blankedNames.push('first name');
         hasProfileChanges = true;
       }
       // Optional text goes through blankToNull, like the dates below: an
@@ -233,7 +240,8 @@ export const MemberAdminEditPage: React.FC = () => {
         hasProfileChanges = true;
       }
       if (form.last_name !== initialForm.last_name) {
-        profileUpdate.last_name = form.last_name;
+        if (lastName) profileUpdate.last_name = lastName;
+        else blankedNames.push('last name');
         hasProfileChanges = true;
       }
       if (form.preferred_name !== initialForm.preferred_name) {
@@ -368,7 +376,22 @@ export const MemberAdminEditPage: React.FC = () => {
       setForm(newFormData);
       setInitialForm(newFormData);
 
-      setSuccessMessage('Member information saved.');
+      const missing = [
+        ...(newFormData.first_name.trim() ? [] : ['first name']),
+        ...(newFormData.last_name.trim() ? [] : ['last name']),
+      ];
+      const kept = blankedNames.filter((n) => !missing.includes(n));
+      if (missing.length) {
+        setSuccessMessage(
+          `Member information saved. This member's ${missing.join(' and ')} ${missing.length > 1 ? 'are' : 'is'} still missing.`
+        );
+      } else if (kept.length) {
+        setSuccessMessage(
+          `Member information saved. A name can't be blank, so the saved ${kept.join(' and ')} ${kept.length > 1 ? 'were' : 'was'} kept.`
+        );
+      } else {
+        setSuccessMessage('Member information saved.');
+      }
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 403) {
@@ -478,16 +501,27 @@ export const MemberAdminEditPage: React.FC = () => {
                   htmlFor="member-first-name"
                   className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
                 >
-                  First Name
+                  First Name{' '}
+                  <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                    *
+                  </span>
                 </label>
                 <input
                   id="member-first-name"
                   type="text"
+                  required
+                  aria-invalid={!form.first_name.trim() || undefined}
+                  aria-describedby={form.first_name.trim() ? undefined : 'member-first-name-error'}
                   value={form.first_name}
                   onChange={(e) => handleFieldChange('first_name', e.target.value)}
                   className="form-input bg-theme-surface-secondary px-3 text-sm"
                   disabled={saving}
                 />
+                {!form.first_name.trim() && (
+                  <p id="member-first-name-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                    Enter a first name.
+                  </p>
+                )}
               </div>
               <div>
                 <label
@@ -510,16 +544,27 @@ export const MemberAdminEditPage: React.FC = () => {
                   htmlFor="member-last-name"
                   className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
                 >
-                  Last Name
+                  Last Name{' '}
+                  <span aria-hidden="true" className="text-red-700 dark:text-red-400">
+                    *
+                  </span>
                 </label>
                 <input
                   id="member-last-name"
                   type="text"
+                  required
+                  aria-invalid={!form.last_name.trim() || undefined}
+                  aria-describedby={form.last_name.trim() ? undefined : 'member-last-name-error'}
                   value={form.last_name}
                   onChange={(e) => handleFieldChange('last_name', e.target.value)}
                   className="form-input bg-theme-surface-secondary px-3 text-sm"
                   disabled={saving}
                 />
+                {!form.last_name.trim() && (
+                  <p id="member-last-name-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                    Enter a last name.
+                  </p>
+                )}
               </div>
             </div>
 
