@@ -657,6 +657,11 @@ class TrainingRequirement(Base):
     required_attendance_pct: Mapped[Optional[float]] = mapped_column(
         Float, nullable=True
     )
+    # SESSION_ATTENDANCE: may a Chief record an override that counts a member
+    # as meeting it (TrainingRequirementOverride)? Off unless an officer opts in.
+    allows_chief_override: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
 
     # Frequency
     frequency: Mapped[RequirementFrequency] = mapped_column(
@@ -5010,6 +5015,63 @@ class TrainingWaiver(Base):
     __table_args__ = (
         Index("idx_training_waivers_org_user", "organization_id", "user_id"),
         Index("idx_training_waivers_dates", "start_date", "end_date"),
+    )
+
+
+class TrainingRequirementOverride(Base):
+    """A Chief's ruling that a member meets a requirement over a period.
+
+    Distinct from a TrainingWaiver, which excuses days and leaves the member
+    to meet the rest: an override counts the member as meeting the
+    requirement whenever it is graded as of a date from ``start_date`` to
+    ``end_date``, however short they are. Rare by design: only a requirement
+    with ``allows_chief_override`` accepts one, and only a member holding a
+    Chief position may record or revoke it. Revoked, not deleted, so the
+    record of who granted it survives.
+    """
+
+    __tablename__ = "training_requirement_overrides"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    requirement_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("training_requirements.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # Encrypted at rest: the reason a member could not attend may be medical.
+    reason: Mapped[str] = mapped_column(EncryptedText, nullable=False)
+    granted_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    revoked_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_requirement_override_org_req_user",
+            "organization_id",
+            "requirement_id",
+            "user_id",
+        ),
     )
 
 

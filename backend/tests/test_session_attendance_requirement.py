@@ -76,6 +76,7 @@ def _req(pct=60.0, **kw):
         description=None,
         new_member_cutoff_date=None,
         existing_member_deadline=None,
+        allows_chief_override=False,
     )
     fields.update(kw)
     return SimpleNamespace(**fields)

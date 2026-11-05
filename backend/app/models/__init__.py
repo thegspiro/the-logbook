@@ -490,6 +490,7 @@ from app.models.training import (
     TrainingProgram,
     TrainingRecord,
     TrainingRequirement,
+    TrainingRequirementOverride,
     TrainingSession,
     TrainingSessionRequirement,
 )
@@ -714,6 +715,7 @@ __all__ = [
     "TrainingRequirement",
     "TrainingSession",
     "TrainingSessionRequirement",
+    "TrainingRequirementOverride",
     "TrainingApproval",
     "TrainingProgram",
     "ProgramPhase",
