@@ -87,18 +87,17 @@ const PublicRequestsOverview: React.FC<PublicRequestsOverviewProps> = ({
         <h2 className="text-theme-text-primary text-lg font-semibold">Public Event Requests</h2>
         <p className="text-theme-text-muted mt-1 text-sm">
           Let schools, businesses and residents ask your department for an outreach event — a station tour, a fire
-          safety talk, an engine at a block party. Requests arrive in{' '}
-          <button
-            type="button"
-            onClick={onOpenRequests}
-            className="inline-flex items-center gap-1 font-medium text-blue-700 hover:underline dark:text-blue-400"
-          >
-            <Inbox className="h-3.5 w-3.5" aria-hidden="true" />
-            Community Outreach → Requests
-          </button>
-          , where your team works them through to a scheduled event. None of these settings affect events your members
-          create themselves.
+          safety talk, an engine at a block party. Requests arrive in Community Outreach, where your team works them
+          through to a scheduled event. None of these settings affect events your members create themselves.
         </p>
+        <button
+          type="button"
+          onClick={onOpenRequests}
+          className="touch-target-phone mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-blue-700 hover:underline dark:text-blue-400"
+        >
+          <Inbox className="h-4 w-4" aria-hidden="true" />
+          Open the Requests board
+        </button>
       </div>
 
       {/* The master switch: every other page in this section is inert while it is off. */}
