@@ -202,6 +202,23 @@ describe('CommandPalette hub destinations', () => {
     expect(screen.getByText('Payment methods, pricing and notices')).toBeInTheDocument();
   });
 
+  // Compliance Settings needs settings.manage or compliance.manage on top of
+  // the hub's training.manage, and the palette must not offer it without one.
+  it('offers Compliance Settings only with the permission it needs', async () => {
+    await search('compliance settings');
+    expect(screen.queryByRole('option', { name: /Compliance Settings/ })).not.toBeInTheDocument();
+  });
+
+  it('opens Compliance Settings under Settings & Data for a compliance officer', async () => {
+    permissions.current.add('compliance.manage');
+    const user = await search('compliance settings');
+
+    await user.click(screen.getByRole('option', { name: /Compliance Settings/ }));
+
+    expect(window.location.pathname).toBe('/training/admin');
+    expect(window.location.search).toBe('?page=settings&tab=compliance-settings');
+  });
+
   it('opens the store console at the chosen tab', async () => {
     const user = await search('payments that need');
 
