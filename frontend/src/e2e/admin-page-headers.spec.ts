@@ -32,6 +32,14 @@ const ADMIN_PERMISSIONS = [
   'audit.view',
   'positions.manage_permissions',
   'organization.update_settings',
+  'inventory.check_manage',
+  'elections.manage',
+  'minutes.manage',
+  'facilities.manage',
+  'finance.manage',
+  'finance.configure_approvals',
+  'history.manage',
+  'compliance.manage',
 ];
 
 /** [path, the <h1> the page must carry] */
@@ -65,6 +73,18 @@ const PAGES: [string, string][] = [
   ['/admin/security-alerts', 'Security Alerts'],
   ['/admin/errors', 'Error Monitor'],
   ['/testing', 'Testing Home'],
+  // Sub-pages: hub pages render the hub's own <h1>; settings screens their own.
+  ['/members/admin/settings/visibility', 'Members Settings'],
+  ['/inventory/admin/checklists/settings', 'Inventory Administration'],
+  ['/inventory/admin/checklists/catalog-links', 'Inventory Administration'],
+  ['/training/compliance-config', 'Compliance Settings'],
+  ['/elections/settings', 'Election Settings'],
+  ['/minutes/settings', 'Minutes Settings'],
+  ['/facilities/settings', 'Facility Settings'],
+  ['/finance/settings', 'Finance Settings'],
+  ['/finance/settings/approval-chains', 'Approval Chains'],
+  ['/finance/settings/quickbooks', 'QuickBooks Export'],
+  ['/history/settings', 'Titles and Clearance'],
 ];
 
 /**
@@ -72,12 +92,19 @@ const PAGES: [string, string][] = [
  * narrow column (the setup checklist, the camera view) or the settings-screen
  * layout, which centres a 960px column and puts its icon tile before the title.
  */
-const NARROW_COLUMN = new Set(['/setup', '/members/scan', '/settings', '/communications/email-templates']);
+const NARROW_COLUMN = new Set([
+  '/setup',
+  '/members/scan',
+  '/settings',
+  '/communications/email-templates',
+  '/members/admin/settings/visibility',
+  '/history/settings',
+]);
 
 const shotDir = process.env.ADMIN_HEADER_SHOTS;
 
 /**
- * Shapes for the four pages the shared fixtures do not cover. The catch-all
+ * Shapes for the pages the shared fixtures do not cover. The catch-all
  * answers `{}`, which these pages read as a list and crash on before drawing
  * their header -- the same on the code before this header existed, so the gap
  * is in the fixtures, not the pages. Registered after `signIn`, so they take
@@ -110,6 +137,11 @@ const EMPTY_BY_PATH: Record<string, unknown> = {
   '/api/v1/errors': { errors: [], total: 0 },
   '/api/v1/errors/stats': { total: 0, by_type: {}, recent_errors: [] },
   '/api/v1/errors/codes': { codes: [] },
+  '/api/v1/equipment-checks/inventory-link-report': {
+    coverage: { linkable: 0, linked: 0, unlinked: 0 },
+    templateCount: 0,
+    groups: [],
+  },
 };
 
 async function mockUncoveredPages(page: Page) {

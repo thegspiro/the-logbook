@@ -122,7 +122,7 @@ const PATH_LABELS: Record<string, string> = {
   courses: 'Course Library',
   programs: 'Programs',
   'skills-testing': 'Skills Testing',
-  'compliance-config': 'Compliance Config',
+  'compliance-config': 'Compliance Settings',
   templates: 'Templates',
 
   // Events module
