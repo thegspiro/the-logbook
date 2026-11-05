@@ -12,7 +12,7 @@ const mockGetAnswers = vi.fn();
 vi.mock('../services/api', () => ({
   followUpFormService: {
     list: (...a: unknown[]) => mockList(...a) as unknown,
-    getAnswers: (...a: unknown[]) => mockGetAnswers(...a) as unknown,
+    getInterviewAnswers: (...a: unknown[]) => mockGetAnswers(...a) as unknown,
   },
 }));
 

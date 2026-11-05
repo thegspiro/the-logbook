@@ -871,26 +871,49 @@ class TestMembership:
         assert member.membership_type == "probationary"
 
     async def test_a_screening_expiring_today_is_still_listed(self):
+        """Expiring on the department's date (6 October) it is due today, not
+        lapsed — by UTC it is already 7 October. The window used to be read
+        off the SQL bounds; since MS-15 every linked record is loaded and the
+        window is applied in Python, so this asserts the listing itself."""
+        from app.models.medical_screening import ScreeningStatus, ScreeningType
         from app.services.medical_screening_service import MedicalScreeningService
 
-        db = MagicMock()
-        # The organization's date, then its active requirements, then the
-        # records query that carries the window. A record counts only for its
-        # linked requirement (owner decision 2026-11-01), so with no active
-        # requirement nothing is queried; one with no grace period and no
-        # frequency keeps the window exactly today..today+30.
         requirement = SimpleNamespace(
-            id="req-1", grace_period_days=0, frequency_months=None
+            id="req-1",
+            name="Annual physical",
+            grace_period_days=0,
+            frequency_months=None,
         )
+        record = SimpleNamespace(
+            id="rec-1",
+            requirement_id="req-1",
+            user_id="u1",
+            prospect_id=None,
+            screening_type=ScreeningType.PHYSICAL_EXAM,
+            status=ScreeningStatus.PASSED,
+            completed_date=LOCAL_TODAY - timedelta(days=365),
+            expiration_date=LOCAL_TODAY,
+            created_at=None,
+            self_recorded=False,
+        )
+        names = MagicMock()
+        names.all.return_value = [("u1", "Jordan", "Avery", None)]
+        db = MagicMock()
         db.execute = AsyncMock(
-            side_effect=[_one(_org()), _scalars([requirement]), _scalars([])]
+            side_effect=[
+                _one(_org()),
+                _scalars([requirement]),
+                _scalars([record]),
+                names,
+            ]
         )
 
-        await MedicalScreeningService(db).get_expiring_soon("org-1", days=30)
+        listed = await MedicalScreeningService(db).get_expiring_soon("org-1", days=30)
 
-        bound = _bound(db.execute.await_args_list[2].args[0])
-        assert {LOCAL_TODAY, LOCAL_TODAY + timedelta(days=30)} <= bound
-        assert FROZEN_UTC.date() not in bound
+        assert [(s.record_id, s.days_until_expiration) for s in listed] == [
+            ("rec-1", 0)
+        ]
+        assert listed[0].expiration_date == LOCAL_TODAY
 
 
 class TestAdministration:

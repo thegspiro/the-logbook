@@ -7,12 +7,11 @@ records, and compliance tracking.
 
 import re
 from datetime import date, datetime, timedelta, timezone
-from typing import Dict, List, NamedTuple, Optional, Set, Tuple
+from typing import Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import Select, and_, exists, func, or_, select
+from sqlalchemy import Select, and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
 from app.core.utils import generate_uuid
 from app.models.medical_screening import (
@@ -133,60 +132,40 @@ _SATISFYING_STATUSES = (
 _DECIDING_STATUSES = _SATISFYING_STATUSES + (ScreeningStatus.FAILED.value,)
 
 
-def superseded_record_clause():
-    """SQL: a newer deciding record for the same requirement and subject exists.
+def _subject_key(record: ScreeningRecord) -> Tuple[str, str]:
+    """Whose record this is: the member when it names one, else the prospect.
 
-    The compliance summary grades each requirement on the subject's most
-    recent deciding record **linked to that requirement** (a result: passed,
-    completed, waived or failed — ``_DECIDING_STATUSES``): latest completed
-    date, an undated record ranking lowest, the newer-created winning a
-    same-day tie. A record something later supersedes is therefore not an
-    impending lapse however soon it expires, and a list of expiring screenings
-    must leave it out to agree with the count (pitfall #29). The one
-    definition, shared by ``get_expiring_soon`` and through it the MCP
-    ``list_expiring_screenings`` tool. The subject is the member when the
-    record names one, else the prospect.
-
-    Partitioned by ``requirement_id``, not screening type (owner decision
-    2026-11-01: a record satisfies only the requirement it is linked to), so a
-    newer record filed against a different requirement of the same type does
-    not supersede this one. A record linked to nothing is never superseded by
-    this clause, and is never listed either: it counts toward nothing.
+    A record carried across a prospect's transfer names both and belongs to
+    the member (W71b-2).
     """
-    later = aliased(ScreeningRecord)
-    floor = date.min
-    completed = func.coalesce(ScreeningRecord.completed_date, floor)
-    later_completed = func.coalesce(later.completed_date, floor)
-    created_floor = datetime(1, 1, 1, tzinfo=timezone.utc)
-    created = func.coalesce(ScreeningRecord.created_at, created_floor)
-    later_created = func.coalesce(later.created_at, created_floor)
-    return exists(
-        select(later.id).where(
-            later.organization_id == ScreeningRecord.organization_id,
-            or_(
-                and_(
-                    ScreeningRecord.user_id.isnot(None),
-                    later.user_id == ScreeningRecord.user_id,
-                ),
-                and_(
-                    ScreeningRecord.user_id.is_(None),
-                    later.prospect_id == ScreeningRecord.prospect_id,
-                ),
-            ),
-            later.requirement_id == ScreeningRecord.requirement_id,
-            later.status.in_(_DECIDING_STATUSES),
-            later.id != ScreeningRecord.id,
-            or_(
-                later_completed > completed,
-                and_(later_completed == completed, later_created > created),
-                and_(
-                    later_completed == completed,
-                    later_created == created,
-                    later.id > ScreeningRecord.id,
-                ),
-            ),
-        )
-    )
+    if record.user_id:
+        return ("user", str(record.user_id))
+    return ("prospect", str(record.prospect_id or ""))
+
+
+def deciding_records(
+    records: Iterable[ScreeningRecord],
+) -> Dict[Tuple[Tuple[str, str], str], ScreeningRecord]:
+    """The record that decides each (subject, requirement): its latest result.
+
+    The same partition and ordering ``_grade`` uses — a result (passed,
+    completed, waived or failed, ``_DECIDING_STATUSES``) linked to the
+    requirement, most recent by ``_recency`` — so the expiring list and the
+    grade agree (pitfall #29). A record any later result supersedes is not
+    an impending lapse, and a record linked to nothing decides nothing.
+
+    This replaces a correlated SQL ``EXISTS``: the status is ciphertext since
+    MS-15, so the database cannot tell a result from a booking.
+    """
+    latest: Dict[Tuple[Tuple[str, str], str], ScreeningRecord] = {}
+    for record in records:
+        if record.requirement_id is None or record.status not in _DECIDING_STATUSES:
+            continue
+        key = (_subject_key(record), str(record.requirement_id))
+        current = latest.get(key)
+        if current is None or _recency(record) > _recency(current):
+            latest[key] = record
+    return latest
 
 
 def _positive_months(months: Optional[int]) -> Optional[int]:
@@ -273,7 +252,7 @@ def _recency(record: ScreeningRecord) -> Tuple[date, datetime, str]:
     """Sort key for "most recent": completed date, then entry time, then id.
 
     An undated record ranks lowest; a same-day tie goes to the one entered
-    later. Mirrors ``superseded_record_clause``, field for field.
+    later. ``_grade`` and ``deciding_records`` both rank by it.
     """
     created = record.created_at or datetime(1, 1, 1, tzinfo=timezone.utc)
     if created.tzinfo is None:
@@ -313,7 +292,7 @@ def _grade(
 
     for req in requirements:
         # The most recent result linked to this requirement decides — the
-        # same ordering and partition as `superseded_record_clause`, so the
+        # same ordering and partition as `deciding_records`, so the
         # expiring list and this grade agree. A failure therefore leaves the
         # requirement unmet until a later satisfying record supersedes it.
         matching_records = [
@@ -520,14 +499,18 @@ class MedicalScreeningService:
             query = query.where(ScreeningRecord.prospect_id == prospect_id)
         if screening_type:
             query = query.where(ScreeningRecord.screening_type == screening_type)
-        if status:
-            query = query.where(ScreeningRecord.status == status)
         # created_at has one-second resolution, so a batch entered together
         # ties on it; id keeps the order stable across page requests.
         query = query.order_by(ScreeningRecord.created_at.desc(), ScreeningRecord.id)
-        query = _page(query, skip, limit)
+        if not status:
+            result = await self.db.execute(_page(query, skip, limit))
+            return list(result.scalars().all())
+        # The status is ciphertext (MS-15): filter the decrypted value, then
+        # page, so a page is never short while matches lie further on.
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        matching = [r for r in result.scalars().all() if r.status == status]
+        end = None if limit is None else skip + limit
+        return matching[skip:end]
 
     async def get_record(
         self, record_id: str, organization_id: str
@@ -1051,10 +1034,12 @@ class MedicalScreeningService:
         """Current records for active requirements, due by ``cutoff``, still counting.
 
         Soonest due first, then by record id so a paged caller sees a stable
-        order. The SQL bounds are deliberately loose — the longest grace
-        period and frequency in the organization — and the exact window is
-        ``screening_deadline``'s, applied per record, so the date rule lives in
-        one place rather than once in Python and again in SQL.
+        order. Every record linked to an active requirement is loaded and the
+        deciding one per subject and requirement is picked in Python
+        (``deciding_records``): the status is ciphertext since MS-15, so SQL
+        can neither keep only satisfying results nor drop superseded ones. The
+        window is ``screening_deadline``'s, applied per record, so the date
+        rule lives in one place.
         """
         requirements = {
             str(req.id): req
@@ -1062,47 +1047,21 @@ class MedicalScreeningService:
         }
         if not requirements:
             return []
-        max_grace = max(_grace_days(req) for req in requirements.values())
-        frequencies = [
-            m
-            for m in (
-                _positive_months(r.frequency_months) for r in requirements.values()
-            )
-            if m
-        ]
-        oldest_due = today - timedelta(days=max_grace)
-        window = [
-            and_(
-                ScreeningRecord.expiration_date.isnot(None),
-                ScreeningRecord.expiration_date >= oldest_due,
-                ScreeningRecord.expiration_date <= cutoff,
-            )
-        ]
-        if frequencies:
-            # Completed longer ago than the longest frequency plus the longest
-            # grace has lapsed under any requirement, so the query never reads
-            # the whole history.
-            window.append(
-                and_(
-                    ScreeningRecord.expiration_date.is_(None),
-                    ScreeningRecord.completed_date.isnot(None),
-                    ScreeningRecord.completed_date
-                    >= oldest_due - relativedelta(months=max(frequencies)),
-                )
-            )
         criteria = [
             ScreeningRecord.organization_id == organization_id,
             ScreeningRecord.requirement_id.in_(list(requirements)),
-            ScreeningRecord.status.in_(_SATISFYING_STATUSES),
-            or_(*window),
-            ~superseded_record_clause(),
         ]
         if members_only:
             criteria.append(ScreeningRecord.user_id.isnot(None))
         rows = await self.db.execute(select(ScreeningRecord).where(*criteria))
+        current = [
+            record
+            for record in deciding_records(rows.scalars().all()).values()
+            if record.status in _SATISFYING_STATUSES
+        ]
 
         due: List[Tuple[ScreeningRecord, ScreeningRequirement, ScreeningDeadline]] = []
-        for record in rows.scalars().all():
+        for record in current:
             requirement = requirements[str(record.requirement_id)]
             deadline = screening_deadline(record, requirement)
             if (
