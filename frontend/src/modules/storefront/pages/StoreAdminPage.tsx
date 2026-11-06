@@ -17,8 +17,8 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
-import { ArrowLeft, CalendarClock, Clock3, Loader2, RefreshCw } from 'lucide-react';
+import { useSearchParams } from 'react-router';
+import { CalendarClock, Clock3, Loader2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
 import type { AdminHubAction } from '../../../components/admin';
@@ -518,10 +518,10 @@ const StoreAdminPage: React.FC = () => {
       // The generated trail would be built from this page's URL, and every
       // ancestor in it belongs to Inventory — a module this route does not
       // require. A department running the store with Inventory switched off
-      // would get crumbs the hub refuses with "Inventory is not enabled", which
-      // is the same wrong link the back-link below is conditional to avoid. No
+      // would get crumbs the hub refuses with "Inventory is not enabled". No
       // trail rather than an unusable one; with Inventory on, the generated
-      // trail is correct and this passes nothing.
+      // trail is correct, links back to Inventory Administration, and is the
+      // page's only way back -- as on every other admin page.
       breadcrumbs={inventoryOn ? undefined : []}
       actions={actions}
       headerAside={
@@ -537,35 +537,6 @@ const StoreAdminPage: React.FC = () => {
             >
               Store is offline · turn on in Settings
             </button>
-          )}
-          {/* The frame has no back-link prop, and this page sits one level
-              inside Inventory Administration — so the way back rides here,
-              beside the actions, as TrainingAdminPage does with its HelpLink.
-
-              Only where there is an Inventory to go back to. This route is
-              gated on the storefront module, not on inventory, so a department
-              can run the store with Inventory switched off — and the hub then
-              refuses with "Inventory is not enabled". A link the app knows will
-              be turned away is worse than no link: it reads as a permission
-              problem with the member rather than a module the department chose
-              not to run. */}
-          {/* Held in place, invisible, while the lookup is in flight: on a phone
-              it is what wraps the header's actions onto a second row, and
-              arriving afterwards it pushed the whole page down 56px. An
-              invisible link cannot be clicked, so the refusal above still
-              cannot be reached. */}
-          {(inventoryOn || modulesLoading) && (
-            <Link
-              to="/inventory/admin"
-              aria-hidden={modulesLoading || undefined}
-              tabIndex={modulesLoading ? -1 : undefined}
-              className={`text-theme-text-muted hover:text-theme-text-secondary touch:min-h-11 flex items-center gap-1 text-sm ${
-                modulesLoading ? 'invisible' : ''
-              }`}
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Inventory
-            </Link>
           )}
         </div>
       }
