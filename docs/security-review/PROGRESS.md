@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(this PR)** (branch `claude/security-review-documents-legal-p15`) —
+**PR [#4103](https://github.com/thegspiro/the-logbook/pull/4103)** (branch
+`claude/security-review-documents-legal-p15`) —
 Feature 10 (Documents & legal), pass 15, a watchdog pickup (the dedicated
 `/loop 30m /security-review` session remains unreachable; this iteration
 was handed Step 0/1 already done — no open `claude/security-review-*` PR,
