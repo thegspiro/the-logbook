@@ -62,6 +62,8 @@ vi.mock('../services/api', () => ({
     updateLineItem: vi.fn(),
   },
   fiscalYearService: { options: () => Promise.resolve([]) },
+  // The line dialog reads the mileage rate for its trip log.
+  financeSettingsService: { get: () => Promise.reject(new Error('not needed')) },
   budgetService: {
     options: () =>
       Promise.resolve([

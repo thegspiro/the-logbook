@@ -156,6 +156,7 @@ from app.models.facilities import (
 )
 from app.models.finance import (
     AdvanceReturn,
+    AdvanceStatement,
     ApprovalChain,
     ApprovalChainStep,
     ApprovalEntityType,
@@ -909,6 +910,7 @@ __all__ = [
     "ExpenseType",
     "CheckRequest",
     "AdvanceReturn",
+    "AdvanceStatement",
     "CheckRequestStatus",
     "DuesSchedule",
     "DuesFrequency",

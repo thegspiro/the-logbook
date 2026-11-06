@@ -5,8 +5,10 @@
  * `fundraising.manage` records and edits pledges. The dashboard's
  * Outstanding Pledges figure links here.
  *
- * Status and the fulfilled amount are what the officer recorded; the page
- * shows them as stored and computes nothing but each row's remaining balance.
+ * Status and the fulfilled amount are the backend's: a donation recorded
+ * against a pledge moves both, and an officer can still correct them by hand.
+ * The page shows them as stored and computes nothing but each row's
+ * remaining balance (pitfall #29).
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';

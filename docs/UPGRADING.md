@@ -721,6 +721,92 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Expense receipts: one receipt on several lines, a mileage trip log, and three board reports (2026-11-06)
+
+Nothing blocks a restart. Migration `5f3bc23bc9a6` adds two nullable columns
+to `expense_line_items` — `mileage_trips` and `mileage_rate` — and backfills
+nothing.
+
+- **Mileage trip logs need a rate before members can use them.** Set it on
+  **Finance › Settings › Approval chains** (_Mileage rate_, dollars a mile,
+  `settings.manage`). There is no default; until it is set, the expense form
+  says so and members claim mileage with an amount and an uploaded log
+  exactly as before.
+- **A receipt can be shared between lines of one report**, and taken off one
+  draft line without touching the others. A document that a submitted line
+  refers to still cannot be deleted.
+- **Three new tabs on Finance › Reports** — _Expenses by member_, _Dues
+  delinquency_ and _Purchases by vendor_ — for anyone who could already read
+  the reports (`finance.view`). Nothing else changes for them.
+- **API.** `POST /finance/expense-reports/{id}/items` (and lines in a new
+  report) no longer require `amount` and `dateIncurred` when the line carries
+  `mileageTrips`; without a log, a line missing either is now a 400 rather
+  than a 422.
+- **Downgrading** drops both columns: a line priced from a log keeps its
+  amount but loses its trips, and having no uploaded receipt it cannot be
+  submitted again until one is attached.
+
+### Pledges follow donations, Federal Programs become opportunities, and two Treasurer reminders (2026-11-06)
+
+Nothing blocks a restart. Migration `6dadac1674c8` adds a nullable
+`donations.pledge_id` and backfills nothing; migration `3c1f5e2a9d47` inserts
+rows.
+
+- **Every department gains up to four grant opportunities** — AFG, SAFER,
+  FP&S and the Firehouse Subs Public Safety Foundation — replacing the fixed
+  "Federal Programs" cards on **Grants › Opportunities**. A department that
+  already has an opportunity with one of those program codes (retired or not)
+  is not given a second. They can be edited or retired like any other.
+- **A donation can pay toward a pledge.** From now on a linked donation moves
+  the pledge's received amount and status. Existing donations stay unlinked
+  and existing pledges keep the amounts entered by hand.
+- **Budget-request reminders are a department setting** (**Finance ›
+  Settings**). Unset, they go out 7 and 1 days before the deadline by email
+  only, exactly as before.
+- **A new daily scheduled task, `fiscal_year_due_reminders`,** emails the
+  Treasurers when an adopted fiscal year reaches its start date or the active
+  one passes its end date. A department whose active year ended before the
+  upgrade and was never closed is emailed on the first run. Deployments that
+  drive scheduled tasks from an external crontab rather than the in-process
+  scheduler need the new line from the `SCHEDULE` block in
+  `app/services/scheduled_tasks.py` (08:15 daily).
+- **Downgrading** drops `donations.pledge_id` (pledge amounts already moved
+  stay as they are) and removes the seeded opportunities that still carry
+  their seeded name and have no application started from them.
+
+### Dues: schedule terms apply, late fees, My Dues and dues reminder emails (2026-11-06)
+
+Nothing blocks a restart. Migration `ba80cc574948` adds three nullable
+columns — `dues_schedules.terms_effective_at`,
+`member_dues.due_reminder_sent_at` and `member_dues.overdue_reminder_sent_at`
+— and backfills nothing.
+
+- **Existing dues schedules behave exactly as before until someone saves
+  one.** Their new `terms_effective_at` is empty, so they keep billing every
+  active member and charge no late fee, even if a grace period, late fee,
+  fiscal year or membership list was stored on them through the API. Saving a
+  schedule from **Finance › Dues** applies those four (the form warns first);
+  a late fee is then charged only where the grace period ends after that save.
+  New schedules apply them from the start: generation bills only the chosen
+  membership types (none chosen bills everyone), a due date outside the chosen
+  fiscal year is refused, and generation is refused once that year is closing
+  or locked.
+- **Two new daily scheduled tasks.** `dues_late_fees` adds a schedule's late
+  fee, once, to dues still owing after the due date plus the grace period —
+  `amount_due` grows by the fee, so dues totals and exports include it.
+  `dues_reminders` emails a member a week before their dues fall due and once
+  when they become overdue (only dues overdue for 30 days or less, so the
+  first run does not email about dues long since dealt with). The emails are
+  the new optional **Your dues** kind: on by default, a member can turn it off
+  and a department can make it required.
+- **Members see Finance › My Dues** (`/finance/my-dues`), which needs no
+  finance permission, and the Treasurer's payment history names who recorded
+  each payment.
+- **Downgrading** drops the three columns: every schedule reads as never
+  saved again, and a reminder already sent may be sent once more after a
+  re-upgrade. A late fee already charged stays in `amount_due` and
+  `late_fee_applied`, which the older release shows but does not add to.
+
 ### Budget amendments: partial reversals, a pending queue, and two new finance emails (2026-11-06)
 
 Nothing blocks a restart. Migration `0961ffc2cdf1` adds a nullable

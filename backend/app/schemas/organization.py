@@ -24,6 +24,7 @@ from app.schemas.base import UTCResponseBase
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.utils import membership_numbers
 from app.utils.embed_origins import MAX_EMBED_ORIGINS, normalize_embed_origin
+from app.utils.mileage_rate import parse_mileage_rate
 
 
 class OrganizationTypeEnum(str, Enum):
@@ -1730,6 +1731,43 @@ class FinanceSettingsUpdate(BaseModel):
             "approval goes through) or block (it cannot be approved)."
         ),
     )
+    advance_return_method: Optional[Literal["fixed_date", "periodic_statement"]] = (
+        Field(
+            None,
+            description=(
+                "How a cash advance's return deadline is worked out: "
+                "fixed_date (the default; 120 days from the check) or "
+                "periodic_statement (120 days from the first quarterly "
+                "statement after it). An advance keeps the method in force "
+                "when its check was issued."
+            ),
+        )
+    )
+    mileage_rate: Optional[str] = Field(
+        None,
+        max_length=10,
+        description=(
+            "Dollars per mile a mileage line's trip log is priced at, as a "
+            "decimal string of at most three places, 0.001 to 5. Null: no "
+            "rate, and trip logs are refused until one is set "
+            "(app/services/expense_mileage.py)."
+        ),
+    )
+
+    @field_validator("mileage_rate", mode="before")
+    @classmethod
+    def _check_mileage_rate(cls, value: Any) -> Optional[str]:
+        # Stored as a string: the settings JSON cannot hold a Decimal, and a
+        # float would round a rate such as 0.725.
+        if value is None or (isinstance(value, str) and not value.strip()):
+            return None
+        rate = parse_mileage_rate(value)
+        if rate is None:
+            raise ValueError(
+                "The mileage rate must be between 0.001 and 5 dollars a mile, "
+                "with at most three decimal places"
+            )
+        return str(rate)
 
     model_config = ConfigDict(extra="allow")
 

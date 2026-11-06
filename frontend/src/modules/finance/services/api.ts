@@ -10,6 +10,7 @@ import type {
   AdvanceAccountsPayload,
   AdvanceDetail,
   AdvanceExportReadiness,
+  AdvanceHolder,
   AdvanceReturn,
   AdvanceReturnPayload,
   AdvancesReport,
@@ -73,6 +74,7 @@ import type {
   FiscalYearUpdatePayload,
   FinanceNamedOption,
   MemberDues,
+  MyDues,
   MyBudget,
   MyBudgetRequestLines,
   MyBudgetsSummary,
@@ -85,10 +87,14 @@ import type {
   StartFromLastYearResult,
   UnroutedApproval,
   FinanceSettings,
+  BudgetRequestReminderSettings,
   AmendmentLogReport,
   BudgetVsActualReport,
   PaymentsRegisterReport,
   LateSubstantiationReport,
+  ExpenseSummaryByMemberReport,
+  DuesDelinquencyReport,
+  PurchasesByVendorReport,
   FunctionalClass,
   FunctionalExpensesReport,
   FundBalancesReport,
@@ -636,6 +642,45 @@ export const financeReportService = {
     const query = new URLSearchParams({ start, end, format: 'csv' });
     return fetchFile(api, `/finance/reports/late-substantiation?${query.toString()}`, 'outside-accountable-plan.csv');
   },
+
+  /** What each member was reimbursed in the period (the payments register's reimbursements, by member). */
+  async expenseSummaryByMember(start: string, end: string): Promise<ExpenseSummaryByMemberReport> {
+    const response = await api.get<ExpenseSummaryByMemberReport>('/finance/reports/expense-summary-by-member', {
+      params: { start, end },
+    });
+    return response.data;
+  },
+
+  async expenseSummaryByMemberCsv(start: string, end: string): Promise<DownloadedFile> {
+    const query = new URLSearchParams({ start, end, format: 'csv' });
+    return fetchFile(api, `/finance/reports/expense-summary-by-member?${query.toString()}`, 'expenses-by-member.csv');
+  },
+
+  /** Dues falling due in the period, and the members overdue on them today. */
+  async duesDelinquency(start: string, end: string): Promise<DuesDelinquencyReport> {
+    const response = await api.get<DuesDelinquencyReport>('/finance/reports/dues-delinquency', {
+      params: { start, end },
+    });
+    return response.data;
+  },
+
+  async duesDelinquencyCsv(start: string, end: string): Promise<DownloadedFile> {
+    const query = new URLSearchParams({ start, end, format: 'csv' });
+    return fetchFile(api, `/finance/reports/dues-delinquency?${query.toString()}`, 'dues-delinquency.csv');
+  },
+
+  /** A fiscal year's approved and paid purchase requests, by vendor. */
+  async purchasesByVendor(fiscalYearId: string): Promise<PurchasesByVendorReport> {
+    const response = await api.get<PurchasesByVendorReport>('/finance/reports/purchases-by-vendor', {
+      params: { fiscal_year_id: fiscalYearId },
+    });
+    return response.data;
+  },
+
+  async purchasesByVendorCsv(fiscalYearId: string): Promise<DownloadedFile> {
+    const query = new URLSearchParams({ fiscal_year_id: fiscalYearId, format: 'csv' });
+    return fetchFile(api, `/finance/reports/purchases-by-vendor?${query.toString()}`, 'purchases-by-vendor.csv');
+  },
 };
 
 /**
@@ -861,6 +906,21 @@ export const expenseReportService = {
     return response.data;
   },
 
+  /** Use the receipt already uploaded to another line of the same report. */
+  async shareLineItemReceipt(reportId: string, itemId: string, fromItemId: string): Promise<ExpenseLineItem> {
+    const response = await api.post<ExpenseLineItem>(
+      `/finance/expense-reports/${reportId}/items/${itemId}/receipt/share`,
+      { fromItemId }
+    );
+    return response.data;
+  },
+
+  /** Take the receipt off one line of a draft; other lines sharing it keep it. */
+  async detachLineItemReceipt(reportId: string, itemId: string): Promise<ExpenseLineItem> {
+    const response = await api.delete<ExpenseLineItem>(`/finance/expense-reports/${reportId}/items/${itemId}/receipt`);
+    return response.data;
+  },
+
   downloadLineItemReceipt(reportId: string, itemId: string): Promise<DownloadedFile> {
     return fetchFile(api, `/finance/expense-reports/${reportId}/items/${itemId}/receipt`, 'receipt');
   },
@@ -906,6 +966,12 @@ export const advanceService = {
   async get(id: string): Promise<AdvanceDetail> {
     const response = await api.get<AdvanceDetail>(`/finance/advances/${id}`);
     return response.data;
+  },
+
+  /** The members the finance office can raise an advance for (`finance.manage`). */
+  async holders(): Promise<AdvanceHolder[]> {
+    const response = await api.get<AdvanceHolder[]>('/finance/advances/holders');
+    return asArray(response.data);
   },
 
   async recordReturn(id: string, data: AdvanceReturnPayload): Promise<AdvanceReturn> {
@@ -1031,6 +1097,18 @@ export const duesService = {
     return response.data;
   },
 
+  /** The department's membership tiers, for a schedule's "applies to" list. */
+  async membershipTypeOptions(): Promise<FinanceNamedOption[]> {
+    const response = await api.get<FinanceNamedOption[]>('/finance/dues-schedules/membership-type-options');
+    return asArray(response.data);
+  },
+
+  /** The signed-in member's own dues. Needs no finance permission. */
+  async listMine(): Promise<MyDues[]> {
+    const response = await api.get<MyDues[]>('/finance/my-dues');
+    return asArray(response.data);
+  },
+
   async getSummary(scheduleId?: string): Promise<DuesSummary> {
     const response = await api.get<DuesSummary>('/finance/dues/summary', {
       params: { schedule_id: scheduleId },
@@ -1138,5 +1216,17 @@ export const exportMappingService = {
       filename:
         filenameFromContentDisposition(typeof header === 'string' ? header : undefined) ?? 'quickbooks-journal.csv',
     };
+  },
+};
+
+/** The budget-request reminder schedule (`finance.manage` to change it). */
+export const budgetRequestReminderService = {
+  async get(): Promise<BudgetRequestReminderSettings> {
+    const response = await api.get<BudgetRequestReminderSettings>('/finance/settings/budget-request-reminders');
+    return response.data;
+  },
+  async update(data: Omit<BudgetRequestReminderSettings, 'isDefault'>): Promise<BudgetRequestReminderSettings> {
+    const response = await api.put<BudgetRequestReminderSettings>('/finance/settings/budget-request-reminders', data);
+    return response.data;
   },
 };

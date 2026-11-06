@@ -88,21 +88,20 @@ opens the application list filtered to the same applications the card counted.
 
 ## Grant Opportunities Library
 
-**Opportunities** — "Browse grant programs and start an application" — has two
-parts:
+**Opportunities** — "Browse grant programs and start an application" — lists
+your department's grant programs, with their award range, deadline and match
+requirement. Every department starts with four well-known programs already in
+the list, as ordinary opportunities you can start an application from, edit
+(add this year's award range, match and dates) or retire:
 
-- **Federal Programs:** reference cards for four well-known programs, with a
-  short description of each:
+| Program                                                       | Agency                    | Category   |
+| ------------------------------------------------------------- | ------------------------- | ---------- |
+| Assistance to Firefighters Grant (**AFG**)                    | FEMA                      | Equipment  |
+| Staffing for Adequate Fire and Emergency Response (**SAFER**) | FEMA                      | Staffing   |
+| Fire Prevention & Safety (**FP&S**)                           | FEMA                      | Prevention |
+| Firehouse Subs Public Safety Foundation                       | Firehouse Subs Foundation | Equipment  |
 
-  | Program                                                       | Agency                    | Category   |
-  | ------------------------------------------------------------- | ------------------------- | ---------- |
-  | Assistance to Firefighters Grant (**AFG**)                    | FEMA                      | Equipment  |
-  | Staffing for Adequate Fire and Emergency Response (**SAFER**) | FEMA                      | Staffing   |
-  | Fire Prevention & Safety (**FP&S**)                           | FEMA                      | Prevention |
-  | Firehouse Subs Public Safety Foundation                       | Firehouse Subs Foundation | Equipment  |
-
-- **All Opportunities:** the programs your department has added, with their
-  award range, deadline and match requirement.
+Retiring one keeps it under **Show retired**; it is not added back.
 
 ### Browsing Opportunities
 
@@ -112,7 +111,8 @@ parts:
 3. Search by name or agency.
 4. Check the deadline. Within 14 days it shows in red as "_n_d left"; within 30
    days, in amber. A past deadline reads **Expired**, and a program with no date
-   reads **Rolling deadline**.
+   reads **Recurring deadline** (an application cycle that repeats, such as
+   the four programs above) or **Rolling deadline**.
 5. Select **Details** to see eligible uses, eligibility, match details and the
    application link.
 6. Select **Start Application** to open a new application already linked to the
@@ -563,6 +563,10 @@ gift is dated the day it was given.
    - **Campaign** — optional
    - **Donor** — choose from the donor directory, or leave it as "Not in the
      donor directory" and enter a name and email for a one-time gift
+   - **Pays toward a pledge** — shown once you choose a donor who has an open
+     pledge (Pending, Partial or Overdue). Pick the pledge this gift pays; a
+     completed gift is added to the pledge's amount received, and the pledge
+     becomes Fulfilled once it is paid in full
    - **Anonymous** — hides who gave from members with view access only. The
      Donations list and the dashboard's recent donations show **Anonymous**.
      Officers who can manage fundraising still see the donor, so receipts and
@@ -623,10 +627,17 @@ status.
 
 ### Recording What Came In
 
-Select the pencil on a pledge to edit it. Enter the **Amount received so far**
-and set the **Status** yourself. Recording a donation does not update a pledge,
-so you keep the two in step by hand. Clearing the due date or notes and saving
-removes them.
+Record each payment as a donation and choose the pledge under **Pays toward a
+pledge**: the pledge's **Amount received** and **Status** then follow on their
+own — Partial while money is still owed, Fulfilled once paid in full. If that
+donation is later refunded or its amount corrected, the pledge moves back by
+the difference. A Cancelled pledge stays Cancelled, and an Overdue one stays
+Overdue until it is paid in full.
+
+For money that arrived some other way, select the pencil on a pledge and enter
+the **Amount received so far** and the **Status** yourself; donations
+recorded against it afterwards add to what you entered. Clearing the due date
+or notes and saving removes them.
 
 ### Pledge Reminders
 

@@ -179,6 +179,8 @@ describe('a draft expense report', () => {
       merchant: null,
       fundCampaignId: null,
       budgetId: null,
+      // The dialog owns the trip log too, and sends it on every save.
+      mileageTrips: null,
     });
     await waitFor(() => expect(fetchReport).toHaveBeenCalledWith('er-1'));
   });

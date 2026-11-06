@@ -1415,6 +1415,19 @@ class ExpenseLineItem(Base):
         nullable=True,
     )
     merchant: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    # A mileage line's trip log (owner decision 2026-11-01: record trips in
+    # the form instead of uploading a log). One canonical shape, settled by
+    # app/services/expense_mileage.py on every write (Pitfall #20):
+    # [{"trip_date": "YYYY-MM-DD", "from_location", "to_location", "purpose",
+    #   "miles": "12.5"}], miles as a decimal string so no float rounds them.
+    # A line with a log takes its amount from miles x mileage_rate and needs
+    # no uploaded receipt; null or empty is an ordinary line.
+    mileage_trips: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # The department's rate per mile when the log was priced, kept so a later
+    # change to the rate does not reprice a line already claimed.
+    mileage_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(6, 3), nullable=True
+    )
     # Submitted more than the department's substantiation deadline after it
     # was incurred, decided once at submission so a later change to the rule
     # does not re-grade a submitted report.
@@ -1491,6 +1504,22 @@ class CheckRequest(Base):
     # budget line or fund: the expense report that accounts for it does.
     is_advance: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
+    )
+    # The finance officer who raised an advance on behalf of the member in
+    # ``requested_by`` (owner decision 2026-11-01). The member stays the
+    # holder -- the one who owes it, is reminded and is blocked while it is
+    # overdue -- and the raiser may neither approve nor issue it. Null: the
+    # member raised it themselves.
+    raised_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # How an advance's return deadline is worked out, fixed when its check is
+    # issued from the department's setting at that moment, so changing the
+    # setting never moves the deadline of an advance already paid out
+    # (app/services/cash_advances.py). Null reads as the fixed-date method,
+    # the only one before 2026-11-06.
+    advance_return_method: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
     )
     # The approved expense report this check reimburses the member for. Like
     # an advance it charges no budget line or fund -- the report's lines do --
@@ -1683,6 +1712,53 @@ class AdvanceReturn(Base):
     )
 
 
+class AdvanceStatement(Base):
+    """A quarterly statement emailed to a cash advance's holder.
+
+    Only an advance on the periodic-statement method has them
+    (app/services/cash_advances.py works out when each is due, and
+    app/services/cash_advance_statements.py sends them). The row is the
+    delivery record: what the statement listed as outstanding and when it
+    reached the member's inbox. The unique key is what makes a second run of
+    the scheduled task, or two at once, send a statement once (CLAUDE.md
+    pitfall #36).
+    """
+
+    __tablename__ = "advance_statements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    advance_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("check_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The quarter's last day on the department's calendar.
+    statement_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # The last day to account for or return what it lists.
+    due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    outstanding: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # Null until the mailer accepted it; a row left null by a crash is sent
+    # on the next run.
+    emailed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "advance_id", "statement_date", name="uq_advance_statement_quarter"
+        ),
+        Index("ix_advance_statements_org", "organization_id"),
+    )
+
+
 # ============================================
 # Phase 4: Dues & Assessments
 # ============================================
@@ -1720,6 +1796,16 @@ class DuesSchedule(Base):
     )
     applies_to_membership_types: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
+    )
+    # When the four terms above (grace period, late fee, fiscal year,
+    # membership types) began to apply. NULL is a schedule saved before they
+    # were read (owner decision 2026-11-01): it keeps billing every active
+    # member and charges no late fee, whatever those columns hold, until it is
+    # next saved. A late fee is charged only on dues whose grace period ends
+    # after this instant, so turning the terms on never charges a fee for a
+    # lateness that happened before. Set by create/update_dues_schedule.
+    terms_effective_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     # The QuickBooks accounts this schedule's payments post to: the income
     # account credited and the bank account debited. Null takes the
@@ -1799,8 +1885,19 @@ class MemberDues(Base):
     transaction_reference: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True
     )
+    # The late fee charged on these dues, already included in amount_due. Its
+    # being set is also what stops the daily dues_late_fees task charging it
+    # again (pitfall #36): the task's UPDATE requires it to be NULL.
     late_fee_applied: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(12, 2), nullable=True
+    )
+    # When the dues_reminders task emailed the member that these dues are
+    # coming due / are overdue; each is sent at most once per record.
+    due_reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    overdue_reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     waived_by: Mapped[Optional[str]] = mapped_column(
         String(36),

@@ -1349,6 +1349,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/check-requests`             | Check Requests             | `finance.request`, `finance.view` or `finance.manage`                    |
 | `/finance/check-requests/new`         | New Check Request          | `finance.request` or `finance.manage`                                    |
 | `/finance/check-requests/:id`         | Check Request Detail       | `finance.request`, `finance.view` or `finance.manage`                    |
+| `/finance/my-dues`                    | My Dues                    | Authenticated                                                            |
 | `/finance/dues`                       | Dues                       | `finance.view`                                                           |
 | `/finance/reports`                    | Finance Reports            | `finance.view`                                                           |
 | `/finance/approvals`                  | Approvals                  | `finance.approve`                                                        |

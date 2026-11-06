@@ -57,6 +57,7 @@ import {
 } from '../utils/chargeAccess';
 import { descendantIds, orderCategoryTree } from '../utils/budgetCategoryTree';
 import { FiscalYearLockDialog } from '../components/FiscalYearLockDialog';
+import { BudgetRequestReminderSettingsCard } from '../components/BudgetRequestReminderSettingsCard';
 import { PLANNING_STAGE_LABELS } from '../utils/budgetRequests';
 import { blankToNull } from '@/utils/formValues';
 import { getErrorMessage } from '@/utils/errorHandling';
@@ -1164,6 +1165,8 @@ const FiscalYearSettingsPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      <BudgetRequestReminderSettingsCard />
 
       {/* Modals */}
       <CreateFYModal open={showCreateFY} onClose={() => setShowCreateFY(false)} />

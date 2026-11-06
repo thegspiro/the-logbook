@@ -5,9 +5,14 @@
  * requester (app/services/cash_advances.py): a check to the member before an
  * expense, which charges no budget line or fund until the member's expense
  * report accounts for it.
+ *
+ * The finance office (`finance.manage`) may raise an advance for another
+ * member (owner decision 2026-11-01): the member holds it and is the payee,
+ * and the officer, recorded as having raised it, may not approve or issue it.
+ * The members offered are the server's (`GET /finance/advances/holders`).
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -23,6 +28,8 @@ import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
 import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { useMyOpenAdvances } from '../hooks/useMyOpenAdvances';
+import { advanceDeadlineHint, useAdvanceReturnMethod } from '../hooks/useAdvanceReturnMethod';
+import { useAdvanceHolders } from '../hooks/useAdvanceHolders';
 import { ADVANCE_RETURN_DAYS, ApprovalEntityType, type CheckRequest } from '../types';
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
@@ -72,18 +79,34 @@ const CheckRequestFormPage: React.FC = () => {
 
   const isAdvance = watch('isAdvance') ?? false;
   const user = useAuthStore((s) => s.user);
+  const canRaiseForOthers = useAuthStore((s) => s.checkPermission('finance.manage'));
   // The check is made out to the member, so their legal name.
   const memberName = user?.full_name || user?.display_name || user?.username || '';
+  // '' is the signed-in member; otherwise the member the office raises it for.
+  const [holderId, setHolderId] = useState('');
+  const holders = useAdvanceHolders(canRaiseForOthers && isAdvance, user?.id);
+  const forSomeoneElse = isAdvance && holderId !== '';
   // Advice only: the server refuses the submission while one is overdue.
-  const overdue = useMyOpenAdvances(isAdvance).filter((advance) => advance.overdue);
+  const overdue = useMyOpenAdvances(isAdvance && !forSomeoneElse).filter((advance) => advance.overdue);
+  const returnMethod = useAdvanceReturnMethod(isAdvance);
+
+  const payeeFor = (id: string) => (id ? (holders.find((h) => h.id === id)?.legalName ?? '') : memberName);
 
   const toggleAdvance = (checked: boolean) => {
     setValue('isAdvance', checked, { shouldDirty: true });
     if (checked) {
       setValue('budgetId', '', { shouldDirty: true });
       setValue('fundCampaignId', '', { shouldDirty: true });
-      if (!watch('payeeName')) setValue('payeeName', memberName, { shouldDirty: true });
+      if (!watch('payeeName')) setValue('payeeName', payeeFor(holderId), { shouldDirty: true });
     }
+  };
+
+  const chooseHolder = (id: string) => {
+    // The check is made out to whoever holds the advance, so a payee filled
+    // in for the previous choice follows the new one.
+    const payee = watch('payeeName');
+    if (!payee || payee === payeeFor(holderId)) setValue('payeeName', payeeFor(id), { shouldDirty: true });
+    setHolderId(id);
   };
 
   const onSubmit = async (data: CheckRequestFormData) => {
@@ -98,6 +121,7 @@ const CheckRequestFormPage: React.FC = () => {
       if (data.purpose?.trim()) payload.purpose = data.purpose.trim();
       if (data.isAdvance) {
         payload.isAdvance = true;
+        if (holderId) payload.advanceHolderId = holderId;
       } else {
         if (data.budgetId) payload.budgetId = data.budgetId;
         if (data.fundCampaignId) payload.fundCampaignId = data.fundCampaignId;
@@ -150,15 +174,43 @@ const CheckRequestFormPage: React.FC = () => {
                 htmlFor="isAdvance"
                 className="text-theme-text-primary touch:flex touch:min-h-11 touch:items-center text-sm font-medium"
               >
-                This is a cash advance to me
+                {canRaiseForOthers ? 'This is a cash advance' : 'This is a cash advance to me'}
               </label>
               <p id="isAdvance-hint" className="text-theme-text-secondary text-xs">
-                Money paid to you before an expense, such as for travel. Within {ADVANCE_RETURN_DAYS} days of the check,
-                submit an expense report against it and return anything not spent. Until you do, it may count as taxable
-                pay and you cannot request another advance.
+                Money paid to {canRaiseForOthers ? 'a member' : 'you'} before an expense, such as for travel.{' '}
+                {advanceDeadlineHint(returnMethod, ADVANCE_RETURN_DAYS)}{' '}
+                {canRaiseForOthers
+                  ? 'Until the member does, it may count as their taxable pay and they cannot request another advance.'
+                  : 'Until you do, it may count as taxable pay and you cannot request another advance.'}
               </p>
             </div>
           </div>
+
+          {isAdvance && canRaiseForOthers && (
+            <div>
+              <label htmlFor="advanceHolder" className={labelClass}>
+                Advance for
+              </label>
+              <select
+                id="advanceHolder"
+                className={selectClass}
+                value={holderId}
+                onChange={(e) => chooseHolder(e.target.value)}
+                aria-describedby="advanceHolder-hint"
+              >
+                <option value="">Me</option>
+                {holders.map((holder) => (
+                  <option key={holder.id} value={holder.id}>
+                    {holder.name}
+                  </option>
+                ))}
+              </select>
+              <p id="advanceHolder-hint" className="text-theme-text-secondary mt-1 text-xs">
+                The member holds the advance: it is paid to them, its statements and deadline are theirs, and an overdue
+                one stops them requesting another. As the one who raised it, you cannot approve it or issue its check.
+              </p>
+            </div>
+          )}
 
           {isAdvance && overdue.length > 0 && (
             <div role="alert" className="alert-warning text-sm">

@@ -1140,10 +1140,17 @@ project the newest payment. Write payments, not totals.
 
 ```
 PUT    /api/v1/finance/dues/{dues_id}            # Record a payment (finance.manage)
-GET    /api/v1/finance/dues/{dues_id}/payments   # Payment ledger, oldest first (finance.view or finance.manage)
+GET    /api/v1/finance/dues/{dues_id}/payments   # Payment ledger, oldest first, each with recordedByName (finance.view or finance.manage)
 POST   /api/v1/finance/dues/{dues_id}/waive      # Waive dues; reason required (finance.manage)
 POST   /api/v1/finance/dues/{dues_id}/unwaive    # Reverse a waiver; reason required (finance.manage)
+GET    /api/v1/finance/my-dues                   # The caller's own dues, balances, late fees and payments (any member)
+GET    /api/v1/finance/dues-schedules/membership-type-options  # Tiers a schedule may target (finance.manage)
 ```
+
+_(2026-11-06)_ A schedule's `gracePeriodDays`, `lateFeeAmount`, `fiscalYearId`
+and `appliesToMembershipTypes` apply once its `termsEffectiveAt` is set (on
+create, or the first save of a schedule from before then); a daily task adds
+the late fee to `amountDue` once and records it in `lateFeeApplied`.
 
 | Route         | Body                                                                                           |
 | ------------- | ---------------------------------------------------------------------------------------------- |

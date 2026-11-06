@@ -2,6 +2,10 @@
  * Lead W69: a donation's PUT worked but nothing could load one gift to edit
  * it. The record form now edits at `/grants/donations/:donationId/edit`, and
  * an update sends every field it owns, with an emptied one as null.
+ *
+ * A gift that pays toward a pledge (owner decision 2026-11-01) keeps that
+ * pledge in the picker while it is edited, even once the pledge is fulfilled,
+ * and unlinking it or changing the donor sends `pledgeId: null`.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -17,14 +21,16 @@ vi.mock('../../../stores/authStore', () => ({
     selector({ checkPermission: () => true }),
 }));
 
-const { getDonation, updateDonation, createDonation, listDonors, listCampaigns, listDonations } = vi.hoisted(() => ({
-  getDonation: vi.fn(),
-  updateDonation: vi.fn(),
-  createDonation: vi.fn(),
-  listDonors: vi.fn(),
-  listCampaigns: vi.fn(),
-  listDonations: vi.fn(),
-}));
+const { getDonation, updateDonation, createDonation, listDonors, listCampaigns, listDonations, listPledges } =
+  vi.hoisted(() => ({
+    getDonation: vi.fn(),
+    updateDonation: vi.fn(),
+    createDonation: vi.fn(),
+    listDonors: vi.fn(),
+    listCampaigns: vi.fn(),
+    listDonations: vi.fn(),
+    listPledges: vi.fn(),
+  }));
 vi.mock('../services/api', () => ({
   fundraisingService: {
     getDonation: (...a: unknown[]) => getDonation(...a) as unknown,
@@ -33,6 +39,7 @@ vi.mock('../services/api', () => ({
     listDonors: (...a: unknown[]) => listDonors(...a) as unknown,
     listCampaigns: (...a: unknown[]) => listCampaigns(...a) as unknown,
     listDonations: (...a: unknown[]) => listDonations(...a) as unknown,
+    listPledges: (...a: unknown[]) => listPledges(...a) as unknown,
   },
 }));
 
@@ -44,6 +51,7 @@ const DONATION = {
   organizationId: 'o1',
   campaignId: 'camp-1',
   donorId: null,
+  pledgeId: null,
   amount: '125.00',
   currency: 'USD',
   donationDate: '2026-10-04T00:00:00Z',
@@ -79,7 +87,15 @@ const renderAt = (path: string) =>
 
 describe('Editing a donation (W69)', () => {
   beforeEach(() => {
-    for (const fn of [getDonation, updateDonation, createDonation, listDonors, listCampaigns, listDonations]) {
+    for (const fn of [
+      getDonation,
+      updateDonation,
+      createDonation,
+      listDonors,
+      listCampaigns,
+      listDonations,
+      listPledges,
+    ]) {
       fn.mockReset();
     }
     getDonation.mockResolvedValue(structuredClone(DONATION));
@@ -87,6 +103,7 @@ describe('Editing a donation (W69)', () => {
     listDonors.mockResolvedValue([]);
     listCampaigns.mockResolvedValue([{ id: 'camp-1', name: 'New Engine Fund' }]);
     listDonations.mockResolvedValue([structuredClone(DONATION)]);
+    listPledges.mockResolvedValue([]);
   });
 
   it('loads the gift and saves every field, clearing the emptied ones', async () => {
@@ -112,6 +129,7 @@ describe('Editing a donation (W69)', () => {
       paymentStatus: 'completed',
       donorId: null,
       campaignId: 'camp-1',
+      pledgeId: null,
       donorName: 'Sam Lee',
       donorEmail: 'sam@example.org',
       isAnonymous: false,
@@ -138,5 +156,84 @@ describe('Editing a donation (W69)', () => {
     const table = await screen.findByRole('table');
     const link = await within(table).findByRole('link', { name: /Edit the .* donation from Sam Lee/ });
     expect(link).toHaveAttribute('href', '/grants/donations/don-1/edit');
+  });
+
+  describe('a gift paying toward a pledge', () => {
+    const pledge = (id: string, status: string, donorId = 'donor-1') => ({
+      id,
+      organizationId: 'o1',
+      campaignId: null,
+      donorId,
+      pledgedAmount: '125.00',
+      fulfilledAmount: status === 'fulfilled' ? '125.00' : '0.00',
+      pledgeDate: '2026-09-01',
+      dueDate: null,
+      status,
+      paymentSchedule: null,
+      reminderEnabled: false,
+      notes: null,
+      createdBy: null,
+      createdAt: '2026-09-01T00:00:00Z',
+      updatedAt: '2026-09-01T00:00:00Z',
+    });
+
+    beforeEach(() => {
+      getDonation.mockResolvedValue({ ...structuredClone(DONATION), donorId: 'donor-1', pledgeId: 'p-paid' });
+      listDonors.mockResolvedValue([
+        { id: 'donor-1', firstName: 'Sam', lastName: 'Lee', donorType: 'individual' },
+        { id: 'donor-2', firstName: 'Ana', lastName: 'Ruiz', donorType: 'individual' },
+      ]);
+      // The gift itself fulfilled p-paid; p-open is another open pledge.
+      listPledges.mockResolvedValue([pledge('p-paid', 'fulfilled'), pledge('p-open', 'pending')]);
+    });
+
+    const payload = () => updateDonation.mock.calls[0]?.[1] as Record<string, unknown>;
+
+    it('keeps the fulfilled pledge it pays toward selected and sends it back', async () => {
+      const user = userEvent.setup();
+      renderAt('/grants/donations/don-1/edit');
+
+      const picker = await screen.findByLabelText(/pays toward a pledge/i);
+      await waitFor(() => expect(picker).toHaveValue('p-paid'));
+      expect(
+        within(picker)
+          .getAllByRole('option')
+          .map((o) => o.getAttribute('value'))
+      ).toEqual(['', 'p-paid', 'p-open']);
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() => expect(updateDonation).toHaveBeenCalledTimes(1));
+      expect(payload().pledgeId).toBe('p-paid');
+    });
+
+    it('sends null when the pledge is taken off the gift', async () => {
+      const user = userEvent.setup();
+      renderAt('/grants/donations/don-1/edit');
+
+      const picker = await screen.findByLabelText(/pays toward a pledge/i);
+      await waitFor(() => expect(picker).toHaveValue('p-paid'));
+      await user.selectOptions(picker, '');
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() => expect(updateDonation).toHaveBeenCalledTimes(1));
+      expect(payload().pledgeId).toBeNull();
+    });
+
+    it('drops the pledge when the gift moves to another donor', async () => {
+      const user = userEvent.setup();
+      listPledges.mockImplementation((params: { donorId: string }) =>
+        Promise.resolve(params.donorId === 'donor-1' ? [pledge('p-paid', 'fulfilled')] : [])
+      );
+      renderAt('/grants/donations/don-1/edit');
+
+      await waitFor(() => expect(screen.getByLabelText(/pays toward a pledge/i)).toHaveValue('p-paid'));
+      await user.selectOptions(screen.getByRole('combobox', { name: /^Donor/ }), 'donor-2');
+      await waitFor(() => expect(screen.queryByLabelText(/pays toward a pledge/i)).not.toBeInTheDocument());
+      await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      await waitFor(() => expect(updateDonation).toHaveBeenCalledTimes(1));
+      expect(payload().donorId).toBe('donor-2');
+      expect(payload().pledgeId).toBeNull();
+    });
   });
 });
