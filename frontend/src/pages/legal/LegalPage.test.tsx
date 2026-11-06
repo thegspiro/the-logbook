@@ -82,6 +82,26 @@ describe('LegalPage', () => {
     expect(screen.queryByText(/Information we collect/)).not.toBeInTheDocument();
   });
 
+  it('renders headings and lists in org-configured text, and nothing else as markup', async () => {
+    // Owner decision W54-5: a small safe subset. Everything else is shown as typed.
+    mockGet.mockResolvedValue({
+      data: {
+        organizationName: 'Falls Church VFD',
+        privacyPolicy:
+          '## What we keep\n\n- Your name\n- <script>alert(1)</script>\n\n<a href="javascript:alert(1)">Click</a>',
+        termsOfService: null,
+        privacyPolicyLastUpdated: null,
+        termsOfServiceLastUpdated: null,
+      },
+    });
+    renderAt('/privacy');
+    expect(await screen.findByRole('heading', { name: 'What we keep', level: 2 })).toBeInTheDocument();
+    expect(screen.getByText('Your name').tagName).toBe('LI');
+    expect(screen.getByText('<script>alert(1)</script>').tagName).toBe('LI');
+    expect(screen.getByText('<a href="javascript:alert(1)">Click</a>')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Click' })).not.toBeInTheDocument();
+  });
+
   it('omits the revision date on custom text that carries none', async () => {
     mockGet.mockResolvedValue({
       data: {

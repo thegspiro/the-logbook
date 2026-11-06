@@ -493,13 +493,18 @@ the rest, newest first, as `{ items, total, offset, limit }` (default `limit`
 - Only drafts are editable or deletable — a published revision is what the
   department is on record as having published on a date. A proposer may
   modify only their own draft (`403` otherwise); a publisher may modify
-  anyone's.
+  anyone's. A revision edited by someone other than its proposer carries
+  `editedBy`, `editedByName` and `editedAt` (the latest such edit); they are
+  set from the caller, never from the request body.
 - Publishing archives the previously published revision, writes the body and
   its effective date into the organization's settings, and audits as
   `legal.document_published`. Reverting archives the published revision and
   removes the custom text so the built-in default renders again
-  (`legal.document_reverted_to_default`). Archived revisions are never
-  deleted. Proposing, editing and discarding audit as
+  (`legal.document_reverted_to_default`). A revert that changed what members
+  saw also adds a history entry with `revertsToDefault: true`, an empty
+  `body`, and `publishedByName` / `publishedAt` naming who restored the
+  built-in text and when. History is ordered by `publishedAt`, newest first.
+  Archived revisions are never deleted. Proposing, editing and discarding audit as
   `legal.revision_proposed`, `legal.revision_updated` and
   `legal.revision_discarded`.
 - `legal.propose` is granted to every position holding `settings.view` (or
@@ -540,8 +545,10 @@ fields are `null` — with no org context, no tenant's text is served.
 `settings["legal"]` is unvalidated JSON, so values are read defensively: a
 non-string value, a non-dict `legal` key, or blank/whitespace text all return
 `null` (the defaults render) rather than erroring on a page anonymous visitors
-reach. Returned text is plain text (rendered as paragraphs, never HTML) and
-capped at 100,000 characters; dates at 64.
+reach. Returned text is returned as stored — never HTML — and capped at
+100,000 characters; dates at 64. The page applies a small formatting subset to
+it (`## ` / `### ` headings, `- ` or `* ` bullets, `1. ` numbered items) and
+renders everything else, including any HTML, as the characters typed.
 
 ---
 

@@ -199,6 +199,63 @@ async def _profile(db, member):
         )
 
 
+async def _profile_seen_by(db, member, permissions):
+    """The member's profile as another member holding ``permissions`` reads it."""
+    with (
+        patch("app.api.v1.endpoints.users.log_audit_event", new=AsyncMock()),
+        patch(
+            "app.api.v1.endpoints.users._load_contact_visibility",
+            new=AsyncMock(return_value={}),
+        ),
+    ):
+        caller = SimpleNamespace(
+            id=str(uuid.uuid4()),
+            organization_id=member.organization_id,
+            username="viewer",
+            positions=[SimpleNamespace(permissions=list(permissions))],
+            rank=None,
+        )
+        return await get_user_with_roles(
+            user_id=uuid.UUID(member.id), db=db, current_user=caller
+        )
+
+
+@pytest.mark.integration
+class TestWhoSeesMemberSince:
+    """Owner decision 2026-11-05: "member since" is credited service, which can
+    count time at another department, so it is shown to the member and to
+    officers who manage members or their ID cards, not to every member who can
+    open the roster."""
+
+    async def test_an_ordinary_member_does_not_see_another_members_date(
+        self, db_session
+    ):
+        org = await _org(db_session)
+        member = await _returned_member(db_session, org)
+
+        profile = await _profile_seen_by(db_session, member, ["members.view"])
+
+        assert profile.service_since is None
+
+    async def test_an_officer_who_manages_members_sees_it(self, db_session):
+        org = await _org(db_session)
+        member = await _returned_member(db_session, org)
+
+        profile = await _profile_seen_by(db_session, member, ["members.manage"])
+
+        assert profile.service_since == CONTINUED_SINCE
+
+    async def test_an_officer_who_manages_id_cards_sees_it(self, db_session):
+        org = await _org(db_session)
+        member = await _returned_member(db_session, org)
+
+        profile = await _profile_seen_by(
+            db_session, member, ["members.view", "members.manage_id_cards"]
+        )
+
+        assert profile.service_since == CONTINUED_SINCE
+
+
 @pytest.mark.integration
 class TestProfileReader:
     async def test_a_returned_member_is_a_member_since_their_credited_start(

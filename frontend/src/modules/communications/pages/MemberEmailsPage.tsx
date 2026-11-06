@@ -13,7 +13,8 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, Lock, MessageSquare, ToggleRight } from 'lucide-react';
+import { Link } from 'react-router';
+import { AlertCircle, Lock, MailX, MessageSquare, ToggleRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { SkeletonPage } from '../../../components/ux';
 import { SettingsToggle } from '../../../components/settings/SettingsToggle';
@@ -162,6 +163,13 @@ const MemberEmailsPage: React.FC = () => {
                 ? ' Make one required and members will see it as always sent instead of as a choice.'
                 : ''}
             </p>
+            <Link
+              to="/communications/member-emails/opt-outs"
+              className="text-theme-text-primary touch:min-h-11 mb-3 inline-flex items-center gap-1.5 text-sm font-medium underline hover:no-underline"
+            >
+              <MailX className="h-4 w-4 shrink-0" aria-hidden="true" />
+              See which members have turned these off
+            </Link>
             <ul className="grid gap-3 md:grid-cols-2">
               {optional.map((kind) => (
                 <EmailKindCard

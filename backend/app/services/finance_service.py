@@ -132,6 +132,7 @@ from app.services.separation_of_duties import (
     assert_different_person,
 )
 from app.utils.csv_export import SafeCsvWriter, csv_safe_cell
+from app.utils.document_locks import lock_documents_for_reference
 from app.utils.finance_settings import (
     FINANCE_SETTINGS_KEY,
     FUND_OVERSPEND_BLOCK,
@@ -5787,6 +5788,7 @@ class FinanceService:
     async def submit_expense_report(
         self, er_id: str, org_id: str, requester_id: Optional[str] = None
     ) -> ExpenseReport:
+        await self._lock_claimed_purchase(er_id, org_id)
         er = await self.get_expense_report(
             er_id, org_id, restrict_to_user=requester_id, for_update=True
         )
@@ -5896,6 +5898,7 @@ class FinanceService:
         payment_method: Optional[str] = None,
         acted_by: Optional[str] = None,
     ) -> ExpenseReport:
+        await self._lock_claimed_purchase(er_id, org_id)
         # Locked read -- see mark_pr_paid. Two concurrent "mark paid" calls on
         # the same report must not both pass the APPROVED check off a plain
         # SELECT and both add every line item's amount to spent.
@@ -5937,6 +5940,25 @@ class FinanceService:
     # Reimbursement: purchase -> report -> check
     # (app/services/finance_reimbursement.py)
     # ========================================
+
+    async def _lock_claimed_purchase(self, er_id: str, org_id: str) -> None:
+        """Lock the purchase a report claims back, before the report itself.
+
+        Purchase, then report, is the one order for the pair (the canonical
+        lock order in documents_service): cancelling or paying a purchase and
+        raising a claim lock the purchase and then its live report, so every
+        report-side path that also needs the purchase takes it first, here.
+        The link is fixed when the report is created, so it is read without a
+        lock; the later ``lock_purchase`` calls find the row already held.
+        """
+        pr_id = await self.db.scalar(
+            select(ExpenseReport.purchase_request_id).where(
+                ExpenseReport.id == er_id,
+                ExpenseReport.organization_id == org_id,
+            )
+        )
+        if pr_id:
+            await lock_purchase(self.db, org_id, pr_id)
 
     async def _refuse_while_claimed(
         self, pr: PurchaseRequest, org_id: str, action: str
@@ -5982,6 +6004,20 @@ class FinanceService:
         Only the member who raised the request may claim it: the report pays
         whoever submits it.
         """
+        # The copied line points at the request's receipt, so the receipt is
+        # locked before the request: Documents before Finance, the order a
+        # document delete takes (DOC-31; the canonical lock order in
+        # documents_service). Read unlocked to learn which document; if an
+        # upload replaces it before the request's lock is granted, the new
+        # one is locked by the line's foreign key check instead, which a
+        # delete meets with NOWAIT rather than a wait.
+        receipt_id = await self.db.scalar(
+            select(PurchaseRequest.receipt_document_id).where(
+                PurchaseRequest.id == pr_id,
+                PurchaseRequest.organization_id == org_id,
+            )
+        )
+        await lock_documents_for_reference(self.db, org_id, [receipt_id])
         pr = await lock_purchase(self.db, org_id, pr_id)
         if pr is None or (
             requester_scope is not None and pr.requested_by != requester_scope
@@ -6523,8 +6559,9 @@ class FinanceService:
 
         Report, then check, is the order ``mark_expense_paid`` and
         ``request_reimbursement_check`` take the two locks in, so issuing or
-        voiding the check cannot deadlock against them. The link itself is
-        fixed at creation, so it is read without a lock.
+        voiding the check cannot deadlock against them; the purchase the
+        report claims back comes before both (``_lock_claimed_purchase``).
+        The links are fixed at creation, so they are read without a lock.
         """
         er_id = await self.db.scalar(
             select(CheckRequest.expense_report_id).where(
@@ -6533,6 +6570,7 @@ class FinanceService:
         )
         if not er_id:
             return None
+        await self._lock_claimed_purchase(er_id, org_id)
         return await self.get_expense_report(er_id, org_id, for_update=True)
 
     async def void_check(self, cr_id: str, org_id: str) -> CheckRequest:

@@ -163,6 +163,12 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/inventory/items': { permissions: ['inventory.manage'] },
   '/inventory/storage-areas': { label: 'Storage Areas', permissions: ['inventory.manage'] },
   '/onboarding/modules': {},
+  // An ancestor because the opt-out list sits beneath it; labelled as its own
+  // heading says, and gated as its route is.
+  '/communications/member-emails': {
+    label: 'Member Emails & Texts',
+    permissions: ['settings.manage', 'organization.update_settings', 'notifications.manage'],
+  },
   // An ancestor only because a posted set of minutes sits beneath the public
   // list; no gate, since the page is open to anyone the department chose to show it to.
   '/public/minutes': {},

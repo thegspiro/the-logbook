@@ -25,6 +25,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail
+from app.models.document import DocumentFolder
 from app.models.finance import (
     ApprovalEntityType,
     ExpenseReportStatus,
@@ -5206,12 +5207,24 @@ _ER_RECEIPT_OPEN_TO_REQUESTER = {
 }
 
 
+async def _lock_receipts_folder(db: AsyncSession, user: User) -> DocumentFolder:
+    """Finance > Receipts, share-locked before the request or report is.
+
+    The folder comes before the finance record in the cross-feature lock
+    order (DOC-31; the canonical lock order in documents_service), so it is
+    taken first here, ahead of the record's row lock.
+    """
+    return await DocumentsService(db).lock_finance_receipts_folder(user.organization_id)
+
+
 async def _store_receipt(
-    db: AsyncSession, file: UploadFile, user: User, name: str, source_id: str
+    db: AsyncSession,
+    file: UploadFile,
+    user: User,
+    folder: DocumentFolder,
+    name: str,
+    source_id: str,
 ):
-    folder = await DocumentsService(db).ensure_finance_receipts_folder(
-        user.organization_id
-    )
     return await module_documents.store_as_document(
         db,
         file,
@@ -5264,6 +5277,7 @@ async def upload_purchase_request_receipt(
     service = FinanceService(db)
     org_id = str(current_user.organization_id)
     requester = _requester_scope(current_user)
+    folder = await _lock_receipts_folder(db, current_user)
     pr = await service.get_purchase_request(
         pr_id, org_id, for_update=True, restrict_to_user=requester
     )
@@ -5277,7 +5291,7 @@ async def upload_purchase_request_receipt(
         )
 
     document = await _store_receipt(
-        db, file, current_user, f"Receipt {pr.request_number}", str(pr.id)
+        db, file, current_user, folder, f"Receipt {pr.request_number}", str(pr.id)
     )
     previous = pr.receipt_document_id
     try:
@@ -5359,6 +5373,7 @@ async def upload_expense_line_item_receipt(
     """
     org_id = str(current_user.organization_id)
     requester = _requester_scope(current_user)
+    folder = await _lock_receipts_folder(db, current_user)
     er = await FinanceService(db).get_expense_report(
         er_id, org_id, restrict_to_user=requester, for_update=True
     )
@@ -5385,7 +5400,7 @@ async def upload_expense_line_item_receipt(
     item = await _expense_line_item(er, item_id)
 
     document = await _store_receipt(
-        db, file, current_user, f"Receipt {er.report_number}", str(item.id)
+        db, file, current_user, folder, f"Receipt {er.report_number}", str(item.id)
     )
     previous = item.receipt_document_id
     try:

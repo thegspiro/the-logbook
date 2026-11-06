@@ -137,6 +137,11 @@ class EPCRImportConfig(BaseModel):
     auto_match_members: bool = True
 
 
+# The event types a calendar integration's filter may name: the values the
+# publishing pass reads off Event.event_type.
+CALENDAR_PUBLISH_EVENT_TYPES = frozenset(t.value for t in EventType)
+
+
 # Calendar publishing is one way by design, and the tokens, the calendar and
 # the signed-in account come only from the provider's sign-in: the connect
 # flow writes them and the API refuses them (see
@@ -145,15 +150,29 @@ class _CalendarPublishConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sync_direction: Literal["push"] = "push"
+    # The publishing pass (calendar_sync_service._type_filter) compares these
+    # with each event's EventType value, so a name outside that enum would
+    # match nothing and quietly empty the calendar. Empty means every type.
     event_types_to_sync: List[str] = Field(default_factory=list)
     # Event descriptions can carry internal notes, so they stay out of the
     # published calendar unless an administrator opts in.
     sync_descriptions: bool = False
+    # Bounds mirror calendar_sync_service.MAX_DAYS_AHEAD and its default.
     days_ahead: int = Field(default=180, ge=1, le=730)
     # A department's own OAuth client, overriding the deployment's sign-in
     # app. Both are stored encrypted (SECRET_CONFIG_KEYS).
     client_id: str = ""
     client_secret: str = ""
+
+    @field_validator("event_types_to_sync")
+    @classmethod
+    def _known_event_types(cls, value: List[str]) -> List[str]:
+        unknown = sorted(set(value) - CALENDAR_PUBLISH_EVENT_TYPES)
+        if unknown:
+            raise ValueError(
+                list_within_detail_limit("Unknown event type(s): ", unknown)
+            )
+        return list(dict.fromkeys(value))
 
 
 class GoogleCalendarConfig(_CalendarPublishConfig):

@@ -721,6 +721,52 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Integrations: catalog changes reach existing departments, and calendar publishing settings on the card (2026-11-05)
+
+Nothing blocks a restart. Migration `7c41e9a2b6d8` changes no schema. Two
+owner decisions of 2026-11-01:
+
+- **Integration cards may read differently after the upgrade.** The migration
+  rewrites every department's integration rows to the current catalog's name,
+  description and category, and moves a row between **Available** and
+  **Coming soon** where the catalog has promoted or demoted it since the
+  department was set up. A connected integration, or one showing an error,
+  keeps its status, settings and credentials; a demoted one that is connected
+  stays connected until someone disconnects it. From now on the Integrations
+  page applies the same rule each time it loads, so a later catalog change
+  needs no migration.
+- **Google Calendar and Outlook publishing** gains **Days ahead** and
+  **Event types** on the connected card. Nothing changes until someone saves
+  them: 180 days and every type remain the default. The API
+  (`PATCH /integrations/{id}`) now refuses an `event_types_to_sync` value that
+  is not an event type (422); a value stored before the upgrade is left as it
+  is.
+- Rollback: the downgrade does not restore the old catalog text or statuses
+  (they were stale copies); the previous version simply stops reconciling.
+
+### Legal documents: headings and lists render on `/privacy` and `/terms`, and reverts appear in the history (2026-11-05)
+
+Nothing blocks a restart. Migration `81b38694152f` adds three columns to
+`legal_document_revisions` (`reverts_to_default`, false for every existing
+row; `edited_by` and `edited_at`, empty) and changes no existing row. Three
+owner decisions of 2026-11-01:
+
+- **Published department text may change appearance.** A line starting `## `,
+  `# ` or `### ` now renders as a heading, and lines starting `- `, `* ` or
+  `1. ` as a list, on `/privacy` and `/terms`. Text published before the
+  upgrade that used those marks as plain characters — most often a list typed
+  as `- ` lines, which is how the built-in text used to be seeded — now shows
+  as a real list. Open each page once after upgrading. HTML and links are
+  still shown as typed, never interpreted.
+- **Reverting to the built-in text is recorded in the published history**,
+  naming who did it and when. Reverts made before the upgrade are in the audit
+  log only.
+- **An edit to someone else's proposal names the editor** beside the
+  proposer.
+- Rollback: the downgrade drops the three columns and deletes the revert
+  history rows (the audit log keeps each revert). The previous version renders
+  any headings and lists as plain characters again.
+
 ### Minutes: attachments reach the published copy and the PDF, and meeting action item reminders are emailed (2026-11-05)
 
 Nothing blocks a restart. Migration `a42466630e74` adds two nullable columns

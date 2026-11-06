@@ -30,6 +30,15 @@ export interface LegalRevision {
   publishedBy?: string | null;
   publishedByName?: string | null;
   publishedAt?: string | null;
+  /**
+   * A history entry recording that the built-in text was restored — by
+   * `publishedByName`, at `publishedAt`. Its body is empty.
+   */
+  revertsToDefault?: boolean;
+  /** Set only when someone other than the proposer edited the draft. */
+  editedBy?: string | null;
+  editedByName?: string | null;
+  editedAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }

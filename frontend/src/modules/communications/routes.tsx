@@ -15,6 +15,8 @@ const MessagesAdminPage = lazyWithRetry(() => import('./pages/MessagesAdminPage'
 
 const MemberEmailsPage = lazyWithRetry(() => import('./pages/MemberEmailsPage'));
 
+const MemberEmailOptOutsPage = lazyWithRetry(() => import('./pages/MemberEmailOptOutsPage'));
+
 const MessagesInboxPage = lazyWithRetry(() => import('./pages/MessagesInboxPage'));
 
 const MessageDetailPage = lazyWithRetry(() => import('./pages/MessageDetailPage'));
@@ -46,6 +48,20 @@ export const getCommunicationsRoutes = () => {
           >
             <Suspense fallback={null}>
               <MemberEmailsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* The same grants as the policy page it sits beside, whose decisions it
+          informs; the backend list checks the same three. */}
+      <Route
+        path="/communications/member-emails/opt-outs"
+        element={
+          <ProtectedRoute
+            requiredAnyPermission={['settings.manage', 'organization.update_settings', 'notifications.manage']}
+          >
+            <Suspense fallback={null}>
+              <MemberEmailOptOutsPage />
             </Suspense>
           </ProtectedRoute>
         }

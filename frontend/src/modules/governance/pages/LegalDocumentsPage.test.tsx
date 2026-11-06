@@ -141,9 +141,12 @@ describe('LegalDocumentsPage', () => {
     expect(body.value).toContain('holds full control of this application');
     expect(body.value).toContain('Access is based on your status within the department');
     expect(body.value).toContain('Falls Church VFD');
-    // `**bold**` markers are stripped: the public page renders custom text as
-    // plain paragraphs, so a marker left in would be published literally.
+    // `**bold**` markers are stripped: department text supports headings and
+    // lists only, so a marker left in would be published literally.
     expect(body.value).not.toContain('**');
+    // Headings arrive as `## ` lines the public page renders as headings
+    // (W54-5), not as the capitalised paragraphs they used to be.
+    expect(body.value).toMatch(/^## Who controls this system and your access$/m);
   });
 
   it('refuses to save a proposal with no explanation', async () => {
@@ -328,6 +331,84 @@ describe('LegalDocumentsPage', () => {
       renderWithRouter(<LegalDocumentsPage />);
       await screen.findByText('Dana Reyes proposed this');
       expect(screen.queryByRole('button', { name: /Load more/ })).not.toBeInTheDocument();
+    });
+  });
+
+  // Owner decisions W54-3, W54-4 and W54-5 (2026-11-01).
+  describe('history, attribution and formatting', () => {
+    const withPrivacy = (patch: Partial<LegalDocumentsOverview['documents'][number]>) =>
+      overview({
+        documents: overview().documents.map((d) => (d.documentType === 'privacy_policy' ? { ...d, ...patch } : d)),
+      });
+
+    it('names who edited a proposal without taking the proposer off it', async () => {
+      mockGetOverview.mockResolvedValue(
+        withPrivacy({
+          drafts: [{ ...draft, editedBy: 'user-2', editedByName: 'Pat Lee', editedAt: '2026-08-19T15:00:00Z' }],
+          draftsTotal: 1,
+        })
+      );
+      renderWithRouter(<LegalDocumentsPage />);
+      expect(await screen.findByText('Dana Reyes proposed this')).toBeInTheDocument();
+      expect(screen.getByText(/^Edited by Pat Lee on /)).toBeInTheDocument();
+    });
+
+    it('says nothing about an editor when nobody else edited the proposal', async () => {
+      mockGetOverview.mockResolvedValue(withPrivacy({ drafts: [draft], draftsTotal: 1 }));
+      renderWithRouter(<LegalDocumentsPage />);
+      await screen.findByText('Dana Reyes proposed this');
+      expect(screen.queryByText(/Edited by/)).not.toBeInTheDocument();
+    });
+
+    it('shows a revert to the built-in text in the published history, with who and when', async () => {
+      const replaced = {
+        ...draft,
+        id: 'rev-old',
+        status: 'archived' as const,
+        publishedBy: 'user-3',
+        publishedByName: 'Chief Alvarez',
+        publishedAt: '2026-08-20T12:00:00Z',
+        editedBy: 'user-2',
+        editedByName: 'Pat Lee',
+      };
+      const revert = {
+        ...replaced,
+        id: 'rev-revert',
+        body: '',
+        changeNote: 'Restored the built-in text.',
+        revertsToDefault: true,
+        createdByName: 'Pat Lee',
+        publishedByName: 'Pat Lee',
+        publishedAt: '2026-09-01T12:00:00Z',
+        editedBy: null,
+        editedByName: null,
+      };
+      mockGetOverview.mockResolvedValue(withPrivacy({ history: [revert, replaced], historyTotal: 2 }));
+      renderWithRouter(<LegalDocumentsPage />);
+
+      await screen.findByRole('heading', { name: 'Published history' });
+      // No proposals are open, so the history holds the only list items.
+      const entries = screen.getAllByRole('listitem');
+      expect(entries).toHaveLength(2);
+      expect(entries[0]).toHaveTextContent('Built-in text restored by Pat Lee');
+      expect(within(entries[0] as HTMLElement).queryByText('Read this version')).not.toBeInTheDocument();
+      expect(entries[1]).toHaveTextContent('Replaced — published by Chief Alvarez');
+      expect(entries[1]).toHaveTextContent('Proposed by Dana Reyes, edited by Pat Lee');
+    });
+
+    it('renders proposed text with its headings and lists, and shows markup as typed', async () => {
+      mockGetOverview.mockResolvedValue(
+        withPrivacy({
+          drafts: [{ ...draft, body: '## Retention\n\n- Seven years\n- <img src=x onerror=alert(1)>' }],
+          draftsTotal: 1,
+        })
+      );
+      renderWithRouter(<LegalDocumentsPage />);
+      await screen.findByText('Dana Reyes proposed this');
+      expect(screen.getByRole('heading', { name: 'Retention', level: 3 })).toBeInTheDocument();
+      expect(screen.getByText('Seven years').tagName).toBe('LI');
+      expect(screen.getByText('<img src=x onerror=alert(1)>')).toBeInTheDocument();
+      expect(screen.queryByRole('img')).not.toBeInTheDocument();
     });
   });
 });

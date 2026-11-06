@@ -180,6 +180,8 @@ export type {
   ScheduledEmailCreate,
   ScheduledEmailUpdate,
   MemberEmailKind,
+  MemberEmailOptOut,
+  MemberEmailOptOutPage,
   MemberEmailPolicy,
   MemberTextAlert,
   MessageHistoryRecord,

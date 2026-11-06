@@ -37,6 +37,8 @@ class TestFinanceDisbursementSoD:
     async def test_requester_cannot_mark_own_expense_paid(self):
         db = MagicMock()
         db.execute = AsyncMock(return_value=_one(SimpleNamespace(submitted_by="u1")))
+        # Not a purchase reimbursement: no purchase to lock before the report.
+        db.scalar = AsyncMock(return_value=None)
         svc = FinanceService(db)
         with pytest.raises(ValueError, match="cannot mark paid your own"):
             await svc.mark_expense_paid("er1", "org1", None, acted_by="u1")

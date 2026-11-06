@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**356 tables · 5801 columns · 1197 foreign keys**
+**356 tables · 5804 columns · 1198 foreign keys**
 
 ---
 
@@ -442,7 +442,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`legal_document_revisions`](#legal_document_revisions) | `LegalDocumentRevision` | 12 | A proposed or published version of one public legal document. |
+| [`legal_document_revisions`](#legal_document_revisions) | `LegalDocumentRevision` | 15 | A proposed or published version of one public legal document. |
 
 ### Locations
 
@@ -7206,6 +7206,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `published_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `published_at` | DATETIME | yes |  |  |  |
+| `reverts_to_default` | BOOL | no |  | `false` |  |
+| `edited_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `edited_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -7455,7 +7458,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `template_id` | VARCHAR(36) | yes | FK |  | → `minutes_templates.id` ON DELETE SET NULL |
 | `header_config` | JSON | yes |  |  |  |
 | `footer_config` | JSON | yes |  |  |  |
-| `published_document_id` | VARCHAR(36) | yes |  |  |  |
+| `published_document_id` | VARCHAR(36) | yes | IDX |  |  |
 | `published_revision_version` | INTEGER | yes |  |  |  |
 | `published_at` | DATETIME | yes |  |  |  |
 | `agenda` | TEXT | yes |  |  |  |
@@ -7492,6 +7495,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_meeting_minutes_meeting_date` (`meeting_date`)
 - `ix_meeting_minutes_meeting_type` (`meeting_type`)
 - `ix_meeting_minutes_organization_id` (`organization_id`)
+- `ix_meeting_minutes_published_document_id` (`published_document_id`)
 - `ix_meeting_minutes_status` (`status`)
 
 ### `meeting_motions`
@@ -12350,7 +12354,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (440 references)
+### → `users` (441 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12586,6 +12590,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `knowledge_tests` | `created_by` | SET NULL | yes |
 | `label_printers` | `created_by_id` | SET NULL | yes |
 | `legal_document_revisions` | `created_by` | SET NULL | yes |
+| `legal_document_revisions` | `edited_by` | SET NULL | yes |
 | `legal_document_revisions` | `published_by` | SET NULL | yes |
 | `locations` | `created_by` | RESTRICT | yes |
 | `maintenance_records` | `created_by` | RESTRICT | yes |

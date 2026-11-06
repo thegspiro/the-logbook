@@ -513,3 +513,39 @@ class MemberEmailPolicyUpdate(BaseModel):
     """The optional kinds this department makes required, replacing the list."""
 
     required_kinds: List[str] = Field(default_factory=list, max_length=50)
+
+
+class MemberEmailOptOutRow(BaseModel):
+    """One current member and the optional emails they have turned off.
+
+    Carries no contact fields: the view answers "who will not hear about
+    this", not "how do I reach them", and the directory already governs
+    who may see a member's address.
+    """
+
+    user_id: str
+    name: str
+    membership_number: Optional[str] = None
+    # Email Notifications is off: every optional kind the department has not
+    # made required is stopped, whatever turned_off says.
+    email_notifications_off: bool
+    # Keys of the optional kinds the member's own setting turns off.
+    turned_off: List[str]
+
+
+class MemberEmailOptOutsResponse(BaseModel):
+    """A page of members with opt-outs, read-only."""
+
+    members: List[MemberEmailOptOutRow]
+    # Members matching the filter, across every page.
+    total: int
+    skip: int
+    limit: int
+    # Current members of the department, opted out or not.
+    members_considered: int
+    # For each optional kind, how many current members are not emailed it.
+    # Zero for a kind the department has made required.
+    not_emailed: Dict[str, int]
+    # Optional kinds this department has made required, so the screen can say
+    # an opt-out from one of them no longer stops it.
+    department_required: List[str]

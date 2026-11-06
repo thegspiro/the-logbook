@@ -429,6 +429,18 @@ had just failed their connection test without a word (W01-27). Owner decision:
 warn, but allow saving. The failure now stays on the page, and Continue asks
 before saving.
 
+**✅ Resolved (owner decision 2026-11-01: confirm; built 2026-11-05).** Asked
+whether a failed test should still save, the owner chose to ask the installer
+first, who can go back and fix the settings. That is the W01-27 behaviour, and
+it was checked against the decision rather than rebuilt: after a failed test,
+**Continue** opens **Save settings that failed the test?** through
+`useConfirm` (CLAUDE.md pitfall #16) with **Fix the settings** and **Save
+anyway**. Fix the settings saves nothing and stays on the step; Save anyway
+saves and moves on. A passing test, no test, or a test whose settings were
+changed since (the warning clears) saves without asking, as before. Covered by
+`EmailConfiguration.failedTest.test.tsx` (both confirmation tests go red with
+the confirmation removed).
+
 ## Members — Members See the Built-In Tier Names (2026-10-31)
 
 The department's membership tiers ("Active Member", "Senior Member", …) come
@@ -4619,6 +4631,12 @@ hire date moved forward by the time away for one whose earlier service keeps
 counting. A separated member's date is measured to their last day of service so
 it does not drift. `GET /users/{id}/with-roles` carries it as `service_since`
 (the profile's write endpoints do not, and the page keeps the value it had).
+**Who sees it (owner decision 2026-11-05):** the member themselves and
+officers holding `members.manage` or `members.manage_id_cards`. Credited
+service can count time at another department, so a member who can open the
+roster with `members.view` alone gets `service_since: null` for anyone else,
+and the profile hides the row (`tests/test_credited_service_readers.py`,
+`TestWhoSeesMemberSince`).
 **Left on `hire_date`, deliberately:** the hire date field itself and the
 roster's Hire Date column (both name the hire date); the Salesforce sync
 (`Hire_Date__c` is the hire date); the event-attendance cut-off, the meeting
@@ -5481,6 +5499,8 @@ seconds.
 
 ## Calendar Publishing — What a Pass Sends, and What No Screen Sets (2026-10-16)
 
+✅ **Resolved 2026-11-05** — the range and event types are set on the card (below).
+
 The `calendar_sync` scheduled task publishes department events one way to a
 Google Calendar or Outlook integration's calendar
 (`app/services/calendar_sync_service.py`, mapping rows in
@@ -5497,6 +5517,24 @@ true. It skips drafts, deletes cancelled events from the calendar, covers 30
 days back to `days_ahead` (default 180) ahead, and honours an
 `event_types_to_sync` list. The cards set `sync_descriptions`; no screen sets
 `days_ahead` or `event_types_to_sync`, which only the API accepts.
+
+**✅ Resolved (owner decision 2026-11-01: add settings on the integration
+card; built 2026-11-05).** A connected Google Calendar or Outlook card now has
+a **What is published** section: **Days ahead** (a whole number from 1 to 730,
+showing 180 when nothing is saved) and an **Event types** checklist of the
+department's event types (none ticked publishes every type), saved together
+with **Save publishing settings** as one `PATCH /integrations/{id}`. The
+reader is unchanged — `_load_desired` in `calendar_sync_service.py` already
+read both keys, defaulting to 180 days and every type, so a department that
+never opens the section publishes exactly what it did. The API now refuses an
+event type the pass could not match (anything outside `EventType`, which used
+to be stored and silently filtered out every event of that name) with a 422,
+alongside the range bounds it already enforced. A filter saved before this
+check that names an unknown type is left in place rather than rewritten, does
+not block later changes to the other settings, and the card says it is there.
+The 30-day look-back stays fixed. Covered by
+`tests/test_calendar_publish_settings.py` (including a saved range and filter
+reaching the pass) and `CalendarPublishPanel.test.tsx`.
 
 ## Salesforce Integration — Clearing the Refresh Token Has No Reachable UI Control (INT-11, 2026-09-13)
 
@@ -7495,6 +7533,43 @@ folders keep theirs) and `required_permissions` (set by modules, not by hand).
 
 ## Legal Documents — History, Attribution and Formatting Gaps (2026-10-04)
 
+> ✅ **All three resolved (owner decision 2026-11-01, built 2026-11-05).**
+>
+> - **W54-3, as the owner chose: record reverts.** "Revert to the built-in
+>   text" now writes a row into the published history — **Built-in text
+>   restored by …**, with the date — so the history shows what members saw
+>   after it. A revert row (`reverts_to_default`) was chosen over "replaced
+>   at / by" columns because a revert can follow text that has no revision
+>   row at all (configured in settings before this screen existed), and only
+>   a row of its own can record that. It is born archived, so it can never be
+>   edited, published or discarded, and nothing is recorded when the built-in
+>   text was already live. The history is now ordered by when each entry went
+>   live rather than when it was drafted. Existing rows were left untouched:
+>   reverts made before 2026-11-05 are in the audit log only.
+> - **W54-4, as the owner chose: record "edited by".** When someone other
+>   than the proposer edits a draft, the revision records them and the time
+>   (`edited_by` / `edited_at`); the card reads "Sam Ortiz proposed this" and
+>   "Edited by Pat Lee on …", and the published history keeps both names
+>   ("Proposed by Sam Ortiz, edited by Pat Lee"). Only the latest such editor
+>   is shown; every edit remains in the audit log
+>   (`legal.revision_updated`). The proposer revising their own wording names
+>   no editor.
+> - **W54-5, as the owner chose: allow headings and lists.** Department text
+>   may use `## ` / `### ` headings, `- ` (or `* `) bullets and `1. `
+>   numbered items; everything else — HTML, links, emphasis — is shown exactly
+>   as typed. No dependency was added: `pages/legal/legalMarkup.ts` parses the
+>   subset into plain data and `LegalMarkup.tsx` renders each string as a
+>   React text node, so there is no HTML to sanitize. The one renderer is used
+>   on `/privacy` and `/terms` (and so their printout), for the published text,
+>   proposals and history in Governance → Legal Documents, and as a preview in
+>   the editor. A new proposal now starts from the built-in text with its
+>   headings as `## ` lines. Published text that already had lines starting
+>   `- ` now shows them as a list. Tests:
+>   `backend/tests/test_legal_documents_history_attribution.py`,
+>   `test_legal_revert_edit_migration.py`,
+>   `frontend/src/pages/legal/legalMarkup.test.tsx` (XSS cases included),
+>   `LegalPage.test.tsx`, `LegalDocumentsPage.test.tsx`.
+
 Found driving W54 (`docs/workflow-review/W54-org-chart-and-legal.md`, W54-3 to
 W54-5). Publishing, reverting and the permission split all work; these three
 need an owner decision before anything is built.
@@ -7605,10 +7680,32 @@ was not meant to; each is a definition or a trade-off.
 > had one (`_record_nominee_bell_notice`). Behaviour that changed with it: an
 > auto-purge warning, the shelf-audit digest and a withdrawal now count as given
 > when every coordinator or manager has turned the email off, because the bell
-> entries are the notice. Still open: there is no administrator view of who has
-> opted out of what. Covered by `tests/test_officer_alert_copies.py` and
-> `tests/test_prospect_auto_purge_warning.py`. The history below is kept as the
-> record.
+> entries are the notice. The administrator view of who has opted out of what
+> is resolved separately, below. Covered by `tests/test_officer_alert_copies.py`
+> and `tests/test_prospect_auto_purge_warning.py`. The history below is kept as
+> the record.
+>
+> ✅ **Resolved (owner decision 2026-11-01: add an opt-out view; built
+> 2026-11-05).** **Member Email Opt-Outs**
+> (`/communications/member-emails/opt-outs`), linked from **Member Emails &
+> Texts** as "See which members have turned these off", lists the
+> department's current members (active and probationary) who have turned off
+> **Email Notifications** or any optional email, by the emails' own labels.
+> **Show** narrows it to the members who will not be emailed one kind, and
+> each choice carries that count, so an officer deciding whether to switch on
+> **Require for every member** can see who it would reach. An opt-out from a
+> kind the department already requires is marked _still sent_. Read-only:
+> opt-outs stay the member's own choice. Gated like the policy page it sits
+> beside — `settings.manage`, `organization.update_settings` or
+> `notifications.manage`, no new permission — and backed by
+> `GET /api/v1/email-templates/member-email-opt-outs`, which is org-scoped,
+> paged (`limit` at most 200), carries no contact fields and is in the
+> frontend's `UNCACHEABLE_PREFIXES`. Who counts as not emailed is decided by
+> `email_policy.not_emailed`, tested to agree with `member_receives_email`
+> for every kind, so the view cannot drift from the senders (CLAUDE.md
+> pitfall #29). Covered by `tests/test_member_email_opt_outs.py`,
+> `tests/test_member_email_opt_outs_integration.py` and
+> `MemberEmailOptOutsPage.test.tsx`.
 
 **Open (owner decision).** Since 2026-09-28 every member email is either always
 sent or optional (`app/services/email_policy.py`), and a member's **Email
@@ -7787,6 +7884,8 @@ Until one is chosen, the fields are harmless to set and useless.
 
 ## INT2-3 / INT2-4 — Integrations Connect Without Credentials, And The Catalog Never Updates Existing Rows (2026-10-16, INT2-3 resolved 2026-10-27)
 
+✅ **Both resolved** — INT2-3 on 2026-10-27, INT2-4 on 2026-11-05 (below).
+
 **INT2-3 — resolved (owner decision: require the credentials at connect).**
 `POST /integrations/{id}/connect` now refuses PayPal without `client_id` and
 `client_secret`, Documenso without `api_token`, Cal.com without `api_key`, and
@@ -7804,6 +7903,23 @@ for every existing department, and no migration reconciles them. **Owner decisio
 decide which columns the catalog owns (status, description, category), then reconcile
 them in a migration — noting that a status reconcile can change what a department sees as
 connected — or accept that catalog changes reach new organizations only.
+
+**✅ INT2-4 resolved (owner decision 2026-11-01: reconcile chosen columns;
+built 2026-11-05).** The catalog owns `name`, `description` and `category`
+outright, and `status` only between `available` and `coming_soon`
+(`CATALOG_OWNED_COLUMNS` and `catalog_status` in
+`app/api/v1/endpoints/integrations.py`). A row that is `connected` or in
+`error` is the department's connection and keeps its status — so a demoted
+integration a department has connected stays connected until it disconnects,
+and reads coming soon from then on; nothing a department sees as connected is
+changed by a catalog edit. `enabled`, `config`, the encrypted secrets, the
+health columns and `contains_phi` (which the Claude MCP row derives from a
+department setting) are never touched. Migration `7c41e9a2b6d8` applied the
+rule, from a frozen copy of the catalog, to every row that existed; from then
+on `ensure_catalog` applies it to a department's existing rows each time the
+integrations page lists them, so the next catalog change reaches existing
+departments without another migration. A row whose type the catalog no longer
+lists is left alone. Covered by `tests/test_integration_catalog_reconcile.py`.
 
 See `docs/app-review/integrations.md` → Pass 5.
 
@@ -8728,7 +8844,7 @@ did not match training-core's scoped completion-gate filter
 under that gate; the filter is now `"training or compliance or
 knowledge_test"`.
 
-## DOC-31 — A Document Delete's New Receipt-Reference Guard Reads Without Locking The Row It Checks (2026-10-23)
+## DOC-31 — A Document Delete's New Receipt-Reference Guard Reads Without Locking The Row It Checks (2026-10-23, resolved 2026-11-05)
 
 Found by security review DOC-10 pass 11
 (`docs/security-review/DOC-10-documents-legal.md`, pass 11, DOC-31). An
@@ -8748,13 +8864,74 @@ through the missing check. The window is one request's own transaction, and
 the worst case is no worse than the pre-pass-11 behavior; this is an unclosed
 gap in the new guard, not a regression.
 
-**Not fixed.** Closing it means taking a locking read
+~~**Not fixed.** Closing it means taking a locking read
 (`.with_for_update()`) on the referencing `PurchaseRequest`/`ExpenseReport`
 rows inside a document-delete transaction, which raises a lock-ordering
 question against Finance's own locking conventions (Pitfall #27) that a
 documents-feature review pass should not decide unilaterally — Finance and
 Documents would need to agree on one order before this can lock safely
-without risking a new cross-feature deadlock.
+without risking a new cross-feature deadlock.~~
+
+**✅ Resolved (owner decision 2026-11-01: agree a lock order and lock; built
+2026-11-05).** One order now covers both features, written once in the
+"canonical lock order" note at the top of `app/services/documents_service.py`
+(FAC-35's note, extended): document folder, then document, then the record
+that points at the document — a facility reference, or a purchase request,
+expense line or expense report.
+
+- **The guard locks what it reads.** `_release_document_references` reads
+  every purchase request and expense line naming the document with
+  `FOR UPDATE`, and their reports with a shared lock, all `NOWAIT`
+  (`read_referencing_rows_nowait` in `app/utils/document_locks.py`). A
+  request submitted after the delete's snapshot is now seen and the delete
+  refused; a submit arriving after the guard waits for the delete, and finds
+  the draft's receipt gone, as a draft's may. Requests and lines are locked
+  exclusively because the `SET NULL` key writes them when the document goes:
+  a shared lock upgraded at that write deadlocked against a waiting submit.
+- **The delete never waits on a finance row or a minutes row.** A finance
+  writer can hold its record and then need the document (the foreign key
+  check on a receipt), and minutes lock their own row and then write their
+  library copy, so a delete waiting on either could close a cycle. A row
+  another transaction is changing makes the delete refuse with "being changed
+  right now; try the delete again in a moment" (400) instead of waiting.
+- **Finance takes the document side first where it will reference one.**
+  Claiming a purchase back share-locks the receipt it copies before locking
+  the purchase (`lock_documents_for_reference`), and both receipt uploads
+  share-lock Finance > Receipts before the request or report
+  (`DocumentsService.lock_finance_receipts_folder`); the new document's
+  foreign key would otherwise take that lock last. Submitting, approving,
+  cancelling and paying touch no document and take nothing from the first
+  two levels. Cash advances and check requests hold no document reference.
+- **Two deadlocks found while agreeing the order are fixed too.**
+  - _Finance against itself._ Submitting or paying a reimbursement report,
+    and issuing or voiding the check that pays it, locked the report and then
+    the purchase it claims back; cancelling or paying the purchase, and
+    raising the claim, locked the purchase and then the report. Purchase
+    first is now the order everywhere (`_lock_claimed_purchase` in
+    `finance_service.py`), and the note records the whole Finance order:
+    purchase, report, line, check.
+  - _Minutes against a document delete._ Reopening minutes locks them and
+    then flags their library copy; the delete held the copy and then cleared
+    the minutes naming it, and with `published_document_id` unindexed that
+    clear locked every minutes row in the department. Migration
+    `c6b690cc33d6` indexes the column (no data change; skipped where the
+    table or index already exists), and the delete now takes the naming rows
+    `NOWAIT` and clears them by primary key.
+- The finance locking reads need no migration: the foreign keys' indexes on
+  `receipt_document_id` already make them touch only the referencing rows.
+
+`tests/test_document_receipt_reference_race.py` runs each interleaving on two
+real connections: a request and a report submitted after the delete's
+snapshot keep their receipts, a submit after the guard waits for it, a delete
+meeting a submit in flight refuses without waiting, and the reimbursement and
+upload paths leave the purchase request unlocked while they wait for the
+document side. All six failed against the unlocked guard.
+`tests/test_cross_feature_lock_order.py` covers the two deadlocks: paying a
+report while its purchase is being cancelled, and reopening minutes while
+their copy is being deleted (both ended in MySQL error 1213 before), the
+purchase-first order on submit and on issuing the check, and the delete
+leaving unrelated minutes unlocked and refusing at once on minutes in flight.
+All six failed before the fix.
 
 ## EC-17 — A Shift Report Stays Editable By Its Filing Officer After Approval (2026-10-26, resolved 2026-10-27)
 

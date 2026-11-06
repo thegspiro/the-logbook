@@ -537,6 +537,13 @@ Body: {
 }
 ```
 
+**A failed test does not block saving, but Continue asks first** _(owner
+decision 2026-11-01, W01-27)_. The failure stays on the page as a warning until
+the settings change. Continue then asks **Save settings that failed the test?**
+— **Fix the settings** returns to the form with nothing saved, **Save anyway**
+saves. A passing test, or no test at all, saves without asking. Covered by
+`EmailConfiguration.failedTest.test.tsx`.
+
 **API Call** (save config):
 
 ```
