@@ -7,7 +7,7 @@
  * Vice President, Secretary, Assistant Secretary
  *
  * Features:
- * - View by Member: See each member, their rank, membership type and positions
+ * - View by Member: See each member, their rank, member class and status, and positions
  * - View by Position: See each position and the members assigned to it
  * - Edit member contact information (admin)
  *
@@ -625,13 +625,14 @@ export const MembersAdminPage: React.FC = () => {
         </div>
 
         <p className="text-theme-text-muted mb-4 text-sm">
-          Each member has a <strong>rank</strong> (their place in the chain of command), a{' '}
-          <strong>membership type</strong> (probationary, active, life or administrative, which the Membership Tiers
-          ladder advances) and one or more <strong>positions</strong> (the offices held, managed under Roles, which
-          decide what they can do). Every member holds the base Member position. Positions named after a rank &mdash;
-          Chief, Captain, Firefighter &mdash; are not listed here: a rank is set in the Rank field and carries its own
-          access. A member&rsquo;s account <strong>status</strong> &mdash; on leave, retired, dropped &mdash; is changed
-          from their profile.
+          Each member has a <strong>rank</strong> (their place in the chain of command), a <strong>member class</strong>{' '}
+          (operational, administrative or social), a <strong>membership status</strong> (their standing: probationary,
+          regular, life or one of the department&rsquo;s own tiers, which the Membership Tiers ladder advances) and one
+          or more <strong>positions</strong> (the offices held, managed under Roles, which decide what they can do).
+          Class and status are shown together under Membership and grant nothing on their own. Every member holds the
+          base Member position. Positions named after a rank &mdash; Chief, Captain, Firefighter &mdash; are not listed
+          here: a rank is set in the Rank field and carries its own access. A member&rsquo;s account{' '}
+          <strong>status</strong> &mdash; on leave, retired, dropped &mdash; is changed from their profile.
         </p>
 
         {/* View by Member */}

@@ -235,7 +235,8 @@ code:
 - The Members roster's Actions column is clipped at 1440px, and the explainer
   above it still describes one "membership type". The Actions column is
   **fixed on main** (#03f21141 and follow-ups; `01-22` re-shot 2026-11-04).
-  The explainer still says "membership type".
+  The explainer is **fixed**: it names the member class and membership status
+  the Membership column shows; `01-22` re-shot 2026-11-05.
 - An unchanged draft purchase request reads "Saving soon…" as soon as it opens.
   **Fixed** by #4037. No guide image pictured the status line.
 - On the prospective-members board, each card's selection checkbox
