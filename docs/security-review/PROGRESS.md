@@ -16,6 +16,56 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4106](https://github.com/thegspiro/the-logbook/pull/4106)** (branch
+`claude/security-review-inventory-p15`) —
+Feature 11 (Inventory), pass 15, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable; this iteration
+was handed Step 0/1 already done — 0 open `claude/security-review-*` PRs,
+row 11 the next `⬜`). PR #4103 (Feature 10, Documents & legal, pass 15)
+had already merged — row 10's ✅ rides along uncommitted from that merge,
+recorded here rather than with a PR of its own. Baseline: pass 14's own
+merge, PR #3919 → `6f0a2d577f`, confirmed an ancestor of `origin/main` (the
+working tree started as a shallow clone, which `git fetch --unshallow`
+resolved before any ancestor check or `git log --all --grep` lookup could
+work at all). Head: `fb288610f`. Scoped to this feature's declared files:
+**15** commits (4 backend, 11 frontend-only, none touching `backend/`).
+
+Real delta, not a zero-delta pass: category names now unique among active
+siblings under a new `inventory_category_names` organization lock with a
+locking sibling read (Pitfall #27's shape, done correctly) and existing
+duplicates grandfathered/flagged rather than refused; item-date validation
+now checked against the department's own calendar date rather than the
+server's UTC clock; item creation and barcode put-away now record a
+"sighting" the Items Not Seen report reads (new
+`app/services/inventory_sightings.py` plus a `create_all`-guarded,
+idempotent migration widening `inventory_nfc_scans.action`'s ENUM); and a
+dashboard-tile fix reuses `InventoryService`'s existing org-scoped
+low-stock/overdue scans for the linked list pages rather than a second
+definition of "low"/"overdue" (Pitfall #29's shape). Plus a new Background
+Sync transport for the offline equipment-check queue, reviewed in full as a
+genuinely new surface and found to carry credentials, CSRF and per-owner
+filtering correctly. 0 application-code defects found. INV-22 (the one
+standing finding, owner-accepted) re-confirmed OPEN, unaffected — zero diff
+in its underlying functions since pass 12. Routes unchanged at 198
+(AST-verified), identical set to pass 14. See
+`docs/security-review/INV-11-inventory.md`'s **Pass 15** section.
+
+Completion gate: `flake8`(7.4.1, pinned)/`black --check`/`isort
+--check-only` on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 734 revisions, single head; `check_route_permissions.py
+--strict` — 302 routes, 0 errors/warnings; scoped backend suite
+(`-k "inventory or label or nfc or kiosk or vendor or encrypt"`) — 2450
+passed, 1 environment-only skip (`py_vapid`); the four tenancy/migration
+guard suites plus the two migration-integrity suites — 166 passed; `npm run
+typecheck` — 0 errors; `npm run lint` — 0 warnings; scoped `vitest run
+src/modules/inventory` — 1899 passed (127 files).
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 15, PR #4103, merged), preserved for history</summary>
+
 **PR [#4103](https://github.com/thegspiro/the-logbook/pull/4103)** (branch
 `claude/security-review-documents-legal-p15`) —
 Feature 10 (Documents & legal), pass 15, a watchdog pickup (the dedicated
@@ -49,6 +99,8 @@ warnings; scoped `vitest run` — 68 passed (5 files).
 
 Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 15, PR #4098, merged), preserved for history</summary>
