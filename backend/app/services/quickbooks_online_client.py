@@ -59,6 +59,12 @@ MINOR_VERSION = "75"
 # The most a query returns in one page (default 100).
 QUERY_PAGE_SIZE = 1000
 
+# The entities ``query`` may read, each with its fixed statement.
+_QUERY_STATEMENTS: dict[str, str] = {
+    "Account": "SELECT * FROM Account",
+    "Vendor": "SELECT * FROM Vendor",
+}
+
 # Intuit times out a request after 120 seconds; waiting longer is pointless.
 REQUEST_TIMEOUT_SECONDS = 120.0
 
@@ -367,14 +373,19 @@ class AccountingClient:
 
     async def query(self, entity: str) -> list[dict[str, Any]]:
         """Every ``entity`` in the company, a page of ``QUERY_PAGE_SIZE`` at a
-        time. ``entity`` is a fixed name from this module, never user text."""
+        time.
+
+        Only the entities in ``_QUERY_STATEMENTS`` can be queried. Each one's
+        statement is a literal, so no caller can splice text into the query
+        language, and an unknown name is refused before anything is sent.
+        """
+        base = _QUERY_STATEMENTS.get(entity)
+        if base is None:
+            raise ValueError(f"QuickBooks entity {entity!r} cannot be queried")
         rows: list[dict[str, Any]] = []
         start = 1
         while True:
-            statement = (
-                f"SELECT * FROM {entity} "
-                f"STARTPOSITION {start} MAXRESULTS {QUERY_PAGE_SIZE}"
-            )
+            statement = f"{base} STARTPOSITION {start} MAXRESULTS {QUERY_PAGE_SIZE}"
             payload = await self._send("GET", "query", {"query": statement})
             response = payload.get("QueryResponse")
             page = response.get(entity) if isinstance(response, dict) else None

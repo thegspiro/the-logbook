@@ -296,6 +296,19 @@ class TestAccountingCalls:
         async with _client(handler) as http:
             assert await _accounting(http).list_accounts() == []
 
+    async def test_an_entity_outside_the_allowlist_is_refused_unsent(self):
+        sent: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            sent.append(request)
+            return httpx.Response(200, json={"QueryResponse": {}})
+
+        async with _client(handler) as http:
+            with pytest.raises(ValueError, match="cannot be queried"):
+                await _accounting(http).query("Vendor WHERE Active = false")
+
+        assert sent == []
+
     def test_request_ids_longer_than_intuit_allows_are_refused(self):
         with pytest.raises(ValueError, match="1 to 50 characters"):
             qbo._request_id("x" * 51)
