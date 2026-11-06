@@ -16,41 +16,47 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#4098](https://github.com/thegspiro/the-logbook/pull/4098)** (branch
-`claude/security-review-medical-screening-p15`) —
-Feature 09 (Medical screening, PHI), pass 15, a watchdog pickup (the
-dedicated `/loop 30m /security-review` session remains unreachable; this
-iteration was handed Step 0/1 already done — no open
-`claude/security-review-*` PR, row 09 the next `⬜`). Baseline `6a1ad334f`
-(PR #3911's merge, pass 14) to head: 7 non-merge commits touch this
-feature's declared scope, each read in full. Real delta, already built and
-verified by other sessions, re-verified rather than re-derived: MS-14 (no
-finer-grained read tier under `.view`) and the `grace_period_days` half of
-MS-16 are now resolved (new `medical_screening.view_details` permission,
-evidence-based grant migration, one shared `screening_deadline()` rule);
-`screening_records.status` moved behind a new `EncryptedEnum` column
-(AES-256-GCM, refuses SQL comparison) — legacy-plaintext read path,
-idempotent migration, every former SQL filter on `status` moved to Python,
-all confirmed correct. **Fixed:** the encryption commit minted a new
-finding labelled `MS-15`, colliding with the already-assigned, still-open
-`MS-15` (compliance roster loads every record unbounded, pass 8, OPEN,
-unchanged). Renamed to `MS-18` (confirmed free repo-wide) across the ~17
-places the collision reached, leaving every genuine `MS-15` (roster)
-reference untouched. All 16 routes re-enumerated by AST, unchanged. 0
-application-code defects found in this feature's own code. See
-`docs/security-review/MS-09-medical-screening.md`'s **Pass 15** section.
+**(this PR)** (branch `claude/security-review-documents-legal-p15`) —
+Feature 10 (Documents & legal), pass 15, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable; this iteration
+was handed Step 0/1 already done — no open `claude/security-review-*` PR,
+row 10 the next `⬜`). PR #4098 (Feature 09, Medical screening, pass 15)
+had already merged — row 09's ✅ rides along uncommitted from that merge,
+recorded here rather than with a PR of its own, per this file's own rule
+that a merged PR is not independently recordable when the only thing to
+record is the merge itself. Baseline `2b1884237` (PR #3913's merge, pass
+14; the commit literally named in that pass's own text, `e8a5c00b0`, is not
+an ancestor of current `main` — the usual squash/orphan-merge artifact).
+Real delta since: two new routes (`GET /{document_id}/minutes-attachments`,
+`GET /{document_id}/minutes-attachments/{attachment_id}/file`, owner
+decision 2026-11-01 — a published minutes document now lists and serves the
+files filed with it, through the document's own folder ACL, both read in
+full), a new `PublishedMinutesAttachmentResponse` schema carrying no
+storage path, and matching frontend. 0 application-code defects found;
+DOC-31 (the one standing finding) re-confirmed OPEN, unaffected, its
+underlying code byte-identical to pass 14. See
+`docs/security-review/DOC-10-documents-legal.md`'s **Pass 15** section.
 
 Completion gate: `flake8`/`black --check`/`isort --check-only` on
-`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 730
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 734
 revisions, single head; `check_route_permissions.py --strict` — 302 routes,
-0 errors/warnings; scoped backend suite (`-k "medical_screening or
-medical_screen or screening"`) — 230 passed, 1 environment-only skip
-(`py_vapid`); `npm run typecheck` — 0 errors; `npm run lint` — 0 warnings;
-`npx vitest run src/modules/medical-screening` — 78 passed (14 files).
+0 errors/warnings; scoped backend suite (`-k "document or legal or
+station_document or facility_folder or folder or admin_only or
+minutes_attachment or published_minutes"`) — 671 passed, 1 environment-only
+skip (`py_vapid`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+warnings; scoped `vitest run` — 68 passed (5 files).
 
-Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
-legal) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 15, PR #4098, merged), preserved for history</summary>
+
+_None._ PR [#4098](https://github.com/thegspiro/the-logbook/pull/4098)
+(Feature 09, Medical screening, pass 15, branch
+`claude/security-review-medical-screening-p15`) merged.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 16, PR #4087, merged), preserved for history</summary>
@@ -24928,7 +24934,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                                                      | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                  | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                      | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                   | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                 | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                               | ⬜     |
@@ -24971,6 +24977,60 @@ them to be re-discovered by SEC-00 every lap.
 ---
 
 ## Log
+
+### 2026-11-06 — Feature 09 (Medical screening, PHI, pass 15) merged; Feature 10 (Documents & legal, pass 15) — watchdog pickup, 0 fixed, 0 new findings, DOC-31 re-confirmed OPEN
+
+Watchdog pickup: the dedicated `/loop 30m /security-review` session remains
+unreachable. This iteration was handed Step 0/1 already done: a fresh
+`list_pull_requests` (open, head prefix `claude/security-review-`) returned
+0 results, so no security-review PR was open; PR #4098 (Feature 09,
+Medical screening, pass 15) had already merged, docs-only in its own commit
+plus the MS-18 rename — row 09's ✅ and the Open PR row's clearing ride
+along uncommitted here rather than in a PR of their own. Row 10 (Documents
+& legal) was the next `⬜`.
+
+Baseline `2b1884237` (PR #3913's merge, pass 14). Pass 14's own file text
+named `e8a5c00b0` as that baseline; it is not an ancestor of current
+`main` (the usual squash/orphan-merge artifact this rotation keeps
+re-finding) — `2b1884237`, the actual merge commit, was located via
+`git log --all --grep` and confirmed an ancestor of HEAD before diffing
+against it.
+
+Real delta, not a zero-delta pass: owner decision 2026-11-01 added two new
+routes (`GET /{document_id}/minutes-attachments`,
+`GET /{document_id}/minutes-attachments/{attachment_id}/file`) letting a
+reader of a published-minutes document open the files filed with those
+minutes, through the document's own folder ACL rather than a new access
+model. Both read in full — org-scoped at every step
+(`get_document_by_id` + `can_access_document` + a `MeetingMinutes` match on
+`id`/`organization_id`/`published_document_id`, then `MinutesAttachment`
+filtered on `minutes_id`/`organization_id`/`published_at IS NOT NULL`), a
+uniform 404 for every not-found/no-access/wrong-shape case, and a response
+schema (`PublishedMinutesAttachmentResponse`) that carries no storage path.
+The `published_at` stamping that drives the list (`document_service.py`'s
+`publish_minutes`) and a new migration (`a42466630e74`, nullable, table/
+column-guarded) were also read in full. A second migration in this window
+(`986b38c2086b`, FAC-13's facility-file refile — Feature 12-owned) writes
+directly to `document_folders`/`documents`; reviewed for this feature's own
+invariants (table-existence-guarded, per-organization, every move recorded
+for a reversible downgrade) and left to Feature 12's row for its own
+decisions. 26 routes re-enumerated by AST (up from 24: `documents.py` 17,
+up from 15), every one carrying an explicit permission dependency, neither
+new route a baseline/rank grant. `check_route_permissions.py --strict` —
+302 routes repo-wide, 0 errors/warnings.
+
+0 fixes applied (nothing needed one), 0 new findings. DOC-31
+(`_release_document_references`'s refusal check is a plain `SELECT`, not a
+locking read) re-confirmed OPEN by direct read — `documents_service.py`
+carries zero diff since pass 14. Completion gate: `flake8`/
+`black --check`/`isort --check-only` on `app/ tests/ alembic/` all clean;
+`validate_migrations.py --strict` — 734 revisions, single head; scoped
+backend suite — 671 passed, 1 environment-only skip (`py_vapid`); `npm run
+typecheck` — 0 errors; `npm run lint` — 0 warnings; scoped `vitest run` —
+68 passed (5 files). See `docs/security-review/DOC-10-documents-legal.md`'s
+**Pass 15** section for the full write-up.
+
+Next: Feature 11 (Inventory), the next `⬜` row.
 
 ### 2026-11-05 — Feature 06 (Elections & ballots, pass 15) merged; Feature 07 (Users & organizations, pass 15) — watchdog pickup, USR-11/USR-12 closed by an owner-decision commit, 0 fixed, 0 new findings
 
