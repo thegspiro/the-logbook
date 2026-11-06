@@ -136,7 +136,7 @@ describe('MemberTrainingHistoryPage officer corrections', () => {
 
     expect(await screen.findByText('HIPAA Awareness')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Void HIPAA Awareness' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('columnheader', { name: 'Actions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit HIPAA Awareness' })).not.toBeInTheDocument();
   });
 
   it('saves every field the form owns, clearing a blanked one, with the note to the member', async () => {
@@ -276,5 +276,50 @@ describe('MemberTrainingHistoryPage training period', () => {
       });
     });
     click.mockRestore();
+  });
+});
+
+describe('MemberTrainingHistoryPage record list', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetUser.mockReset();
+    mockGetUser.mockResolvedValue({ id: 'member-1', full_name: 'Pat Member', username: 'pat' });
+    mockGetRecords.mockReset();
+    mockPermissions = [];
+  });
+
+  it('summarises each record on one line instead of a label per field', async () => {
+    const noExpiry = record({ course_code: 'HIPAA-1' });
+    delete noExpiry.expiration_date;
+    mockGetRecords.mockResolvedValue([noExpiry]);
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    const list = await screen.findByRole('list', { name: 'Training records' });
+    const item = within(list).getByRole('listitem');
+    expect(item).toHaveTextContent('Continuing Education · 9/1/2026 · 1 hr');
+    expect(within(item).getByText('HIPAA-1')).toBeInTheDocument();
+    expect(within(item).queryByText(/Expires/)).not.toBeInTheDocument();
+  });
+
+  it('does not repeat a course code the imported name already carries', async () => {
+    mockGetRecords.mockResolvedValue([
+      record({ course_name: 'CAPCE HIPAA Awareness (3088740)', course_code: '3088740' }),
+    ]);
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    expect(await screen.findByText('CAPCE HIPAA Awareness (3088740)')).toBeInTheDocument();
+    expect(screen.queryByText('3088740')).not.toBeInTheDocument();
+  });
+
+  it('names the expiry date with the verb that matches it', async () => {
+    mockGetRecords.mockResolvedValue([
+      record({ id: 'a', course_name: 'Old Cert', expiration_date: '2025-01-01' }),
+      record({ id: 'b', course_name: 'New Cert', expiration_date: '2028-06-30', hours_completed: 0.5 }),
+    ]);
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    expect(await screen.findByText('Expired 1/1/2025')).toBeInTheDocument();
+    expect(screen.getByText('Expires 6/30/2028')).toBeInTheDocument();
+    expect(screen.getByText(/0\.5 hrs/)).toBeInTheDocument();
   });
 });
