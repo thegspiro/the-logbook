@@ -16,6 +16,53 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4109](https://github.com/thegspiro/the-logbook/pull/4109)** (branch
+`claude/security-review-apparatus-nfc-p22`) — Feature 13 (Apparatus & NFC),
+pass 22, a watchdog pickup (the dedicated `/loop 30m /security-review`
+session remains unreachable; this iteration was handed Step 0/1 already
+done — no open `claude/security-review-*` PR, row 13 the next `⬜`). PR
+#4108 (Feature 12, Facilities, pass 15) had already merged — its
+bookkeeping rides along uncommitted from that merge, recorded here rather
+than with a PR of its own. Baseline `bb77eae12` (PR #3924's merge, pass
+21). Real delta: a dashboard-tile double-counting fix (DASH-38) that also
+wires the tile to a new list view over a pre-existing, already-reviewed,
+already-org-scoped `GET /apparatus/maintenance/due`; a 2-line, non-security
+boolean field threaded through an already org-scoped external-agency
+create/read (Training's own scope, not reviewed here); and a pure layout
+class swap. 0 application-code defects found; AP2-4 re-confirmed resolved
+from pass 21, unaffected. See `docs/security-review/AP-13-apparatus-nfc.md`'s
+**Pass 22** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 737
+revisions, single head; `check_route_permissions.py --strict` — 303
+routes, 0 errors/warnings; scoped backend suite (`-k "apparatus or nfc or
+evoc or driver_exception"`) — 1390 passed, 1 environment-only skip
+(`py_vapid`); standing guard suites — 166 passed; `npm run typecheck` — 0
+errors; `npm run lint` — 0 warnings; `npx vitest run src/modules/apparatus`
+— 123 passed (15 files).
+
+Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
+& shifts) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 15, PR #4108, merged), preserved for history</summary>
+
+_None._ PR [#4108](https://github.com/thegspiro/the-logbook/pull/4108)
+(Feature 12, Facilities, pass 15, branch
+`claude/security-review-facilities-p15`) merged. Not docs-only — it
+carried a real delta, so it already has its own **Log** entry below (dated
+2026-11-06) rather than a fresh one here. Confirmed via a fresh
+`list_pull_requests` (state `open`): 0 results for a
+`claude/security-review-*` head. Rotation row 12 is ✅. Next is Feature 13
+(Apparatus & NFC) — the next `⬜` row.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 15, PR #4108, merged), preserved for history</summary>
+
 **PR [#4108](https://github.com/thegspiro/the-logbook/pull/4108)** (branch
 `claude/security-review-facilities-p15`) — Feature 12 (Facilities), pass
 15, a watchdog pickup (the dedicated `/loop 30m /security-review` session
@@ -48,8 +95,9 @@ guard suites plus the two migration-integrity suites — 166 passed; `npm
 run typecheck` — 0 errors; `npm run lint` — 0 warnings; `npx vitest run
 src/modules/facilities` — 170 passed (22 files).
 
-Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
-NFC) — re-check `list_pull_requests` fresh rather than trusting this note.
+Row 12 → ✅ (merged as `2ff2abf75`); next was Feature 13 (Apparatus & NFC).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 15, PR #4106, merged), preserved for history</summary>
@@ -25047,7 +25095,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                   | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                 | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                               | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                               | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                 | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                            | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                   | ⬜     |
@@ -47545,3 +47593,52 @@ migration-integrity suites — 166 passed; `npm run typecheck` — 0 errors;
 
 Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus & NFC)
 — re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-06 — Feature 12 (Facilities, pass 15) merged; Feature 13 (Apparatus & NFC, pass 22) — watchdog pickup, 0 fixed, 0 new findings
+
+Step 0/1 were handed to this iteration already done: no open PR with a
+`claude/security-review-*` head exists, and row 13 (Apparatus & NFC) is the
+next `⬜` row in the rotation table, confirmed directly against a
+freshly-read `main` — row 12 (Facilities) was already `✅` from PR #4108's
+own merge.
+
+Baseline `bb77eae12` (PR #3924's merge, pass 21) to head `2ff2abf75` (PR
+#4108's merge, current `main`). `git log bb77eae12..HEAD` over this
+feature's declared scope returns 75 commits when the broad
+`backend/alembic/versions` pathspec is included, almost all unrelated
+migration-head rejoins; excluding that path and restricting to the
+feature's actual files narrows it to exactly 3 non-merge commits. Real
+delta: a dashboard-tile double-counting fix (DASH-38 — "Maintenance Due"
+summed an already-inclusive figure with itself) that also wires the tile to
+a new `MaintenanceDueList` component, calling a **pre-existing**,
+already-reviewed, already-org-scoped `GET /apparatus/maintenance/due`
+(confirmed zero diff on `apparatus.py`/`apparatus_service.py` since pass 21) — now exposed as a list rather than only a count, re-checked for
+over-serialization and found to carry no field beyond
+id/unit-number/maintenance-type/due-date/overdue; a 2-line, non-security
+`evaluate_shifts` boolean threaded through an already org-scoped external-
+agency create/read (the surrounding Training feature's own scope, not
+reviewed here); and a pure Tailwind layout-class swap. 94 + 11 = 105 routes
+re-enumerated by AST, unchanged.
+
+**0 fixed, 0 new findings.** No open finding exists for this feature — AP2-4
+was resolved in pass 21 by ordinary feature work and this window's diff
+touches none of the files it concerned; `docs/module-audit/apparatus.md`
+and `docs/app-review/apparatus.md` re-checked directly and both report zero
+open items. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`'s
+**Pass 22** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `python3 scripts/validate_migrations.py
+--strict` — 737 revisions, single head `c6b690cc33d6`; `python3
+scripts/check_route_permissions.py --strict` — 303 routes, 0
+errors/warnings; scoped backend suite (`-k "apparatus or nfc or evoc or
+driver_exception"`) — 1390 passed, 1 pre-existing skip (`py_vapid`);
+standing guard suites (capacity locking, org-scoping ratchet, LIKE
+escaping, CSV sweep, migration chain, `create_all`-table tolerance) — 166
+passed; `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/apparatus` — 123 passed (15
+files).
+
+Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
+& shifts) — re-check `list_pull_requests` fresh rather than trusting this
+note.
