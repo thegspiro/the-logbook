@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { DollarSign, Search, Filter, Receipt, Heart, Plus } from 'lucide-react';
+import { DollarSign, Search, Filter, Receipt, Heart, Plus, Pencil } from 'lucide-react';
 import { fundraisingService } from '../services/api';
 import type { Donation, Donor } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
@@ -210,6 +210,11 @@ const DonationsPage: React.FC = () => {
                   >
                     Dedication
                   </th>
+                  {canManage && (
+                    <th scope="col" className="px-4 py-3">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-theme-surface-border divide-y">
@@ -254,6 +259,18 @@ const DonationsPage: React.FC = () => {
                         ? `${donation.dedicationType === 'in_honor' ? 'In honor of' : 'In memory of'} ${donation.dedicationName ?? ''}`
                         : '—'}
                     </td>
+                    {canManage && (
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <Link
+                          to={`/grants/donations/${donation.id}/edit`}
+                          className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone inline-flex rounded p-1 transition-colors"
+                          title="Edit donation"
+                          aria-label={`Edit the ${formatCurrency(Number(donation.amount))} donation from ${nameOf(donation)}`}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Link>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

@@ -171,11 +171,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   second set of October minutes. The "link survives a clear" half of W50-60 is
   still read from code only.
 
-- **Fundraising, a later pass** — the Donations list has a Receipt column
-  but nothing sends a receipt or marks one sent (left as is by the owner,
-  2026-11-05), and a donation has no edit control though its `PUT` works:
-  editing one needs a single-donation `GET` and an edit route, which neither
-  exists yet (W69).
 - **Admin hours, a later pass** — scanning a second category's QR code while
   clocked in is refused, but the page neither names the running session nor
   offers its Clock Out (W70-5).
@@ -204,6 +199,24 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### Lead — A donation can be edited — 2026-11-05
+
+Read from code and tested, not re-driven. Fixed (W69): a donation's `PUT`
+worked but nothing could load one gift to edit it. `GET
+/grants/donations/{id}` (`fundraising.view`, org-scoped) returns one gift and
+presents an anonymous one as the list does (GF-8), so a view-only caller cannot
+read a hidden donor by asking for the row. The record form now also edits, at
+`/grants/donations/:donationId/edit` (`fundraising.manage`, in all three route
+registries); each row of the Donations list links there for a manager. The
+update sends every field the form owns, an emptied one as null, keeps a linked
+donor or campaign the picker no longer lists, and a failed load shows a message
+rather than a blank form that would save over the gift. The Receipt column
+stays as is (KNOWN_LIMITATIONS, 2026-11-05), so this closes the fundraising
+lead. `test_get_donation.py` and `DonationFormPage.edit.test.tsx` failed
+without the change. Gate: typecheck and lint clean, both route checks and the
+endpoint permission check clean, 164 grants and registry frontend tests and
+1,097 fundraising backend tests pass.
 
 ### W02 second pass — Sign in after the November security work — 2026-11-05
 

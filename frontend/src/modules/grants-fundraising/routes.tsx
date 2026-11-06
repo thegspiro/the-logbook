@@ -196,6 +196,18 @@ export const getGrantsFundraisingRoutes = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/grants/donations/:donationId/edit"
+        element={
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.manage"
+          >
+            <DonationFormPage />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Pledges and fundraising events: everyone with fundraising.view reads;
           the pages offer create/edit only to fundraising.manage. */}

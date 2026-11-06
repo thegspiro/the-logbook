@@ -298,6 +298,18 @@ class FundraisingService:
     # Donations
     # ------------------------------------------------------------------
 
+    async def get_donation(
+        self, donation_id: str, organization_id: str
+    ) -> Optional[Donation]:
+        result = await self.db.execute(
+            select(Donation).where(
+                Donation.id == donation_id,
+                Donation.organization_id == organization_id,
+            )
+        )
+        donation: Optional[Donation] = result.scalar_one_or_none()
+        return donation
+
     async def list_donations(
         self,
         organization_id: str,
