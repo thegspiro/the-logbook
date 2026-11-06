@@ -29,6 +29,12 @@ const AdminHoursClockInPage: React.FC = () => {
   const [showClockOutPrompt, setShowClockOutPrompt] = useState(false);
   const [activeSession, setActiveSession] = useState<AdminHoursActiveSession | null>(null);
   const [clockOutData, setClockOutData] = useState<AdminHoursClockOutResponse | null>(null);
+  // A session running in ANOTHER category. One session runs at a time, so this
+  // category cannot be clocked into until that one ends (W70-5): the page names
+  // it and offers its Clock Out, then this category's Clock In. It never ends
+  // one and starts the other in a single tap.
+  const [otherSession, setOtherSession] = useState<AdminHoursActiveSession | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!categoryId) return;
@@ -50,6 +56,8 @@ const AdminHoursClockInPage: React.FC = () => {
       if (session && session.categoryId === categoryId) {
         setActiveSession(session);
         setShowClockOutPrompt(true);
+      } else if (session) {
+        setOtherSession(session);
       }
     } catch (err: unknown) {
       const appError = toAppError(err);
@@ -76,7 +84,14 @@ const AdminHoursClockInPage: React.FC = () => {
           setShowClockOutPrompt(true);
         }
       } else {
-        setError(appError.message || 'Failed to clock in');
+        // A session in another category may have started since the page
+        // loaded (on another device); name it rather than only refusing.
+        const session = await adminHoursClockService.getActiveSession().catch(() => null);
+        if (session && session.categoryId !== categoryId) {
+          setOtherSession(session);
+        } else {
+          setError(appError.message || 'Failed to clock in');
+        }
       }
     } finally {
       setProcessing(false);
@@ -92,6 +107,22 @@ const AdminHoursClockInPage: React.FC = () => {
       setClockOutData(result);
       setClockedOut(true);
       setShowClockOutPrompt(false);
+    } catch (err: unknown) {
+      const appError = toAppError(err);
+      setError(appError.message || 'Failed to clock out');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleClockOutOther = async () => {
+    if (!otherSession) return;
+    try {
+      setProcessing(true);
+      setError(null);
+      const result = await adminHoursClockService.clockOut(otherSession.id);
+      setNotice(`Clocked out of ${result.categoryName} after ${formatDuration(result.durationMinutes)}.`);
+      setOtherSession(null);
     } catch (err: unknown) {
       const appError = toAppError(err);
       setError(appError.message || 'Failed to clock out');
@@ -332,6 +363,40 @@ const AdminHoursClockInPage: React.FC = () => {
           {qrData?.categoryDescription && <p className="text-theme-text-secondary">{qrData.categoryDescription}</p>}
         </div>
 
+        {otherSession && (
+          <div
+            className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-5 dark:border-amber-500/30 dark:bg-amber-500/10"
+            role="status"
+          >
+            <p className="font-semibold text-amber-900 dark:text-amber-300">
+              You&apos;re still clocked in to {otherSession.categoryName}
+            </p>
+            <p className="mt-1 text-sm text-amber-900 dark:text-amber-300">
+              Since {formatTime(otherSession.clockInAt, tz)} ({formatDuration(otherSession.elapsedMinutes)}). Clock out
+              of it before clocking in here.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void handleClockOutOther();
+              }}
+              disabled={processing}
+              className="btn-primary mt-4 w-full px-6 py-3 font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {processing ? 'Clocking Out...' : `Clock out of ${otherSession.categoryName}`}
+            </button>
+          </div>
+        )}
+
+        {notice && (
+          <div
+            className="mb-6 rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-500/30 dark:bg-green-500/10"
+            role="status"
+          >
+            <p className="text-green-800 dark:text-green-300">{notice}</p>
+          </div>
+        )}
+
         {error && (
           <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
             <p className="text-red-800 dark:text-red-400">{error}</p>
@@ -342,7 +407,7 @@ const AdminHoursClockInPage: React.FC = () => {
           onClick={() => {
             void handleClockIn();
           }}
-          disabled={processing}
+          disabled={processing || Boolean(otherSession)}
           className="btn-success w-full px-8 py-4 text-lg font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
         >
           {processing ? 'Clocking In...' : 'Clock In'}

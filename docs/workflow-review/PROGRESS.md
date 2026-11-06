@@ -171,10 +171,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   second set of October minutes. The "link survives a clear" half of W50-60 is
   still read from code only.
 
-- **Admin hours, a later pass** — scanning a second category's QR code while
-  clocked in is refused, but the page neither names the running session nor
-  offers its Clock Out (W70-5).
-
 - **Integrations, a later pass** — the `integration.connected` and
   `integration.disconnected` audit rows carry no IP address (W75).
 - **Member administration, a later pass** — most audit rows `users.py`
@@ -199,6 +195,19 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### Lead — A scan while clocked in elsewhere names the running session — 2026-11-06
+
+Read from code and component-tested, not re-driven. Fixed (W70-5): scanning
+one admin-hours category's code while clocked in to another was refused with
+no way out. The clock-in page now names the running session (its category,
+start time and time elapsed), keeps Clock In disabled, and offers "Clock out of
+<category>", which ends that session by its own entry id; Clock In then works.
+Decided here: a scan never ends one session and starts another on its own; the
+member makes both moves. A session started on another device after the page
+loaded is named the same way when Clock In is refused. No backend change.
+`AdminHoursClockInPage.test.tsx` failed against the old page. Gate: typecheck
+and lint clean, the 128 admin-hours tests pass.
 
 ### Lead — A donation can be edited — 2026-11-05
 
