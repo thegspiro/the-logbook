@@ -25,6 +25,21 @@ Nothing was captured by this pass.
 | 15 | Applicant board with selection on, card content inset | Replace (`15-46` was re-shot) |
 | 02 | `02-135` Operational members: the button now ticks Active, Probationary and Life, not Retired (2026-11-06) | Replace |
 
+## Queued by the November 5 – 6 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-5--6-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 04 | Minutes Settings → Quorum with the three switches | Create |
+| 04 | Roll call with **Represented by proxy**; Documents paperclip on published minutes | Create |
+| 02 | `02-40` member Training History: period list with **Last 12 Months** and period-scoped cards | Replace |
+| 08 | Admin-hours clock-in page naming the running session and **Clock out of** | Create |
+| 12 | Donations list pencil and **Edit Donation**; Budget tab with Edit and Delete | Create |
+| 05 | Items and reorder lists as cards at tablet width | Replace |
+| 08 | Any capture showing an Administration page header (eyebrow, one title) | Replace |
+
 ## Captured 2026-11-05 — Event settings Public Requests (#4049)
 
 #4049 turned Event settings' **Outreach Types**, **Pipeline**, **Email** and

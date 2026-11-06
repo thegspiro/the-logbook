@@ -281,6 +281,10 @@ The tab shows **Total Budgeted**, **Total Spent** and **Remaining**, overall and
 for each line. Spending on a line is added up from the expenditures linked to
 it.
 
+_(2026-11-06)_ Each line has **Edit** and **Delete** buttons for people with
+**Manage fundraising**, so a wrong category or amount no longer needs a new line.
+Deleting a line asks you to confirm.
+
 ### Expenditures
 
 On the **Expenditures** tab, record spending against the budget:
@@ -292,6 +296,10 @@ On the **Expenditures** tab, record spending against the budget:
 3. Optionally choose a line under **Budget Item (optional)**. **None** leaves it
    unlinked.
 4. Save with **Record Expenditure**.
+
+_(2026-11-06)_ A recorded expenditure has **Edit** and **Delete** buttons too.
+Deleting one asks you to confirm with **Delete expenditure**, and the totals
+fall by that amount.
 
 ![Grant application budget tab with budgeted, spent, and remaining columns](./images/12-06-application-budget-tab.png)
 
@@ -381,6 +389,9 @@ the grant dates **before** you move the application to Awarded.
 2. To add a task, select **Add Task** and enter the **Task Type**, **Title**,
    **Description (optional)**, **Due Date**, **Priority** and **Report Template
    (optional)**.
+   _(2026-11-06)_ The form has an **Assign to** choice, so a task can name its
+   member when it is created, not only afterwards. Only members of your
+   department can be chosen.
 3. Change a task's status as the work moves along, and select **Mark Complete**
    when it is done.
 
@@ -508,7 +519,13 @@ business and organization that supports the department.
 **Edit** button for people with **Manage fundraising**. It opens the same form,
 filled in. An emptied box clears the stored value (an email or end date removed
 here is removed, not kept). A campaign's status and restriction keep the
-controls already on its card. Donations still cannot be edited.
+controls already on its card.
+
+**Editing a donation** _(2026-11-06)_. People with **Manage fundraising** see a
+pencil in the **Donations** list's last column. It opens **Edit Donation**, the
+same form as **Record Donation**, filled in, with **Save changes** at the foot.
+Use it to fix an amount, a date, a donor or a campaign typed wrongly. A donation
+cannot be deleted from the page.
 
 ### What the donor list shows
 
@@ -963,20 +980,20 @@ Lt. Walsh files the final closeout report:
 
 ## Troubleshooting
 
-| Problem                                               | What to do                                                                                                                                                                                                         |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| An opportunity shows no deadline                      | Check its **Deadline** setting. A Rolling deadline has no date, and a Recurring one shows a date only when the next deadline was entered.                                                                          |
-| You cannot create an application                      | You need the **Manage fundraising** permission, and the module must be turned on.                                                                                                                                  |
-| Budget lines do not match the expenditures            | Link each expenditure to its budget item. Unlinked expenditures count toward the grant's total, but not toward any line.                                                                                           |
-| No compliance tasks were created at the award         | They need a **Reporting Frequency** and grant dates, set **before** the move to Awarded. Tasks are created only once; add any missing ones with **Add Task**.                                                      |
-| A campaign's progress does not change                 | Link the donation to the campaign, and make sure its **Payment status** is Completed. Unlinked or pending donations do not count.                                                                                  |
-| A donor appears twice                                 | The Logbook does not catch duplicates and cannot merge them. Search before adding a donor.                                                                                                                         |
-| A pledge's status is wrong                            | Pledge statuses are set by hand. Edit the pledge, enter the amount received, and set the status.                                                                                                                   |
-| A report shows $0 for a period                        | Check the start and end dates include the donations or applications you expect.                                                                                                                                    |
-| **Total Awarded** or **Total Grant Funding** reads $0 | Edit each awarded grant and fill in **Amount Awarded**. Only grants in Awarded, Active, Reporting or Closed count. See [Expenditures](#expenditures).                                                              |
-| A Zeffy payment is not on its campaign                | Open **Grants & Fundraising → Zeffy** and find the payment's status. Usually its campaign is not linked, or it was made before the link's start date.                                                              |
-| A Zeffy gift was counted twice                        | It was also entered by hand. Donations cannot be edited or removed on the Donations page, so ask your administrator. Prevent it by leaving the start date blank when linking a campaign whose gifts were typed in. |
-| Nobody was reminded about a deadline                  | Only tasks and pledges are reminded. See [Task Reminders](#task-reminders) and [Pledge Reminders](#pledge-reminders) for who gets them.                                                                            |
+| Problem                                               | What to do                                                                                                                                                                                                                                                                                 |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| An opportunity shows no deadline                      | Check its **Deadline** setting. A Rolling deadline has no date, and a Recurring one shows a date only when the next deadline was entered.                                                                                                                                                  |
+| You cannot create an application                      | You need the **Manage fundraising** permission, and the module must be turned on.                                                                                                                                                                                                          |
+| Budget lines do not match the expenditures            | Link each expenditure to its budget item. Unlinked expenditures count toward the grant's total, but not toward any line.                                                                                                                                                                   |
+| No compliance tasks were created at the award         | They need a **Reporting Frequency** and grant dates, set **before** the move to Awarded. Tasks are created only once; add any missing ones with **Add Task**.                                                                                                                              |
+| A campaign's progress does not change                 | Link the donation to the campaign, and make sure its **Payment status** is Completed. Unlinked or pending donations do not count.                                                                                                                                                          |
+| A donor appears twice                                 | The Logbook does not catch duplicates and cannot merge them. Search before adding a donor.                                                                                                                                                                                                 |
+| A pledge's status is wrong                            | Pledge statuses are set by hand. Edit the pledge, enter the amount received, and set the status.                                                                                                                                                                                           |
+| A report shows $0 for a period                        | Check the start and end dates include the donations or applications you expect.                                                                                                                                                                                                            |
+| **Total Awarded** or **Total Grant Funding** reads $0 | Edit each awarded grant and fill in **Amount Awarded**. Only grants in Awarded, Active, Reporting or Closed count. See [Expenditures](#expenditures).                                                                                                                                      |
+| A Zeffy payment is not on its campaign                | Open **Grants & Fundraising → Zeffy** and find the payment's status. Usually its campaign is not linked, or it was made before the link's start date.                                                                                                                                      |
+| A Zeffy gift was counted twice                        | It was also entered by hand. Open the duplicate's pencil on the Donations list to correct it; a donation cannot be removed from the page, so ask your administrator to delete the extra one. Prevent it by leaving the start date blank when linking a campaign whose gifts were typed in. |
+| Nobody was reminded about a deadline                  | Only tasks and pledges are reminded. See [Task Reminders](#task-reminders) and [Pledge Reminders](#pledge-reminders) for who gets them.                                                                                                                                                    |
 
 ---
 

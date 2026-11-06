@@ -5,6 +5,35 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 5 – 6, 2026
+
+Merged to `main` after `a02bdd96` (2026-11-05 06:53 UTC) through `880f939b`
+(2026-11-06 05:55 UTC), 25 merges. Security-review passes (medical-screening
+pass 15, membership-pipeline pass 16) are in `docs/security-review/PROGRESS.md`.
+`CHANGELOG.md` stays closed. The 2026-11-05 YouTube-script pass (#4088) and
+the Alembic head rejoin (#4060, #4081, #4082, #4085, #4087) were documentation
+or operator-only and are not repeated.
+
+| Change                                                                                                                                                                                                                                                              | Guide  | Disposition                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------- |
+| Minutes, Elections & Events batch 7 (#4097): quorum settings (late, left early, **Use proxies**), published attachments and PDF embeds, action-item email, paged Action Items, election rollback files a dated correction, event-request status token hashed        | 04, 14 | Added to 04 and 14; `MEETING_MINUTES_MODULE` and wiki written with the change; `UPGRADING` covers the migrations |
+| Member Training History period now scopes totals and list; **Last 12 Months** (#4101)                                                                                                                                                                               | 02     | Export-only wording corrected                                                                                    |
+| **Operational members** shortcut no longer ticks Retired (#4100)                                                                                                                                                                                                    | 02     | Already correct in 02; image `02-135` queued                                                                     |
+| Admin-hours scan for another category names the running session, **Clock out of** (#4099)                                                                                                                                                                           | 08     | Refusal table row updated                                                                                        |
+| Edit a donation (#4090); edit/delete grant budget lines and expenditures; assign a task on create (#4067)                                                                                                                                                           | 12     | "Donations still cannot be edited" corrected in two places; sections added                                       |
+| Interviewers see sensitive answers on the Interview page only (#4079)                                                                                                                                                                                               | 15     | Added                                                                                                            |
+| Blank first or last name: other fields save, stored name kept, field flagged (#4084)                                                                                                                                                                                | 01     | Added                                                                                                            |
+| Sign-in wait counted per account (#4064)                                                                                                                                                                                                                            | 00     | Added                                                                                                            |
+| Items and reorder lists reflow to cards below 80rem (#4076)                                                                                                                                                                                                         | 05     | Added                                                                                                            |
+| Admin headers unified, **Compliance Settings** title, inset fixes (#4086, #4092); Members roster explains member class (#4091); Card Readers label helper (#4093); Public Requests overview captured (#4085); purple accents and high-contrast switch knobs (#4080) | none   | No guide text quotes the headers; images re-shot by their own PRs                                                |
+| Encrypt medical-screening record status at rest (#4083, #4098); backup passes `DB_PORT` (#4081); CI Safari budget (#4082, #4094)                                                                                                                                    | none   | Operator or CI only                                                                                              |
+
+**Screenshots to create:** Minutes Settings → Quorum; roll call with
+**Represented by proxy**; admin-hours clock-in page showing the running session;
+Edit Donation; grant Budget tab Edit/Delete. **Replace:** `02-40` (Training
+History with period-scoped cards), `02-135`, Administration page headers.
+Queued in `docs/training/SCREENSHOT_CURRENCY.md`.
+
 ## Change audit: November 4 – 5, 2026
 
 Merged to `main` after `9df03d0d` (2026-11-04 12:53 UTC) through `905bd6cf`

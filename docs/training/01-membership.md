@@ -541,6 +541,11 @@ button on the **Members** page, which goes to the same place.
      department's own tiers; it starts on Probationary); and
    - a primary emergency contact (name, relationship, phone).
 
+   _(2026-11-06)_ On **My Account** and the officer's **Edit Member** page, a
+   blank first or last name is not sent: everything else saves, the stored name
+   stays, and the field is flagged until a name is entered. A legal name cannot
+   be cleared.
+
    There is no username box. The Logbook makes the username from the part of
    the email before the `@`.
 

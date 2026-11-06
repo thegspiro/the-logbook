@@ -89,7 +89,9 @@ exact page once you have signed in.
 **If you type the wrong password several times,** the **Sign In** button
 changes to **Wait 2s** and counts down before you can try again. The wait gets
 longer with each wrong try. The message reads, for example: _"Too many failed
-attempts. Try again in 4 seconds."_ When the countdown ends, you can try again.
+attempts. Try again in 4 seconds."_ When the countdown ends, you can try again. _(2026-11-06)_ The wait is counted
+per account name, so on a shared station computer one member's mistakes do not
+hold the next member's sign-in.
 
 > **Didn't get a welcome email?** Ask your department's IT manager or the
 > person who set up The Logbook. They can send it again or reset your

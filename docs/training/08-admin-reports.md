@@ -1311,13 +1311,13 @@ a check on the very people who review admin hours.
 
 > **What if a clock-in or entry is refused?**
 >
-> | Message or problem                       | What it means / what to do                                                                                                  |
-> | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-> | "Already clocked in"                     | You have an open session in this category. Clock out first                                                                  |
-> | Clock-in refused for an "active session" | You have an open session in another category. Only one clock-in at a time is allowed. Clock out of it first                 |
-> | Category "no longer active"              | An administrator turned the category off. You cannot clock in to it. Ask your administrator                                 |
-> | Manual entry refused                     | The clock-out must be after the clock-in, the clock-in cannot be in the future, and the session must be at least one minute |
-> | Rejecting an entry                       | A reason is required                                                                                                        |
+> | Message or problem                       | What it means / what to do                                                                                                                                                                                                                                                                 |
+> | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+> | "Already clocked in"                     | You have an open session in this category. Clock out first                                                                                                                                                                                                                                 |
+> | Clock-in refused for an "active session" | You have an open session in another category. Only one clock-in at a time is allowed. _(2026-11-06)_ The clock-in page names the running session (category, start time, elapsed) and offers **Clock out of _category_**; use it, then **Clock In**. A scan never switches sessions for you |
+> | Category "no longer active"              | An administrator turned the category off. You cannot clock in to it. Ask your administrator                                                                                                                                                                                                |
+> | Manual entry refused                     | The clock-out must be after the clock-in, the clock-in cannot be in the future, and the session must be at least one minute                                                                                                                                                                |
+> | Rejecting an entry                       | A reason is required                                                                                                                                                                                                                                                                       |
 
 ---
 

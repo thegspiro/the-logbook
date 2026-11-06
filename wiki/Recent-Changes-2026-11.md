@@ -5,6 +5,28 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 5 – 6, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-5--6-2026).
+
+- **Minutes** let each department choose whether late and left-early members
+  count toward quorum and whether to use proxies; published minutes list their
+  attachments and the PDF embeds them.
+- **Elections**: rolling back a closed election files a dated correction rather
+  than editing the minutes.
+- **Fundraising**: donations can be edited; grant budget lines and expenditures
+  can be edited and deleted; tasks can be assigned when created.
+- **Training History** totals and list follow the selected period, with a new
+  Last 12 Months choice.
+- **Admin hours**: scanning another category's code names the session you are
+  clocked in to and offers to clock out of it.
+- **Sign-in** waits are counted per account, so a shared station computer no
+  longer holds the next member.
+- **Profiles** save with a blank name left unchanged and flagged.
+- **Prospective members**: interviewers see sensitive answers on the Interview
+  page only.
+
 ## Recent changes: November 4 – 5, 2026
 
 The engineering audit is
