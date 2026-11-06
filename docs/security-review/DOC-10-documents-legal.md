@@ -1,6 +1,208 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), #3734 (pass 12), #3816 (pass 13), (this PR) (pass 14)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-18 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2), #2187 (pass 3), #2411 (pass 4), #2559 (pass 5), #2611 (pass 6), #2962 (pass 7), #3160 (pass 8), #3262 (pass 9), #3431 (pass 10), #3579 (pass 11), #3734 (pass 12), #3816 (pass 13), #3913 (pass 14), (this PR) (pass 15)
+
+---
+
+## Pass 15 (2026-11-06)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session was
+unreachable; this iteration was handed Step 0/1 already done — `gh`/MCP
+`list_pull_requests` search for `is:open head:claude/security-review-`
+returned 0 results, so no security-review PR was open. PR #4098 (Feature 09,
+Medical screening, pass 15) had already merged (`b99d11f31`); row 09 was
+already ✅ from that PR's own commit, and its Open PR row was stale (still
+named #4098 as open) — cleared below, no separate commit, rides along with
+this pass's own commit per the rotation's established practice. Row 10
+(Documents & legal) was the next `⬜`. The only other open PR, #4102, is
+unrelated feature work (markup rendering and history/revert tracking for
+legal documents, plus documents/finance lock-ordering changes) on branch
+`claude/kind-mayer-3n00bq`, not yet merged — reviewed here is `main` as it
+stands, not that branch; it is out of scope for this pass and left for
+whichever pass reviews it after it lands.
+
+**Baseline** `2b1884237` (PR #3913's merge, pass 14). The commit named in
+pass 14's own file text, `e8a5c00b0`, is not an ancestor of the current
+`main` HEAD — the same squash/orphan-merge artifact this file has documented
+since pass 1/4/7/8; `2b1884237` (the actual merge commit for PR #3913,
+confirmed via `git log --all --grep`) is the real pass-14 baseline and is
+an ancestor of HEAD. `git diff --numstat 2b1884237..HEAD`, across the full
+declared scope (`documents.py`, `station_documents.py`, `legal_documents.py`,
+`api/public/legal.py`, `documents_service.py`, `document_service.py`,
+`print_document_service.py`, `legal_service.py`,
+`admin_only_folder_digest.py`, `models/document.py`, `models/legal.py`,
+`schemas/documents.py`, `schemas/legal.py`, `mcp/tools/documents.py`,
+`DocumentsPage.tsx`, `LegalPage.tsx`, and the `documents/` frontend
+components):
+
+| File                                                                         | +/−          | What changed                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `endpoints/documents.py`                                                     | +112/0       | New `GET /{document_id}/minutes-attachments`, `GET /{document_id}/minutes-attachments/{attachment_id}/file` — owner decision 2026-11-01: a published minutes document now lists, and lets its readers open, the files filed with the minutes                                                                                                                                                                           |
+| `schemas/documents.py`                                                       | +23/0        | `DocumentResponse.source_type` (exposes an already-stored, pre-existing column); new `PublishedMinutesAttachmentResponse` (no storage path, no uploader)                                                                                                                                                                                                                                                               |
+| `services/document_service.py`                                               | +131/−8      | `publish_minutes` gains `refresh_only` (re-render in place without a new version, for an addendum); stamps `MinutesAttachment.published_at` for the attachments list a copy publishes; `_attachments_html` (escaped); election-result correction/supersession HTML (escaped); attendance now lists a "Represented by proxy" row. Feature 24 (Minutes)-owned; reviewed only for the part reaching the documents library |
+| `services/print_document_service.py`                                         | +13/−4       | Shift roster seat column now reads a department's custom seat labels (`department_seat_labels`) instead of only the built-in name. Feature 14/15 (Equipment check/Scheduling)-owned; pure print-string change, no ACL surface                                                                                                                                                                                          |
+| `frontend/src/pages/DocumentsPage.tsx`                                       | +17/−7       | Mounts the new `PublishedMinutesAttachments` component on a minutes-sourced document; file type now shown via `fileTypeLabel()` ("PDF", "Word") instead of the raw MIME string in capitals; `data-label`/`rwd-table-lead` added to the list view's cells for the mobile reflow table                                                                                                                                   |
+| `frontend/src/components/documents/PublishedMinutesAttachments.tsx` (+ test) | new (116+79) | Lists and downloads the files published with a minutes document, from a `Paperclip` button beside it in both grid and list view                                                                                                                                                                                                                                                                                        |
+| `frontend/src/utils/fileTypeLabel.ts` (+ test)                               | new          | MIME-type → human label lookup, pure string mapping, no injection surface                                                                                                                                                                                                                                                                                                                                              |
+
+`station_documents.py`, `legal_documents.py`, `api/public/legal.py`,
+`legal_service.py`, `models/legal.py`, `models/document.py`,
+`schemas/legal.py`, `admin_only_folder_digest.py`, `mcp/tools/documents.py`
+and `frontend/src/pages/LegalPage.tsx` are byte-identical to pass 14.
+
+Two migrations landed in this window touch this feature's tables, both
+reviewed in full:
+
+- `a42466630e74` ("Minutes attachments in the published copy…") — adds
+  nullable `minutes_attachments.published_at`; the same owner decision as
+  the new routes above, Feature 24-owned, table/column-existence-guarded
+  (pitfall #26), idempotent, reversible.
+- `986b38c2086b` ("Refile facility files filed outside the facility
+  folders", FAC-13) — Feature 12 (Facilities)-owned, but writes directly to
+  `document_folders` and `documents`. Reviewed for this feature's own
+  invariants: guards on `{document_folders, documents, facilities}` all
+  existing before running at all (pitfall #26), is per-organization
+  (`_Tree` keyed by `organization_id`), records every move and every folder
+  it creates in a dedicated `facility_outside_refile_backfill` table created
+  only when there is something to record, and the downgrade replays those
+  records in reverse, deleting a folder it created only once empty. No
+  document or folder is moved outside its own organization. Left to
+  Feature 12's own row for the Facilities-side decisions it embodies.
+
+No other migration in this window touches `document_folders`, `documents`,
+`legal_documents`, or `legal_document_revisions`
+(`git diff --name-only 2b1884237..HEAD -- backend/alembic/versions`, 83
+files, grepped for the four table names).
+
+**Routes: 26, up from 24** (re-enumerated by AST, not grepped:
+`documents.py` 17 — up from 15, the two new routes above —
+`station_documents.py` 2, `legal_documents.py` 7, identical to pass 14). The
+unauthenticated `api/public/legal.py` route (1, unchanged, already named as
+intentionally public with its own rate limit since pass 1) is tracked
+separately from this running total per this file's established convention.
+Both new routes carry `Depends(require_permission("documents.view"))` —
+the same permission as the pre-existing `GET /{document_id}` and
+`GET /{document_id}/download`, not a baseline/rank grant.
+`check_route_permissions.py --strict` — 302 routes repo-wide, 0
+errors/warnings.
+
+### New surface — reviewed in full
+
+**What it is.** Owner decision 2026-11-01: a document published from meeting
+minutes now lists the files that were filed with those minutes at
+publish time, and a reader of the document can open them without also
+holding whatever lets them open the minutes record directly.
+
+- **Tenant isolation and ACL both hold (XC-3).** `_published_minutes`
+  (`documents.py:724-752`) resolves the document through the existing
+  org-scoped `get_document_by_id(document_id, org_id)` and then re-runs the
+  same `can_access_document` folder-ACL check `GET /{document_id}` uses —
+  not a new or weaker check. It then requires the `MeetingMinutes` row to
+  match on `id` **and** `organization_id` **and**
+  `published_document_id == document.id` — a client cannot point the route
+  at an unrelated minutes record even within the same org, because the
+  minutes must themselves name this exact document as their published copy.
+  `_published_attachments_query` (`documents.py:755-761`) then filters
+  `MinutesAttachment` on `minutes_id` **and** `organization_id` **and**
+  `published_at IS NOT NULL` — the last clause is what keeps the list to
+  exactly the files that specific publish stamped (see below), not every
+  file ever filed with the minutes, some of which may have been added after
+  an executive-session publish and must wait for the next one.
+  `download_published_minutes_attachment` additionally filters on
+  `attachment_id`, so an id for another minutes record's attachment 404s
+  rather than resolving.
+- **Fails closed with a uniform 404, not a distinguishing error.** A
+  document that does not exist, one the caller cannot open under its
+  folder's ACL, one not sourced from minutes, and one whose minutes record
+  does not (or no longer) name it as the published copy all raise the same
+  `404 "Document not found"` / `"Document has no attachments"` — a caller
+  probing ids learns nothing about which case applies.
+- **The attachment response schema is deliberately narrow.**
+  `PublishedMinutesAttachmentResponse` (`schemas/documents.py`) carries no
+  `file_path` and no uploader field — a reader is told what the file is
+  (title, category, original name, MIME type, size, hash) and opens it only
+  through the download route, which resolves the path itself
+  (`MinutesRecordService.serve_attachment`, pre-existing, unchanged — still
+  resolves through `file_storage.resolve(..., StorageArea.MINUTES_ATTACHMENTS)`
+  before serving, the same containment check reviewed for this area in
+  earlier passes of the infrastructure it belongs to).
+- **The `published_at` stamp is the mechanism that keeps the list accurate,
+  not merely a timestamp.** `publish_minutes` (`document_service.py:287-298`)
+  stamps every `MinutesAttachment` row matching the minutes at the moment of
+  that publish — org-scoped query, in the same transaction as the document
+  write. A file filed with the minutes after a publish is not retroactively
+  added to an already-published copy's list; the next publish (or the new
+  `refresh_only` re-render) stamps it. This matches the migration's own
+  stated intent (`a42466630e74`'s docstring) and was checked against the
+  code, not assumed from the docstring.
+- **Audit logging on download, ids only.**
+  `download_published_minutes_attachment` logs
+  `document_id`/`minutes_id`/`attachment_id` — no file name, no title, no
+  PHI/PII (CHECKLIST.md §5).
+- **Frontend matches the backend's own gate, not a re-derivation** (pitfall
+  #29): `PublishedMinutesAttachments` is mounted whenever
+  `doc.source_type === 'meeting_minutes'` — a cheap display hint, not an
+  authorization decision, since the backend re-checks `can_access_document`
+  on every call regardless of what the frontend renders. No
+  `window.confirm`, no `dangerouslySetInnerHTML`; the component only
+  fetches on open (confirmed by its own test, "asks for nothing until it is
+  opened") and surfaces a failed load distinctly from an empty list (a
+  network error must not read as "nothing was published").
+- **`refresh_only`'s addendum path cannot be used to backdate or hide an
+  edit.** It keeps the existing document's `published_revision_version` and
+  `published_at` (`document_service.py:318-323` — the increment is skipped
+  specifically `if not refresh_only`), and is unreachable without a
+  published copy already on file (`raise ValueError` otherwise,
+  `document_service.py:325`) — reviewed as Feature 24's own change; the
+  only part of it reaching this feature is the attachment-stamping call
+  inside the same method, covered above.
+- **Election-result correction/supersession HTML** (`document_service.py`,
+  `_election_results_html`) — Feature 24/06-owned (Minutes/Elections), the
+  `reason` field and the computed day are both passed through `escape()`
+  before interpolation, consistent with every other field in this render;
+  no new unescaped user text reaches the documents library's published HTML.
+- **Print-roster seat-label change** (`print_document_service.py`) — reads
+  `department_seat_labels(db, organization_id)`, itself org-scoped
+  (Scheduling-owned); no new ACL surface, pure label substitution in a
+  print string.
+
+**0 fixes applied, 0 new findings.** DOC-31 (the only standing item) was
+re-verified against the current, unchanged code — see below.
+
+### DOC-31 — re-confirmed OPEN, unaffected
+
+`_release_document_references`'s refusal check (`documents_service.py:1524,
+1544`) is still a plain `SELECT`, not `.with_for_update()`, on the
+referencing `PurchaseRequest`/`ExpenseReport` rows before refusing a
+receipt-document delete — confirmed by direct read this pass, byte-identical
+to pass 14 (`documents_service.py` carries zero diff since baseline).
+Already in `docs/KNOWN_LIMITATIONS.md`; no new information.
+
+No other standing OPEN/FLAGGED finding exists for this feature (passes 9-14
+all closed with none besides DOC-31).
+
+## Completion gate
+
+| Check                                                                                                                                            | Result                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                    | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/`                                                                                                             | ✅ 2981 files unchanged                         |
+| `isort --check-only app/ tests/ alembic/`                                                                                                        | ✅ clean                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                | ✅ 734 revisions, single head `f4583df5025b`    |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                                                                                | ✅ 302 routes, 0 errors, 0 warnings             |
+| `pytest tests/ -k "document or legal or station_document or facility_folder or folder or admin_only or minutes_attachment or published_minutes"` | ✅ 671 passed, 1 pre-existing skip (`py_vapid`) |
+| `cd frontend && npm run typecheck`                                                                                                               | ✅ 0 errors                                     |
+| `cd frontend && npm run lint`                                                                                                                    | ✅ 0 errors, 0 warnings                         |
+| `npx vitest run src/pages/DocumentsPage.test.tsx src/components/documents src/pages/LegalPage.test.tsx src/utils/fileTypeLabel.test.ts`          | ✅ 68 passed (5 files)                          |
+
+No source file needed a fix this pass — the new surface was already built
+and tested by owner-direct work before this pass began; this pass verified
+it against all seven checklist dimensions and found it sound. Only this
+findings file and `PROGRESS.md` were updated.
+
+## Next
+
+Feature 11 (Inventory).
 
 ---
 
