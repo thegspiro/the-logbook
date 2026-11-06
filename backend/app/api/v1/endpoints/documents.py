@@ -23,6 +23,7 @@ from app.core.utils import (
     safe_error_detail,
 )
 from app.models.document import Document, DocumentStatus
+from app.models.minute import MeetingMinutes, MinutesAttachment
 from app.models.user import Position, User
 from app.schemas.documents import (
     DocumentFolderCreate,
@@ -34,6 +35,7 @@ from app.schemas.documents import (
     DocumentUpdate,
     FolderRoleOption,
     FoldersListResponse,
+    PublishedMinutesAttachmentResponse,
 )
 from app.services import file_storage_service as file_storage
 from app.services.documents_service import DocumentsService
@@ -42,6 +44,7 @@ from app.services.file_storage_service import (
     FileStorageService,
     StorageArea,
 )
+from app.services.minutes_record_service import MinutesRecordService
 from app.utils import download_names
 from app.utils.org_timezone import resolve_scheduling_timezone
 
@@ -715,6 +718,115 @@ async def download_document(
             fallback=download_names.original_stem(document.file_name) or "document",
         ),
         media_type=document.file_type or "application/octet-stream",
+    )
+
+
+# ============================================
+# Files published with minutes
+# ============================================
+
+
+async def _published_minutes(
+    db: AsyncSession, document_id: UUID, current_user: User
+) -> MeetingMinutes:
+    """The minutes a readable published-minutes document was filed from.
+
+    The document's own folder rules decide, exactly as ``GET /{document_id}``
+    does, so an executive-session copy in its leadership-only folder stays
+    there. The minutes must still name this document as their published copy;
+    anything else is not found, so a guessed id reveals nothing.
+    """
+    service = DocumentsService(db)
+    org_id = current_user.organization_id
+    document = ensure_found(
+        await service.get_document_by_id(document_id, org_id), "Document"
+    )
+    if not await service.can_access_document(document, org_id, current_user):
+        raise HTTPException(status_code=404, detail="Document not found")
+    if document.source_type != "meeting_minutes" or not document.source_id:
+        raise HTTPException(status_code=404, detail="Document has no attachments")
+    minutes = await db.scalar(
+        select(MeetingMinutes).where(
+            MeetingMinutes.id == document.source_id,
+            MeetingMinutes.organization_id == str(org_id),
+            MeetingMinutes.published_document_id == document.id,
+        )
+    )
+    if minutes is None:
+        raise HTTPException(status_code=404, detail="Document has no attachments")
+    return minutes
+
+
+def _published_attachments_query(minutes: MeetingMinutes):
+    # published_at is set by the publish that wrote this copy: a file filed
+    # since is not one the copy lists (DocumentService.publish_minutes).
+    return select(MinutesAttachment).where(
+        MinutesAttachment.minutes_id == minutes.id,
+        MinutesAttachment.organization_id == minutes.organization_id,
+        MinutesAttachment.published_at.isnot(None),
+    )
+
+
+@router.get(
+    "/{document_id}/minutes-attachments",
+    response_model=list[PublishedMinutesAttachmentResponse],
+)
+async def list_published_minutes_attachments(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("documents.view")),
+):
+    """The files published with a minutes document. Same ACL as the document."""
+    minutes = await _published_minutes(db, document_id, current_user)
+    result = await db.execute(
+        _published_attachments_query(minutes).order_by(
+            MinutesAttachment.uploaded_at, MinutesAttachment.id
+        )
+    )
+    return list(result.scalars().all())
+
+
+@router.get("/{document_id}/minutes-attachments/{attachment_id}/file")
+async def download_published_minutes_attachment(
+    document_id: UUID,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("documents.view")),
+):
+    """Download a file published with a minutes document.
+
+    Who may open it is whoever may read the published copy that lists it, and
+    nobody else: a ``minutes.view`` holder without access to the document
+    still opens the file from the minutes themselves.
+    """
+    minutes = await _published_minutes(db, document_id, current_user)
+    attachment = ensure_found(
+        await db.scalar(
+            _published_attachments_query(minutes).where(
+                MinutesAttachment.id == attachment_id
+            )
+        ),
+        "Attachment",
+    )
+    await log_audit_event(
+        db=db,
+        event_type="minutes_attachment_downloaded",
+        event_category="documents",
+        severity="info",
+        event_data={
+            "document_id": str(document_id),
+            "minutes_id": minutes.id,
+            "attachment_id": attachment.id,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    tz = await resolve_scheduling_timezone(db, current_user.organization_id)
+    return await MinutesRecordService(db).serve_attachment(
+        minutes,
+        attachment,
+        current_user.organization_id,
+        local_day=download_names.local_day(minutes.meeting_date, tz),
     )
 
 

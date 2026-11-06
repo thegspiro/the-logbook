@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**356 tables · 5794 columns · 1196 foreign keys**
+**356 tables · 5801 columns · 1197 foreign keys**
 
 ---
 
@@ -219,7 +219,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`event_request_activity`](#event_request_activity) | `EventRequestActivity` | 9 | Audit trail for event request pipeline actions. |
 | [`event_request_email_templates`](#event_request_email_templates) | `EventRequestEmailTemplate` | 12 | Reusable email templates for the event request pipeline. |
-| [`event_requests`](#event_requests) | `EventRequest` | 35 | Public outreach event request. |
+| [`event_requests`](#event_requests) | `EventRequest` | 36 | Public outreach event request. |
 
 ### Events
 
@@ -488,9 +488,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`meeting_minutes`](#meeting_minutes) | `MeetingMinutes` | 49 | Meeting Minutes model |
 | [`meeting_motions`](#meeting_motions) | `Motion` | 21 | Motion model |
 | [`minutes_action_items`](#minutes_action_items) | `ActionItem` | 15 | Action Item model |
-| [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 13 | A file kept with a set of minutes: reports, handouts, the signed copy. |
+| [`minutes_attachments`](#minutes_attachments) | `MinutesAttachment` | 14 | A file kept with a set of minutes: reports, handouts, the signed copy. |
 | [`minutes_closed_sessions`](#minutes_closed_sessions) | `MinutesClosedSession` | 13 | A closed (executive) session held during a meeting. |
-| [`minutes_election_results`](#minutes_election_results) | `MinutesElectionResult` | 10 | An election's certified result, frozen into a set of minutes. |
+| [`minutes_election_results`](#minutes_election_results) | `MinutesElectionResult` | 14 | An election's certified result, frozen into a set of minutes. |
 | [`minutes_public_copies`](#minutes_public_copies) | `MinutesPublicCopy` | 15 | The copy of a set of minutes posted on the department's public page. |
 | [`minutes_revisions`](#minutes_revisions) | `MinutesRevision` | 13 | An approved version of a set of minutes, immutable once written. |
 | [`minutes_signatures`](#minutes_signatures) | `MinutesSignature` | 10 | A signature on adopted minutes: who attested to which version, and when. |
@@ -503,7 +503,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 14 | Meeting Action Item model |
+| [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 15 | Meeting Action Item model |
 | [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 10 | Meeting Attendee model |
 | [`meetings`](#meetings) | `Meeting` | 21 | Meeting model |
 
@@ -3177,7 +3177,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `staffing_shift_id` | VARCHAR(36) | yes | FK |  | → `shifts.id` ON DELETE SET NULL |
 | `staffing_roles` | JSON | yes |  |  |  |
 | `volunteer_call_sent_at` | DATETIME | yes |  |  |  |
-| `status_token` | VARCHAR(64) | yes | UQ, UQ-IDX | `generate_status_token()` |  |
+| `status_token` | TEXT | yes |  |  |  |
+| `status_token_hash` | VARCHAR(64) | yes | UQ, UQ-IDX |  |  |
 | `form_submission_id` | VARCHAR(36) | yes | FK |  | → `form_submissions.id` ON DELETE SET NULL |
 | `ip_address` | VARCHAR(45) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -3188,7 +3189,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_event_request_org_status` (`organization_id`, `status`)
 - `idx_event_request_org_type` (`organization_id`, `outreach_type`)
 - `ix_event_requests_status` (`status`)
-- UNIQUE `ix_event_requests_status_token` (`status_token`)
+- UNIQUE `ix_event_requests_status_token_hash` (`status_token_hash`)
 
 ## Events
 
@@ -7563,7 +7564,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **MinutesAttachment** · `app/models/minute.py`
 
-> A file kept with a set of minutes: reports, handouts, the signed copy. The bytes live in ``FileStorageService``'s ``minutes-attachments`` area and are served only through the minutes endpoints, so a file attached to executive-session minutes is as restricted as the minutes themselves. They are deliberately *not* filed as shared Documents, whose folder rights reach every ``documents.view`` holder.
+> A file kept with a set of minutes: reports, handouts, the signed copy. The bytes live in ``FileStorageService``'s ``minutes-attachments`` area and are served through the minutes endpoints, so a file attached to executive-session minutes is as restricted as the minutes themselves. They are deliberately *not* filed as shared Documents, whose folder rights reach every ``documents.view`` holder. Once the minutes are published, the files the published copy lists (``published_at``) are also served through that document, under its own folder's rules (owner decision 2026-11-01).
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -7580,6 +7581,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `sha256` | VARCHAR(64) | no |  |  |  |
 | `uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `uploaded_at` | DATETIME | no |  | `now()` |  |
+| `published_at` | DATETIME | yes |  |  |  |
 
 **Indexes**
 
@@ -7629,6 +7631,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `election_closed_at` | DATETIME | yes |  |  |  |
 | `snapshot` | JSON | no |  |  |  |
 | `is_addendum` | BOOL | no |  | `0` |  |
+| `superseded_at` | DATETIME | yes |  |  |  |
+| `superseded_reason` | TEXT | yes |  |  |  |
+| `superseded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `current_election_id` | VARCHAR(36) | yes |  |  |  |
 | `captured_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
@@ -7639,7 +7645,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Constraints**
 
-- UNIQUE `uq_minutes_election_results_pair` (`minutes_id`, `election_id`)
+- UNIQUE `uq_minutes_election_results_current` (`minutes_id`, `current_election_id`)
 
 ### `minutes_public_copies`
 
@@ -7812,6 +7818,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `priority` | INTEGER | yes |  | `0` |  |
 | `completed_at` | DATETIME | yes |  |  |  |
 | `completion_notes` | TEXT | yes |  |  |  |
+| `reminder_emailed_on` | DATE | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `source` | VARCHAR(32) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
@@ -12343,7 +12350,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (439 references)
+### → `users` (440 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12622,6 +12629,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_attachments` | `uploaded_by` | SET NULL | yes |
 | `minutes_closed_sessions` | `created_by` | SET NULL | yes |
 | `minutes_election_results` | `captured_by` | SET NULL | yes |
+| `minutes_election_results` | `superseded_by` | SET NULL | yes |
 | `minutes_public_copies` | `posted_by` | SET NULL | yes |
 | `minutes_public_copies` | `withdrawn_by` | SET NULL | yes |
 | `minutes_revisions` | `approved_by` | SET NULL | yes |

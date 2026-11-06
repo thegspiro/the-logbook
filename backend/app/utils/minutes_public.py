@@ -15,7 +15,8 @@ carries their names; a page anyone can open does not:
 * **Closed sessions** show why, on what authority, and when. Who was in the room
   and the summary stay out.
 * **Elections** show turnout and each contest's candidates and counts, as the
-  PDF does, and no voter-level detail.
+  PDF does, and no voter-level detail. A result a rollback superseded shows
+  the date of its correction, not the reason given for it.
 * **Attachments** are not listed and not linked; the files stay private.
 * **Library links** an agenda item carried are dropped.
 
@@ -67,7 +68,7 @@ def _attendance(attendees: List[Any], listing: str) -> Dict[str, Any]:
     name would count as zero: that would read as "nobody was absent" rather
     than "absences are not reported". Those keys are left out instead.
     """
-    counts = {"present": 0, "excused": 0, "absent": 0, "guests": 0}
+    counts = {"present": 0, "excused": 0, "absent": 0, "guests": 0, "proxies": 0}
     officers: List[Dict[str, str]] = []
     for entry in attendees:
         entry = _dict(entry)
@@ -75,7 +76,11 @@ def _attendance(attendees: List[Any], listing: str) -> Dict[str, Any]:
         if status == "guest":
             counts["guests"] += 1
             continue
-        if status == "excused":
+        if status == "proxy":
+            # Represented, not in the room: neither a member present nor an
+            # officer present.
+            counts["proxies"] += 1
+        elif status == "excused":
             counts["excused"] += 1
         elif status in ("absent", "no_show"):
             counts["absent"] += 1
@@ -89,7 +94,12 @@ def _attendance(attendees: List[Any], listing: str) -> Dict[str, Any]:
         key: n
         for key, n in counts.items()
         if key in ("present", "guests")
-        or is_listed("excused" if key == "excused" else "absent", listing)
+        # Only a department that recorded a proxy says anything about them.
+        or (key == "proxies" and n > 0)
+        or (
+            key in ("excused", "absent")
+            and is_listed("excused" if key == "excused" else "absent", listing)
+        )
     }
     return {**shown, "officers_present": officers}
 
@@ -189,6 +199,11 @@ def _election(entry: Dict[str, Any]) -> Dict[str, Any]:
         "title": _text(entry.get("title"), 300),
         "closed": _text(entry.get("closed_display"), 100),
         "addendum": bool(entry.get("addendum")),
+        # A rollback's dated correction, and a re-run's result replacing it.
+        # The date only: the reason is a manager's free text, and may name
+        # people, so it stays with the members' copies.
+        "superseded_on": _text(entry.get("superseded_display"), 100),
+        "replaces_superseded_on": _text(entry.get("replaces_display"), 100),
         "eligible_voters": _number(snapshot.get("total_eligible_voters")),
         "ballots_cast": _number(snapshot.get("total_votes")),
         "turnout_percentage": _number(snapshot.get("voter_turnout_percentage")),

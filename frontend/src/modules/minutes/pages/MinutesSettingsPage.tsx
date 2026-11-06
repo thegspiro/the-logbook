@@ -2,6 +2,7 @@
  * Minutes Settings: every department-wide choice about meeting minutes, in one
  * place.
  *
+ * Attendance, quorum, signatures, reminders and publishing settings live here.
  * Attendance, signatures, reminders and publishing used to be four buttons on
  * the Minutes page, each opening its own dialog. They share one read
  * (`GET /minutes-records/settings`, what the server applies) and one write path
@@ -15,7 +16,7 @@
 
 import React from 'react';
 import { useSearchParams } from 'react-router';
-import { Globe, PenLine, Bell, Settings as SettingsIcon, Users, Vote } from 'lucide-react';
+import { Globe, PenLine, Bell, Scale, Settings as SettingsIcon, Users, Vote } from 'lucide-react';
 import { SettingsLayout, type SettingsSection } from '../../../components/settings/SettingsLayout';
 import SettingsPanelHead from '../../../components/settings/SettingsPanelHead';
 import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
@@ -23,14 +24,16 @@ import { useAuthStore } from '../../../stores/authStore';
 import { AttendanceListingPanel } from '../components/AttendanceListingPanel';
 import { ElectionFilingPanel } from '../components/ElectionFilingPanel';
 import { PublishingSettingsPanel } from '../components/PublishingSettingsPanel';
+import { QuorumCountingPanel } from '../components/QuorumCountingPanel';
 import { ReminderSettingsPanel } from '../components/ReminderSettingsPanel';
 import { SignerSettingsPanel } from '../components/SignerSettingsPanel';
 import { useMinutesSettings } from '../hooks/useMinutesSettings';
 
-type SectionKey = 'attendance' | 'signatures' | 'reminders' | 'publishing' | 'elections';
+type SectionKey = 'attendance' | 'quorum' | 'signatures' | 'reminders' | 'publishing' | 'elections';
 
 const SECTIONS: SettingsSection<SectionKey>[] = [
   { key: 'attendance', label: 'Attendance', icon: Users, description: 'Who the minutes name' },
+  { key: 'quorum', label: 'Quorum', icon: Scale, description: 'Who counts toward quorum' },
   { key: 'signatures', label: 'Signatures', icon: PenLine, description: 'Who signs adopted minutes' },
   { key: 'reminders', label: 'Reminders', icon: Bell, description: 'Following up action items' },
   { key: 'publishing', label: 'Publishing', icon: Globe, description: 'The library and the public page' },
@@ -41,6 +44,10 @@ const HEADINGS: Record<SectionKey, { title: string; description: string }> = {
   attendance: {
     title: 'How attendance is listed',
     description: 'The roll is always recorded in full. This chooses who a reader of the minutes is shown.',
+  },
+  quorum: {
+    title: 'Who counts toward quorum',
+    description: 'Late arrivals, early departures and proxies, as your bylaws count them.',
   },
   signatures: {
     title: 'Who signs adopted minutes',
@@ -79,6 +86,8 @@ export const MinutesSettingsPage: React.FC = () => {
     switch (active) {
       case 'attendance':
         return <AttendanceListingPanel {...props} />;
+      case 'quorum':
+        return <QuorumCountingPanel {...props} />;
       case 'signatures':
         return <SignerSettingsPanel {...props} />;
       case 'reminders':

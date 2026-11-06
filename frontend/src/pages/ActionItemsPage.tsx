@@ -1,31 +1,44 @@
 /**
  * Action Items Page (C2)
  *
- * Unified view of action items from both Meeting and Minutes modules.
- * Allows filtering by status and source and showing items assigned to the
- * current user. `?status=` and `?source=` seed those filters, which is how the
- * operations dashboard's overdue cards link here (DASH-37).
+ * Every action item from meetings and minutes, soonest due first, one page at
+ * a time (DASH-40), and the screen meeting action items are managed from
+ * (owner decision 2026-11-01). Filters: status, source, assignee, meeting, and
+ * "Assigned to me". `?status=`, `?source=`, `?assignee=` and `?meeting=` seed
+ * them, which is how the dashboard tile, the operations dashboard's overdue
+ * cards and the Minutes page link here (DASH-37).
+ *
+ * Who may do what is the backend's rule, mirrored rather than widened:
+ * - a meeting item is edited, completed or deleted by a `meetings.manage`
+ *   holder (`PATCH`/`DELETE /meetings/action-items/{id}`);
+ * - a minutes item's status and notes are changed by a `minutes.manage`
+ *   holder or by the member it is assigned to (W52-7); anything else about it
+ *   is edited on its minutes.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { AlertTriangle, CheckCircle2, Clock, Filter, Loader2 } from 'lucide-react';
-import { dashboardService } from '../services/api';
-import type { ActionItemSummary } from '../services/api';
+import { dashboardService, meetingsService } from '../services/api';
+import type { ActionItemPage, ActionItemSummary, MeetingRecord } from '../services/api';
 import { minutesService } from '../modules/minutes/services/api';
+import type { ActionItemAssignee } from '../modules/minutes/types/minutes';
+import { MeetingActionItemDialog } from '../modules/action-items/components/MeetingActionItemDialog';
 import { getErrorMessage } from '../utils/errorHandling';
 import { blankToNull } from '../utils/formValues';
 import { calendarDaysFromToday, formatCalendarDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
-import { EmptyState } from '../components/ux';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { EmptyState, Pagination } from '../components/ux';
 import { Modal } from '../components/Modal';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
 import { actionItemStatusLabel } from '../modules/minutes/utils/actionItemStatus';
+import { DEFAULT_PAGE_SIZE } from '../constants/config';
 
-/** What an assignee may set on their own minutes action item (W52-7). */
-const ASSIGNEE_STATUS_OPTIONS = [
+/** What may be set on a minutes action item from this screen (W52-7). */
+const MINUTES_STATUS_OPTIONS = [
   { value: 'pending', label: 'Pending' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
@@ -58,13 +71,19 @@ const MEETING_PRIORITY_LABELS: Record<string, string> = {
 
 const CLOSED_STATUSES: readonly string[] = ['completed', 'cancelled'];
 
-const isOpen = (item: ActionItemSummary): boolean => !CLOSED_STATUSES.includes(item.status);
+/**
+ * Whether a row still offers "Mark complete". The counts and the Open filter
+ * are the server's; this only decides which rows show the button. A carried
+ * minutes item is closed here: it is worked in the minutes it was carried to.
+ */
+const isOpen = (item: ActionItemSummary): boolean => !CLOSED_STATUSES.includes(item.status) && !item.carried_forward;
 
 /**
  * "Open" means not yet done, across both sources: meeting items store `open`,
  * minutes items `pending`, and both can be `in_progress` or (minutes)
  * `overdue`. Sent to the API as a status it matched exactly, "Open" found
- * meeting items only — zero rows beside an Open tile reading 3 (W52-3).
+ * meeting items only — zero rows beside an Open tile reading 3 (W52-3). It is
+ * sent as `open_only`, the rule the dashboard tile counts by.
  */
 const OPEN_FILTER = 'open';
 
@@ -76,7 +95,14 @@ const OPEN_FILTER = 'open';
  */
 const OVERDUE_FILTER = 'overdue';
 
-const STATUS_FILTERS: readonly string[] = [OPEN_FILTER, OVERDUE_FILTER, 'pending', 'in_progress', 'completed'];
+const STATUS_FILTERS: readonly string[] = [
+  OPEN_FILTER,
+  OVERDUE_FILTER,
+  'pending',
+  'in_progress',
+  'completed',
+  'cancelled',
+];
 
 type SourceFilter = '' | 'meeting' | 'minutes';
 
@@ -90,26 +116,110 @@ const priorityLabel = (item: ActionItemSummary): string | undefined =>
     ? (MEETING_PRIORITY_LABELS[item.priority] ?? item.priority)
     : item.priority;
 
+/** How many recent meetings the meeting filter offers. */
+const MEETING_FILTER_LIMIT = 100;
+
+const EMPTY_PAGE: ActionItemPage = { items: [], total: 0, open_total: 0, overdue_total: 0, limit: 0, offset: 0 };
+
 const ActionItemsPage: React.FC = () => {
   const tz = useTimezone();
+  const { confirm } = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [items, setItems] = useState<ActionItemSummary[]>([]);
+  const [data, setData] = useState<ActionItemPage>(EMPTY_PAGE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>(() => statusFromParam(searchParams.get('status')));
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>(() => sourceFromParam(searchParams.get('source')));
+  const [assigneeFilter, setAssigneeFilter] = useState<string>(() => searchParams.get('assignee') ?? '');
+  const [meetingFilter, setMeetingFilter] = useState<string>(() => searchParams.get('meeting') ?? '');
   const [assignedToMe, setAssignedToMe] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const currentUserId = useAuthStore((state) => state.user?.id);
+  const checkPermission = useAuthStore((state) => state.checkPermission);
+  const canManageMeetings = checkPermission('meetings.manage');
+  const canManageMinutes = checkPermission('minutes.manage');
+  const canViewMeetings = checkPermission('meetings.view') || checkPermission('minutes.view');
+  const [assignees, setAssignees] = useState<ActionItemAssignee[]>([]);
+  const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
   const [editing, setEditing] = useState<ActionItemSummary | null>(null);
+  const [editingMeetingItem, setEditingMeetingItem] = useState<ActionItemSummary | null>(null);
   const [editStatus, setEditStatus] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   // Only minutes items carry an assignee_id the server can match an assignee
   // on (W52-7); an item assigned by name only, or a meeting item, is not
   // offered.
   const isMine = (item: ActionItemSummary): boolean =>
     item.source === 'minutes' && !!currentUserId && item.assignee_id === currentUserId;
+
+  const canUpdateMinutesItem = (item: ActionItemSummary): boolean =>
+    item.source === 'minutes' && !item.carried_forward && (canManageMinutes || isMine(item));
+
+  const canManageItem = (item: ActionItemSummary): boolean =>
+    item.source === 'meeting' ? canManageMeetings : canUpdateMinutesItem(item);
+
+  // The pickers' own reads are gated as the backend gates them, so a member
+  // who cannot use them never asks.
+  useEffect(() => {
+    if (!canManageMeetings && !canManageMinutes) return;
+    minutesService
+      .getActionItemAssignees()
+      .then(setAssignees)
+      .catch(() => setAssignees([]));
+  }, [canManageMeetings, canManageMinutes]);
+
+  useEffect(() => {
+    if (!canViewMeetings) return;
+    meetingsService
+      .getMeetings({ limit: MEETING_FILTER_LIMIT })
+      .then((res) => setMeetings(res.meetings))
+      .catch(() => setMeetings([]));
+  }, [canViewMeetings]);
+
+  const fetchItems = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await dashboardService.getActionItems({
+        ...(statusFilter && statusFilter !== OPEN_FILTER && statusFilter !== OVERDUE_FILTER
+          ? { status_filter: statusFilter }
+          : {}),
+        ...(statusFilter === OPEN_FILTER ? { open_only: true } : {}),
+        ...(statusFilter === OVERDUE_FILTER ? { overdue: true } : {}),
+        // A meeting is only ever the source of meeting items.
+        ...(meetingFilter ? { source: 'meeting' as const, source_id: meetingFilter } : {}),
+        ...(sourceFilter && !meetingFilter ? { source: sourceFilter } : {}),
+        ...(assignedToMe ? { assigned_to_me: assignedToMe } : {}),
+        ...(assigneeFilter ? { assignee_id: assigneeFilter } : {}),
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
+      });
+      setData(result);
+      setError(null);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter, sourceFilter, assignedToMe, assigneeFilter, meetingFilter, page, pageSize]);
+
+  useEffect(() => {
+    void fetchItems();
+  }, [fetchItems]);
+
+  // A filter changed on the page drops the parameter that seeded it, so a
+  // reload or a shared link does not bring back a filter the user cleared.
+  // It also returns to the first page: page 3 of a narrower list may not exist.
+  const changeFilter = (name: string, apply: () => void) => {
+    apply();
+    setPage(1);
+    if (!searchParams.has(name)) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete(name);
+    setSearchParams(next, { replace: true });
+  };
 
   const openEditor = (item: ActionItemSummary) => {
     setEditing(item);
@@ -135,36 +245,47 @@ const ActionItemsPage: React.FC = () => {
     }
   };
 
-  const fetchItems = useCallback(async () => {
+  const markComplete = async (item: ActionItemSummary) => {
+    setBusyId(item.id);
     try {
-      setLoading(true);
-      const data = await dashboardService.getActionItems({
-        ...(statusFilter && statusFilter !== OPEN_FILTER && statusFilter !== OVERDUE_FILTER
-          ? { status_filter: statusFilter }
-          : {}),
-        ...(statusFilter === OVERDUE_FILTER ? { overdue: true } : {}),
-        ...(sourceFilter ? { source: sourceFilter } : {}),
-        ...(assignedToMe ? { assigned_to_me: assignedToMe } : {}),
-      });
-      setItems(statusFilter === OPEN_FILTER ? data.filter(isOpen) : data);
-    } catch (err) {
-      setError(getErrorMessage(err));
+      if (item.source === 'meeting') {
+        await meetingsService.updateActionItem(item.id, { status: 'completed' });
+      } else {
+        await minutesService.updateActionItem(item.source_id, item.id, { status: 'completed' });
+      }
+      toast.success('Marked complete');
+      await fetchItems();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not mark the action item complete'));
     } finally {
-      setLoading(false);
+      setBusyId(null);
     }
-  }, [statusFilter, sourceFilter, assignedToMe]);
+  };
 
-  useEffect(() => {
-    void fetchItems();
-  }, [fetchItems]);
-
-  // A filter changed on the page drops the parameter that seeded it, so a
-  // reload or a shared link does not bring back a filter the user cleared.
-  const dropParam = (name: string) => {
-    if (!searchParams.has(name)) return;
-    const next = new URLSearchParams(searchParams);
-    next.delete(name);
-    setSearchParams(next, { replace: true });
+  const deleteMeetingItem = async (item: ActionItemSummary) => {
+    const confirmed = await confirm({
+      title: 'Delete this action item?',
+      message: `"${item.description}" is removed from its meeting and from this list. This cannot be undone. To close an item that is finished or no longer needed, mark it complete or cancelled instead.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep it',
+    });
+    if (!confirmed) return;
+    setBusyId(item.id);
+    try {
+      await meetingsService.deleteActionItem(item.id);
+      toast.success('Action item deleted');
+      // The last row of a page going leaves an empty page; step back to the
+      // one before it rather than showing nothing.
+      if (data.items.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        await fetchItems();
+      }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Could not delete the action item'));
+    } finally {
+      setBusyId(null);
+    }
   };
 
   // A due date is a calendar day (a meeting item's DATE, or a minutes item's
@@ -181,12 +302,12 @@ const ActionItemsPage: React.FC = () => {
     return 'text-theme-text-secondary';
   };
 
-  const overdue = items.filter((i) => {
-    const days = daysUntilDue(i.due_date);
-    return days !== null && days < 0 && isOpen(i);
-  }).length;
-
-  const open = items.filter(isOpen).length;
+  const items = data.items;
+  const filtered = !!(statusFilter || sourceFilter || assignedToMe || assigneeFilter || meetingFilter);
+  const meetingOptions =
+    meetingFilter && !meetings.some((m) => m.id === meetingFilter)
+      ? [{ id: meetingFilter, title: 'Selected meeting', meeting_date: '' }, ...meetings]
+      : meetings;
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -196,61 +317,92 @@ const ActionItemsPage: React.FC = () => {
         subtitle="Action items from meetings and minutes, soonest due first"
       />
 
-      {/* Summary Cards */}
+      {/* Summary Cards — the server's totals over every matching item, not
+          just this page (DASH-40), counted as the dashboard tile counts. */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="card-secondary p-4">
           <p className="text-theme-text-muted text-sm">Total Items</p>
-          <p className="text-theme-text-primary text-2xl font-bold">{items.length}</p>
+          <p className="text-theme-text-primary text-2xl font-bold" data-testid="action-items-total">
+            {data.total}
+          </p>
         </div>
         <div className="card-secondary p-4">
           <p className="text-theme-text-muted text-sm">Open</p>
-          <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{open}</p>
+          <p className="text-2xl font-bold text-blue-700 dark:text-blue-400" data-testid="action-items-open">
+            {data.open_total}
+          </p>
         </div>
         <div className="card-secondary p-4">
           <p className="text-theme-text-muted text-sm">Overdue</p>
-          <p className="text-2xl font-bold text-red-700 dark:text-red-400">{overdue}</p>
+          <p className="text-2xl font-bold text-red-700 dark:text-red-400" data-testid="action-items-overdue">
+            {data.overdue_total}
+          </p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="mb-6 flex flex-wrap gap-3">
-        <div className="flex items-center gap-2">
-          <Filter className="text-theme-text-muted h-4 w-4" />
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <Filter className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+        <select
+          value={statusFilter}
+          onChange={(e) => changeFilter('status', () => setStatusFilter(e.target.value))}
+          aria-label="Filter action items by status"
+          className="form-input-sm w-auto"
+        >
+          <option value="">All Statuses</option>
+          <option value={OPEN_FILTER}>Open (not done)</option>
+          <option value={OVERDUE_FILTER}>Overdue</option>
+          <option value="pending">Pending</option>
+          <option value="in_progress">In Progress</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <select
+          value={meetingFilter ? 'meeting' : sourceFilter}
+          onChange={(e) => changeFilter('source', () => setSourceFilter(sourceFromParam(e.target.value)))}
+          disabled={!!meetingFilter}
+          aria-label="Filter action items by source"
+          className="form-input-sm w-auto"
+        >
+          <option value="">All Sources</option>
+          <option value="meeting">Meetings</option>
+          <option value="minutes">Minutes</option>
+        </select>
+        {meetingOptions.length > 0 && (
           <select
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              dropParam('status');
-            }}
-            aria-label="Filter action items by status"
-            className="form-input-sm"
+            value={meetingFilter}
+            onChange={(e) => changeFilter('meeting', () => setMeetingFilter(e.target.value))}
+            aria-label="Filter action items by meeting"
+            className="form-input-sm w-auto max-w-xs"
           >
-            <option value="">All Statuses</option>
-            <option value={OPEN_FILTER}>Open (not done)</option>
-            <option value={OVERDUE_FILTER}>Overdue</option>
-            <option value="pending">Pending</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
+            <option value="">All Meetings</option>
+            {meetingOptions.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.meeting_date ? `${m.title} (${formatCalendarDate(m.meeting_date)})` : m.title}
+              </option>
+            ))}
           </select>
+        )}
+        {assignees.length > 0 && (
           <select
-            value={sourceFilter}
-            onChange={(e) => {
-              setSourceFilter(sourceFromParam(e.target.value));
-              dropParam('source');
-            }}
-            aria-label="Filter action items by source"
-            className="form-input-sm"
+            value={assigneeFilter}
+            onChange={(e) => changeFilter('assignee', () => setAssigneeFilter(e.target.value))}
+            aria-label="Filter action items by assignee"
+            className="form-input-sm w-auto max-w-xs"
           >
-            <option value="">All Sources</option>
-            <option value="meeting">Meetings</option>
-            <option value="minutes">Minutes</option>
+            <option value="">Anyone</option>
+            {assignees.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
           </select>
-        </div>
+        )}
         <label className="text-theme-text-secondary touch:min-h-[44px] flex cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={assignedToMe}
-            onChange={(e) => setAssignedToMe(e.target.checked)}
+            onChange={(e) => changeFilter('mine', () => setAssignedToMe(e.target.checked))}
             className="form-checkbox"
           />
           Assigned to me
@@ -269,75 +421,138 @@ const ActionItemsPage: React.FC = () => {
       ) : items.length === 0 ? (
         <EmptyState
           icon={CheckCircle2}
-          title={statusFilter || sourceFilter || assignedToMe ? 'No matching action items' : 'No action items'}
+          title={filtered ? 'No matching action items' : 'No action items'}
           description={
-            statusFilter || sourceFilter || assignedToMe
-              ? 'Choose a different status or clear "Assigned to me" to see more.'
+            filtered
+              ? 'Choose a different filter or clear "Assigned to me" to see more.'
               : 'Action items recorded in meetings and minutes appear here.'
           }
         />
       ) : (
-        <div className="space-y-2">
-          {items.map((item) => (
-            // A link, not a clickable div: the row was unreachable by keyboard
-            // and unannounced to a screen reader (W52-4).
-            <div key={`${item.source}-${item.id}`} className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
-              <Link
-                to={item.source === 'meeting' ? '/minutes' : `/minutes/${item.source_id}`}
-                className="card-secondary hover:bg-theme-surface-hover block min-w-0 flex-1 p-4"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-theme-text-primary truncate text-sm font-medium">{item.description}</p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <span
-                        className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-theme-surface-secondary text-theme-text-primary'}`}
-                      >
-                        {actionItemStatusLabel(item.status)}
-                      </span>
-                      {item.priority && (
+        <>
+          <div className="space-y-2">
+            {items.map((item) => (
+              // A link, not a clickable div: the row was unreachable by keyboard
+              // and unannounced to a screen reader (W52-4).
+              <div key={`${item.source}-${item.id}`} className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                <Link
+                  to={item.source === 'meeting' ? '/minutes' : `/minutes/${item.source_id}`}
+                  className="card-secondary hover:bg-theme-surface-hover block min-w-0 flex-1 p-4"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-theme-text-primary truncate text-sm font-medium">{item.description}</p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         <span
-                          className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${PRIORITY_BADGES[priorityLabel(item) ?? ''] || ''}`}
+                          className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${STATUS_BADGES[item.status] || 'bg-theme-surface-secondary text-theme-text-primary'}`}
                         >
-                          {priorityLabel(item)}
+                          {actionItemStatusLabel(item.status)}
                         </span>
-                      )}
-                      <span className="text-theme-text-muted text-xs">
-                        {item.source === 'meeting' ? 'Meeting' : 'Minutes'}
-                      </span>
-                      {item.assignee_name && (
-                        <span className="text-theme-text-muted text-xs">{item.assignee_name}</span>
+                        {item.carried_forward && (
+                          <span className="bg-theme-surface-secondary text-theme-text-primary inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium">
+                            Carried forward
+                          </span>
+                        )}
+                        {item.priority && (
+                          <span
+                            className={`inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium ${PRIORITY_BADGES[priorityLabel(item) ?? ''] || ''}`}
+                          >
+                            {priorityLabel(item)}
+                          </span>
+                        )}
+                        <span className="text-theme-text-muted text-xs">
+                          {item.source === 'meeting' ? (item.source_title ?? 'Meeting') : 'Minutes'}
+                        </span>
+                        {item.assignee_name && (
+                          <span className="text-theme-text-muted text-xs">{item.assignee_name}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      {item.due_date ? (
+                        <div className={`text-sm ${getDueDateClass(item.due_date)}`}>
+                          <Clock className="mr-1 inline h-3 w-3" />
+                          {/* A calendar day: formatting it in the department's zone
+                            showed the day before (W52-1). */}
+                          {formatCalendarDate(item.due_date)}
+                        </div>
+                      ) : (
+                        <span className="text-theme-text-muted text-xs">No due date</span>
                       )}
                     </div>
                   </div>
-                  <div className="shrink-0 text-right">
-                    {item.due_date ? (
-                      <div className={`text-sm ${getDueDateClass(item.due_date)}`}>
-                        <Clock className="mr-1 inline h-3 w-3" />
-                        {/* A calendar day: formatting it in the department's zone
-                          showed the day before (W52-1). */}
-                        {formatCalendarDate(item.due_date)}
-                      </div>
+                </Link>
+                {canManageItem(item) && (
+                  <div className="flex shrink-0 flex-wrap gap-2 self-start sm:self-center">
+                    {isOpen(item) && (
+                      <button
+                        type="button"
+                        onClick={() => void markComplete(item)}
+                        disabled={busyId === item.id}
+                        aria-label={`Mark ${item.description} complete`}
+                        className="btn-secondary touch:min-h-11 rounded-lg px-3 py-2 text-sm disabled:opacity-50"
+                      >
+                        Mark complete
+                      </button>
+                    )}
+                    {item.source === 'meeting' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setEditingMeetingItem(item)}
+                          aria-label={`Edit ${item.description}`}
+                          className="btn-secondary touch:min-h-11 rounded-lg px-3 py-2 text-sm"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void deleteMeetingItem(item)}
+                          disabled={busyId === item.id}
+                          aria-label={`Delete ${item.description}`}
+                          className="btn-secondary touch:min-h-11 rounded-lg px-3 py-2 text-sm disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </>
                     ) : (
-                      <span className="text-theme-text-muted text-xs">No due date</span>
+                      <button
+                        type="button"
+                        onClick={() => openEditor(item)}
+                        aria-label={`Update status of ${item.description}`}
+                        className="btn-secondary touch:min-h-11 rounded-lg px-3 py-2 text-sm"
+                      >
+                        Update status
+                      </button>
                     )}
                   </div>
-                </div>
-              </Link>
-              {isMine(item) && (
-                <button
-                  type="button"
-                  onClick={() => openEditor(item)}
-                  aria-label={`Update status of ${item.description}`}
-                  className="btn-secondary touch:min-h-11 shrink-0 self-start rounded-lg px-3 py-2 text-sm sm:self-center"
-                >
-                  Update status
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <Pagination
+            currentPage={page}
+            totalItems={data.total}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
+            className="mt-4"
+          />
+        </>
       )}
+
+      <MeetingActionItemDialog
+        item={editingMeetingItem}
+        assignees={assignees}
+        onClose={() => setEditingMeetingItem(null)}
+        onSaved={() => {
+          setEditingMeetingItem(null);
+          void fetchItems();
+        }}
+      />
 
       <Modal
         isOpen={editing !== null}
@@ -368,8 +583,17 @@ const ActionItemsPage: React.FC = () => {
           <div className="space-y-4">
             <p className="text-theme-text-primary text-sm">{editing.description}</p>
             <p className="text-theme-text-muted text-xs">
-              As the assignee you can change the status and add completion notes. Anything else is changed by whoever
-              keeps the minutes.
+              {canManageMinutes ? (
+                <>
+                  Change the status and completion notes here. The description, assignee and due date are edited on{' '}
+                  <Link to={`/minutes/${editing.source_id}`} className="underline">
+                    its minutes
+                  </Link>
+                  .
+                </>
+              ) : (
+                'As the assignee you can change the status and add completion notes. Anything else is changed by whoever keeps the minutes.'
+              )}
             </p>
             <div>
               <label htmlFor="assignee-status" className="form-label">
@@ -381,7 +605,7 @@ const ActionItemsPage: React.FC = () => {
                 onChange={(e) => setEditStatus(e.target.value)}
                 className="form-input"
               >
-                {ASSIGNEE_STATUS_OPTIONS.map((o) => (
+                {MINUTES_STATUS_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
                     {o.label}
                   </option>

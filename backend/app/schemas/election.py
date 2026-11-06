@@ -1590,9 +1590,8 @@ class BallotSendJobResponse(UTCResponseBase):
     """A background ballot send and, once it has finished, its outcome.
 
     ``kind`` is ballots, reminder, package or announcement. ``status`` is queued, running, completed
-    or failed. ``result`` is set on completed and carries what the synchronous
-    send-ballot / remind-non-voters endpoint returns; ``error`` is set on
-    failed.
+    or failed. ``result`` is set on completed and carries the send's outcome
+    (an :class:`EmailBallotResponse`); ``error`` is set on failed.
     """
 
     id: str

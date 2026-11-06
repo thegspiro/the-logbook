@@ -281,6 +281,11 @@ class MeetingActionItem(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     completion_notes: Mapped[Optional[str]] = mapped_column(Text)
 
+    # The department-local day a due-date reminder was last emailed for this
+    # item. It is what makes a second run of the reminder task on the same day
+    # send nothing (CLAUDE.md pitfall #36); the bell entry is not gated on it.
+    reminder_emailed_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+
     # Provenance. ``created_by`` is who the item is attributed to and
     # ``source`` names an automated path that created it ("mcp" for the
     # Claude connection); both are NULL for an item a person entered in the

@@ -29,6 +29,9 @@ const off: MinutesReminderSettings = {
   executive_effective_public: false,
   attendance_listing: 'all',
   auto_file_election_results: true,
+  quorum_counts_late: true,
+  quorum_counts_left_early: true,
+  proxy_attendance: false,
 };
 
 describe('PublishingSettingsPanel', () => {

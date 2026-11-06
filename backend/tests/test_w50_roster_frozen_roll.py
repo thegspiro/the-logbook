@@ -14,19 +14,26 @@ send and the reminder build their skipped clause from ``skipped_details``.
 
 import secrets
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.endpoints.elections import send_ballot_emails as send_ballot_endpoint
+from app.api.v1.endpoints.elections import (
+    start_ballot_send_job_endpoint,
+    start_reminder_send_job_endpoint,
+)
+from app.models.election import BallotSendJob
 from app.schemas.election import EmailBallot
+from app.services.ballot_send_jobs import job_response, run_ballot_send_job
 from app.services.election_service import ElectionService
 
 SEND_BATCH = "app.services.email_service.EmailService.send_batch"
+START_JOB = "app.services.ballot_send_jobs.start_ballot_send_job"
 ITEM_RULE_SENTENCE = "did not meet ballot item requirements"
 
 
@@ -259,23 +266,54 @@ class TestRosterReadsFrozenRoll:
         assert roster["total_eligible"] == 2
 
 
+def _session_factory(db_session: AsyncSession):
+    """Hand the job runner the test's session, which holds the test's rows."""
+
+    @asynccontextmanager
+    async def factory():
+        yield db_session
+
+    return factory
+
+
+async def _queue_and_run(db_session: AsyncSession, frozen_election, queue):
+    """Queue a send through its endpoint, run the job, and return its outcome."""
+    user = SimpleNamespace(
+        id=frozen_election["on_roll"], organization_id=frozen_election["org_id"]
+    )
+    start = MagicMock()
+    with patch(START_JOB, new=start):
+        await queue(user)
+    job_id, org_id, send = start.call_args.args
+    send_batch = AsyncMock(side_effect=lambda b: [True] * len(b))
+    with patch(SEND_BATCH, new=send_batch):
+        await run_ballot_send_job(
+            job_id, org_id, send, session_factory=_session_factory(db_session)
+        )
+    job = await db_session.get(BallotSendJob, job_id)
+    assert job is not None
+    await db_session.refresh(job)
+    response = job_response(job)
+    assert response.result is not None, response.error
+    return response.result
+
+
 @pytest.mark.integration
 class TestSendSummaryNamesTheRecordedReason:
     async def test_send_ballot_message_comes_from_skipped_details(
         self, db_session: AsyncSession, frozen_election
     ):
-        send_batch = AsyncMock(side_effect=lambda b: [True] * len(b))
-        with patch(SEND_BATCH, new=send_batch):
-            response = await send_ballot_endpoint(
-                election_id=uuid.UUID(frozen_election["election_id"]),
+        election_id = uuid.UUID(frozen_election["election_id"])
+        response = await _queue_and_run(
+            db_session,
+            frozen_election,
+            lambda user: start_ballot_send_job_endpoint(
+                election_id=election_id,
                 email_data=EmailBallot(),
-                request=SimpleNamespace(),
                 db=db_session,
-                current_user=SimpleNamespace(
-                    id=frozen_election["on_roll"],
-                    organization_id=frozen_election["org_id"],
-                ),
-            )
+                current_user=user,
+            ),
+        )
 
         assert response.recipients_count == 1
         assert response.skipped_count == 1
@@ -288,19 +326,17 @@ class TestSendSummaryNamesTheRecordedReason:
     async def test_reminder_message_reports_its_skips(
         self, db_session: AsyncSession, frozen_election
     ):
-        from app.api.v1.endpoints.elections import remind_non_voters as remind_endpoint
-
-        send_batch = AsyncMock(side_effect=lambda b: [True] * len(b))
-        with patch(SEND_BATCH, new=send_batch):
-            response = await remind_endpoint(
-                election_id=uuid.UUID(frozen_election["election_id"]),
+        election_id = uuid.UUID(frozen_election["election_id"])
+        response = await _queue_and_run(
+            db_session,
+            frozen_election,
+            lambda user: start_reminder_send_job_endpoint(
+                election_id=election_id,
                 payload=None,
                 db=db_session,
-                current_user=SimpleNamespace(
-                    id=frozen_election["on_roll"],
-                    organization_id=frozen_election["org_id"],
-                ),
-            )
+                current_user=user,
+            ),
+        )
 
         assert response.recipients_count == 1
         assert response.skipped_count == 1

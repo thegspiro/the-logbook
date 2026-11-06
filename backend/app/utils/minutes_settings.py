@@ -56,9 +56,25 @@ these defaults.
     Which attendance statuses the minutes name: ``all``, ``present_excused`` or
     ``present``. Absent or unrecognised reads as ``all``, the behaviour every
     department had before this existed, so an upgrade changes nothing on a
-    printed or published copy. Display only: the roll is always recorded in
+    printed or published copy. A department created by setup from 2026-11-05
+    has ``present`` written here when it is created (owner decision
+    2026-11-01, ``NEW_DEPARTMENT_ATTENDANCE_LISTING``); the reading of an
+    absent value did not change. Display only: the roll is always recorded in
     full, because quorum and the attendance reports read it. A set of minutes
     can carry its own choice (``meeting_minutes.attendance_listing``).
+
+``quorum_counts_late`` / ``quorum_counts_left_early``
+    Whether a member who arrived late, or left early, counts toward quorum. On
+    unless set to a literal ``False``, which is how every department counted
+    before the setting existed. A member marked present always counts and a
+    guest never does. Read by ``QuorumService.calculate_quorum``, the one place
+    quorum is computed.
+
+``proxy_attendance``
+    Whether the department uses proxies: the roll call offers a "Represented by
+    proxy" status and a proxy counts toward quorum. Off unless a literal
+    ``True``. A proxy is never "present" in the room, so it does not vote in a
+    roll call or count toward a "majority of members present".
 
 ``auto_file_election_results``
     Whether a closed election's certified result is filed with the minutes of
@@ -81,7 +97,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import Organization
-from app.utils.minutes_attendance import DEFAULT_ATTENDANCE_LISTING, normalize_listing
+from app.utils.minutes_attendance import (
+    DEFAULT_ATTENDANCE_LISTING,
+    normalize_listing,
+    quorum_statuses,
+)
 
 MINUTES_SETTINGS_KEY = "minutes"
 
@@ -290,3 +310,55 @@ async def load_auto_file_election_results(
         select(Organization.settings).where(Organization.id == str(organization_id))
     )
     return auto_file_election_results_in(result.scalar_one_or_none())
+
+
+QUORUM_LATE_FLAG = "quorum_counts_late"
+QUORUM_LEFT_EARLY_FLAG = "quorum_counts_left_early"
+PROXY_FLAG = "proxy_attendance"
+
+
+@dataclass(frozen=True)
+class QuorumCounting:
+    """Who the department counts toward quorum."""
+
+    late: bool
+    left_early: bool
+    proxies: bool
+
+    @property
+    def statuses(self) -> frozenset[str]:
+        return quorum_statuses(
+            late=self.late, left_early=self.left_early, proxies=self.proxies
+        )
+
+    def note(self) -> str:
+        """What differs from the default rule, for the quorum description."""
+        parts = []
+        if not self.late:
+            parts.append("late arrivals not counted")
+        if not self.left_early:
+            parts.append("members who left early not counted")
+        if self.proxies:
+            parts.append("proxies counted")
+        return "; ".join(parts)
+
+
+def quorum_counting_in(settings: Any) -> QuorumCounting:
+    """Resolve who counts toward quorum; absent reads as the pre-setting rule."""
+    section = settings.get(MINUTES_SETTINGS_KEY) if isinstance(settings, dict) else None
+    if not isinstance(section, dict):
+        section = {}
+    return QuorumCounting(
+        late=section.get(QUORUM_LATE_FLAG) is not False,
+        left_early=section.get(QUORUM_LEFT_EARLY_FLAG) is not False,
+        proxies=section.get(PROXY_FLAG) is True,
+    )
+
+
+async def load_quorum_counting(
+    db: AsyncSession, organization_id: str
+) -> QuorumCounting:
+    result = await db.execute(
+        select(Organization.settings).where(Organization.id == str(organization_id))
+    )
+    return quorum_counting_in(result.scalar_one_or_none())

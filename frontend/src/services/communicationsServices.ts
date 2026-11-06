@@ -216,7 +216,25 @@ export interface ActionItemSummary {
   status: string;
   priority?: string;
   completion_notes?: string | null;
+  /** The meeting's title, for a meeting item; minutes items are not named. */
+  source_title?: string | null;
+  /** A minutes item carried into later minutes — open there, closed here. */
+  carried_forward?: boolean;
   created_at: string;
+}
+
+/**
+ * One page of `GET /dashboard/action-items/page` (DASH-40). The totals cover every
+ * row the filters match, not just this page, and are counted with the same
+ * open and overdue rules as the dashboard's Action Items tile.
+ */
+export interface ActionItemPage {
+  items: ActionItemSummary[];
+  total: number;
+  open_total: number;
+  overdue_total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface CommunityEngagement {

@@ -212,4 +212,50 @@ describe('ElectionResultsPanel', () => {
       expect(within(dialog).queryByText(/permanent, dated addendum/)).not.toBeInTheDocument();
     });
   });
+
+  describe('after the election was rolled back', () => {
+    const superseded = {
+      ...filed,
+      is_addendum: true,
+      superseded_at: '2026-10-20T15:30:00Z',
+      superseded_reason: 'Two ballots were counted twice',
+      superseded_by_name: 'Ada Approver',
+    };
+    const rerun = {
+      ...filed,
+      id: 'r3',
+      is_addendum: true,
+      created_at: '2026-10-27T12:00:00Z',
+      replaces_superseded_at: '2026-10-20T15:30:00Z',
+    };
+
+    beforeEach(() => {
+      mockList.mockReset();
+      mockList.mockResolvedValue([superseded, rerun]);
+    });
+
+    it('shows the dated correction over the superseded result, which stays in full', async () => {
+      renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+
+      expect(await screen.findByText('Superseded')).toBeInTheDocument();
+      const note = screen.getByRole('note');
+      expect(note).toHaveTextContent(
+        /Correction filed .*October 20, 2026.* by Ada Approver: this result has been superseded/
+      );
+      expect(note).toHaveTextContent('Reason given: Two ballots were counted twice');
+      expect(screen.getAllByRole('table', { name: 'Results for Chief' })).toHaveLength(2);
+    });
+
+    it("links the re-run's result to the correction it replaces", async () => {
+      renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+
+      const replaces = await screen.findByText(
+        (_text, element) =>
+          element?.tagName === 'P' &&
+          /^Corrected result: replaces the result superseded on .*October 20, 2026/.test(element.textContent ?? '')
+      );
+      expect(replaces).toBeInTheDocument();
+      expect(screen.getAllByText('Superseded')).toHaveLength(1);
+    });
+  });
 });

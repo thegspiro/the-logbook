@@ -1027,10 +1027,12 @@ class MinutesAttachment(Base):
     """A file kept with a set of minutes: reports, handouts, the signed copy.
 
     The bytes live in ``FileStorageService``'s ``minutes-attachments`` area and
-    are served only through the minutes endpoints, so a file attached to
+    are served through the minutes endpoints, so a file attached to
     executive-session minutes is as restricted as the minutes themselves. They
     are deliberately *not* filed as shared Documents, whose folder rights
-    reach every ``documents.view`` holder.
+    reach every ``documents.view`` holder. Once the minutes are published, the
+    files the published copy lists (``published_at``) are also served through
+    that document, under its own folder's rules (owner decision 2026-11-01).
     """
 
     __tablename__ = "minutes_attachments"
@@ -1063,6 +1065,13 @@ class MinutesAttachment(Base):
     )
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    # When the file was included in the library copy published to Documents.
+    # The published copy's readers can open a file only while this is set: a
+    # file filed after publishing (a signed copy) is not one the published copy
+    # lists, so its readers reach it only once the minutes are published again.
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     __table_args__ = (
@@ -1108,6 +1117,32 @@ class MinutesElectionResult(Base):
         Boolean, nullable=False, default=False, server_default="0"
     )
 
+    # A rolled-back election's result no longer stands, but circulated or
+    # adopted minutes are a record and are never edited or emptied (owner
+    # decision 2026-11-01, ELEC-49). The rollback files a dated correction
+    # against the result instead: the row stays, word for word, and these say
+    # when, why and by whom it was superseded. A re-run election that closes
+    # later files its new result as a further addendum, which is shown as
+    # replacing this one. Outside the approval snapshot, like any addendum, so
+    # an adopted version still verifies after a correction.
+    superseded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    superseded_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    superseded_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # The election's id while this is its standing result in these minutes,
+    # NULL once superseded. Unique with minutes_id, so at most one standing
+    # result per election per minutes, while any number of superseded ones
+    # stay on file. MySQL has no partial unique index; a unique key ignores
+    # NULLs, which is what makes this column work as one. Not a foreign key:
+    # it is a uniqueness slot, and an election deleted later must not free
+    # the slot by nulling it.
+    current_election_id: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True
+    )
+
     captured_by: Mapped[Optional[str]] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -1117,7 +1152,9 @@ class MinutesElectionResult(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "minutes_id", "election_id", name="uq_minutes_election_results_pair"
+            "minutes_id",
+            "current_election_id",
+            name="uq_minutes_election_results_current",
         ),
         Index("ix_minutes_election_results_minutes_id", "minutes_id"),
         Index("ix_minutes_election_results_organization_id", "organization_id"),

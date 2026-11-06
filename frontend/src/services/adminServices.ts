@@ -10,7 +10,7 @@ import type {
   DashboardStats,
   AdminSummary,
   OperationsDashboard,
-  ActionItemSummary,
+  ActionItemPage,
   CommunityEngagement,
   DashboardPulseLayout,
   DashboardPulseResponse,
@@ -485,10 +485,23 @@ export const dashboardService = {
     status_filter?: string | undefined;
     assigned_to_me?: boolean | undefined;
     overdue?: boolean | undefined;
+    open_only?: boolean | undefined;
     source?: 'meeting' | 'minutes' | undefined;
-  }): Promise<ActionItemSummary[]> {
-    const response = await api.get<ActionItemSummary[]>('/dashboard/action-items', { params });
-    return asArray(response.data);
+    assignee_id?: string | undefined;
+    source_id?: string | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+  }): Promise<ActionItemPage> {
+    const response = await api.get<Partial<ActionItemPage> | undefined>('/dashboard/action-items/page', { params });
+    const page = response.data ?? {};
+    return {
+      items: asArray(page.items ?? []),
+      total: page.total ?? 0,
+      open_total: page.open_total ?? 0,
+      overdue_total: page.overdue_total ?? 0,
+      limit: page.limit ?? 0,
+      offset: page.offset ?? 0,
+    };
   },
   async getCommunityEngagement(): Promise<CommunityEngagement> {
     const response = await api.get<CommunityEngagement>('/dashboard/community-engagement');

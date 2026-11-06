@@ -2633,7 +2633,10 @@ const Dashboard: React.FC = () => {
                             : 'All on track'
                         }
                         loading={loadingAdmin}
-                        onClick={() => void navigate('/action-items')}
+                        // The tile counts open items, so it opens the list on
+                        // exactly those: `?status=open` asks the feed for
+                        // the same open rule the count uses (DASH-40).
+                        onClick={() => void navigate('/action-items?status=open')}
                         ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
                       />
                     )}

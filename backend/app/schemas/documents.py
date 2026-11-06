@@ -129,6 +129,29 @@ class DocumentResponse(UTCResponseBase):
     # Set while the minutes this document was published from are reopened for
     # correction (MM-17); the Documents screen shows a "Being corrected" notice.
     under_correction_since: Optional[datetime] = None
+    # What generated the document ("meeting_minutes" for published minutes),
+    # so the screen can offer the files published with it.
+    source_type: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PublishedMinutesAttachmentResponse(UTCResponseBase):
+    """A file listed by a published minutes document.
+
+    Carries no storage path and no uploader: a library reader is told what the
+    file is, and opens it through the document.
+    """
+
+    id: str
+    title: str
+    category: str
+    description: Optional[str] = None
+    original_name: str
+    mime_type: str
+    file_size: int
+    sha256: str
+    uploaded_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 

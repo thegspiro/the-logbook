@@ -19,7 +19,7 @@ from pydantic import (
 from app.models.minute import MinutesAttachmentCategory, MinutesMeetingType
 from app.schemas.base import UTCDateTime, UTCResponseBase
 from app.schemas.column_bounds import INT32_MAX
-from app.utils.minutes_attendance import COUNTS_TOWARD_QUORUM, derive_status
+from app.utils.minutes_attendance import IN_THE_ROOM, derive_status
 from app.utils.redline import describe_change
 from app.utils.rich_text import MAX_HTML_LENGTH, sanitize_html
 
@@ -521,7 +521,7 @@ class CarryForwardRequest(BaseModel):
 
 
 AttendanceStatus = Literal[
-    "present", "late", "left_early", "excused", "absent", "guest"
+    "present", "late", "left_early", "excused", "absent", "guest", "proxy"
 ]
 
 
@@ -545,7 +545,7 @@ class AttendeeEntry(BaseModel):
     def _settle_status(self) -> "AttendeeEntry":
         if self.status is None:
             self.status = derive_status({"present": self.present})  # type: ignore[assignment]
-        self.present = self.status in COUNTS_TOWARD_QUORUM
+        self.present = self.status in IN_THE_ROOM
         return self
 
 
@@ -859,6 +859,10 @@ class MinutesReminderSettingsResponse(BaseModel):
     executive_effective_public: bool = False
     attendance_listing: Literal["all", "present_excused", "present"] = "all"
     auto_file_election_results: bool = True
+    # Who counts toward quorum, as QuorumService applies it.
+    quorum_counts_late: bool = True
+    quorum_counts_left_early: bool = True
+    proxy_attendance: bool = False
 
 
 class PublishingStatusResponse(BaseModel):
@@ -1049,6 +1053,15 @@ class MinutesElectionResultResponse(UTCResponseBase):
     captured_by: Optional[str] = None
     captured_by_name: Optional[str] = None
     created_at: datetime
+    # The dated correction a rollback of the election filed against this
+    # result, which no longer stands; it stays on file as it was recorded.
+    superseded_at: Optional[datetime] = None
+    superseded_reason: Optional[str] = None
+    superseded_by: Optional[str] = None
+    superseded_by_name: Optional[str] = None
+    # Set on a re-run's result filed after an earlier result of the same
+    # election was superseded in these minutes: that correction's date.
+    replaces_superseded_at: Optional[datetime] = None
 
     model_config = _response_config
 

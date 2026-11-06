@@ -1597,6 +1597,26 @@ class MinutesSettingsUpdate(BaseModel):
             "it was held at, without a manager importing it. Absent reads as on."
         ),
     )
+    quorum_counts_late: Optional[bool] = Field(
+        None,
+        description=(
+            "Count a member who arrived late toward quorum. Absent reads as on."
+        ),
+    )
+    quorum_counts_left_early: Optional[bool] = Field(
+        None,
+        description=(
+            "Count a member who left before the end toward quorum. Absent "
+            "reads as on."
+        ),
+    )
+    proxy_attendance: Optional[bool] = Field(
+        None,
+        description=(
+            "Offer a 'represented by proxy' roll-call status, counted toward "
+            "quorum. Absent reads as off."
+        ),
+    )
     executive_library_publishing: Optional[bool] = Field(
         None,
         description=(

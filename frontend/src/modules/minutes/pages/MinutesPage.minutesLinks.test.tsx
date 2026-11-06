@@ -148,6 +148,31 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
     expect(await screen.findByText('8')).toBeInTheDocument();
   });
 
+  // Owner decision 2026-11-01: action items are worked on the Action Items
+  // screen, so the Minutes page leads there.
+  it('opens the open action items from the tile', async () => {
+    mockGetSummary.mockResolvedValue({
+      total_meetings: 2,
+      meetings_this_month: 1,
+      open_action_items: 2,
+      pending_approval: 0,
+    });
+    renderWithRouter(<MinutesPage />);
+
+    const tile = await screen.findByRole('link', { name: /Open Action Items/ });
+    expect(tile).toHaveAttribute('href', '/action-items?status=open');
+  });
+
+  it("links a meeting's action items to that meeting's list", async () => {
+    mockGetMeetings.mockResolvedValue({
+      meetings: [{ ...meeting('meet-1', 'October Business Meeting'), action_item_count: 3 }],
+    });
+    renderWithRouter(<MinutesPage />);
+
+    const link = await screen.findByRole('link', { name: '3 action items' });
+    expect(link).toHaveAttribute('href', '/action-items?meeting=meet-1');
+  });
+
   it('opens existing minutes instead of writing a second set', async () => {
     const user = userEvent.setup();
     renderWithRouter(<MinutesPage />);

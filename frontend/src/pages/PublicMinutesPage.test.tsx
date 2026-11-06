@@ -158,5 +158,60 @@ describe('PublicMinutesPage', () => {
     expect(screen.getByText('Guests')).toBeInTheDocument();
     expect(screen.queryByText('Absent')).not.toBeInTheDocument();
     expect(screen.queryByText('Excused')).not.toBeInTheDocument();
+    expect(screen.queryByText('Represented by proxy')).not.toBeInTheDocument();
+  });
+
+  it('counts members represented by proxy when the server reports them', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        ...item,
+        organization_name: 'FD',
+        replaces: null,
+        content: {
+          ...content,
+          attendance: { present: 9, guests: 0, proxies: 2, officers_present: [] },
+        },
+      },
+    });
+    at('/public/minutes/c1');
+
+    expect(await screen.findByText('Represented by proxy')).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+  });
+  it("shows a rolled-back election's correction over its result and links the re-run to it", async () => {
+    const result = {
+      title: 'Officer election',
+      closed: 'October 9, 2026',
+      addendum: true,
+      eligible_voters: 12,
+      ballots_cast: 9,
+      turnout_percentage: 75,
+      contests: [{ label: 'Chief', candidates: [{ name: 'Alex Adams', votes: 6, outcome: 'winner' }] }],
+    };
+    mockGet.mockResolvedValue({
+      data: {
+        ...item,
+        organization_name: 'FD',
+        replaces: null,
+        content: {
+          ...content,
+          election_results: [
+            { ...result, superseded_on: 'October 20, 2026' },
+            { ...result, replaces_superseded_on: 'October 20, 2026' },
+          ],
+        },
+      },
+    });
+    at('/public/minutes/c1');
+
+    expect(await screen.findByRole('note')).toHaveTextContent(
+      'Correction filed October 20, 2026: this result has been superseded.'
+    );
+    expect(
+      screen.getByRole('heading', { name: /Officer election \(added after adoption\) \(superseded\)/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Corrected result: replaces the result superseded on October 20, 2026.')
+    ).toBeInTheDocument();
   });
 });

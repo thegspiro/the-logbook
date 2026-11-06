@@ -43,6 +43,9 @@ const server: MinutesReminderSettings = {
   executive_effective_public: false,
   attendance_listing: 'all',
   auto_file_election_results: true,
+  quorum_counts_late: true,
+  quorum_counts_left_early: true,
+  proxy_attendance: false,
 };
 
 const Where: React.FC = () => <span data-testid="where">{useLocation().pathname + useLocation().search}</span>;
@@ -113,6 +116,14 @@ describe('MinutesSettingsPage', () => {
     show('/minutes/settings?tab=elections');
 
     expect(await screen.findByRole('checkbox', { name: /File election results/ })).toBeChecked();
+  });
+
+  it('offers the quorum section with what the server applies', async () => {
+    mockGet.mockResolvedValue({ ...server, quorum_counts_left_early: false });
+    show('/minutes/settings?tab=quorum');
+
+    expect(await screen.findByRole('checkbox', { name: /Members who left early count/ })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Members who arrived late count/ })).toBeChecked();
   });
 
   it('re-reads what the server holds after a save', async () => {

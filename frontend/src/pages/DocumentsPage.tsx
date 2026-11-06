@@ -33,6 +33,7 @@ import { asArray } from '../utils/asArray';
 import { FolderManageDialog } from '../components/documents/FolderManageDialog';
 import { AdminOnlyFoldersNotice } from '../components/documents/AdminOnlyFoldersNotice';
 import { DocumentCorrectionNotice } from '../components/documents/DocumentCorrectionNotice';
+import { PublishedMinutesAttachments } from '../components/documents/PublishedMinutesAttachments';
 import { FolderAccessFields } from '../components/documents/FolderAccessFields';
 import {
   ADMIN_ONLY_CONFIRMATION,
@@ -782,6 +783,9 @@ const DocumentsPage: React.FC = () => {
                               <span className="text-theme-text-muted text-xs">{fileTypeLabel(doc.file_type)}</span>
                             )}
                             <div className="ml-auto flex shrink-0 items-center gap-1">
+                              {doc.source_type === 'meeting_minutes' && (
+                                <PublishedMinutesAttachments documentId={doc.id} documentName={doc.name} />
+                              )}
                               {doc.has_file && (
                                 <button
                                   onClick={(e) => {
@@ -895,6 +899,9 @@ const DocumentsPage: React.FC = () => {
                           </td>
                           <td data-label="Actions" className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end space-x-1">
+                              {doc.source_type === 'meeting_minutes' && (
+                                <PublishedMinutesAttachments documentId={doc.id} documentName={doc.name} />
+                              )}
                               {doc.has_file && (
                                 <button
                                   onClick={() => void handleDownloadDocument(doc)}

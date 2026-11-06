@@ -721,6 +721,114 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Minutes: attachments reach the published copy and the PDF, and meeting action item reminders are emailed (2026-11-05)
+
+Nothing blocks a restart. Migration `a42466630e74` adds two nullable columns
+(`minutes_attachments.published_at`, `meeting_action_items.reminder_emailed_on`)
+and changes no existing row. Two owner decisions of 2026-11-01:
+
+- **Files filed with minutes become readable by the published copy's
+  audience.** From the next publish of a set of minutes, its library copy in
+  Documents lists those files and anyone who can open that document can
+  download them (a paperclip on the document). For ordinary minutes that is
+  every member with `documents.view` who can see the Meeting Minutes folder —
+  a wider audience than before, when only those who could read the minutes
+  themselves could. Copies published before the upgrade list nothing until
+  they are published again. Review what is attached before republishing old
+  minutes. Executive-session copies stay in their leadership-only folder.
+- **`GET /minutes-records/{id}/pdf` embeds attachments.** Images are printed,
+  PDFs appended and other files listed; the export reads up to 40 MB of files
+  and appends up to 300 pages, so a minutes PDF can be much larger and slower
+  to produce than before.
+- **New emails start going out.** Action items on a meeting record are now
+  emailed to their assignee on the days the bell already reminded them (3 and
+  1 days before, the due date, the day after), from the daily
+  `action_item_reminders` task. Members who switched off "Action items from
+  meetings and minutes" (formerly "Action items from meeting minutes") get the
+  bell only. The first run after the upgrade emails only items whose reminder
+  day it is.
+- Rollback: the downgrade drops both columns. The previous version reads
+  neither; a library copy published by this version keeps its attachment list
+  in its text, but the previous version has no route to open the files from it.
+
+### Elections: the synchronous ballot and reminder sends are gone, and a rollback files a correction in the minutes (2026-11-05)
+
+Nothing blocks a restart. Two owner decisions of 2026-11-01; migration
+`61e85742f52b` carries the data side.
+
+- **`POST /api/v1/elections/{id}/send-ballot` and
+  `POST /api/v1/elections/{id}/remind-non-voters` are removed** and now answer
+  404/405. Two calls to either could both pass the in-progress check and mail
+  every member twice. API clients must queue the send instead, with the same
+  JSON bodies and `elections.manage` as before:
+  `POST /api/v1/elections/{id}/ballot-send-jobs` (an `EmailBallot` body) or
+  `POST /api/v1/elections/{id}/reminder-send-jobs` (optional `subject`,
+  `message`). Each answers `202` with a job; poll
+  `GET /api/v1/elections/{id}/ballot-send-jobs/{job_id}` until `status` is
+  `completed` (its `result` is the response the old routes returned) or
+  `failed` (`error`). A send already in progress is refused with `409`, and a
+  refused reminder (election not open, reminders off, inside the cooldown) with
+  `400`, before anything is queued. No screen called the old routes.
+- **Rolling back a closed election now corrects its filed result.** A result
+  in circulated or adopted minutes is kept and marked superseded, with the
+  date, the reason given for the rollback and who rolled it back; a draft's own
+  result is removed. When the election closes again, its new result is filed
+  beside the superseded one and shown as replacing it. Published library and
+  public copies of the minutes are re-rendered in place to show the
+  correction, keeping their version and posting date.
+- **Existing results.** The migration marks as superseded every filed result
+  whose election was rolled back from closed after it was filed, dated from
+  the election's rollback history. A draft's stale result is marked, not
+  removed; the secretary can remove it. An election that has already re-closed
+  has no new result filed (the old one blocked it): import it by hand from the
+  minutes page. Published copies show the correction from their next publish.
+- Rollback: the downgrade keeps one result per minutes and election (the one
+  standing, else the latest superseded one), deletes the other superseded
+  results, and drops the correction columns. The previous version reads none of
+  them.
+
+### `GET /dashboard/action-items` is capped at 200 items, and the Action Items tile counts the Minutes module's open items (2026-11-05)
+
+Nothing blocks a restart, and nothing in the app needs changing. Two things
+an operator or an API client may notice:
+
+- **The feed is capped.** `GET /api/v1/dashboard/action-items` still answers
+  the same bare JSON list, but now at most 200 items (it used to return every
+  matching item). `limit` (up to 200) and `offset` move through it. For totals
+  and paging, use the new `GET /api/v1/dashboard/action-items/page`, which
+  takes the same filters and answers an object with `items`, `total`,
+  `open_total`, `overdue_total`, `limit` and `offset`.
+- **The dashboard's Action Items figures may move.** The open and overdue
+  counts now use the Minutes module's own rule: a minutes item someone marked
+  `overdue` by hand counts as open (and, past its due date, as overdue), and
+  an item carried forward into later minutes is counted there only, not twice.
+  The tile, the Minutes page's tile and the Action Items list now agree.
+
+### Event-request status links are encrypted at rest, and copied event reminder markers are cleared (2026-11-05)
+
+Nothing blocks a restart. Two migrations change stored data:
+
+- **`e429ae62992e`** — the token in a public event request's status link
+  (`/event-request/status/<token>`) is now looked up by its SHA-256 hash and
+  stored encrypted, as the applicant status token has been since
+  `f7c09cfec5b0`. Existing tokens are converted in place and do not change, so
+  a link a coordinator has already shared keeps working. A database or backup
+  read no longer yields a live link. The column is encrypted with
+  `ENCRYPTION_KEY`; a rollback decrypts it back to plaintext and needs the same
+  key. `scripts/rotate_encryption_key.py` and `scripts/reencrypt_to_aesgcm.py`
+  now include it. If `event_requests` has not been built yet (it is created at
+  first startup), the migration does nothing.
+- **`f4583df5025b`** — before 2026-10-04, saving "This and all future events"
+  copied the edited occurrence's reminder-sent and validation-prompt-sent
+  markers onto every later occurrence, which then skipped those notices. On
+  rows in a recurring series, the migration removes a reminder marker whose
+  send time, for that occurrence's own start, has not arrived yet, and a
+  validation marker on an event that has not ended — unless a reminder (or
+  validation prompt) was actually logged for that occurrence, so nothing is
+  sent twice. **Members may receive reminders for upcoming recurring events
+  they would previously have missed.** The cleanup cannot be undone; its
+  downgrade leaves the rows as they are.
+
 ### Facility files filed outside the facility folders are moved into them (2026-11-05)
 
 Nothing blocks a restart, but who can open some files changes. Migration

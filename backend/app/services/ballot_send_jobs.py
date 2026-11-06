@@ -12,8 +12,10 @@ and is invited to send again, which mails every member a second link.
 ``POST /elections/{id}/ballot-send-jobs`` therefore records a
 :class:`BallotSendJob`, returns at once, and the send runs in this process
 after the response. The page polls the row for the outcome. The synchronous
-``POST /elections/{id}/send-ballot`` is kept for API callers and runs the same
-:func:`perform_ballot_send`, so both report a send identically.
+``POST /elections/{id}/send-ballot`` and ``POST /elections/{id}/remind-non-voters``
+that used to sit beside the queue were removed on 2026-11-05 (owner decision
+2026-11-01): two calls to either could race past the in-progress guard and
+mail every member twice, and the queue covers both sends.
 
 Remind Non-Voters goes the same way through
 ``POST /elections/{id}/reminder-send-jobs``: a reminder is a ballot send to

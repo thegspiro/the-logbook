@@ -504,16 +504,17 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         ),
     ),
     EmailKind.MINUTES_ACTION_ITEMS: EmailPolicy(
-        label="Action items from meeting minutes",
+        label="Action items from meetings and minutes",
         required=False,
         audience=_M,
         includes=(
             "Action items assigned to you when meeting minutes are approved",
             "Reminders before an action item is due and while it is overdue",
+            "Reminders for action items recorded on a meeting",
         ),
         rationale=(
-            "Minutes > Action Items lists everything assigned to you, and "
-            "due-date reminders continue in the app."
+            "Action Items lists everything assigned to you, and due-date "
+            "reminders continue on the bell."
         ),
     ),
     EmailKind.MINUTES_CIRCULATED: EmailPolicy(

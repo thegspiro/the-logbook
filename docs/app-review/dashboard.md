@@ -236,6 +236,11 @@ department with dozens; a department with years of minutes gets the lot on
 every dashboard load. `ActionItemSummary` carries free-text `description`, so
 the payload grows with the content, not just the row count.
 
+**✅ Resolved 2026-11-05 (owner decision 2026-11-01: page or cap).** The list
+route is capped at 200, and `/dashboard/action-items/page` pages it, cut from
+the merged order, with totals over every match. See KNOWN_LIMITATIONS.md,
+DASH-40.
+
 ### DASH-2 — LOW — re-verified, still open — 🚩 FLAGGED
 
 `GET /dashboard/stats` still returns `total_documents=0`,

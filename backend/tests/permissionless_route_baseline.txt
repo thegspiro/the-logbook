@@ -70,6 +70,13 @@ app/api/v1/endpoints/course_cohorts.py::list_my_cohorts
 
 app/api/v1/endpoints/course_syllabus.py::list_course_classes
 
+# Action items page (2026-11-05, DASH-40): the paged twin of
+# get_unified_action_items, reading through the same helper. It is scoped as
+# that route is: off when the Minutes module is off, the meeting half only for
+# meetings.view or minutes.view, the minutes half confined by
+# minutes_visibility_filter and, without minutes.view, to items assigned to the
+# caller; every query filters the caller's organization.
+app/api/v1/endpoints/dashboard.py::get_action_items_page
 app/api/v1/endpoints/dashboard.py::get_asset_widgets
 app/api/v1/endpoints/dashboard.py::get_dashboard_stats
 app/api/v1/endpoints/dashboard.py::get_main_dashboard_widgets

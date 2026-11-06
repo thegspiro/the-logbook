@@ -40,6 +40,8 @@ from app.services.location_service import (
 from app.services.operational_rank_service import OperationalRankService
 from app.services.organization_service import OrganizationService
 from app.services.suggestion_service import SuggestionService
+from app.utils.minutes_attendance import NEW_DEPARTMENT_ATTENDANCE_LISTING
+from app.utils.minutes_settings import ATTENDANCE_LISTING_FLAG, MINUTES_SETTINGS_KEY
 from app.utils.positions import normalize_stored_positions
 
 # ── Modules the setup wizard offers ───────────────────────────────────────
@@ -760,6 +762,18 @@ class OnboardingService:
         org_settings.setdefault(
             "membership_tiers", MembershipTierSettings().model_dump()
         )
+        # Owner decision 2026-11-01: a department set up from now on lists
+        # only who attended on its minutes. Written here, at creation, rather
+        # than by changing how an absent value reads, so a department that
+        # predates the decision keeps listing everyone across an upgrade.
+        minutes_section = org_settings.get(MINUTES_SETTINGS_KEY)
+        minutes_section = (
+            dict(minutes_section) if isinstance(minutes_section, dict) else {}
+        )
+        minutes_section.setdefault(
+            ATTENDANCE_LISTING_FLAG, NEW_DEPARTMENT_ATTENDANCE_LISTING
+        )
+        org_settings[MINUTES_SETTINGS_KEY] = minutes_section
 
         # Create organization with all fields
         org = Organization(
