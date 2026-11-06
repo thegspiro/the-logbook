@@ -231,7 +231,8 @@ code:
   `05-141` re-shot 2026-11-04.
 - Card Readers says "1 taps" and repeats a room's station in its name. "1 taps"
   is **fixed** by #4035 (`06-36`, `04-92` re-shot 2026-11-04); the repeated
-  station is still open.
+  station is **fixed** by #4057, with the location pickers in #4062, and
+  `06-36`, `04-92` re-shot 2026-11-05.
 - The Members roster's Actions column is clipped at 1440px, and the explainer
   above it still describes one "membership type". The Actions column is
   **fixed on main** (#03f21141 and follow-ups; `01-22` re-shot 2026-11-04).
