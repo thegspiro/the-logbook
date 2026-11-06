@@ -16,7 +16,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { MAX_MONEY_AMOUNT, MIN_MONEY_AMOUNT } from '../utils/moneyLimits';
 import { EXPENSE_TYPE_OPTIONS, expenseLineSchema } from '../utils/expenseLines';
 import { useLateLineWarning } from '../hooks/useLateLineWarning';
-import { useRequestFormOptions } from '../hooks/useRequestFormOptions';
+import { budgetOptionLabel, selectableBudgetOptions, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
@@ -46,6 +46,8 @@ interface LineItemEntry {
   expenseType: string;
   merchant: string;
   fundCampaignId: string;
+  /** The budget line the member charges; approval commits the amount there. */
+  budgetId: string;
 }
 
 // =============================================================================
@@ -83,9 +85,6 @@ const ExpenseReportFormPage: React.FC = () => {
   const navigate = useNavigate();
 
   const { createExpenseReport } = useFinanceStore();
-  // The active and draft years, from the options endpoint a member holding
-  // only finance.request can read. Expense lines carry no budget here.
-  const { fiscalYears, fiscalYearsLoaded } = useRequestFormOptions(undefined);
 
   const [lineItems, setLineItems] = useState<LineItemEntry[]>([]);
   const [lineItemErrors, setLineItemErrors] = useState<Record<number, string>>({});
@@ -98,6 +97,7 @@ const ExpenseReportFormPage: React.FC = () => {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
     reset,
   } = useForm<ExpenseReportFormData>({
@@ -108,6 +108,21 @@ const ExpenseReportFormPage: React.FC = () => {
       fiscalYearId: '',
     },
   });
+
+  // The active and draft years, and the chosen year's budget lines the
+  // member may charge, from the options endpoints a member holding only
+  // finance.request can read (owner decision 2026-11-01: the member picks
+  // each expense's line, and approval commits it there).
+  const fiscalYearId = watch('fiscalYearId');
+  const { fiscalYears, fiscalYearsLoaded, budgetOptions } = useRequestFormOptions(fiscalYearId || undefined);
+
+  // A line belongs to one year's budget, so choosing another year clears the
+  // lines picked from the last one.
+  useEffect(() => {
+    setLineItems((prev) =>
+      prev.some((item) => item.budgetId) ? prev.map((item) => ({ ...item, budgetId: '' })) : prev
+    );
+  }, [fiscalYearId]);
 
   // Auto-select active fiscal year
   useEffect(() => {
@@ -145,6 +160,7 @@ const ExpenseReportFormPage: React.FC = () => {
         expenseType: ExpenseType.GENERAL,
         merchant: '',
         fundCampaignId: '',
+        budgetId: '',
       },
     ]);
   };
@@ -208,6 +224,7 @@ const ExpenseReportFormPage: React.FC = () => {
           const merchant = item.merchant?.trim();
           if (merchant) li.merchant = merchant;
           if (item.fundCampaignId) li.fundCampaignId = item.fundCampaignId;
+          if (item.budgetId) li.budgetId = item.budgetId;
           return li;
         }),
       };
@@ -463,6 +480,27 @@ const ExpenseReportFormPage: React.FC = () => {
                         value={item.merchant}
                         onChange={(e) => updateLineItem(index, 'merchant', e.target.value)}
                       />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label htmlFor={`line-${String(index)}-budget`} className={labelClass}>
+                        Budget line
+                      </label>
+                      <select
+                        className={selectClass}
+                        id={`line-${String(index)}-budget`}
+                        value={item.budgetId}
+                        onChange={(e) => updateLineItem(index, 'budgetId', e.target.value)}
+                      >
+                        <option value="">No budget line</option>
+                        {selectableBudgetOptions(budgetOptions).map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {budgetOptionLabel(option)}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-theme-text-secondary mt-1 text-xs">
+                        Approving the report commits this amount to the line you choose.
+                      </p>
                     </div>
                     <div className="sm:col-span-3">
                       <FundSelect

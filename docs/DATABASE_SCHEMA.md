@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**356 tables · 5804 columns · 1198 foreign keys**
+**356 tables · 5811 columns · 1199 foreign keys**
 
 ---
 
@@ -280,23 +280,23 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`advance_returns`](#advance_returns) | `AdvanceReturn` | 12 | Unspent cash a member handed back against a cash advance. |
 | [`approval_chain_steps`](#approval_chain_steps) | `ApprovalChainStep` | 13 | A single step in an approval chain |
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
-| [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 16 | Tracks actual approval step progression for a specific entity |
-| [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 14 | Extra money leadership approved for a budget line, as recorded. |
+| [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 17 | Tracks actual approval step progression for a specific entity |
+| [`budget_amendments`](#budget_amendments) | `BudgetAmendment` | 15 | Extra money leadership approved for a budget line, as recorded. |
 | [`budget_categories`](#budget_categories) | `BudgetCategory` | 13 | Budget category (hierarchical) |
 | [`budget_category_charge_positions`](#budget_category_charge_positions) | `BudgetCategoryChargePosition` | 5 | A position named as able to charge a restricted category's lines. |
 | [`budget_requests`](#budget_requests) | `BudgetRequest` | 22 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
-| [`check_requests`](#check_requests) | `CheckRequest` | 34 | Request to cut a check for payment |
+| [`check_requests`](#check_requests) | `CheckRequest` | 36 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 13 | A single payment received against a member's dues (FIN-6). |
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 17 | Schedule for dues collection |
 | [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 14 | Individual line item within an expense report |
-| [`expense_reports`](#expense_reports) | `ExpenseReport` | 27 | Expense report submitted by a member for reimbursement |
+| [`expense_reports`](#expense_reports) | `ExpenseReport` | 29 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 14 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
 | [`finance_qb_chart_accounts`](#finance_qb_chart_accounts) | `QuickBooksChartAccount` | 6 | One account of the department's QuickBooks chart of accounts, as the |
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
-| [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 32 | Purchase request submitted by a member |
+| [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 33 | Purchase request submitted by a member |
 
 ### Forms
 
@@ -4280,6 +4280,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `email_status` | VARCHAR(16) | yes |  |  |  |
 | `email_status_at` | DATETIME | yes |  |  |  |
 | `email_link_version` | INTEGER | no |  | `0` |  |
+| `approvers_notified_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -4295,7 +4296,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **BudgetAmendment** · `app/models/finance.py`
 
-> Extra money leadership approved for a budget line, as recorded. Each row is an audit record of one increase: how much, why, who approved it and when, and which member entered it. An amendment is entered ``pending`` and moves nothing; a second officer -- a ``finance.budget_review`` or ``finance.manage`` holder other than the member who entered it -- confirms it, which raises the line's ``amount_budgeted`` by ``amount`` in the same transaction, or rejects it. ``amount_budgeted`` stays the single live ceiling the spend checks read. The line's *original* budget is not stored anywhere; it is ``amount_budgeted`` minus the sum of the *confirmed* rows (``FinanceService._budget_row``). There is no edit or delete path: an amendment is what the department approved. A mistaken one is corrected by a **reversing entry** (owner decision, 2026-10-09): a new row whose ``amount`` is the original's, negated, and whose ``reverses_amendment_id`` names it. The original stays on record, ``amount_budgeted`` drops by the amount, and the original budget -- current less the sum of every row, reversals included -- is unchanged. ``FinanceService.reverse_budget_amendment`` holds the rules.
+> Extra money leadership approved for a budget line, as recorded. Each row is an audit record of one increase: how much, why, who approved it and when, and which member entered it. An amendment is entered ``pending`` and moves nothing; a second officer -- a ``finance.budget_review`` or ``finance.manage`` holder other than the member who entered it -- confirms it, which raises the line's ``amount_budgeted`` by ``amount`` in the same transaction, or rejects it. ``amount_budgeted`` stays the single live ceiling the spend checks read. The line's *original* budget is not stored anywhere; it is ``amount_budgeted`` minus the sum of the *confirmed* rows (``FinanceService._budget_row``). There is no edit or delete path: an amendment is what the department approved. A mistaken one is corrected by a **reversing entry** (owner decision, 2026-10-09): a new row whose ``amount`` is negative -- the whole original, or since 2026-11-01 any part of it, so $2,500 entered for $250 is corrected by one reversal of $2,250 -- and whose ``reverses_amendment_id`` names it. The original stays on record, ``amount_budgeted`` drops by the amount, and the original budget -- current less the sum of every row, reversals included -- is unchanged. ``FinanceService.reverse_budget_amendment`` holds the rules.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -4309,6 +4310,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
 | `reverses_amendment_id` | VARCHAR(36) | yes | FK, UQ |  | → `budget_amendments.id` ON DELETE SET NULL |
+| `reverses_amendment_ref` | VARCHAR(36) | yes |  |  |  |
 | `status` | ENUM(`pending`, `confirmed`, `rejected`) | no |  | `'pending'` |  |
 | `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `decided_at` | DATETIME | yes |  |  |  |
@@ -4461,11 +4463,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `amount` | NUMERIC(12, 2) | no |  |  |  |
 | `memo` | VARCHAR(500) | yes |  |  |  |
 | `purpose` | TEXT | yes |  |  |  |
+| `receipt_document_id` | VARCHAR(36) | yes | FK, IDX |  | → `documents.id` ON DELETE SET NULL |
 | `status` | ENUM(`draft`, `submitted`, `pending_approval`, `approved`, `denied`, `issued`, `voided`, `cancelled`) | no |  | `'draft'` |  |
 | `approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `approved_at` | DATETIME | yes |  |  |  |
 | `first_approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `first_approved_at` | DATETIME | yes |  |  |  |
+| `second_approval_requested_at` | DATETIME | yes |  |  |  |
 | `denial_reason` | TEXT | yes |  |  |  |
 | `check_number` | VARCHAR(50) | yes |  |  |  |
 | `check_date` | DATETIME | yes |  |  |  |
@@ -4486,6 +4490,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_check_requests_expense_report_id` (`expense_report_id`)
 - `ix_check_requests_fund_campaign_id` (`fund_campaign_id`)
 - `ix_check_requests_org_status` (`organization_id`, `status`)
+- `ix_check_requests_receipt_document_id` (`receipt_document_id`)
 
 **Constraints**
 
@@ -4601,6 +4606,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `approved_at` | DATETIME | yes |  |  |  |
 | `first_approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `first_approved_at` | DATETIME | yes |  |  |  |
+| `second_approval_requested_at` | DATETIME | yes |  |  |  |
 | `denial_reason` | TEXT | yes |  |  |  |
 | `paid_at` | DATETIME | yes |  |  |  |
 | `advance_id` | VARCHAR(36) | yes | FK, IDX |  | → `check_requests.id` ON DELETE SET NULL |
@@ -4609,6 +4615,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `submitted_at` | DATETIME | yes |  |  |  |
 | `late_acknowledged_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `late_acknowledged_at` | DATETIME | yes |  |  |  |
+| `budget_committed_at` | DATETIME | yes |  |  |  |
 | `qb_exported_at` | DATETIME | yes |  |  |  |
 | `qb_export_log_id` | VARCHAR(36) | yes | FK |  | → `finance_export_logs.id` ON DELETE SET NULL |
 | `payment_method` | VARCHAR(50) | yes |  |  |  |
@@ -4788,6 +4795,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `approved_at` | DATETIME | yes |  |  |  |
 | `first_approved_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `first_approved_at` | DATETIME | yes |  |  |  |
+| `second_approval_requested_at` | DATETIME | yes |  |  |  |
 | `denial_reason` | TEXT | yes |  |  |  |
 | `ordered_at` | DATETIME | yes |  |  |  |
 | `received_at` | DATETIME | yes |  |  |  |
@@ -13500,6 +13508,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_line_items` | `budget_id` | SET NULL | yes |
 | `purchase_requests` | `budget_id` | SET NULL | yes |
 
+### → `documents` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `apparatus_documents` | `document_id` | CASCADE | yes |
+| `apparatus_photos` | `document_id` | CASCADE | yes |
+| `check_requests` | `receipt_document_id` | SET NULL | yes |
+| `expense_line_items` | `receipt_document_id` | SET NULL | yes |
+| `purchase_requests` | `receipt_document_id` | SET NULL | yes |
+
 ### → `email_templates` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -13538,15 +13556,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `department_message_reads` | `message_id` | CASCADE | no |
 | `department_message_recipients` | `message_id` | CASCADE | no |
 | `notification_logs` | `department_message_id` | CASCADE | yes |
-
-### → `documents` (4 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `apparatus_documents` | `document_id` | CASCADE | yes |
-| `apparatus_photos` | `document_id` | CASCADE | yes |
-| `expense_line_items` | `receipt_document_id` | SET NULL | yes |
-| `purchase_requests` | `receipt_document_id` | SET NULL | yes |
 
 ### → `equipment_check_templates` (4 references)
 

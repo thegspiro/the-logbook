@@ -178,6 +178,7 @@ describe('a draft expense report', () => {
       expenseType: 'general',
       merchant: null,
       fundCampaignId: null,
+      budgetId: null,
     });
     await waitFor(() => expect(fetchReport).toHaveBeenCalledWith('er-1'));
   });

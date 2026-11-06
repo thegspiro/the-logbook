@@ -192,7 +192,9 @@ const ExpenseReportDetailPage: React.FC = () => {
         title: withdrawing ? 'Withdraw this report?' : 'Cancel this report?',
         message: withdrawing
           ? `${er.reportNumber} is closed and nobody is asked to approve it. It cannot be reopened; start a new report to claim these expenses later.`
-          : `${er.reportNumber} is closed for good: any approval still outstanding is withdrawn and emailed approval links stop working. Nothing has been paid on it, so no budget line changes.`,
+          : er.budgetCommittedAt
+            ? `${er.reportNumber} is closed for good. Nothing has been paid on it, and the amounts its approval committed to its budget lines are released.`
+            : `${er.reportNumber} is closed for good: any approval still outstanding is withdrawn and emailed approval links stop working. Nothing has been paid on it, so no budget line changes.`,
         confirmLabel: withdrawing ? 'Withdraw report' : 'Cancel report',
         cancelLabel: 'Keep it',
         variant: 'danger',
@@ -537,6 +539,9 @@ const ExpenseReportDetailPage: React.FC = () => {
                             <LateLinesBadge />
                           </div>
                         )}
+                        <p className="text-theme-text-secondary mt-1 text-xs">
+                          {item.budgetId ? `Budget line: ${item.budgetLabel ?? 'unnamed'}` : 'No budget line'}
+                        </p>
                         {item.fundName && (
                           <p className="text-theme-text-secondary mt-1 text-xs">Restricted fund: {item.fundName}</p>
                         )}
@@ -702,6 +707,7 @@ const ExpenseReportDetailPage: React.FC = () => {
       {editingLine && (
         <ExpenseLineDialog
           reportId={er.id}
+          fiscalYearId={er.fiscalYearId}
           line={editingLine === 'new' ? undefined : editingLine}
           onClose={() => setEditingLine(null)}
           onSaved={() => {

@@ -499,8 +499,14 @@ export interface BudgetAmendment {
   createdBy?: string | null;
   enteredByName?: string | null;
   createdAt: string;
-  /** On a reversal: the amendment it cancels. */
+  /** On a reversal: the amendment it cancels. Cleared when the reversal is rejected. */
   reversesAmendmentId?: string | null;
+  /**
+   * On a reversal: the amendment it was entered against, kept after a
+   * rejection clears `reversesAmendmentId` (owner decision, 2026-11-01).
+   * Display only.
+   */
+  reversesAmendmentRef?: string | null;
   isReversal?: boolean;
   /** On a reversed amendment: the reversal, when it was entered and by whom. */
   reversedByAmendmentId?: string | null;
@@ -508,6 +514,8 @@ export interface BudgetAmendment {
   reversedByName?: string | null;
   /** On a reversed amendment: whether its reversal is pending or confirmed. */
   reversalStatus?: BudgetAmendmentStatus | null;
+  /** On a reversed amendment: how much the reversal takes back — the whole, or a part. */
+  reversedAmount?: MonetaryAmount | null;
   status?: BudgetAmendmentStatus;
   /** Who confirmed or rejected it, when, and (on a rejection) why. */
   decidedBy?: string | null;
@@ -530,13 +538,31 @@ export interface BudgetAmendmentCreatePayload {
 }
 
 /**
- * `POST /finance/budgets/:id/amendments/:amendmentId/reverse`. Every field is
- * required; the amount is the whole amendment's, taken by the backend.
+ * `POST /finance/budgets/:id/amendments/:amendmentId/reverse`. `amount` is how
+ * much to take back, up to the whole amendment (owner decision, 2026-11-01);
+ * left out, the backend reverses the whole of it.
  */
 export interface BudgetAmendmentReversePayload {
   reason: string;
   approvedBy: string;
   approvedOn: string;
+  amount?: MonetaryAmount;
+}
+
+/**
+ * `GET /finance/budget-amendments/pending`: an amendment or reversal awaiting
+ * a second officer, with the line and year it is on. On a reversal,
+ * `reversedAmendmentAmount` and `reversedAmendmentApprovedOn` describe the
+ * amendment it reverses.
+ */
+export interface PendingBudgetAmendment extends BudgetAmendment {
+  categoryName?: string | null;
+  stationName?: string | null;
+  fiscalYearId: string;
+  fiscalYearName: string;
+  yearLocked: boolean;
+  reversedAmendmentAmount?: MonetaryAmount | null;
+  reversedAmendmentApprovedOn?: string | null;
 }
 
 /** The new amendment (or reversal) and the line as it now stands. */
@@ -929,8 +955,6 @@ export const ApproverCoverageProblem = {
   NOT_FOUND: 'not_found',
   NO_ACTIVE_MEMBERS: 'no_active_members',
   INVALID_EMAIL: 'invalid_email',
-  /** Someone fills the step, but none of them holds finance.approve. */
-  NO_APPROVE_PERMISSION: 'no_approve_permission',
 } as const;
 export type ApproverCoverageProblem = (typeof ApproverCoverageProblem)[keyof typeof ApproverCoverageProblem];
 
@@ -977,12 +1001,27 @@ export const SubstantiationMode = {
 export type SubstantiationMode = (typeof SubstantiationMode)[keyof typeof SubstantiationMode];
 
 /** `GET /finance/settings`: the finance rules the server applies. */
+export interface DualApprovalTypeThreshold {
+  entityType: ApprovalEntityType;
+  threshold: MonetaryAmount | null;
+  followsDefault: boolean;
+}
+
 export interface FinanceSettings {
   /**
    * Requests of this amount or more need two different approvers; null is off.
    * Changed through organization settings (`settings.manage`), not here.
    */
   dualApprovalThreshold: MonetaryAmount | null;
+  /**
+   * The threshold each request type actually uses: its own figure, or the one
+   * above when `followsDefault`. Null `threshold` is off for that type.
+   */
+  dualApprovalThresholds?: DualApprovalTypeThreshold[] | undefined;
+  /** Slug of the position one of the two approvers must hold; null is anyone. */
+  secondApproverPosition?: string | null | undefined;
+  /** That position's name; null when it no longer exists. */
+  secondApproverPositionName?: string | null | undefined;
   /** The accountable-plan deadline for expense reports. */
   substantiationMode: SubstantiationMode;
   /** Days allowed between incurring an expense and submitting it (1-60). */
@@ -1010,6 +1049,11 @@ export interface PurchaseRequest extends FunctionalClassFields, FundFields {
   vendor?: string | null;
   estimatedAmount: MonetaryAmount;
   actualAmount?: MonetaryAmount;
+  /**
+   * Once paid, what was paid less what was approved (negative when under);
+   * null until paid, or for a request paid before the amount was asked for.
+   */
+  paidDifference?: MonetaryAmount | null;
   status: PurchaseRequestStatus;
   priority: PurchaseRequestPriority;
   approvedBy?: string;
@@ -1061,7 +1105,9 @@ export interface ReimbursementCheckPayload {
 export interface ExpenseLineItem extends FunctionalClassFields, FundFields {
   id: string;
   expenseReportId: string;
-  budgetId?: string;
+  budgetId?: string | null;
+  /** The budget line's name as the request forms' picker shows it (detail responses only). */
+  budgetLabel?: string | null;
   description: string;
   amount: MonetaryAmount;
   dateIncurred: string;
@@ -1083,6 +1129,7 @@ export interface ExpenseLineItemUpdatePayload {
   expenseType?: ExpenseType | undefined;
   merchant?: string | null | undefined;
   fundCampaignId?: string | null | undefined;
+  budgetId?: string | null | undefined;
 }
 
 export interface ExpenseReport {
@@ -1124,6 +1171,12 @@ export interface ExpenseReport {
   lateAcknowledgedAt?: string | null;
   /** Held until an approver acknowledges the late lines (detail responses only). */
   awaitingLateAcknowledgement?: boolean;
+  /**
+   * When approval committed the lines to their budget lines; null before
+   * approval, and for a report approved before 2026-11-06 or claiming back a
+   * purchase, which committed nothing of its own.
+   */
+  budgetCommittedAt?: string | null;
   /** How far its lines would take their restricted funds past what they have left, until approved (detail responses only). */
   fundShortfall?: MonetaryAmount | null;
   /** The purchase request this report claims back. */
@@ -1178,6 +1231,11 @@ export interface CheckRequest extends FunctionalClassFields, FundFields {
   expenseReportId?: string | null;
   expenseReportNumber?: string | null;
   notes?: string;
+  /** The uploaded receipt or invoice, opened through `receiptFileUrl`. */
+  receiptDocumentId?: string | null;
+  receiptFileUrl?: string | null;
+  /** Whether issuing the check waits on a receipt (not for an advance or a reimbursement check). */
+  receiptRequired?: boolean;
   createdAt: string;
   updatedAt: string;
   approvalSteps: ApprovalStepRecord[];

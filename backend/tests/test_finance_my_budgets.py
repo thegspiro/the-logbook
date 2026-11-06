@@ -28,6 +28,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.document import Document
 from app.models.finance import (
     ApprovalEntityType,
     Budget,
@@ -323,6 +324,11 @@ async def movements(db_session: AsyncSession, dept):
     member = dept["member"].id
     treasurer = dept["treasurer"].id
     service = FinanceService(db_session)
+    # Paying a request or issuing a check needs a receipt on file (owner
+    # decision 2026-11-01); one document stands in for each.
+    receipt = Document(organization_id=org_id, name="Receipt", file_name="r.pdf")
+    db_session.add(receipt)
+    await db_session.flush()
 
     def pr(number, amount, status=PurchaseRequestStatus.PENDING_APPROVAL):
         return PurchaseRequest(
@@ -335,6 +341,7 @@ async def movements(db_session: AsyncSession, dept):
             vendor="Hose Supply Co",
             estimated_amount=Decimal(amount),
             status=status,
+            receipt_document_id=receipt.id,
         )
 
     def cr(number, amount):
@@ -349,6 +356,7 @@ async def movements(db_session: AsyncSession, dept):
             amount=Decimal(amount),
             memo=f"Check {number}",
             status=CheckRequestStatus.APPROVED,
+            receipt_document_id=receipt.id,
         )
 
     approved = pr("PR-0001", "100.00")

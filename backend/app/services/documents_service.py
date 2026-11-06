@@ -43,6 +43,8 @@ from app.models.document import (
 )
 from app.models.facilities import FacilityDocument, FacilityPhoto
 from app.models.finance import (
+    CheckRequest,
+    CheckRequestStatus,
     ExpenseLineItem,
     ExpenseReport,
     ExpenseReportStatus,
@@ -122,8 +124,8 @@ FACILITY_SENSITIVE_PERMISSIONS = FACILITY_FOLDER_PERMISSIONS
 #
 # DOC-31 (owner decision 2026-11-01): Finance's receipt references and the
 # minutes' published copy join level 3. A purchase request's
-# ``receipt_document_id``, an expense line's and a minutes row's
-# ``published_document_id`` are references to a Document like a
+# ``receipt_document_id``, an expense line's, a check request's (2026-11-06)
+# and a minutes row's ``published_document_id`` are references to a Document like a
 # FacilityDocument row is, so the same order holds across the features:
 #
 #   1. DocumentFolder
@@ -168,8 +170,9 @@ FACILITY_SENSITIVE_PERMISSIONS = FACILITY_FOLDER_PERMISSIONS
 # locked by another transaction; the same delete a moment later is decided on
 # that record's committed state.
 _RECEIPT_HOLDER_BUSY = (
-    "A purchase request or expense report that uses this document as a "
-    "receipt is being changed right now; try the delete again in a moment"
+    "A purchase request, expense report or check request that uses this "
+    "document as a receipt is being changed right now; try the delete again "
+    "in a moment"
 )
 _MINUTES_BUSY = (
     "The minutes this document was published from are being changed right "
@@ -1558,10 +1561,11 @@ class DocumentsService:
     ) -> None:
         """Refuse, or tidy, the records that point at documents being deleted.
 
-        A receipt on a purchase request or an expense line is the evidence the
-        finance office approved and paid against. Its foreign key is
-        ``SET NULL``, so the delete used to succeed and silently strip the
-        receipt from the record; once the request or report has left draft,
+        A receipt on a purchase request, an expense line or a check request
+        is the evidence the finance office approved and paid against. Its
+        foreign key is ``SET NULL``, so the delete used to succeed and
+        silently strip the receipt from the record; once the request or
+        report has left draft,
         the delete is refused instead, naming the record. A draft may still
         lose it: nobody has relied on it yet.
 
@@ -1652,6 +1656,32 @@ class DocumentsService:
                     "This document is a receipt on expense report ",
                     report_numbers,
                     ", which is past draft; the report keeps it as its record, "
+                    "so it cannot be deleted",
+                )
+            )
+
+        # A check request's receipt (2026-11-06), the same rule. Last of the
+        # Finance rows, the order the canonical lock order gives them.
+        checks = await read_referencing_rows_nowait(
+            self.db,
+            select(CheckRequest.request_number, CheckRequest.status)
+            .where(
+                CheckRequest.organization_id == org_id,
+                CheckRequest.receipt_document_id.in_(ids),
+            )
+            .order_by(CheckRequest.id),
+            _RECEIPT_HOLDER_BUSY,
+            exclusive=True,
+        )
+        check_numbers = sorted(
+            number for number, status in checks if status != CheckRequestStatus.DRAFT
+        )
+        if check_numbers:
+            raise ValueError(
+                list_within_detail_limit(
+                    "This document is the receipt on check request ",
+                    check_numbers,
+                    ", which is past draft; the request keeps it as its record, "
                     "so it cannot be deleted",
                 )
             )

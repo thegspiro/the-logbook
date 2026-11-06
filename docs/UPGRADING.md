@@ -721,6 +721,126 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Budget amendments: partial reversals, a pending queue, and two new finance emails (2026-11-06)
+
+Nothing blocks a restart. Migration `0961ffc2cdf1` adds a nullable
+`budget_amendments.reverses_amendment_ref` and fills it for reversals already
+on record — from their link, or for rejected ones from the audit log — so a
+rejected reversal keeps naming the amendment it tried to reverse.
+
+- **Officers who may confirm a budget amendment are now emailed** when one is
+  entered (`finance.budget_review` and `finance.manage` holders, not whoever
+  entered it), and **budget-line owners are emailed** when leadership changes
+  their amount in leadership review. Both are optional email kinds a member can
+  turn off (_Finance duties_ and _Next year's budget requests_); a department
+  can make them required. Amendments already pending at upgrade are not
+  emailed retroactively — they are listed on the new **Finance › Budget
+  amendments** queue.
+- **A reversal can now take back part of an amendment.** The reverse endpoint
+  (`POST …/amendments/{id}/reverse`) accepts an optional `amount`; a script
+  that sends none still reverses the whole amendment.
+- **Downgrading** drops the column; nothing that moves money reads it, and the
+  audit log keeps the pairs. The older release's screen strikes a
+  part-reversed amendment through as if wholly reversed; the budget figures
+  stay right, since they are sums of the stored amounts.
+
+### Finance payments: the amount paid, a receipt before payment, and expense reports committed on approval (2026-11-06)
+
+Nothing blocks a restart. Migration `100121b59d94` adds a nullable, indexed
+`check_requests.receipt_document_id` and a nullable
+`expense_reports.budget_committed_at`; nothing is backfilled.
+
+- **Mark Paid now asks for the amount paid.** The screen always sends it;
+  the mark-paid endpoint (`POST /finance/purchase-requests/{id}/mark-paid`)
+  still accepts a call without `actual_amount` and records the approved
+  estimate, so existing scripts keep working (an amount of zero or less is a
+  422). The budget line spends the amount paid and the request shows the
+  difference from the approved amount. Requests paid before the upgrade with no amount recorded
+  show no difference.
+- **No payment without a receipt.** Mark Paid on a purchase request, and
+  Issue Check on a check request, are refused with a 400 until a receipt or
+  invoice is uploaded to the request. A typed receipt link does not count.
+  An advance and a reimbursement check need none (the expense report's lines
+  carry them). **Before upgrading, look at purchase requests that are
+  approved, ordered or received, and check requests that are approved:**
+  each one without an uploaded receipt needs one attached before it can be
+  paid. The receipt upload is on each request's page; check requests gain one
+  with this release.
+- **An expense report's lines are committed to their budget lines on
+  approval**, as a purchase request's estimate is, and the member now picks
+  each line's budget line. An approval the line cannot cover is refused like
+  a purchase request's. Reports already approved at upgrade committed
+  nothing; paying or cancelling one moves only what it always did. A report
+  claiming back a purchase commits nothing of its own (the purchase's
+  approval already did).
+- **Downgrading** drops both columns: a check request's link to its receipt
+  is lost (the file stays under Finance → Receipts), and a report approved
+  after the upgrade keeps its commitment on the budget line while the older
+  release, paying it, would not release it — correct those lines by hand.
+
+### Finance approvals: a named approver can act, approvers and requesters are emailed, and each chain routes only its own type (2026-11-06)
+
+**Each approval chain routes only its own request type.** A chain whose
+**Applies To** is Purchase Requests no longer routes expense reports or check
+requests — before 2026-10-17 every purchase chain did, and outranked a default
+expense or check chain whenever it had an amount range or a category. Nothing
+is migrated:
+
+- requests already submitted keep the steps they were given;
+- an expense report or check request submitted from now on goes through a
+  chain for **its own type**, and when the department has none it waits in
+  Pending Approval for any `finance.approve` holder to approve or deny it on
+  the request's own page (the same "no chain applies" path a department with
+  no chains always had).
+
+**What to check.** Open **Finance → Settings → Approval Chains**. If your
+reimbursements or payouts were meant to follow a purchase chain's approvers,
+create an Expense Reports chain and a Check Requests chain with those steps.
+No chain was copied for you, because which approvers a reimbursement should
+have is the department's call, not the upgrade's.
+
+**A member a chain step names can now approve or deny that step** without the
+`finance.approve` permission — a Chief named on a step no longer gets a 403.
+It covers that step only: a step that names nobody, a request no chain routes
+and the Approvals page still need `finance.approve`, and an override still
+needs both `finance.approve` and `finance.configure_approvals`. The member
+works from the request's page, which the approval email links to. The
+approver-coverage report stops flagging such steps (`no_approve_permission`
+is no longer reported). If you relied on a named position being unable to
+approve, change that step's approver.
+
+**Two new emails, both optional and on by default** (migration
+`50c94d5c30f8` adds `approval_step_records.approvers_notified_at`; nothing is
+backfilled, so steps already waiting at upgrade are not emailed):
+
+- the members a step names are emailed when a request reaches it (**Finance
+  duties**, formerly labelled "Treasurer duties");
+- the requester is emailed when their request is approved or denied (**Your
+  purchase, expense and check requests**).
+
+A department can make either required on **Member Emails & Texts**.
+
+### Finance dual approval: per-type thresholds, a named second approver, and an email when a request waits (2026-11-06)
+
+Nothing blocks a restart. Migration `ee9ff4596ce7` adds a nullable
+`second_approval_requested_at` to `purchase_requests`, `expense_reports` and
+`check_requests`; nothing is backfilled.
+
+- **A new email.** When a request at or above the dual-approval threshold is
+  held for its second approval, the members who could give it are emailed
+  once (**Finance duties**, optional, on by default). A request already
+  waiting at upgrade is not emailed.
+- **One person by email.** An approval from an emailed link now counts as the
+  member whose account has that address. A member who approved that way can
+  no longer give the in-app second approval as well; if your department used
+  one person's two routes as its two approvals, someone else now has to give
+  the second.
+- **Two new settings, both off until set** (Finance → Settings → Approval
+  Chains, `settings.manage`): a threshold per request type (every type follows
+  the existing threshold until changed), and the position that must give the
+  second approval. A position named there and later deleted holds every large
+  request until the setting is changed — the card says so.
+
 ### Integrations: catalog changes reach existing departments, and calendar publishing settings on the card (2026-11-05)
 
 Nothing blocks a restart. Migration `7c41e9a2b6d8` changes no schema. Two

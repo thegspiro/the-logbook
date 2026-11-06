@@ -2,11 +2,15 @@
  * Reverse a mistaken budget amendment.
  *
  * An amendment is never edited or deleted (owner decision, 2026-10-09): the
- * correction is a reversing entry for the whole amount, with its own reason
- * and approval. Saving enters the reversal pending; once a second officer
- * confirms it, it lowers the line's budget by the amendment's amount. The
- * original amendment stays on record, so the dialog says all of that before
- * the Treasurer saves.
+ * correction is a reversing entry with its own reason and approval. It takes
+ * back the whole amendment by default, or any part of it (owner decision,
+ * 2026-11-01), so $2,500 entered for $250 is corrected by one reversal of
+ * $2,250. Saving enters the reversal pending; once a second officer confirms
+ * it, it lowers the line's budget by that much. The original amendment stays
+ * on record, so the dialog says all of that before the Treasurer saves.
+ *
+ * The whole amount is sent as no amount at all, which the backend reads as
+ * "the whole amendment" from the row itself.
  *
  * The checks here only spare a round trip; the backend makes the same ones
  * (the approval date against the department's calendar, a locked year, what
@@ -25,6 +29,13 @@ import type { BudgetAmendment, BudgetAmendmentCreated, BudgetAmendmentReversePay
 
 const MAX_REASON = 2000;
 const MAX_APPROVED_BY = 200;
+const MONEY = /^\d+(\.\d{1,2})?$/;
+
+/** A dollars-and-cents string as whole cents, so comparisons are exact. */
+const toCents = (value: string): number => {
+  const [whole = '0', fraction = ''] = value.split('.');
+  return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+};
 
 interface ReverseAmendmentDialogProps {
   budgetId: string;
@@ -48,7 +59,15 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
   const [approvedOn, setApprovedOn] = useState(today);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const wholeAmount = Number(amendment.amount).toFixed(2);
+  const [amountText, setAmountText] = useState(wholeAmount);
   const amount = formatCurrency(amendment.amount);
+  const typed = amountText.trim();
+  const wholeCents = toCents(wholeAmount);
+  const typedCents = MONEY.test(typed) ? toCents(typed) : null;
+  // What the summary describes: the typed amount once it is a sensible one.
+  const takesBack = typedCents !== null && typedCents > 0 && typedCents <= wholeCents ? typedCents : wholeCents;
+  const remainder = wholeCents - takesBack;
 
   const validate = (): BudgetAmendmentReversePayload | null => {
     const next: Record<string, string> = {};
@@ -60,9 +79,18 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
     }
     if (!approvedOn) next.approvedOn = 'Enter the date it was approved.';
     else if (approvedOn > today) next.approvedOn = 'The approval date cannot be in the future.';
+    if (typed !== '' && !MONEY.test(typed)) {
+      next.amount = Number.isFinite(Number(typed))
+        ? 'Use dollars and cents, at most two decimal places.'
+        : 'Enter an amount greater than zero.';
+    } else if (typedCents === null || typedCents <= 0) next.amount = 'Enter an amount greater than zero.';
+    else if (typedCents > wholeCents) next.amount = `A reversal can take back at most ${amount}.`;
     setErrors(next);
-    if (Object.keys(next).length > 0) return null;
-    return { reason: reason.trim(), approvedBy: approvedBy.trim(), approvedOn };
+    if (Object.keys(next).length > 0 || typedCents === null) return null;
+    const payload: BudgetAmendmentReversePayload = { reason: reason.trim(), approvedBy: approvedBy.trim(), approvedOn };
+    // The whole amendment is left to the backend, which reads it off the row.
+    if (typedCents !== wholeCents) payload.amount = (typedCents / 100).toFixed(2);
+    return payload;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -118,10 +146,31 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
             Reversing the +{amount} amendment approved {formatDate(amendment.approvedOn, tz)} by {amendment.approvedBy}.
           </p>
           <p className="text-theme-text-primary font-medium">
-            Once a second officer confirms it, this lowers the current budget by {amount}. The original amendment stays
-            on record.
+            {remainder > 0
+              ? `Once a second officer confirms it, this lowers the current budget by ${formatCurrency(takesBack / 100)}. ${formatCurrency(remainder / 100)} of the amendment stays, and the original amendment stays on record.`
+              : `Once a second officer confirms it, this lowers the current budget by ${amount}. The original amendment stays on record.`}
           </p>
           <p>A reversal cannot be undone. If the money is needed again, record a new amendment.</p>
+        </div>
+
+        <div>
+          <label htmlFor="reversal-amount" className="form-label">
+            Amount to reverse
+          </label>
+          <input
+            id="reversal-amount"
+            type="text"
+            inputMode="decimal"
+            className="form-input"
+            value={amountText}
+            onChange={(e) => setAmountText(e.target.value)}
+            aria-invalid={Boolean(errors.amount)}
+            aria-describedby={errors.amount ? 'reversal-amount-error' : 'reversal-amount-hint'}
+          />
+          <p id="reversal-amount-hint" className="text-theme-text-secondary mt-1 text-xs">
+            The whole amendment, or the part entered by mistake.
+          </p>
+          {errorText('amount')}
         </div>
 
         <div>

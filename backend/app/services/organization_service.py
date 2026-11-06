@@ -15,7 +15,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.onboarding import OnboardingStatus
-from app.models.user import Organization, User
+from app.models.user import Organization, Position, User
 from app.schemas.organization import (
     _LEGACY_EMAIL_OAUTH_FIELDS,
     ContactInfoSettings,
@@ -639,6 +639,12 @@ class OrganizationService:
                 current_settings.get("file_storage"),
             )
 
+        finance_incoming = settings_update.get("finance")
+        if isinstance(finance_incoming, dict):
+            await self._settle_second_approver_position(
+                organization_id, finance_incoming, updated_settings
+            )
+
         # SEC: Encrypt secret fields before persisting to the database
         updated_settings = encrypt_settings_secrets(updated_settings)
 
@@ -650,6 +656,42 @@ class OrganizationService:
 
         # Return updated settings
         return await self.get_organization_settings(organization_id)
+
+    async def _settle_second_approver_position(
+        self,
+        organization_id: UUID | str,
+        incoming: Dict[str, Any],
+        merged: Dict[str, Any],
+    ) -> None:
+        """Refuse a dual-approval office the department does not have.
+
+        ``app/utils/finance_settings.py`` reads a slug naming no position as
+        nobody, which holds every large request until the setting is fixed —
+        right for one that was deleted after it was chosen, wrong to accept
+        from a typo. A blank value is stored as null (any approver).
+        """
+        if "second_approver_position" not in incoming:
+            return
+        value = incoming.get("second_approver_position")
+        slug = value.strip() if isinstance(value, str) else ""
+        section = merged.get("finance")
+        if not isinstance(section, dict):
+            return
+        if not slug:
+            section["second_approver_position"] = None
+            return
+        result = await self.db.execute(
+            select(Position.slug).where(
+                Position.organization_id == str(organization_id),
+                func.lower(Position.slug) == slug.lower(),
+            )
+        )
+        stored = result.scalars().first()
+        if stored is None:
+            raise ValueError(
+                "The position chosen for the second approval does not exist"
+            )
+        section["second_approver_position"] = stored
 
     async def get_enabled_modules(
         self, organization_id: UUID | str
