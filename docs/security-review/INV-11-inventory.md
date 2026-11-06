@@ -1,6 +1,100 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), [#3738](https://github.com/thegspiro/the-logbook/pull/3738) (pass 12), pass 13 (this PR)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3), 2026-09-08 (pass 4), 2026-09-14 (pass 5), 2026-09-16 (pass 6), 2026-10-06 (pass 7), 2026-10-13 (pass 8), 2026-10-15 (pass 9), 2026-10-19 (pass 10), 2026-10-23 (pass 11), 2026-10-26 (pass 12), 2026-10-29 (pass 13), 2026-11-01 (pass 14), 2026-11-06 (pass 15) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3), [#2422](https://github.com/thegspiro/the-logbook/pull/2422) (pass 4), [#2561](https://github.com/thegspiro/the-logbook/pull/2561) (pass 5), [#2616](https://github.com/thegspiro/the-logbook/pull/2616) (pass 6), [#2966](https://github.com/thegspiro/the-logbook/pull/2966) (pass 7), [#3166](https://github.com/thegspiro/the-logbook/pull/3166) (pass 8), [#3272](https://github.com/thegspiro/the-logbook/pull/3272) (pass 9), [#3432](https://github.com/thegspiro/the-logbook/pull/3432) (pass 10), [#3580](https://github.com/thegspiro/the-logbook/pull/3580) (pass 11), [#3738](https://github.com/thegspiro/the-logbook/pull/3738) (pass 12), #3919 (pass 14), pass 15 (this PR)
+
+---
+
+## Pass 15 (2026-11-06) — watchdog pickup, real delta (owner decisions W44-2/3/4, duplicate-category-name flag, item-date plausibility), 0 fixed, 0 new findings; INV-22 re-confirmed
+
+**Step 0/1.** No open PR with a `claude/security-review-*` head exists (fresh
+`list_pull_requests`, state `open`). Row 11 (Inventory) is the next `⬜` row in
+the rotation table, confirmed directly against `main` — row 10 (Documents &
+legal) had already merged as PR #4103, and that bookkeeping rides along
+uncommitted in this PR per the rotation's own rule that a merged PR with no
+real delta of its own is recorded, not re-opened.
+
+**Scope.** Baseline `6f0a2d577` (PR #3919's merge, pass 14). `git log
+6f0a2d577..origin/main -- <declared files>` surfaces one pre-baseline,
+non-ancestor commit (`253b9e330`, dated 2026-10-31, the usual orphan/squash-merge
+artifact this rotation keeps re-finding — confirmed not an ancestor of the
+baseline via `git merge-base --is-ancestor`); the real delta is the `git diff
+6f0a2d577..origin/main` content, not the commit list. Real delta: 43 files
+(9 backend, 34 frontend), net +1568/-290.
+
+**Verified good (mechanisms).**
+
+- **No new routes.** AST route-decorator count across the six files this
+  feature's rotation entry covers: `inventory.py` 151 (150 HTTP + 1 WebSocket),
+  `inventory_nfc.py` 29, `labels.py` 12, `inventory_kiosk.py` 4,
+  `inventory_last_seen.py` 2 — **198 total**, unchanged from pass 14's count.
+  `check_route_permissions.py --strict`: 302 app-wide routes (this feature's
+  198 among them), 0 errors/warnings.
+- **New category-duplicate-name guard (`_assert_category_name_free`,
+  `flag_duplicate_category_names`, `inventory_service.py`) is correctly
+  locked and org-scoped.** The sibling read is `.with_for_update()` **and**
+  runs under a new per-org advisory lock (`INVENTORY_CATEGORY_NAMES` added to
+  `app/utils/org_locks.py`), taken before the read — the read-then-write
+  shape Pitfall #27 requires, not just a locking read without serializing
+  concurrent creators. Every query in the new code filters
+  `organization_id == str(organization_id)`. The preset-seeding path
+  (`get_category_presets`'s caller) takes the same lock and the same
+  `for_update=True` read before inserting, closing the gap a hand-made
+  category and a preset of the same name could otherwise race through.
+- **`inventory_sightings.add_sighting` / `record_creation_sightings`
+  (new file) never accept a client-supplied `organization_id` directly** —
+  every caller (`InventoryService.create_item`/bulk-create/CSV-import,
+  `InventoryNfcService`'s tap/audit recorders) passes the authenticated
+  caller's own `current_user.organization_id` or an item's own
+  already-org-scoped `item.organization_id`. No new unscoped by-id read.
+- **`inventory_storage_area_names.active_storage_area_names` (new file)**
+  filters `StorageArea.organization_id == str(organization_id)` and
+  `is_active.is_(True)` — matches the rule its own docstring states (only an
+  active area is named) and is now the single implementation shared by the
+  Items Not Seen report and the NFC "items on this tag" lookup, replacing two
+  separate inline `_area_name_map` methods that existed before this diff.
+- **`item_dates.py` (new util)** is pure date-plausibility arithmetic (year
+  range, warranty-after-purchase) with no DB access, no raw SQL, no
+  string formatting of user input into a query or log call — out of scope
+  for every CHECKLIST dimension except correctness, which is not this
+  review's lens.
+- **No new `.like()`/`.ilike()`, no new CSV writer, no new f-string combined
+  with logger args, no new `window.confirm`/`alert`/`prompt`, no new
+  `innerHTML`/`dangerouslySetInnerHTML`** anywhere in the diff (grepped the
+  full `git diff` for each).
+- **`UnassignItemModal.tsx` (new component)** uses the shared `Modal`
+  component (not a hand-rolled overlay) and the `||`-coercion form-value
+  convention (`return_notes.trim() || undefined`) correctly; the backend
+  `unassign_item` endpoint it posts to already validates `return_condition`
+  against the `ItemCondition` enum (400 on an invalid value) and predates
+  this diff unchanged.
+- **Cross-feature touch, reviewed for this feature's own use only:**
+  `app/utils/org_locks.py` gained one new named scope constant
+  (`INVENTORY_CATEGORY_NAMES`); the shared `lock_organization_scope` function
+  itself is unchanged.
+
+**Standing: INV-22** (`get_fulfillment_options` / `get_requestable_categories`,
+owner-accepted full-catalog materialization) re-confirmed OPEN, unchanged —
+neither function appears in this window's diff (now at `inventory_service.py:12217`
+and `:12408`, shifted by this pass's earlier insertions; confirmed by grepping
+the diff for both names with zero hits). `KNOWN_LIMITATIONS.md` already records
+the owner's 2026-10-05 decision; nothing new to add.
+
+**0 fixed, 0 new findings.**
+
+### Completion gate (pass 15)
+
+| Check                                                                                                                                                      | Result                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `flake8 app/ tests/ alembic/` (7.5.0)                                                                                                                      | ✅ 0 violations                                  |
+| `black --check app/ tests/ alembic/` (26.10.1)                                                                                                             | ✅ 2981 files unchanged                          |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                                          | ✅ clean                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                          | ✅ 734 revisions, single head `f4583df5025b`     |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                      | ✅ 302 routes, 0 errors/warnings                 |
+| `pytest -k "inventory or label or nfc or kiosk or vendor or encrypt"`                                                                                      | ✅ 2450 passed, 1 pre-existing skip (`py_vapid`) |
+| Standing guard suites (org-scoping ratchet, capacity locking, LIKE escaping, logging/log-call-shape, `create_all`-table tolerance, baseline member grants) | ✅ 162 passed                                    |
+| `cd frontend && npm run typecheck`                                                                                                                         | ✅ exit 0                                        |
+| `cd frontend && npm run lint`                                                                                                                              | ✅ exit 0, 0 errors/warnings                     |
+| `npx vitest run src/modules/inventory`                                                                                                                     | ✅ 1899 passed (127 files)                       |
 
 ---
 
