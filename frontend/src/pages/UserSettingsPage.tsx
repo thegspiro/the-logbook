@@ -5,7 +5,7 @@
  * appearance, and notification preferences.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import {
   User,
@@ -88,6 +88,10 @@ const SECTIONS: SettingsSection<TabType>[] = [
   { key: 'app', label: 'App', icon: Smartphone, description: 'Installed version and update status' },
 ];
 
+type LegalNameField = 'first_name' | 'last_name';
+const LEGAL_NAME_FIELDS: readonly LegalNameField[] = ['first_name', 'last_name'];
+const LEGAL_NAME_LABELS: Record<LegalNameField, string> = { first_name: 'first name', last_name: 'last name' };
+
 export const UserSettingsPage: React.FC = () => {
   const { user, endSessionLocally } = useAuthStore();
   const navigate = useNavigate();
@@ -152,6 +156,19 @@ export const UserSettingsPage: React.FC = () => {
   const [profile, setProfile] = useState<UserWithRoles | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  // Legal-name fields left blank. Owner rule (2026-11-05): a form saves even
+  // with an error, and the error stays flagged until it is resolved.
+  const [blankNames, setBlankNames] = useState<LegalNameField[]>([]);
+  const firstNameRef = useRef<HTMLInputElement>(null);
+  const lastNameRef = useRef<HTMLInputElement>(null);
+  // The inputs are disabled while a save is in flight and a disabled input
+  // cannot take focus, so the field to point at waits for the save to end.
+  const focusAfterSave = useRef<LegalNameField | null>(null);
+  useEffect(() => {
+    if (savingProfile || !focusAfterSave.current) return;
+    (focusAfterSave.current === 'first_name' ? firstNameRef : lastNameRef).current?.focus();
+    focusAfterSave.current = null;
+  }, [savingProfile]);
   const [downloadingData, setDownloadingData] = useState(false);
   const [consents, setConsents] = useState<ConsentItem[]>([]);
   const [savingConsent, setSavingConsent] = useState<string | null>(null);
@@ -199,6 +216,7 @@ export const UserSettingsPage: React.FC = () => {
       try {
         const data = await userService.getUserWithRoles(user.id);
         setProfile(data);
+        setBlankNames(LEGAL_NAME_FIELDS.filter((f) => !data[f]?.trim()));
         setProfileForm({
           first_name: data.first_name || '',
           middle_name: data.middle_name || '',
@@ -256,17 +274,53 @@ export const UserSettingsPage: React.FC = () => {
 
   const handleSaveProfile = async () => {
     if (!user?.id) return;
+    const firstName = profileForm.first_name?.trim() ?? '';
+    const lastName = profileForm.last_name?.trim() ?? '';
     setSavingProfile(true);
     try {
       // Strip fields that are only editable by Membership Coordinators via Members admin
-      const { membership_number: _mn, rank: _r, station: _s, ...editableFields } = profileForm;
+      const {
+        membership_number: _mn,
+        rank: _r,
+        station: _s,
+        first_name: _fn,
+        last_name: _ln,
+        ...editableFields
+      } = profileForm;
       const updated = await userService.updateUserProfile(user.id, {
         ...editableFields,
+        // A blank legal name is left out rather than sent: the server refuses
+        // one, and an omitted key keeps the stored name, so the rest of the
+        // profile still saves.
+        ...(firstName ? { first_name: firstName } : {}),
+        ...(lastName ? { last_name: lastName } : {}),
         // An emptied box must clear the stored name, not be omitted (CLAUDE.md #1).
         preferred_name: blankToNull(profileForm.preferred_name),
       });
       setProfile(updated);
-      toast.success('Profile saved');
+      // A name blanked by mistake comes back from the server unchanged; one
+      // that was never recorded stays blank and flagged until it is entered.
+      setProfileForm((prev) => ({
+        ...prev,
+        first_name: updated.first_name || '',
+        last_name: updated.last_name || '',
+      }));
+      const stillBlank = LEGAL_NAME_FIELDS.filter((f) => !updated[f]?.trim());
+      const kept = LEGAL_NAME_FIELDS.filter(
+        (f) => !(f === 'first_name' ? firstName : lastName) && !stillBlank.includes(f)
+      );
+      setBlankNames(stillBlank);
+      const firstBlank = stillBlank[0];
+      if (firstBlank) {
+        toast.success(
+          `Profile saved. Your ${LEGAL_NAME_LABELS[firstBlank]} is still missing; enter it to complete your profile.`
+        );
+        focusAfterSave.current = firstBlank;
+      } else if (kept[0]) {
+        toast.success(`Profile saved. A name can't be blank, so your saved ${LEGAL_NAME_LABELS[kept[0]]} was kept.`);
+      } else {
+        toast.success('Profile saved');
+      }
       // The header and greeting read the signed-in user, not this form.
       if (updated.display_name !== user.display_name) {
         void useAuthStore.getState().loadUser();
@@ -280,6 +334,9 @@ export const UserSettingsPage: React.FC = () => {
 
   const handleProfileChange = (field: keyof UserProfileUpdate, value: string) => {
     setProfileForm((prev) => ({ ...prev, [field]: value }));
+    if (field === 'first_name' || field === 'last_name') {
+      setBlankNames((prev) => (value.trim() ? prev.filter((f) => f !== field) : prev));
+    }
   };
 
   const passwordValidation = validatePasswordStrength(newPassword);
@@ -649,16 +706,28 @@ export const UserSettingsPage: React.FC = () => {
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                       <div>
                         <label htmlFor="firstName" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                          First Name
+                          First Name{' '}
+                          <span aria-hidden="true" className="text-red-800 dark:text-red-300">
+                            *
+                          </span>
                         </label>
                         <input
+                          ref={firstNameRef}
                           id="firstName"
                           type="text"
+                          required
+                          aria-invalid={blankNames.includes('first_name') || undefined}
+                          aria-describedby={blankNames.includes('first_name') ? 'firstName-error' : undefined}
                           value={profileForm.first_name || ''}
                           onChange={(e) => handleProfileChange('first_name', e.target.value)}
                           className="form-input sm:text-sm"
                           disabled={savingProfile}
                         />
+                        {blankNames.includes('first_name') && (
+                          <p id="firstName-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
+                            Enter your {LEGAL_NAME_LABELS.first_name}.
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label
@@ -678,16 +747,28 @@ export const UserSettingsPage: React.FC = () => {
                       </div>
                       <div>
                         <label htmlFor="lastName" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                          Last Name
+                          Last Name{' '}
+                          <span aria-hidden="true" className="text-red-800 dark:text-red-300">
+                            *
+                          </span>
                         </label>
                         <input
+                          ref={lastNameRef}
                           id="lastName"
                           type="text"
+                          required
+                          aria-invalid={blankNames.includes('last_name') || undefined}
+                          aria-describedby={blankNames.includes('last_name') ? 'lastName-error' : undefined}
                           value={profileForm.last_name || ''}
                           onChange={(e) => handleProfileChange('last_name', e.target.value)}
                           className="form-input sm:text-sm"
                           disabled={savingProfile}
                         />
+                        {blankNames.includes('last_name') && (
+                          <p id="lastName-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
+                            Enter your {LEGAL_NAME_LABELS.last_name}.
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="mt-4 sm:max-w-sm">

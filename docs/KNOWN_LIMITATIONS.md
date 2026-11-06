@@ -245,6 +245,29 @@ on one install are closed on that basis.
 - Should skills-evaluation, checklist and knowledge-test requirements stop matching records by name, as certifications did? _Decision:_ Extend the cut-off (Apply the same rule to fallback types). From "Training — Credit From Event Attendance (2026-09-29)".
 - What should happen to the older, duplicate training-enrollment endpoint? _Decision:_ Remove it (Delete the route). From "Training — `POST /training/enrollments` Duplicates, and Lags, the Fixed Enrollment Path (2026-10-06)".
 
+## Forms — Save With an Error, Resolve It Before Submitting (Owner Decision, 2026-11-05)
+
+**Owner decision (2026-11-05): a form always saves, even with a validation
+error. The error stays flagged on its field until it is resolved, and it must
+be resolved before the record is submitted or published.** Saving is never the
+step that refuses; submitting, publishing, sending for approval or
+finalizing is.
+
+- **Draft-then-submit forms** (training submission, purchase / expense /
+  check requests, events saved as draft, minutes, the custom-forms builder):
+  Save Draft always succeeds and shows every open error; Submit or Publish is
+  refused until they are fixed.
+- **Single-save forms** (a member's profile, an officer's edit-member page):
+  Save is the final step, so a value the record cannot hold is not written —
+  the rest of the form saves, the stored value is kept, and the field stays
+  flagged with a message until it is fixed.
+
+Built so far: the legal-name fields on `/account` and the officer's
+edit-member page (forms review F-1, `docs/FORMS_REVIEW_2026-11-05.md`). The
+rest of the app's forms still refuse a save on error in various ways (F-3 in
+that review); they come into line through the shared form-field work that
+review recommends.
+
 ## Fundraising — The Donations List's Receipt Column Is Never Filled (2026-11-05)
 
 The Donations list shows a Receipt column read from `receipt_sent`, but nothing

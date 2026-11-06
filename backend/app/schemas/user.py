@@ -9,7 +9,14 @@ from datetime import date, datetime
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    ValidationInfo,
+    field_validator,
+)
 
 from app.schemas.base import RefusesNull, UTCResponseBase
 from app.utils.membership import MemberClass, MemberStatus, canonical_member_status
@@ -471,14 +478,29 @@ class UserUpdate(MembershipClassificationFields, RefusesNull):
     # Emergency contacts
     emergency_contacts: Optional[List[EmergencyContact]] = None
 
-    # The profile handler skips a null here (an empty list is how contacts are
-    # removed), so a null would answer 200 and change nothing.
-    null_refused = frozenset({"emergency_contacts"})
+    # The profile handler skips a null on emergency_contacts (an empty list is
+    # how contacts are removed), so a null would answer 200 and change nothing.
+    # A null name would clear the member's legal name, which AdminUserCreate
+    # never allows to be absent.
+    null_refused = frozenset({"emergency_contacts", "first_name", "last_name"})
 
     @field_validator("preferred_name")
     @classmethod
     def _clean_preferred_name(cls, v: Optional[str]) -> Optional[str]:
         return _clean_preferred_name(v)
+
+    @field_validator("first_name", "last_name")
+    @classmethod
+    def _require_name(cls, v: Optional[str], info: ValidationInfo) -> Optional[str]:
+        # Reports and legal records print first_name and last_name, so an
+        # emptied box must be refused, not stored as "" behind a success toast.
+        if v is None:
+            return v
+        cleaned = v.strip()
+        if not cleaned:
+            label = "First name" if info.field_name == "first_name" else "Last name"
+            raise ValueError(f"{label} cannot be blank.")
+        return cleaned
 
 
 class _UserResponseFields(_UserBaseFields, UTCResponseBase):
