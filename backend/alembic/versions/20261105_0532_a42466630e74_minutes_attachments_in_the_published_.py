@@ -23,7 +23,7 @@ revision before that, so each step is skipped when its table is absent; a
 table built later is built from the models, which declare the column.
 
 Revision ID: a42466630e74
-Revises: 219455a5d79c
+Revises: 986b38c2086b
 Create Date: 2026-11-05 05:32:42.813239
 
 """
@@ -34,7 +34,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a42466630e74"
-down_revision: Union[str, None] = "219455a5d79c"
+down_revision: Union[str, None] = "986b38c2086b"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
