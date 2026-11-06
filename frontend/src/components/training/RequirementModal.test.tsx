@@ -74,10 +74,12 @@ describe('RequirementModal', () => {
       await user.click(shortcut);
 
       expect(shortcut).toHaveAttribute('aria-pressed', 'true');
-      for (const name of ['Active', 'Probationary', 'Life', 'Retired', 'Administrative']) {
+      for (const name of ['Active', 'Probationary', 'Life', 'Administrative']) {
         expect(screen.getByRole('checkbox', { name })).toBeChecked();
       }
-      expect(screen.getByRole('checkbox', { name: 'Honorary' })).not.toBeChecked();
+      for (const name of ['Retired', 'Honorary']) {
+        expect(screen.getByRole('checkbox', { name })).not.toBeChecked();
+      }
 
       await saveAsEveryone(user);
       const [payload] = onSave.mock.calls[0] as [{ required_membership_types: string[] }];
@@ -86,7 +88,6 @@ describe('RequirementModal', () => {
         'administrative',
         'life',
         'probationary',
-        'retired',
       ]);
     });
 
@@ -100,10 +101,10 @@ describe('RequirementModal', () => {
 
       await saveAsEveryone(user);
       const [payload] = onSave.mock.calls[0] as [{ required_membership_types: string[] }];
-      expect([...payload.required_membership_types].sort()).toEqual(['active', 'life', 'probationary', 'retired']);
+      expect([...payload.required_membership_types].sort()).toEqual(['active', 'life', 'probationary']);
     });
 
-    it('reads as selected when all four are already ticked, and clears only them', async () => {
+    it('reads as selected without Retired, and clears only the three it ticks', async () => {
       const user = userEvent.setup();
       render(
         <RequirementModal
@@ -121,10 +122,23 @@ describe('RequirementModal', () => {
       expect(shortcut).toHaveAttribute('aria-pressed', 'false');
       await saveAsEveryone(user);
       expect(onSave).toHaveBeenCalledWith(
-        expect.objectContaining({ applies_to_all: false, required_membership_types: ['honorary'] }),
+        expect.objectContaining({ applies_to_all: false, required_membership_types: ['retired', 'honorary'] }),
         true,
         'req-1'
       );
+    });
+
+    it('reads as selected for Active, Probationary and Life alone', () => {
+      render(
+        <RequirementModal
+          requirement={scoped(['active', 'probationary', 'life'])}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+      expect(screen.getByRole('button', { name: 'Operational members' })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('checkbox', { name: 'Retired' })).not.toBeChecked();
     });
 
     it('is not offered while the requirement applies to all members', () => {

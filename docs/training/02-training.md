@@ -1302,14 +1302,19 @@ sessions", and counts a member's progress in sessions.
 
 **Applying a requirement to every operational member** _(2026-10-27)_. Under
 **Member Categories**, the **Operational members** button ticks **Active**,
-**Probationary**, **Life** and **Retired** in one go. Those four are every
-operational member, whatever their status (see
-[Member Class and Member Status](./01-membership.md#member-class-and-member-status)).
-When all four are ticked, the button shows a check mark; selecting it again
-unticks those four. **Administrative** and **Honorary** are left as you set
-them either way, so tick them yourself if the requirement covers them too.
+**Probationary** and **Life** in one go — the operational members still
+serving. **Retired** is an operational rung too (see
+[Member Class and Member Status](./01-membership.md#member-class-and-member-status)),
+but the button leaves it out _(2026-11-06)_ so a riding requirement is not
+held against members who have stepped back; tick it yourself if the
+requirement covers them. When all three are ticked, the button shows a check
+mark; selecting it again unticks those three. **Retired**, **Administrative**
+and **Honorary** are left as you set them either way.
 
-![A new requirement's Member Categories with Applies to all members unticked and Operational members selected: its check mark, and Active, Probationary, Life and Retired ticked while Administrative and Honorary are not](./images/02-135-requirement-operational-members.png)
+Requirements saved before 2026-11-06 with **Retired** ticked keep it. Open one
+and untick **Retired** if retired members should no longer be graded on it.
+
+![A new requirement's Member Categories with Applies to all members unticked and Operational members selected: its check mark, and Active, Probationary and Life ticked while Retired, Administrative and Honorary are not](./images/02-135-requirement-operational-members.png)
 
 ### The Chief's override of a session attendance requirement
 
