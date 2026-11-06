@@ -16,6 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+_None._ PR [#4106](https://github.com/thegspiro/the-logbook/pull/4106)
+(Feature 11, Inventory, pass 15, branch
+`claude/security-review-inventory-p15`) merged. Not docs-only — it carried
+a real delta, so it already has its own **Log** entry below (dated
+2026-11-06) rather than a fresh one here. A near-simultaneous duplicate,
+PR #4107 (same feature, opened ~70s apart by a second concurrent watchdog
+session against the same base commit), was closed as a duplicate per the
+note left on it — kept #4106 since its CI was further along; both reached
+the same conclusion (0 fixes, 0 new findings). Confirmed via a fresh
+`list_pull_requests` (state `open`): 0 results for a
+`claude/security-review-*` head. Rotation row 11 is ✅. Next is Feature 12
+(Facilities) — the next `⬜` row.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 15, PR #4106, merged), preserved for history</summary>
+
 **PR [#4106](https://github.com/thegspiro/the-logbook/pull/4106)** (branch
 `claude/security-review-inventory-p15`) —
 Feature 11 (Inventory), pass 15, a watchdog pickup (the dedicated
@@ -60,8 +76,9 @@ guard suites plus the two migration-integrity suites — 166 passed; `npm run
 typecheck` — 0 errors; `npm run lint` — 0 warnings; scoped `vitest run
 src/modules/inventory` — 1899 passed (127 files).
 
-Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 11 → ✅ (merged as `3ed12fcb5`); next was Feature 12 (Facilities).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 15, PR #4103, merged), preserved for history</summary>
@@ -24989,7 +25006,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                      | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                   | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                 | ⬜     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                 | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                               | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                 | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                            | ⬜     |
@@ -47434,3 +47451,57 @@ scoped `vitest run src/modules/prospective-members` — 404 passed (44 files).
 
 Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical screening,
 PHI) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-06 — Feature 11 (Inventory, pass 15) merged; Feature 12 (Facilities, pass 15) — watchdog pickup, 0 fixed, 0 new findings
+
+Step 0/1 were handed to this iteration already done: no open PR with a
+`claude/security-review-*` head exists, and row 12 (Facilities) is the next
+`⬜` row in the rotation table, confirmed directly against a freshly-read
+`main` — row 11 (Inventory) was already `✅` from PR #4106's own merge. A
+near-simultaneous duplicate of that PR, #4107, was opened by a different
+concurrent watchdog session and closed as the duplicate (both reached 0
+fixes, 0 new findings; #4106 was kept since its CI was further along) —
+noted here only because it is the kind of race this rotation's "one PR at a
+time" rule exists to resolve, not because it changed either review's
+content.
+
+Baseline `f2e7bd578` (PR #3923's merge, pass 14) to head `3ed12fcb5`
+(PR #4106's merge). `git diff --stat` scoped to this feature's declared
+files (the broad `backend/alembic/versions` pathspec pulls in unrelated
+migration-head rejoins from concurrent owner-decision batches, so checked
+separately): 10 files, +377/−64, all read in full — a third
+`due_within_days` filter on the maintenance list (same shape pass 14
+verified on two other endpoints, server-bounded `ge=1, le=366`); two new
+`maintenance_overdue_conditions`/`maintenance_due_soon_conditions`
+classmethods that give the dashboard tiles, the facilities dashboard card
+and the cross-facility list one shared, org-scoped definition each
+(Pitfall #29's shape, done correctly); and a facility room's Location mirror
+refactored to call `location_service.save_system_named_location`, whose
+race handling (savepoint-scoped flush, a locking re-read on retry) is the
+correct shape for Pitfall #27 and is itself org-scoped on every lookup.
+`routes.tsx` also fixes the previously-flagged LOC-37 (the room check-in
+route now wraps in a bare, permission-less `ProtectedRoute`, closing the
+`postLoginRedirect` gap without widening access). A cross-feature migration
+in the window, `986b38c2086b` (Documents-owned tables, FAC-13 follow-up,
+already reviewed by PR #4103 for that module's own invariants), was
+reviewed here for this feature's own invariants: org-scoped, guards table
+existence, idempotent by inspection. 102 routes re-enumerated by AST,
+unchanged.
+
+**0 fixed, 0 new findings.** FAC-30 (P2, owner-accepted "leave as is")
+re-confirmed OPEN and unaffected — nothing in this window's diff touches the
+permission constants it concerns. Full write-up:
+`docs/security-review/FAC-12-facilities.md`'s **Pass 15** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `python3 scripts/validate_migrations.py
+--strict` — 737 revisions, single head `c6b690cc33d6`; `python3
+scripts/check_route_permissions.py --strict` — 303 routes, 0
+errors/warnings; `pytest tests/ -k "facilit"` — 318 passed, 1 pre-existing
+skip (`py_vapid`); the four tenancy/migration guard suites plus the two
+migration-integrity suites — 166 passed; `npm run typecheck` — 0 errors;
+`npm run lint` — 0 errors/warnings; `npx vitest run src/modules/facilities`
+— 170 passed (22 files).
+
+Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus & NFC)
+— re-check `list_pull_requests` fresh rather than trusting this note.
