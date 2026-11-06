@@ -187,6 +187,11 @@ async def _cleanup(org_id: str) -> None:
     async with database_manager.engine.connect() as conn:
         async with conn.begin():
             for statement in (
+                # The receipt upload commits an audit event; left behind it
+                # shifts every audit-shipping and chain test that runs after
+                # this file in a random order (the onboarding race test cleans
+                # up the same way).
+                "DELETE FROM audit_logs WHERE organization_id = :o",
                 "DELETE FROM meeting_minutes WHERE organization_id = :o",
                 "DELETE FROM check_requests WHERE organization_id = :o",
                 "DELETE li FROM expense_line_items li JOIN expense_reports er "
