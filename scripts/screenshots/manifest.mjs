@@ -266,6 +266,26 @@ export function clickByName(name) {
 }
 
 /**
+ * Open one page of Event settings' Public Requests section.
+ *
+ * The section opens on its Overview, whose step cards carry the same names as
+ * the page rail ("Request form", "Handling"), so a page-wide name match can
+ * land on a step card instead of the rail. Scoping to the rail's nav keeps the
+ * click on the control the guide describes. `page` is null for the Overview,
+ * which is where the section lands.
+ */
+export function openPublicRequestsPage(label) {
+  return async (page) => {
+    await clickByName(/^Public Requests$/)(page);
+    if (label === null) return;
+    const rail = page.getByRole("navigation", {
+      name: "Public Requests pages",
+    });
+    await rail.getByRole("button", { name: label }).click({ timeout: 10_000 });
+  };
+}
+
+/**
  * Navigate to a public room-display route.
  *
  * Both the kiosk and the guest sign-in page are addressed by the *location's*
@@ -18842,9 +18862,26 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 915,
     anchor: "Event Settings outreach-form picker under an event-admin account",
-    alt: "Events Settings > Public Form: the generated outreach form listed as published and accepting submissions, with its public URL",
+    alt: "Events Settings > Public Requests > Request form: the generated outreach form listed as published and accepting submissions, with its public URL",
     route: "/events/admin?tab=settings",
-    prepare: clickByName(/^Public Form/),
+    expect: "Request Form",
+    prepare: openPublicRequestsPage(/^Request form/),
+    fullPage: true,
+  },
+  {
+    // The Overview is the section's landing page. What it is for is the step
+    // list's statuses, read from the seeded department, so the shot is taken
+    // as seeded rather than staged: whichever steps the seed leaves unfinished
+    // read amber, which is the state the guide tells a new department to
+    // expect.
+    id: "04-98-public-requests-overview",
+    doc: "04-events-meetings.md",
+    line: 1647,
+    anchor: "Event settings, Public Requests, Overview",
+    alt: "Event settings, Public Requests, Overview: the Accept Public Requests switch, Minimum Lead Time, and the four numbered steps, each with its status",
+    route: "/events/admin?tab=settings",
+    expect: "How it works",
+    prepare: openPublicRequestsPage(null),
     fullPage: true,
   },
   {

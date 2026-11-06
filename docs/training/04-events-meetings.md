@@ -1648,9 +1648,13 @@ public, never to events your members create:
 
 The **Overview** lists the four steps with a one-line status each (for example
 _"1 in draft, not yet published"_ or _"No default coordinator"_); select a step
-to open its page. _(2026-11-05)_ **Handling** shows amber until a default
-coordinator is set, because a request nobody is assigned to waits until someone
-notices it. The Events hub's Settings card is named for public requests.
+to open its page. A status reads green once that step is set up and amber
+while something is missing. _(2026-11-05)_ **Handling** stays amber until there
+is both a default coordinator and at least one checklist step, because a request
+nobody is assigned to waits until someone notices it. The Events hub's Settings
+card is named for public requests.
+
+![Event settings, Public Requests, Overview: the Accept Public Requests switch, Minimum Lead Time, and the four numbered steps, each with its status](./images/04-98-public-requests-overview.png)
 
 On a phone the sections become a scrollable strip of tabs, and every control
 is a full-size touch target.
