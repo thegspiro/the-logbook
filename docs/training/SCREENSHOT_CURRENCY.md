@@ -23,6 +23,7 @@ Nothing was captured by this pass.
 | Any | Every capture showing a toggle switch: the track is now a true pill and the accent is red, not purple | Replace |
 | 01, 10 | Wide tables at tablet width (roster, inventory items, dues, finance approvals) as cards | Replace |
 | 15 | Applicant board with selection on, card content inset | Replace (`15-46` was re-shot) |
+| 02 | `02-135` Operational members: the button now ticks Active, Probationary and Life, not Retired (2026-11-06) | Replace |
 
 ## Captured 2026-11-05 — Event settings Public Requests (#4049)
 

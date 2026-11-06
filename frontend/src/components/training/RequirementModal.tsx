@@ -35,12 +35,16 @@ const MEMBERSHIP_TYPES = [
 ] as const;
 
 /**
- * Every membership type an operational-class member is stored under. Mirrors
- * the operational rows of `_SPLIT` in backend/app/utils/membership.py, which
- * derives `membership_type` from the member's class and status; `prospective`
- * is left out because prospects are not member accounts and are never graded.
+ * The membership types of the operational members who are still serving.
+ *
+ * `retired` is an operational-class rung in `_SPLIT` (backend/app/utils/
+ * membership.py), but a department reads "operational members" as the people
+ * who ride, and ticking Retired from this shortcut held stepped-back members
+ * to riding requirements (owner decision 2026-11-06). An officer who does
+ * mean them ticks Retired by hand. `prospective` is left out because
+ * prospects are not member accounts and are never graded.
  */
-const OPERATIONAL_MEMBERSHIP_TYPES: readonly string[] = ['active', 'probationary', 'life', 'retired'];
+const OPERATIONAL_MEMBERSHIP_TYPES: readonly string[] = ['active', 'probationary', 'life'];
 
 /**
  * Full create/edit form for a training requirement.
@@ -140,9 +144,9 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   const allOperationalSelected = OPERATIONAL_MEMBERSHIP_TYPES.every((t) =>
     formData.required_membership_types.includes(t)
   );
-  // Adds whichever operational types are missing, or clears all four when
-  // they are already ticked; any other category (Administrative, Honorary)
-  // is left as the officer set it.
+  // Adds whichever operational types are missing, or clears all three when
+  // they are already ticked; any other category (Retired, Administrative,
+  // Honorary) is left as the officer set it.
   const toggleOperational = () => {
     setFormData((prev) => {
       const hasAll = OPERATIONAL_MEMBERSHIP_TYPES.every((t) => prev.required_membership_types.includes(t));
@@ -1185,7 +1189,8 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                       Operational members
                     </button>
                     <span className="text-theme-text-muted text-xs">
-                      Active, Probationary, Life and Retired — every operational member, whatever their status.
+                      Active, Probationary and Life — the operational members still serving. Tick Retired yourself to
+                      include them.
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 md:grid-cols-3" role="group" aria-label="Member categories">
