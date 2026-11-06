@@ -55,7 +55,11 @@ vi.mock('../services/api', () => ({
     listPayments: (...args: unknown[]) => listPayments(...args) as unknown,
     waive: (...args: unknown[]) => waive(...args) as unknown,
     unwaive: (...args: unknown[]) => unwaive(...args) as unknown,
+    // The schedule form's membership-type picker; none configured here.
+    membershipTypeOptions: () => Promise.resolve([]),
   },
+  // The schedule form's fiscal-year picker; none open here.
+  fiscalYearService: { options: () => Promise.resolve([]) },
 }));
 
 import DuesManagementPage from './DuesManagementPage';
@@ -183,6 +187,12 @@ describe('schedules', () => {
       amount: '150.00',
       frequency: 'quarterly',
       dueDate: '2028-03-01T00:00:00.000Z',
+      // The form's 2026-11-01 terms: the default grace period, no fee, no
+      // fiscal year, every member.
+      gracePeriodDays: 30,
+      lateFeeAmount: undefined,
+      fiscalYearId: undefined,
+      appliesToMembershipTypes: undefined,
       notes: undefined,
     });
     await waitFor(() => expect(fetchDuesSchedules).toHaveBeenCalledTimes(2));
@@ -218,6 +228,10 @@ describe('schedules', () => {
         amount: '120.00',
         frequency: 'annual',
         dueDate: '2027-03-01T00:00:00.000Z',
+        gracePeriodDays: 30,
+        lateFeeAmount: null,
+        fiscalYearId: null,
+        appliesToMembershipTypes: null,
         isActive: false,
         notes: null,
         // Blank: the department's defaults apply.

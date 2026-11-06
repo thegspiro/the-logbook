@@ -43,6 +43,8 @@ vi.mock('@/stores/authStore', () => ({
 vi.mock('../hooks/useFundOptions', () => ({ useFundOptions: () => ({ funds: [], mode: 'warn' }) }));
 vi.mock('../hooks/useLateLineWarning', () => ({ useLateLineWarning: () => () => null }));
 vi.mock('../services/api', () => ({
+  // The detail pages ask whether the payment went to QuickBooks Online; it did not.
+  quickBooksOnlineService: { postings: () => Promise.resolve([]) },
   approvalService: { manualApprove: vi.fn(), manualDeny: vi.fn() },
   functionalClassService: {},
   advanceService: { get: vi.fn(), deleteReturn: vi.fn() },
@@ -62,6 +64,8 @@ vi.mock('../services/api', () => ({
     updateLineItem: vi.fn(),
   },
   fiscalYearService: { options: () => Promise.resolve([]) },
+  // The line dialog reads the mileage rate for its trip log.
+  financeSettingsService: { get: () => Promise.reject(new Error('not needed')) },
   budgetService: {
     options: () =>
       Promise.resolve([

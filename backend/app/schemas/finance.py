@@ -10,7 +10,14 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 from pydantic.alias_generators import to_camel
 
 from app.models.finance import (
@@ -198,17 +205,22 @@ class FiscalYearLock(BaseModel):
 
 
 class FiscalYearOpenItemResponse(UTCResponseBase):
-    """A request still in flight that stops a closing year from locking."""
+    """A request still in flight at a year's close (``blocks_lock``: whether it
+    stops the year from locking)."""
 
     model_config = _RESPONSE_CONFIG
 
-    # purchase_request, expense_report or check_request
+    # purchase_request, expense_report, check_request, budget_amendment or
+    # cash_advance
     kind: str
     entity_id: str
     number: str
     description: str
     status: str
     amount: Optional[Decimal] = None
+    # False for a cash advance still outstanding: listed so the Treasurer
+    # sees what is owed at year end, but it does not stop the lock.
+    blocks_lock: bool = True
 
 
 class StartFromLastYearResponse(BaseModel):
@@ -1415,6 +1427,87 @@ class LateSubstantiationReportResponse(BaseModel):
     total: Decimal
 
 
+class ExpenseSummaryMemberRowResponse(BaseModel):
+    """One member's reimbursements in a period (from the payments register)."""
+
+    model_config = _RESPONSE_CONFIG
+
+    member_id: str
+    member_name: str
+    # Expense reports paid to the member in the period, and reimbursement
+    # checks to them voided in it.
+    report_count: int
+    voided_checks: int = 0
+    amount: Decimal
+
+
+class ExpenseSummaryByMemberReportResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    start: date
+    end: date
+    rows: list[ExpenseSummaryMemberRowResponse]
+    total: Decimal
+
+
+class DuesDelinquencyRowResponse(BaseModel):
+    """A member with dues overdue, under the dues screen's own rule."""
+
+    model_config = _RESPONSE_CONFIG
+
+    member_id: str
+    member_name: str
+    overdue_records: int
+    # Amount due (late fees included) less what was paid, over the overdue
+    # records.
+    amount_overdue: Decimal
+    late_fees: Decimal
+    # The department's calendar day the oldest overdue record fell due, and
+    # how many days ago that was.
+    oldest_due: date
+    days_overdue: int
+
+
+class DuesDelinquencyReportResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    start: date
+    end: date
+    # Delinquency is as of today, the day the report was run.
+    as_of: date
+    expected: Decimal
+    collected: Decimal
+    waived: Decimal
+    outstanding: Decimal
+    members_overdue: int
+    rows: list[DuesDelinquencyRowResponse]
+    total_overdue: Decimal
+
+
+class VendorPurchasesRowResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    # Null: requests with no vendor named.
+    vendor: Optional[str] = None
+    orders: int
+    # Approved, ordered and received, at their estimate.
+    open: Decimal
+    # Paid (or bought by the member and reimbursed), at what was paid.
+    paid: Decimal
+    total: Decimal
+
+
+class PurchasesByVendorReportResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    fiscal_year_id: str
+    fiscal_year_name: str
+    rows: list[VendorPurchasesRowResponse]
+    total_open: Decimal
+    total_paid: Decimal
+    total: Decimal
+
+
 class DualApprovalTypeThresholdResponse(BaseModel):
     """The dual-approval threshold in force for one request type."""
 
@@ -1452,6 +1545,45 @@ class FinanceSettingsResponse(BaseModel):
     # A payment charged to a restricted fund for more than it has left:
     # "off", "warn" or "block".
     fund_overspend_mode: str = "warn"
+    # Dollars per mile a mileage line's trip log is priced at; None until the
+    # department sets one, when trip logs are refused
+    # (app/services/expense_mileage.py).
+    mileage_rate: Optional[Decimal] = None
+    # How a cash advance issued now has its return deadline worked out:
+    # "fixed_date" or "periodic_statement" (app/services/cash_advances.py).
+    advance_return_method: str = "fixed_date"
+
+
+class BudgetRequestReminderSettingsResponse(BaseModel):
+    """The budget-request reminder schedule the scheduled task follows
+    (app/utils/finance_settings.py, ``budget_request_reminders_in``)."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # Days before the request deadline, most distant first; empty when the
+    # department turned the reminder off.
+    offsets_days: list[int]
+    bell_notices: bool
+    # True until the department chooses a schedule of its own (7 and 1).
+    is_default: bool
+
+
+class BudgetRequestReminderSettingsUpdate(BaseModel):
+    """Set the reminder schedule. Every save sends both fields."""
+
+    model_config = _REQUEST_CONFIG
+
+    offsets_days: list[int] = Field(..., max_length=5)
+    bell_notices: bool
+
+    @field_validator("offsets_days")
+    @classmethod
+    def _days_in_range(cls, value: list[int]) -> list[int]:
+        # 0 is the deadline day itself; 60 matches the longest window a
+        # request period plausibly runs.
+        if any(day < 0 or day > 60 for day in value):
+            raise ValueError("Reminder days must be between 0 and 60")
+        return value
 
 
 class ManualDenyRequest(BaseModel):
@@ -1618,6 +1750,43 @@ class PurchaseRequestResponse(UTCResponseBase):
 # ============================================
 
 
+class MileageTrip(BaseModel):
+    """One trip on a mileage line's log (app/services/expense_mileage.py)."""
+
+    model_config = _REQUEST_CONFIG
+
+    trip_date: date
+    from_location: str = Field(..., min_length=1, max_length=200)
+    to_location: str = Field(..., min_length=1, max_length=200)
+    purpose: str = Field(..., min_length=1, max_length=500)
+    # Tenths of a mile, as an odometer or a map reads.
+    miles: Decimal = Field(..., gt=0, le=1000, max_digits=5, decimal_places=1)
+
+    @field_validator("from_location", "to_location", "purpose")
+    @classmethod
+    def _not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Each trip needs where it started, where it ended and why")
+        return value
+
+    def stored(self) -> dict:
+        """The canonical stored shape (ExpenseLineItem.mileage_trips)."""
+        return {
+            "trip_date": self.trip_date.isoformat(),
+            "from_location": self.from_location,
+            "to_location": self.to_location,
+            "purpose": self.purpose,
+            "miles": str(self.miles.quantize(Decimal("0.1"))),
+        }
+
+
+def _stored_trips(trips: Optional[list[MileageTrip]]) -> Optional[list[dict]]:
+    # Dumped in the stored shape, so the JSON column never receives a date or
+    # a Decimal it cannot serialize, and every writer stores one shape.
+    return None if trips is None else [trip.stored() for trip in trips]
+
+
 class ExpenseLineItemCreate(BaseModel):
     """Create an expense line item"""
 
@@ -1636,8 +1805,11 @@ class ExpenseLineItemCreate(BaseModel):
     # payment spends; app/services/restricted_funds.py.
     fund_campaign_id: Optional[str] = None
     description: str = Field(..., min_length=1, max_length=500)
-    amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
-    date_incurred: datetime
+    # Required unless the line carries a trip log, whose amount and date the
+    # server works out from the trips (app/services/expense_mileage.py); a
+    # figure sent beside a log is replaced.
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
+    date_incurred: Optional[datetime] = None
     # Typed as the enum so an unknown value is rejected with a 422 here rather
     # than reaching MySQL, where the column is an ENUM and the insert fails with
     # "Data truncated for column 'expense_type'" — surfaced to the client as a
@@ -1645,10 +1817,25 @@ class ExpenseLineItemCreate(BaseModel):
     expense_type: ExpenseType = ExpenseType.GENERAL
     receipt_url: Optional[str] = None
     merchant: Optional[str] = None
+    # A mileage line's trips, in place of an uploaded log.
+    mileage_trips: Optional[list[MileageTrip]] = Field(None, max_length=100)
 
     _check_receipt_url = field_validator("receipt_url", mode="before")(
         validate_external_http_url
     )
+
+    @field_serializer("mileage_trips")
+    def _dump_trips(self, trips: Optional[list[MileageTrip]]):
+        return _stored_trips(trips)
+
+    @model_validator(mode="after")
+    def _log_only_on_mileage(self):
+        # A line without a log still needs its amount and date; the service
+        # checks that (FinanceService._price_trip_logs), where it knows
+        # whether a log is in force.
+        if self.mileage_trips and self.expense_type != ExpenseType.MILEAGE:
+            raise ValueError("Only a mileage line can carry a trip log")
+        return self
 
 
 class ExpenseLineItemUpdate(BaseModel):
@@ -1669,6 +1856,32 @@ class ExpenseLineItemUpdate(BaseModel):
     date_incurred: Optional[datetime] = None
     expense_type: Optional[ExpenseType] = None
     merchant: Optional[str] = Field(None, max_length=300)
+    # The whole log, replacing the stored one; null removes it (the line then
+    # needs a receipt like any other). While a line has a log its amount and
+    # date are worked out from it, so a figure sent beside one is replaced.
+    mileage_trips: Optional[list[MileageTrip]] = Field(None, max_length=100)
+
+    @field_serializer("mileage_trips")
+    def _dump_trips(self, trips: Optional[list[MileageTrip]]):
+        return _stored_trips(trips)
+
+
+class MileageTripResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    trip_date: date
+    from_location: str
+    to_location: str
+    purpose: str
+    miles: Decimal
+
+
+class ShareLineReceiptRequest(BaseModel):
+    """Use the receipt already on another line of the same report."""
+
+    model_config = _REQUEST_CONFIG
+
+    from_item_id: str = Field(..., min_length=1, max_length=36)
 
 
 class ExpenseLineItemResponse(UTCResponseBase):
@@ -1701,6 +1914,11 @@ class ExpenseLineItemResponse(UTCResponseBase):
     # responses; app/services/restricted_funds.py).
     fund_campaign_id: Optional[str] = None
     fund_name: Optional[str] = None
+    # A mileage line's trip log, the rate it was priced at and its miles
+    # (app/services/expense_mileage.py). A line with a log needs no receipt.
+    mileage_trips: Optional[list[MileageTripResponse]] = None
+    mileage_rate: Optional[Decimal] = None
+    total_miles: Optional[Decimal] = None
     created_at: datetime
 
     _safe_receipt_url = field_validator("receipt_url", mode="before")(safe_external_url)
@@ -1711,6 +1929,14 @@ class ExpenseLineItemResponse(UTCResponseBase):
             self.receipt_file_url = (
                 f"/api/v1/finance/expense-reports/{self.expense_report_id}"
                 f"/items/{self.id}/receipt"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _set_total_miles(self):
+        if self.mileage_trips:
+            self.total_miles = sum(
+                (trip.miles for trip in self.mileage_trips), Decimal("0")
             )
         return self
 
@@ -1832,6 +2058,10 @@ class CheckRequestCreate(BaseModel):
     # Cash advanced to the requester ahead of an expense; charges no budget
     # line or fund (app/services/cash_advances.py). Fixed at creation.
     is_advance: bool = False
+    # A finance.manage holder raising a cash advance on a member's behalf:
+    # the member who will hold it. Omitted, or the caller's own id: the
+    # caller holds it.
+    advance_holder_id: Optional[str] = Field(None, max_length=36)
     payee_name: str = Field(..., min_length=1, max_length=300)
     payee_address: Optional[str] = None
     amount: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
@@ -1883,6 +2113,9 @@ class CheckRequestResponse(UTCResponseBase):
     # no fund (detail responses).
     fund_shortfall: Optional[Decimal] = None
     is_advance: bool = False
+    # The finance officer who raised this advance on behalf of the member in
+    # requested_by; null when the member raised it.
+    raised_by: Optional[str] = None
     payee_name: str
     payee_address: Optional[str] = None
     amount: Decimal
@@ -1971,7 +2204,9 @@ class DuesScheduleCreate(BaseModel):
     frequency: str
     due_date: UTCDateTime
     grace_period_days: int = Field(30, ge=0, le=INT32_MAX)
-    late_fee_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
+    late_fee_amount: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
     notes: Optional[str] = None
@@ -1999,7 +2234,9 @@ class DuesScheduleUpdate(BaseModel):
     frequency: Optional[str] = None
     due_date: Optional[UTCDateTime] = None
     grace_period_days: Optional[int] = Field(None, ge=0, le=INT32_MAX)
-    late_fee_amount: Optional[Decimal] = Field(None, max_digits=12, decimal_places=2)
+    late_fee_amount: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
     is_active: Optional[bool] = None
@@ -2029,6 +2266,10 @@ class DuesScheduleResponse(UTCResponseBase):
     late_fee_amount: Optional[Decimal] = Field(None, decimal_places=2)
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
+    # Null on a schedule saved before 2026-11-01: its grace period, late fee,
+    # fiscal year and membership types are stored but not applied until it is
+    # next saved (app/services/dues_terms.py).
+    terms_effective_at: Optional[datetime] = None
     is_active: bool
     notes: Optional[str] = None
     qb_income_account: Optional[str] = None
@@ -2081,8 +2322,46 @@ class DuesPaymentResponse(UTCResponseBase):
     qb_exported_at: Optional[datetime] = None
     received_at: datetime
     recorded_by: Optional[str] = None
+    # Who recorded it, by name (owner decision 2026-11-01); null when their
+    # account is gone. Set by the payment-history endpoint.
+    recorded_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+
+class MyDuesPaymentResponse(UTCResponseBase):
+    """One payment on the member's own dues, as Finance › My Dues lists it."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    amount: Decimal
+    payment_method: Optional[str] = None
+    received_at: datetime
+
+
+class MyDuesResponse(UTCResponseBase):
+    """One of the caller's own dues records (``GET /finance/my-dues``)."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    schedule_name: str
+    # Includes any late fee already charged (``late_fee_applied``).
+    amount_due: Decimal
+    amount_paid: Decimal
+    # What is still owed; zero for paid, waived and exempt dues.
+    balance: Decimal
+    status: str
+    due_date: datetime
+    paid_date: Optional[datetime] = None
+    late_fee_applied: Optional[Decimal] = None
+    # A late fee not yet charged and the instant after which it will be, while
+    # the schedule charges one and these dues still owe money.
+    late_fee_amount: Optional[Decimal] = None
+    late_fee_after: Optional[datetime] = None
+    waive_reason: Optional[str] = None
+    payments: list[MyDuesPaymentResponse] = []
 
 
 class MemberDuesPayment(BaseModel):
@@ -2324,9 +2603,15 @@ class AdvanceSummaryResponse(UTCResponseBase):
     purpose: Optional[str] = None
     check_number: Optional[str] = None
     issued_at: Optional[datetime] = None
-    # 120 days after the check: the IRS safe harbor for returning what was
-    # not accounted for.
+    # The last moment to account for or return it: 120 days after the check
+    # (fixed_date), or through the 120th day after the first quarterly
+    # statement (periodic_statement); app/services/cash_advances.py.
     due_at: Optional[datetime] = None
+    return_method: str = "fixed_date"
+    # The periodic method's first statement, a department-calendar date.
+    first_statement_date: Optional[date] = None
+    # The finance officer who raised it on the member's behalf, if one did.
+    raised_by: Optional[str] = None
     # Covered by the member's submitted expense reports, and handed back.
     accounted: Decimal
     returned: Decimal
@@ -2371,9 +2656,37 @@ class AdvanceReturnResponse(UTCResponseBase):
     created_at: datetime
 
 
+class AdvanceStatementResponse(UTCResponseBase):
+    """One quarterly statement under the periodic method."""
+
+    model_config = _RESPONSE_CONFIG
+
+    statement_date: date
+    # The last day to account for or return what it lists.
+    due_date: date
+    # What it listed and when it was emailed; null until it has been.
+    outstanding: Optional[Decimal] = None
+    emailed_at: Optional[datetime] = None
+    # Dated after today on the department's calendar.
+    upcoming: bool = False
+
+
 class AdvanceDetailResponse(AdvanceSummaryResponse):
+    raised_by_name: Optional[str] = None
+    statements: list[AdvanceStatementResponse] = []
     reports: list[AdvanceReportResponse] = []
     returns: list[AdvanceReturnResponse] = []
+
+
+class AdvanceHolderResponse(UTCResponseBase):
+    """A member a cash advance can be raised for."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    name: str
+    # The name of record a check is made out to.
+    legal_name: str
 
 
 class AdvanceReturnCreate(BaseModel):
@@ -2483,3 +2796,95 @@ class FinanceDashboardResponse(BaseModel):
     pending_check_requests: int
     dues_collection_rate: float
     recent_transactions: list[dict] = []
+
+
+# ============================================
+# QuickBooks Online connection
+# ============================================
+
+
+class QuickBooksPostingCountsResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    queued: int = 0
+    retrying: int = 0
+    posted: int = 0
+    failed: int = 0
+    superseded: int = 0
+
+
+class QuickBooksConnectionResponse(UTCResponseBase):
+    """The department's QuickBooks Online connection, as the settings page
+    shows it."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # False while QBO_CLIENT_ID, QBO_CLIENT_SECRET or QBO_REDIRECT_URI is
+    # blank on the server: nothing can connect and the CSV export is the way.
+    configured: bool
+    # The server's QBO_ENVIRONMENT (sandbox or production), when configured.
+    environment: Optional[str] = None
+    # disconnected, connected or reconnect_required.
+    status: str
+    connected_environment: Optional[str] = None
+    environment_mismatch: bool = False
+    realm_id: Optional[str] = None
+    connected_at: Optional[datetime] = None
+    connected_by_name: Optional[str] = None
+    post_from: Optional[datetime] = None
+    last_sync_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+    counts: QuickBooksPostingCountsResponse
+
+
+class QuickBooksConnectStartResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    authorization_url: str
+
+
+class QuickBooksDisconnectResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    # False when Intuit did not confirm the revocation; the tokens are gone
+    # here either way, and the app can be removed from QuickBooks' Apps page.
+    revoked: bool
+
+
+class QuickBooksPostFromUpdate(BaseModel):
+    """The first day payments post live; earlier ones stay on the CSV export."""
+
+    model_config = _REQUEST_CONFIG
+
+    post_from: datetime
+
+
+class QuickBooksSyncResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    queued: int = 0
+    posted: int = 0
+    failed: int = 0
+    retrying: int = 0
+    skipped: Optional[str] = None
+
+
+class QuickBooksPostingResponse(UTCResponseBase):
+    """One payment's posting to QuickBooks Online."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    payment_type: str
+    payment_id: str
+    document_number: str
+    # queued, retrying, posted, failed or superseded.
+    status: str
+    vendor_name: Optional[str] = None
+    amount: Optional[Decimal] = None
+    qb_purchase_id: Optional[str] = None
+    attempts: int
+    next_attempt_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+    posted_at: Optional[datetime] = None
+    created_at: datetime

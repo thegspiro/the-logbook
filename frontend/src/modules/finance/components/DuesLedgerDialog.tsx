@@ -4,7 +4,8 @@
  * The dues row carries only the derived total and the latest payment's
  * detail; this is the underlying list (`GET /finance/dues/:id/payments`),
  * and the only place earlier payments can be read back. Read-only — a
- * payment cannot be edited or removed once recorded.
+ * payment cannot be edited or removed once recorded. Each payment names who
+ * recorded it (owner decision 2026-11-01).
  */
 
 import React, { useEffect, useState } from 'react';
@@ -87,6 +88,11 @@ export const DuesLedgerDialog: React.FC<DuesLedgerDialogProps> = ({ dues, member
                       .join(' · ') || 'No method recorded'}
                   </p>
                   {payment.notes && <p className="text-theme-text-secondary mt-1 text-xs">{payment.notes}</p>}
+                  {(payment.recordedByName || payment.recordedBy) && (
+                    <p className="text-theme-text-secondary mt-1 text-xs">
+                      Recorded by {payment.recordedByName || 'a former member'}
+                    </p>
+                  )}
                 </div>
                 <p className="split-row-aside text-theme-text-secondary text-xs sm:text-right">
                   {formatDateTime(payment.receivedAt, tz)}

@@ -50,6 +50,8 @@ vi.mock('@/stores/authStore', () => ({
 }));
 
 vi.mock('../services/api', () => ({
+  // The detail pages ask whether the payment went to QuickBooks Online; it did not.
+  quickBooksOnlineService: { postings: () => Promise.resolve([]) },
   checkRequestService: {
     issue: (...args: unknown[]) => issue(...args) as unknown,
     void: (...args: unknown[]) => voidCheck(...args) as unknown,

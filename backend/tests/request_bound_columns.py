@@ -561,6 +561,10 @@ _JSON = (
     "stored inside a JSON column or settings document; no numeric column limit",
 )
 NOT_COLUMN_BACKED = {
+    "app.schemas.finance:BudgetRequestReminderSettingsUpdate.offsets_days": (
+        "JSON",
+        "stored in organizations.settings['finance']; the schema's validator keeps each day between 0 and 60 and the list to five",
+    ),
     "app.schemas.organization:MembershipIdSettings.next_number": (
         "SERVICE_VALIDATED",
         "MembershipIdSettings._pattern_is_usable refuses a number whose formatted id overflows the 50-character column",

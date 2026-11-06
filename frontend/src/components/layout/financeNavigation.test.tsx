@@ -99,13 +99,28 @@ describe('Finance navigation', () => {
     expect(screen.queryByText('Finance')).not.toBeInTheDocument();
   });
 
-  it('shows a member their own three lists and nothing that would refuse them', () => {
-    expect(visible(['finance.request'])).toEqual(['My Purchase Requests', 'My Expense Reports', 'My Check Requests']);
+  it('shows a member their own dues and three lists, and nothing that would refuse them', () => {
+    expect(visible(['finance.request'])).toEqual([
+      'My Dues',
+      'My Purchase Requests',
+      'My Expense Reports',
+      'My Check Requests',
+    ]);
+  });
+
+  it('offers My Dues to every member who sees the group, and links it', async () => {
+    // Owner decision 2026-11-01: members see their own dues.
+    expect(visible(['finance.request', 'finance.view', 'finance.manage'])).toContain('My Dues');
+    granted = new Set(['finance.request']);
+    openMobileMenu();
+    await expandMobileFinance();
+    expect(screen.getByRole('link', { name: 'My Dues' })).toHaveAttribute('href', '/finance/my-dues');
   });
 
   it('offers My Budgets to a member who owns a budget line', () => {
     expect(visible(['finance.request'], true)).toEqual([
       'My Budgets',
+      'My Dues',
       'My Purchase Requests',
       'My Expense Reports',
       'My Check Requests',
@@ -137,6 +152,7 @@ describe('Finance navigation', () => {
   it('shows the treasurer the department’s queues', () => {
     expect(visible(['finance.request', 'finance.view', 'finance.manage', 'finance.approve'])).toEqual([
       'Dashboard',
+      'My Dues',
       'Budget requests',
       'Budget amendments',
       'Purchase Requests',
@@ -151,6 +167,7 @@ describe('Finance navigation', () => {
     expect(visible(['finance.request'], true, true)).toEqual([
       'My Budgets',
       "Next year's budget",
+      'My Dues',
       'My Purchase Requests',
       'My Expense Reports',
       'My Check Requests',

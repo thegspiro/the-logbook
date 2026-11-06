@@ -33,6 +33,7 @@ from app.models.training import BasicApparatus
 from app.models.user import IdentifierType, Organization, OrganizationType, Role, User
 from app.schemas.organization import MembershipTierSettings
 from app.services.auth_service import AuthService
+from app.services.grant_federal_programs import seed_federal_program_opportunities
 from app.services.location_service import (
     LocationService,
     save_system_named_location,
@@ -826,6 +827,10 @@ class OnboardingService:
 
         # After the positions: its reviewer is the seeded Compliance Officer.
         await SuggestionService(self.db).seed_compliance_box(org.id)
+
+        # The Federal Programs on the Grant Opportunities page are this
+        # department's own opportunity records (owner decision, 2026-11-01).
+        await seed_federal_program_opportunities(self.db, org.id)
 
         # Create headquarters facility from station address
         await self._create_headquarters_facility(org)

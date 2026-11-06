@@ -1,7 +1,9 @@
 /**
  * Finance reports for the board
  *
- * Budget vs actual, the amendment log and the payments register. Every figure
+ * Budget vs actual, the amendment log and the payments register, and since
+ * 2026-11-06 (owner decision 2026-11-01) expenses by member, dues delinquency
+ * and purchases by vendor. Every figure
  * is the server's (`/finance/reports/*`): the page formats, it never sums, so
  * the screen, the CSV and the printout all show the same numbers (Pitfall #29).
  *
@@ -29,6 +31,9 @@ import {
   type AdvancesReport,
   type AmendmentLogReport,
   type BudgetVsActualReport,
+  type DuesDelinquencyReport,
+  type ExpenseSummaryByMemberReport,
+  type PurchasesByVendorReport,
   type FiscalYear,
   FUNCTIONAL_CLASS_LABELS,
   type FunctionalExpensesReport,
@@ -46,6 +51,9 @@ const REPORTS = {
   'fund-balances': 'Restricted funds',
   advances: 'Cash advances',
   'late-substantiation': 'Outside the accountable plan',
+  'expenses-by-member': 'Expenses by member',
+  'dues-delinquency': 'Dues delinquency',
+  'purchases-by-vendor': 'Purchases by vendor',
 } as const;
 type ReportKey = keyof typeof REPORTS;
 const REPORT_KEYS = Object.keys(REPORTS) as ReportKey[];
@@ -921,8 +929,9 @@ const Advances: React.FC = () => {
             </div>
             <p className="text-theme-text-secondary mt-3 text-xs">
               An advance is accounted for by the expense reports the member submits against it and by cash returned. One
-              still outstanding {ADVANCE_RETURN_DAYS} days after its check is overdue: the IRS treats what is left as
-              the member&apos;s wages, and the member cannot request another advance until it is settled.
+              still outstanding after its due date — {ADVANCE_RETURN_DAYS} days after its check, or after its first
+              quarterly statement where the department uses quarterly statements — is overdue: the IRS treats what is
+              left as the member&apos;s wages, and the member cannot request another advance until it is settled.
             </p>
           </>
         ))}
@@ -1047,6 +1056,304 @@ const LateSubstantiation: React.FC = () => {
 // Page
 // =============================================================================
 
+// =============================================================================
+// Expenses by member
+// =============================================================================
+
+const ExpensesByMember: React.FC = () => {
+  const period = usePeriod();
+  const { start, end, rangeError } = period;
+
+  const load = useCallback(() => financeReportService.expenseSummaryByMember(start, end), [start, end]);
+  const { data, error, loading } = useReport<ExpenseSummaryByMemberReport>(rangeError ? null : load);
+
+  return (
+    <div className="space-y-4">
+      <PeriodPicker period={period} />
+      <ReportFrame
+        title="Expenses by member"
+        subtitle={
+          data
+            ? `Reimbursed ${formatCalendarDate(data.start)} to ${formatCalendarDate(data.end)}`
+            : 'What each member was reimbursed in a period, as the payments register shows it.'
+        }
+        loading={loading}
+        error={rangeError ?? error}
+        canDownload={Boolean(data) && !rangeError}
+        onDownload={() => financeReportService.expenseSummaryByMemberCsv(start, end)}
+      >
+        {data && data.rows.length === 0 ? (
+          <EmptyState
+            headingLevel={3}
+            title="No reimbursements"
+            description="No member was reimbursed in this period."
+          />
+        ) : (
+          data && (
+            <div
+              className="rwd-table-container overflow-x-auto print:overflow-visible"
+              tabIndex={0}
+              role="region"
+              aria-label="Members"
+            >
+              <table className="rwd-table w-full">
+                <thead className="border-theme-surface-border border-b text-left">
+                  <tr>
+                    <th className={thClass}>Member</th>
+                    <th className={`${thClass} text-right`}>Reports paid</th>
+                    <th className={`${thClass} text-right`}>Reimbursed</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-theme-surface-border divide-y">
+                  {data.rows.map((row) => (
+                    <tr key={row.memberId}>
+                      <td data-label="Member" className={tdClass}>
+                        {row.memberName}
+                        {row.voidedChecks > 0 && (
+                          <span className="text-theme-text-secondary block text-xs">
+                            {row.voidedChecks === 1 ? 'One check voided' : `${String(row.voidedChecks)} checks voided`}
+                          </span>
+                        )}
+                      </td>
+                      <td data-label="Reports paid" className={numClass}>
+                        {row.reportCount}
+                      </td>
+                      <td data-label="Reimbursed" className={numClass}>
+                        {formatCurrency(row.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-theme-surface-border border-t-2 font-semibold">
+                  <tr>
+                    <td className={tdClass} colSpan={2}>
+                      Total
+                    </td>
+                    <td data-label="Total" className={numClass}>
+                      {formatCurrency(data.total)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )
+        )}
+      </ReportFrame>
+    </div>
+  );
+};
+
+// =============================================================================
+// Dues delinquency
+// =============================================================================
+
+const DuesDelinquency: React.FC = () => {
+  const period = usePeriod();
+  const { start, end, rangeError } = period;
+
+  const load = useCallback(() => financeReportService.duesDelinquency(start, end), [start, end]);
+  const { data, error, loading } = useReport<DuesDelinquencyReport>(rangeError ? null : load);
+
+  return (
+    <div className="space-y-4">
+      <PeriodPicker period={period} />
+      <ReportFrame
+        title="Dues delinquency"
+        subtitle={
+          data
+            ? `Dues due ${formatCalendarDate(data.start)} to ${formatCalendarDate(data.end)}, overdue as of ${formatCalendarDate(data.asOf)}`
+            : 'Dues falling due in a period, and the members now behind on them.'
+        }
+        loading={loading}
+        error={rangeError ?? error}
+        canDownload={Boolean(data) && !rangeError}
+        onDownload={() => financeReportService.duesDelinquencyCsv(start, end)}
+      >
+        {data && (
+          <div className="space-y-4">
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {(
+                [
+                  ['Expected', data.expected],
+                  ['Collected', data.collected],
+                  ['Waived', data.waived],
+                  ['Outstanding', data.outstanding],
+                ] as const
+              ).map(([label, amount]) => (
+                <div key={label}>
+                  <dt className="text-theme-text-secondary text-xs">{label}</dt>
+                  <dd className="text-theme-text-primary text-sm font-semibold tabular-nums">
+                    {formatCurrency(amount)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            {data.rows.length === 0 ? (
+              <EmptyState
+                headingLevel={3}
+                title="Nobody is overdue"
+                description="No member is overdue on dues that fell due in this period."
+              />
+            ) : (
+              <div
+                className="rwd-table-container overflow-x-auto print:overflow-visible"
+                tabIndex={0}
+                role="region"
+                aria-label="Members overdue"
+              >
+                <table className="rwd-table w-full">
+                  <thead className="border-theme-surface-border border-b text-left">
+                    <tr>
+                      <th className={thClass}>Member</th>
+                      <th className={thClass}>Oldest due</th>
+                      <th className={`${thClass} text-right`}>Records</th>
+                      <th className={`${thClass} text-right`}>Late fees</th>
+                      <th className={`${thClass} text-right`}>Overdue</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-theme-surface-border divide-y">
+                    {data.rows.map((row) => (
+                      <tr key={row.memberId}>
+                        <td data-label="Member" className={tdClass}>
+                          {row.memberName}
+                        </td>
+                        <td data-label="Oldest due" className={tdClass}>
+                          {formatCalendarDate(row.oldestDue)}
+                          <span className="text-theme-text-secondary block text-xs">
+                            {row.daysOverdue === 1 ? '1 day ago' : `${String(row.daysOverdue)} days ago`}
+                          </span>
+                        </td>
+                        <td data-label="Records" className={numClass}>
+                          {row.overdueRecords}
+                        </td>
+                        <td data-label="Late fees" className={numClass}>
+                          {formatCurrency(row.lateFees)}
+                        </td>
+                        <td data-label="Overdue" className={numClass}>
+                          {formatCurrency(row.amountOverdue)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-theme-surface-border border-t-2 font-semibold">
+                    <tr>
+                      <td className={tdClass} colSpan={4}>
+                        Total ({data.membersOverdue === 1 ? '1 member' : `${String(data.membersOverdue)} members`})
+                      </td>
+                      <td data-label="Total" className={numClass}>
+                        {formatCurrency(data.totalOverdue)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </ReportFrame>
+    </div>
+  );
+};
+
+// =============================================================================
+// Purchases by vendor
+// =============================================================================
+
+const PurchasesByVendor: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYear: (id: string) => void }> = ({
+  years,
+  fiscalYearId,
+  onYear,
+}) => {
+  const load = useCallback(() => financeReportService.purchasesByVendor(fiscalYearId), [fiscalYearId]);
+  const { data, error, loading } = useReport<PurchasesByVendorReport>(fiscalYearId ? load : null);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-3 print:hidden">
+        <FiscalYearSelect years={years} value={fiscalYearId} onChange={onYear} />
+      </div>
+      <ReportFrame
+        title="Purchases by vendor"
+        subtitle={
+          data
+            ? `${data.fiscalYearName}: approved purchase requests by vendor`
+            : 'Approved and paid purchase requests, totalled by vendor.'
+        }
+        loading={loading}
+        error={error}
+        canDownload={Boolean(data)}
+        onDownload={() => financeReportService.purchasesByVendorCsv(fiscalYearId)}
+      >
+        {data && data.rows.length === 0 ? (
+          <EmptyState
+            headingLevel={3}
+            title="No purchases"
+            description="No purchase request in this fiscal year has been approved yet."
+          />
+        ) : (
+          data && (
+            <div
+              className="rwd-table-container overflow-x-auto print:overflow-visible"
+              tabIndex={0}
+              role="region"
+              aria-label="Vendors"
+            >
+              <table className="rwd-table w-full">
+                <thead className="border-theme-surface-border border-b text-left">
+                  <tr>
+                    <th className={thClass}>Vendor</th>
+                    <th className={`${thClass} text-right`}>Requests</th>
+                    <th className={`${thClass} text-right`}>Open</th>
+                    <th className={`${thClass} text-right`}>Paid</th>
+                    <th className={`${thClass} text-right`}>Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-theme-surface-border divide-y">
+                  {data.rows.map((row) => (
+                    <tr key={row.vendor ?? ''}>
+                      <td data-label="Vendor" className={tdClass}>
+                        {row.vendor ?? 'No vendor named'}
+                      </td>
+                      <td data-label="Requests" className={numClass}>
+                        {row.orders}
+                      </td>
+                      <td data-label="Open" className={numClass}>
+                        {formatCurrency(row.open)}
+                      </td>
+                      <td data-label="Paid" className={numClass}>
+                        {formatCurrency(row.paid)}
+                      </td>
+                      <td data-label="Total" className={numClass}>
+                        {formatCurrency(row.total)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-theme-surface-border border-t-2 font-semibold">
+                  <tr>
+                    <td className={tdClass} colSpan={2}>
+                      Total
+                    </td>
+                    <td data-label="Open" className={numClass}>
+                      {formatCurrency(data.totalOpen)}
+                    </td>
+                    <td data-label="Paid" className={numClass}>
+                      {formatCurrency(data.totalPaid)}
+                    </td>
+                    <td data-label="Total" className={numClass}>
+                      {formatCurrency(data.total)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )
+        )}
+      </ReportFrame>
+    </div>
+  );
+};
+
 const FinanceReportsPage: React.FC = () => {
   const tablist = useTablist();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1079,7 +1386,9 @@ const FinanceReportsPage: React.FC = () => {
     active !== 'late-substantiation' &&
     active !== 'functional-expenses' &&
     active !== 'fund-balances' &&
-    active !== 'advances';
+    active !== 'advances' &&
+    active !== 'expenses-by-member' &&
+    active !== 'dues-delinquency';
 
   return (
     <div className="space-y-4">
@@ -1118,6 +1427,10 @@ const FinanceReportsPage: React.FC = () => {
         <Advances />
       ) : active === 'late-substantiation' ? (
         <LateSubstantiation />
+      ) : active === 'expenses-by-member' ? (
+        <ExpensesByMember />
+      ) : active === 'dues-delinquency' ? (
+        <DuesDelinquency />
       ) : yearsError ? (
         <p role="alert" className="alert-danger text-sm">
           {yearsError}
@@ -1128,6 +1441,8 @@ const FinanceReportsPage: React.FC = () => {
         <EmptyState title="No fiscal years" description="Create a fiscal year in Finance settings first." />
       ) : active === 'amendment-log' ? (
         <AmendmentLog years={years} fiscalYearId={fiscalYearId} onYear={setFiscalYearId} />
+      ) : active === 'purchases-by-vendor' ? (
+        <PurchasesByVendor years={years} fiscalYearId={fiscalYearId} onYear={setFiscalYearId} />
       ) : (
         <BudgetVsActual years={years} fiscalYearId={fiscalYearId} onYear={setFiscalYearId} />
       )}

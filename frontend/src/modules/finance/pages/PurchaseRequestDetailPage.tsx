@@ -49,8 +49,10 @@ import {
   PurchaseRequestStatus,
   PURCHASE_REQUEST_STATUS_COLORS,
   APPROVAL_STEP_STATUS_COLORS,
+  QuickBooksPaymentType,
 } from '../types';
 import { ApprovalStepActions } from '../components/ApprovalStepActions';
+import { QuickBooksPostingNote } from '../components/QuickBooksPostingNote';
 
 // =============================================================================
 // Status Labels
@@ -574,6 +576,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(pr.qbExportedAt, tz)}</p>
             </div>
           )}
+          <QuickBooksPostingNote paymentType={QuickBooksPaymentType.PURCHASE_REQUEST} paymentId={pr.id} />
           {(canAttachReceipt || pr.receiptFileUrl || pr.receiptUrl) && (
             <div>
               <p className="text-theme-text-secondary text-xs">Receipt</p>

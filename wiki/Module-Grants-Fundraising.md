@@ -19,7 +19,10 @@ organization as well as on the permissions below.
   required documents, federal program code), filterable by category and
   active/inactive. A program is edited from its card and retired (set
   inactive, never deleted) when it closes, so applications started from it
-  keep their program; **Show retired** lists retired ones to reinstate.
+  keep their program; **Show retired** lists retired ones to reinstate. Every
+  department starts with AFG, SAFER, FP&S and the Firehouse Subs Public
+  Safety Foundation as opportunities of its own (seeded at creation, and by
+  migration for existing departments), startable and editable like any other.
 - **Application pipeline** — each application moves through a fixed lifecycle
   (see [Application lifecycle](#application-lifecycle)); the applications page
   has a pipeline (one column per status) and a server-paged, server-sorted
@@ -47,7 +50,10 @@ organization as well as on the permissions below.
   donations are recorded), tags and communication preferences.
 - **Donations and pledges** — donations with payment method and status,
   recurring flag, dedications (in honor / in memory), receipt and thank-you
-  tracking; pledges with fulfilled amount, due date and status.
+  tracking; pledges with fulfilled amount, due date and status. A donation
+  can pay toward an open pledge of the same donor (`pledgeId`); a completed
+  one moves the pledge's fulfilled amount and status, and editing or
+  refunding it moves them back by the difference.
 - **Fundraising events** — dinners, galas, auctions, raffles, golf outings and
   walkathons, with ticketing, attendance, revenue goal, actual revenue and
   expenses; optionally linked to a calendar event.

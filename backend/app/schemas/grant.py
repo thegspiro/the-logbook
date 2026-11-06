@@ -922,6 +922,9 @@ class DonationCreate(DonationBase):
 
     campaign_id: Optional[UUID] = None
     donor_id: Optional[UUID] = None
+    # An open pledge of the same donor this gift pays toward; its fulfilled
+    # amount and status follow the donation from then on.
+    pledge_id: Optional[UUID] = None
 
 
 class DonationUpdate(BaseModel):
@@ -944,6 +947,8 @@ class DonationUpdate(BaseModel):
     tax_deductible: Optional[bool] = None
     campaign_id: Optional[UUID] = None
     donor_id: Optional[UUID] = None
+    # null unlinks the gift from its pledge, which gives the amount back.
+    pledge_id: Optional[UUID] = None
 
 
 class DonationResponse(DonationBase):
@@ -953,6 +958,7 @@ class DonationResponse(DonationBase):
     organization_id: UUID
     campaign_id: Optional[UUID] = None
     donor_id: Optional[UUID] = None
+    pledge_id: Optional[UUID] = None
     currency: str = "USD"
     transaction_id: Optional[str] = None
     check_number: Optional[str] = None

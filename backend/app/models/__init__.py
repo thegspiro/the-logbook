@@ -156,6 +156,7 @@ from app.models.facilities import (
 )
 from app.models.finance import (
     AdvanceReturn,
+    AdvanceStatement,
     ApprovalChain,
     ApprovalChainStep,
     ApprovalEntityType,
@@ -188,6 +189,8 @@ from app.models.finance import (
     PurchaseRequestPriority,
     PurchaseRequestStatus,
     QuickBooksChartAccount,
+    QuickBooksConnection,
+    QuickBooksPosting,
 )
 from app.models.forms import (
     FieldType,
@@ -909,6 +912,7 @@ __all__ = [
     "ExpenseType",
     "CheckRequest",
     "AdvanceReturn",
+    "AdvanceStatement",
     "CheckRequestStatus",
     "DuesSchedule",
     "DuesFrequency",
@@ -917,6 +921,8 @@ __all__ = [
     "ExportMapping",
     "ExportLog",
     "QuickBooksChartAccount",
+    "QuickBooksConnection",
+    "QuickBooksPosting",
     # Grant & Fundraising models
     "GrantOpportunity",
     "GrantApplication",

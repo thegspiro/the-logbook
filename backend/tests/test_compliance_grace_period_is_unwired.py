@@ -40,6 +40,12 @@ _OTHER_OWNERS = {
     # name, read by medical screening grading since 2026-11-04 (MS-16). See
     # test_medical_screening_grace_period.py.
     "app/services/medical_screening_service.py",
+    # DuesSchedule.grace_period_days — the dues schedule's own column, read by
+    # late fees, reminders and My Dues since 2026-11-06 (owner decision
+    # 2026-11-01, dues terms). See test_dues_terms_and_reminders.py.
+    "app/services/dues_terms.py",
+    "app/services/dues_reminders.py",
+    "app/services/my_dues.py",
 }
 
 

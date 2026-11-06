@@ -1,11 +1,11 @@
 /**
  * Record or edit a pledge — a donor's promise of a gift not yet received.
  *
- * `fundraising.manage`, the gate on both endpoints. A pledge's fulfilled
- * amount and status are recorded by whoever receives the money: nothing in
- * the backend moves them when a donation arrives, so the edit form asks for
- * both rather than guessing one from the other. The backend refuses a donor
- * or campaign outside the department.
+ * `fundraising.manage`, the gate on both endpoints. A donation recorded
+ * against a pledge moves its fulfilled amount and status in the backend
+ * (owner decision, 2026-11-01); the edit form still offers both, for money
+ * that arrived some other way or a correction. The backend refuses a donor or
+ * campaign outside the department.
  *
  * A create omits blank optional fields; an edit sends every field the form
  * owns, a cleared one as null (pitfall #1). The reminder switch is read by
@@ -93,11 +93,15 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
           pledgedAmount: Number(pledgedAmount).toFixed(2),
           pledgeDate,
           dueDate: dueDate || null,
-          fulfilledAmount: Number(fulfilledAmount || 0).toFixed(2),
-          status: status as PledgeStatus,
           notes: blankToNull(notes),
           reminderEnabled,
         };
+        // Only fields the user changed: recording a gift against the pledge
+        // moves both on the server, so echoing the loaded values back would
+        // undo a donation recorded while this dialog was open.
+        const fulfilled = Number(fulfilledAmount || 0).toFixed(2);
+        if (fulfilled !== Number(pledge.fulfilledAmount).toFixed(2)) payload.fulfilledAmount = fulfilled;
+        if (status !== pledge.status) payload.status = status as PledgeStatus;
         await fundraisingService.updatePledge(pledge.id, payload);
         toast.success('Pledge saved');
       } else {
@@ -252,8 +256,11 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
                 value={fulfilledAmount}
                 onChange={(e) => setFulfilledAmount(e.target.value)}
                 aria-invalid={Boolean(errors.fulfilledAmount)}
-                aria-describedby={describedBy('fulfilledAmount')}
+                aria-describedby={[describedBy('fulfilledAmount'), 'pledge-fulfilled-hint'].filter(Boolean).join(' ')}
               />
+              <p id="pledge-fulfilled-hint" className="text-theme-text-secondary mt-1 text-xs">
+                Donations recorded against this pledge add to this and set the status for you.
+              </p>
               {errorText('fulfilledAmount')}
             </div>
             <div>

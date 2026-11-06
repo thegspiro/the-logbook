@@ -3,8 +3,9 @@
  * it, the cash handed back, and what the member still owes.
  *
  * Every figure is the server's (`GET /finance/advances/{id}`), including
- * whether it is overdue, so this panel and the advances report always agree
- * (CLAUDE.md pitfall #29).
+ * whether it is overdue, its deadline and, on the periodic-statement method,
+ * its quarterly statements, so this panel and the advances report always
+ * agree (CLAUDE.md pitfall #29).
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -14,10 +15,16 @@ import { Trash2 } from 'lucide-react';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCurrency } from '../../../utils/currencyFormatting';
-import { formatDate } from '../../../utils/dateFormatting';
+import { formatCalendarDate, formatDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { advanceService } from '../services/api';
-import { ADVANCE_RETURN_DAYS, EXPENSE_REPORT_STATUS_COLORS, type AdvanceDetail, type AdvanceReturn } from '../types';
+import {
+  ADVANCE_RETURN_DAYS,
+  AdvanceReturnMethod,
+  EXPENSE_REPORT_STATUS_COLORS,
+  type AdvanceDetail,
+  type AdvanceReturn,
+} from '../types';
 import { AdvanceReturnDialog } from './AdvanceReturnDialog';
 
 const REPORT_STATUS_LABELS: Record<string, string> = {
@@ -93,6 +100,11 @@ export const AdvancePanel: React.FC<AdvancePanelProps> = ({ advanceId, canManage
   if (!advance) return null;
 
   const outstanding = Number(advance.outstanding);
+  const periodic = advance.returnMethod === AdvanceReturnMethod.PERIODIC_STATEMENT;
+  const statements = advance.statements ?? [];
+  const overdueReason = periodic
+    ? `More than ${String(ADVANCE_RETURN_DAYS)} days have passed since this advance's first quarterly statement.`
+    : `More than ${String(ADVANCE_RETURN_DAYS)} days have passed since this advance was issued.`;
 
   return (
     <section className="card p-6" aria-labelledby="advance-panel-heading">
@@ -116,6 +128,12 @@ export const AdvancePanel: React.FC<AdvancePanelProps> = ({ advanceId, canManage
         )}
       </div>
 
+      {advance.raisedBy && (
+        <p className="text-theme-text-secondary mb-4 text-sm">
+          Raised by {advance.raisedByName || 'the finance office'} for {advance.memberName}, who holds the advance.
+        </p>
+      )}
+
       <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div>
           <dt className="text-theme-text-secondary text-xs">Advanced</dt>
@@ -138,9 +156,47 @@ export const AdvancePanel: React.FC<AdvancePanelProps> = ({ advanceId, canManage
       {outstanding > 0 && advance.dueAt && (
         <p className={`mt-4 text-sm ${advance.overdue ? 'alert-danger' : 'text-theme-text-secondary'}`}>
           {advance.overdue
-            ? `More than ${String(ADVANCE_RETURN_DAYS)} days have passed since this advance was issued. What is still outstanding may have to be reported as the member's wages, and they cannot request another advance until it is settled.`
+            ? `${overdueReason} What is still outstanding may have to be reported as the member's wages, and they cannot request another advance until it is settled.`
             : `Due by ${formatDate(advance.dueAt, tz)}: submit expense reports against it, or return what was not spent.`}
         </p>
+      )}
+
+      {periodic && (
+        <>
+          <h3 className="text-theme-text-primary mt-6 mb-2 text-sm font-semibold">Quarterly statements</h3>
+          <p className="text-theme-text-secondary mb-2 text-xs">
+            The department follows the IRS periodic statement method: at the end of each calendar quarter the member is
+            emailed what is still outstanding, and has {ADVANCE_RETURN_DAYS} days from the first statement to account
+            for it.
+          </p>
+          {statements.length === 0 ? (
+            <p className="text-theme-text-secondary text-sm">No statements.</p>
+          ) : (
+            <ul className="divide-theme-surface-border divide-y">
+              {statements.map((statement) => (
+                <li
+                  key={statement.statementDate}
+                  className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+                >
+                  <span className="text-theme-text-primary">
+                    Quarter ending {formatCalendarDate(statement.statementDate)}
+                    <span className="text-theme-text-secondary">
+                      {' '}
+                      · account for by {formatCalendarDate(statement.dueDate)}
+                    </span>
+                  </span>
+                  <span className="text-theme-text-secondary">
+                    {statement.emailedAt
+                      ? `Emailed ${formatDate(statement.emailedAt, tz)}, listing ${formatCurrency(statement.outstanding ?? null)}`
+                      : statement.upcoming
+                        ? 'Upcoming'
+                        : 'Not yet emailed'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
       <h3 className="text-theme-text-primary mt-6 mb-2 text-sm font-semibold">Expense reports</h3>
