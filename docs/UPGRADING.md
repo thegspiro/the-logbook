@@ -721,6 +721,39 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Finance: an optional live QuickBooks Online connection (2026-11-06)
+
+Nothing blocks a restart. Migration `e4c6e82acbc2` creates two empty tables,
+`quickbooks_connections` and `quickbooks_postings`, and changes no existing
+row.
+
+- **Four new, optional settings**, all blank by default, which leaves the
+  feature off: `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`, `QBO_REDIRECT_URI` and
+  `QBO_ENVIRONMENT` (`sandbox`, the default, or `production`; anything else
+  refuses to start, like any invalid setting). They are passed through all
+  three compose files. While any of the first three is blank, **Finance ›
+  QuickBooks Export** says the connection is not configured and the CSV export
+  works exactly as before.
+- **Setting it up.** Register an app at developer.intuit.com with the
+  QuickBooks Online Accounting scope (`com.intuit.quickbooks.accounting`),
+  add `https://<your-domain>/api/v1/finance/quickbooks/oauth/callback` as a
+  redirect URI (exactly, trailing slash and all), and copy the Client ID and
+  Client secret from **Keys & OAuth** — the Development keys with
+  `QBO_ENVIRONMENT=sandbox`, the Production keys with `production`. The
+  backend must be able to reach `appcenter.intuit.com` (the browser only),
+  `oauth.platform.intuit.com`, `developer.api.intuit.com` and
+  `quickbooks.api.intuit.com` (or `sandbox-quickbooks.api.intuit.com`) over
+  HTTPS. See `docs/FINANCE_MODULE.md`, "QuickBooks Online connection".
+- **Changing `QBO_ENVIRONMENT` after a department connects** stops its posting
+  and asks the Treasurer to reconnect: tokens issued for one environment are
+  never sent to the other.
+- **A new scheduled task, `quickbooks_sync`**, every five minutes; it does
+  nothing until the settings are present and a department has connected.
+- **Downgrading** drops both tables. Payments QuickBooks already accepted are
+  then offered to the CSV export again, and importing that file would record
+  them twice; exclude them by period, or delete the imported duplicates in
+  QuickBooks.
+
 ### Expense receipts: one receipt on several lines, a mileage trip log, and three board reports (2026-11-06)
 
 Nothing blocks a restart. Migration `5f3bc23bc9a6` adds two nullable columns

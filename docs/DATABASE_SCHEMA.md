@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**357 tables · 5827 columns · 1203 foreign keys**
+**359 tables · 5863 columns · 1206 foreign keys**
 
 ---
 
@@ -298,6 +298,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 20 | Individual member dues payment record |
 | [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 33 | Purchase request submitted by a member |
+| [`quickbooks_connections`](#quickbooks_connections) | `QuickBooksConnection` | 18 | A department's connection to its QuickBooks Online company. |
+| [`quickbooks_postings`](#quickbooks_postings) | `QuickBooksPosting` | 18 | One payment's journey to QuickBooks Online as a Purchase. |
 
 ### Forms
 
@@ -4852,6 +4854,74 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_purchase_requests_org_number` (`organization_id`, `request_number`)
+
+### `quickbooks_connections`
+
+**QuickBooksConnection** · `app/models/finance.py`
+
+> A department's connection to its QuickBooks Online company. One row per department. The tokens Intuit issues are encrypted at rest; the refresh token changes as Intuit rotates it, and the newest one is the only one kept ("Always store the latest refresh_token value", Intuit's OAuth 2.0 guide). ``pending_attempt`` holds the one connect attempt in flight (its nonce, who started it, when it expires), encrypted too, so a callback can be completed once and only by the browser that began it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, UQ |  | → `organizations.id` ON DELETE CASCADE |
+| `status` | VARCHAR(20) | no |  | `'disconnected'` |  |
+| `environment` | VARCHAR(20) | yes |  |  |  |
+| `realm_id` | VARCHAR(32) | yes |  |  |  |
+| `access_token` | TEXT | yes |  |  |  |
+| `refresh_token` | TEXT | yes |  |  |  |
+| `access_token_expires_at` | DATETIME | yes |  |  |  |
+| `refresh_token_expires_at` | DATETIME | yes |  |  |  |
+| `pending_attempt` | TEXT | yes |  |  |  |
+| `post_from` | DATETIME | yes |  |  |  |
+| `connected_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `connected_at` | DATETIME | yes |  |  |  |
+| `last_sync_at` | DATETIME | yes |  |  |  |
+| `last_error` | VARCHAR(500) | yes |  |  |  |
+| `sync_lease_until` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_quickbooks_connections_organization_id` (`organization_id`)
+
+### `quickbooks_postings`
+
+**QuickBooksPosting** · `app/models/finance.py`
+
+> One payment's journey to QuickBooks Online as a Purchase. The unique key on (organization, payment type, payment) is what makes a payment post once whatever runs twice: a second sweep finds the row and leaves it. ``request_id`` is sent as Intuit's ``requestid``, which makes Intuit answer a resent create with the original response instead of a second Purchase; it is kept across transient failures and replaced only after Intuit refused the request outright, when nothing was created.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `payment_type` | VARCHAR(20) | no |  |  |  |
+| `payment_id` | VARCHAR(36) | no |  |  |  |
+| `document_number` | VARCHAR(20) | no |  |  |  |
+| `status` | VARCHAR(20) | no |  | `'queued'` |  |
+| `request_id` | VARCHAR(50) | no | UQ |  |  |
+| `realm_id` | VARCHAR(32) | yes |  |  |  |
+| `qb_purchase_id` | VARCHAR(32) | yes |  |  |  |
+| `qb_vendor_id` | VARCHAR(32) | yes |  |  |  |
+| `vendor_name` | VARCHAR(300) | yes |  |  |  |
+| `amount` | NUMERIC(12, 2) | yes |  |  |  |
+| `attempts` | INTEGER | no |  | `0` |  |
+| `next_attempt_at` | DATETIME | yes |  |  |  |
+| `last_error` | VARCHAR(500) | yes |  |  |  |
+| `posted_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_quickbooks_postings_org_status` (`organization_id`, `status`)
+
+**Constraints**
+
+- UNIQUE `uq_quickbooks_postings_payment` (`organization_id`, `payment_type`, `payment_id`)
+- UNIQUE `uq_quickbooks_postings_purchase` (`realm_id`, `qb_purchase_id`)
+- UNIQUE `uq_quickbooks_postings_request_id` (`request_id`)
 
 ## Forms
 
@@ -12397,7 +12467,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (442 references)
+### → `users` (443 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12725,6 +12795,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `purchase_requests` | `first_approved_by` | SET NULL | yes |
 | `purchase_requests` | `requested_by` | RESTRICT | no |
 | `push_subscriptions` | `user_id` | CASCADE | no |
+| `quickbooks_connections` | `connected_by` | SET NULL | yes |
 | `recertification_pathways` | `created_by` | SET NULL | yes |
 | `renewal_tasks` | `user_id` | CASCADE | no |
 | `reorder_receipts` | `received_by` | SET NULL | yes |
@@ -12844,7 +12915,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (295 references)
+### → `organizations` (297 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13065,6 +13136,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `public_portal_data_whitelist` | `organization_id` | CASCADE | no |
 | `purchase_requests` | `organization_id` | CASCADE | no |
 | `push_subscriptions` | `organization_id` | CASCADE | no |
+| `quickbooks_connections` | `organization_id` | CASCADE | no |
+| `quickbooks_postings` | `organization_id` | CASCADE | no |
 | `recertification_pathways` | `organization_id` | CASCADE | no |
 | `renewal_tasks` | `organization_id` | CASCADE | no |
 | `reorder_receipts` | `organization_id` | CASCADE | no |

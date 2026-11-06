@@ -2008,3 +2008,89 @@ export interface BudgetRequestReminderSettings {
   bellNotices: boolean;
   isDefault: boolean;
 }
+
+// ============================================
+// QuickBooks Online connection
+// ============================================
+
+export const QuickBooksConnectionStatus = {
+  DISCONNECTED: 'disconnected',
+  CONNECTED: 'connected',
+  RECONNECT_REQUIRED: 'reconnect_required',
+} as const;
+export type QuickBooksConnectionStatus = (typeof QuickBooksConnectionStatus)[keyof typeof QuickBooksConnectionStatus];
+
+export const QuickBooksPostingStatus = {
+  QUEUED: 'queued',
+  RETRYING: 'retrying',
+  POSTED: 'posted',
+  FAILED: 'failed',
+  SUPERSEDED: 'superseded',
+} as const;
+export type QuickBooksPostingStatus = (typeof QuickBooksPostingStatus)[keyof typeof QuickBooksPostingStatus];
+
+/** How each posting status reads to a Treasurer. */
+export const QUICKBOOKS_POSTING_STATUS_LABELS: Record<QuickBooksPostingStatus, string> = {
+  [QuickBooksPostingStatus.QUEUED]: 'Waiting to post',
+  [QuickBooksPostingStatus.RETRYING]: 'Retrying',
+  [QuickBooksPostingStatus.POSTED]: 'Accepted by QuickBooks',
+  [QuickBooksPostingStatus.FAILED]: 'Refused by QuickBooks',
+  [QuickBooksPostingStatus.SUPERSEDED]: 'Sent in a CSV file',
+};
+
+/** The payments a connection posts, as `quickbooks_postings.payment_type`. */
+export const QuickBooksPaymentType = {
+  PURCHASE_REQUEST: 'purchase_request',
+  CHECK_REQUEST: 'check_request',
+  EXPENSE_REPORT: 'expense_report',
+} as const;
+export type QuickBooksPaymentType = (typeof QuickBooksPaymentType)[keyof typeof QuickBooksPaymentType];
+
+export interface QuickBooksPostingCounts {
+  queued: number;
+  retrying: number;
+  posted: number;
+  failed: number;
+  superseded: number;
+}
+
+/** `GET /finance/quickbooks/connection`. */
+export interface QuickBooksConnection {
+  /** False while the server has no Intuit app (QBO_CLIENT_ID etc. blank). */
+  configured: boolean;
+  environment?: 'sandbox' | 'production' | null;
+  status: QuickBooksConnectionStatus;
+  connectedEnvironment?: string | null;
+  environmentMismatch: boolean;
+  realmId?: string | null;
+  connectedAt?: string | null;
+  connectedByName?: string | null;
+  postFrom?: string | null;
+  lastSyncAt?: string | null;
+  lastError?: string | null;
+  counts: QuickBooksPostingCounts;
+}
+
+export interface QuickBooksPosting {
+  id: string;
+  paymentType: QuickBooksPaymentType;
+  paymentId: string;
+  documentNumber: string;
+  status: QuickBooksPostingStatus;
+  vendorName?: string | null;
+  amount?: number | string | null;
+  qbPurchaseId?: string | null;
+  attempts: number;
+  nextAttemptAt?: string | null;
+  lastError?: string | null;
+  postedAt?: string | null;
+  createdAt: string;
+}
+
+export interface QuickBooksSyncResult {
+  queued: number;
+  posted: number;
+  failed: number;
+  retrying: number;
+  skipped?: string | null;
+}

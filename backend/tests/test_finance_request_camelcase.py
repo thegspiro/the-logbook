@@ -67,6 +67,7 @@ from app.schemas.finance import (
     MileageTrip,
     PurchaseRequestCreate,
     PurchaseRequestUpdate,
+    QuickBooksPostFromUpdate,
     ReimbursementCheckCreate,
     ReimbursementReportCreate,
     ShareLineReceiptRequest,
@@ -343,6 +344,7 @@ SNAKE_BODIES: dict[type[BaseModel], dict] = {
         "income_account": "Dues Income",
         "deposit_account": "Operating Checking",
     },
+    QuickBooksPostFromUpdate: {"post_from": "2026-11-06T05:00:00Z"},
     AdvanceAccountsUpdate: {
         "advances_account": "Employee Advances",
         "cash_account": "Operating Checking",

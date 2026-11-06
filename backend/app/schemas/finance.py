@@ -2796,3 +2796,95 @@ class FinanceDashboardResponse(BaseModel):
     pending_check_requests: int
     dues_collection_rate: float
     recent_transactions: list[dict] = []
+
+
+# ============================================
+# QuickBooks Online connection
+# ============================================
+
+
+class QuickBooksPostingCountsResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    queued: int = 0
+    retrying: int = 0
+    posted: int = 0
+    failed: int = 0
+    superseded: int = 0
+
+
+class QuickBooksConnectionResponse(UTCResponseBase):
+    """The department's QuickBooks Online connection, as the settings page
+    shows it."""
+
+    model_config = _RESPONSE_CONFIG
+
+    # False while QBO_CLIENT_ID, QBO_CLIENT_SECRET or QBO_REDIRECT_URI is
+    # blank on the server: nothing can connect and the CSV export is the way.
+    configured: bool
+    # The server's QBO_ENVIRONMENT (sandbox or production), when configured.
+    environment: Optional[str] = None
+    # disconnected, connected or reconnect_required.
+    status: str
+    connected_environment: Optional[str] = None
+    environment_mismatch: bool = False
+    realm_id: Optional[str] = None
+    connected_at: Optional[datetime] = None
+    connected_by_name: Optional[str] = None
+    post_from: Optional[datetime] = None
+    last_sync_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+    counts: QuickBooksPostingCountsResponse
+
+
+class QuickBooksConnectStartResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    authorization_url: str
+
+
+class QuickBooksDisconnectResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    # False when Intuit did not confirm the revocation; the tokens are gone
+    # here either way, and the app can be removed from QuickBooks' Apps page.
+    revoked: bool
+
+
+class QuickBooksPostFromUpdate(BaseModel):
+    """The first day payments post live; earlier ones stay on the CSV export."""
+
+    model_config = _REQUEST_CONFIG
+
+    post_from: datetime
+
+
+class QuickBooksSyncResponse(BaseModel):
+    model_config = _RESPONSE_CONFIG
+
+    queued: int = 0
+    posted: int = 0
+    failed: int = 0
+    retrying: int = 0
+    skipped: Optional[str] = None
+
+
+class QuickBooksPostingResponse(UTCResponseBase):
+    """One payment's posting to QuickBooks Online."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    payment_type: str
+    payment_id: str
+    document_number: str
+    # queued, retrying, posted, failed or superseded.
+    status: str
+    vendor_name: Optional[str] = None
+    amount: Optional[Decimal] = None
+    qb_purchase_id: Optional[str] = None
+    attempts: int
+    next_attempt_at: Optional[datetime] = None
+    last_error: Optional[str] = None
+    posted_at: Optional[datetime] = None
+    created_at: datetime

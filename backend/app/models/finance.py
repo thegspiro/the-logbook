@@ -2172,3 +2172,140 @@ class QuickBooksChartAccount(Base):
     )
 
     __table_args__ = (Index("ix_finance_qb_chart_accounts_org_id", "organization_id"),)
+
+
+class QuickBooksConnection(Base):
+    """A department's connection to its QuickBooks Online company.
+
+    One row per department. The tokens Intuit issues are encrypted at rest;
+    the refresh token changes as Intuit rotates it, and the newest one is the
+    only one kept ("Always store the latest refresh_token value", Intuit's
+    OAuth 2.0 guide). ``pending_attempt`` holds the one connect attempt in
+    flight (its nonce, who started it, when it expires), encrypted too, so a
+    callback can be completed once and only by the browser that began it.
+    """
+
+    __tablename__ = "quickbooks_connections"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    # disconnected, connected, or reconnect_required (Intuit refused the
+    # refresh token or the scope; posting waits until someone reconnects).
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="disconnected"
+    )
+    # sandbox or production: the environment the tokens were issued for, so a
+    # change of QBO_ENVIRONMENT does not send them to the other one.
+    environment: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # The QuickBooks company (Intuit's realmId) the tokens reach.
+    realm_id: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    access_token: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    refresh_token: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    access_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    refresh_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    pending_attempt: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    # Payments made before this are left to the CSV export: connecting must
+    # not post a department's history into books that already hold it.
+    post_from: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    connected_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    connected_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_sync_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # A run holds this lease while it talks to Intuit, so the scheduled task
+    # and a Treasurer's "Post now" never refresh the same token at once.
+    sync_lease_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class QuickBooksPosting(Base):
+    """One payment's journey to QuickBooks Online as a Purchase.
+
+    The unique key on (organization, payment type, payment) is what makes a
+    payment post once whatever runs twice: a second sweep finds the row and
+    leaves it. ``request_id`` is sent as Intuit's ``requestid``, which makes
+    Intuit answer a resent create with the original response instead of a
+    second Purchase; it is kept across transient failures and replaced only
+    after Intuit refused the request outright, when nothing was created.
+    """
+
+    __tablename__ = "quickbooks_postings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # purchase_request, check_request or expense_report.
+    payment_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    payment_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    document_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    # queued, retrying (sent, outcome unknown or temporarily refused: resent
+    # with the same request id), posted, failed (refused; nothing created),
+    # or superseded (sent in a CSV export file instead).
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
+    request_id: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    realm_id: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    qb_purchase_id: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    qb_vendor_id: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    vendor_name: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    posted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "payment_type",
+            "payment_id",
+            name="uq_quickbooks_postings_payment",
+        ),
+        # QuickBooks ids are unique within one company; two postings naming
+        # the same Purchase would mean one payment was recorded twice.
+        UniqueConstraint(
+            "realm_id", "qb_purchase_id", name="uq_quickbooks_postings_purchase"
+        ),
+        Index("ix_quickbooks_postings_org_status", "organization_id", "status"),
+    )

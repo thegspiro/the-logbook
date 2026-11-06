@@ -103,6 +103,11 @@ import type {
   DuesDefaultAccountsPayload,
   DuesExportReadiness,
   QuickBooksChart,
+  QuickBooksConnection,
+  QuickBooksPaymentType,
+  QuickBooksPosting,
+  QuickBooksPostingStatus,
+  QuickBooksSyncResult,
 } from '../types';
 import { asArray } from '../../../utils/asArray';
 import { readDeleteOutcome, type DeleteOutcome } from '../../../utils/deleteOutcome';
@@ -1216,6 +1221,50 @@ export const exportMappingService = {
       filename:
         filenameFromContentDisposition(typeof header === 'string' ? header : undefined) ?? 'quickbooks-journal.csv',
     };
+  },
+};
+
+/** The department's QuickBooks Online connection and its per-payment postings. */
+export const quickBooksOnlineService = {
+  async connection(): Promise<QuickBooksConnection> {
+    const response = await api.get<QuickBooksConnection>('/finance/quickbooks/connection');
+    return response.data;
+  },
+
+  /** Intuit's consent URL; the browser navigates there to connect. */
+  async startConnect(): Promise<string> {
+    const response = await api.post<{ authorizationUrl: string }>('/finance/quickbooks/oauth/start');
+    return response.data.authorizationUrl;
+  },
+
+  /** Disconnect and revoke; `revoked` is false when Intuit did not confirm. */
+  async disconnect(): Promise<{ revoked: boolean }> {
+    const response = await api.post<{ revoked: boolean }>('/finance/quickbooks/disconnect');
+    return response.data;
+  },
+
+  async setPostFrom(postFrom: string): Promise<QuickBooksConnection> {
+    const response = await api.put<QuickBooksConnection>('/finance/quickbooks/connection', { postFrom });
+    return response.data;
+  },
+
+  /** Post due payments now rather than at the next scheduled run. */
+  async syncNow(): Promise<QuickBooksSyncResult> {
+    const response = await api.post<QuickBooksSyncResult>('/finance/quickbooks/sync');
+    return response.data;
+  },
+
+  async postings(params?: {
+    status?: QuickBooksPostingStatus;
+    paymentType?: QuickBooksPaymentType;
+    paymentId?: string;
+  }): Promise<QuickBooksPosting[]> {
+    const response = await api.get<QuickBooksPosting[]>('/finance/quickbooks/postings', { params });
+    return asArray(response.data);
+  },
+
+  async retry(postingId: string): Promise<void> {
+    await api.post(`/finance/quickbooks/postings/${encodeURIComponent(postingId)}/retry`);
   },
 };
 

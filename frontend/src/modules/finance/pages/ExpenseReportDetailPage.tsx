@@ -59,10 +59,12 @@ import {
   ExpenseReportStatus,
   EXPENSE_REPORT_STATUS_COLORS,
   APPROVAL_STEP_STATUS_COLORS,
+  QuickBooksPaymentType,
   EXPENSE_TYPE_LABELS,
   type ExpenseLineItem,
 } from '../types';
 import { ApprovalStepActions } from '../components/ApprovalStepActions';
+import { QuickBooksPostingNote } from '../components/QuickBooksPostingNote';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
@@ -406,6 +408,7 @@ const ExpenseReportDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(er.qbExportedAt, tz)}</p>
             </div>
           )}
+          <QuickBooksPostingNote paymentType={QuickBooksPaymentType.EXPENSE_REPORT} paymentId={er.id} />
           {er.purchaseRequestId && (
             <div>
               <p className="text-theme-text-secondary text-xs">Claims back purchase</p>

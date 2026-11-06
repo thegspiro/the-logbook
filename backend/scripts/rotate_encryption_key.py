@@ -162,6 +162,11 @@ _PLAIN_COLUMNS = [
     ),
     ("history_revisions", "id", ["snapshot"]),
     ("integrations", "id", ["encrypted_config"]),
+    (
+        "quickbooks_connections",
+        "id",
+        ["access_token", "refresh_token", "pending_attempt"],
+    ),
     ("external_training_providers", "id", ["api_key", "api_secret", "client_secret"]),
     ("apparatus_report_configs", "id", ["email_recipients"]),
     ("approval_chain_steps", "id", ["notification_emails"]),

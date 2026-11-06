@@ -3162,7 +3162,18 @@ export, subcategory inheritance and exporting dues were closed on 2026-10-14. Th
 remain, and each needs a decision or a follow-up change rather than a fix
 inside that one:
 
-- **There is no live QuickBooks connection.** Posting entries and reading back
+- ✅ **Resolved (owner decision 2026-11-01: build it, posting as Purchases to
+  vendors; built 2026-11-06).** A department connects its QuickBooks Online
+  company on **Finance › QuickBooks Export** (`finance.manage`), with the
+  Intuit app named by `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET` /
+  `QBO_REDIRECT_URI` / `QBO_ENVIRONMENT`; without them the page says it is not
+  configured. Paid purchase requests, issued checks and paid expense reports
+  then post as cash **Purchases** to their vendors, once each (see
+  `docs/FINANCE_MODULE.md`, "QuickBooks Online connection", and what is still
+  open under "Finance — QuickBooks Online Connection Limits" below). Reading
+  QuickBooks budgets and actuals back was not part of the decision and is not
+  built. The original entry follows.
+  **There is no live QuickBooks connection.** Posting entries and reading back
   the chart of accounts, budgets and actuals needs the QuickBooks Online
   Accounting API. That means an Intuit developer app, OAuth 2.0 with encrypted
   per-organization tokens, and a background sync, and it is planned as its own
@@ -3180,7 +3191,10 @@ inside that one:
   cannot see whether the Treasurer then imported the file. A file downloaded
   and never imported leaves its payments marked as sent; the Treasurer sends
   that period again with `includeExported`. The live connection would close
-  this, since it would know what QuickBooks accepted. _(2026-10-18)_ The
+  this, since it would know what QuickBooks accepted. _(2026-11-06)_ It does,
+  for the payments it posts: each reads **Accepted by QuickBooks**, with
+  QuickBooks' own record number, on its detail page and on the connection
+  card. A payment that goes in a file is unchanged. _(2026-10-18)_ The
   Treasurer can now mark a file as imported in **Export history**, and sending
   a marked file's payments again is refused until they confirm the earlier
   entries were deleted. That depends on the Treasurer marking it: an imported
@@ -3205,6 +3219,58 @@ inside that one:
   parser reads the Account List report's layout as Intuit has published it
   ("Account" or "Full name" columns); a future change to that report could
   need the parser updated.
+
+## Finance — QuickBooks Online Connection Limits (2026-11-06)
+
+The live connection (owner decision 2026-11-01) posts each paid purchase
+request, issued check and paid expense report as a QuickBooks Purchase to its
+vendor. Each Intuit detail it relies on was checked against Intuit's own
+documentation (the list and URLs are in
+`app/services/quickbooks_online_client.py`); what could not be confirmed there
+was left out rather than guessed, and is listed here with the other gaps. Each
+needs a decision or a follow-up change:
+
+- **Every payment posts as a cash expense from a bank account.** Intuit's
+  pages show a Purchase with `PaymentType` `Cash` paid from a Bank account,
+  and name check and credit card purchases without showing their
+  `PaymentType` values or the account type each needs. So a check is recorded
+  as an expense, not a QuickBooks Check (no check number on it), and a
+  category paid from a credit card account is refused live ("not a Bank
+  account") and goes in the CSV export instead. Posting checks as Checks and
+  card payments as credit card expenses needs Intuit's Purchase reference page
+  read and those two values confirmed.
+- **Some payments still need the CSV export.** Cash advances, expense reports
+  and reimbursement checks that account for an advance (a Purchase is paid from
+  one account, and those are paid partly from the advance), dues, returned
+  advance cash, and a report whose lines are paid from different accounts.
+  A department that is connected and has any of these runs both.
+- **Voiding a posted check does not reverse it in QuickBooks.** The CSV export
+  reverses a voided check; the live connection makes no change to a Purchase
+  it created (the scope it holds can, but deleting records was not part of the
+  decision). Void it in QuickBooks too.
+- **Vendors are matched by display name**, ignoring case. A vendor renamed in
+  QuickBooks gets a new one created under the old name on the next payment to
+  it; a name used by a QuickBooks customer or employee is refused (Intuit error 6240) and the posting says so. An inactive vendor is refused, not
+  reactivated.
+- **A subaccount is found by its `Parent:Child` name only when QuickBooks
+  returns `FullyQualifiedName` on the account.** That field was confirmed on
+  Intuit's Class and Item examples, not on Account; without it, a subaccount
+  matches only by its own name, and a mapping written `Parent:Child` is refused
+  with "QuickBooks has no account named …". Matching is exact, case included,
+  as the CSV export's chart check is.
+- **`TxnDate` and `DocNumber`** are set from the payment's day on the
+  department's calendar and its request number. Intuit documents both on
+  transaction entities generally and shows them on other transactions' examples;
+  they were not seen on a Purchase example.
+- **A payment waiting on a retry when the department disconnects stays out of
+  the CSV export**: QuickBooks may already hold it. Reconnecting to the same
+  company sends it again under the same request id, which Intuit answers with
+  the original Purchase. Reconnecting to a different company would create it
+  there as a new Purchase.
+- **Posting starts from the moment of connecting.** Earlier payments stay on
+  the CSV export; the Treasurer can move the date (**Post payments made on or
+  after**), and a payment already sent in a file is never posted.
+- **Reading budgets and actuals back from QuickBooks** is not built.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 

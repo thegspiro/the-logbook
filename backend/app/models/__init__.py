@@ -189,6 +189,8 @@ from app.models.finance import (
     PurchaseRequestPriority,
     PurchaseRequestStatus,
     QuickBooksChartAccount,
+    QuickBooksConnection,
+    QuickBooksPosting,
 )
 from app.models.forms import (
     FieldType,
@@ -919,6 +921,8 @@ __all__ = [
     "ExportMapping",
     "ExportLog",
     "QuickBooksChartAccount",
+    "QuickBooksConnection",
+    "QuickBooksPosting",
     # Grant & Fundraising models
     "GrantOpportunity",
     "GrantApplication",

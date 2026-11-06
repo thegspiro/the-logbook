@@ -79,6 +79,7 @@ from app.models.finance import (
     PurchaseRequest,
     PurchaseRequestStatus,
     QuickBooksChartAccount,
+    QuickBooksPosting,
     check_request_needs_receipt,
 )
 from app.models.user import Organization, Position, User
@@ -532,6 +533,28 @@ QB_IMPORT_MAX_ROWS = 999
 # A pending export younger than this holds off a second one. An export the
 # process died in the middle of stays pending; past this it no longer blocks.
 QB_EXPORT_IN_PROGRESS_WINDOW = timedelta(minutes=15)
+
+# The payments a QuickBooks Online connection posts live, as
+# quickbooks_postings.payment_type (app/services/quickbooks_sync_service.py).
+PAYMENT_PURCHASE = "purchase_request"
+PAYMENT_CHECK = "check_request"
+PAYMENT_REPORT = "expense_report"
+# A posting in one of these is QuickBooks' to record (or already recorded):
+# the CSV export leaves its payment out, or the books would hold it twice. A
+# failed posting created nothing in QuickBooks, so its payment may go in the
+# file; a superseded one already did.
+LIVE_POSTING_STATUSES = ("queued", "retrying", "posted")
+
+
+def live_posting_clause(org_id: str, payment_type: str, payment_column: Any) -> Any:
+    """True for a payment no live posting has claimed (see above)."""
+    return ~exists().where(
+        QuickBooksPosting.organization_id == org_id,
+        QuickBooksPosting.payment_type == payment_type,
+        QuickBooksPosting.payment_id == payment_column,
+        QuickBooksPosting.status.in_(LIVE_POSTING_STATUSES),
+    )
+
 
 # Appended to a voided check's request number to make its reversing entry's
 # Journal No: distinct from the original's, and recognisably tied to it.
@@ -8466,17 +8489,20 @@ class FinanceService:
             PurchaseRequest.status == PurchaseRequestStatus.PAID,
             PurchaseRequest.paid_at >= date_start,
             PurchaseRequest.paid_at <= date_end,
+            live_posting_clause(org_id, PAYMENT_PURCHASE, PurchaseRequest.id),
         ]
         cr_filters = [
             CheckRequest.organization_id == org_id,
             CheckRequest.check_date >= date_start,
             CheckRequest.check_date <= date_end,
+            live_posting_clause(org_id, PAYMENT_CHECK, CheckRequest.id),
         ]
         er_filters = [
             ExpenseReport.organization_id == org_id,
             ExpenseReport.status == ExpenseReportStatus.PAID,
             ExpenseReport.paid_at >= date_start,
             ExpenseReport.paid_at <= date_end,
+            live_posting_clause(org_id, PAYMENT_REPORT, ExpenseReport.id),
             # A report a reimbursement check paid goes out as that check's
             # entry, so a void can reverse it (finance_reimbursement.py).
             ~exists().where(

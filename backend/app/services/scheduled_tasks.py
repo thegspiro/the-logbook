@@ -635,6 +635,12 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "quickbooks_sync": {
+        "description": "Post paid purchase requests, issued checks and paid expense reports to each connected QuickBooks Online company as Purchases, retrying failures with backoff (one posting per payment and Intuit's requestid, so a second run posts nothing twice; no-op unless QBO_CLIENT_ID, QBO_CLIENT_SECRET and QBO_REDIRECT_URI are set)",
+        "frequency": "every 5 minutes",
+        "recommended_time": "*/5 * * * *",
+        "cron": "*/5 * * * *",
+    },
     "calendar_sync": {
         "description": "Publish department events to each connected Google Calendar or Outlook integration's calendar: create, update and delete what changed, retrying failures with backoff (no-op unless CALENDAR_SYNC_ENABLED)",
         "frequency": "every 5 minutes",
@@ -8312,6 +8318,52 @@ async def run_calendar_sync(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_quickbooks_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Post due payments to each connected QuickBooks Online company.
+
+    Does nothing while the Intuit app is not configured. Each department runs
+    on its own (app.services.quickbooks_sync_service.run_for_organization),
+    so one department's failure neither undoes nor stops another's.
+    """
+    from app.models.finance import QuickBooksConnection
+    from app.services import quickbooks_online_client as qbo
+    from app.services.quickbooks_sync_service import (
+        CONNECTED,
+        run_for_organization,
+    )
+
+    if qbo.configured_credentials() is None:
+        return {"task": "quickbooks_sync", "skipped": "QuickBooks is not configured"}
+    result = await db.execute(
+        select(QuickBooksConnection.organization_id)
+        .join(Organization, Organization.id == QuickBooksConnection.organization_id)
+        .where(
+            QuickBooksConnection.status == CONNECTED,
+            Organization.active.isnot(False),
+        )
+    )
+    org_ids = [str(org_id) for org_id in result.scalars().all()]
+    posted = 0
+    failed_orgs = 0
+    for org_id in org_ids:
+        try:
+            counts = await run_for_organization(db, org_id)
+            posted += int(counts.get("posted", 0) or 0)
+        except Exception as e:
+            await db.rollback()
+            logger.opt(exception=True).warning(
+                "QuickBooks sync failed for org {}", org_id
+            )
+            await persist_task_error_log(org_id, "QuickBooks sync", e)
+            failed_orgs += 1
+    return {
+        "task": "quickbooks_sync",
+        "organizations": len(org_ids),
+        "posted": posted,
+        "failed": failed_orgs,
+    }
+
+
 # Task runner map
 async def run_election_lifecycle(db: AsyncSession) -> Dict[str, Any]:
     """Run election lifecycle transitions for every organization.
@@ -8388,6 +8440,7 @@ TASK_RUNNERS = {
     "external_training_auto_sync": run_external_training_auto_sync,
     "salesforce_auto_sync": run_salesforce_auto_sync,
     "calendar_sync": run_calendar_sync,
+    "quickbooks_sync": run_quickbooks_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
     "dues_late_fees": run_dues_late_fees,
     "dues_reminders": run_dues_reminders,
@@ -8435,6 +8488,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Every 5 minutes: the first retry of a failed calendar push is due 5
     # minutes after it (calendar_sync_service.RETRY_DELAYS).
     "calendar_sync": 300,
+    # Every 5 minutes: the first retry of a QuickBooks posting is due 5
+    # minutes after it fails (quickbooks_sync_service.RETRY_DELAYS).
+    "quickbooks_sync": 300,
     # Every 15 minutes
     "inventory_notifications": 900,
     "election_lifecycle": 900,

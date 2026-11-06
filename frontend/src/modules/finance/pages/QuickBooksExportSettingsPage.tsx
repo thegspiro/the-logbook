@@ -31,6 +31,7 @@ import { RunExportSection } from '../components/RunExportSection';
 import { DuesExportSection } from '../components/DuesExportSection';
 import { AdvanceExportSection } from '../components/AdvanceExportSection';
 import { ChartOfAccountsSection } from '../components/ChartOfAccountsSection';
+import { QuickBooksOnlineSection } from '../components/QuickBooksOnlineSection';
 import { notInChartHint, UNSAFE_ACCOUNT_NAME_HINT } from '../utils/qbAccountIssues';
 import { ExportReadinessStatus } from '../types';
 import type { ExportMapping, ExportReadiness, ExportReadinessCategory } from '../types';
@@ -177,6 +178,8 @@ const QuickBooksExportSettingsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {header}
+
+      <QuickBooksOnlineSection />
 
       {error && (
         <div role="alert" className="alert-danger flex items-center gap-3 rounded-lg p-4 text-sm">

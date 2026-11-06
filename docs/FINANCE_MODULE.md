@@ -2016,6 +2016,96 @@ Export format:
 - **IIF** (future): QuickBooks Desktop interchange format
 - Design the export service with a strategy pattern so adding QBO API later is straightforward
 
+**QuickBooks Online connection** _(owner decision 2026-11-01, built 2026-11-06, migration `e4c6e82acbc2`)_
+
+A department may connect its QuickBooks Online company; payments then post to
+it as QuickBooks **Purchases** to their vendors, as decided on 2026-10-09
+(`docs/KNOWN_LIMITATIONS.md`, "Finance — QuickBooks Export Gaps"), instead of
+going in the journal-entry file. A department that does not connect sees no
+change. What remains open is under "Finance — QuickBooks Online Connection
+Limits" in `docs/KNOWN_LIMITATIONS.md`.
+
+- **Setup (the operator).** Register an app at developer.intuit.com with the
+  **QuickBooks Online Accounting** scope (`com.intuit.quickbooks.accounting`,
+  the only scope requested). Add the redirect URI
+  `https://<your-domain>/api/v1/finance/quickbooks/oauth/callback`, exactly.
+  Set `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET` and `QBO_REDIRECT_URI` from the app's
+  **Keys & OAuth** page, and `QBO_ENVIRONMENT` to `sandbox` (the Development
+  keys and a sandbox company; the default) or `production` (the Production
+  keys and real books). The names follow the repo's `<PROVIDER>_CLIENT_ID` /
+  `_CLIENT_SECRET` / `_REDIRECT_URI` convention. With any of the first three
+  blank the connection reports `configured: false` and nothing is posted.
+- **Connecting (the Treasurer).** **Connect to QuickBooks** on Finance ›
+  QuickBooks Export sends the browser to Intuit's consent page, where they pick
+  the company. The attempt is bound three ways, like the calendar connects: a
+  signed ten-minute `state` (purpose `quickbooks_connect`), its nonce in an
+  httpOnly cookie on `/api/v1/finance/quickbooks/` (double-submitted), and the
+  same nonce stored encrypted as the connection's single pending attempt, which
+  the callback removes before anything else, so a state works once. The
+  Treasurer must still hold `finance.manage` when it finishes. The callback
+  stores the company (`realmId`) and the tokens, encrypted at rest
+  (`EncryptedText`), and redirects back with `?quickbooks=connected` or
+  `?quickbooks_error=<reason>`.
+- **Tokens.** Access tokens last an hour and are refreshed five minutes before
+  they expire, or on a 401; Intuit rotates refresh tokens, and the newest one
+  replaces the stored one every time. A refresh token expires 100 days after
+  issue (rolling), so a run with nothing to post renews the grant once fewer
+  than 30 days are left. A refused refresh (`invalid_grant`), a
+  403, or a change of `QBO_ENVIRONMENT` sets the connection to
+  `reconnect_required`, and posting waits for a reconnect. **Disconnect**
+  discards the tokens, revokes them at Intuit (reporting `revoked: false` if
+  Intuit did not confirm), and returns payments still queued to the CSV
+  export.
+- **What posts.** A paid purchase request (one line, to `vendor`; none is
+  refused), an issued check that is not an advance (one line, to `payeeName`;
+  a reimbursement check carries its report's lines), and a paid expense report
+  not paid by a reimbursement check (its lines, to the member). Each must be
+  dated on or after the connection's **post from** date (the moment of
+  connecting, changeable) and not already stamped by a CSV export. Advances and
+  anything that accounts for one, dues, advance returns and voids stay on the
+  CSV export.
+- **The Purchase.** `PaymentType` `Cash`; `AccountRef` the category's paid-from
+  account, which must be a QuickBooks **Bank** account; one
+  `AccountBasedExpenseLineDetail` line per amount, to the category's expense
+  account; `EntityRef` the vendor; `TxnDate` the payment's day on the
+  department's calendar; `DocNumber` the request number. Accounts come from
+  `_resolve_category_accounts` (the export's own resolver, so the mappings on
+  this page drive both) and are found among QuickBooks' accounts by exact name
+  (`Parent:Child` through `FullyQualifiedName` when QuickBooks returns it). The
+  vendor is found by display name among QuickBooks' vendors, or created.
+  Minor version `75` on every call.
+- **Posted once.** `quickbooks_postings` holds one row per payment, unique on
+  (organization, payment type, payment), with QuickBooks' Purchase id (unique
+  per company). Every create carries Intuit's `requestid` (the posting's, and
+  `<id>-v` for a vendor), which Intuit answers with the original response when
+  it sees one again; it is kept across timeouts and 5xx, so a resent request
+  whose first answer was lost gets the same Purchase back, and replaced only
+  after a refusal, when nothing was created. The CSV export leaves out any
+  payment with a `queued`, `retrying` or `posted` posting; a `failed` one may go
+  in a file, and is then marked `superseded`.
+- **Running.** The `quickbooks_sync` scheduled task runs every five minutes, up
+  to 50 postings per department per run, holding a ten-minute lease on the
+  connection so it and **Post now** never refresh the same token at once.
+  Queuing takes the department's `quickbooks_export` lock (the CSV export's) and
+  waits while an export is being prepared. Statuses: `queued`; `retrying` (a
+  timeout or 5xx: 5 min, 15 min, 1 h, 4 h, then every 12 h; a 429 waits 60
+  seconds and ends the run, as Intuit asks); `posted`; `failed` (Intuit's
+  `Message - Detail`, or the local reason, such as "has no vendor" or "is not a
+  Bank account"; **Send again** queues it under a new request id); `superseded`.
+  No Finance or Documents row is locked, so the lock order at the top of
+  `documents_service.py` is not involved.
+
+| Endpoint                                                        | Permission       | What                                                                                         |
+| --------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------- |
+| `GET /finance/quickbooks/connection`                            | `finance.view`   | configured, environment, status, company id, who connected, post-from date, last run, counts |
+| `PUT /finance/quickbooks/connection`                            | `finance.manage` | `postFrom`, audit-logged `finance.quickbooks_post_from_set`                                  |
+| `POST /finance/quickbooks/oauth/start`                          | `finance.manage` | Intuit's consent URL, and the nonce cookie; 400 when not configured                          |
+| `GET /finance/quickbooks/oauth/callback`                        | none (see above) | where Intuit returns; audit-logged `finance.quickbooks_connected`                            |
+| `POST /finance/quickbooks/disconnect`                           | `finance.manage` | revoke and forget; audit-logged `finance.quickbooks_disconnected`                            |
+| `POST /finance/quickbooks/sync`                                 | `finance.manage` | post due payments now; returns the counts, or `skipped`                                      |
+| `GET /finance/quickbooks/postings?status&paymentType&paymentId` | `finance.view`   | postings, newest first; a detail page reads its payment's this way                           |
+| `POST /finance/quickbooks/postings/{id}/retry`                  | `finance.manage` | send a refused posting again; audit-logged `finance.quickbooks_posting_retried`              |
+
 ### Frontend
 
 Pages:
@@ -2028,6 +2118,7 @@ Pages:
   - The mapping dialog picks the category from the department's categories rather than taking typed text (the export matches by name, so a misspelling matches nothing) and requires the paid-from account, which the export cannot do without even though the API accepts a mapping lacking one.
   - The budget category dialog on Finance Settings carries the category's own **QuickBooks account** (`qbAccountName`), which takes precedence over its mapping's account.
   - A checklist of QuickBooks' own import requirements closes the page _(2026-10-09)_, and a category posting to Accounts Payable or Receivable is shown as **Payable/receivable account**.
+  - **QuickBooks Online connection** _(2026-11-06)_ — first on the page: not configured, connect, reconnect, **Post now**, **Disconnect** (confirmed first), the post-from date, and every posting with its status (_Waiting to post_, _Retrying_, _Accepted by QuickBooks_ with QuickBooks' record number, _Refused by QuickBooks_ with the reason and **Send again**, _Sent in a CSV file_). The purchase request, check and expense report detail pages show the payment's own posting (`QuickBooksPostingNote`, `finance.view`).
   - **Run an export** _(2026-10-14)_ — first and last day (last month by default), **Include payments already sent to QuickBooks** (confirmed first, since QuickBooks would import them again), and **Download QuickBooks file**. The days are the department's (`useTimezone`), sent as local midnight to the instant before the next local midnight (`utils/exportPeriod.ts`); a period over 366 days is refused before the request. The server's refusal (for example a category with no account) is shown as is, and the history reloads after a run.
 
 ---

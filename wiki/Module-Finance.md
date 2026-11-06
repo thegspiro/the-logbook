@@ -354,6 +354,30 @@ Rules worth knowing:
 - In QuickBooks itself, turn off account numbers and the duplicate journal
   number warning before importing; the page lists QuickBooks' requirements.
 
+### QuickBooks Online connection (2026-11-06)
+
+Instead of importing files, a department can connect its QuickBooks Online
+company: **Connect to QuickBooks** at the top of **QuickBooks Export**
+(`finance.manage`). It appears once the server has an Intuit app configured
+(`QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`, `QBO_REDIRECT_URI`, `QBO_ENVIRONMENT` —
+see [Upgrading](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md));
+until then the card says it is not configured and the export works as above.
+
+- Paid purchase requests, issued checks and paid expense reports made on or
+  after the connection date post every five minutes (or with **Post now**) as
+  QuickBooks expenses to their vendors, using the same account mappings. A
+  missing vendor is created.
+- Each is posted once, and shows **Accepted by QuickBooks** with QuickBooks'
+  record number on the card and on its detail page. A posted payment never
+  goes in a file.
+- The paid-from account must be a QuickBooks **Bank** account. A payment
+  QuickBooks refuses shows the reason and **Send again**; it may instead go in
+  the next file.
+- Cash advances, dues, advance returns and voided checks still go in the file.
+  Void a posted check in QuickBooks too.
+- **Disconnect** revokes the connection; payments still waiting go back to
+  the file.
+
 ## Edge cases
 
 | Scenario                                          | Behavior                                                                                        |

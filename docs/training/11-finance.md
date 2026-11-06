@@ -1453,6 +1453,39 @@ The member who owes the advance cannot record their own return. A return entered
 
 **Finance › Reports › Cash advances** lists every advance not yet fully accounted for, who has it, when it is due and which are overdue, with a CSV.
 
+### Connecting QuickBooks Online
+
+**Required Permission:** finance manager (viewing the connection: finance viewer)
+
+Instead of downloading and importing files, you can connect the department's QuickBooks Online company. Payments then go to QuickBooks by themselves, as **expenses to their vendors**, so they appear on each vendor's record and its 1099 report, which imported journal entries may not.
+
+The **QuickBooks Online connection** card is at the top of **Finance › QuickBooks Export**. If it says **Not configured on this server**, your system administrator has to register the department's app with Intuit first (see `docs/FINANCE_MODULE.md`, "QuickBooks Online connection"); until then use the export as described above.
+
+1. Select **Connect to QuickBooks**. Sign in to QuickBooks, choose the company, and allow access. You come back to the same page, which says **Connected**.
+2. Check **Post payments made on or after**. It starts at the moment you connected, so payments already in your books are not sent again; earlier payments stay on the export file. Change it and select **Save date** if needed.
+3. From then on, every five minutes, each paid purchase request, issued check and paid expense report is posted to QuickBooks, to the expense account and paid-from account on this page. **Post now** sends them straight away.
+
+What each payment shows, on the card and on its own detail page under **QuickBooks Online**:
+
+| Status                     | Meaning                                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Waiting to post**        | It goes with the next run                                                                                                       |
+| **Retrying**               | QuickBooks could not be reached or was busy. It is tried again automatically (the time is shown), and it will not be duplicated |
+| **Accepted by QuickBooks** | QuickBooks recorded it; its QuickBooks number is shown                                                                          |
+| **Refused by QuickBooks**  | QuickBooks (or this page) said why. Fix it, then select **Send again** — or let it go in the next export file instead           |
+| **Sent in a CSV file**     | An export file carried it, so it is not posted as well                                                                          |
+
+Things to know:
+
+- **The paid-from account must be a QuickBooks bank account.** A category paid from a credit card is refused with "not a Bank account"; export those payments in the file.
+- **A purchase request needs a vendor.** One with none is refused until you add it. A vendor QuickBooks does not have is created under the name on the request (for an expense report, the member's name). If QuickBooks has a customer or employee with that name, the posting is refused and says so.
+- **Some payments still go in the file:** cash advances, expense reports that account for one, dues, returned advance cash and voided checks. If the department uses any of these, keep exporting them.
+- **A posted check that you void here is not voided in QuickBooks.** Void it there as well.
+- **Reconnect required** means QuickBooks no longer accepts the connection — for example, access was removed in QuickBooks, or the server's QuickBooks setting changed. (The connection is renewed automatically, so a quiet spell does not end it.) Select **Reconnect to QuickBooks**; nothing is lost while it waits.
+- **Disconnect** stops posting. Payments still waiting go back to the export file; what QuickBooks accepted stays there.
+
+> **Hint:** Try it with an Intuit sandbox company before connecting your real books. Your administrator chooses which one the server connects to.
+
 ### Edge Cases
 
 | Scenario                                                     | Behavior                                                                              |
