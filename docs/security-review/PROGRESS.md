@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+_None._ PR [#4103](https://github.com/thegspiro/the-logbook/pull/4103)
+(Feature 10, Documents & legal, pass 15, branch
+`claude/security-review-documents-legal-p15`) merged. Not docs-only — it
+carried a real delta, so it already has its own **Log** entry below (dated
+2026-11-06) rather than a fresh one here. Confirmed via a fresh
+`list_pull_requests` (state `open`): 0 results for a
+`claude/security-review-*` head. Rotation row 10 is ✅. Next is Feature 11
+(Inventory) — the next `⬜` row.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 15, PR #4103, merged), preserved for history</summary>
+
 **PR [#4103](https://github.com/thegspiro/the-logbook/pull/4103)** (branch
 `claude/security-review-documents-legal-p15`) —
 Feature 10 (Documents & legal), pass 15, a watchdog pickup (the dedicated
@@ -47,8 +59,9 @@ minutes_attachment or published_minutes"`) — 671 passed, 1 environment-only
 skip (`py_vapid`); `npm run typecheck` — 0 errors; `npm run lint` — 0
 warnings; scoped `vitest run` — 68 passed (5 files).
 
-Row 10 → ✅ (pending this PR's merge); next is Feature 11 (Inventory) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 10 → ✅ (merged as `fb288610f`); next was Feature 11 (Inventory).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 09, Medical screening, pass 15, PR #4098, merged), preserved for history</summary>
@@ -24936,7 +24949,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                  | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                      | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                   | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                   | 🔄     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                 | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                               | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                 | ⬜     |
@@ -47320,3 +47333,53 @@ scoped `vitest run src/modules/prospective-members` — 404 passed (44 files).
 
 Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical screening,
 PHI) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-06 — Feature 09 (Medical screening, pass 15) merged; Feature 10 (Documents & legal, pass 15) — watchdog pickup, 0 fixed, 0 new findings
+
+Step 0/1 were handed to this iteration already done: no open PR with a
+`claude/security-review-*` head exists, and row 10 (Documents & legal) is
+the next `⬜` row in the rotation table, confirmed directly against a
+freshly-read `main` — row 09 (Medical screening) was already `✅` from PR
+#4098's own merge.
+
+Baseline `2b1884237` (PR #3913's merge, pass 14 — the commit literally
+named in pass 14's own file text, `e8a5c00b0`, is not an ancestor of
+current `main`, the usual squash/orphan-merge artifact this rotation keeps
+re-finding; `2b1884237` is the real merge commit, located via `git log
+--all --grep` and confirmed an ancestor of HEAD). Real delta: owner
+decision 2026-11-01 added two new routes letting a reader of a
+published-minutes document open the files filed with those minutes,
+through the document's own folder ACL rather than a new access model
+(`GET /{document_id}/minutes-attachments`, `GET
+/{document_id}/minutes-attachments/{attachment_id}/file`, both
+`documents.view`-gated, org-scoped at every step, a uniform 404 across
+every not-found/no-access/wrong-shape case); a new
+`PublishedMinutesAttachmentResponse` schema carrying no storage path and
+no uploader; and two migrations (one stamping the attachments a publish
+lists, one Facilities-owned (FAC-13) refile into `document_folders`/
+`documents`, reviewed only for this feature's own invariants). 26 routes
+re-enumerated by AST (up from 24).
+
+**0 fixed, 0 new findings.** DOC-31 (`_release_document_references`'s
+refusal check is a plain `SELECT`, not `.with_for_update()`, on
+referencing `PurchaseRequest`/`ExpenseReport` rows before refusing a
+receipt-document delete) re-confirmed OPEN, byte-identical to pass 14 —
+already in `docs/KNOWN_LIMITATIONS.md`, needs a cross-feature lock-order
+decision with Finance (Pitfall #27) rather than a unilateral fix here.
+Full write-up: `docs/security-review/DOC-10-documents-legal.md`'s **Pass
+15** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `python3 scripts/validate_migrations.py
+--strict` — 734 revisions, single head `f4583df5025b`; `python3
+scripts/check_route_permissions.py --strict` — 302 routes, 0
+errors/warnings; scoped backend suite (`-k "document or legal or
+station_document or facility_folder or folder or admin_only or
+minutes_attachment or published_minutes"`) — 671 passed, 1 pre-existing
+skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/pages/DocumentsPage.test.tsx
+src/components/documents src/pages/LegalPage.test.tsx
+src/utils/fileTypeLabel.test.ts` — 68 passed (5 files).
+
+Row 10 → ✅ (merged as `fb288610f`); next is Feature 11 (Inventory) —
+re-check `list_pull_requests` fresh rather than trusting this note.
