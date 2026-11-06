@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch `claude/security-review-equipment-check-shifts-p15`)** —
+**PR [#4111](https://github.com/thegspiro/the-logbook/pull/4111)** (branch
+`claude/security-review-equipment-check-shifts-p15`) —
 Feature 14 (Equipment check & shifts), pass 15, a watchdog pickup. No
 other Claude session is running on this machine (`ListAgents` → "No
 reachable agents"), consistent with the dedicated `/loop 30m
