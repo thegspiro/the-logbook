@@ -13,10 +13,13 @@ applied in SQL.
 
 import uuid
 from datetime import date, datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from app.api.v1.endpoints import facilities as endpoints
+from app.api.v1.endpoints.dashboard import get_asset_widgets
 from app.models.facilities import (
     Facility,
     FacilityComplianceChecklist,
@@ -148,6 +151,7 @@ class TestMaintenancePage:
             occurred_after=None,
             occurred_before=None,
             search=None,
+            due_within_days=None,
             skip=0,
             limit=50,
             db=db_session,
@@ -322,6 +326,130 @@ class TestDashboardDueWindows:
         )
 
         assert sorted(r.checklist_name for r in rows) == ["day 30", "today"]
+
+    async def _maintenance_page(self, db, org, **filters):
+        params = dict(
+            facility_id=None,
+            maintenance_type_id=None,
+            is_completed=None,
+            is_overdue=None,
+            is_historic=None,
+            occurred_after=None,
+            occurred_before=None,
+            search=None,
+            due_within_days=None,
+            skip=0,
+            limit=50,
+        )
+        params.update(filters)
+        return await endpoints.get_facility_maintenance_page(
+            **params,
+            db=db,
+            current_user=type("U", (), {"organization_id": org.id})(),
+        )
+
+    async def test_maintenance_tiles_partition_and_match_their_lists(
+        self, db_session, scene
+    ):
+        """DASH-39, and the overdue mismatch found while building it.
+
+        "Urgent work orders" links to ``?status=overdue`` and "Maintenance due"
+        to ``?status=due``. Each tile's number must be its list's total, and
+        the two must split the open work due by day 30 between them: every
+        record in exactly one. Overdue is the stored ``is_overdue`` verdict
+        every row badge, the facilities dashboard and the overdue filter
+        already read, at facilities that are not archived. The tile used to
+        count ``due_date <= today`` instead, so work due today, and work whose
+        flag the daily task had not yet flipped, was "urgent" on the tile and
+        absent from the list it opened.
+        """
+        org, fac, kind = scene
+        archived = await self._archived_facility(db_session, org, fac)
+        today = await resolve_org_today(db_session, org.id)
+
+        def job(name, days, facility=fac, done=False, flagged=False):
+            return FacilityMaintenance(
+                id=str(uuid.uuid4()),
+                organization_id=org.id,
+                facility_id=facility.id,
+                maintenance_type_id=kind.id,
+                description=name,
+                due_date=today + timedelta(days=days),
+                is_completed=done,
+                is_overdue=flagged,
+            )
+
+        db_session.add_all(
+            [
+                job("overdue", -1, flagged=True),
+                # Past due, but the daily task has not flipped it yet.
+                job("not yet flagged", -1),
+                job("today", 0),
+                job("day 1", 1),
+                job("day 30", 30),
+                job("day 31", 31),
+                job("completed", 5, done=True),
+                job("archived facility, due", 5, facility=archived),
+                job("archived facility, overdue", -3, facility=archived, flagged=True),
+            ]
+        )
+        other = await _org(db_session, "Other")
+        other_fac = await _facility(db_session, other)
+        db_session.add(
+            FacilityMaintenance(
+                id=str(uuid.uuid4()),
+                organization_id=other.id,
+                facility_id=other_fac.id,
+                maintenance_type_id=kind.id,
+                description="other org",
+                due_date=today - timedelta(days=5),
+                is_overdue=True,
+            )
+        )
+        await db_session.flush()
+
+        overdue = await self._maintenance_page(db_session, org, is_overdue=True)
+        due = await self._maintenance_page(db_session, org, due_within_days=30)
+
+        assert [r.description for r in overdue["items"]] == ["overdue"]
+        assert sorted(r.description for r in due["items"]) == [
+            "day 1",
+            "day 30",
+            "not yet flagged",
+            "today",
+        ]
+
+        with (
+            patch(
+                "app.api.v1.endpoints.dashboard.OrganizationService"
+                ".get_enabled_modules",
+                new=AsyncMock(
+                    return_value=SimpleNamespace(enabled_modules=["facilities"])
+                ),
+            ),
+            patch(
+                "app.api.v1.endpoints.dashboard.user_has_permission",
+                side_effect=lambda _user, permission: permission == "facilities.manage",
+            ),
+        ):
+            widgets = await get_asset_widgets(
+                db=db_session, current_user=SimpleNamespace(organization_id=org.id)
+            )
+        tiles = {w.id: w for w in widgets.widgets}
+        urgent = tiles["facilities-urgent-work-orders"]
+        upcoming = tiles["facilities-maintenance-due"]
+        assert urgent.count == overdue["total"]
+        assert urgent.href == "/facilities/maintenance?status=overdue"
+        assert upcoming.count == due["total"]
+        assert upcoming.href == "/facilities/maintenance?status=due"
+
+        # The facilities dashboard's own "Overdue Maintenance" card and preview
+        # link to the same list, so they count the same records.
+        summary = await FacilitiesService(db_session).get_dashboard_summary(org.id)
+        assert summary["overdue_maintenance"] == overdue["total"]
+        assert [r["description"] for r in summary["overdue_maintenance_records"]] == [
+            "overdue"
+        ]
 
 
 @pytest.mark.parametrize("prefix", ["/maintenance", "/inspections"])

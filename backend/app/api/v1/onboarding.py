@@ -3191,6 +3191,12 @@ async def reset_onboarding(
         #    RESTRICT), so deleting users while a Location references one would
         #    FK-fail and abort the whole reset. These are otherwise only removed
         #    via the organizations CASCADE (step 7), which runs too late.
+        #    Events, training history, meetings, requests and apparatus point
+        #    at locations with ON DELETE RESTRICT, so they are let go first;
+        #    they are deleted with their organization in step 7 regardless.
+        from app.services.location_service import release_location_references
+
+        await release_location_references(db, select(Location.id))
         await db.execute(delete(Location).execution_options(synchronize_session=False))
         await db.execute(delete(Facility).execution_options(synchronize_session=False))
 

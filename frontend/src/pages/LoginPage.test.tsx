@@ -280,6 +280,61 @@ describe('LoginPage passkey second factor', () => {
   });
 });
 
+// LOC-37: an expired session reaches this page by full page load from the API
+// client, which can carry the page it left only in `?from=`. Signing in must
+// land there — for a member at a room's door, the room's check-in page.
+describe('LoginPage return after an expired session', () => {
+  const options = { challenge: 'c-1', allowCredentials: [{ id: 'cred-1', type: 'public-key' }] };
+
+  const signInAt = async (url: string) => {
+    render(
+      <MemoryRouter initialEntries={[url]}>
+        <LoginPage />
+      </MemoryRouter>
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Use your passkey' }));
+    await waitFor(() => expect(mockCompleteMfaLogin).toHaveBeenCalled());
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGet.mockReset();
+    mockGet.mockImplementation((url: string) =>
+      url === '/api/v1/onboarding/status'
+        ? Promise.resolve({ data: { needs_onboarding: false } })
+        : Promise.reject(new Error('not mocked'))
+    );
+    mockMfaChallenge.mockReset();
+    mockMfaChallenge.mockResolvedValue({ totp: false, passkey_options: options });
+    mockAssertion.mockReset();
+    mockAssertion.mockResolvedValue({ id: 'cred-1', response: {} });
+    mockCompleteMfaLogin.mockReset();
+    mockCompleteMfaLogin.mockResolvedValue(undefined);
+    mockMfaRequired = true;
+    mockMfaToken = 'pending-token';
+  });
+
+  afterEach(() => {
+    mockMfaRequired = false;
+    mockMfaToken = null;
+  });
+
+  it('returns the member to the room they tapped', async () => {
+    await signInAt('/login?from=%2Flocations%2Froom-7%2Fcheck-in%3Ftag%3Ddoor');
+
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('/locations/room-7/check-in?tag=door', { replace: true })
+    );
+  });
+
+  it('will not follow a from that leaves the app', async () => {
+    await signInAt('/login?from=%2F%2Fevil.example%2Fphish');
+
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true }));
+    expect(mockNavigate).not.toHaveBeenCalledWith('//evil.example/phish', expect.anything());
+  });
+});
+
 describe('LoginPage single sign-on (W01-11)', () => {
   const answer = (oauth: Record<string, boolean>) => (url: string) =>
     url === '/api/v1/onboarding/status'

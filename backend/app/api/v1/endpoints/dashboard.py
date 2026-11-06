@@ -63,6 +63,10 @@ from app.schemas.dashboard_pulse import (
 )
 from app.services.apparatus_service import ApparatusService
 from app.services.dashboard_widget_service import PERIOD_LABELS, DashboardWidgetService
+from app.services.facilities_service import (
+    FACILITY_MAINTENANCE_DUE_DAYS,
+    FacilitiesService,
+)
 from app.services.inventory_service import InventoryService, overdue_checkout_clause
 from app.services.organization_service import OrganizationService
 from app.services.training_compliance import (
@@ -374,13 +378,12 @@ async def get_asset_widgets(
                     module="apparatus",
                     title="Maintenance due",
                     count=int(fleet["maintenance_due_soon"]),
-                    # `/apparatus/maintenance` is an API path only — there is no
-                    # such route, so the catch-all bounced this click back to
-                    # the dashboard. The fleet board is the nearest real
-                    # destination and surfaces the same due/overdue tallies in
-                    # its summary strip. A dedicated maintenance view is
-                    # flagged rather than invented here.
-                    href="/apparatus",
+                    # No apparatus maintenance page is built (DASH-38, owner
+                    # decision 2026-11-01): the fleet board carries the figure.
+                    # `?maintenance=due` opens its due-maintenance list, read
+                    # from `get_maintenance_due` with the same 30-day window
+                    # as this summary count, overdue work included.
+                    href="/apparatus?maintenance=due",
                     empty_state="No apparatus maintenance is due in the next 30 days.",
                     severity="warning",
                 ),
@@ -408,15 +411,10 @@ async def get_asset_widgets(
         )
     ):
         today = await department_today()
+        # Shared with the `?status=overdue` list this tile links to.
         maintenance = await db.scalar(
-            select(func.count(FacilityMaintenance.id))
-            .join(Facility, Facility.id == FacilityMaintenance.facility_id)
-            .where(
-                FacilityMaintenance.organization_id == org_id,
-                Facility.organization_id == org_id,
-                Facility.is_archived.is_(False),
-                FacilityMaintenance.is_completed.is_(False),
-                FacilityMaintenance.due_date <= today,
+            select(func.count(FacilityMaintenance.id)).where(
+                *FacilitiesService.maintenance_overdue_conditions(org_id)
             )
         )
         compliance = await db.scalar(
@@ -429,6 +427,13 @@ async def get_asset_widgets(
                 FacilityComplianceChecklist.is_completed.is_(False),
                 FacilityComplianceChecklist.due_date >= today,
                 FacilityComplianceChecklist.due_date <= today + timedelta(days=30),
+            )
+        )
+        maintenance_due = await db.scalar(
+            select(func.count(FacilityMaintenance.id)).where(
+                *FacilitiesService.maintenance_due_soon_conditions(
+                    org_id, today, FACILITY_MAINTENANCE_DUE_DAYS
+                )
             )
         )
         inspections = await db.scalar(
@@ -470,17 +475,19 @@ async def get_asset_widgets(
                     empty_state="No facility compliance deadlines are due soon.",
                     severity="warning",
                 ),
-                # There is deliberately no second maintenance widget here.
-                # `facilities-maintenance` used to render this same `maintenance`
-                # count — the one `due_date <= today` query, i.e. overdue — under
-                # the title "Maintenance due", with an empty state that said
-                # "overdue" and an `href` of `?status=due` that
-                # `MaintenanceListPage` does not accept (its filter is
-                # all/pending/completed/overdue), so the tile duplicated its
-                # neighbour's number and filtered nothing. Reporting genuine
-                # upcoming-but-not-yet-overdue maintenance needs a second query
-                # *and* a `due` filter on that page; both are flagged rather
-                # than guessed at here.
+                # Upcoming, not overdue: `maintenance_due_soon_conditions`
+                # takes the open work "Urgent work orders" does not, so a
+                # record is counted by exactly one of the two (DASH-31,
+                # DASH-39). The list's `due` filter applies the same conditions.
+                AssetWidget(
+                    id="facilities-maintenance-due",
+                    module="facilities",
+                    title="Maintenance due",
+                    count=int(maintenance_due or 0),
+                    href="/facilities/maintenance?status=due",
+                    empty_state="No facility maintenance is due in the next 30 days.",
+                    severity="warning",
+                ),
             ]
         )
 

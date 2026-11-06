@@ -5,7 +5,7 @@ Business logic for facility/building management.
 """
 
 from datetime import date, datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 from loguru import logger
 from sqlalchemy import and_, desc, func, or_, select, update
@@ -79,12 +79,21 @@ from app.schemas.facilities import (
     FacilityUtilityReadingCreate,
     FacilityUtilityReadingUpdate,
 )
-from app.services.location_service import LocationInUseError, LocationService
+from app.services.location_service import (
+    LocationInUseError,
+    LocationService,
+    save_system_named_location,
+)
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import resolve_org_today
 from app.utils.sql_ordering import nulls_last_asc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+# The dashboard's "Maintenance due" window. The maintenance list's ``due``
+# filter sends the same number as ``due_within_days``
+# (MAINTENANCE_DUE_WINDOW_DAYS in frontend/src/modules/facilities/constants.ts).
+FACILITY_MAINTENANCE_DUE_DAYS = 30
 
 # How many levels of room nesting are allowed (a top-level room is level 1).
 # Rooms within rooms are for real spatial containment — a storage cage inside
@@ -701,9 +710,7 @@ class FacilitiesService:
         )
         overdue = await self.db.scalar(
             select(func.count(FacilityMaintenance.id)).where(
-                FacilityMaintenance.organization_id == org_id,
-                FacilityMaintenance.is_overdue.is_(True),
-                FacilityMaintenance.is_completed.is_(False),
+                *self.maintenance_overdue_conditions(org_id)
             )
         )
         upcoming = await self.db.scalar(
@@ -739,10 +746,8 @@ class FacilitiesService:
             select(FacilityMaintenance, Facility.name)
             .join(Facility, Facility.id == FacilityMaintenance.facility_id)
             .where(
-                FacilityMaintenance.organization_id == org_id,
                 Facility.organization_id == org_id,
-                FacilityMaintenance.is_overdue.is_(True),
-                FacilityMaintenance.is_completed.is_(False),
+                *self.maintenance_overdue_conditions(org_id),
             )
             .order_by(
                 # MySQL/MariaDB do not support the SQL ``NULLS LAST``
@@ -1453,6 +1458,7 @@ class FacilitiesService:
         occurred_after: Optional[date] = None,
         occurred_before: Optional[date] = None,
         search: Optional[str] = None,
+        due_within_days: Optional[int] = None,
         skip: int = 0,
         limit: int = 50,
     ) -> Tuple[List[FacilityMaintenance], int]:
@@ -1461,17 +1467,34 @@ class FacilitiesService:
         FAC2-5: the cross-facility screen used to load the first 100 rows and
         filter and search them in the browser, so a search or a long overdue
         list was silently partial. Filters and search here run in SQL.
+
+        ``due_within_days`` selects what the dashboard's "Maintenance due" tile
+        counts (DASH-39), through the same ``maintenance_due_soon_conditions``.
+        ``is_overdue=True`` across all facilities selects what "Urgent work
+        orders" counts, through ``maintenance_overdue_conditions``. On one
+        facility's own page it stays the plain flag, so an archived facility
+        still lists its own overdue work.
         """
+        cross_facility_overdue = is_overdue is True and not facility_id
         conditions = self._maintenance_conditions(
             organization_id,
             facility_id=facility_id,
             maintenance_type_id=maintenance_type_id,
             is_completed=is_completed,
-            is_overdue=is_overdue,
+            is_overdue=None if cross_facility_overdue else is_overdue,
             is_historic=is_historic,
             occurred_after=occurred_after,
             occurred_before=occurred_before,
         )
+        if cross_facility_overdue:
+            conditions.extend(self.maintenance_overdue_conditions(organization_id))
+        if due_within_days is not None:
+            today = await resolve_org_today(self.db, organization_id)
+            conditions.extend(
+                self.maintenance_due_soon_conditions(
+                    organization_id, today, due_within_days
+                )
+            )
         if search:
             pattern = like_pattern(search)
             conditions.append(
@@ -1507,6 +1530,54 @@ class FacilitiesService:
             .limit(limit)
         )
         return list(result.scalars().all()), total
+
+    @classmethod
+    def maintenance_overdue_conditions(cls, organization_id: str) -> list:
+        """Open overdue work at facilities that are not archived.
+
+        The one definition behind the dashboard's "Urgent work orders" tile,
+        the facilities dashboard's "Overdue Maintenance" card and preview, and
+        the cross-facility list's overdue filter, which both link to. Overdue
+        is the stored ``is_overdue`` verdict: set on create and update when the
+        due date is before the department's today, and flipped daily by
+        ``run_mark_overdue_maintenance`` after that. It is also what every
+        row's badge shows, so a record in the overdue list always reads
+        overdue. The main dashboard tile used to count ``due_date <= today``
+        instead, which put work due today on the tile and not in the list.
+        """
+        return [
+            FacilityMaintenance.organization_id == organization_id,
+            FacilityMaintenance.is_completed.is_(False),
+            FacilityMaintenance.is_overdue.is_(True),
+            FacilityMaintenance.facility_id.in_(
+                cls._active_facility_ids(organization_id)
+            ),
+        ]
+
+    @classmethod
+    def maintenance_due_soon_conditions(
+        cls, organization_id: str, today: date, days: int
+    ) -> list:
+        """Open work due by ``today + days`` and not yet overdue (DASH-39).
+
+        The one definition behind both the dashboard's "Maintenance due" tile
+        and the maintenance list's ``due`` filter, so the tile's number and the
+        list it opens cannot drift apart. ``today`` is the department's date.
+        "Not yet overdue" negates ``maintenance_overdue_conditions``' flag, so
+        the two tiles split the open work between them: work due today is
+        here, and so is past-due work the daily task has not flagged yet,
+        rather than in neither tile.
+        """
+        return [
+            FacilityMaintenance.organization_id == organization_id,
+            FacilityMaintenance.is_completed.is_(False),
+            FacilityMaintenance.is_overdue.is_(False),
+            FacilityMaintenance.due_date.isnot(None),
+            FacilityMaintenance.due_date <= today + timedelta(days=days),
+            FacilityMaintenance.facility_id.in_(
+                cls._active_facility_ids(organization_id)
+            ),
+        ]
 
     @staticmethod
     def _maintenance_conditions(
@@ -2805,47 +2876,44 @@ class FacilitiesService:
         )
         location = result.scalar_one_or_none()
 
-        loc_name = await self._room_location_name(room, facility, organization_id)
-
-        if location:
-            location.name = loc_name
-            # The room can change buildings (on its own, or carried along when
-            # the room containing it moves); the Location has to follow, or it
-            # keeps pointing at the facility the room just left.
-            location.facility_id = facility.id
-            location.building = facility.name
-            location.floor = str(room.floor) if room.floor is not None else None
-            location.room_number = room.room_number
-            location.capacity = room.capacity
-            location.address = facility.address_line1
-            location.city = facility.city
-            location.state = facility.state
-            location.zip = facility.zip_code
-            location.is_active = room.is_active
-        else:
+        # The room can change buildings (on its own, or carried along when the
+        # room containing it moves); the Location has to follow, or it keeps
+        # pointing at the facility the room just left.
+        values: dict[str, Any] = {
+            "facility_id": facility.id,
+            "building": facility.name,
+            "floor": str(room.floor) if room.floor is not None else None,
+            "room_number": room.room_number,
+            "capacity": room.capacity,
+            "address": facility.address_line1,
+            "city": facility.city,
+            "state": facility.state,
+            "zip": facility.zip_code,
+            "is_active": room.is_active,
+        }
+        if location is None:
             from app.core.utils import generate_display_code, generate_uuid
 
-            display_code = generate_display_code(length=8)
-            location = Location(
+            values.update(
                 id=generate_uuid(),
-                organization_id=organization_id,
-                name=loc_name,
-                facility_id=facility.id,
                 facility_room_id=room.id,
-                building=facility.name,
-                floor=str(room.floor) if room.floor is not None else None,
-                room_number=room.room_number,
-                capacity=room.capacity,
-                address=facility.address_line1,
-                city=facility.city,
-                state=facility.state,
-                zip=facility.zip_code,
                 description=room.description,
-                is_active=room.is_active,
-                display_code=display_code,
+                display_code=generate_display_code(length=8),
                 created_by=created_by,
             )
-            self.db.add(location)
+
+        # Two rooms of one name in one building are ordinary, but their
+        # locations may not share a name there (LOC-41's unique key), so the
+        # later one is numbered rather than the save refused — including when
+        # two saves race for the name.
+        await save_system_named_location(
+            self.db,
+            organization_id,
+            await self._room_location_name(room, facility, organization_id),
+            facility.name,
+            location,
+            values,
+        )
 
     # =========================================================================
     # Emergency Contact Methods

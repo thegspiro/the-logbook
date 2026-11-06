@@ -9,7 +9,7 @@ session accepts any delete.
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -22,6 +22,7 @@ from app.models.apparatus import (
     ApparatusType,
 )
 from app.models.event import Event, EventTemplate, EventType
+from app.models.event_request import EventRequest
 from app.models.facilities import Facility, FacilityStatus, FacilityType
 from app.models.inventory import (
     EquipmentKit,
@@ -33,6 +34,15 @@ from app.models.inventory import (
     StorageLocationType,
 )
 from app.models.location import Location
+from app.models.meeting import Meeting
+from app.models.training import (
+    CourseClass,
+    CourseCohort,
+    CourseCohortClass,
+    TrainingCourse,
+    TrainingRecord,
+    TrainingType,
+)
 from app.models.user import Organization, User
 from app.schemas.facilities import FacilityRoomCreate
 from app.services.apparatus_service import ApparatusService, ApparatusStatusInUseError
@@ -219,6 +229,269 @@ class TestLocationDeleteDeactivatesWhenReferenced:
         assert (
             await db_session.scalar(
                 select(Event.location_id).where(Event.id == event_id)
+            )
+            == location_id
+        )
+
+
+async def _course(db_session, org) -> TrainingCourse:
+    course = TrainingCourse(
+        id=_id(),
+        organization_id=org.id,
+        name="Firefighter I",
+        training_type=TrainingType.CERTIFICATION,
+    )
+    db_session.add(course)
+    await db_session.flush()
+    return course
+
+
+async def _cohort(db_session, org, **fields) -> CourseCohort:
+    course = await _course(db_session, org)
+    cohort = CourseCohort(
+        id=_id(),
+        organization_id=org.id,
+        course_id=course.id,
+        name="Spring Academy",
+        start_date=date(2026, 3, 1),
+        **fields,
+    )
+    db_session.add(cohort)
+    await db_session.flush()
+    return cohort
+
+
+async def _reference(db_session, org, actor, kind: str, location_id: str):
+    """Create one record of ``kind`` naming the location; return (model, id, column)."""
+    if kind == "training_record":
+        row = TrainingRecord(
+            id=_id(),
+            organization_id=org.id,
+            user_id=actor,
+            course_name="Pump Ops",
+            training_type=TrainingType.CERTIFICATION,
+            hours_completed=4.0,
+            location_id=location_id,
+        )
+    elif kind == "course_class":
+        course = await _course(db_session, org)
+        row = CourseClass(
+            id=_id(),
+            organization_id=org.id,
+            course_id=course.id,
+            class_course_id=course.id,
+            sequence=1,
+            location_id=location_id,
+        )
+    elif kind == "course_cohort":
+        row = await _cohort(db_session, org, location_id=location_id)
+        return CourseCohort, row.id, CourseCohort.location_id
+    elif kind == "course_cohort_class":
+        cohort = await _cohort(db_session, org)
+        start = datetime.now(timezone.utc) + timedelta(days=5)
+        row = CourseCohortClass(
+            id=_id(),
+            organization_id=org.id,
+            cohort_id=cohort.id,
+            sequence=1,
+            title="Night 1",
+            scheduled_start=start,
+            scheduled_end=start + timedelta(hours=3),
+            location_id=location_id,
+        )
+    elif kind == "meeting":
+        row = Meeting(
+            id=_id(),
+            organization_id=org.id,
+            title="Business meeting",
+            meeting_date=date(2026, 11, 12),
+            location_id=location_id,
+        )
+    else:
+        row = EventRequest(
+            id=_id(),
+            organization_id=org.id,
+            contact_name="School PTA",
+            contact_email="pta@example.org",
+            description="Station tour",
+            event_location_id=location_id,
+        )
+    db_session.add(row)
+    await db_session.flush()
+    model = type(row)
+    column = (
+        EventRequest.event_location_id if model is EventRequest else model.location_id
+    )
+    return model, row.id, column
+
+
+_PROTECTED_KINDS = [
+    "training_record",
+    "course_class",
+    "course_cohort",
+    "course_cohort_class",
+    "meeting",
+    "event_request",
+]
+
+
+class TestTrainingMeetingsAndRequestsKeepTheirLocation:
+    """Owner decisions of 2026-11-01: these deactivate, as an event does."""
+
+    @pytest.mark.parametrize("kind", _PROTECTED_KINDS)
+    async def test_reference_deactivates_and_keeps_the_location(
+        self, db_session, org, actor, kind
+    ):
+        location_id = (await _location(db_session, org)).id
+        model, row_id, column = await _reference(
+            db_session, org, actor, kind, location_id
+        )
+
+        assert await LocationService(db_session).delete_location(location_id, org.id)
+
+        assert await _location_state(db_session, location_id) == (True, False)
+        assert (
+            await db_session.scalar(select(column).where(model.id == row_id))
+            == location_id
+        )
+
+    @pytest.mark.parametrize("kind", ["training_record", "meeting"])
+    async def test_a_reference_that_races_the_check_is_refused_not_nulled(
+        self, db_session, org, actor, kind
+    ):
+        location_id = (await _location(db_session, org)).id
+        model, row_id, column = await _reference(
+            db_session, org, actor, kind, location_id
+        )
+        await db_session.commit()
+        service = LocationService(db_session)
+
+        async def no_references(_location_id):
+            return 0
+
+        service.location_reference_count = no_references
+
+        with pytest.raises(LocationInUseError):
+            await service.delete_location(location_id, org.id)
+
+        assert await _location_state(db_session, location_id) == (True, True)
+        assert (
+            await db_session.scalar(select(column).where(model.id == row_id))
+            == location_id
+        )
+
+    async def test_an_inventory_item_still_lets_the_location_go(self, db_session, org):
+        location_id = (await _location(db_session, org)).id
+        item = InventoryItem(
+            id=_id(), organization_id=org.id, name="Gloves", location_id=location_id
+        )
+        db_session.add(item)
+        await db_session.flush()
+        item_id = item.id
+
+        assert await LocationService(db_session).delete_location(location_id, org.id)
+
+        assert await _location_state(db_session, location_id) == (False, None)
+        assert (
+            await db_session.scalar(
+                select(InventoryItem.location_id).where(InventoryItem.id == item_id)
+            )
+            is None
+        )
+
+
+class TestWholesaleLocationRemovalDoesNotTripTheProtectedKeys:
+    """Paths that remove locations without ``remove_location``.
+
+    With training history, meetings and requests now ON DELETE RESTRICT, a
+    bulk delete that once quietly nulled them would fail at the constraint.
+    """
+
+    async def test_the_onboarding_reset_releases_every_reference_first(
+        self, db_session, org, actor
+    ):
+        from sqlalchemy import delete
+
+        from app.services.location_service import release_location_references
+
+        location_id = (await _location(db_session, org)).id
+        meeting_id = (await _reference(db_session, org, actor, "meeting", location_id))[
+            1
+        ]
+        record_id = (
+            await _reference(db_session, org, actor, "training_record", location_id)
+        )[1]
+        apparatus = await _apparatus(db_session, org, primary_station_id=location_id)
+        apparatus_id = apparatus.id
+        db_session.add(
+            ApparatusLocationHistory(
+                id=_id(),
+                organization_id=org.id,
+                apparatus_id=apparatus_id,
+                location_id=location_id,
+                assigned_date=datetime.now(timezone.utc),
+            )
+        )
+        await db_session.flush()
+
+        await release_location_references(
+            db_session, select(Location.id).where(Location.id == location_id)
+        )
+        await db_session.execute(delete(Location).where(Location.id == location_id))
+        await db_session.flush()
+
+        assert await _location_state(db_session, location_id) == (False, None)
+        assert (
+            await db_session.scalar(
+                select(Meeting.location_id).where(Meeting.id == meeting_id)
+            )
+            is None
+        )
+        assert (
+            await db_session.scalar(
+                select(TrainingRecord.location_id).where(TrainingRecord.id == record_id)
+            )
+            is None
+        )
+        assert (
+            await db_session.scalar(
+                select(Apparatus.primary_station_id).where(Apparatus.id == apparatus_id)
+            )
+            is None
+        )
+
+    async def test_re_entering_stations_keeps_a_station_a_meeting_names(
+        self, db_session, org, actor
+    ):
+        from app.services.onboarding import OnboardingService
+
+        db_session.add_all(
+            [
+                FacilityType(id=_id(), organization_id=org.id, name="Fire Station"),
+                FacilityStatus(id=_id(), organization_id=org.id, name="Operational"),
+            ]
+        )
+        await db_session.flush()
+        service = OnboardingService(db_session)
+        first = await service.replace_onboarding_stations(
+            org.id, [{"name": "Station 2"}], []
+        )
+        location_id = await db_session.scalar(
+            select(Location.id).where(Location.facility_id == first[0])
+        )
+        meeting_id = (await _reference(db_session, org, actor, "meeting", location_id))[
+            1
+        ]
+
+        # The wizard's back button: the earlier pass's stations are replaced.
+        await service.replace_onboarding_stations(
+            org.id, [{"name": "Station 2"}], first
+        )
+
+        assert await _location_state(db_session, location_id) == (True, False)
+        assert (
+            await db_session.scalar(
+                select(Meeting.location_id).where(Meeting.id == meeting_id)
             )
             == location_id
         )

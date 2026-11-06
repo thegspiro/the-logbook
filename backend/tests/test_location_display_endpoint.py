@@ -50,6 +50,7 @@ def _event(window_type=CheckInWindowType.FLEXIBLE, starts_in_minutes=20):
         location="Hall A",
         location_id=None,
         require_checkout=False,
+        allow_guest_check_in=False,
         check_in_window_type=window_type,
         check_in_minutes_before=None,
         check_in_minutes_after=None,
@@ -58,7 +59,10 @@ def _event(window_type=CheckInWindowType.FLEXIBLE, starts_in_minutes=20):
 
 def _patch_location_service(monkeypatch, events):
     location = SimpleNamespace(
-        id=str(LOC_ID), organization_id="org-1", name="Station 1"
+        id=str(LOC_ID),
+        organization_id="org-1",
+        name="Station 1",
+        nfc_badge_check_in_enabled=False,
     )
     fake = SimpleNamespace(
         get_location=AsyncMock(return_value=location),

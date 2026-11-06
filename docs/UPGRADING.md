@@ -721,6 +721,72 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Facility files filed outside the facility folders are moved into them (2026-11-05)
+
+Nothing blocks a restart, but who can open some files changes. Migration
+`986b38c2086b` finds every file a facility photo or facility document points
+at that sits outside that facility's folders — in General Documents, a
+member's or library folder, another facility's folders, or no folder at all —
+and moves it into the facility's own folders under **Facility Files**:
+
+- a file a facility **document** points at goes to the facility's
+  **Facility Documents** folder, which needs `facilities.view_sensitive`,
+  `.edit` or `.manage`;
+- a file only facility **photos** point at goes to the facility's **Photos**
+  folder, open to any facilities access (`facilities.view` and up).
+
+Missing facility folders are created. **Whoever could open the file only
+through the folder it left loses it** — most often a member holding
+`documents.view` who could download a facility file from General Documents
+without any facilities permission. Facility roles see it where the facility
+record already showed it.
+
+Not moved: a file another module also uses — an apparatus photo or document,
+a purchase-request or expense receipt, published meeting minutes, or one that
+module generated — stays where that module filed it, and a file already in
+one of its own facilities' folders stays. A file two facilities point at goes
+to the facility that attached it first; if either attaches it as a document,
+it goes to the restricted Facility Documents folder.
+
+Rollback: the downgrade moves each file back while it is still where the
+migration put it, and removes the folders it created once they are empty. The
+moves are recorded in a `facility_outside_refile_backfill` table, which exists
+only on a database where something was moved and is dropped by the downgrade.
+
+### Locations: duplicate names are renamed, and deleting one in use by training or meetings deactivates it (2026-11-05)
+
+Nothing blocks a restart, but some location names change. Migration
+`2bb7c963f351` makes a location's name unique within its building in the
+database, and a location with no building counts as one building for this.
+Before it can, it settles the duplicates already stored: in each group of
+locations sharing a name and building in a department, **the oldest keeps its
+name and each later one gets ` (2)`, ` (3)`, … appended** — for example a
+second "Bunk Room" becomes "Bunk Room (2)". Names are compared the way the
+database compares them, so "Bunk Room" and "bunk room" are the same name. A
+number already in use is skipped. Nothing that points at a location changes;
+only its name. Rename them to something meaningful afterwards from the
+Locations page. A facility room's location follows the same numbering from now
+on when two rooms in one building share a name.
+
+The renaming is **not undone by a downgrade**: nothing records which rows were
+renamed, and putting the old names back would recreate the duplicates. The
+downgrade removes only the unique key and its generated `building_key` column.
+Before upgrading, an operator who wants a record can list the affected rows:
+
+```sql
+SELECT organization_id, name, COALESCE(building, '') AS building, COUNT(*)
+FROM locations
+GROUP BY organization_id, name, COALESCE(building, '')
+HAVING COUNT(*) > 1;
+```
+
+The same migration changes six foreign keys to `locations` from `ON DELETE SET
+NULL` to `ON DELETE RESTRICT` — training records, course classes, cohorts,
+cohort classes, meetings and event requests. Deleting a location any of them
+names now deactivates it (it leaves every picker but stays on those records)
+instead of removing it and blanking their location. The downgrade restores
+`SET NULL`. No row changes.
+
 ### Scheduling: outside-shift approval, open-swap bell notices, close-out caps (2026-11-04)
 
 Nothing blocks a restart, and no figure moves on upgrade.

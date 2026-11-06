@@ -178,7 +178,14 @@ with its split auth: authenticated reads, `locations.create`/`.edit`/`.delete`/
 
 ## Pass 3 flagged
 
-### LOC-37 — MED — A member who taps a room tag with an expired session loses the room — 🚩 FLAGGED
+### LOC-37 — MED — A member who taps a room tag with an expired session loses the room — ✅ FIXED (2026-11-05)
+
+> Owner decision 2026-11-01: return to the room. Both check-in pages carry a
+> bare `ProtectedRoute`, and the API client's expired-session redirect now
+> carries the page in `/login?from=`, which `postLoginRedirect` reads and
+> vets. See the LOC-37 entry in `docs/KNOWN_LIMITATIONS.md` for the detail,
+> including the correction that the routes were already under the layout's
+> `ProtectedRoute` and the room was lost on the stale-`has_session` path.
 
 `/locations/:locationId/check-in` is where a room's NFC tag lands a phone. It is
 the **only route in the app entered cold from a physical object** rather than
@@ -210,7 +217,12 @@ put behind an explicit confirmation. The route comment now records the
 mechanism and names this finding so the next reader does not have to re-derive
 it.
 
-### LOC-40 — LOW — Both display implementations are live now, and they fill the same schema differently — 🚩 FLAGGED
+### LOC-40 — LOW — Both display implementations are live now, and they fill the same schema differently — ✅ FIXED (2026-11-05)
+
+> Owner decision 2026-11-01: consolidate. Both endpoints return
+> `build_location_display` (`app/services/location_display.py`), with the
+> `is_valid` difference as its `recheck_window` keyword. The public kiosk's
+> response is unchanged and pinned by `tests/test_location_display_builder.py`.
 
 Pass 2's duplication note ended "delete the authenticated copy, or give it a
 caller. Keeping two implementations of 'what is happening at this location right

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**356 tables · 5793 columns · 1196 foreign keys**
+**356 tables · 5794 columns · 1196 foreign keys**
 
 ---
 
@@ -450,7 +450,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`locations`](#locations) | `Location` | 22 | Location model for managing physical spaces |
+| [`locations`](#locations) | `Location` | 23 | Location model for managing physical spaces |
 
 ### Mcp_Oauth
 
@@ -3171,7 +3171,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `decline_reason` | TEXT | yes |  |  |  |
 | `event_date` | DATETIME | yes |  |  |  |
 | `event_end_date` | DATETIME | yes |  |  |  |
-| `event_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `event_location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE RESTRICT |
 | `task_completions` | JSON | yes |  | `dict()` |  |
 | `event_id` | VARCHAR(36) | yes | FK |  | → `events.id` ON DELETE SET NULL |
 | `staffing_shift_id` | VARCHAR(36) | yes | FK |  | → `shifts.id` ON DELETE SET NULL |
@@ -7233,6 +7233,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `latitude` | VARCHAR(20) | yes |  |  |  |
 | `longitude` | VARCHAR(20) | yes |  |  |  |
 | `building` | VARCHAR(100) | yes |  |  |  |
+| `building_key` | VARCHAR(100) | yes |  | server default |  |
 | `floor` | VARCHAR(20) | yes |  |  |  |
 | `room_number` | VARCHAR(50) | yes |  |  |  |
 | `capacity` | INTEGER | yes |  |  |  |
@@ -7256,6 +7257,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_locations_facility_room_id` (`facility_room_id`)
+- UNIQUE `uq_locations_org_name_building` (`organization_id`, `name`, `building_key`)
 
 ## Mcp_Oauth
 
@@ -7863,7 +7865,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `end_time` | TIME | yes |  |  |  |
 | `location` | VARCHAR(255) | yes |  |  |  |
 | `event_id` | VARCHAR(36) | yes | FK, IDX |  | → `events.id` ON DELETE SET NULL |
-| `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE SET NULL |
+| `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE RESTRICT |
 | `called_by` | VARCHAR(255) | yes |  |  |  |
 | `status` | ENUM(`draft`, `pending_approval`, `approved`) | no |  | `draft` |  |
 | `agenda` | TEXT | yes |  |  |  |
@@ -10035,7 +10037,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `instructor_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
-| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE RESTRICT |
 | `location` | VARCHAR(300) | yes |  |  |  |
 | `category_id` | VARCHAR(36) | yes | FK |  | → `training_categories.id` ON DELETE SET NULL |
 | `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
@@ -10082,7 +10084,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `instructor_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
-| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE RESTRICT |
 | `location` | VARCHAR(300) | yes |  |  |  |
 | `category_id` | VARCHAR(36) | yes | FK |  | → `training_categories.id` ON DELETE SET NULL |
 | `requirement_id` | VARCHAR(36) | yes | FK |  | → `training_requirements.id` ON DELETE SET NULL |
@@ -10185,7 +10187,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `default_duration_minutes` | INTEGER | yes |  |  |  |
 | `date_roll_policy` | ENUM(`none`, `next_business_day`, `next_meeting_day`) | no |  | `'none'` |  |
 | `blackout_dates` | JSON | yes |  |  |  |
-| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE SET NULL |
+| `location_id` | VARCHAR(36) | yes | FK |  | → `locations.id` ON DELETE RESTRICT |
 | `location` | VARCHAR(300) | yes |  |  |  |
 | `requires_rsvp` | BOOL | no |  | `True` |  |
 | `auto_create_records` | BOOL | no |  | `True` |  |
@@ -11607,7 +11609,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `passing_score` | FLOAT | yes |  |  |  |
 | `passed` | BOOL | yes |  |  |  |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
-| `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE SET NULL |
+| `location_id` | VARCHAR(36) | yes | FK, IDX |  | → `locations.id` ON DELETE RESTRICT |
 | `location` | VARCHAR(255) | yes |  |  |  |
 | `apparatus_id` | VARCHAR(36) | yes | FK, IDX |  | → `apparatus.id` ON DELETE SET NULL |
 | `rank_at_completion` | VARCHAR(100) | yes |  |  |  |
@@ -13184,17 +13186,17 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus` | `current_location_id` | RESTRICT | yes |
 | `apparatus` | `primary_station_id` | RESTRICT | yes |
 | `apparatus_location_history` | `location_id` | RESTRICT | no |
-| `course_classes` | `location_id` | SET NULL | yes |
-| `course_cohort_classes` | `location_id` | SET NULL | yes |
-| `course_cohorts` | `location_id` | SET NULL | yes |
-| `event_requests` | `event_location_id` | SET NULL | yes |
+| `course_classes` | `location_id` | RESTRICT | yes |
+| `course_cohort_classes` | `location_id` | RESTRICT | yes |
+| `course_cohorts` | `location_id` | RESTRICT | yes |
+| `event_requests` | `event_location_id` | RESTRICT | yes |
 | `event_templates` | `default_location_id` | RESTRICT | yes |
 | `events` | `location_id` | RESTRICT | yes |
 | `inventory_items` | `location_id` | SET NULL | yes |
-| `meetings` | `location_id` | SET NULL | yes |
+| `meetings` | `location_id` | RESTRICT | yes |
 | `nfc_card_taps` | `location_id` | SET NULL | yes |
 | `storage_areas` | `location_id` | SET NULL | yes |
-| `training_records` | `location_id` | SET NULL | yes |
+| `training_records` | `location_id` | RESTRICT | yes |
 
 ### → `shifts` (14 references)
 

@@ -236,16 +236,17 @@ export const LoginPage: React.FC = () => {
       if (useAuthStore.getState().mfaRequired) {
         return;
       }
-      // Back to the page ProtectedRoute stopped them at (see postLoginRedirect
-      // for the open-redirect guard).
-      void navigate(postLoginRedirect(location.state), { replace: true });
+      // Back to the page ProtectedRoute stopped them at, or the one an expired
+      // session sent them from by full page load (`?from=`) — see
+      // postLoginRedirect for the open-redirect guard.
+      void navigate(postLoginRedirect(location.state, location.search), { replace: true });
     } catch (_err) {
       // Error is handled by the store and displayed via error state
     }
   };
 
   const redirectAfterAuth = () => {
-    void navigate(postLoginRedirect(location.state), { replace: true });
+    void navigate(postLoginRedirect(location.state, location.search), { replace: true });
   };
 
   // Each passkey challenge is single-use, so a fresh one is fetched up front
