@@ -41,6 +41,19 @@ it defaults to on. The "five emails that cannot be switched off" in the
   03 about +6); Short 8AS still says about 47 seconds and gained roughly 8.
 - The member script (06) leaves out the leader-only dashboard changes by design.
 
+## Flagged by the 2026-11-05 → 11-06 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-5--6-2026).
+Rows are **Open**; nothing was re-recorded or rewritten.
+
+| Script                                                           | Beat                                   | Now                                                                                                                  |
+| ---------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Secretary (07)**, **Chief (04)**                               | Minutes roll call and quorum           | Quorum counting is a department setting; **Use proxies** adds a roll-call status; published minutes list attachments |
+| **Elections deep dive (12)**                                     | Closing by mistake                     | Roll Back files a dated correction on filed minutes                                                                  |
+| **Training Officer (05, 16, 09)**, **Member (06)**, **Short 08** | Member Training History                | Period list scopes the cards and list, not only exports; **Last 12 Months**                                          |
+| **Fire Chief (04)**                                              | Operational members button             | Ticks Active, Probationary and Life, not Retired                                                                     |
+| **Any admin-hours or sign-in beat**                              | Clock-in conflict; failed sign-in wait | Names the running session; wait is per account                                                                       |
+
 ## Flagged by the 2026-11-04 → 11-05 changes
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).

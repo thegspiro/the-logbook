@@ -1278,7 +1278,9 @@ a **Sensitive** badge. Its answer is shown only to members who hold
 **sensitive_answers.view**, and each time it is shown the audit log records it,
 as it does in the Forms module (see
 [Documents & Forms → Sensitive fields](./07-documents-forms.md#sensitive-fields-2026-10-26)).
-Everyone else reads "Withheld: you do not have permission to view sensitive
+_(2026-11-06)_ An assigned interviewer sees sensitive answers only on the
+**Interview** page; anywhere else they read as withheld, as they do for case
+managers. Everyone else reads "Withheld: you do not have permission to view sensitive
 answers" in its place, so a withheld answer is never mistaken for a blank one.
 
 **In the election package.** On an **Election Vote** stage, tick **Include

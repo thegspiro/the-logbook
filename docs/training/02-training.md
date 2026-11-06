@@ -3172,8 +3172,17 @@ one member, as CSV or PDF files.
 
 1. Open the member's **Training History** page (from their profile or the
    member list).
-2. Choose a period in the **Export period** list — **This Month**, **This
-   Quarter**, **This Year** or **All Time**.
+2. Choose a period in the **Period** list — **This Month**, **This Quarter**,
+   **This Year**, **Last 12 Months** or **All Time**. _(2026-11-06)_ The period
+   now scopes the page as well as the export: **Total Records**, **Completed**,
+   **Total Hours** and the record list all follow it. Before, only the export
+   did, so **This Year** sat above a lifetime hour total.
+   **Scheduled**, **Expiring Soon** and **Expired** always show today's state, and
+   the Expired and Expiring Soon filters search every record so they agree with
+   those cards. Only the period's start applies to the list, so upcoming
+   scheduled classes stay visible. **Last 12 Months** is twelve whole calendar
+   months ending with this one, the window a rolling requirement uses, so its
+   total matches that requirement's card.
 3. Select **Export CSV** or **Export PDF** to download that member's records
    for the period.
 

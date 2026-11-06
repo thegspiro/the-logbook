@@ -1141,7 +1141,10 @@ you can make full screen and project in the room:
    - **Anonymous election:** closing is final once any vote is recorded; a
      recount needs a new election.
    - **Named election:** reopening takes a **Roll Back**, which stops every
-     ballot link already sent.
+     ballot link already sent. _(2026-11-06)_ If the result was already filed in
+     minutes, the rollback does not edit them: it adds a dated **correction**
+     that supersedes the filed result, and the re-run's result is filed beside
+     it as the corrected result.
 2. The results are worked out and shown on the **Results** tab:
    - each race's winner, or "No winner" if nobody met the winning rule;
    - the votes for each candidate;

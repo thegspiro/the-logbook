@@ -1891,6 +1891,35 @@ approved with no name or date rather than left deletable. Creating,
 editing, deleting or approving a meeting — and changing its attendees or
 action items — is recorded in the audit log.
 
+### Who counts toward quorum _(2026-11-06)_
+
+Under **Minutes → Settings → Quorum**, a settings administrator chooses:
+
+| Setting                          | Default | Effect                                                         |
+| -------------------------------- | ------- | -------------------------------------------------------------- |
+| Members who arrived late count    | On      | A member marked **Late** counts                                |
+| Members who left early count      | On      | A member marked **Left early** counts                          |
+| Use proxies                       | Off     | Adds **Represented by proxy** to the roll call; a proxy counts |
+
+The defaults are the rule every department had before, so an upgrade changes no
+count. Adopted minutes keep the quorum they were adopted with; a draft is
+recounted the next time its quorum is checked. A proxy is not "present": they do
+not vote in a roll call. A line already recorded as a proxy stays editable after
+proxies are switched off, but no longer counts. A department set up from
+2026-11-05 starts with the roll listing **present members only**; existing
+departments are unchanged.
+
+**Published copies and the PDF.** Publishing now lists the minutes' attachments
+in the library copy; whoever can open that document sees them, so an executive
+copy's files stay in its leadership-only folder. Documents shows a paperclip on
+published minutes. A signed copy filed after publishing appears at the next
+publish. The public copy never carries attachments. The minutes PDF embeds
+image attachments and appends PDF attachments, within size and page limits.
+
+**Action-item email.** Meeting-record action items are emailed on the same
+schedule as the bell reminder. The department can opt out of this email under
+the minutes notification settings.
+
 ### Who is listed on the roll (department default and per minutes)
 
 _(2026-10-18)_ The roll is always recorded in full; quorum and the attendance
@@ -1995,7 +2024,7 @@ suggestions and the sections stay open.
 
 | Panel                 | What it holds                                                                                                                                                                                                                                        |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Attendance**        | Roll call with six statuses: present, late, left early, excused, absent, guest. **Present, late and left early count toward quorum**; the rest do not. A suggested roll is built from the event's check-ins, or the member list if there is no event |
+| **Attendance**        | Roll call with six statuses: present, late, left early, excused, absent, guest (a seventh, **Represented by proxy**, if your department turns it on). **Present always counts toward quorum**; late, left early and proxy count as the department's quorum settings say (below); excused, absent and guests never do. A suggested roll is built from the event's check-ins, or the member list if there is no event |
 | **Motions**           | Mover, seconder and result; a motion can link to the election or ballot item that decided it                                                                                                                                                         |
 | **Closed sessions**   | Reason, legal basis, start and end times, who stayed (someone who stepped out is recorded), a summary, and the motion that moved into it                                                                                                             |
 | **Election results**  | A closed election's certified tally, frozen into the minutes. If the election ends after minutes are circulated, the result is filed as a permanent, labelled **addendum**                                                                           |
@@ -2052,7 +2081,9 @@ server; rebuild the backend image (see [`UPGRADING.md`](../UPGRADING.md)).
 ## Action Items
 
 Select **Action Items** in the sidebar for one list of every task assigned
-from meetings and minutes.
+from meetings and minutes. _(2026-11-06)_ Officers who manage meetings can
+add, edit and complete meeting items here, the list is paged with totals, and
+**open** and **overdue** mean the same here as on the dashboard and in Minutes.
 
 Each action item has:
 

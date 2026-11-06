@@ -130,6 +130,11 @@ that are hidden on a desktop to save width (manufacturer, serial number, asset
 tag, barcode and cost) come back on the phone card, where there is room for
 them.
 
+_(2026-11-06)_ The items list (Pinned, the shelf and Unavailable) and the
+reorder requests list switch to these cards below about 1280 pixels wide, not
+only on a phone, so a tablet or a laptop with the sidebar open no longer scrolls
+them sideways.
+
 ![The inventory items table on a phone — each row stacked into a card with the field name on the left and its value on the right](./images/05-70-inventory-table-mobile.png)
 
 ---
