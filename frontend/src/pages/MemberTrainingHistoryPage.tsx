@@ -24,7 +24,12 @@ import { formatDate } from '../utils/dateFormatting';
 import { isCertificationExpired, isCertificationExpiringSoon } from '../utils/certificationExpiry';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
-import { getTrainingPeriodWindow, TRAINING_PERIOD_LABELS, TrainingExportPeriod } from '../utils/trainingPeriods';
+import {
+  getTrainingPeriodWindow,
+  isDateInTrainingPeriod,
+  TRAINING_PERIOD_LABELS,
+  TrainingExportPeriod,
+} from '../utils/trainingPeriods';
 import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
@@ -165,8 +170,10 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Export
-  const [exportPeriod, setExportPeriod] = useState<TrainingExportPeriod>(TrainingExportPeriod.YEAR);
+  // The period scopes the record list, the record and hour totals, and the
+  // exports alike — a selector that changed only the export left "This Year"
+  // sitting above a lifetime hour total.
+  const [period, setPeriod] = useState<TrainingExportPeriod>(TrainingExportPeriod.YEAR);
   const [exporting, setExporting] = useState(false);
 
   // Attachments
@@ -198,7 +205,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     if (!userId) return;
     try {
       setExporting(true);
-      const window = getTrainingPeriodWindow(exportPeriod, tz);
+      const window = getTrainingPeriodWindow(period, tz);
       const blob = await reportExportService.exportReport({
         report_type: 'individual',
         format,
@@ -211,7 +218,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `training_${safeName}_${exportPeriod}.${format}`;
+      a.download = `training_${safeName}_${period}.${format}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -265,9 +272,23 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     }
   };
 
+  // Records dated inside the selected period. Only the period's start applies
+  // here: the export window ends today, but an upcoming scheduled class still
+  // belongs on the page under every period.
+  const periodTrainings = useMemo(() => {
+    const { start_date } = getTrainingPeriodWindow(period, tz);
+    return trainings.filter((t) => isDateInTrainingPeriod(t.completion_date || t.scheduled_date, { start_date }));
+  }, [trainings, period, tz]);
+
+  // Expiry is a current state rather than an event in the period: a
+  // certificate earned three years ago can expire this week. Those two status
+  // filters therefore search every record, matching the Expiring Soon and
+  // Expired cards, which count every record.
+  const isExpiryFilter = filterStatus === 'expired' || filterStatus === 'expiring_soon';
+
   // Filter and sort training records
   const filteredTrainings = useMemo(() => {
-    let result = [...trainings];
+    let result = [...(isExpiryFilter ? trainings : periodTrainings)];
 
     // Apply search filter
     if (searchQuery) {
@@ -316,11 +337,12 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     });
 
     return result;
-  }, [trainings, filterStatus, sortField, sortOrder, searchQuery, tz]);
+  }, [trainings, periodTrainings, isExpiryFilter, filterStatus, sortField, sortOrder, searchQuery, tz]);
 
-  // Calculate statistics
+  // Record and hour totals follow the period; Scheduled, Expiring Soon and
+  // Expired describe the member's standing today and count every record.
   const stats = useMemo(() => {
-    const completed = trainings.filter((t) => t.status === 'completed');
+    const completed = periodTrainings.filter((t) => t.status === 'completed');
     const totalHours = sumHoursToQuarter(completed.map((t) => t.hours_completed));
     const expiringSoon = trainings.filter(
       (t) => isCertificationExpiringSoon(t.expiration_date, tz) && !isCertificationExpired(t.expiration_date, tz)
@@ -329,14 +351,14 @@ export const MemberTrainingHistoryPage: React.FC = () => {
     const scheduled = trainings.filter((t) => t.status === 'scheduled');
 
     return {
-      total: trainings.length,
+      total: periodTrainings.length,
       completed: completed.length,
       totalHours,
       expiringSoon: expiringSoon.length,
       expired: expired.length,
       scheduled: scheduled.length,
     };
-  }, [trainings, tz]);
+  }, [trainings, periodTrainings, tz]);
 
   if (loading) {
     return (
@@ -386,9 +408,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
             </div>
             <div className="page-header-actions flex flex-wrap items-center gap-2 print:hidden">
               <select
-                aria-label="Export period"
-                value={exportPeriod}
-                onChange={(e) => setExportPeriod(e.target.value as TrainingExportPeriod)}
+                aria-label="Training period"
+                value={period}
+                onChange={(e) => setPeriod(e.target.value as TrainingExportPeriod)}
                 className="form-input px-3 text-sm"
               >
                 {Object.values(TrainingExportPeriod).map((p) => (
@@ -506,7 +528,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               description={
                 searchQuery || filterStatus !== 'all'
                   ? 'Try adjusting your search or filters.'
-                  : 'No training has been recorded for this member yet.'
+                  : trainings.length > 0
+                    ? `No training is recorded for ${TRAINING_PERIOD_LABELS[period].toLowerCase()}. Choose a longer period to see earlier records.`
+                    : 'No training has been recorded for this member yet.'
               }
               actions={
                 searchQuery || filterStatus !== 'all'
@@ -703,7 +727,10 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         {/* Summary */}
         {filteredTrainings.length > 0 && (
           <div className="text-theme-text-muted mt-4 text-right text-sm">
-            Showing {filteredTrainings.length} of {trainings.length} records
+            Showing {filteredTrainings.length} of {isExpiryFilter ? trainings.length : periodTrainings.length} records
+            {!isExpiryFilter && period !== TrainingExportPeriod.LIFETIME && (
+              <> ({TRAINING_PERIOD_LABELS[period].toLowerCase()})</>
+            )}
           </div>
         )}
       </div>
