@@ -158,7 +158,7 @@ encryption changes:
 - `scripts/rotate_encryption_key.py` and `scripts/reencrypt_to_aesgcm.py` cover
   the column.
 - **Not part of this change:** the screening type, the dates and which member a
-  record belongs to remain plaintext (see `docs/KNOWN_LIMITATIONS.md`, MS-15).
+  record belongs to remain plaintext (see `docs/KNOWN_LIMITATIONS.md`, MS-18).
 
 ### `REDIS_REQUIRED=true` now refuses to start without Redis (2026-11-04)
 

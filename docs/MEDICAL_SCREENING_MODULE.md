@@ -118,7 +118,7 @@ frontend/src/modules/medical-screening/
 > A value that _is_ marked as ciphertext and fails to decrypt **raises** rather
 > than being returned as ciphertext or as empty — it fails closed.
 >
-> **`status` is encrypted too** _(2026-11-05, MS-15, owner decision)_. The
+> **`status` is encrypted too** _(2026-11-05, MS-18, owner decision)_. The
 > outcome is PHI in its own right: "failed" beside a member's name and a
 > psychological evaluation says what the encrypted notes would. It uses
 > `EncryptedEnum`, which reads back as `ScreeningStatus` and **refuses any SQL
@@ -134,7 +134,7 @@ frontend/src/modules/medical-screening/
 > Still plaintext: the screening type, the dates and the member and
 > requirement links, which every query filters, sorts and joins on. The type
 > also leaks through the requirement a record is linked to and through older
-> audit-log entries; see `docs/KNOWN_LIMITATIONS.md` (MS-15). Cross-reference:
+> audit-log entries; see `docs/KNOWN_LIMITATIONS.md` (MS-18). Cross-reference:
 > [wiki/Security-Encryption](../wiki/Security-Encryption.md#what-is-encrypted).
 
 > **Schema note.** [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) is the generated,

@@ -155,7 +155,7 @@ def deciding_records(
     an impending lapse, and a record linked to nothing decides nothing.
 
     This replaces a correlated SQL ``EXISTS``: the status is ciphertext since
-    MS-15, so the database cannot tell a result from a booking.
+    MS-18, so the database cannot tell a result from a booking.
     """
     latest: Dict[Tuple[Tuple[str, str], str], ScreeningRecord] = {}
     for record in records:
@@ -505,7 +505,7 @@ class MedicalScreeningService:
         if not status:
             result = await self.db.execute(_page(query, skip, limit))
             return list(result.scalars().all())
-        # The status is ciphertext (MS-15): filter the decrypted value, then
+        # The status is ciphertext (MS-18): filter the decrypted value, then
         # page, so a page is never short while matches lie further on.
         result = await self.db.execute(query)
         matching = [r for r in result.scalars().all() if r.status == status]
@@ -1036,7 +1036,7 @@ class MedicalScreeningService:
         Soonest due first, then by record id so a paged caller sees a stable
         order. Every record linked to an active requirement is loaded and the
         deciding one per subject and requirement is picked in Python
-        (``deciding_records``): the status is ciphertext since MS-15, so SQL
+        (``deciding_records``): the status is ciphertext since MS-18, so SQL
         can neither keep only satisfying results nor drop superseded ones. The
         window is ``screening_deadline``'s, applied per record, so the date
         rule lives in one place.

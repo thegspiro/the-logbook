@@ -52,7 +52,7 @@ class _EnumColumn(NamedTuple):
 _TARGET_COLUMNS: tuple[_EnumColumn, ...] = (
     _EnumColumn("screening_requirements", "screening_type", ScreeningType, None),
     _EnumColumn("screening_records", "screening_type", ScreeningType, None),
-    # Not screening_records.status: it is ciphertext since MS-15, and the
+    # Not screening_records.status: it is ciphertext since MS-18, and the
     # repair below rewrites any non-ENUM column it lists to VARCHAR(64) and
     # back to an ENUM, which would destroy every encrypted value.
     # ``shift_assignments.position`` and ``standing_shift_claims.position`` were

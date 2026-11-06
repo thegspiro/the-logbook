@@ -873,7 +873,7 @@ class TestMembership:
     async def test_a_screening_expiring_today_is_still_listed(self):
         """Expiring on the department's date (6 October) it is due today, not
         lapsed — by UTC it is already 7 October. The window used to be read
-        off the SQL bounds; since MS-15 every linked record is loaded and the
+        off the SQL bounds; since MS-18 every linked record is loaded and the
         window is applied in Python, so this asserts the listing itself."""
         from app.models.medical_screening import ScreeningStatus, ScreeningType
         from app.services.medical_screening_service import MedicalScreeningService

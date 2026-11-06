@@ -16,6 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+_None._ PR [#4087](https://github.com/thegspiro/the-logbook/pull/4087)
+(Feature 08, Membership pipeline, pass 16, branch
+`claude/security-review-membership-pipeline-p16`) merged 2026-11-05T22:31:08-05:00.
+Not docs-only — it carried a real delta, so it already has its own **Log**
+entry below (dated 2026-11-05) rather than a fresh one here. Confirmed via a
+fresh `list_pull_requests` (state `open`): 0 results for a
+`claude/security-review-*` head. Rotation row 08 is ✅. Next is Feature 09
+(Medical screening, PHI) — the next `⬜` row.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 16, PR #4087, merged), preserved for history</summary>
+
 **PR [#4087](https://github.com/thegspiro/the-logbook/pull/4087)** (branch
 `claude/security-review-membership-pipeline-p16`) —
 Feature 08 (Membership pipeline), pass 16, a watchdog pickup (the dedicated
@@ -60,6 +72,8 @@ scoped `vitest run src/modules/prospective-members` — 404 passed (44 files).
 
 Row 08 → ✅ (pending this PR's merge); next is Feature 09 (Medical screening,
 PHI) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 07, Users & organizations, pass 15, PR #4069, merged), preserved for history</summary>
@@ -24872,7 +24886,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                                              | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                                                      | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                                                  | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                      | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                                                      | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                   | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                 | ⬜     |
