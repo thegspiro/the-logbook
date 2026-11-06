@@ -16,6 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4109](https://github.com/thegspiro/the-logbook/pull/4109)** (branch
+`claude/security-review-apparatus-nfc-p22`) — Feature 13 (Apparatus & NFC),
+pass 22, a watchdog pickup (the dedicated `/loop 30m /security-review`
+session remains unreachable; this iteration was handed Step 0/1 already
+done — no open `claude/security-review-*` PR, row 13 the next `⬜`). PR
+#4108 (Feature 12, Facilities, pass 15) had already merged — its
+bookkeeping rides along uncommitted from that merge, recorded here rather
+than with a PR of its own. Baseline `bb77eae12` (PR #3924's merge, pass
+21). Real delta: a dashboard-tile double-counting fix (DASH-38) that also
+wires the tile to a new list view over a pre-existing, already-reviewed,
+already-org-scoped `GET /apparatus/maintenance/due`; a 2-line, non-security
+boolean field threaded through an already org-scoped external-agency
+create/read (Training's own scope, not reviewed here); and a pure layout
+class swap. 0 application-code defects found; AP2-4 re-confirmed resolved
+from pass 21, unaffected. See `docs/security-review/AP-13-apparatus-nfc.md`'s
+**Pass 22** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 737
+revisions, single head; `check_route_permissions.py --strict` — 303
+routes, 0 errors/warnings; scoped backend suite (`-k "apparatus or nfc or
+evoc or driver_exception"`) — 1390 passed, 1 environment-only skip
+(`py_vapid`); standing guard suites — 166 passed; `npm run typecheck` — 0
+errors; `npm run lint` — 0 warnings; `npx vitest run src/modules/apparatus`
+— 123 passed (15 files).
+
+Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
+& shifts) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 15, PR #4108, merged), preserved for history</summary>
+
 _None._ PR [#4108](https://github.com/thegspiro/the-logbook/pull/4108)
 (Feature 12, Facilities, pass 15, branch
 `claude/security-review-facilities-p15`) merged. Not docs-only — it
@@ -24,6 +57,8 @@ carried a real delta, so it already has its own **Log** entry below (dated
 `list_pull_requests` (state `open`): 0 results for a
 `claude/security-review-*` head. Rotation row 12 is ✅. Next is Feature 13
 (Apparatus & NFC) — the next `⬜` row.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 15, PR #4108, merged), preserved for history</summary>
