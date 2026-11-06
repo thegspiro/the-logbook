@@ -16,6 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4108](https://github.com/thegspiro/the-logbook/pull/4108)** (branch
+`claude/security-review-facilities-p15`) — Feature 12 (Facilities), pass
+15, a watchdog pickup (the dedicated `/loop 30m /security-review` session
+remains unreachable; this iteration was handed Step 0/1 already done — no
+open `claude/security-review-*` PR, row 12 the next `⬜`). PR #4106
+(Feature 11, Inventory, pass 15) had already merged — its bookkeeping,
+including the note on near-duplicate PR #4107's closure, rides along
+uncommitted from that merge, recorded here rather than with a PR of its
+own. Baseline `f2e7bd578` (PR #3923's merge, pass 14). Real delta: a third
+`due_within_days` filter on the maintenance list; two new
+`maintenance_overdue_conditions`/`maintenance_due_soon_conditions`
+classmethods giving the dashboard tiles and the cross-facility list one
+shared, org-scoped definition each (Pitfall #29); a facility room's
+Location mirror refactored onto `location_service.save_system_named_location`,
+whose race handling is the correct shape for Pitfall #27; and `routes.tsx`
+fixing the previously-flagged LOC-37 (room check-in now requires sign-in,
+closing the `postLoginRedirect` gap without widening access). A
+cross-feature migration (`986b38c2086b`, Documents-owned tables) reviewed
+for this feature's own invariants and found sound. 0 application-code
+defects found; FAC-30 (the one standing finding) re-confirmed OPEN,
+unaffected. See `docs/security-review/FAC-12-facilities.md`'s **Pass 15**
+section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 737
+revisions, single head; `check_route_permissions.py --strict` — 303
+routes, 0 errors/warnings; scoped backend suite (`-k "facilit"`) — 318
+passed, 1 environment-only skip (`py_vapid`); the four tenancy/migration
+guard suites plus the two migration-integrity suites — 166 passed; `npm
+run typecheck` — 0 errors; `npm run lint` — 0 warnings; `npx vitest run
+src/modules/facilities` — 170 passed (22 files).
+
+Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus &
+NFC) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 15, PR #4106, merged), preserved for history</summary>
+
 _None._ PR [#4106](https://github.com/thegspiro/the-logbook/pull/4106)
 (Feature 11, Inventory, pass 15, branch
 `claude/security-review-inventory-p15`) merged. Not docs-only — it carried
@@ -28,6 +66,8 @@ the same conclusion (0 fixes, 0 new findings). Confirmed via a fresh
 `list_pull_requests` (state `open`): 0 results for a
 `claude/security-review-*` head. Rotation row 11 is ✅. Next is Feature 12
 (Facilities) — the next `⬜` row.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 11, Inventory, pass 15, PR #4106, merged), preserved for history</summary>
