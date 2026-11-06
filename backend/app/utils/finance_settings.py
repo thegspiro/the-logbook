@@ -21,6 +21,26 @@ of these defaults.
     over one mistyped setting (Pitfall #19, "read free-form JSON
     defensively").
 
+``dual_approval_thresholds``
+    Per request type (owner decision, 2026-11-01): ``purchase_request``,
+    ``check_request`` and ``expense_report``, each in whole dollars. A type
+    whose value is absent, ``null`` or malformed follows
+    ``dual_approval_threshold`` above, so a department that never sets one
+    keeps exactly the single figure it had; ``0`` turns the rule off for that
+    type alone. ``FinanceSettings.threshold_for`` is the one place a type's
+    figure is worked out.
+
+``second_approver_position``
+    The slug of the position (the office) that must give the second approval
+    on a request held by the threshold (owner decision, 2026-11-01). Absent or
+    blank: any ``finance.approve`` holder other than the first approver may,
+    as before. Set: the request completes only once two different people have
+    approved it **and** one of them holds this position, so a request the
+    office has not yet approved waits for a holder of it. A slug that names no
+    position fails closed: nobody holds it, the request stays waiting, and the
+    settings screen says the position no longer exists. Saving a slug the
+    department does not have is refused.
+
 ``substantiation_mode`` and ``substantiation_days``
     The accountable-plan deadline for expense reports: a line submitted more
     than ``substantiation_days`` after it was incurred is late. The mode is
@@ -58,17 +78,28 @@ of these defaults.
     refused while either is blank.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.finance import ApprovalEntityType
 from app.models.user import Organization
 
 FINANCE_SETTINGS_KEY = "finance"
 DUAL_APPROVAL_THRESHOLD_KEY = "dual_approval_threshold"
+DUAL_APPROVAL_THRESHOLDS_KEY = "dual_approval_thresholds"
+SECOND_APPROVER_POSITION_KEY = "second_approver_position"
+
+# The request types a dual-approval threshold applies to, in the order the
+# settings screen lists them.
+DUAL_APPROVAL_TYPES = (
+    ApprovalEntityType.PURCHASE_REQUEST.value,
+    ApprovalEntityType.CHECK_REQUEST.value,
+    ApprovalEntityType.EXPENSE_REPORT.value,
+)
 SUBSTANTIATION_MODE_KEY = "substantiation_mode"
 SUBSTANTIATION_DAYS_KEY = "substantiation_days"
 
@@ -102,6 +133,34 @@ class FinanceSettings:
     substantiation_mode: str = SUBSTANTIATION_OFF
     substantiation_days: int = MAX_SUBSTANTIATION_DAYS
     fund_overspend_mode: str = FUND_OVERSPEND_WARN
+    # Per request type: whole dollars, 0 for "off for this type", or None
+    # (absent) for "follows dual_approval_threshold".
+    dual_approval_type_overrides: dict[str, Optional[int]] = field(default_factory=dict)
+    second_approver_position: Optional[str] = None
+
+    def threshold_for(self, entity_type: Any) -> Optional[Decimal]:
+        """The dual-approval threshold in force for one request type.
+
+        Every reader asks this (the approval hold, the route preview and
+        ``GET /finance/settings``), so the screen and the approval path cannot
+        disagree about a type (CLAUDE.md pitfall #29).
+        """
+        key = getattr(entity_type, "value", entity_type)
+        override = self.dual_approval_type_overrides.get(key)
+        if override is None:
+            return self.dual_approval_threshold
+        return Decimal(override) if override > 0 else None
+
+
+def _whole_dollars(raw: Any, minimum: int) -> Optional[int]:
+    # bool is an int subclass; a stray ``true`` must not read as $1.
+    if (
+        isinstance(raw, int)
+        and not isinstance(raw, bool)
+        and minimum <= raw <= MAX_DUAL_APPROVAL_THRESHOLD
+    ):
+        return raw
+    return None
 
 
 def finance_settings_in(settings: Any) -> FinanceSettings:
@@ -110,15 +169,18 @@ def finance_settings_in(settings: Any) -> FinanceSettings:
     if not isinstance(section, dict):
         section = {}
 
-    raw = section.get(DUAL_APPROVAL_THRESHOLD_KEY)
-    threshold: Optional[Decimal] = None
-    # bool is an int subclass; a stray ``true`` must not read as $1.
-    if (
-        isinstance(raw, int)
-        and not isinstance(raw, bool)
-        and 0 < raw <= MAX_DUAL_APPROVAL_THRESHOLD
-    ):
-        threshold = Decimal(raw)
+    whole = _whole_dollars(section.get(DUAL_APPROVAL_THRESHOLD_KEY), 1)
+    threshold = Decimal(whole) if whole is not None else None
+
+    per_type = section.get(DUAL_APPROVAL_THRESHOLDS_KEY)
+    if not isinstance(per_type, dict):
+        per_type = {}
+    overrides: dict[str, Optional[int]] = {
+        key: _whole_dollars(per_type.get(key), 0) for key in DUAL_APPROVAL_TYPES
+    }
+
+    office = section.get(SECOND_APPROVER_POSITION_KEY)
+    office = office.strip() if isinstance(office, str) else ""
 
     mode = section.get(SUBSTANTIATION_MODE_KEY)
     if mode not in SUBSTANTIATION_MODES:
@@ -138,6 +200,8 @@ def finance_settings_in(settings: Any) -> FinanceSettings:
         substantiation_mode=mode,
         substantiation_days=days,
         fund_overspend_mode=fund_mode,
+        dual_approval_type_overrides=overrides,
+        second_approver_position=office or None,
     )
 
 

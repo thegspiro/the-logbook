@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user
 from app.api.v1.endpoints import finance as finance_endpoints
 from app.core.database import get_db
+from app.core.security import email_fingerprint
 from app.models.facilities import Facility, FacilityStatus, FacilityType
 from app.models.finance import Budget, BudgetCategory, FiscalYear, FiscalYearStatus
 from app.models.user import User
@@ -113,18 +114,23 @@ async def _user(
     db: AsyncSession, org_id: str, name: str, position_ids, status="active"
 ) -> User:
     user_id = str(uuid.uuid4())
+    email = f"{name}-{user_id[:8]}@test.example"
+    # A raw INSERT bypasses the ORM listener that keeps email_hash in step with
+    # the address, so set it here: SQL can only match a member by email through
+    # the fingerprint, never the encrypted column.
     await db.execute(
         text(
             "INSERT INTO users (id, organization_id, username, first_name, "
-            "last_name, email, password_hash, status) "
-            "VALUES (:id, :org, :un, :fn, 'Test', :em, 'hashed', :st)"
+            "last_name, email, email_hash, password_hash, status) "
+            "VALUES (:id, :org, :un, :fn, 'Test', :em, :eh, 'hashed', :st)"
         ),
         {
             "id": user_id,
             "org": org_id,
             "fn": name,
             "un": f"{name}-{user_id[:8]}",
-            "em": f"{name}-{user_id[:8]}@test.example",
+            "em": email,
+            "eh": email_fingerprint(email),
             "st": status,
         },
     )

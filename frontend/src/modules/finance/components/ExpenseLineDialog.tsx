@@ -6,8 +6,10 @@
  * clear persists (CLAUDE.md pitfall #1), except the date, which is sent only
  * when it was changed: a line stored before dates were entered at local noon
  * can read back as the previous local day, and re-saving that would move it.
- * A line's budget line is not edited here, as the report form does not set one;
- * a line copied from a purchase request keeps the request's.
+ * The member picks the budget line the expense charges (owner decision
+ * 2026-11-01); approving the report commits it there. A line copied from a
+ * purchase request keeps the request's, which stays selectable even under an
+ * inactive category, as the server accepts it unchanged.
  */
 
 import React, { useState } from 'react';
@@ -20,6 +22,7 @@ import { getTodayLocalDate, localToUTC, toLocalISODate } from '../../../utils/da
 import { expenseReportService } from '../services/api';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { useLateLineWarning } from '../hooks/useLateLineWarning';
+import { budgetOptionLabel, selectableBudgetOptions, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { EXPENSE_TYPE_OPTIONS, expenseLineSchema } from '../utils/expenseLines';
 import { MAX_MONEY_AMOUNT, MIN_MONEY_AMOUNT } from '../utils/moneyLimits';
 import { FundSelect } from './FundSelect';
@@ -27,16 +30,25 @@ import { ExpenseType, type ExpenseLineItem } from '../types';
 
 interface ExpenseLineDialogProps {
   reportId: string;
+  /** The report's year, whose budget lines the picker offers. */
+  fiscalYearId: string;
   /** The line to edit; absent to add one. */
   line?: ExpenseLineItem | undefined;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({ reportId, line, onClose, onSaved }) => {
+export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({
+  reportId,
+  fiscalYearId,
+  line,
+  onClose,
+  onSaved,
+}) => {
   const tz = useTimezone();
   const lateWarning = useLateLineWarning();
   const { funds, mode: fundMode } = useFundOptions();
+  const { budgetOptions } = useRequestFormOptions(fiscalYearId);
   const initialDate = line ? toLocalISODate(line.dateIncurred, tz) : getTodayLocalDate(tz);
   const [description, setDescription] = useState(line?.description ?? '');
   const [amount, setAmount] = useState(line ? Number(line.amount).toFixed(2) : '');
@@ -44,6 +56,7 @@ export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({ reportId, 
   const [expenseType, setExpenseType] = useState<string>(line?.expenseType ?? ExpenseType.GENERAL);
   const [merchant, setMerchant] = useState(line?.merchant ?? '');
   const [fundCampaignId, setFundCampaignId] = useState(line?.fundCampaignId ?? '');
+  const [budgetId, setBudgetId] = useState(line?.budgetId ?? '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -80,6 +93,7 @@ export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({ reportId, 
           expenseType: expenseType as ExpenseType,
           merchant: blankToNull(merchant),
           fundCampaignId: blankToNull(fundCampaignId),
+          budgetId: blankToNull(budgetId),
           ...(dateIncurred !== initialDate ? { dateIncurred: dateValue() } : {}),
         });
         toast.success('Line updated');
@@ -91,6 +105,7 @@ export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({ reportId, 
           expenseType: expenseType as ExpenseType,
           ...(merchant.trim() ? { merchant: merchant.trim() } : {}),
           ...(fundCampaignId ? { fundCampaignId } : {}),
+          ...(budgetId ? { budgetId } : {}),
         });
         toast.success('Line added');
       }
@@ -207,6 +222,28 @@ export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({ reportId, 
               onChange={(e) => setMerchant(e.target.value)}
             />
           </div>
+        </div>
+        <div>
+          <label htmlFor="expense-line-budget" className="form-label">
+            Budget line
+          </label>
+          <select
+            id="expense-line-budget"
+            className="form-input"
+            value={budgetId}
+            onChange={(e) => setBudgetId(e.target.value)}
+            aria-describedby="expense-line-budget-hint"
+          >
+            <option value="">No budget line</option>
+            {selectableBudgetOptions(budgetOptions, line?.budgetId).map((option) => (
+              <option key={option.id} value={option.id}>
+                {budgetOptionLabel(option)}
+              </option>
+            ))}
+          </select>
+          <p id="expense-line-budget-hint" className="text-theme-text-secondary mt-1 text-xs">
+            Approving the report commits this amount to the line you choose.
+          </p>
         </div>
         <FundSelect
           id="expense-line-fund"

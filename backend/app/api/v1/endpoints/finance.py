@@ -28,6 +28,7 @@ from app.core.utils import safe_error_detail
 from app.models.document import DocumentFolder
 from app.models.finance import (
     ApprovalEntityType,
+    CheckRequestStatus,
     ExpenseReportStatus,
     FiscalYearStatus,
     FunctionalClass,
@@ -81,6 +82,7 @@ from app.schemas.finance import (
     CheckRequestCreate,
     CheckRequestResponse,
     CheckRequestUpdate,
+    DualApprovalTypeThresholdResponse,
     DuesDefaultAccountsUpdate,
     DuesExportReadinessResponse,
     DuesPaymentResponse,
@@ -126,6 +128,7 @@ from app.schemas.finance import (
     MyBudgetsSummaryResponse,
     PaymentsRegisterReportResponse,
     PendingApprovalResponse,
+    PendingBudgetAmendmentResponse,
     PurchaseRequestCreate,
     PurchaseRequestResponse,
     PurchaseRequestUpdate,
@@ -138,9 +141,15 @@ from app.schemas.finance import (
 from app.services import module_documents
 from app.services.documents_service import DocumentsService
 from app.services.expense_substantiation import incurred_day
+from app.services.finance_approval_notifications import send_approval_notices
 from app.services.finance_approver_matching import (
+    ApproverDirectory,
     ApproverMismatchError,
     normalize_approver_type,
+)
+from app.services.finance_budget_change_notifications import (
+    notify_amendment_pending,
+    notify_leadership_change,
 )
 from app.services.finance_budget_ownership import (
     user_owns_any_budget,
@@ -186,7 +195,7 @@ from app.services.upload_scanning import reject_if_malicious
 from app.utils import download_names
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.delete_outcome import set_delete_outcome
-from app.utils.finance_settings import load_finance_settings
+from app.utils.finance_settings import DUAL_APPROVAL_TYPES, load_finance_settings
 from app.utils.org_timezone import resolve_org_today, resolve_scheduling_timezone
 from app.utils.quickbooks_chart import MAX_CHART_FILE_BYTES, parse_chart_of_accounts
 from app.utils.upload_limits import read_upload_limited
@@ -1104,6 +1113,7 @@ async def add_budget_amendment(
             username=current_user.username,
             organization_id=org_id,
         )
+        await notify_amendment_pending(db, org_id, amendment.id, str(current_user.id))
         return {
             "amendment": service.amendment_detail(amendment, current_user),
             "budget": await service.get_budget_detail(budget_id, org_id),
@@ -1132,10 +1142,13 @@ async def reverse_budget_amendment(
 
     **Requires permission: finance.manage**
 
-    Records a new amendment for the whole amount, negated, with its own
-    reason and approval, entered ``pending``: the line's budget drops by it
-    only when another officer confirms it. The original stays on record and
-    the original budget is unchanged. Refused: an amendment already reversed
+    Records a new amendment for ``amount`` -- any part of the amendment, up
+    to the whole; left out, the whole -- negated, with its own reason and
+    approval, entered ``pending``: the line's budget drops by it only when
+    another officer confirms it, and the officers who may confirm it are
+    emailed. The original stays on record and the original budget is
+    unchanged. Refused: an amount past the amendment's (400), an amendment
+    already reversed
     or with a reversal pending (409), the reversal itself or an amendment not
     yet confirmed (400), a locked
     fiscal year (400), a future approval date (400), and a budget that would
@@ -1166,6 +1179,7 @@ async def reverse_budget_amendment(
             username=current_user.username,
             organization_id=org_id,
         )
+        await notify_amendment_pending(db, org_id, reversal.id, str(current_user.id))
         return {
             "amendment": service.amendment_detail(reversal, current_user),
             "budget": await service.get_budget_detail(budget_id, org_id),
@@ -1267,11 +1281,6 @@ async def reject_budget_amendment(
     service = FinanceService(db)
     org_id = str(current_user.organization_id)
     try:
-        before = await service.list_budget_amendments(budget_id, org_id)
-        reversed_id = next(
-            (r["reverses_amendment_id"] for r in before if r["id"] == amendment_id),
-            None,
-        )
         amendment = await service.reject_budget_amendment(
             budget_id, amendment_id, org_id, str(current_user.id), note=data.note
         )
@@ -1285,9 +1294,9 @@ async def reject_budget_amendment(
                 "amendment_id": amendment.id,
                 "amount": str(amendment.amount),
                 "entered_by": amendment.created_by,
-                # Cleared on the row so the amendment can be reversed again;
-                # kept here so the record says which it was.
-                "reversed_amendment_id": reversed_id,
+                # The link is cleared on the row so the amendment can be
+                # reversed again; the display reference keeps which it was.
+                "reversed_amendment_id": amendment.reverses_amendment_ref,
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -1300,6 +1309,29 @@ async def reject_budget_amendment(
         }
     except Exception as e:
         raise _amendment_decision_error(e)
+
+
+@router.get(
+    "/budget-amendments/pending",
+    response_model=list[PendingBudgetAmendmentResponse],
+)
+async def list_pending_budget_amendments(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.budget_review", "finance.manage")
+    ),
+):
+    """Every amendment and reversal awaiting confirmation, oldest first.
+
+    **Requires permission: finance.budget_review or finance.manage** -- the
+    confirm endpoint's gate, since this is the confirmer's queue (owner
+    decision, 2026-11-01). Each row names its line and fiscal year, so a
+    reviewer who cannot open the line still sees what they confirm. The
+    caller's own entries are listed too: they may withdraw them.
+    """
+    return await FinanceService(db).list_pending_amendments(
+        str(current_user.organization_id)
+    )
 
 
 @router.get(
@@ -1721,6 +1753,10 @@ async def review_budget_request(
     service = FinanceBudgetRequestService(db)
     org_id = str(current_user.organization_id)
     try:
+        # What the owner had before: an earlier review's amount, else the
+        # Treasurer's. Read before the review overwrites it, so the email
+        # goes out only when the owner's amount actually changes.
+        previous = await service.owner_amount(request_id, org_id)
         request = await service.review_request(
             request_id,
             org_id,
@@ -1739,6 +1775,13 @@ async def review_budget_request(
                 else None
             ),
             review_amount=str(request.review_amount),
+        )
+        await notify_leadership_change(
+            db,
+            org_id,
+            request.id,
+            str(current_user.id),
+            previous_amount=previous,
         )
         return (await service.describe([request], org_id))[0]
     except Exception as e:
@@ -2793,7 +2836,10 @@ async def get_finance_settings(
     **Requires permission: finance.request, finance.view, finance.approve,
     finance.manage or finance.configure_approvals**
 
-    ``dualApprovalThreshold`` is null when off. ``substantiationMode`` and
+    ``dualApprovalThreshold`` is null when off; ``dualApprovalThresholds``
+    is the figure each request type uses, and whether it follows that one.
+    ``secondApproverPosition`` is the office one of the two approvers must
+    hold (null: anyone), with its name, null when it no longer exists. ``substantiationMode`` and
     ``substantiationDays`` are the accountable-plan deadline for expense
     reports; ``finance.request`` reads them so the expense form can warn a
     member before they submit a late line. ``fundOverspendMode`` is what
@@ -2802,9 +2848,27 @@ async def get_finance_settings(
     ``PATCH /organization/settings`` (``settings.manage``), never here: they
     bind the finance officers themselves.
     """
-    resolved = await load_finance_settings(db, str(current_user.organization_id))
+    org_id = str(current_user.organization_id)
+    resolved = await load_finance_settings(db, org_id)
+    office = resolved.second_approver_position
+    office_position = (
+        await ApproverDirectory(db, org_id).position(office) if office else None
+    )
     return FinanceSettingsResponse(
         dual_approval_threshold=resolved.dual_approval_threshold,
+        dual_approval_thresholds=[
+            DualApprovalTypeThresholdResponse(
+                entity_type=entity_type,
+                threshold=resolved.threshold_for(entity_type),
+                follows_default=entity_type not in resolved.dual_approval_type_overrides
+                or resolved.dual_approval_type_overrides[entity_type] is None,
+            )
+            for entity_type in DUAL_APPROVAL_TYPES
+        ],
+        second_approver_position=office,
+        second_approver_position_name=(
+            office_position.name if office_position is not None else None
+        ),
         substantiation_mode=resolved.substantiation_mode,
         substantiation_days=resolved.substantiation_days,
         fund_overspend_mode=resolved.fund_overspend_mode,
@@ -2896,6 +2960,7 @@ async def manual_approve(
             user_id=str(current_user.id),
             username=current_user.username,
         )
+        await _commit_and_send_notices(db, service)
     except Exception as e:
         raise _manual_decision_error(e)
 
@@ -2939,8 +3004,24 @@ async def manual_deny(
             user_id=str(current_user.id),
             username=current_user.username,
         )
+        await _commit_and_send_notices(db, service)
     except Exception as e:
         raise _manual_decision_error(e)
+
+
+async def _commit_and_send_notices(db: AsyncSession, service: FinanceService) -> None:
+    """Commit the change, then email whoever it concerns.
+
+    The approval emails a request's change queued (a step reaching its
+    approvers, a decision reaching the requester) go out only once it is
+    committed, so none announces a step or a decision a later failure rolled
+    back (finance_approval_notifications). Sending never raises.
+    """
+    notices = service.take_approval_notices()
+    if not notices:
+        return
+    await db.commit()
+    await send_approval_notices(db, notices)
 
 
 def _approval_audit_data(service: FinanceService, step_record_id: str) -> dict:
@@ -2977,18 +3058,25 @@ async def approve_step(
     step_record_id: str,
     data: ApprovalActionRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.approve")),
+    # Not require_permission("finance.approve"): a member a step names may act
+    # on that step without it (owner decision 2026-11-01). The service refuses
+    # anyone else — a member without the permission on any step that does not
+    # name them — before reading the step's order or its request.
+    current_user: User = Depends(get_current_user),
 ):
     """
     Approve the approval step a request is currently waiting on
 
-    Only the step's named approver may approve it. An approvals administrator
-    (``finance.configure_approvals``) who is not the named approver may do so
-    by giving ``overrideReason``; it is recorded in the audit log. The
-    requester can never approve their own request. Anyone else gets 403.
+    Only the step's named approver may approve it; being named is enough,
+    with or without ``finance.approve``. A step that names nobody takes any
+    ``finance.approve`` holder. An approvals administrator
+    (``finance.configure_approvals`` and ``finance.approve``) who is not the
+    named approver may do so by giving ``overrideReason``; it is recorded in
+    the audit log. The requester can never approve their own request. Anyone
+    else gets 403.
 
     **Authentication required**
-    **Requires permission: finance.approve**
+    **Requires: finance.approve, or being named on this step**
     """
     service = FinanceService(db)
     try:
@@ -3009,6 +3097,7 @@ async def approve_step(
             user_id=str(current_user.id),
             username=current_user.username,
         )
+        await _commit_and_send_notices(db, service)
         return record
     except ApproverMismatchError as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -3028,7 +3117,8 @@ async def deny_step(
     step_record_id: str,
     data: ApprovalActionRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.approve")),
+    # As approve_step: being named on the step is the grant.
+    current_user: User = Depends(get_current_user),
 ):
     """
     Deny the approval step a request is currently waiting on
@@ -3037,7 +3127,7 @@ async def deny_step(
     requester may deny (withdraw) their own request.
 
     **Authentication required**
-    **Requires permission: finance.approve**
+    **Requires: finance.approve, or being named on this step**
     """
     service = FinanceService(db)
     try:
@@ -3057,6 +3147,7 @@ async def deny_step(
             user_id=str(current_user.id),
             username=current_user.username,
         )
+        await _commit_and_send_notices(db, service)
         return record
     except ApproverMismatchError as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -3324,14 +3415,24 @@ async def get_purchase_request(
     **Requires permission: finance.request, finance.view or finance.manage**
 
     Another member's request is a 404 to a caller without the view or
-    manage grant.
+    manage grant, unless they are one of its approvers (``reviews_entity``):
+    the approval email sends a named approver here to decide on it.
     """
     service = FinanceService(db)
+    org_id = str(current_user.organization_id)
     pr = await service.get_purchase_request(
-        pr_id,
-        str(current_user.organization_id),
-        restrict_to_user=_read_scope(current_user),
+        pr_id, org_id, restrict_to_user=_read_scope(current_user)
     )
+    if pr is None and _read_scope(current_user) is not None:
+        other = await service.get_purchase_request(pr_id, org_id)
+        if other is not None and await service.reviews_entity(
+            current_user,
+            ApprovalEntityType.PURCHASE_REQUEST,
+            other.id,
+            org_id,
+            submitted=other.status != PurchaseRequestStatus.DRAFT,
+        ):
+            pr = other
     if not pr:
         raise HTTPException(status_code=404, detail="Purchase request not found")
     payload = await _with_approval_steps(
@@ -3424,9 +3525,11 @@ async def submit_purchase_request(
             str(current_user.organization_id),
             current_user,
         )
-        return await _with_reimbursement_links(
+        response = await _with_reimbursement_links(
             service, payload, KIND_PURCHASE, pr, str(current_user.organization_id)
         )
+        await _commit_and_send_notices(db, service)
+        return response
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
@@ -3483,10 +3586,23 @@ async def mark_pr_received(
 )
 async def mark_pr_paid(
     pr_id: str,
-    actual_amount: Optional[Decimal] = Query(None, decimal_places=2),
+    actual_amount: Optional[Decimal] = Query(
+        None, gt=0, max_digits=12, decimal_places=2
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
+    """Record a purchase request as paid, and what was actually paid.
+
+    **Requires permission: finance.manage**
+
+    ``actual_amount`` is what was paid (owner decision 2026-11-01): the
+    screen always asks for it, the request shows any difference from the
+    approved amount, and the budget line spends what was paid. Left out, the
+    approved estimate is recorded, so an API client written before the
+    amount was asked for keeps working. Refused with a 400 while the request
+    has no uploaded receipt.
+    """
     service = FinanceService(db)
     try:
         pr = await service.mark_pr_paid(
@@ -3502,7 +3618,8 @@ async def mark_pr_paid(
             severity="info",
             event_data={
                 "request_number": pr.request_number,
-                "amount": str(pr.actual_amount or pr.estimated_amount),
+                "amount": str(pr.actual_amount),
+                "approved_amount": str(pr.estimated_amount),
             },
             user_id=str(current_user.id),
             username=current_user.username,
@@ -3736,6 +3853,16 @@ async def get_expense_report(
         str(current_user.organization_id),
         current_user,
     )
+    # Each line names the budget line it charges, labelled as the picker the
+    # member chose it from labels it, so an approver sees where approval
+    # commits the money without the budget pages' grant.
+    labels = await service.budget_line_labels(
+        str(current_user.organization_id),
+        er.fiscal_year_id,
+        [item.budget_id for item in payload.line_items],
+    )
+    for item in payload.line_items:
+        item.budget_label = labels.get(item.budget_id) if item.budget_id else None
     return await _with_reimbursement_links(
         service, payload, KIND_EXPENSE, er, str(current_user.organization_id)
     )
@@ -3957,9 +4084,11 @@ async def submit_expense_report(
             str(current_user.organization_id),
             current_user,
         )
-        return await _with_reimbursement_links(
+        response = await _with_reimbursement_links(
             service, payload, KIND_EXPENSE, er, str(current_user.organization_id)
         )
+        await _commit_and_send_notices(db, service)
+        return response
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
@@ -4139,14 +4268,24 @@ async def get_check_request(
     **Requires permission: finance.request, finance.view or finance.manage**
 
     Another member's request is a 404 to a caller without the view or
-    manage grant.
+    manage grant, unless they are one of its approvers (``reviews_entity``):
+    the approval email sends a named approver here to decide on it.
     """
     service = FinanceService(db)
+    org_id = str(current_user.organization_id)
     cr = await service.get_check_request(
-        cr_id,
-        str(current_user.organization_id),
-        restrict_to_user=_read_scope(current_user),
+        cr_id, org_id, restrict_to_user=_read_scope(current_user)
     )
+    if cr is None and _read_scope(current_user) is not None:
+        other = await service.get_check_request(cr_id, org_id)
+        if other is not None and await service.reviews_entity(
+            current_user,
+            ApprovalEntityType.CHECK_REQUEST,
+            other.id,
+            org_id,
+            submitted=other.status != CheckRequestStatus.DRAFT,
+        ):
+            cr = other
     if not cr:
         raise HTTPException(status_code=404, detail="Check request not found")
     payload = await _with_approval_steps(
@@ -4228,9 +4367,11 @@ async def submit_check_request(
             str(current_user.organization_id),
             current_user,
         )
-        return await _with_reimbursement_links(
+        response = await _with_reimbursement_links(
             service, payload, KIND_CHECK, cr, str(current_user.organization_id)
         )
+        await _commit_and_send_notices(db, service)
+        return response
     except FinanceEntityNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BudgetLimitExceededError as e:
@@ -5198,6 +5339,14 @@ _PR_RECEIPT_CLOSED_TO_REQUESTER = _PR_RECEIPT_CLOSED | {
     PurchaseRequestStatus.PAID,
     PurchaseRequestStatus.REIMBURSED,
 }
+# A check request's receipt follows the purchase request's rule: its
+# requester until the check goes out, the finance office until it is closed.
+_CR_RECEIPT_CLOSED = {
+    CheckRequestStatus.DENIED,
+    CheckRequestStatus.CANCELLED,
+    CheckRequestStatus.VOIDED,
+}
+_CR_RECEIPT_CLOSED_TO_REQUESTER = _CR_RECEIPT_CLOSED | {CheckRequestStatus.ISSUED}
 # Line-item receipts are the evidence an approver reviews, so a requester may
 # change them only while the report itself is still editable.
 _ER_RECEIPT_CLOSED = {ExpenseReportStatus.DENIED, ExpenseReportStatus.CANCELLED}
@@ -5340,6 +5489,94 @@ async def download_purchase_request_receipt(
         name_parts=(pr.request_number, pr.vendor, "Receipt"),
         fallback="receipt",
         day=download_names.local_day(pr.created_at, tz),
+        folder_rights=False,
+    )
+
+
+@router.post("/check-requests/{cr_id}/receipt", response_model=CheckRequestResponse)
+async def upload_check_request_receipt(
+    cr_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.manage")
+    ),
+):
+    """Attach the receipt or invoice (PDF or image) a check request pays.
+
+    **Requires permission: finance.request or finance.manage**
+
+    Without the manage grant, only to the caller's own request, and not once
+    the check is issued. Issuing the check needs one (owner decision
+    2026-11-01), an advance's and a reimbursement check's aside.
+    """
+    service = FinanceService(db)
+    org_id = str(current_user.organization_id)
+    requester = _requester_scope(current_user)
+    folder = await _lock_receipts_folder(db, current_user)
+    cr = await service.get_check_request(
+        cr_id, org_id, for_update=True, restrict_to_user=requester
+    )
+    if not cr:
+        raise HTTPException(status_code=404, detail="Check request not found")
+    closed = _CR_RECEIPT_CLOSED_TO_REQUESTER if requester else _CR_RECEIPT_CLOSED
+    if cr.status in closed:
+        raise HTTPException(
+            status_code=400,
+            detail="A receipt can't be attached to a request in this status",
+        )
+
+    document = await _store_receipt(
+        db, file, current_user, folder, f"Receipt {cr.request_number}", str(cr.id)
+    )
+    previous = cr.receipt_document_id
+    try:
+        cr.receipt_document_id = str(document.id)
+        await db.flush()
+        await db.refresh(cr, ["updated_at"])
+        await _audit_receipt(db, current_user, cr.request_number, document, previous)
+    except Exception:
+        await module_documents.discard_file(document)
+        raise
+    payload = await _with_approval_steps(
+        service,
+        CheckRequestResponse.model_validate(cr),
+        ApprovalEntityType.CHECK_REQUEST,
+        cr.id,
+        org_id,
+        current_user,
+    )
+    return await _with_reimbursement_links(service, payload, KIND_CHECK, cr, org_id)
+
+
+@router.get("/check-requests/{cr_id}/receipt")
+async def download_check_request_receipt(
+    cr_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("finance.request", "finance.view", "finance.manage")
+    ),
+):
+    """The receipt uploaded to a check request.
+
+    **Requires permission: finance.request, finance.view or finance.manage**
+
+    Readable by whoever may read the request itself.
+    """
+    org_id = str(current_user.organization_id)
+    cr = await FinanceService(db).get_check_request(
+        cr_id, org_id, restrict_to_user=_read_scope(current_user)
+    )
+    if not cr or not cr.receipt_document_id:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    tz = await resolve_scheduling_timezone(db, org_id)
+    return await module_documents.serve_document(
+        db,
+        cr.receipt_document_id,
+        current_user,
+        name_parts=(cr.request_number, cr.payee_name, "Receipt"),
+        fallback="receipt",
+        day=download_names.local_day(cr.created_at, tz),
         folder_rights=False,
     )
 

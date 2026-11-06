@@ -20,6 +20,7 @@ const BudgetDetailPage = lazyWithRetry(() => import('./pages/BudgetDetailPage'))
 const MyBudgetsPage = lazyWithRetry(() => import('./pages/MyBudgetsPage'));
 const BudgetRequestsPage = lazyWithRetry(() => import('./pages/BudgetRequestsPage'));
 const BudgetRequestReviewPage = lazyWithRetry(() => import('./pages/BudgetRequestReviewPage'));
+const PendingAmendmentsPage = lazyWithRetry(() => import('./pages/PendingAmendmentsPage'));
 
 // Settings
 const FiscalYearSettingsPage = lazyWithRetry(() => import('./pages/FiscalYearSettingsPage'));
@@ -119,6 +120,23 @@ export const getFinanceRoutes = () => {
             moduleLabel="Finance"
           >
             <BudgetRequestReviewPage />
+          </ProtectedRoute>
+        }
+      />
+      {/*
+        Amendments awaiting a second officer, across every line: the confirm
+        endpoint's gate (finance.budget_review or finance.manage). Owner
+        decision, 2026-11-01.
+      */}
+      <Route
+        path="/finance/budget-amendments"
+        element={
+          <ProtectedRoute
+            requiredAnyPermission={['finance.manage', 'finance.budget_review']}
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
+            <PendingAmendmentsPage />
           </ProtectedRoute>
         }
       />

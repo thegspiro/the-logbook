@@ -86,6 +86,7 @@ class EmailKind(str, enum.Enum):
     ELECTION_NOTICES = "election_notices"
     SUGGESTION_BOX = "suggestion_box"
     BUDGET_REQUESTS = "budget_requests"
+    FINANCE_REQUESTS = "finance_requests"
     MINUTES_ACTION_ITEMS = "minutes_action_items"
     MINUTES_CIRCULATED = "minutes_circulated"
     WEATHER_ALERTS = "weather_alerts"
@@ -372,8 +373,19 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "or the deadline changed",
             "Reminders before the request deadline",
             "The Treasurer's decision on a budget request",
+            "Senior leadership changing the amount of a budget request",
         ),
         rationale="Finance > Next year's budget shows the same deadline and decisions.",
+    ),
+    EmailKind.FINANCE_REQUESTS: EmailPolicy(
+        label="Your purchase, expense and check requests",
+        required=False,
+        audience=_M,
+        includes=(
+            "A purchase request, expense report or check request you raised "
+            "was approved or denied",
+        ),
+        rationale="The request's own page shows the same decision.",
     ),
     # Sent only when the department turned on email for its NWS weather
     # integration (owner decision 2026-10-29); otherwise no member gets one.
@@ -538,11 +550,20 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         rationale="Minutes > Action Items lists every open item.",
     ),
     EmailKind.FINANCE_DUTIES: EmailPolicy(
-        label="Treasurer duties",
+        label="Finance duties",
         required=False,
         audience=_O,
-        includes=("A budget request submitted for your review",),
-        rationale="Finance > Budget requests lists every request waiting.",
+        includes=(
+            "A budget request submitted for your review",
+            "A purchase request, expense report or check request reaching an "
+            "approval step that names you",
+            "A large request waiting for a second approval you could give",
+            "A budget amendment or reversal waiting for your confirmation",
+        ),
+        rationale=(
+            "Finance > Budget requests and Finance > Approvals list every "
+            "request waiting."
+        ),
     ),
     EmailKind.DOCUMENT_DUTIES: EmailPolicy(
         label="Document folder access",

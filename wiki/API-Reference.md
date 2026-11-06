@@ -1072,8 +1072,8 @@ camelCase (`alias_generator=to_camel`).
 
 ```
 GET    /api/v1/finance/approval-chains/approver-coverage   # Every approval step, who can act on it, any problem, requests waiting (finance.configure_approvals)
-POST   /api/v1/finance/approvals/{step_record_id}/approve  # Approve the step a request is waiting on (finance.approve)
-POST   /api/v1/finance/approvals/{step_record_id}/deny     # Deny it (finance.approve)
+POST   /api/v1/finance/approvals/{step_record_id}/approve  # Approve the step a request is waiting on (finance.approve, or named on the step)
+POST   /api/v1/finance/approvals/{step_record_id}/deny     # Deny it (finance.approve, or named on the step)
 ```
 
 **Approve and deny are limited to the step's named approver.** Body
@@ -1083,8 +1083,11 @@ at most 2000 characters, blank treated as absent) and
 an expense report with lines submitted after the department's substantiation
 deadline).
 
-- An approvals administrator (`finance.configure_approvals`) who is not the
-  named approver may act by giving `overrideReason`; the override is recorded
+- Being named is the grant: a member the step names may act without
+  `finance.approve`, on that step only. A caller without `finance.approve`
+  whom the step does not name gets 403 before the step's state is read.
+- An approvals administrator (`finance.configure_approvals` and
+  `finance.approve`) who is not the named approver may act by giving `overrideReason`; the override is recorded
   in the audit log (`finance.approval_step_approved` /
   `finance.approval_step_denied`).
 - The requester can never approve their own request; a requester may deny
@@ -1100,14 +1103,31 @@ deadline).
 chains, so an administrator can find steps nobody can act on before requests
 pile up behind them:
 
-| Field                                            | Notes                                                                                            |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `chainId`, `chainName`, `chainIsActive`          | The chain the step belongs to                                                                    |
-| `stepId`, `stepName`, `stepOrder`                | The step                                                                                         |
-| `approverType`, `approverValue`, `assigneeLabel` | Who the step names                                                                               |
-| `eligibleActiveCount`                            | Active members who match the step and may approve (`finance.approve`, except on an email step)   |
-| `problem`                                        | `null`, `no_value`, `not_found`, `no_active_members`, `no_approve_permission` or `invalid_email` |
-| `pendingRequestCount`                            | Requests waiting on this step now                                                                |
+| Field                                            | Notes                                                                   |
+| ------------------------------------------------ | ----------------------------------------------------------------------- |
+| `chainId`, `chainName`, `chainIsActive`          | The chain the step belongs to                                           |
+| `stepId`, `stepName`, `stepOrder`                | The step                                                                |
+| `approverType`, `approverValue`, `assigneeLabel` | Who the step names                                                      |
+| `eligibleActiveCount`                            | Active members who match the step (being named is enough to act on it)  |
+| `problem`                                        | `null`, `no_value`, `not_found`, `no_active_members` or `invalid_email` |
+| `pendingRequestCount`                            | Requests waiting on this step now                                       |
+
+---
+
+## Finance — Budget Amendments Awaiting Confirmation
+
+```
+GET    /api/v1/finance/budget-amendments/pending                              # Every pending amendment and reversal across the department's lines, oldest first (finance.budget_review or finance.manage)
+POST   /api/v1/finance/budgets/{budget_id}/amendments/{amendment_id}/reverse  # Reverse a confirmed amendment; optional `amount` reverses part of it (finance.manage)
+```
+
+Each pending row is an amendment row plus `categoryName`, `stationName`,
+`fiscalYearId`, `fiscalYearName`, `yearLocked`, and on a reversal
+`reversedAmendmentAmount` and `reversedAmendmentApprovedOn`. Amendment rows
+carry `reversesAmendmentRef` (the amendment a reversal was entered against,
+kept after a rejection) and, on a reversed amendment, `reversedAmount`. The
+reverse body's `amount` is optional: left out, the whole amendment is
+reversed; more than the amendment is 400. See `docs/FINANCE_MODULE.md`.
 
 ---
 

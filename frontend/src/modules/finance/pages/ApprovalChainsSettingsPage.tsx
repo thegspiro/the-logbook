@@ -101,8 +101,6 @@ function coverageProblemText(row: ApproverCoverageRow): string {
       return (type && NOT_FOUND_TEXT[type]) || 'That position, member or permission no longer exists';
     case ApproverCoverageProblem.INVALID_EMAIL:
       return 'Not a valid email address';
-    case ApproverCoverageProblem.NO_APPROVE_PERMISSION:
-      return 'Nobody on this step has the finance approval permission, so they cannot approve or deny';
     case ApproverCoverageProblem.NO_ACTIVE_MEMBERS:
     default:
       return 'No active member can act on this step';
@@ -602,7 +600,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
         }
       />
 
-      <DualApprovalSettingsCard />
+      <DualApprovalSettingsCard positions={approverOptions.positions} />
       <SubstantiationSettingsCard />
       <FundOverspendSettingsCard />
 
@@ -672,12 +670,17 @@ const ApprovalChainsSettingsPage: React.FC = () => {
                 id="new-chain-applies-to"
                 className={selectClass}
                 value={formData.appliesTo}
+                aria-describedby="new-chain-applies-to-help"
                 onChange={(e) => setFormData({ ...formData, appliesTo: e.target.value as ApprovalEntityType })}
               >
                 <option value={ApprovalEntityType.PURCHASE_REQUEST}>Purchase Requests</option>
                 <option value={ApprovalEntityType.EXPENSE_REPORT}>Expense Reports</option>
                 <option value={ApprovalEntityType.CHECK_REQUEST}>Check Requests</option>
               </select>
+              <p id="new-chain-applies-to-help" className="text-theme-text-secondary mt-1 text-xs">
+                A chain routes only this type of request. A type with no chain of its own is decided by hand by a
+                finance approver.
+              </p>
             </div>
             <div>
               <label htmlFor="new-chain-category" className={labelClass}>

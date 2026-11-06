@@ -30,6 +30,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
+from app.models.document import Document
 from app.models.finance import (
     ApprovalEntityType,
     ApprovalStepType,
@@ -618,6 +619,15 @@ class TestOverspending:
     async def test_block_refuses_paying_more_than_the_fund_has(self, db_session, funds):
         await _mode(db_session, funds["org_id"], "block")
         service = FinanceService(db_session)
+        # Payment needs a receipt on file (owner decision 2026-11-01).
+        receipt = Document(
+            organization_id=funds["org_id"], name="Receipt", file_name="r.pdf"
+        )
+        db_session.add(receipt)
+        await db_session.flush()
+        pr = await db_session.get(PurchaseRequest, funds["approved_pr"])
+        pr.receipt_document_id = receipt.id
+        await db_session.flush()
 
         # Its own 150 estimate is released: 380 + 150 = 530 is what it may use.
         with pytest.raises(FundBalanceExceededError):

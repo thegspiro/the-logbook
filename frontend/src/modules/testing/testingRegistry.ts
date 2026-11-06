@@ -1096,6 +1096,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'finance',
       },
       {
+        path: '/finance/budget-amendments',
+        label: 'Budget amendments (pending)',
+        anyPermission: ['finance.manage', 'finance.budget_review'],
+        module: 'finance',
+      },
+      {
         path: '/finance/purchase-requests',
         label: 'Purchase requests',
         anyPermission: FINANCE_REQUEST_READ_GATE,

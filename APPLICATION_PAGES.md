@@ -1338,6 +1338,7 @@ lot's number or expiration date require `inventory.check_manage` or
 | `/finance/my-budgets`                 | My Budgets                 | Authenticated                                                            |
 | `/finance/budget-requests`            | Next Year's Budget         | Authenticated                                                            |
 | `/finance/budget-requests/review`     | Budget Requests (review)   | `finance.manage` or `finance.budget_review`                              |
+| `/finance/budget-amendments`          | Budget Amendments (queue)  | `finance.manage` or `finance.budget_review`                              |
 | `/finance/purchase-requests`          | Purchase Requests          | `finance.request`, `finance.view` or `finance.manage`                    |
 | `/finance/purchase-requests/new`      | New Purchase Request       | `finance.request` or `finance.manage`                                    |
 | `/finance/purchase-requests/:id`      | Purchase Request Detail    | `finance.request`, `finance.view` or `finance.manage`                    |

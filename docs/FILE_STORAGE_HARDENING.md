@@ -278,8 +278,9 @@ moved out of reach is not served through the module's door. Typed URLs are
 refused on the way in, and `fileUrl` passes an old one on only if it is
 HTTP(S).
 
-**Finance receipts** are uploaded at `POST /finance/purchase-requests/{id}/receipt`
-and `/expense-reports/{id}/items/{item}/receipt`, filed in Finance > Receipts,
+**Finance receipts** are uploaded at `POST /finance/purchase-requests/{id}/receipt`,
+`/expense-reports/{id}/items/{item}/receipt` and (2026-11-06)
+`/check-requests/{id}/receipt`, filed in Finance > Receipts,
 and linked by `receipt_document_id`. Here the record's read rule is the
 authority, not the folder's: a member opens the receipt on their own request
 without holding the rights that open the Finance folder. Replacing a receipt

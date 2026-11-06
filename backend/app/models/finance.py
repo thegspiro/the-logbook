@@ -598,8 +598,10 @@ class BudgetAmendment(Base):
 
     There is no edit or delete path: an amendment is what the department
     approved. A mistaken one is corrected by a **reversing entry** (owner
-    decision, 2026-10-09): a new row whose ``amount`` is the original's,
-    negated, and whose ``reverses_amendment_id`` names it. The original stays
+    decision, 2026-10-09): a new row whose ``amount`` is negative -- the
+    whole original, or since 2026-11-01 any part of it, so $2,500 entered for
+    $250 is corrected by one reversal of $2,250 -- and whose
+    ``reverses_amendment_id`` names it. The original stays
     on record, ``amount_budgeted`` drops by the amount, and the original
     budget -- current less the sum of every row, reversals included -- is
     unchanged. ``FinanceService.reverse_budget_amendment`` holds the rules.
@@ -644,6 +646,15 @@ class BudgetAmendment(Base):
         ForeignKey("budget_amendments.id", ondelete="SET NULL"),
         nullable=True,
         unique=True,
+    )
+    # The amendment a reversal was entered against, kept for display (owner
+    # decision, 2026-11-01). Rejecting a reversal clears
+    # ``reverses_amendment_id`` so its unique key frees the target; this copy
+    # stays, so the rejected row still names what it tried to reverse. No
+    # foreign or unique key on purpose: it must hold nothing back, and nothing
+    # that moves money reads it.
+    reverses_amendment_ref: Mapped[Optional[str]] = mapped_column(
+        String(36), nullable=True
     )
     status: Mapped[BudgetAmendmentStatus] = mapped_column(
         SQLEnum(
@@ -965,6 +976,16 @@ class ApprovalStepRecord(Base):
     email_link_version: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # When the members this step names were emailed that it had reached them
+    # (owner decision 2026-11-01). Stamped in the transaction that makes the
+    # step current, and a step already stamped is never emailed again, so
+    # re-running the advance after a retry or a sibling step's approval
+    # cannot repeat the notice (CLAUDE.md pitfall #36). NULL for a step that
+    # has not been reached, an emailed-link step (whose link is its notice),
+    # and every step reached before the notice existed.
+    approvers_notified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -1073,6 +1094,12 @@ class PurchaseRequest(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     first_approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # When the eligible approvers were emailed that this request waits for its
+    # second approval; set once, so the notice goes out once per request
+    # (app/services/finance_second_approval.py).
+    second_approval_requested_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -1221,6 +1248,12 @@ class ExpenseReport(Base):
     first_approved_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # When the eligible approvers were emailed that this request waits for its
+    # second approval; set once, so the notice goes out once per request
+    # (app/services/finance_second_approval.py).
+    second_approval_requested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     paid_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -1261,6 +1294,17 @@ class ExpenseReport(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     late_acknowledged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # When approval encumbered the lines' amounts on the budget lines they
+    # charge (owner decision 2026-11-01: the member picks the line, approval
+    # commits it). Paying, cancelling or a voided check releases exactly that
+    # commitment, and only when this is set: a report approved before the
+    # commitment existed, or one claiming back a purchase whose own approval
+    # already encumbered it, never committed anything to release, and
+    # releasing it anyway would eat into other requests' encumbrances on the
+    # same line.
+    budget_committed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     # When a complete QuickBooks export file last carried this payment, and
@@ -1392,6 +1436,17 @@ class ExpenseLineItem(Base):
     __table_args__ = (Index("ix_expense_line_items_report", "expense_report_id"),)
 
 
+def check_request_needs_receipt(
+    is_advance: Optional[bool], expense_report_id: Optional[str]
+) -> bool:
+    """Whether issuing a check waits on a receipt of its own (owner decision
+    2026-11-01). An advance is paid before anything is bought, and a
+    reimbursement check pays an expense report whose every line already
+    carries one, so neither does. The one definition: ``issue_check``
+    enforces it and the response reports it to the screens."""
+    return not is_advance and not expense_report_id
+
+
 class CheckRequest(Base):
     """Request to cut a check for payment"""
 
@@ -1455,6 +1510,18 @@ class CheckRequest(Base):
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     memo: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     purpose: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # The invoice or bill the check pays: a Document under Finance > Receipts.
+    # Required before the check is issued (owner decision 2026-11-01), except
+    # for an advance and a reimbursement check, whose receipts are the expense
+    # report's lines. Indexed because a document delete reads the rows naming
+    # it with NOWAIT locking reads (documents_service, DOC-31), which must lock
+    # only those rows.
+    receipt_document_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("documents.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     status: Mapped[CheckRequestStatus] = mapped_column(
         SQLEnum(
             CheckRequestStatus,
@@ -1478,6 +1545,12 @@ class CheckRequest(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     first_approved_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # When the eligible approvers were emailed that this request waits for its
+    # second approval; set once, so the notice goes out once per request
+    # (app/services/finance_second_approval.py).
+    second_approval_requested_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     denial_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

@@ -5,9 +5,9 @@
  * Whether the viewer may act is the backend's answer, not this component's:
  * the detail endpoint sets `canAct` (the viewer is the step's named approver)
  * or `requiresOverride` (an approvals admin who is not) on the step the request
- * is waiting on, from the same rule approve / deny enforce. Both are false for
- * a notification step and for a viewer without `finance.approve`, so neither
- * is re-checked here.
+ * is waiting on, from the same rule approve / deny enforce. A member the step
+ * names may act without `finance.approve` (owner decision 2026-11-01), so no
+ * permission is checked here; both flags are false for a notification step.
  *
  * Renders nothing unless the request is pending approval and has a pending
  * step. A pending request with no pending step is a different problem and is

@@ -30,6 +30,7 @@ import { FunctionalClassControl } from '../components/FunctionalClassControl';
 import { FundNameItem, FundShortfallNotice } from '../components/FundShortfallNotice';
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { ReceiptControl } from '../components/ReceiptControl';
+import { MarkPaidDialog } from '../components/MarkPaidDialog';
 import { ReimbursementClaimDialog } from '../components/ReimbursementClaimDialog';
 import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { Skeleton } from '@/components/ux/Skeleton';
@@ -42,6 +43,7 @@ import { useConfirm } from '@/contexts/ConfirmContext';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import {
+  type MonetaryAmount,
   ApprovalEntityType,
   ExpenseReportStatus,
   PurchaseRequestStatus,
@@ -201,6 +203,16 @@ const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({ isDraft, steps }) =
   );
 };
 
+/**
+ * The server's paid-less-approved figure, in words: "$30.00 over", "$14.50
+ * under" or "None". The sign is the server's; only the wording is chosen here.
+ */
+const describePaidDifference = (difference: MonetaryAmount): string => {
+  const value = Number(difference);
+  if (value === 0) return 'None';
+  return `${formatCurrency(Math.abs(value))} ${value > 0 ? 'over' : 'under'}`;
+};
+
 // =============================================================================
 // Main Page Component
 // =============================================================================
@@ -220,6 +232,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
   const access = useFinanceRequestAccess();
   const { confirm } = useConfirm();
   const [claiming, setClaiming] = useState(false);
+  const [payingOpen, setPayingOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -257,17 +270,6 @@ const PurchaseRequestDetailPage: React.FC = () => {
       void fetchPurchaseRequest(id);
     } catch {
       toast.error('Failed to mark as received');
-    }
-  };
-
-  const handleMarkPaid = async () => {
-    if (!id) return;
-    try {
-      await purchaseRequestService.markPaid(id);
-      toast.success('Marked as paid');
-      void fetchPurchaseRequest(id);
-    } catch {
-      toast.error('Failed to mark as paid');
     }
   };
 
@@ -347,6 +349,10 @@ const PurchaseRequestDetailPage: React.FC = () => {
   const canMarkOrdered = access.canManage && pr.status === PurchaseRequestStatus.APPROVED;
   const canMarkReceived = access.canManage && pr.status === PurchaseRequestStatus.ORDERED;
   const canMarkPaid = access.canManage && pr.status === PurchaseRequestStatus.RECEIVED && !heldByClaim;
+  // No payment without an uploaded receipt (owner decision 2026-11-01;
+  // FinanceService.mark_pr_paid refuses it too). The button stays visible,
+  // disabled, with the reason beside it, so the office knows what is missing.
+  const awaitingReceipt = canMarkPaid && !pr.receiptDocumentId;
   // A requester may withdraw only a draft; past that it is the finance
   // office's to cancel (FinanceService.cancel_purchase_request).
   const canCancel = access.canManage
@@ -455,8 +461,10 @@ const PurchaseRequestDetailPage: React.FC = () => {
             {canMarkPaid && (
               <button
                 type="button"
-                onClick={() => void handleMarkPaid()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
+                disabled={awaitingReceipt}
+                onClick={() => setPayingOpen(true)}
+                aria-describedby={awaitingReceipt ? 'pr-receipt-needed' : undefined}
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <CreditCard className="h-3.5 w-3.5" />
                 Mark Paid
@@ -481,10 +489,18 @@ const PurchaseRequestDetailPage: React.FC = () => {
             <p className="text-theme-text-secondary text-xs">Estimated Amount</p>
             <p className="text-theme-text-primary text-sm font-semibold">{formatCurrency(pr.estimatedAmount)}</p>
           </div>
-          {pr.actualAmount != null && (
+          {pr.status === PurchaseRequestStatus.PAID && pr.actualAmount != null && (
             <div>
-              <p className="text-theme-text-secondary text-xs">Actual Amount</p>
+              <p className="text-theme-text-secondary text-xs">Amount Paid</p>
               <p className="text-theme-text-primary text-sm font-semibold">{formatCurrency(pr.actualAmount)}</p>
+            </div>
+          )}
+          {pr.paidDifference != null && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Difference from Approved</p>
+              <p className="text-theme-text-primary text-sm font-semibold">
+                {describePaidDifference(pr.paidDifference)}
+              </p>
             </div>
           )}
           <div>
@@ -576,6 +592,15 @@ const PurchaseRequestDetailPage: React.FC = () => {
           )}
         </div>
 
+        {awaitingReceipt && (
+          <div id="pr-receipt-needed" className="alert-warning mt-4">
+            <p className="text-theme-alert-warning-text text-sm">
+              Attach the receipt or invoice below before marking this request paid. It is the record of what the
+              department paid for.
+            </p>
+          </div>
+        )}
+
         {/* Description */}
         {pr.description && (
           <div className="border-theme-surface-border mt-4 border-t pt-4">
@@ -626,6 +651,17 @@ const PurchaseRequestDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {payingOpen && (
+        <MarkPaidDialog
+          purchase={pr}
+          onClose={() => setPayingOpen(false)}
+          onPaid={() => {
+            setPayingOpen(false);
+            void fetchPurchaseRequest(pr.id);
+          }}
+        />
+      )}
 
       {claiming && (
         <ReimbursementClaimDialog

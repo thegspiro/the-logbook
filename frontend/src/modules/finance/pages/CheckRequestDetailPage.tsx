@@ -17,6 +17,7 @@ import { FundNameItem, FundShortfallNotice } from '../components/FundShortfallNo
 import { ManualApprovalPanel } from '../components/ManualApprovalPanel';
 import { AdvancePanel } from '../components/AdvancePanel';
 import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
+import { ReceiptControl } from '../components/ReceiptControl';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { PromptDialog } from '@/components/ux/PromptDialog';
@@ -219,6 +220,18 @@ const CheckRequestDetailPage: React.FC = () => {
   // voided (FinanceService.void_check).
   const canSubmit = cr.status === CheckRequestStatus.DRAFT && access.canActAsRequester(cr.requestedBy);
   const canIssue = access.canManage && cr.status === CheckRequestStatus.APPROVED;
+  // No check without the receipt or invoice on file, an advance's and a
+  // reimbursement check's aside (owner decision 2026-11-01). Whether this one
+  // needs one is the server's `receiptRequired`, the rule issue_check applies.
+  const awaitingReceipt = canIssue && cr.receiptRequired !== false && !cr.receiptDocumentId;
+  // Mirrors _CR_RECEIPT_CLOSED / _CR_RECEIPT_CLOSED_TO_REQUESTER in
+  // backend/app/api/v1/endpoints/finance.py.
+  const receiptClosed =
+    cr.status === CheckRequestStatus.DENIED ||
+    cr.status === CheckRequestStatus.CANCELLED ||
+    cr.status === CheckRequestStatus.VOIDED ||
+    (!access.canManage && cr.status === CheckRequestStatus.ISSUED);
+  const canAttachReceipt = cr.receiptRequired !== false && access.canActAsRequester(cr.requestedBy) && !receiptClosed;
   const canVoid = access.canManage && cr.status === CheckRequestStatus.ISSUED;
   const canCancel = access.canManage
     ? (
@@ -282,8 +295,10 @@ const CheckRequestDetailPage: React.FC = () => {
             {canIssue && (
               <button
                 type="button"
+                disabled={awaitingReceipt}
                 onClick={() => setShowIssueDialog(true)}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800"
+                aria-describedby={awaitingReceipt ? 'cr-receipt-needed' : undefined}
+                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <CheckCircle className="h-3.5 w-3.5" />
                 Issue Check
@@ -388,7 +403,30 @@ const CheckRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(cr.qbVoidExportedAt, tz)}</p>
             </div>
           )}
+          {(canAttachReceipt || cr.receiptFileUrl) && (
+            <div>
+              <p className="text-theme-text-secondary text-xs">Receipt or invoice</p>
+              <ReceiptControl
+                subject={cr.payeeName}
+                receiptFileUrl={cr.receiptFileUrl}
+                canAttach={canAttachReceipt}
+                onUpload={async (file) => {
+                  await checkRequestService.uploadReceipt(cr.id, file);
+                  await fetchCheckRequest(cr.id);
+                }}
+                onDownload={() => checkRequestService.downloadReceipt(cr.id)}
+              />
+            </div>
+          )}
         </div>
+
+        {awaitingReceipt && (
+          <div id="cr-receipt-needed" className="alert-warning mt-4">
+            <p className="text-theme-alert-warning-text text-sm">
+              Attach the receipt or invoice before issuing this check. It is the record of what the department paid for.
+            </p>
+          </div>
+        )}
 
         {cr.payeeAddress && (
           <div className="border-theme-surface-border mt-4 border-t pt-4">

@@ -192,8 +192,16 @@ app/api/v1/endpoints/external_shift_hours.py::list_my_external_shifts
 app/api/v1/endpoints/external_shift_hours.py::log_external_shift
 app/api/v1/endpoints/external_shift_hours.py::update_my_external_shift
 
+# Finance approval steps (2026-11-06, owner decision 2026-11-01 "naming grants
+# that step"): a member an approval chain step names may approve or deny that
+# step without finance.approve. FinanceService.approve_step / deny_step resolve
+# the step org-scoped through its chain, then refuse (403) a caller without
+# finance.approve whom the step does not name (may_reach_step) before reading
+# its order or its request, and then apply the step's own approver rule.
+app/api/v1/endpoints/finance.py::approve_step
 app/api/v1/endpoints/finance.py::create_budget_request
 app/api/v1/endpoints/finance.py::delete_budget_request
+app/api/v1/endpoints/finance.py::deny_step
 app/api/v1/endpoints/finance.py::get_budget
 app/api/v1/endpoints/finance.py::get_budget_request
 app/api/v1/endpoints/finance.py::get_charge_access_settings

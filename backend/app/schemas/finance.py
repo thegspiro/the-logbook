@@ -23,6 +23,7 @@ from app.models.finance import (
     ExportMappingType,
     FunctionalClass,
     PurchaseRequestPriority,
+    check_request_needs_receipt,
 )
 from app.schemas.base import UTCDateTime, UTCResponseBase
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
@@ -477,13 +478,17 @@ class BudgetAmendmentCreate(BaseModel):
 class BudgetAmendmentReverse(BaseModel):
     """Reverse a mistaken amendment with an entry of its own.
 
-    The amount is not sent: a reversal cancels the whole amendment, so the
-    service takes it from the row being reversed. The approval date's "not in
-    the future" check needs the department's calendar, so the service makes it.
+    ``amount`` is how much to take back: any part of the amendment, up to the
+    whole (owner decision, 2026-11-01). Left out, the whole amendment is
+    reversed, as before partial reversals. Whether it exceeds the amendment
+    needs the row, so the service checks that; so does the approval date's
+    "not in the future", which needs the department's calendar.
     """
 
     model_config = _REQUEST_CONFIG
 
+    # Two places within Numeric(12, 2), as for an amendment.
+    amount: Optional[Decimal] = Field(None, gt=0, max_digits=12, decimal_places=2)
     reason: str = Field(..., max_length=2000)
     approved_by: str = Field(..., max_length=200)
     approved_on: date
@@ -544,11 +549,32 @@ class BudgetAmendmentResponse(UTCResponseBase):
     reversed_at: Optional[datetime] = None
     reversed_by_name: Optional[str] = None
     reversal_status: Optional[str] = None
+    # How much the reversal takes back: the whole amendment, or a part of it.
+    reversed_amount: Optional[Decimal] = None
+    # On a reversal, the amendment it was entered against -- kept after a
+    # rejection clears ``reverses_amendment_id``. Display only.
+    reverses_amendment_ref: Optional[str] = None
     status: str = "confirmed"
     decided_by: Optional[str] = None
     decided_by_name: Optional[str] = None
     decided_at: Optional[datetime] = None
     decision_note: Optional[str] = None
+
+
+class PendingBudgetAmendmentResponse(BudgetAmendmentResponse):
+    """An amendment awaiting confirmation, with the line it is on.
+
+    The pending queue's row. On a reversal, ``reversed_amendment_amount`` and
+    ``reversed_amendment_approved_on`` describe the amendment it reverses.
+    """
+
+    category_name: Optional[str] = None
+    station_name: Optional[str] = None
+    fiscal_year_id: str
+    fiscal_year_name: str
+    year_locked: bool = False
+    reversed_amendment_amount: Optional[Decimal] = None
+    reversed_amendment_approved_on: Optional[date] = None
 
 
 class BudgetAmendmentCreatedResponse(BaseModel):
@@ -1389,14 +1415,36 @@ class LateSubstantiationReportResponse(BaseModel):
     total: Decimal
 
 
+class DualApprovalTypeThresholdResponse(BaseModel):
+    """The dual-approval threshold in force for one request type."""
+
+    model_config = _RESPONSE_CONFIG
+
+    entity_type: str
+    # None: off for this type.
+    threshold: Optional[Decimal] = None
+    # True when the type has no figure of its own and follows the
+    # department's dual_approval_threshold.
+    follows_default: bool = True
+
+
 class FinanceSettingsResponse(BaseModel):
     """The finance rules the server applies (app/utils/finance_settings.py)."""
 
     model_config = _RESPONSE_CONFIG
 
     # None: off. Otherwise requests of this amount or more need two different
-    # approvers.
+    # approvers. The department figure; dual_approval_thresholds says what
+    # each request type actually uses.
     dual_approval_threshold: Optional[Decimal] = None
+    dual_approval_thresholds: list[DualApprovalTypeThresholdResponse] = Field(
+        default_factory=list
+    )
+    # The slug of the position whose holder must be one of the two approvers,
+    # and its name; the name is None when no such position exists any more
+    # (the rule then holds every large request until it is changed).
+    second_approver_position: Optional[str] = None
+    second_approver_position_name: Optional[str] = None
     # The accountable-plan deadline for expense reports: "off", "warn" or
     # "block", and the days allowed between incurring and submitting.
     substantiation_mode: str = "off"
@@ -1509,6 +1557,11 @@ class PurchaseRequestResponse(UTCResponseBase):
     vendor: Optional[str] = None
     estimated_amount: Decimal
     actual_amount: Optional[Decimal] = None
+    # Once paid, what was paid less what was approved: positive when the
+    # invoice came in over the estimate, negative under it. Null until paid,
+    # and for a request paid before the amount was asked for (2026-11-06)
+    # with none recorded.
+    paid_difference: Optional[Decimal] = None
     status: str
     priority: str
     approved_by: Optional[str] = None
@@ -1549,6 +1602,14 @@ class PurchaseRequestResponse(UTCResponseBase):
             self.receipt_file_url = (
                 f"/api/v1/finance/purchase-requests/{self.id}/receipt"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _set_paid_difference(self):
+        # Only a paid request's actual amount is what was paid: a draft's edit
+        # form can also set the column, and that is nobody's payment.
+        if self.status == "paid" and self.actual_amount is not None:
+            self.paid_difference = self.actual_amount - self.estimated_amount
         return self
 
 
@@ -1618,6 +1679,9 @@ class ExpenseLineItemResponse(UTCResponseBase):
     id: str
     expense_report_id: str
     budget_id: Optional[str] = None
+    # The budget line's name as the request forms' picker shows it (detail
+    # responses; FinanceService.list_budget_options).
+    budget_label: Optional[str] = None
     description: str
     amount: Decimal
     date_incurred: datetime
@@ -1719,6 +1783,10 @@ class ExpenseReportResponse(UTCResponseBase):
     late_acknowledged_by: Optional[str] = None
     late_acknowledged_at: Optional[datetime] = None
     awaiting_late_acknowledgement: bool = False
+    # When approval committed the lines to their budget lines; null before
+    # approval, and for a report approved before 2026-11-06 or one claiming
+    # back a purchase, which committed nothing of its own.
+    budget_committed_at: Optional[datetime] = None
     # How far this payment would take its restricted funds past what they
     # have left, while it is not yet approved; null when it fits or charges
     # no fund (detail responses).
@@ -1841,9 +1909,24 @@ class CheckRequestResponse(UTCResponseBase):
     expense_report_id: Optional[str] = None
     expense_report_number: Optional[str] = None
     notes: Optional[str] = None
+    # The invoice or bill the check pays, uploaded to Finance > Receipts.
+    receipt_document_id: Optional[str] = None
+    receipt_file_url: Optional[str] = None
+    # Whether issuing the check waits on a receipt of its own
+    # (check_request_needs_receipt, the rule issue_check enforces).
+    receipt_required: bool = True
     created_at: datetime
     updated_at: datetime
     approval_steps: list[ApprovalStepRecordResponse] = []
+
+    @model_validator(mode="after")
+    def _set_receipt_fields(self):
+        if self.receipt_document_id:
+            self.receipt_file_url = f"/api/v1/finance/check-requests/{self.id}/receipt"
+        self.receipt_required = check_request_needs_receipt(
+            self.is_advance, self.expense_report_id
+        )
+        return self
 
 
 class ReimbursementReportCreate(BaseModel):

@@ -78,6 +78,7 @@ from app.models.finance import (
     PurchaseRequest,
     PurchaseRequestStatus,
     QuickBooksChartAccount,
+    check_request_needs_receipt,
 )
 from app.models.user import Organization, Position, User
 from app.services.cash_advances import (
@@ -89,15 +90,26 @@ from app.services.cash_advances import (
     lock_advance,
 )
 from app.services.expense_substantiation import describe_late, late_items
+from app.services.finance_approval_notifications import (
+    APPROVED,
+    DECIDED,
+    DENIED,
+    SECOND_APPROVAL,
+    STEP_REACHED,
+    ApprovalNotice,
+)
 from app.services.finance_approver_matching import (
     FINANCE_APPROVE,
     ApproverDecision,
     ApproverDirectory,
+    ApproverMismatchError,
     authorize_step_actor,
     describe_assignee,
     is_approvals_admin,
     is_known_permission,
     is_valid_single_email,
+    may_override,
+    may_reach_step,
     normalize_approver_type,
     user_matches_step,
 )
@@ -118,6 +130,12 @@ from app.services.finance_reimbursement import (
     live_report_for_purchase,
     lock_purchase,
     reopened_status,
+)
+from app.services.finance_second_approval import (
+    claim_second_approval_notice,
+    email_identity,
+    office_among,
+    office_label,
 )
 from app.services.restricted_funds import (
     KIND_CHECK,
@@ -290,6 +308,24 @@ def _amount_by_amendment(status, stage, is_locked) -> bool:
 
 class FinanceEntityNotFoundError(ValueError):
     """The request does not exist in the caller's organization (→ 404)."""
+
+
+class ReceiptRequiredError(ValueError):
+    """Paying a purchase request, or issuing a check, with no receipt on it.
+
+    Owner decision 2026-11-01: a receipt is the evidence a payment is made
+    against, so it is on file before the money goes out. A ``ValueError``, so
+    every endpoint already answers 400 with this message, which names what to
+    do; ``code`` lets a screen recognise it.
+    """
+
+    code = "receipt_required"
+
+    def __init__(self, record: str, action: str) -> None:
+        super().__init__(
+            f"Attach the receipt or invoice to this {record} before it is "
+            f"{action}. It is the record of what the department paid for."
+        )
 
 
 def _raise_not_found(label: str, requester_id: Optional[str]) -> NoReturn:
@@ -800,6 +836,41 @@ class FinanceService:
         # can audit it without re-running the match after the mutation. The
         # service is built per request, so this never crosses requests.
         self.last_approver_decision: Optional[ApproverDecision] = None
+        # Approval emails queued by this request's changes, sent by the
+        # endpoint once they commit (finance_approval_notifications).
+        self.approval_notices: list[ApprovalNotice] = []
+
+    def take_approval_notices(self) -> list[ApprovalNotice]:
+        """The queued approval emails, emptying the queue."""
+        notices, self.approval_notices = self.approval_notices, []
+        return notices
+
+    def _queue_decision_notice(
+        self,
+        entity_type: ApprovalEntityType,
+        entity_id: str,
+        org_id: str,
+        outcome: str,
+        actor_id: Optional[str],
+        reason: Optional[str] = None,
+    ) -> None:
+        """Tell the requester, after the commit, that their request was decided.
+
+        Only the call that moved the request out of pending approval queues
+        this, under the request's row lock, so a retried decision — refused
+        as no longer pending — queues nothing a second time.
+        """
+        self.approval_notices.append(
+            ApprovalNotice(
+                kind=DECIDED,
+                org_id=str(org_id),
+                entity_type=entity_type,
+                entity_id=str(entity_id),
+                outcome=outcome,
+                actor_id=actor_id,
+                reason=reason,
+            )
+        )
 
     # ========================================
     # Fiscal Years
@@ -1768,9 +1839,12 @@ class FinanceService:
           (``mark_pr_paid``);
         * a check request **issued** is spent (``issue_check``); a **voided**
           one is listed with effect ``none`` because ``void_check`` reversed it;
-        * an expense report's line items charged to this line are spent once
-          the report is **paid** (``mark_expense_paid``) — the line item's own
-          ``budget_id``, not the report's.
+        * an expense report's line items charged to this line are encumbered
+          once the report is **approved**, when approval committed them
+          (``_commit_report_lines``; a report approved before 2026-11-06, or
+          one claiming back a purchase, committed nothing and is not listed
+          until paid), and spent once it is **paid** (``mark_expense_paid``)
+          — the line item's own ``budget_id``, not the report's.
 
         Excluded because they never touched the totals: drafts, submitted,
         pending, denied, and cancelled records (a request cancelled after
@@ -1790,6 +1864,7 @@ class FinanceService:
             return and_(User.id == column, User.organization_id == org_id)
 
         pr_paid = PurchaseRequest.status == PurchaseRequestStatus.PAID
+        er_paid = ExpenseReport.status == ExpenseReportStatus.PAID
         purchases = (
             select(
                 PurchaseRequest.id.label("row_id"),
@@ -1890,10 +1965,13 @@ class FinanceService:
                 User.username,
                 cast(ExpenseReport.status, String(30)).label("status"),
                 ExpenseLineItem.amount.label("amount"),
-                literal("spent").label("effect"),
-                func.coalesce(ExpenseReport.paid_at, ExpenseReport.updated_at).label(
-                    "occurred_at"
+                case((er_paid, literal("spent")), else_=literal("encumbered")).label(
+                    "effect"
                 ),
+                case(
+                    (er_paid, ExpenseReport.paid_at),
+                    else_=ExpenseReport.approved_at,
+                ).label("occurred_at"),
             )
             .join(
                 ExpenseReport,
@@ -1905,7 +1983,13 @@ class FinanceService:
             .outerjoin(User, requester_join(ExpenseReport.submitted_by))
             .where(
                 ExpenseLineItem.budget_id == budget_id,
-                ExpenseReport.status == ExpenseReportStatus.PAID,
+                or_(
+                    er_paid,
+                    and_(
+                        ExpenseReport.status == ExpenseReportStatus.APPROVED,
+                        ExpenseReport.budget_committed_at.is_not(None),
+                    ),
+                ),
             )
         )
         movements = union_all(purchases, checks, expenses).subquery()
@@ -2165,12 +2249,17 @@ class FinanceService:
         reason: str,
         approved_by: str,
         approved_on: date,
+        amount: Optional[Decimal] = None,
     ) -> BudgetAmendment:
         """Enter a reversing entry for a mistaken amendment, pending confirmation.
 
         A mistaken amendment is never edited or deleted (owner decision,
-        2026-10-09). The reversal is a new row for the whole amount, negated,
-        carrying its own reason and approval. Like an amendment it is entered
+        2026-10-09). The reversal is a new row carrying its own reason and
+        approval, for ``amount`` negated -- any part of the amendment, up to
+        the whole of it (owner decision, 2026-11-01: $2,500 entered for $250
+        is corrected by one reversal of $2,250) -- or, with no ``amount``, the
+        whole amendment. Either way the amendment is reversed once; what is
+        left of it stays. Like an amendment it is entered
         pending; ``amount_budgeted`` drops by the amount only when another
         officer confirms it. The original budget is then unchanged, because it
         is the current amount less the sum of every confirmed row and both
@@ -2189,9 +2278,14 @@ class FinanceService:
         or an amendment that is not on that line; ``AmendmentAlreadyReversedError``
         for an amendment reversed before; ``BudgetLimitExceededError`` when the
         lower budget would no longer cover what is spent and committed; and
-        ``ValueError`` for a reversal of a reversal, a locked year, a blank
-        reason or approver, or a future approval date.
+        ``ValueError`` for a reversal of a reversal, an amount that is not
+        positive or exceeds the amendment, a locked year, a blank reason or
+        approver, or a future approval date.
         """
+        if amount is not None:
+            amount = Decimal(amount).quantize(Decimal("0.01"))
+            if amount <= 0:
+                raise ValueError("The amount reversed must be greater than zero.")
         reason = (reason or "").strip()
         approved_by = (approved_by or "").strip()
         if not reason:
@@ -2247,19 +2341,28 @@ class FinanceService:
             raise AmendmentAlreadyReversedError()
         if await self._year_is_locked(budget.fiscal_year_id, org_id):
             raise ValueError(_LOCKED_YEAR_AMOUNT_MESSAGE)
-        new_amount = Decimal(budget.amount_budgeted or 0) - target.amount
+        reversed_amount = Decimal(target.amount) if amount is None else amount
+        if reversed_amount > target.amount:
+            raise ValueError(
+                f"A reversal can take back at most the amendment's "
+                f"${Decimal(target.amount):,.2f}."
+            )
+        new_amount = Decimal(budget.amount_budgeted or 0) - reversed_amount
         if new_amount < budget.amount_spent + budget.amount_encumbered:
             raise BudgetLimitExceededError()
 
         reversal = BudgetAmendment(
             organization_id=org_id,
             budget_id=budget.id,
-            amount=-target.amount,
+            amount=-reversed_amount,
             reason=reason,
             approved_by=approved_by,
             approved_on=approved_on,
             created_by=created_by,
             reverses_amendment_id=target.id,
+            # Kept when a rejection clears the link above (owner decision,
+            # 2026-11-01), so the row still names what it tried to reverse.
+            reverses_amendment_ref=target.id,
             status=BudgetAmendmentStatus.PENDING,
         )
         try:
@@ -2374,7 +2477,8 @@ class FinanceService:
         The note is required: the row stays on record with why it was not
         applied. A rejected reversal gives up its link to the amendment it
         named, so that amendment can be reversed again; the link would
-        otherwise hold the unique key, and the audit log keeps which it was.
+        otherwise hold the unique key. ``reverses_amendment_ref`` keeps which
+        it was, for display (owner decision, 2026-11-01).
         """
         note = (note or "").strip()
         if not note:
@@ -2420,6 +2524,7 @@ class FinanceService:
                 reversal.id.label("reversal_id"),
                 reversal.created_at.label("reversal_created_at"),
                 reversal.status.label("reversal_status"),
+                reversal.amount.label("reversal_amount"),
                 reverser.first_name.label("reverser_first_name"),
                 reverser.last_name.label("reverser_last_name"),
                 reverser.preferred_name.label("reverser_preferred_name"),
@@ -2480,7 +2585,101 @@ class FinanceService:
                     reversed_at=row.reversal_created_at,
                     reversed_by_name=name or row.reverser_username or None,
                     reversal_status=getattr(reversal_status, "value", reversal_status),
+                    # How much the reversal takes back: the whole amendment,
+                    # or since 2026-11-01 a part of it.
+                    reversed_amount=abs(Decimal(row.reversal_amount)),
                 )
+            rows.append(data)
+        return rows
+
+    async def list_pending_amendments(self, org_id: str) -> list[dict]:
+        """Every amendment and reversal awaiting a second officer, oldest first.
+
+        The pending queue (owner decision, 2026-11-01): one list across the
+        department's lines for whoever may confirm, so nobody has to find
+        them line by line. Each row is an amendment row (``_amendment_row``)
+        plus where it is -- the line's category and station, its fiscal year
+        and whether that year is locked -- and, on a reversal, the amount and
+        approval date of the amendment it reverses, read through the display
+        reference. Every join is in-org, so a stray id names nothing.
+        """
+        target = aliased(BudgetAmendment)
+        result = await self.db.execute(
+            select(
+                BudgetAmendment,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+                BudgetCategory.name.label("category_name"),
+                Facility.name.label("station_name"),
+                FiscalYear.id.label("fiscal_year_id"),
+                FiscalYear.name.label("fiscal_year_name"),
+                FiscalYear.is_locked.label("year_locked"),
+                target.amount.label("target_amount"),
+                target.approved_on.label("target_approved_on"),
+            )
+            .join(
+                Budget,
+                and_(
+                    Budget.id == BudgetAmendment.budget_id,
+                    Budget.organization_id == org_id,
+                ),
+            )
+            .join(
+                FiscalYear,
+                and_(
+                    FiscalYear.id == Budget.fiscal_year_id,
+                    FiscalYear.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                BudgetCategory,
+                and_(
+                    BudgetCategory.id == Budget.category_id,
+                    BudgetCategory.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                Facility,
+                and_(
+                    Facility.id == Budget.station_id,
+                    Facility.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                User,
+                and_(
+                    User.id == BudgetAmendment.created_by,
+                    User.organization_id == org_id,
+                ),
+            )
+            .outerjoin(
+                target,
+                and_(
+                    target.id == BudgetAmendment.reverses_amendment_ref,
+                    target.budget_id == BudgetAmendment.budget_id,
+                    target.organization_id == org_id,
+                ),
+            )
+            .where(
+                BudgetAmendment.organization_id == org_id,
+                BudgetAmendment.status == BudgetAmendmentStatus.PENDING,
+            )
+            .order_by(BudgetAmendment.created_at, BudgetAmendment.id)
+        )
+        rows = []
+        for row in result.all():
+            data = self._amendment_row(*row[:5])
+            data.update(
+                category_name=row.category_name,
+                station_name=row.station_name,
+                fiscal_year_id=row.fiscal_year_id,
+                fiscal_year_name=row.fiscal_year_name,
+                year_locked=bool(row.year_locked),
+                reversed_amendment_amount=row.target_amount,
+                reversed_amendment_approved_on=row.target_approved_on,
+            )
             rows.append(data)
         return rows
 
@@ -2660,6 +2859,32 @@ class FinanceService:
                 }
             )
         return options
+
+    async def budget_line_labels(
+        self, org_id: str, fiscal_year_id: str, budget_ids: Iterable[Optional[str]]
+    ) -> dict[str, str]:
+        """The picker's label (``list_budget_options``) for each line named,
+        so a record shows its line by the name it was chosen under. A line
+        outside ``fiscal_year_id`` gets the category path alone."""
+        wanted = {str(budget_id) for budget_id in budget_ids if budget_id}
+        if not wanted:
+            return {}
+        labels = {
+            str(option["id"]): option["label"]
+            for option in await self.list_budget_options(org_id, fiscal_year_id)
+            if str(option["id"]) in wanted
+        }
+        missing = wanted - labels.keys()
+        if missing:
+            tree = await load_category_tree(self.db, org_id)
+            result = await self.db.execute(
+                select(Budget.id, Budget.category_id).where(
+                    Budget.organization_id == org_id, Budget.id.in_(sorted(missing))
+                )
+            )
+            for budget_id, category_id in result.all():
+                labels[str(budget_id)] = " › ".join(tree.path(str(category_id)))
+        return labels
 
     async def list_position_options(self, org_id: str) -> list[dict]:
         """Every position in the org as id + name, for the owner pickers."""
@@ -3491,6 +3716,22 @@ class FinanceService:
         self.last_approver_decision = decision
         return decision
 
+    async def _refuse_unnamed_member(
+        self, record: ApprovalStepRecord, actor: User, org_id: str
+    ) -> None:
+        """Refuse a caller without ``finance.approve`` whom this step does not name.
+
+        The approve / deny endpoints admit any member, because being named on
+        a step is itself the grant (owner decision 2026-11-01). This is the
+        rest of that gate: such a member reaches only the step that names
+        them, and is refused before the step's order or its request's state
+        is looked at, so the refusal tells them nothing about either.
+        """
+        if not await may_reach_step(self.db, actor, record.step, org_id):
+            raise ApproverMismatchError(
+                "Only the approver this step names can act on it."
+            )
+
     async def approve_step(
         self,
         step_record_id: str,
@@ -3518,6 +3759,7 @@ class FinanceService:
         record: ApprovalStepRecord | None = result.scalar_one_or_none()
         if not record:
             raise ValueError("Approval step record not found")
+        await self._refuse_unnamed_member(record, approver, org_id)
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step is not pending approval")
         await self._ensure_current_step(record, org_id)
@@ -3559,9 +3801,11 @@ class FinanceService:
         all_complete = await self._check_all_steps_complete(
             record.entity_type, record.entity_id, org_id
         )
-        if all_complete:
-            await self._finalize_approval(
-                record.entity_type, record.entity_id, approver_id, org_id
+        if all_complete and await self._finalize_approval(
+            record.entity_type, record.entity_id, approver_id, org_id
+        ):
+            self._queue_decision_notice(
+                record.entity_type, record.entity_id, org_id, APPROVED, approver_id
             )
 
         logger.info("Approval step {} approved by {}", step_record_id, approver_id)
@@ -3591,6 +3835,7 @@ class FinanceService:
         record: ApprovalStepRecord | None = result.scalar_one_or_none()
         if not record:
             raise ValueError("Approval step record not found")
+        await self._refuse_unnamed_member(record, denier, org_id)
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step is not pending approval")
         await self._ensure_current_step(record, org_id)
@@ -3610,6 +3855,9 @@ class FinanceService:
         # Deny the entire entity
         await self._finalize_denial(
             record.entity_type, record.entity_id, denier_id, notes, org_id
+        )
+        self._queue_decision_notice(
+            record.entity_type, record.entity_id, org_id, DENIED, denier_id, notes
         )
 
         await self.db.flush()
@@ -3708,9 +3956,11 @@ class FinanceService:
         all_complete = await self._check_all_steps_complete(
             record.entity_type, record.entity_id, org_id
         )
-        if all_complete:
-            await self._finalize_approval(
-                record.entity_type, record.entity_id, None, org_id
+        if all_complete and await self._finalize_approval(
+            record.entity_type, record.entity_id, None, org_id
+        ):
+            self._queue_decision_notice(
+                record.entity_type, record.entity_id, org_id, APPROVED, None
             )
 
         return record
@@ -3751,6 +4001,9 @@ class FinanceService:
 
         await self._finalize_denial(
             record.entity_type, record.entity_id, None, notes, org_id
+        )
+        self._queue_decision_notice(
+            record.entity_type, record.entity_id, org_id, DENIED, None, notes
         )
         await self.db.flush()
         return record
@@ -4010,8 +4263,11 @@ class FinanceService:
         For the request detail pages, so they show the same answer approve /
         deny will give rather than re-deriving it. Only the step the request
         is currently waiting on (the first PENDING record, as in
-        ``get_current_pending_step``) can be acted on, and only through the
-        ``finance.approve``-gated endpoints, so both flags require that too.
+        ``get_current_pending_step``) can be acted on. ``can_act`` is the
+        match itself: a member the step names may act on it without
+        ``finance.approve`` (owner decision 2026-11-01), and an unassigned step
+        matches only holders of it. ``requires_override`` needs the override
+        holder, who must hold ``finance.approve`` as well (``may_override``).
         Separation of duties is not folded in: it depends on the request, and
         the approve endpoint still refuses the requester with its own message.
         """
@@ -4019,8 +4275,7 @@ class FinanceService:
         current = next(
             (r for r in records if r.status == ApprovalStepStatus.PENDING), None
         )
-        may_approve = user_has_permission(user, FINANCE_APPROVE)
-        admin = is_approvals_admin(user)
+        admin = may_override(user)
         flags: dict[str, dict] = {}
         for record in records:
             step = record.step
@@ -4031,11 +4286,7 @@ class FinanceService:
                 "can_act": False,
                 "requires_override": False,
             }
-            if (
-                record is current
-                and may_approve
-                and step.step_type == ApprovalStepType.APPROVAL
-            ):
+            if record is current and step.step_type == ApprovalStepType.APPROVAL:
                 matched = await user_matches_step(self.db, user, step, org_id)
                 entry["can_act"] = matched
                 entry["requires_override"] = not matched and admin
@@ -4085,22 +4336,13 @@ class FinanceService:
                     continue
                 approver_type = normalize_approver_type(step.approver_type)
                 value = (step.approver_value or "").strip()
-                # Approve and deny need finance.approve as well as a match
-                # (step_actor_flags, and the endpoints' gate). Counting the
-                # match alone reported a Chief step as covered while the Chief,
-                # holding no finance.approve, got 403 on the queue and 404 on
-                # the request. An email approver acts from the emailed link, so
-                # the grant does not apply to them.
-                needs_grant = approver_type != ApproverType.EMAIL
-                matched = 0
+                # The match is the whole rule: a member the step names may act
+                # on it without finance.approve (owner decision 2026-11-01),
+                # and an unassigned step matches only holders of it.
                 eligible = 0
                 for member in members:
                     if await user_matches_step(self.db, member, step, org_id):
-                        matched += 1
-                        if not needs_grant or user_has_permission(
-                            member, FINANCE_APPROVE
-                        ):
-                            eligible += 1
+                        eligible += 1
                 rows.append(
                     {
                         "chain_id": chain.id,
@@ -4116,7 +4358,7 @@ class FinanceService:
                         "assignee_label": await describe_assignee(step, directory),
                         "eligible_active_count": eligible,
                         "problem": await self._coverage_problem(
-                            approver_type, value, eligible, directory, matched
+                            approver_type, value, eligible, directory
                         ),
                         "pending_request_count": pending_by_step.get(step.id, 0),
                     }
@@ -4129,7 +4371,6 @@ class FinanceService:
         value: str,
         eligible: int,
         directory: ApproverDirectory,
-        matched: int = 0,
     ) -> Optional[str]:
         if approver_type is None:
             return None if eligible else "no_active_members"
@@ -4148,11 +4389,7 @@ class FinanceService:
         elif approver_type == ApproverType.PERMISSION:
             if not is_known_permission(value):
                 return "not_found"
-        if eligible:
-            return None
-        # Somebody fills the step, but none of them may approve: distinct from
-        # an empty position, because the fix is a grant, not a person.
-        return "no_approve_permission" if matched else "no_active_members"
+        return None if eligible else "no_active_members"
 
     # ========================================
     # Manual approval (no approval chain applies)
@@ -4280,13 +4517,15 @@ class FinanceService:
         )
         # A request held for a second approver cannot be completed by someone
         # who has already approved it, through its chain or here.
-        if str(approver_id) in await self._approvers_so_far(
-            entity_type, entity, org_id
-        ):
+        people = await self._approvers_so_far(entity_type, entity, org_id)
+        if str(approver_id) in people:
             raise SeparationOfDutiesError(
                 "You have already approved this request. It needs a second "
                 "approval from someone else."
             )
+        await self._refuse_outside_the_office(
+            entity_type, entity, approver_id, people, org_id
+        )
         await self._take_late_acknowledgement(
             entity_type, entity_id, org_id, approver_id, acknowledge_late
         )
@@ -4295,6 +4534,10 @@ class FinanceService:
         completed = await self._finalize_approval(
             entity_type, entity_id, approver_id, org_id
         )
+        if completed:
+            self._queue_decision_notice(
+                entity_type, entity_id, org_id, APPROVED, approver_id
+            )
         logger.info(
             "{} {} manually {} by {}",
             entity_type.value,
@@ -4325,6 +4568,9 @@ class FinanceService:
             raise ValueError("A reason is required to deny a request")
         entity = await self._lock_unrouted_entity(entity_type, entity_id, org_id)
         await self._finalize_denial(entity_type, entity_id, denier_id, reason, org_id)
+        self._queue_decision_notice(
+            entity_type, entity_id, org_id, DENIED, denier_id, reason
+        )
         logger.info(
             "{} {} manually denied by {}", entity_type.value, entity_id, denier_id
         )
@@ -4530,9 +4776,7 @@ class FinanceService:
         except ValueError:
             raise ValueError(f"Invalid entity type: {entity_type}")
         chain = await self._request_chain(org_id, et, amount, budget_id)
-        threshold = (
-            await load_finance_settings(self.db, org_id)
-        ).dual_approval_threshold
+        threshold = (await load_finance_settings(self.db, org_id)).threshold_for(et)
         route: dict[str, Any] = {
             "chain_name": None,
             "manual": True,
@@ -4591,6 +4835,7 @@ class FinanceService:
         if any(r.status == ApprovalStepStatus.DENIED for r in records):
             return
 
+        reachable: set[str] = set()
         for record in records:
             if record.status != ApprovalStepStatus.PENDING:
                 continue
@@ -4608,6 +4853,7 @@ class FinanceService:
                         break
             if not prior_complete:
                 continue
+            reachable.add(record.id)
 
             if record.step.step_type == ApprovalStepType.NOTIFICATION:
                 record.status = ApprovalStepStatus.SENT
@@ -4627,6 +4873,46 @@ class FinanceService:
             ):
                 self._mint_approval_link(record)
                 await self.send_approval_request_email(record, record.step, org_id)
+
+        if self._queue_step_notice(records, reachable, org_id):
+            # Written now rather than by whichever later query autoflushes it.
+            await self.db.flush()
+
+    def _queue_step_notice(
+        self, records: list[ApprovalStepRecord], reachable: set[str], org_id: str
+    ) -> bool:
+        """Queue the email telling the step a request now waits on its approvers.
+
+        Only the current step (the first still pending, as approve / deny
+        decide it) and only once: ``approvers_notified_at`` is stamped here,
+        in the transaction that reached it, and a stamped step is skipped, so
+        an advance re-run by a sibling step's approval or a retry sends
+        nothing new (CLAUDE.md pitfall #36). An emailed-link step is skipped
+        too — the link it was just sent is its notice.
+        """
+        current = next(
+            (r for r in records if r.status == ApprovalStepStatus.PENDING), None
+        )
+        if (
+            current is None
+            or current.id not in reachable
+            or current.step is None
+            or current.step.step_type != ApprovalStepType.APPROVAL
+            or current.approvers_notified_at is not None
+            or normalize_approver_type(current.step.approver_type) == ApproverType.EMAIL
+        ):
+            return False
+        current.approvers_notified_at = datetime.now(timezone.utc)
+        self.approval_notices.append(
+            ApprovalNotice(
+                kind=STEP_REACHED,
+                org_id=str(org_id),
+                entity_type=current.entity_type,
+                entity_id=str(current.entity_id),
+                step_record_id=str(current.id),
+            )
+        )
+        return True
 
     async def _check_all_steps_complete(
         self,
@@ -4711,9 +4997,11 @@ class FinanceService:
 
         A chain step approved in the app counts as the member who approved it;
         one approved from an emailed link (``acted_by`` is empty) as the
-        address the step names, a different person from any member. An
-        auto-approved step counts as nobody. A first approval given outside
-        the chain is on the request.
+        member whose account has the address the step names, or, when no
+        member has it, as the address itself — a different person from any
+        member (``finance_second_approval.email_identity``). An auto-approved
+        step counts as nobody. A first approval given outside the chain is on
+        the request.
         """
         people: set[str] = set()
         records = await self.get_approval_records(entity_type, entity.id, org_id)
@@ -4723,7 +5011,9 @@ class FinanceService:
             if record.acted_by:
                 people.add(str(record.acted_by))
             elif record.step is not None and record.step.approver_value:
-                people.add("email:" + record.step.approver_value.strip().lower())
+                people.add(
+                    await email_identity(self.db, org_id, record.step.approver_value)
+                )
         if entity.first_approved_by:
             people.add(str(entity.first_approved_by))
         return people
@@ -4833,23 +5123,75 @@ class FinanceService:
         approval — so a single-step chain, or one person approving every step,
         cannot complete a request above the threshold either. The first
         approval given outside a chain is recorded on the request.
+
+        The threshold is the request type's own (``threshold_for``). When the
+        department names an office (``second_approver_position``), two people
+        are not enough until one of them holds it. The first time a request is
+        held, the members who could give the second approval are emailed
+        (``finance_second_approval``).
         """
-        threshold = (
-            await load_finance_settings(self.db, org_id)
-        ).dual_approval_threshold
+        rules = await load_finance_settings(self.db, org_id)
+        threshold = rules.threshold_for(entity_type)
         if threshold is None or self._approval_amount(entity_type, entity) < threshold:
             return False
         people = await self._approvers_so_far(entity_type, entity, org_id)
         if approver_id:
             people.add(str(approver_id))
-        if len(people) >= 2:
+        office = rules.second_approver_position
+        if len(people) >= 2 and await office_among(self.db, org_id, office, people):
             return False
         if approver_id and not entity.first_approved_by:
             entity.first_approved_by = approver_id
             entity.first_approved_at = datetime.now(timezone.utc)
             await self.db.flush()
         logger.info("{} {} held for a second approver", entity_type.value, entity.id)
+        model, _pending, _label = self._unrouted_mapping(entity_type)
+        # Claimed in this transaction, sent after it commits: a rollback takes
+        # the claim with it, and a retry that holds the request again finds
+        # the claim taken and queues nothing (finance_second_approval).
+        if await claim_second_approval_notice(self.db, model, entity):
+            self.approval_notices.append(
+                ApprovalNotice(
+                    kind=SECOND_APPROVAL,
+                    org_id=str(org_id),
+                    entity_type=entity_type,
+                    entity_id=str(entity.id),
+                )
+            )
         return True
+
+    async def _refuse_outside_the_office(
+        self,
+        entity_type: ApprovalEntityType,
+        entity,
+        approver_id: str,
+        people: set[str],
+        org_id: str,
+    ) -> None:
+        """Refuse a second approval from outside the department's named office.
+
+        Only while it matters: the request is at or above its threshold,
+        someone has already approved it, and nobody who has holds the office.
+        A first approval from anyone is accepted; the request then waits for
+        the office. Refused rather than quietly not counted, so the approver
+        learns who the request is waiting for.
+        """
+        rules = await load_finance_settings(self.db, org_id)
+        office = rules.second_approver_position
+        threshold = rules.threshold_for(entity_type)
+        if (
+            not office
+            or not people
+            or threshold is None
+            or self._approval_amount(entity_type, entity) < threshold
+        ):
+            return
+        if await office_among(self.db, org_id, office, people | {str(approver_id)}):
+            return
+        raise SeparationOfDutiesError(
+            "The second approval on this request must come from "
+            f"{await office_label(self.db, org_id, office)}."
+        )
 
     def is_awaiting_second_approval(
         self, entity_type: ApprovalEntityType, entity, records
@@ -4925,6 +5267,7 @@ class FinanceService:
                 )
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
             entity.status = ExpenseReportStatus.APPROVED
+            await self._commit_report_lines(entity, org_id, now)
         else:
             entity.status = CheckRequestStatus.APPROVED
 
@@ -5359,29 +5702,41 @@ class FinanceService:
         await self.require_year_accepts(pr.fiscal_year_id, org_id, action="finish")
         # Paying the vendor as well as the member would pay for it twice.
         await self._refuse_while_claimed(pr, org_id, "marked as paid")
+        # Owner decision 2026-11-01: no payment without the receipt on file.
+        # Only an uploaded document counts; the older typed receipt_url is a
+        # link nobody checked, not a record the department holds.
+        if not pr.receipt_document_id:
+            raise ReceiptRequiredError("purchase request", "marked paid")
+        # What was actually paid is recorded on every payment (owner decision
+        # 2026-11-01), the estimate standing in only for a caller that sends
+        # none. Never the stored actual_amount: a draft's edit form can set
+        # it, so falling back to it would let the requester name the spend.
+        paid = (
+            Decimal(str(actual_amount))
+            if actual_amount is not None
+            else Decimal(str(pr.estimated_amount))
+        )
+        if paid <= 0:
+            raise ValueError("The amount paid must be more than zero")
 
         # The approval committed the estimate; paying more than it spends the
         # difference, which the fund must still have.
-        if actual_amount is not None and actual_amount > pr.estimated_amount:
+        if paid > pr.estimated_amount:
             await self._enforce_fund_balance(
                 KIND_PURCHASE,
                 pr,
                 org_id,
-                charges=(
-                    {pr.fund_campaign_id: Decimal(str(actual_amount))}
-                    if pr.fund_campaign_id
-                    else {}
-                ),
+                charges=({pr.fund_campaign_id: paid} if pr.fund_campaign_id else {}),
             )
 
         pr.status = PurchaseRequestStatus.PAID
         pr.paid_at = datetime.now(timezone.utc)
-        if actual_amount is not None:
-            pr.actual_amount = actual_amount
+        pr.actual_amount = paid
 
-        # Move from encumbered to spent
+        # The budget line's actuals are what was paid, not what was approved:
+        # the whole estimate the approval encumbered is released and the paid
+        # amount is spent, so a difference either way lands on the line.
         if pr.budget_id:
-            amount = pr.actual_amount or pr.estimated_amount
             # One locked mutation avoids briefly counting both the existing
             # encumbrance and the resulting spend.  It also permits an actual
             # amount up to the remaining budget after releasing the estimate.
@@ -5389,7 +5744,7 @@ class FinanceService:
                 pr.budget_id,
                 org_id,
                 encumbered_delta=-pr.estimated_amount,
-                spent_delta=amount,
+                spent_delta=paid,
             )
 
         await self.db.flush()
@@ -5714,10 +6069,12 @@ class FinanceService:
         denied one already closed. While a check is paying the report it is
         refused: the check is cancelled or voided first.
 
-        Nothing has been spent or encumbered for an unpaid report, so no
-        budget line moves; a cancelled report stops counting against its cash
-        advance and its restricted funds, and frees the purchase it claimed
-        back (finance_reimbursement.py) for another claim.
+        Nothing has been spent for an unpaid report. An approved one had its
+        lines committed on approval (``_commit_report_lines``), and that is
+        released; otherwise no budget line moves. A cancelled report stops
+        counting against its cash advance and its restricted funds, and frees
+        the purchase it claimed back (finance_reimbursement.py) for another
+        claim.
         """
         er = await self.get_expense_report(
             er_id, org_id, restrict_to_user=requester_id, for_update=True
@@ -5740,6 +6097,9 @@ class FinanceService:
                 f"Check request {check.request_number} is paying this report. "
                 "Cancel or void that check first."
             )
+        # An approved report's lines were committed on approval; cancelling
+        # it frees that money on the lines it charged.
+        await self._release_report_lines(er, org_id)
         er.status = ExpenseReportStatus.CANCELLED
         # Close the chain as cancel_purchase_request does, so it leaves every
         # approver's queue and its emailed links stop working.
@@ -6243,6 +6603,9 @@ class FinanceService:
             if item.budget_id:
                 deltas.setdefault(item.budget_id, [Decimal("0"), Decimal("0")])
                 deltas[item.budget_id][0] += Decimal(str(item.amount))
+                # What approval committed is released as it is spent.
+                if er.budget_committed_at is not None:
+                    deltas[item.budget_id][1] -= Decimal(str(item.amount))
         if er.purchase_request_id:
             pr = await lock_purchase(self.db, org_id, er.purchase_request_id)
             if pr is None or pr.status not in CLAIMABLE_PURCHASE_STATUSES:
@@ -6264,6 +6627,54 @@ class FinanceService:
         er.paid_at = paid_at
         er.payment_method = payment_method
 
+    async def _report_line_charges(self, er_id: str) -> dict[str, Decimal]:
+        """What a report's lines charge, per budget line, summed in the
+        database rather than off a loaded collection (FIN-7). Lines can change
+        only while the report is a draft, so after submission this is fixed."""
+        result = await self.db.execute(
+            select(ExpenseLineItem.budget_id, func.sum(ExpenseLineItem.amount))
+            .where(
+                ExpenseLineItem.expense_report_id == er_id,
+                ExpenseLineItem.budget_id.is_not(None),
+            )
+            .group_by(ExpenseLineItem.budget_id)
+        )
+        return {
+            str(budget_id): Decimal(str(total or 0))
+            for budget_id, total in result.all()
+        }
+
+    async def _commit_report_lines(
+        self, er: ExpenseReport, org_id: str, now: datetime
+    ) -> None:
+        """Approval commits a report's lines to the budget lines the member
+        chose (owner decision 2026-11-01), as a purchase request's approval
+        encumbers its estimate: the line's committed figure shows money
+        promised, and the ceiling refuses an approval the line cannot cover.
+
+        A report claiming back a purchase is left alone: that purchase's own
+        approval already encumbered it, and paying the report releases it.
+        Budget rows are locked in id order by ``_mutate_budget``, after the
+        report, the order every Finance path takes.
+        """
+        if er.purchase_request_id or er.budget_committed_at is not None:
+            return
+        charges = await self._report_line_charges(er.id)
+        for budget_id, amount in sorted(charges.items()):
+            await self._mutate_budget(budget_id, org_id, encumbered_delta=amount)
+        er.budget_committed_at = now
+
+    async def _release_report_lines(self, er: ExpenseReport, org_id: str) -> None:
+        """Release what ``_commit_report_lines`` encumbered, for a committed
+        report that is cancelled. Payment releases it in the same mutation as
+        the spend instead (``_settle_report``)."""
+        if er.budget_committed_at is None:
+            return
+        charges = await self._report_line_charges(er.id)
+        for budget_id, amount in sorted(charges.items()):
+            await self._mutate_budget(budget_id, org_id, encumbered_delta=-amount)
+        er.budget_committed_at = None
+
     async def _unsettle_report(self, er: ExpenseReport, org_id: str) -> None:
         """Undo ``_settle_report`` for a report whose check was voided: back to
         approved, its spend reversed and its purchase reopened with its
@@ -6273,6 +6684,9 @@ class FinanceService:
             if item.budget_id:
                 deltas.setdefault(item.budget_id, [Decimal("0"), Decimal("0")])
                 deltas[item.budget_id][0] -= Decimal(str(item.amount))
+                # Approved again, so committed again.
+                if er.budget_committed_at is not None:
+                    deltas[item.budget_id][1] += Decimal(str(item.amount))
         if er.purchase_request_id:
             pr = await lock_purchase(self.db, org_id, er.purchase_request_id)
             if pr is not None and pr.status == PurchaseRequestStatus.REIMBURSED:
@@ -6528,6 +6942,13 @@ class FinanceService:
         if cr.status != CheckRequestStatus.APPROVED:
             raise ValueError("Only approved requests can have checks issued")
         await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
+        # Owner decision 2026-11-01: no check without the receipt or invoice
+        # on file, an advance's and a reimbursement check's aside.
+        if (
+            check_request_needs_receipt(cr.is_advance, cr.expense_report_id)
+            and not cr.receipt_document_id
+        ):
+            raise ReceiptRequiredError("check request", "issued")
 
         cr.status = CheckRequestStatus.ISSUED
         cr.check_number = check_number

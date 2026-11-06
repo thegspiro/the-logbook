@@ -30,6 +30,7 @@ import type {
   BudgetAmendmentCreated,
   BudgetAmendmentRejectPayload,
   BudgetAmendmentReversePayload,
+  PendingBudgetAmendment,
   BudgetCategory,
   BudgetCategoryUpdatePayload,
   BudgetCreatePayload,
@@ -318,6 +319,12 @@ export const budgetService = {
       `/finance/budgets/${id}/amendments/${amendmentId}/reverse`,
       data
     );
+    return response.data;
+  },
+
+  /** Every amendment and reversal awaiting confirmation, across the department's lines. */
+  async listPendingAmendments(): Promise<PendingBudgetAmendment[]> {
+    const response = await api.get<PendingBudgetAmendment[]>('/finance/budget-amendments/pending');
     return response.data;
   },
 
@@ -768,7 +775,8 @@ export const purchaseRequestService = {
     return response.data;
   },
 
-  async markPaid(id: string, actualAmount?: MonetaryAmount): Promise<PurchaseRequest> {
+  /** Record the request paid, and what was actually paid; the screen always sends it and the budget line spends it. */
+  async markPaid(id: string, actualAmount: MonetaryAmount): Promise<PurchaseRequest> {
     const response = await api.post<PurchaseRequest>(`/finance/purchase-requests/${id}/mark-paid`, undefined, {
       params: { actual_amount: actualAmount },
     });
@@ -952,6 +960,18 @@ export const checkRequestService = {
   async void(id: string): Promise<CheckRequest> {
     const response = await api.post<CheckRequest>(`/finance/check-requests/${id}/void`);
     return response.data;
+  },
+
+  /** The receipt or invoice the check pays; issuing the check needs one unless `receiptRequired` is false. */
+  async uploadReceipt(id: string, file: File): Promise<CheckRequest> {
+    const response = await api.post<CheckRequest>(`/finance/check-requests/${id}/receipt`, receiptForm(file), {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  downloadReceipt(id: string): Promise<DownloadedFile> {
+    return fetchFile(api, `/finance/check-requests/${id}/receipt`, 'receipt');
   },
 };
 

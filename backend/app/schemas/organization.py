@@ -1661,6 +1661,21 @@ class AdminHoursSettingsUpdate(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+class DualApprovalThresholdsUpdate(BaseModel):
+    """A dual-approval threshold per request type, in whole dollars.
+
+    Null (or leaving the type out of a fresh section) follows the department
+    threshold; 0 turns the rule off for that type alone.
+    """
+
+    purchase_request: Optional[int] = Field(None, ge=0, le=9_999_999_999)
+    check_request: Optional[int] = Field(None, ge=0, le=9_999_999_999)
+    expense_report: Optional[int] = Field(None, ge=0, le=9_999_999_999)
+
+    # A misspelt type would otherwise be stored and read by nothing.
+    model_config = ConfigDict(extra="forbid")
+
+
 class FinanceSettingsUpdate(BaseModel):
     """Finance rules; read by app/utils/finance_settings.py."""
 
@@ -1672,6 +1687,22 @@ class FinanceSettingsUpdate(BaseModel):
             "Whole dollars. A purchase request, check request or expense report "
             "of this amount or more needs two different approvers. Null turns "
             "the rule off, which is also the default."
+        ),
+    )
+    dual_approval_thresholds: Optional[DualApprovalThresholdsUpdate] = Field(
+        None,
+        description=(
+            "A separate threshold per request type. A type left null follows "
+            "dual_approval_threshold; 0 turns the rule off for that type."
+        ),
+    )
+    second_approver_position: Optional[str] = Field(
+        None,
+        max_length=100,
+        description=(
+            "The slug of the position whose holder must be one of the two "
+            "approvers of a request held by the threshold. Null or blank: any "
+            "finance approver other than the first."
         ),
     )
     substantiation_mode: Optional[Literal["off", "warn", "block"]] = Field(
