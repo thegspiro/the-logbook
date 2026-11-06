@@ -138,6 +138,7 @@ describe('Finance navigation', () => {
     expect(visible(['finance.request', 'finance.view', 'finance.manage', 'finance.approve'])).toEqual([
       'Dashboard',
       'Budget requests',
+      'Budget amendments',
       'Purchase Requests',
       'Expense Reports',
       'Check Requests',
@@ -154,6 +155,13 @@ describe('Finance navigation', () => {
       'My Expense Reports',
       'My Check Requests',
     ]);
+  });
+
+  it('offers the pending-amendment queue to whoever may confirm an amendment', () => {
+    // Owner decision, 2026-11-01: pending amendments listed in one place.
+    expect(visible(['finance.budget_review'])).toEqual(['Budget requests', 'Budget amendments']);
+    expect(visible(['finance.manage'])).toContain('Budget amendments');
+    expect(visible(['finance.request', 'finance.view'])).not.toContain('Budget amendments');
   });
 
   it('offers the budget request review only to finance.manage', () => {

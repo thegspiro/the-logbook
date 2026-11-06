@@ -317,3 +317,127 @@ describe('Reverse amendment dialog', () => {
     expect(getBudget).toHaveBeenCalledTimes(1);
   });
 });
+
+// Owner decisions of 2026-11-01: partial reversals, and a rejected reversal
+// keeps naming the amendment it tried to reverse.
+
+describe('Partial reversals', () => {
+  const open = async () => {
+    const user = userEvent.setup();
+    listAmendments.mockResolvedValue([
+      amendment({ id: 'am-typo', amount: '2500.00', reason: 'Gloves', approvedOn: '2026-10-07' }),
+    ]);
+    await openLine('b-open');
+    await user.click(within(itemFor('Gloves')).getByRole('button', { name: /^Reverse/ }));
+    const dialog = within(await screen.findByRole('dialog'));
+    const fill = async () => {
+      await user.type(dialog.getByLabelText('Reason'), 'Entered $2,500 for $250');
+      await user.type(dialog.getByLabelText('Approved by'), 'Chief');
+    };
+    return { user, dialog, fill };
+  };
+
+  it('offers the whole amendment by default and sends no amount for it', async () => {
+    reverseAmendment.mockResolvedValue({ amendment: rows[0], budget: budgets[0] });
+    const { user, dialog, fill } = await open();
+    expect(dialog.getByLabelText('Amount to reverse')).toHaveValue('2500.00');
+    await fill();
+    await user.click(dialog.getByRole('button', { name: 'Record reversal' }));
+    await waitFor(() => expect(reverseAmendment).toHaveBeenCalledTimes(1));
+    expect(reverseAmendment.mock.calls[0]?.[2]).not.toHaveProperty('amount');
+  });
+
+  it('corrects the amount in one entry and says what stays', async () => {
+    reverseAmendment.mockResolvedValue({ amendment: rows[0], budget: budgets[0] });
+    const { user, dialog, fill } = await open();
+    await user.clear(dialog.getByLabelText('Amount to reverse'));
+    await user.type(dialog.getByLabelText('Amount to reverse'), '2250');
+    expect(
+      dialog.getByText(
+        'Once a second officer confirms it, this lowers the current budget by $2,250.00. $250.00 of the amendment stays, and the original amendment stays on record.'
+      )
+    ).toBeInTheDocument();
+    await fill();
+    await user.click(dialog.getByRole('button', { name: 'Record reversal' }));
+    await waitFor(() =>
+      expect(reverseAmendment).toHaveBeenCalledWith('b-open', 'am-typo', {
+        reason: 'Entered $2,500 for $250',
+        approvedBy: 'Chief',
+        approvedOn: today(),
+        amount: '2250.00',
+      })
+    );
+  });
+
+  it.each([
+    ['0', 'Enter an amount greater than zero.'],
+    ['2500.01', 'A reversal can take back at most $2,500.00.'],
+    ['12.345', 'Use dollars and cents, at most two decimal places.'],
+  ])('refuses %s without calling the API', async (value, message) => {
+    const { user, dialog, fill } = await open();
+    await user.clear(dialog.getByLabelText('Amount to reverse'));
+    await user.type(dialog.getByLabelText('Amount to reverse'), value);
+    await fill();
+    await user.click(dialog.getByRole('button', { name: 'Record reversal' }));
+    expect(dialog.getByText(message)).toBeInTheDocument();
+    expect(reverseAmendment).not.toHaveBeenCalled();
+  });
+
+  it('shows a partly reversed amendment as reduced, not struck through', async () => {
+    listAmendments.mockResolvedValue([
+      amendment({
+        id: 'rev-1',
+        amount: '-2250.00',
+        reason: 'Entered $2,500 for $250',
+        approvedOn: '2026-10-08',
+        isReversal: true,
+        reversesAmendmentId: 'am-typo',
+        reversesAmendmentRef: 'am-typo',
+        status: 'confirmed',
+      }),
+      amendment({
+        id: 'am-typo',
+        amount: '2500.00',
+        reason: 'Gloves',
+        approvedOn: '2026-10-07',
+        reversedByAmendmentId: 'rev-1',
+        reversedAt: '2026-10-08T15:00:00Z',
+        reversedByName: 'Pat Treasurer',
+        reversedAmount: '2250.00',
+        reversalStatus: 'confirmed',
+      }),
+    ]);
+    await openLine('b-open');
+    const reduced = within(itemFor('Gloves'));
+    expect(reduced.getByText('+$2,500.00')).not.toHaveClass('line-through');
+    expect(reduced.getByText('Reduced by $2,250.00 on 10/8/2026 by Pat Treasurer')).toBeInTheDocument();
+    expect(reduced.queryByText(/^Reversed /)).not.toBeInTheDocument();
+    expect(reduced.queryByRole('button', { name: /^Reverse/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('A rejected reversal', () => {
+  it('still names the amendment it tried to reverse', async () => {
+    listAmendments.mockResolvedValue([
+      amendment({
+        id: 'rev-1',
+        amount: '-2500.00',
+        reason: 'Entered on the wrong line',
+        approvedOn: '2026-10-08',
+        isReversal: true,
+        reversesAmendmentId: null,
+        reversesAmendmentRef: 'am-typo',
+        status: 'rejected',
+        decidedAt: '2026-10-09T12:00:00Z',
+        decidedByName: 'Sam President',
+        decisionNote: 'Wrong line',
+      }),
+      amendment({ id: 'am-typo', amount: '2500.00', reason: 'Gloves', approvedOn: '2026-10-07' }),
+    ]);
+    await openLine('b-open');
+    const rejected = within(itemFor('Entered on the wrong line'));
+    expect(rejected.getByText('· Would have reversed the 10/7/2026 amendment of +$2,500.00')).toBeInTheDocument();
+    // The amendment itself is free to be reversed again.
+    expect(within(itemFor('Gloves')).getByRole('button', { name: /^Reverse/ })).toBeInTheDocument();
+  });
+});

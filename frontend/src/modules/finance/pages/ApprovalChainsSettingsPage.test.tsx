@@ -462,12 +462,6 @@ describe('ApprovalChainsSettingsPage', () => {
       ['not_found', 'specific_user', 'That member no longer exists'],
       ['not_found', 'permission', 'That permission no longer exists'],
       ['no_active_members', 'position', 'No active member can act on this step'],
-      // W63: the Chief filled the step but held no finance.approve.
-      [
-        'no_approve_permission',
-        'position',
-        'Nobody on this step has the finance approval permission, so they cannot approve or deny',
-      ],
     ] as const)('words the %s problem for a %s approver plainly', async (problem, approverType, text) => {
       mockGetCoverage.mockResolvedValue([
         coverageRow({ problem, approverType, eligibleActiveCount: 0, pendingRequestCount: 1 }),
@@ -546,5 +540,22 @@ describe('ApprovalChainsSettingsPage', () => {
       dialog.getByText(/Only the approver chosen here can approve or deny this step in The Logbook/)
     ).toBeInTheDocument();
     expect(dialog.queryByText(/whatever you choose here/)).not.toBeInTheDocument();
+    // Owner decision 2026-11-01: being named is the grant.
+    expect(
+      dialog.getByText(/A position or member chosen here can do so without the finance\.approve permission/)
+    ).toBeInTheDocument();
+  });
+
+  it('says a new chain routes only the request type it applies to', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ApprovalChainsSettingsPage />);
+    await screen.findByRole('button', { name: /^Large purchases/ });
+
+    await user.click(screen.getByRole('button', { name: 'New Chain' }));
+
+    const appliesTo = screen.getByLabelText(/Applies To/);
+    expect(appliesTo).toHaveAccessibleDescription(
+      'A chain routes only this type of request. A type with no chain of its own is decided by hand by a finance approver.'
+    );
   });
 });

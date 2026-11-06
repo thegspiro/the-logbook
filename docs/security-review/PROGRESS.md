@@ -23,9 +23,10 @@ other Claude session is running on this machine (`ListAgents` → "No
 reachable agents"), consistent with the dedicated `/loop 30m
 /security-review` session remaining unreachable through every prior pass.
 Two PRs had already merged since the last iteration: #4108 (Feature 12,
-Facilities, pass 15 — real delta, already has its own **Log** entry below)
-and #4109 (Feature 13, Apparatus & NFC, pass 22 — docs-only, 0 fixed/0
-flagged, not independently recorded per this file's own rule). A fresh
+Facilities, pass 15) and #4109 (Feature 13, Apparatus & NFC, pass 22) —
+both carried a real review verdict (0 fixed, 0 new findings each), so
+both already have their own **Log** entries below rather than fresh ones
+here. A fresh
 `list_pull_requests` (state=open) found 0 PRs with a
 `claude/security-review-*` head; row 14 is the next pending feature.
 
@@ -81,15 +82,17 @@ row 12 is ✅. Next is Feature 13 (Apparatus & NFC) — the next `⬜` row.
 </details>
 
 <details>
-<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 22, PR #4109, merged, docs-only), preserved for history</summary>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 22, PR #4109, merged), preserved for history</summary>
 
-_None — docs-only, not independently recorded._ PR
-[#4109](https://github.com/thegspiro/the-logbook/pull/4109) (Feature 13,
-Apparatus & NFC, pass 22, branch `claude/security-review-apparatus-nfc-p22`)
-merged. 0 fixed, 0 new findings; touched only
-`docs/security-review/AP-13-apparatus-nfc.md` and this file — no
-application code. Rotation row 13 is ✅. Next is Feature 14 (Equipment
-check & shifts) — the next `⬜` row.
+_None._ PR [#4109](https://github.com/thegspiro/the-logbook/pull/4109)
+(Feature 13, Apparatus & NFC, pass 22, branch
+`claude/security-review-apparatus-nfc-p22`) merged. Not docs-only on the
+findings — it carried a real review verdict (0 fixed, 0 new findings on a
+dashboard-tile fix and two unrelated-feature threadings), so it already
+has its own **Log** entry below rather than a fresh one here. Confirmed
+via a fresh `list_pull_requests` (state `open`): 0 results for a
+`claude/security-review-*` head. Rotation row 13 is ✅. Next is Feature 14
+(Equipment check & shifts) — the next `⬜` row.
 
 </details>
 
@@ -25089,7 +25092,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                                                | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                   | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                 | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                               | ⬜     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                               | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                 | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                            | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                   | ⬜     |
@@ -47588,19 +47591,64 @@ migration-integrity suites — 166 passed; `npm run typecheck` — 0 errors;
 Row 12 → ✅ (pending this PR's merge); next is Feature 13 (Apparatus & NFC)
 — re-check `list_pull_requests` fresh rather than trusting this note.
 
-### 2026-11-06 — Feature 12 (Facilities, pass 15) merged; Feature 13 (Apparatus & NFC, pass 22) merged, docs-only; Feature 14 (Equipment check & shifts, pass 15) — watchdog pickup, 0 fixed, 0 new findings
+### 2026-11-06 — Feature 12 (Facilities, pass 15) merged; Feature 13 (Apparatus & NFC, pass 22) — watchdog pickup, 0 fixed, 0 new findings
+
+Step 0/1 were handed to this iteration already done: no open PR with a
+`claude/security-review-*` head exists, and row 13 (Apparatus & NFC) is the
+next `⬜` row in the rotation table, confirmed directly against a
+freshly-read `main` — row 12 (Facilities) was already `✅` from PR #4108's
+own merge.
+
+Baseline `bb77eae12` (PR #3924's merge, pass 21) to head `2ff2abf75` (PR
+#4108's merge, current `main`). `git log bb77eae12..HEAD` over this
+feature's declared scope returns 75 commits when the broad
+`backend/alembic/versions` pathspec is included, almost all unrelated
+migration-head rejoins; excluding that path and restricting to the
+feature's actual files narrows it to exactly 3 non-merge commits. Real
+delta: a dashboard-tile double-counting fix (DASH-38 — "Maintenance Due"
+summed an already-inclusive figure with itself) that also wires the tile to
+a new `MaintenanceDueList` component, calling a **pre-existing**,
+already-reviewed, already-org-scoped `GET /apparatus/maintenance/due`
+(confirmed zero diff on `apparatus.py`/`apparatus_service.py` since pass 21) — now exposed as a list rather than only a count, re-checked for
+over-serialization and found to carry no field beyond
+id/unit-number/maintenance-type/due-date/overdue; a 2-line, non-security
+`evaluate_shifts` boolean threaded through an already org-scoped external-
+agency create/read (the surrounding Training feature's own scope, not
+reviewed here); and a pure Tailwind layout-class swap. 94 + 11 = 105 routes
+re-enumerated by AST, unchanged.
+
+**0 fixed, 0 new findings.** No open finding exists for this feature — AP2-4
+was resolved in pass 21 by ordinary feature work and this window's diff
+touches none of the files it concerned; `docs/module-audit/apparatus.md`
+and `docs/app-review/apparatus.md` re-checked directly and both report zero
+open items. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`'s
+**Pass 22** section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `python3 scripts/validate_migrations.py
+--strict` — 737 revisions, single head; `python3
+scripts/check_route_permissions.py --strict` — 303 routes, 0
+errors/warnings; scoped backend suite (`-k "apparatus or nfc or evoc or
+driver_exception"`) — 1390 passed, 1 pre-existing skip (`py_vapid`);
+standing guard suites (capacity locking, org-scoping ratchet, LIKE
+escaping, CSV sweep, migration chain, `create_all`-table tolerance) — 166
+passed; `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/apparatus` — 123 passed (15
+files).
+
+Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
+& shifts) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-11-06 — Feature 13 (Apparatus & NFC, pass 22) merged; Feature 14 (Equipment check & shifts, pass 15) — watchdog pickup, 0 fixed, 0 new findings
 
 No other Claude session is running on this machine (`ListAgents` → "No
 reachable agents"), consistent with the dedicated `/loop 30m
 /security-review` session remaining unreachable through every prior
-iteration recorded above. Step 0/1 were handed to this iteration mostly
-done: PR #4108 (Facilities, pass 15) had merged with a real delta, and PR
-#4109 (Apparatus & NFC, pass 22) had merged touching only its own findings
-file and this tracker — docs-only, so per this file's own rule it gets no
-independent log entry beyond this mention. A fresh `list_pull_requests`
-(state=open) found 0 PRs with a `claude/security-review-*` head. Row 14
-(Equipment check & shifts) is the next `⬜` row, confirmed directly: rows
-00–13 are all `✅`.
+iteration recorded above. PR #4109 (Apparatus & NFC, pass 22, logged
+above) had merged. A fresh `list_pull_requests` (state=open) found 0 PRs
+with a `claude/security-review-*` head. Row 14 (Equipment check & shifts)
+is the next `⬜` row, confirmed directly: rows 00–13 are all `✅`.
 
 Baseline `2a96a177d` (PR #3927's merge, pass 14) to head `0d2a8d2fa` (PR
 #4109's merge, current `main`). `git log --no-merges` restricted to this

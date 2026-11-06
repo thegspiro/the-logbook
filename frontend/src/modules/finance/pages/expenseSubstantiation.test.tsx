@@ -37,7 +37,9 @@ const formOptions = {
   budgetOptions: [],
   fiscalYearsLoaded: true,
 };
-vi.mock('../hooks/useRequestFormOptions', () => ({
+// The hook alone is replaced; the picker's label helpers are the real ones.
+vi.mock('../hooks/useRequestFormOptions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../hooks/useRequestFormOptions')>()),
   useRequestFormOptions: () => formOptions,
 }));
 

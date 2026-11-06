@@ -855,8 +855,9 @@ class TestApproverCoverage:
         holder = await _make_member(
             db_session, org_id, "finance.approve", slug="treasurer"
         )
-        # Fills the captain position but may not approve: approve and deny
-        # are gated on finance.approve, so the step is not covered (W63).
+        # Fills the captain position without finance.approve. Being named is
+        # the grant (owner decision 2026-11-01), so the step is covered; it
+        # was reported "no_approve_permission" before (W63).
         await _make_member(db_session, org_id, slug="captain")
         await _make_member(
             db_session, org_id, slug="trustee", status=UserStatus.INACTIVE
@@ -920,8 +921,8 @@ class TestApproverCoverage:
         assert rows["treasurer"]["assignee_label"] == "Treasurer position"
         assert rows["trustee"]["problem"] == "no_active_members"
         assert rows["chief"]["problem"] == "no_active_members"
-        assert rows["captain"]["problem"] == "no_approve_permission"
-        assert rows["captain"]["eligible_active_count"] == 0
+        assert rows["captain"]["problem"] is None
+        assert rows["captain"]["eligible_active_count"] == 1
         assert rows["ghost"]["problem"] == "not_found"
         assert rows["blank"]["problem"] == "no_value"
         assert rows["perm"]["problem"] == "not_found"

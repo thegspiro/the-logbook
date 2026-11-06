@@ -892,6 +892,29 @@ class FinanceBudgetRequestService:
         await self.db.refresh(request, ["updated_at"])
         return request
 
+    async def owner_amount(self, request_id: str, org_id: str) -> Optional[Decimal]:
+        """The amount a request stands at for its owner: leadership's, else the
+        Treasurer's approved one. ``None`` for none, or another org's request.
+
+        Read before a leadership review overwrites it, so the owner is emailed
+        only when their amount actually changes (owner decision, 2026-11-01).
+        """
+        row = (
+            await self.db.execute(
+                select(
+                    BudgetRequest.review_amount, BudgetRequest.approved_amount
+                ).where(
+                    BudgetRequest.id == request_id,
+                    BudgetRequest.organization_id == org_id,
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        review: Optional[Decimal] = row.review_amount
+        approved: Optional[Decimal] = row.approved_amount
+        return review if review is not None else approved
+
     # ========================================
     # Reads
     # ========================================

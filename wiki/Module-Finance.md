@@ -95,7 +95,15 @@ budget**, **Current budget** and the amendments.
 
 - Amendments cannot be edited or deleted. A mistaken one is undone with
   **Reverse**, which records an offsetting entry (also confirmed by a second
-  officer).
+  officer). The entry can take back the whole amendment or only part of it —
+  $2,500 entered for $250 is corrected by reversing $2,250 — and an amendment
+  is reversed once. A rejected reversal still names the amendment it would
+  have reversed.
+- Whoever may confirm an amendment — `finance.budget_review` or
+  `finance.manage`, other than the officer who entered it — is **emailed**
+  when one is entered (the optional _Finance duties_ email), and **Finance ›
+  Budget amendments** lists every amendment waiting, across all lines, with
+  **Confirm** and **Reject** on each.
 - Once a year goes before the board — and throughout an active or closing year —
   a line's amount changes **only** through an amendment. Owner, station and
   notes stay editable.
@@ -108,13 +116,21 @@ submits. The form's **Who will approve this** panel shows the route the request
 will actually take before it is sent.
 
 - **Purchase request** — approved → ordered → received → paid. Approval
-  **encumbers** the estimate against the line ("Committed"); paying moves it to
-  spent. The office marks each step.
+  **encumbers** the estimate against the line ("Committed"). **Mark Paid**
+  asks what was actually paid: the line spends that amount, and the request
+  shows any difference from the approved amount ("$30.00 over"). It stays
+  disabled until a **receipt or invoice is uploaded** to the request. The
+  office marks each step.
 - **Expense report** — a member's out-of-pocket claim, one line per expense.
+  The member picks each expense's **budget line**; approving the report
+  **commits** those amounts to the lines, and paying it moves them to spent.
   **Every line needs an uploaded receipt** before **Submit for Approval** is
   enabled. Lines can be edited or removed only while the report is a draft.
 - **Check request** — a payment by check; **Issue Check** records the check
-  number and date. An issued check is **voided**, not cancelled.
+  number and date, and waits until the **receipt or invoice is uploaded** to
+  the request (not for a cash advance or a reimbursement check, whose
+  receipts are on the expense report). An issued check is **voided**, not
+  cancelled.
 
 Uploaded receipts are filed as documents in a **Finance → Receipts** folder that
 only finance rights open.
@@ -122,9 +138,11 @@ only finance rights open.
 ### Approval chains
 
 **Approval Chains** (`finance.configure_approvals`) defines who approves what, in
-order. A chain applies to purchase requests, expense reports, check requests or
-all three, and can be limited to an amount range or a budget category; the most
-specific match wins, then the department's default chain. Each step is either:
+order. A chain applies to one type — purchase requests, expense reports or check
+requests — and routes only that type: a purchase chain never routes an expense
+report or a check request. It can be limited to an amount range or a budget
+category; the most specific match wins, then the department's default chain for
+that type. Each step is either:
 
 - **Approval** — waits for a person. The approver is a **position**, a
   **permission**, a **specific member**, or an **email address** (for an outside
@@ -133,13 +151,25 @@ specific match wins, then the department's default chain. Each step is either:
 - **Notification** — marked sent and skipped past. **No email is actually sent**
   for a notification step.
 
-Only the step's named approver can act on it, from **Approvals**. A
-`finance.configure_approvals` holder can act on someone else's step by giving an
-override reason, which is audit-logged. The page flags any step nobody can act
+Only the step's named approver can act on it, from **Approvals** or the
+request's own page. Being named is enough: a Chief named on a step approves or
+denies that step without `finance.approve` (on that step only), working from
+the request's page that the approval email links to. A step that names nobody
+takes any `finance.approve` holder. A `finance.configure_approvals` holder who
+also holds `finance.approve` can act on someone else's step by giving an
+override reason, which is audit-logged.
+
+**Emails.** When a request reaches an approval step, the members the step names
+are emailed (**Finance duties**); when it is approved or denied, the requester
+is (**Your purchase, expense and check requests**, with the reason for a
+denial). Both are optional and on by default; neither is sent twice. An
+email-address step's approval link is its only email. The page flags any step nobody can act
 on ("No active member can act on this step") — fix those before relying on the
 chain.
 
-A request **no chain matches** waits for approval with no steps; any
+A request **no chain matches** — including an expense report or check request
+when the department has chains only for purchase requests — waits for approval
+with no steps; any
 `finance.approve` holder other than the requester decides it from the request's
 own page. Approvals lists these below the step rows.
 
@@ -154,6 +184,21 @@ officers they bind cannot lift them:
 | Second approver for large requests | At or above a dollar threshold, a request is approved only once **two different people** have approved it                                                       | Off     |
 | Deadline for claiming expenses     | IRS accountable-plan deadline (at most 60 days). `warn` makes the approver confirm the late lines before approving; `block` refuses submission with a late line | Off     |
 | Overspending a restricted fund     | `warn` flags a payment its restricted fund cannot cover; `block` refuses the approval; `off` does not check                                                     | Warn    |
+
+The second-approver card also sets, since 2026-11-06:
+
+- **By request type** — purchase requests, check requests and expense reports
+  can each have their own threshold, or be turned off. A type left on _Same as
+  above_ uses the card's main threshold, which is how every department starts.
+- **Who gives the second approval** — name a position (the Treasurer, say).
+  A large request then completes only once one of its two approvers holds that
+  position; until it does, the request waits for that office and other
+  approvers are told so. _Any finance approver_ keeps the old rule.
+
+When a request is held for its second approval, the members who could give it
+are emailed once (the optional **Finance duties** email). Someone who approved
+by an emailed link counts as the member with that email address, so they
+cannot give the second approval as well.
 
 ## Cash advances and reimbursing a purchase
 
@@ -194,6 +239,8 @@ Next year is built in a **draft** fiscal year, which moves through stages on
 2. **Start leadership review.** Owners can no longer change requests;
    `finance.budget_review` holders may **Change amount** on a decided request,
    with a note. Nobody can change a request they submitted or whose line they own.
+   The line's owners and the member who submitted it are emailed the old and
+   new amount and the note.
 3. **Send to the board.** Nothing can change while it is before the board.
 4. **Record adoption** — the date and the board's reference (e.g. a vote).
 5. **Start the year**, on or after its start date. Line owners are emailed. A
@@ -310,9 +357,11 @@ Rules worth knowing:
 - **Scheduled task:** `budget_request_reminders`, daily.
 - **Notable migrations:** `7db20aa49329` (`finance.request` to members),
   `1be4fbbc235d` (owners and stations), `ca564ba5a9ad` / `c62a98b47406` /
-  `0a55dae43a0a` (amendments, reversals, second-officer confirmation),
+  `0a55dae43a0a` / `0961ffc2cdf1` (amendments, reversals, second-officer
+  confirmation, a rejected reversal's display link),
   `9effb8790488` / `5c8be05f2f0f` / `af92f1496c43` (budget requests, planning
-  stages and adoption, close and lock), `3c9c5025a380` (dual approval),
+  stages and adoption, close and lock), `3c9c5025a380` / `ee9ff4596ce7` (dual
+  approval, and its second-approval notice),
   `3f3bd6f3c7e4` / `0d32069fea4d` / `a33ffa561e4f` (QuickBooks tracking, dues
   export, chart of accounts), `390fa30d0200` (functional classes),
   `3decd3ff6ce5` (restricted funds), `252c7517d80a` (charge access),

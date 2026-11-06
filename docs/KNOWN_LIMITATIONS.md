@@ -2686,7 +2686,7 @@ _Treasurer duties_), and a department can make either required. See
 **Owner decision needed** only if a department asks for a different schedule
 or for bell entries.
 
-## Finance — Budget Amendment Corrections Are Whole Reversals Only (2026-10-09)
+## Finance — Budget Amendment Corrections Are Whole Reversals Only (2026-10-09, resolved 2026-11-06)
 
 **Resolved in part (owner decision, 2026-10-09).** A mistaken amendment is now
 corrected by a **reversing entry** —
@@ -2699,8 +2699,21 @@ and should not be used for this: it moves the original budget.
 
 What remains limited, by design:
 
-- **No partial reversal.** $2,500 entered for $250 is fixed by reversing the
-  whole $2,500 and recording a new $250 amendment — two entries, not one.
+- ~~**No partial reversal.** $2,500 entered for $250 is fixed by reversing the
+  whole $2,500 and recording a new $250 amendment — two entries, not one.~~
+  **✅ Resolved (owner decision 2026-11-01: allow partial reversals; built
+  2026-11-06).** The reverse endpoint takes an optional `amount` — any part of
+  the amendment, up to the whole (400 past it); left out, the whole amendment
+  is reversed as before. $2,500 entered for $250 is now one reversal of
+  $2,250. An amendment is still reversed once: a part-reversed amendment is
+  not reversed again, and what is left of it stays. The spend check, the
+  pending confirmation and the locked-year refusal apply to the partial amount
+  exactly as to a whole one. The line's page shows a part-reversed amendment
+  as "Reduced by $X", not struck through, and the Reverse dialog asks for the
+  amount (the whole by default) and says what stays. See
+  `docs/FINANCE_MODULE.md`, "Reversing a mistaken amendment". Tests:
+  `TestPartialReversal` in `tests/test_finance_budget_amendment_reversals.py`,
+  `budgetAmendmentReversals.test.tsx`.
 - **A reversal is final.** It cannot itself be reversed; restoring the money
   takes a new amendment with a fresh approval.
 - **A locked year takes no reversal**, as it takes no amendment. A mistake found
@@ -2709,66 +2722,139 @@ What remains limited, by design:
   the lower budget (409 "Insufficient available budget"); the spending has to be
   resolved first.
 
-**Owner decision needed** only if partial reversals, or reversals in a locked
-year, are wanted.
+The other three stand. The owner's decision was partial reversals only, so a
+locked year still takes no reversal, partial or whole.
 
-## Finance — Dual Approval: What It Does Not Cover (2026-10-11)
+## Finance — Dual Approval: What It Does Not Cover (2026-10-11, resolved 2026-11-06)
 
 Large requests can need two different approvers
 (`finance.dual_approval_threshold`; see `docs/FINANCE_MODULE.md`, "Dual
-approval"). Four gaps are deliberate, pending a decision:
+approval"). Four gaps were left pending a decision; the owner decided all four
+on 2026-11-01 and they were built on 2026-11-06.
 
-- **Nobody is told a request is waiting for its second approval.** It is
-  listed on the Approvals screen and marked on its own page, but no email or
-  bell entry goes out.
-- **Any `finance.approve` holder may give the second approval**, not only the
-  approvers a chain names. The rule is "two different people", not "two named
-  officers"; a department that wants the second approver to be a specific
-  office needs a two-step chain naming it.
-- **People are told apart by account.** An approval from an emailed link
-  counts as the address the step names, so one person who is both a member and
-  an external email approver could be counted twice. Steps that auto-approve
-  count as nobody.
-- **The threshold is whole dollars and one figure for all three request
-  types.** A per-type or per-category threshold, or one in cents, is not
-  supported.
+- **Nobody is told a request is waiting for its second approval — ✅ resolved
+  (owner decision 2026-11-01: email finance approvers; built 2026-11-06).**
+  The first time a request is held, the members who could give the second
+  approval are emailed (`app/services/finance_second_approval.py`): active
+  `finance.approve` holders who have not approved it and did not raise it,
+  narrowed to the named office's holders while that office is still owed.
+  Email only, under the optional `finance_duties` kind; no text or bell entry
+  (pitfall 18). The request's `second_approval_requested_at` (migration
+  `ee9ff4596ce7`) is claimed with a conditional update in the approval's
+  transaction, which queues the notice; the endpoint sends it only after the
+  commit, on the same queue as the other approval emails
+  (`finance_approval_notifications`). A rollback takes the claim and the
+  notice with it, a retry finds the claim taken, and a crash between the
+  commit and the send loses that one email (the Approvals screen still lists
+  the request). A failed send is logged and never fails the approval. A
+  request already held when the upgrade ran is not emailed retroactively.
+- **Any `finance.approve` holder may give the second approval — ✅ resolved
+  (owner decision 2026-11-01: named second approver setting; built
+  2026-11-06).** `finance.second_approver_position` names a position by slug
+  (Finance > Settings > Approval chains, "Who gives the second approval";
+  `settings.manage`). A held request then completes only once two different
+  people have approved it **and** one of them holds that position: a request
+  the office has not yet approved waits for one of its holders, and another
+  approver is refused with "The second approval on this request must come
+  from the … position". Unset, the rule is "two different people" as before.
+  Saving a slug the department does not have is refused; one deleted after it
+  was chosen fails closed (the request waits, and the settings card says the
+  position no longer exists). The office's holders also need
+  `finance.approve` to use the manual approval.
+- **People are told apart by account — ✅ resolved (owner decision
+  2026-11-01: match by email address too; built 2026-11-06).** An approval
+  from an emailed link now counts as the member whose account has the step's
+  address (case-insensitive, deleted accounts excepted), so a member who
+  approved by link cannot also give the in-app approval. An address no member
+  has is still a person of its own. Steps that auto-approve still count as
+  nobody.
+- **The threshold is one figure for all three request types — ✅ resolved
+  (owner decision 2026-11-01: per-type thresholds; built 2026-11-06).**
+  `finance.dual_approval_thresholds` holds a figure per type
+  (`purchase_request`, `check_request`, `expense_report`). A type left unset
+  follows `dual_approval_threshold`, so nothing changed for any department
+  until one is set; `0` turns the rule off for that type alone.
+  `FinanceSettings.threshold_for` is the one reader, shared by the approval
+  hold, the route preview and `GET /finance/settings`. Still not supported, and
+  not asked for: a per-category threshold, and cents (the figure is whole
+  dollars).
 
-## Finance — Amendment Confirmation: What It Does Not Cover (2026-10-09)
+## Finance — Amendment Confirmation: What It Does Not Cover (2026-10-09, resolved 2026-11-06)
 
 Amendments and reversals are entered pending and move money only once a
 `finance.budget_review` or `finance.manage` holder other than whoever entered
 them confirms them (`docs/FINANCE_MODULE.md`, "Second-officer confirmation").
-Three gaps are deliberate, pending a decision:
+Three gaps were left pending a decision; the owner decided all three on
+2026-11-01, and the two that called for building were built on 2026-11-06.
 
-- **Nobody is told an amendment is waiting.** No email, bell entry or queue
+- ~~**Nobody is told an amendment is waiting.** No email, bell entry or queue
   lists pending amendments across lines; the confirmer finds them on the line's
   page (marked _Pending confirmation_) or, at year-end, in the open items that
-  hold the lock. The Treasurer tells the confirming officer.
-- **A department with one finance officer cannot confirm anything.** Someone
+  hold the lock. The Treasurer tells the confirming officer.~~ **✅ Resolved
+  (owner decision 2026-11-01: email + pending queue; built 2026-11-06).**
+  Entering an amendment or a reversal emails every active member who may
+  confirm it — `finance.budget_review` or `finance.manage`, wildcards
+  included — other than whoever entered it, under the optional _Finance
+  duties_ kind (`finance_duties`); email only, no text or bell entry (pitfall
+  #18). Each send is recorded in the email sent-log keyed on the amendment, so
+  a second notice for the same amendment sends nothing. **Finance › Budget
+  amendments** (`/finance/budget-amendments`; the API is
+  `GET /finance/budget-amendments/pending`, the same two permissions) lists every
+  pending one across the department's lines, oldest first, with its line and
+  year, and offers Confirm and Reject there — so a reviewer who holds only
+  `finance.budget_review` and cannot open the line can still act. Tests:
+  `tests/test_finance_budget_change_notices.py`,
+  `PendingAmendmentsPage.test.tsx`.
+- **A department with one finance officer cannot confirm anything** (owner
+  decision 2026-11-01: leave as is, require a second officer). Someone
   other than the entering member must hold `finance.budget_review` or
   `finance.manage`; until one does, amendments stay pending and a closing year
   cannot be locked. This is the control working as intended, but a very small
   department has to grant `finance.budget_review` to a second officer first.
-- **A rejected reversal loses its link on the row.** Rejecting a pending
+- ~~**A rejected reversal loses its link on the row.** Rejecting a pending
   reversal clears `reverses_amendment_id` so the original can be reversed
   again; the rejected row then reads "Reverses an earlier amendment" rather
   than naming it. The audit event `finance.budget_amendment_rejected` keeps
-  `reversed_amendment_id`.
+  `reversed_amendment_id`.~~ **✅ Resolved (owner decision 2026-11-01: keep a
+  display-only link; built 2026-11-06).** `budget_amendments.reverses_amendment_ref`
+  (migration `0961ffc2cdf1`) is written when a reversal is entered and never
+  cleared; it has no foreign or unique key, so it frees nothing and holds
+  nothing back, and nothing that moves money reads it. A rejected reversal now
+  reads "Would have reversed the {date} amendment of +$Y". The migration
+  filled it for existing reversals — from the link where it still stands,
+  and for already-rejected ones from the audit log's
+  `finance.budget_amendment_reversed` / `…_rejected` events, only where the
+  amendment named is on the same line. Tests:
+  `TestRejectedReversalKeepsItsReference`,
+  `tests/test_budget_amendment_reversal_ref_migration.py`.
 
-## Finance — Budget Adoption Stages: What They Do Not Cover (2026-10-09)
+## Finance — Budget Adoption Stages: What They Do Not Cover (2026-10-09, resolved 2026-11-06)
 
 Next year's budget moves through taking requests, leadership review and board
 review to an adoption the Treasurer records (see `docs/FINANCE_MODULE.md`,
-"Adopting the budget"). Three gaps are deliberate, pending a decision:
+"Adopting the budget"). Three gaps were left pending a decision; the owner
+decided all three on 2026-11-01, and the one that called for building was
+built on 2026-11-06.
 
-- **Leadership changes only what the Treasurer decided.** A request still
+- **Leadership changes only what the Treasurer decided** (owner decision
+  2026-11-01: leave as is). A request still
   submitted or declined, and a draft line nobody requested (one copied from
   last year and never requested), cannot be changed in leadership review. The
   Treasurer moves the year back to taking requests, or edits the line.
-- **Owners are not emailed when leadership changes their amount.** They see the
+- ~~**Owners are not emailed when leadership changes their amount.** They see the
   change and its note on _Next year's budget_, and the adoption email lists the
-  final amounts.
-- **The board's changes are entered by moving the year back.** Board review
+  final amounts.~~ **✅ Resolved (owner decision 2026-11-01: email owners on
+  change; built 2026-11-06).** When leadership changes a request's amount in
+  leadership review, the request's submitter and the active holders of the
+  line's owner position (its own, else its category's) are emailed — never
+  the reviewer — with the amount before and after and leadership's note, under
+  the optional _Next year's budget requests_ kind (`budget_requests`). Saving
+  the amount the owner already had sends nothing, and a second notice for the
+  same review sends nothing (sent-log keyed on the request, the review time
+  and the amount). Tests: `TestLeadershipChangeEmail` in
+  `tests/test_finance_budget_change_notices.py`.
+- **The board's changes are entered by moving the year back** (owner decision
+  2026-11-01: leave as is). Board review
   freezes the draft; if the board amends the budget at its meeting, the
   Treasurer moves the year back to leadership review (or taking requests),
   makes the change there, and returns it to board review before recording the
@@ -2804,9 +2890,25 @@ pending a decision:
   to each of them.
 - **Mileage has no log of its own.** A mileage line needs a file like any
   other; the guide asks for the trip log. Nothing checks what the file is.
-- **Purchase requests and check requests do not require one.** A purchase
+- ~~**Purchase requests and check requests do not require one.** A purchase
   request can carry an uploaded receipt, but nothing requires it before
-  payment, and check requests take none.
+  payment, and check requests take none.~~ **✅ Resolved (owner decision
+  2026-11-01: require before payment; built 2026-11-06).** `mark_pr_paid`
+  refuses a purchase request with no uploaded receipt, and `issue_check` a
+  check request with none, each with a 400 that says to attach it
+  (`ReceiptRequiredError`). A typed `receipt_url` does not count. Check
+  requests now take an upload (`check_requests.receipt_document_id`,
+  migration `100121b59d94`; `POST`/`GET /finance/check-requests/{id}/receipt`,
+  the purchase request's access rule), and a document that is the receipt on
+  a check request past draft cannot be deleted, as for the other two. An
+  advance and a reimbursement check need none — their receipts are the
+  expense report's lines — which `check_request_needs_receipt` decides for
+  both the service and the page. Mark Paid and Issue Check stay on screen,
+  disabled, with the reason beside them until the receipt is attached.
+  Requests approved before the upgrade need a receipt attached before they
+  can be paid (`docs/UPGRADING.md`). Tests:
+  `tests/test_finance_paid_amounts_receipts_commitments.py`,
+  `paidAmountsReceipts.test.tsx`.
 
 ## Finance — Restricted Funds: What They Do Not Cover (2026-10-13)
 
@@ -7974,28 +8076,66 @@ show title, amount and requester.**
 Found driving W63 (`docs/workflow-review/W63-purchase-request-approval.md`,
 W63-5, W63-6 and W63-7).
 
-- **A chain can name an approver who cannot approve.** Approve, deny and the
-  Approvals queue require `finance.approve`. A chain step naming a position
-  (the Chief, here) whose holders lack it leaves them a 403 on the queue and
-  a 404 on the request. Only an approvals admin's override moves it on.
-  - The chain screen now says so ("Nobody on this step has the finance
-    approval permission", W63-2).
-  - Decision: either naming a position or member in a chain lets them act on
-    that step, or saving such a step is refused.
-- **Nobody is told.** No email, bell entry or text goes to:
-  - an approver whose step a request has reached;
-  - the requester when it is approved or denied.
+- **A chain can name an approver who cannot approve — ✅ resolved (owner
+  decision 2026-11-01: naming grants that step; built 2026-11-06).** Approve
+  and deny used to require `finance.approve`, so a step naming a position (the
+  Chief, here) whose holders lacked it left them a 403, and the request a 404.
+  - Being named is now the grant. `POST /finance/approvals/{id}/approve` and
+    `/deny` admit any member; the service refuses (403) a caller without
+    `finance.approve` whom the step does not name before it reads the step's
+    order or its request (`may_reach_step`), then applies the step's own rule.
+  - It reaches that step only: not a later step naming someone else, not
+    another request, not a step that names nobody (still any
+    `finance.approve` holder), not a request no chain routes (manual
+    approval keeps its gate), and not the Approvals queue page, which stays a
+    `finance.approve` screen. A named member works from the request's own
+    page, which they can now open (`reviews_entity`) and which the approval
+    email links to.
+  - An override still needs `finance.approve` as well as
+    `finance.configure_approvals` (`may_override`), so opening the gate did
+    not make the approvals-admin grant alone a licence to decide requests.
+  - The approver-coverage report counts named members as covering their step;
+    its `no_approve_permission` problem and the chain screen's "Nobody on this
+    step has the finance approval permission" warning are gone.
+- **Nobody is told — ✅ resolved (owner decision 2026-11-01: email approvers
+  and requesters; built 2026-11-06).** `app/services/finance_approval_notifications.py`:
+  - when a request reaches an approval step, the active members it names are
+    emailed (optional kind `finance_duties`, now labelled "Finance duties"),
+    never the requester; an emailed-link step's link is still its only notice;
+  - when it is approved or denied, the requester is (new optional kind
+    `finance_requests`, "Your purchase, expense and check requests"), with the
+    denial reason, unless they withdrew it themselves.
 
-  The existing entries record this for dual approval's second approval and
-  for amendments. It holds for every ordinary step and for the decision too.
-  Decision: which events notify whom (email first, pitfall 18).
+  Email only, no text or bell entry. The emails are queued while the request
+  changes and sent after the commit, so none announces a step or a decision
+  that a later failure rolled back; a crash in between loses that email (the
+  request's page still shows it). A step is stamped `approvers_notified_at`
+  (migration `50c94d5c30f8`) when its notice is queued and never notified
+  again; a decision is notified only by the call that moves the request out of
+  pending approval, so a retried approve or deny sends nothing. Notices for a
+  second approval and for amendments are their own entries.
 
-- **The paid amount is always the estimate.** "Mark Paid" sends no amount,
+- ~~**The paid amount is always the estimate.** "Mark Paid" sends no amount,
   though `POST /finance/purchase-requests/{id}/mark-paid` takes
   `actual_amount` and the service records it. An invoice that differs from
   the quote leaves the budget line's spent and committed figures wrong, with
   no way to correct them on screen. Decision: whether "Mark Paid" asks for
-  the amount, and how a difference from the commitment is shown.
+  the amount, and how a difference from the commitment is shown.~~ **✅
+  Resolved (owner decision 2026-11-01: ask for the amount; built
+  2026-11-06).** Mark Paid opens a dialog asking what was paid, starting from
+  the approved estimate, and always sends it as `actual_amount`. The endpoint
+  keeps the parameter optional so existing API clients keep working (left
+  out, the estimate is recorded; zero or less is a 422). Every payment stores
+  the amount, so a value a draft's edit form put in
+  `actual_amount` is overwritten, never spent. The budget line's actuals are
+  what was paid: the whole approved estimate is released from committed and
+  the paid amount is spent, in one locked mutation, so an invoice over or
+  under the quote lands on the line either way (paying over still needs the
+  line, and any restricted fund, to cover it). A paid request reports
+  `paid_difference` — paid less approved — which the page shows as "$30.00
+  over" or "$14.50 under". A request paid before this with no amount recorded
+  shows none. Tests: `tests/test_finance_paid_amounts_receipts_commitments.py`,
+  `paidAmountsReceipts.test.tsx`.
 
 ## Finance — Expense Reports: Routed by Purchase Chains, and Charged to No Budget (2026-10-14)
 
@@ -8015,16 +8155,43 @@ W64-5).
     of Trustees.
   - It has worked this way since the module was added, so changing it
     re-routes live requests.
-  - Decision: match only the request's own type (with an `UPGRADING.md` note
-    and perhaps a migration copying purchase chains to the other types), add
-    an explicit "All requests" option, or keep it and say so on the chain
-    screen.
-- **Expense lines carry no budget.** The form offers no budget line, so
+  - **✅ Resolved (owner decision 2026-11-01: match own type only; built
+    2026-11-06).** `resolve_approval_chain` has matched only the request's own
+    type since 2026-10-17; an expense report or check request with no chain of
+    its own is decided by hand (Approve or Deny on the request's own page, by
+    any `finance.approve` holder), not routed through a purchase chain. No
+    migration copies purchase chains to the other types: which approvers a
+    reimbursement or a payout should have is the department's decision, so
+    `docs/UPGRADING.md` tells an operator to create those chains. Requests
+    already routed keep the steps they were given. The chain form now says a
+    chain routes only its own type.
+- ~~**Expense lines carry no budget.** The form offers no budget line, so
   `budget_id` is null, and `mark_expense_paid` posts spending only to lines
   that have one. A paid reimbursement reaches no budget line, and nothing
   commits it on approval as a purchase request's amount is. Decision: who
   picks the line (the member, or the Treasurer on approval), and whether
-  approval commits it.
+  approval commits it.~~ **✅ Resolved (owner decision 2026-11-01: member
+  picks, approval commits; built 2026-11-06).**
+  - The member chooses each expense's budget line on the report form and the
+    line dialog, from the same picker a purchase request uses (the lines they
+    may charge in the report's year). The writes already checked the line is
+    the department's (pitfall 14c) and that the member may charge it.
+  - Approval commits the lines (`_commit_report_lines`): each budget line's
+    committed figure rises by its lines' total, under the line's row lock with
+    the ceiling check, so an approval a line cannot cover is refused (409) like
+    a purchase request's. `expense_reports.budget_committed_at` (migration
+    `100121b59d94`) records it.
+  - Paying releases the commitment in the same mutation as the spend; a
+    cancelled approved report releases it; a voided reimbursement check
+    restores it with the report. Each releases only a report that was
+    committed, so reports approved before the upgrade, and a report claiming
+    back a purchase (whose own approval already encumbered it), move only
+    what they always did.
+  - The line's transaction history lists an approved report's lines as
+    Committed; the report's page names each line's budget line.
+  - Like a purchase request, a line may still be left without one.
+  - Tests: `tests/test_finance_paid_amounts_receipts_commitments.py`,
+    `paidAmountsReceipts.test.tsx`.
 
 ## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14, overpayments resolved 2026-10-27)
 

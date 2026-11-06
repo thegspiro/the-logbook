@@ -31,6 +31,7 @@ from app.models.finance import (
     ApprovalStepType,
     ApproverType,
 )
+from app.services.finance_approval_notifications import send_approval_notices
 from app.services.finance_service import (
     ApprovalTokenNotValidError,
     BudgetLimitExceededError,
@@ -218,6 +219,9 @@ async def approve_via_token(
             organization_id=str(record.chain.organization_id),
         )
         await db.commit()
+        # After the commit: the requester's decision email, and the next
+        # step's approvers (finance_approval_notifications). Never raises.
+        await send_approval_notices(db, service.take_approval_notices())
     except ApprovalTokenNotValidError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found"
@@ -267,6 +271,9 @@ async def deny_via_token(
             organization_id=str(record.chain.organization_id),
         )
         await db.commit()
+        # After the commit: the requester's decision email, and the next
+        # step's approvers (finance_approval_notifications). Never raises.
+        await send_approval_notices(db, service.take_approval_notices())
     except ApprovalTokenNotValidError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found"
