@@ -1253,6 +1253,8 @@ async def connect_integration(
         # event_data never shows in the department's trail.
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
 
     return _integration_to_dict(
@@ -1390,6 +1392,8 @@ async def disconnect_integration(
         # event_data never shows in the department's trail.
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
 
     return {"status": "disconnected"}
@@ -1467,6 +1471,8 @@ async def update_integration(
         # event_data never shows in the department's trail.
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
     # The Claude (MCP) configuration is what a live service key may read
     # and write; widening it without a record is refused, the way a key
