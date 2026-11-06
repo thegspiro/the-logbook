@@ -536,7 +536,7 @@ async def _members_attention(ctx: MetricContext) -> list[AdminAttentionItem]:
         # "reschedule this" is the safer direction than hiding a member who never
         # had their physical.
         #
-        # Decided in Python: the status is ciphertext (MS-15), so the database
+        # Decided in Python: the status is ciphertext (MS-18), so the database
         # cannot tell a booking from a result. One row per member and type.
         overdue_count, oldest_due = await _missed_screening_appointments(ctx)
         if overdue_count:

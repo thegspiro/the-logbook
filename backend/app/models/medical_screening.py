@@ -181,7 +181,7 @@ class ScreeningRecord(Base):
         ),
         nullable=False,
     )
-    # MS-15: the outcome is PHI too — "failed" beside a member's name and a
+    # MS-18: the outcome is PHI too — "failed" beside a member's name and a
     # psychological evaluation says what the encrypted notes would. Stored as
     # ciphertext, so the database cannot filter or sort on it: readers load
     # rows and compare the decrypted value in Python, and the column refuses

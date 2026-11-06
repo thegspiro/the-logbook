@@ -102,7 +102,7 @@ searched.
 > | `notes`          | `EncryptedText` | Free-text notes                                     |
 > | `status`         | `EncryptedEnum` | The outcome: passed, failed, waived, scheduled, …   |
 >
-> `status` (since 2026-11-05, MS-15) reads back as the `ScreeningStatus` enum,
+> `status` (since 2026-11-05, MS-18) reads back as the `ScreeningStatus` enum,
 > but the database can no longer compare it, because the same value encrypts
 > differently on every write. The column type refuses a SQL comparison outright
 > (`TypeError`), so code that needs to filter by status loads the rows and

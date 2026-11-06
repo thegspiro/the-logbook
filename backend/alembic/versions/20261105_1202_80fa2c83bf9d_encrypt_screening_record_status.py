@@ -1,4 +1,4 @@
-"""Encrypt the status of a screening record at rest (MS-15)
+"""Encrypt the status of a screening record at rest (MS-18)
 
 ``screening_records.status`` says how a fitness-for-duty screening came out.
 The provider, results and notes beside it were already AES-256-GCM ciphertext

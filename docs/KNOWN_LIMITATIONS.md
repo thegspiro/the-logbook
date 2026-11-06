@@ -1,6 +1,6 @@
 # Known Limitations & Open Decisions
 
-## Medical Screening — What Is Still Plaintext at Rest (MS-15, 2026-11-05)
+## Medical Screening — What Is Still Plaintext at Rest (MS-18, 2026-11-05)
 
 **Decided 2026-11-04: encrypt the status first.** `screening_records.status` is
 now AES-256-GCM ciphertext (`EncryptedEnum`, migration `80fa2c83bf9d`), so a

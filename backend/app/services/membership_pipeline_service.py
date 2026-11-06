@@ -2429,7 +2429,7 @@ class MembershipPipelineService:
                         )
                     )
                 )
-                # The status is ciphertext (MS-15), so the cleared results are
+                # The status is ciphertext (MS-18), so the cleared results are
                 # picked here rather than in the query.
                 cleared = (ScreeningStatus.PASSED, ScreeningStatus.COMPLETED)
                 passed_types = {

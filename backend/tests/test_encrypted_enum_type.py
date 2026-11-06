@@ -1,6 +1,6 @@
 """``EncryptedEnum``: an enum column stored as AES-256-GCM ciphertext.
 
-Built for ``screening_records.status`` (MS-15): a dump of the table must not say
+Built for ``screening_records.status`` (MS-18): a dump of the table must not say
 which member *failed* a fitness-for-duty screening. The Python value stays the
 enum, so the code that compares statuses is unchanged; the database can no
 longer compare the column at all, because the same status encrypts differently

@@ -1,4 +1,4 @@
-"""``screening_records.status`` is ciphertext at rest (MS-15, owner decision 2026-11-04).
+"""``screening_records.status`` is ciphertext at rest (MS-18, owner decision 2026-11-04).
 
 The provider, results and notes were already encrypted, but the status beside
 them was a plain ENUM, so a dump of the table still read "Jordan Avery —
