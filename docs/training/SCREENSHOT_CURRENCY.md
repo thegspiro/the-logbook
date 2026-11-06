@@ -244,7 +244,9 @@ code:
   inactivity banner (seen 2026-11-04 in `15-46`). **Fixed**: a card with the
   box insets its content; `15-46` re-shot 2026-11-05.
 - A case manager without manage rights sees **Send now**, which guide 15 says
-  needs `prospective_members.manage`.
+  needs `prospective_members.manage`. **Guide corrected** 2026-11-05: the app
+  lets the applicant's case manager send and resend on purpose
+  (`ProspectAccess.can_work`); guide 15 now says so.
 
 ## Queued by the October 31 – November 1 documentation pass
 
