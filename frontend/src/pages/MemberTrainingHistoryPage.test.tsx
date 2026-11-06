@@ -170,6 +170,14 @@ describe('MemberTrainingHistoryPage officer corrections', () => {
   });
 });
 
+// A scheduled record has no completion date; the key is removed rather than
+// set to undefined, which exactOptionalPropertyTypes rejects.
+const undated = (r: TrainingRecord): TrainingRecord => {
+  const copy = { ...r };
+  delete copy.completion_date;
+  return copy;
+};
+
 const statValue = (label: string): string | null | undefined =>
   screen.getByText(label, { selector: 'p' }).nextElementSibling?.textContent;
 
@@ -185,14 +193,15 @@ describe('MemberTrainingHistoryPage training period', () => {
       record({ id: 'r-2026', course_name: 'Pump Ops 2026', completion_date: '2026-01-10', hours_completed: 6 }),
       record({ id: 'r-dec', course_name: 'Ladders Dec 2025', completion_date: '2025-12-05', hours_completed: 6.5 }),
       record({ id: 'r-old', course_name: 'Hazmat 2019', completion_date: '2019-04-02', hours_completed: 92 }),
-      record({
-        id: 'r-next',
-        course_name: 'Driver Course',
-        status: 'scheduled',
-        completion_date: undefined,
-        scheduled_date: '2026-12-02',
-        hours_completed: 0,
-      }),
+      undated(
+        record({
+          id: 'r-next',
+          course_name: 'Driver Course',
+          status: 'scheduled',
+          scheduled_date: '2026-12-02',
+          hours_completed: 0,
+        })
+      ),
     ]);
     mockPermissions = [];
   });
