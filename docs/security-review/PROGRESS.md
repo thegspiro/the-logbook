@@ -16,6 +16,38 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4107](https://github.com/thegspiro/the-logbook/pull/4107)** (branch
+`claude/security-review-inventory`) —
+Feature 11 (Inventory), pass 15, a watchdog pickup (the dedicated
+`/loop 30m /security-review` session remains unreachable; this iteration
+was handed Step 0/1 already done — no open `claude/security-review-*` PR,
+row 11 the next `⬜`). PR #4103 (Feature 10, Documents & legal, pass 15)
+had already merged — row 10's ✅ rides along uncommitted from that merge,
+recorded here rather than with a PR of its own. Baseline `6f0a2d577` (PR
+#3919's merge, pass 14). Real delta: owner decisions W44-2/3/4 (item
+creation/barcode put-away count as a sighting; a barcode now stamped on
+every created item; only an active storage area is ever named) and a new
+locked, org-scoped duplicate-category-name guard — all already built and
+tested by owner-direct work, re-verified rather than re-derived. 198
+routes re-enumerated by AST, unchanged. 0 application-code defects found;
+INV-22 (the one standing finding) re-confirmed OPEN, unaffected. See
+`docs/security-review/INV-11-inventory.md`'s **Pass 15** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 734
+revisions, single head; `check_route_permissions.py --strict` — 302 routes,
+0 errors/warnings; scoped backend suite (`-k "inventory or label or nfc or
+kiosk or vendor or encrypt"`) — 2450 passed, 1 environment-only skip
+(`py_vapid`); standing guard suites — 162 passed; `npm run typecheck` — 0
+errors; `npm run lint` — 0 warnings; `npx vitest run src/modules/inventory`
+— 1899 passed (127 files).
+
+Row 11 → ✅ (pending this PR's merge); next is Feature 12 (Facilities) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 15, PR #4103, merged), preserved for history</summary>
+
 _None._ PR [#4103](https://github.com/thegspiro/the-logbook/pull/4103)
 (Feature 10, Documents & legal, pass 15, branch
 `claude/security-review-documents-legal-p15`) merged. Not docs-only — it
@@ -24,6 +56,8 @@ carried a real delta, so it already has its own **Log** entry below (dated
 `list_pull_requests` (state `open`): 0 results for a
 `claude/security-review-*` head. Rotation row 10 is ✅. Next is Feature 11
 (Inventory) — the next `⬜` row.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 10, Documents & legal, pass 15, PR #4103, merged), preserved for history</summary>
