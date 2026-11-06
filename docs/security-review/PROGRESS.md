@@ -16,6 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4098](https://github.com/thegspiro/the-logbook/pull/4098)** (branch
+`claude/security-review-medical-screening-p15`) —
+Feature 09 (Medical screening, PHI), pass 15, a watchdog pickup (the
+dedicated `/loop 30m /security-review` session remains unreachable; this
+iteration was handed Step 0/1 already done — no open
+`claude/security-review-*` PR, row 09 the next `⬜`). Baseline `6a1ad334f`
+(PR #3911's merge, pass 14) to head: 7 non-merge commits touch this
+feature's declared scope, each read in full. Real delta, already built and
+verified by other sessions, re-verified rather than re-derived: MS-14 (no
+finer-grained read tier under `.view`) and the `grace_period_days` half of
+MS-16 are now resolved (new `medical_screening.view_details` permission,
+evidence-based grant migration, one shared `screening_deadline()` rule);
+`screening_records.status` moved behind a new `EncryptedEnum` column
+(AES-256-GCM, refuses SQL comparison) — legacy-plaintext read path,
+idempotent migration, every former SQL filter on `status` moved to Python,
+all confirmed correct. **Fixed:** the encryption commit minted a new
+finding labelled `MS-15`, colliding with the already-assigned, still-open
+`MS-15` (compliance roster loads every record unbounded, pass 8, OPEN,
+unchanged). Renamed to `MS-18` (confirmed free repo-wide) across the ~17
+places the collision reached, leaving every genuine `MS-15` (roster)
+reference untouched. All 16 routes re-enumerated by AST, unchanged. 0
+application-code defects found in this feature's own code. See
+`docs/security-review/MS-09-medical-screening.md`'s **Pass 15** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 730
+revisions, single head; `check_route_permissions.py --strict` — 302 routes,
+0 errors/warnings; scoped backend suite (`-k "medical_screening or
+medical_screen or screening"`) — 230 passed, 1 environment-only skip
+(`py_vapid`); `npm run typecheck` — 0 errors; `npm run lint` — 0 warnings;
+`npx vitest run src/modules/medical-screening` — 78 passed (14 files).
+
+Row 09 → ✅ (pending this PR's merge); next is Feature 10 (Documents &
+legal) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 16, PR #4087, merged), preserved for history</summary>
+
 _None._ PR [#4087](https://github.com/thegspiro/the-logbook/pull/4087)
 (Feature 08, Membership pipeline, pass 16, branch
 `claude/security-review-membership-pipeline-p16`) merged 2026-11-05T22:31:08-05:00.
@@ -24,6 +63,8 @@ entry below (dated 2026-11-05) rather than a fresh one here. Confirmed via a
 fresh `list_pull_requests` (state `open`): 0 results for a
 `claude/security-review-*` head. Rotation row 08 is ✅. Next is Feature 09
 (Medical screening, PHI) — the next `⬜` row.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 08, Membership pipeline, pass 16, PR #4087, merged), preserved for history</summary>
