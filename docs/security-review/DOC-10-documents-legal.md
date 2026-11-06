@@ -60,8 +60,8 @@ reviewed in full:
 - `986b38c2086b` ("Refile facility files filed outside the facility
   folders", FAC-13) — Feature 12 (Facilities)-owned, but writes directly to
   `document_folders` and `documents`. Reviewed for this feature's own
-  invariants: guards on `{document_folders, documents, facilities} ⊆
-tables` before running at all (pitfall #26), is per-organization
+  invariants: guards on `{document_folders, documents, facilities}` all
+  existing before running at all (pitfall #26), is per-organization
   (`_Tree` keyed by `organization_id`), records every move and every folder
   it creates in a dedicated `facility_outside_refile_backfill` table created
   only when there is something to record, and the downgrade replays those
@@ -70,13 +70,13 @@ tables` before running at all (pitfall #26), is per-organization
   Feature 12's own row for the Facilities-side decisions it embodies.
 
 No other migration in this window touches `document_folders`, `documents`,
-`legal_documents`, or `legal_document_revisions` (`git diff --name-only
-2b1884237..HEAD -- backend/alembic/versions`, 83 files, grepped for the four
-table names).
+`legal_documents`, or `legal_document_revisions`
+(`git diff --name-only 2b1884237..HEAD -- backend/alembic/versions`, 83
+files, grepped for the four table names).
 
 **Routes: 26, up from 24** (re-enumerated by AST, not grepped:
-`documents.py` 17 — up from 15, the two new routes above — `station_
-documents.py` 2, `legal_documents.py` 7, identical to pass 14). The
+`documents.py` 17 — up from 15, the two new routes above —
+`station_documents.py` 2, `legal_documents.py` 7, identical to pass 14). The
 unauthenticated `api/public/legal.py` route (1, unchanged, already named as
 intentionally public with its own rate limit since pass 1) is tracked
 separately from this running total per this file's established convention.
@@ -135,9 +135,10 @@ holding whatever lets them open the minutes record directly.
   `refresh_only` re-render) stamps it. This matches the migration's own
   stated intent (`a42466630e74`'s docstring) and was checked against the
   code, not assumed from the docstring.
-- **Audit logging on download, ids only.** `download_published_minutes_
-attachment` logs `document_id`/`minutes_id`/`attachment_id` — no file
-  name, no title, no PHI/PII (CHECKLIST.md §5).
+- **Audit logging on download, ids only.**
+  `download_published_minutes_attachment` logs
+  `document_id`/`minutes_id`/`attachment_id` — no file name, no title, no
+  PHI/PII (CHECKLIST.md §5).
 - **Frontend matches the backend's own gate, not a re-derivation** (pitfall
   #29): `PublishedMinutesAttachments` is mounted whenever
   `doc.source_type === 'meeting_minutes'` — a cheap display hint, not an
