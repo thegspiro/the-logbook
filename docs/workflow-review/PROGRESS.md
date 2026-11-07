@@ -171,8 +171,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   second set of October minutes. The "link survives a clear" half of W50-60 is
   still read from code only.
 
-- **Integrations, a later pass** — the `integration.connected` and
-  `integration.disconnected` audit rows carry no IP address (W75).
 - **Member administration, a later pass** — most audit rows `users.py`
   writes for an administrator's action on a member carry no IP address or
   user agent: `account_unlocked`, the password, MFA and passkey resets,
@@ -195,6 +193,18 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### Lead — Integration audit rows record the caller — 2026-11-06
+
+Read from code and tested over HTTP, not re-driven. Fixed (W75-5): the
+`integration.connected`, `integration.updated` and `integration.disconnected`
+audit rows had empty IP and browser columns, so the trail could not say where
+a connection change came from. All three now record `get_client_ip` and the
+user agent, as the MCP key rows written during a disconnect already did. A new
+test in `test_integrations_lifecycle_integration.py` connects, updates and
+disconnects iCalendar and checks all three rows; it failed before the fix.
+Gate: flake8, black, isort and mypy clean on the changed files; 646
+integration and MCP tests pass.
 
 ### Lead — A scan while clocked in elsewhere names the running session — 2026-11-06
 
