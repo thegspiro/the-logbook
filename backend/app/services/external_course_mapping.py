@@ -201,6 +201,44 @@ async def mapped_course_id(
     return str(course_id) if course_id else None
 
 
+def course_hours(
+    credit_hours: Optional[float], duration_hours: Optional[float]
+) -> Optional[float]:
+    """Hours a library course credits, or None when it credits none.
+
+    Read the way a session of the course reads it: Credit Hours when the
+    officer filled it in, otherwise the course's duration.
+    """
+    hours = credit_hours if credit_hours is not None else duration_hours
+    if hours is None or hours <= 0:
+        return None
+    return round(float(hours), 2)
+
+
+async def mapped_course_hours(
+    db: AsyncSession, course_id: Optional[str], organization_id: str
+) -> Optional[float]:
+    """Hours the library course credits, or None (see ``course_hours``)."""
+    if not course_id:
+        return None
+    row = (
+        await db.execute(
+            select(TrainingCourse.credit_hours, TrainingCourse.duration_hours)
+            .where(TrainingCourse.id == course_id)
+            .where(TrainingCourse.organization_id == organization_id)
+        )
+    ).one_or_none()
+    if row is None:
+        return None
+    return course_hours(row[0], row[1])
+
+
+# Hours are FLOAT (single precision) in MySQL, so 1.1 read back is not 1.1 as
+# a double. Matching "the hours a course credited" needs a tolerance; every
+# value written here is rounded to two places, so half a hundredth suffices.
+_HOURS_TOLERANCE = 0.005
+
+
 async def course_category_id(
     db: AsyncSession, course_id: str, organization_id: str
 ) -> Optional[str]:
@@ -267,6 +305,52 @@ async def apply_course_mapping(
         else (TrainingRecord.course_id.is_(None))
         | (TrainingRecord.course_id == previous)
     )
+
+    # Hours follow the course onto records whose completion the provider
+    # reported with no hours (Target Solutions sends 0 for a policy
+    # acknowledgment). Run before the course link moves, so it reaches the
+    # same records the link does. A record keeps its hours when the provider
+    # reported some, or when they are neither zero nor what the previous
+    # mapping credited — those were set by an officer, not by a mapping.
+    # Unmapping, or mapping to a course with no hours, takes a credit the
+    # previous course gave back to zero, as a fresh import would have it.
+    previous_hours = await mapped_course_hours(db, previous, mapping.organization_id)
+    new_hours = await mapped_course_hours(
+        db, internal_course_id, mapping.organization_id
+    )
+    if previous_hours != new_hours:
+        hourless_import = (
+            select(ExternalTrainingImport.training_record_id)
+            .where(ExternalTrainingImport.provider_id == mapping.provider_id)
+            .where(ExternalTrainingImport.organization_id == mapping.organization_id)
+            .where(
+                ExternalTrainingImport.external_course_id == mapping.external_course_id
+            )
+            .where(ExternalTrainingImport.training_record_id.isnot(None))
+            .where(
+                func.coalesce(ExternalTrainingImport.credit_hours, 0) <= 0,
+                func.coalesce(ExternalTrainingImport.duration_minutes, 0) <= 0,
+            )
+        )
+        credited_by_mapping: ColumnElement[bool] = TrainingRecord.hours_completed <= 0
+        if previous_hours is not None:
+            credited_by_mapping = credited_by_mapping | (
+                func.abs(TrainingRecord.hours_completed - previous_hours)
+                < _HOURS_TOLERANCE
+            )
+        await db.execute(
+            update(TrainingRecord)
+            .where(TrainingRecord.organization_id == mapping.organization_id)
+            .where(TrainingRecord.id.in_(hourless_import))
+            .where(unchanged_link)
+            .where(credited_by_mapping)
+            .values(
+                hours_completed=new_hours or 0.0,
+                credit_hours=new_hours,
+            )
+            .execution_options(synchronize_session=False)
+        )
+
     result = await db.execute(
         update(TrainingRecord)
         .where(TrainingRecord.organization_id == mapping.organization_id)

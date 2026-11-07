@@ -1462,7 +1462,12 @@ authenticated by `key` and `secret` query parameters, returning a CSV.
 
 - **Mapping.** `Transcript ID` is the external record id (a re-sync updates the
   same import in place); `Duration (hours)` fills both `credit_hours` and
-  `duration_minutes`; members are matched on the `Email` column against the
+  `duration_minutes`. A completion reported with no hours (a policy
+  acknowledgment arrives as 0) is credited its mapped library course's Credit
+  Hours, or the course's duration when Credit Hours is blank; hours the report
+  does carry always win. Mapping or re-mapping a course applies the same rule
+  to records already imported from it, leaving alone any record whose hours an
+  officer changed. Members are matched on the `Email` column against the
   member's email, case- and whitespace-insensitive, skipping deleted members. An
   unmatched member stays in the user mappings and is auto-matched on a later
   sync unless an officer has set or cleared that mapping by hand.

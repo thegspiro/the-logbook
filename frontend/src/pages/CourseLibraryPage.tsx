@@ -312,8 +312,8 @@ const CourseFormModal: React.FC<CourseFormModalProps> = ({ isOpen, course, categ
                 aria-describedby="course-credit-hours-help"
               />
               <p id="course-credit-hours-help" className="text-theme-text-muted mt-1 text-xs">
-                The training hours a member is credited with. Left blank, a session from this course credits its
-                duration.
+                The training hours a member is credited with, by a session of this course or by a mapped provider
+                completion that reports no hours. Left blank, the course credits its duration.
               </p>
             </div>
           </div>
