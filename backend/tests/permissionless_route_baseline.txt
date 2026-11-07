@@ -211,6 +211,11 @@ app/api/v1/endpoints/finance.py::list_budget_request_proposal_options
 app/api/v1/endpoints/finance.py::list_budget_requests
 app/api/v1/endpoints/finance.py::list_budget_transactions
 app/api/v1/endpoints/finance.py::list_my_budget_request_lines
+# My Dues (2026-11-06, owner decision 2026-11-01 "My dues view"): every member
+# may read their own dues. list_my_dues filters MemberDues on the caller's own
+# user_id and organization_id, so a member sees only their own rows and one
+# with none gets an empty list.
+app/api/v1/endpoints/finance.py::list_my_dues_endpoint
 app/api/v1/endpoints/finance.py::list_my_budgets
 app/api/v1/endpoints/finance.py::submit_budget_request
 app/api/v1/endpoints/finance.py::update_budget_category_charge_access

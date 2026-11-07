@@ -60,6 +60,38 @@ def _json_safe_amounts(data: Dict[str, Any]) -> Dict[str, Any]:
     return {**data, "suggested_amounts": [str(amount) for amount in amounts]}
 
 
+def pledge_share(pledge_id: Any, amount: Any, payment_status: Any) -> Decimal:
+    """What a donation counts toward its pledge: its amount once completed.
+
+    A pending, failed or refunded gift counts for nothing, as it counts for
+    nothing toward its campaign's total.
+    """
+    status = getattr(payment_status, "value", payment_status)
+    if not pledge_id or status != PaymentStatus.COMPLETED.value:
+        return Decimal(0)
+    return Decimal(amount)
+
+
+def pledge_status_after(
+    status: PledgeStatus, fulfilled: Decimal, pledged: Decimal
+) -> PledgeStatus:
+    """A pledge's status once a linked donation moved its fulfilled amount.
+
+    Paid in full is fulfilled. A cancelled pledge stays cancelled whatever
+    arrives, and an overdue one stays overdue until it is paid in full — both
+    are an officer's call, not the arithmetic's. Otherwise partial once
+    anything is in, pending when nothing is (a fulfilled pledge whose gift
+    was refunded goes back to one of these).
+    """
+    if status == PledgeStatus.CANCELLED:
+        return status
+    if fulfilled >= pledged:
+        return PledgeStatus.FULFILLED
+    if status == PledgeStatus.OVERDUE:
+        return status
+    return PledgeStatus.PARTIAL if fulfilled > 0 else PledgeStatus.PENDING
+
+
 class FundraisingService:
     """Service for fundraising management"""
 
@@ -422,8 +454,25 @@ class FundraisingService:
             if donation.donor_id:
                 await self._lock_donor(donation.donor_id, organization_id)
 
+        # The pledge is locked before the insert for the same reason, and
+        # whatever the payment status: it has to be validated either way.
+        pledges = await self._lock_pledges([donation.pledge_id], organization_id)
+        if donation.pledge_id:
+            self._check_pledge_link(
+                pledges.get(str(donation.pledge_id)), donation.donor_id, True
+            )
+            donation.pledge_id = str(donation.pledge_id)
+
         self.db.add(donation)
         await self.db.flush()
+
+        if donation.pledge_id:
+            self._move_pledge(
+                pledges[donation.pledge_id],
+                pledge_share(
+                    donation.pledge_id, donation.amount, donation.payment_status
+                ),
+            )
 
         # Update campaign current_amount
         if donation.campaign_id and donation.payment_status == PaymentStatus.COMPLETED:
@@ -459,6 +508,12 @@ class FundraisingService:
         # current_amount and donor's total_donated stay overstated.
         old_campaign_id = donation.campaign_id
         old_donor_id = donation.donor_id
+        old_pledge_id = donation.pledge_id
+        old_share = (
+            pledge_share(old_pledge_id, donation.amount, donation.payment_status)
+            if old_pledge_id
+            else Decimal(0)
+        )
 
         # Validate any reassigned FK is in-org before applying — the recompute
         # below fetches and writes the referenced campaign/donor.
@@ -483,8 +538,33 @@ class FundraisingService:
             if did is not None:
                 await self._lock_donor(did, organization_id)
 
+        new_pledge_id = data["pledge_id"] if "pledge_id" in data else old_pledge_id
+        new_pledge_id = str(new_pledge_id) if new_pledge_id else None
+        pledges = await self._lock_pledges(
+            [old_pledge_id, new_pledge_id], organization_id
+        )
+        if new_pledge_id:
+            self._check_pledge_link(
+                pledges.get(new_pledge_id),
+                data["donor_id"] if "donor_id" in data else old_donor_id,
+                new_pledge_id != old_pledge_id,
+            )
+            if "pledge_id" in data:
+                data = {**data, "pledge_id": new_pledge_id}
+
         apply_updates(donation, data, skip={"organization_id", "id"})
         await self.db.flush()
+
+        # Take the gift's old share off the pledge it counted toward and put
+        # its new share on the one it counts toward now — the same pledge
+        # when only the amount or the payment status moved.
+        if old_pledge_id and old_pledge_id in pledges:
+            self._move_pledge(pledges[old_pledge_id], -old_share)
+        if new_pledge_id:
+            self._move_pledge(
+                pledges[new_pledge_id],
+                pledge_share(new_pledge_id, donation.amount, donation.payment_status),
+            )
 
         # Recalculate aggregates for both the old and new campaign/donor.
         for cid in {
@@ -604,6 +684,60 @@ class FundraisingService:
         tz = await resolve_scheduling_timezone(self.db, organization_id)
         donor.first_donation_date = local_date(row[2], tz) if row[2] else None
         donor.last_donation_date = local_date(row[3], tz) if row[3] else None
+
+    # ------------------------------------------------------------------
+    # Donations paying toward a pledge (owner decision, 2026-11-01)
+    # ------------------------------------------------------------------
+
+    async def _lock_pledges(
+        self, pledge_ids: List[Any], organization_id: str
+    ) -> Dict[str, Pledge]:
+        """Lock the pledges a donation write moves, in id order.
+
+        A pledge's fulfilled amount is moved by a delta, read then written
+        (pitfall #27): two gifts recorded together against one pledge must
+        not both start from the same figure. Locked in a fixed order so two
+        writes touching the same two pledges cannot deadlock. Only this
+        department's pledges are returned; a foreign id is simply absent.
+        """
+        ids = sorted({str(pid) for pid in pledge_ids if pid})
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(Pledge)
+            .where(Pledge.id.in_(ids), Pledge.organization_id == organization_id)
+            .order_by(Pledge.id)
+            .with_for_update()
+        )
+        return {str(p.id): p for p in result.scalars().all()}
+
+    @staticmethod
+    def _check_pledge_link(
+        pledge: Optional[Pledge], donor_id: Any, newly_linked: bool
+    ) -> None:
+        if pledge is None:
+            raise ValueError("Pledge not found")
+        if newly_linked and pledge.status in (
+            PledgeStatus.FULFILLED,
+            PledgeStatus.CANCELLED,
+        ):
+            status = getattr(pledge.status, "value", pledge.status)
+            raise ValueError(
+                f"That pledge is {status}; a donation can only "
+                "pay toward an open pledge"
+            )
+        if pledge.donor_id and str(pledge.donor_id) != str(donor_id or ""):
+            raise ValueError("That pledge was made by a different donor")
+
+    @staticmethod
+    def _move_pledge(pledge: Pledge, delta: Decimal) -> None:
+        if not delta:
+            return
+        fulfilled = max(Decimal(0), Decimal(pledge.fulfilled_amount or 0) + delta)
+        pledge.fulfilled_amount = fulfilled
+        pledge.status = pledge_status_after(
+            pledge.status, fulfilled, Decimal(pledge.pledged_amount)
+        )
 
     # ------------------------------------------------------------------
     # Pledges

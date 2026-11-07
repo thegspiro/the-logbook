@@ -23,12 +23,41 @@ is the member cannot submit another (``assert_no_overdue``). The deadline is
 fixed at the safe harbor rather than configurable: unlike the substantiation
 days, a department has no reason to be stricter about a return the member
 could make at any time.
+
+**The periodic statement method** (Treas. Reg. 1.62-2(g)(2)(ii); owner
+decision 2026-11-01) is the IRS's other safe harbor: the department gives the
+member a statement at least quarterly of what is still outstanding, and the
+member has 120 days from the statement to account for it or return it. Here
+a statement falls on the last day of each calendar quarter, on the
+department's calendar, after the check -- never on the day of the check
+itself -- and is emailed to the member (``cash_advance_statements``). What
+the first statement lists is everything not yet accounted for, so once 120
+days have passed since it, anything still outstanding was on it: the
+advance's deadline is the 120th day after its first statement, through the
+end of that day. Later statements remind; they do not move the deadline.
+
+The department chooses the method (``advance_return_method`` in
+``app/utils/finance_settings.py``, fixed-date by default). An advance takes
+the method in force when its check is issued (``CheckRequest.
+advance_return_method``) and keeps it, so a change of setting moves no
+deadline already running. ``AdvanceBalance.due_at`` is the one place either
+deadline is worked out; overdue, the block on another advance, the advance
+page and the advances report all read it (CLAUDE.md pitfall #29).
+
+**On a member's behalf** (owner decision 2026-11-01): a ``finance.manage``
+holder may raise an advance for another member. The member is still
+``requested_by`` -- the holder, who owes it, is emailed its statements and is
+blocked while it is overdue -- and the officer is ``raised_by``. Separation of
+duties then binds both: neither may approve it or issue its check
+(``assert_not_raiser`` beside the existing requester rule).
 """
 
+from calendar import monthrange
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Iterable, Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,6 +69,14 @@ from app.models.finance import (
     ExpenseReport,
     ExpenseReportStatus,
 )
+from app.models.user import Organization, User
+from app.services.separation_of_duties import SeparationOfDutiesError
+from app.utils.finance_settings import (
+    ADVANCE_FIXED_DATE,
+    ADVANCE_PERIODIC_STATEMENT,
+    ADVANCE_RETURN_METHODS,
+)
+from app.utils.org_timezone import local_date, local_day_start_utc, scheduling_timezone
 
 ZERO = Decimal("0.00")
 
@@ -63,6 +100,45 @@ def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+def advance_method(stored: Optional[str]) -> str:
+    """An advance's method; null (every advance issued before the setting
+    existed) and anything unrecognised read as fixed-date."""
+    return stored if stored in ADVANCE_RETURN_METHODS else ADVANCE_FIXED_DATE
+
+
+def _quarter_end(year: int, quarter: int) -> date:
+    month = quarter * 3
+    return date(year, month, monthrange(year, month)[1])
+
+
+def first_statement_date(issued_on: date) -> date:
+    """The first calendar-quarter end after the day the check was issued."""
+    quarter = (issued_on.month - 1) // 3 + 1
+    end = _quarter_end(issued_on.year, quarter)
+    if end > issued_on:
+        return end
+    return (
+        _quarter_end(issued_on.year + 1, 1)
+        if quarter == 4
+        else _quarter_end(issued_on.year, quarter + 1)
+    )
+
+
+def statement_dates(issued_on: date, through: date) -> list[date]:
+    """Every statement date from the first through ``through`` inclusive."""
+    dates: list[date] = []
+    current = first_statement_date(issued_on)
+    while current <= through:
+        dates.append(current)
+        current = first_statement_date(current)
+    return dates
+
+
+def statement_due_date(statement_date: date) -> date:
+    """The last day to account for or return what a statement lists."""
+    return statement_date + timedelta(days=ADVANCE_RETURN_DAYS)
+
+
 @dataclass
 class AdvanceBalance:
     advance_id: str
@@ -72,16 +148,44 @@ class AdvanceBalance:
     accounted: Decimal = ZERO
     returned: Decimal = ZERO
     now: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    method: str = ADVANCE_FIXED_DATE
+    # The department's calendar, for the periodic method's quarter ends.
+    tz: ZoneInfo = field(default_factory=lambda: ZoneInfo("UTC"))
 
     @property
     def outstanding(self) -> Decimal:
         return self.amount - self.accounted - self.returned
 
     @property
+    def first_statement(self) -> Optional[date]:
+        """The periodic method's first statement date; None on fixed-date."""
+        if self.issued_at is None or self.method != ADVANCE_PERIODIC_STATEMENT:
+            return None
+        return first_statement_date(local_date(self.issued_at, self.tz))
+
+    @property
     def due_at(self) -> Optional[datetime]:
         if self.issued_at is None:
             return None
+        first = self.first_statement
+        if first is not None:
+            # Through the end of the 120th day after the first statement, on
+            # the department's calendar: the last second of that day, so the
+            # date shown and the moment it turns overdue are the same day.
+            return local_day_start_utc(
+                statement_due_date(first) + timedelta(days=1), self.tz
+            ) - timedelta(seconds=1)
         return _aware(self.issued_at) + timedelta(days=ADVANCE_RETURN_DAYS)
+
+    def statement_dates(self) -> list[date]:
+        """The periodic method's statements due so far, and the next one."""
+        first = self.first_statement
+        if first is None or self.issued_at is None:
+            return []
+        today = local_date(self.now, self.tz)
+        dates = statement_dates(local_date(self.issued_at, self.tz), today)
+        upcoming = first_statement_date(dates[-1]) if dates else first
+        return dates + [upcoming]
 
     @property
     def overdue(self) -> bool:
@@ -100,10 +204,59 @@ class OverdueAdvanceError(ValueError):
     def __init__(self, numbers: list[str]) -> None:
         shown = ", ".join(numbers[:3]) + (" and others" if len(numbers) > 3 else "")
         super().__init__(
-            f"Cash advance {shown} is more than {ADVANCE_RETURN_DAYS} days old and "
-            "not fully accounted for. Submit an expense report for it or return "
-            "what was not spent before requesting another advance."
+            f"Cash advance {shown} is past its return deadline and not fully "
+            "accounted for. Submit an expense report for it or return what was "
+            "not spent before requesting another advance."
         )
+
+
+class AdvanceHolderError(ValueError):
+    """The member an advance is raised for cannot hold one."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "A cash advance can be raised only for a current member of this "
+            "department."
+        )
+
+
+def assert_not_raiser(
+    actor_id: Optional[str], raised_by: Optional[str], *, action: str
+) -> None:
+    """Refuse the officer who raised an advance for a member the approval or
+    issue of it: raising and approving one's own disbursement is the conflict
+    the requester rule exists to stop, and raising it for somebody else does
+    not remove it. Unattributed either way is no known conflict, as in
+    ``assert_different_person``."""
+    if not actor_id or not raised_by or str(actor_id) != str(raised_by):
+        return
+    raise SeparationOfDutiesError(
+        f"You raised this cash advance for the member, so you cannot {action} "
+        "it. Separation of duties requires someone else to."
+    )
+
+
+async def assert_holder_eligible(db: AsyncSession, org_id: str, holder_id: str) -> None:
+    """The member an advance is raised for is a current member of this
+    department (CLAUDE.md pitfalls #14c and #32)."""
+    found = await db.execute(
+        select(User.id).where(
+            User.id == holder_id,
+            User.organization_id == org_id,
+            User.is_active,
+        )
+    )
+    if found.scalar_one_or_none() is None:
+        raise AdvanceHolderError()
+
+
+async def advance_calendar(db: AsyncSession, org_id: str) -> ZoneInfo:
+    """The department's calendar, which the periodic method's quarters
+    follow; the same zone ``org_today`` answers in."""
+    org = (
+        await db.execute(select(Organization).where(Organization.id == org_id))
+    ).scalar_one_or_none()
+    return scheduling_timezone(org)
 
 
 async def advance_balances(
@@ -136,6 +289,10 @@ async def advance_balances(
         query = query.where(CheckRequest.requested_by == member_id)
     query = query.order_by(CheckRequest.check_date, CheckRequest.id)
     moment = now or datetime.now(timezone.utc)
+    advances = list((await db.execute(query)).scalars())
+    if not advances:
+        return {}
+    tz = await advance_calendar(db, org_id)
     balances = {
         cr.id: AdvanceBalance(
             advance_id=cr.id,
@@ -143,11 +300,11 @@ async def advance_balances(
             amount=_money(cr.amount),
             issued_at=cr.check_date,
             now=moment,
+            method=advance_method(cr.advance_return_method),
+            tz=tz,
         )
-        for cr in (await db.execute(query)).scalars()
+        for cr in advances
     }
-    if not balances:
-        return balances
     ids = list(balances)
 
     accounted = (

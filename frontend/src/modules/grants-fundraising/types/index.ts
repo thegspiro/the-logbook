@@ -568,6 +568,8 @@ export interface Donation {
   organizationId: string;
   campaignId: string | null;
   donorId: string | null;
+  /** The pledge this gift pays toward; hidden on an anonymous gift from a view-only caller. */
+  pledgeId: string | null;
   amount: number;
   currency: string;
   donationDate: string;
@@ -600,6 +602,8 @@ export interface DonationCreatePayload {
   paymentStatus: 'pending' | 'completed' | 'failed' | 'refunded' | 'cancelled';
   campaignId?: string | undefined;
   donorId?: string | undefined;
+  /** An open pledge of the same donor; the backend moves its received amount and status. */
+  pledgeId?: string | undefined;
   donorName?: string | undefined;
   donorEmail?: string | undefined;
   isAnonymous: boolean;
@@ -651,8 +655,13 @@ export interface PledgeUpdatePayload {
   pledgedAmount: string;
   pledgeDate: string;
   dueDate: string | null;
-  fulfilledAmount: string;
-  status: PledgeStatus;
+  /**
+   * Sent only when the user changed it: a donation linked to the pledge moves
+   * these on the server, and echoing the values the dialog loaded with would
+   * undo a gift recorded while it was open.
+   */
+  fulfilledAmount?: string | undefined;
+  status?: PledgeStatus | undefined;
   notes: string | null;
   reminderEnabled: boolean;
 }

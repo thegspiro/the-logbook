@@ -45,6 +45,7 @@ from app.models.email_template import EmailTemplate
 from app.models.facilities import Facility
 from app.models.finance import (
     AdvanceReturn,
+    AdvanceStatement,
     ApprovalChain,
     ApprovalChainStep,
     ApprovalEmailStatus,
@@ -78,16 +79,25 @@ from app.models.finance import (
     PurchaseRequest,
     PurchaseRequestStatus,
     QuickBooksChartAccount,
+    QuickBooksPosting,
     check_request_needs_receipt,
 )
 from app.models.user import Organization, Position, User
 from app.services.cash_advances import (
     AdvanceNotSettleableError,
     advance_balances,
+    assert_holder_eligible,
     assert_no_overdue,
+    assert_not_raiser,
     assert_settleable,
     is_accounted_for,
     lock_advance,
+    statement_due_date,
+)
+from app.services.expense_mileage import (
+    has_trip_log,
+    load_mileage_rate,
+    settle_mileage_fields,
 )
 from app.services.expense_substantiation import describe_late, late_items
 from app.services.finance_approval_notifications import (
@@ -523,6 +533,28 @@ QB_IMPORT_MAX_ROWS = 999
 # A pending export younger than this holds off a second one. An export the
 # process died in the middle of stays pending; past this it no longer blocks.
 QB_EXPORT_IN_PROGRESS_WINDOW = timedelta(minutes=15)
+
+# The payments a QuickBooks Online connection posts live, as
+# quickbooks_postings.payment_type (app/services/quickbooks_sync_service.py).
+PAYMENT_PURCHASE = "purchase_request"
+PAYMENT_CHECK = "check_request"
+PAYMENT_REPORT = "expense_report"
+# A posting in one of these is QuickBooks' to record (or already recorded):
+# the CSV export leaves its payment out, or the books would hold it twice. A
+# failed posting created nothing in QuickBooks, so its payment may go in the
+# file; a superseded one already did.
+LIVE_POSTING_STATUSES = ("queued", "retrying", "posted")
+
+
+def live_posting_clause(org_id: str, payment_type: str, payment_column: Any) -> Any:
+    """True for a payment no live posting has claimed (see above)."""
+    return ~exists().where(
+        QuickBooksPosting.organization_id == org_id,
+        QuickBooksPosting.payment_type == payment_type,
+        QuickBooksPosting.payment_id == payment_column,
+        QuickBooksPosting.status.in_(LIVE_POSTING_STATUSES),
+    )
+
 
 # Appended to a voided check's request number to make its reversing entry's
 # Journal No: distinct from the original's, and recognisably tied to it.
@@ -1060,6 +1092,13 @@ class FinanceService:
         approved expense reports not yet paid and approved checks not yet
         issued. Drafts are not open items: they moved no money, and nothing
         submits them once the year is closing.
+
+        The year's cash advances still outstanding are listed too (owner
+        decision 2026-11-01), with ``blocks_lock`` false: a member may take
+        up to 120 days or more to account for one, a return moves no budget
+        figure and can be recorded after the lock, so the Treasurer is shown
+        what is still owed -- what may become wages on a W-2 -- without the
+        close waiting on it. Every other item blocks the lock.
         """
         fy = await self.get_fiscal_year(fy_id, org_id)
         if not fy:
@@ -1126,6 +1165,7 @@ class FinanceService:
                         "description": row[2],
                         "status": getattr(row[3], "value", row[3]),
                         "amount": row[4],
+                        "blocks_lock": True,
                     }
                 )
         # An amendment awaiting its second officer is open too: locking would
@@ -1168,6 +1208,45 @@ class FinanceService:
                     "description": reason,
                     "status": BudgetAmendmentStatus.PENDING.value,
                     "amount": amendment_amount,
+                    "blocks_lock": True,
+                }
+            )
+        items.extend(await self._outstanding_advance_items(fy.id, org_id))
+        return items
+
+    async def _outstanding_advance_items(self, fy_id: str, org_id: str) -> list[dict]:
+        """The year's issued advances not yet fully accounted for, oldest
+        first, at what is still outstanding (``advance_balances``, the same
+        figures as the advances report)."""
+        year_advances = (
+            await self.db.execute(
+                select(CheckRequest.id).where(
+                    CheckRequest.organization_id == org_id,
+                    CheckRequest.fiscal_year_id == fy_id,
+                    CheckRequest.is_advance.is_(True),
+                    CheckRequest.status == CheckRequestStatus.ISSUED,
+                )
+            )
+        ).scalars()
+        balances = await advance_balances(
+            self.db, org_id, advance_ids=list(year_advances)
+        )
+        owed = {k: b for k, b in balances.items() if b.outstanding > 0}
+        rows = await self._advance_rows(org_id, list(owed))
+        items = []
+        for advance_id, balance in owed.items():
+            if advance_id not in rows:
+                continue
+            cr, member = rows[advance_id]
+            items.append(
+                {
+                    "kind": "cash_advance",
+                    "entity_id": advance_id,
+                    "number": cr.request_number,
+                    "description": member or cr.payee_name,
+                    "status": "overdue" if balance.overdue else "outstanding",
+                    "amount": balance.outstanding,
+                    "blocks_lock": False,
                 }
             )
         return items
@@ -1198,7 +1277,11 @@ class FinanceService:
             raise ValueError(
                 f"{fy.name} can be locked only after its year-end close has " "begun."
             )
-        open_items = await self.list_open_items(fy.id, org_id)
+        open_items = [
+            item
+            for item in await self.list_open_items(fy.id, org_id)
+            if item["blocks_lock"]
+        ]
         if open_items:
             shown = ", ".join(item["number"] for item in open_items[:5])
             more = f" and {len(open_items) - 5} more" if len(open_items) > 5 else ""
@@ -3779,6 +3862,11 @@ class FinanceService:
             action="approve",
             record=record.entity_type.value.replace("_", " "),
         )
+        assert_not_raiser(
+            approver_id,
+            await self._entity_raiser_id(record.entity_type, record.entity_id, org_id),
+            action="approve",
+        )
 
         await self._take_late_acknowledgement(
             record.entity_type, record.entity_id, org_id, approver_id, acknowledge_late
@@ -3937,6 +4025,20 @@ class FinanceService:
                     "This request's requester and this step's approver are "
                     "the same person; self-approval is not allowed for this "
                     "step."
+                )
+            # The officer who raised an advance on a member's behalf is bound
+            # the same way (assert_not_raiser on the in-app path).
+            raiser_email = await self._entity_raiser_email(
+                record.entity_type, record.entity_id, org_id
+            )
+            if (
+                approver_email
+                and raiser_email
+                and approver_email == raiser_email.strip().lower()
+            ):
+                raise SeparationOfDutiesError(
+                    "This step's approver raised this cash advance for the "
+                    "member; self-approval is not allowed for this step."
                 )
 
         await self._take_late_acknowledgement(
@@ -4515,6 +4617,11 @@ class FinanceService:
             action="approve",
             record=entity_type.value.replace("_", " "),
         )
+        assert_not_raiser(
+            approver_id,
+            await self._entity_raiser_id(entity_type, entity_id, org_id),
+            action="approve",
+        )
         # A request held for a second approver cannot be completed by someone
         # who has already approved it, through its chain or here.
         people = await self._approvers_so_far(entity_type, entity, org_id)
@@ -4963,6 +5070,40 @@ class FinanceService:
         )
         requester_id: Optional[str] = result.scalar_one_or_none()
         return requester_id
+
+    async def _entity_raiser_id(
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
+    ) -> Optional[str]:
+        """The finance officer who raised a cash advance on a member's
+        behalf, if this is one; None for anything else."""
+        if entity_type != ApprovalEntityType.CHECK_REQUEST:
+            return None
+        raiser: Optional[str] = (
+            await self.db.execute(
+                select(CheckRequest.raised_by).where(
+                    CheckRequest.id == entity_id,
+                    CheckRequest.organization_id == org_id,
+                )
+            )
+        ).scalar_one_or_none()
+        return raiser
+
+    async def _entity_raiser_email(
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
+    ) -> Optional[str]:
+        """Email of the officer who raised an advance on a member's behalf,
+        for the token-approval path (see approve_by_token)."""
+        raiser_id = await self._entity_raiser_id(entity_type, entity_id, org_id)
+        if not raiser_id:
+            return None
+        email: Optional[str] = (
+            await self.db.execute(
+                select(User.email).where(
+                    User.id == raiser_id, User.organization_id == org_id
+                )
+            )
+        ).scalar_one_or_none()
+        return email
 
     async def _entity_creator_email(
         self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
@@ -5890,6 +6031,7 @@ class FinanceService:
         await self._assert_budget_open_for_new_charges(
             org_id, [item_data.get("budget_id") for item_data in line_items or []]
         )
+        await self._price_trip_logs(org_id, line_items or [])
         if kwargs.get("advance_id"):
             await assert_settleable(self.db, org_id, kwargs["advance_id"], submitted_by)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
@@ -5969,6 +6111,7 @@ class FinanceService:
         await self._assert_budget_open_for_new_charges(
             org_id, [kwargs.get("budget_id")]
         )
+        await self._price_trip_logs(org_id, [kwargs])
         item = ExpenseLineItem(expense_report_id=er_id, **kwargs)
         self.db.add(item)
         await self.db.flush()
@@ -5989,6 +6132,30 @@ class FinanceService:
         )
         er.total_amount = total_result.scalar_one()
         await self.db.flush()
+
+    async def _price_trip_logs(self, org_id: str, lines: list[dict]) -> None:
+        """Price each new line that carries a mileage trip log, in place, at
+        the department's current rate (app/services/expense_mileage.py), and
+        refuse a line with neither a log nor an amount and a date. The rate
+        and today are read only when some line has a log."""
+        logged = [line for line in lines if has_trip_log(line.get("mileage_trips"))]
+        for line in lines:
+            if not has_trip_log(line.get("mileage_trips")) and (
+                line.get("amount") is None or line.get("date_incurred") is None
+            ):
+                raise ValueError("Enter each line's amount and date")
+        if not logged:
+            return
+        rate = await load_mileage_rate(self.db, org_id)
+        today = await resolve_org_today(self.db, org_id)
+        for line in logged:
+            settle_mileage_fields(
+                line,
+                expense_type=line.get("expense_type"),
+                trips=line["mileage_trips"],
+                rate=rate,
+                today=today,
+            )
 
     async def _draft_line(
         self,
@@ -6033,11 +6200,43 @@ class FinanceService:
             await assert_may_charge(
                 self.db, org_id, requester_id, kwargs.get("budget_id")
             )
+        await self._settle_edited_trip_log(item, kwargs, org_id)
         apply_updates(item, kwargs)
         await self.db.flush()
         await self._recalculate_report_total(er)
         await self.db.refresh(item, ["created_at"])
         return item
+
+    async def _settle_edited_trip_log(
+        self, item: ExpenseLineItem, fields: dict, org_id: str
+    ) -> None:
+        """Keep an edited line's amount and date the price of its trip log.
+
+        A new log is priced at today's rate; a line edited around the log it
+        already has keeps the rate it was priced at, so editing a description
+        does not reprice a claim. Removing the log leaves the amount for the
+        member to change, and the line then needs a receipt.
+        """
+        expense_type = fields.get("expense_type") or item.expense_type
+        if "mileage_trips" in fields:
+            trips = fields["mileage_trips"]
+            if not has_trip_log(trips):
+                fields["mileage_trips"] = None
+                fields["mileage_rate"] = None
+                return
+            rate = await load_mileage_rate(self.db, org_id)
+        else:
+            trips = item.mileage_trips
+            if not has_trip_log(trips):
+                return
+            rate = item.mileage_rate
+        settle_mileage_fields(
+            fields,
+            expense_type=expense_type,
+            trips=trips,
+            rate=rate,
+            today=await resolve_org_today(self.db, org_id),
+        )
 
     async def delete_expense_line_item(
         self,
@@ -6056,6 +6255,98 @@ class FinanceService:
         # The loaded collection still holds the deleted line until reloaded.
         await self.db.refresh(er, ["line_items", "updated_at"])
         return er
+
+    async def share_line_receipt(
+        self,
+        er_id: str,
+        item_id: str,
+        from_item_id: str,
+        org_id: str,
+        requester_id: Optional[str] = None,
+    ) -> tuple[ExpenseLineItem, str]:
+        """Point a line at the receipt already uploaded to another line of the
+        same report: one hotel folio covering the room, the parking and the
+        meals (owner decision 2026-11-01). Returns the line and the document.
+
+        Only within one report, so the receipt is the member's own and the
+        department's; a receipt on another member's report, or another
+        report of the member's, is not offered. Who may and when follows an
+        upload: the requester while the report is a draft or just submitted,
+        the finance office until it is denied or cancelled.
+
+        The document is share-locked before the report, Documents before
+        Finance (the canonical lock order in documents_service). It is read
+        unlocked first to learn which; if an upload replaces the source's
+        receipt before the report's lock is granted, the line takes the new
+        one, whose foreign key check locks it, and a delete meets that with
+        NOWAIT rather than a wait.
+        """
+        if item_id == from_item_id:
+            raise ValueError("Choose a different line's receipt")
+        receipt_id = await self.db.scalar(
+            select(ExpenseLineItem.receipt_document_id)
+            .join(ExpenseReport, ExpenseReport.id == ExpenseLineItem.expense_report_id)
+            .where(
+                ExpenseLineItem.id == from_item_id,
+                ExpenseLineItem.expense_report_id == er_id,
+                ExpenseReport.organization_id == org_id,
+            )
+        )
+        await lock_documents_for_reference(self.db, org_id, [receipt_id])
+        er = await self.get_expense_report(
+            er_id, org_id, restrict_to_user=requester_id, for_update=True
+        )
+        if not er:
+            _raise_not_found("Expense report", requester_id)
+        if requester_id is not None:
+            open_to_change = er.status in (
+                ExpenseReportStatus.DRAFT,
+                ExpenseReportStatus.SUBMITTED,
+            )
+        else:
+            open_to_change = er.status not in (
+                ExpenseReportStatus.DENIED,
+                ExpenseReportStatus.CANCELLED,
+            )
+        if not open_to_change:
+            raise ValueError("A receipt can't be attached to a report in this status")
+        await self.require_year_accepts(
+            er.fiscal_year_id, org_id, action="new" if requester_id else "finish"
+        )
+        lines = {line.id: line for line in er.line_items}
+        item = lines.get(item_id)
+        source = lines.get(from_item_id)
+        if item is None or source is None:
+            raise FinanceEntityNotFoundError("Expense line not found")
+        if not source.receipt_document_id:
+            raise ValueError("That line has no receipt to share yet")
+        item.receipt_document_id = source.receipt_document_id
+        await self.db.flush()
+        return item, source.receipt_document_id
+
+    async def detach_line_receipt(
+        self,
+        er_id: str,
+        item_id: str,
+        org_id: str,
+        requester_id: Optional[str] = None,
+    ) -> tuple[ExpenseLineItem, Optional[str]]:
+        """Take the receipt off one line while the report is a draft, leaving
+        every other line that uses it, and the document itself, as they are.
+        Returns the line and the document it held.
+
+        Draft only: submitting checks that every line has its receipt, and
+        taking one off afterwards would leave a submitted line without the
+        evidence it was submitted with. Clearing the reference writes no
+        foreign key, so only the report is locked.
+        """
+        _er, item = await self._draft_line(er_id, item_id, org_id, requester_id)
+        previous = item.receipt_document_id
+        if previous is None:
+            raise ValueError("This line has no receipt to remove")
+        item.receipt_document_id = None
+        await self.db.flush()
+        return item, previous
 
     async def cancel_expense_report(
         self, er_id: str, org_id: str, requester_id: Optional[str] = None
@@ -6162,7 +6453,13 @@ class FinanceService:
         await self._assert_budget_open_for_new_charges(
             org_id, [item.budget_id for item in er.line_items]
         )
-        missing = [item for item in er.line_items if not item.receipt_document_id]
+        # A mileage line's trip log stands in for its receipt (owner decision
+        # 2026-11-01; app/services/expense_mileage.py).
+        missing = [
+            item
+            for item in er.line_items
+            if not item.receipt_document_id and not has_trip_log(item.mileage_trips)
+        ]
         if missing:
             named = ", ".join(f'"{item.description}"' for item in missing[:3])
             more = f" and {len(missing) - 3} more" if len(missing) > 3 else ""
@@ -6769,8 +7066,24 @@ class FinanceService:
         requested_by: str,
         *,
         charger_id: Optional[str] = None,
+        raised_by: Optional[str] = None,
         **kwargs,
     ) -> CheckRequest:
+        """Raise a check request for ``requested_by``.
+
+        ``raised_by`` is a finance officer raising a cash advance on that
+        member's behalf (the endpoint checks ``finance.manage``): the member
+        is the advance's holder and must be a current member of the
+        department; the officer is recorded beside them.
+        """
+        if raised_by is not None and str(raised_by) == str(requested_by):
+            raised_by = None
+        if raised_by is not None:
+            if not kwargs.get("is_advance"):
+                raise ValueError(
+                    "Only a cash advance can be raised on another member's behalf."
+                )
+            await assert_holder_eligible(self.db, org_id, requested_by)
         if kwargs.get("is_advance"):
             _refuse_advance_charges(kwargs)
         await self._validate_finance_fks(org_id, kwargs)
@@ -6783,6 +7096,7 @@ class FinanceService:
         cr = CheckRequest(
             organization_id=org_id,
             requested_by=requested_by,
+            raised_by=raised_by,
             **kwargs,
         )
         await self._flush_with_unique_number(
@@ -6939,6 +7253,7 @@ class FinanceService:
         assert_different_person(
             acted_by, cr.requested_by, action="issue", record="check request"
         )
+        assert_not_raiser(acted_by, cr.raised_by, action="issue")
         if cr.status != CheckRequestStatus.APPROVED:
             raise ValueError("Only approved requests can have checks issued")
         await self.require_year_accepts(cr.fiscal_year_id, org_id, action="finish")
@@ -6953,6 +7268,12 @@ class FinanceService:
         cr.status = CheckRequestStatus.ISSUED
         cr.check_number = check_number
         cr.check_date = check_date or datetime.now(timezone.utc)
+        if cr.is_advance:
+            # The method in force now is the advance's for good, so a later
+            # change of setting cannot move a deadline already running.
+            cr.advance_return_method = (
+                await load_finance_settings(self.db, org_id)
+            ).advance_return_method
         if cr.expense_report_id:
             # The check is how the report is paid: the report's lines are the
             # spend, and the check (with no budget line) adds none of its own.
@@ -7088,11 +7409,62 @@ class FinanceService:
             "check_number": cr.check_number,
             "issued_at": cr.check_date,
             "due_at": balance.due_at,
+            "return_method": balance.method,
+            "first_statement_date": balance.first_statement,
+            "raised_by": cr.raised_by,
             "accounted": balance.accounted,
             "returned": balance.returned,
             "outstanding": balance.outstanding,
             "overdue": balance.overdue,
         }
+
+    async def _advance_statements(self, org_id: str, balance) -> list[dict]:
+        """The periodic method's statements: those emailed, with what each
+        listed, and while anything is outstanding those due so far and the
+        next one. Empty on the fixed-date method."""
+        if balance.first_statement is None:
+            return []
+        sent = {
+            row.statement_date: row
+            for row in (
+                await self.db.execute(
+                    select(AdvanceStatement).where(
+                        AdvanceStatement.organization_id == org_id,
+                        AdvanceStatement.advance_id == balance.advance_id,
+                    )
+                )
+            ).scalars()
+        }
+        dates = set(sent)
+        if balance.outstanding > 0:
+            dates.update(balance.statement_dates())
+        today = balance.now.astimezone(balance.tz).date()
+        return [
+            {
+                "statement_date": day,
+                "due_date": statement_due_date(day),
+                "outstanding": sent[day].outstanding if day in sent else None,
+                "emailed_at": sent[day].emailed_at if day in sent else None,
+                "upcoming": day > today,
+            }
+            for day in sorted(dates)
+        ]
+
+    async def list_advance_holders(self, org_id: str) -> list[dict]:
+        """Every current member a cash advance can be raised for, by name --
+        the set ``assert_holder_eligible`` admits."""
+        result = await self.db.execute(
+            select(User).where(User.organization_id == org_id, User.is_active)
+        )
+        holders = [
+            {
+                "id": user.id,
+                "name": user.display_name or user.username or "",
+                "legal_name": user.full_name or user.username or "",
+            }
+            for user in result.scalars()
+        ]
+        return sorted(holders, key=lambda h: (h["name"].casefold(), h["id"]))
 
     async def list_advances(
         self,
@@ -7123,6 +7495,16 @@ class FinanceService:
         if balance is None:
             raise FinanceEntityNotFoundError("Cash advance not found")
         cr, member = (await self._advance_rows(org_id, [advance_id]))[advance_id]
+        raiser_name = None
+        if cr.raised_by:
+            raiser = await self.db.execute(
+                select(
+                    User.first_name, User.last_name, User.preferred_name, User.username
+                ).where(User.id == cr.raised_by, User.organization_id == org_id)
+            )
+            row = raiser.one_or_none()
+            if row is not None:
+                raiser_name = format_display_name(row[0], row[1], row[2]) or row[3]
         reports = await self.db.execute(
             select(ExpenseReport)
             .where(
@@ -7141,6 +7523,8 @@ class FinanceService:
         )
         return {
             **self._advance_summary(cr, member, balance),
+            "raised_by_name": raiser_name,
+            "statements": await self._advance_statements(org_id, balance),
             "reports": [
                 {
                     "id": er.id,
@@ -7281,7 +7665,22 @@ class FinanceService:
         _refuse_unusable_accounts(
             kwargs.get("qb_income_account"), kwargs.get("qb_deposit_account")
         )
-        schedule = DuesSchedule(organization_id=org_id, created_by=created_by, **kwargs)
+        from app.services.dues_terms import clean_membership_types
+
+        if "applies_to_membership_types" in kwargs:
+            kwargs["applies_to_membership_types"] = clean_membership_types(
+                kwargs["applies_to_membership_types"]
+            )
+        # A schedule created from now on has its grace period, late fee,
+        # fiscal year and membership types in effect (owner decision
+        # 2026-11-01); see app/services/dues_terms.py.
+        schedule = DuesSchedule(
+            organization_id=org_id,
+            created_by=created_by,
+            terms_effective_at=datetime.now(timezone.utc),
+            **kwargs,
+        )
+        await self._check_dues_fiscal_year(schedule, org_id, generating=False)
         self.db.add(schedule)
         await self.db.flush()
         await self.db.refresh(schedule, ["created_at", "updated_at"])
@@ -7297,16 +7696,66 @@ class FinanceService:
         _refuse_unusable_accounts(
             kwargs.get("qb_income_account"), kwargs.get("qb_deposit_account")
         )
+        from app.services.dues_terms import clean_membership_types
+
+        if "applies_to_membership_types" in kwargs:
+            kwargs["applies_to_membership_types"] = clean_membership_types(
+                kwargs["applies_to_membership_types"]
+            )
         apply_updates(schedule, kwargs)
+        # Saving a schedule from before the 2026-11-01 decision puts its
+        # stored terms into effect: the edit form now shows them, so the
+        # Treasurer saving it has seen what they are. A later save leaves the
+        # instant alone — moving it would excuse late fees already due.
+        if schedule.terms_effective_at is None:
+            schedule.terms_effective_at = datetime.now(timezone.utc)
+        await self._check_dues_fiscal_year(schedule, org_id, generating=False)
         await self.db.flush()
         await self.db.refresh(schedule, ["updated_at"])
         return schedule
 
+    async def _check_dues_fiscal_year(
+        self, schedule: DuesSchedule, org_id: str, *, generating: bool
+    ) -> None:
+        """Refuse a schedule whose due date lies outside its fiscal year, and
+        generation against a year that is closing or locked.
+
+        Only for a schedule whose terms are in effect; a legacy schedule's
+        stored year is not read (see app/services/dues_terms.py).
+        """
+        from app.services.dues_terms import due_date_outside_year, terms_apply
+
+        if not terms_apply(schedule) or not schedule.fiscal_year_id:
+            return
+        year = await self.get_fiscal_year(schedule.fiscal_year_id, org_id)
+        if year is None:
+            return
+        if generating and year.is_locked:
+            raise ValueError(
+                f"{year.name} is locked; dues can no longer be billed against it."
+            )
+        if generating and year.status == FiscalYearStatus.CLOSED:
+            raise ValueError(
+                f"{year.name} is closing for year-end: dues can no longer be "
+                "generated against it."
+            )
+        tz = await resolve_scheduling_timezone(self.db, org_id)
+        problem = due_date_outside_year(schedule.due_date, year, tz)
+        if problem:
+            raise ValueError(problem)
+
     async def generate_member_dues(self, schedule_id: str, org_id: str) -> int:
-        """Bulk-create member_dues records for all eligible members"""
+        """Bulk-create member_dues records for every member the schedule bills.
+
+        Every active member, unless the schedule's terms are in effect and
+        name membership types (``dues_terms.bills_member``).
+        """
+        from app.services.dues_terms import bills_member
+
         schedule = await self.get_dues_schedule(schedule_id, org_id)
         if not schedule:
             raise ValueError("Dues schedule not found")
+        await self._check_dues_fiscal_year(schedule, org_id, generating=True)
 
         # Get eligible members
         query = select(User).where(
@@ -7331,6 +7780,8 @@ class FinanceService:
 
         count = 0
         for user in users:
+            if not bills_member(schedule, user):
+                continue
             # Check if dues already exist for this user + schedule
             existing = await self.db.execute(
                 select(MemberDues).where(
@@ -8038,17 +8489,20 @@ class FinanceService:
             PurchaseRequest.status == PurchaseRequestStatus.PAID,
             PurchaseRequest.paid_at >= date_start,
             PurchaseRequest.paid_at <= date_end,
+            live_posting_clause(org_id, PAYMENT_PURCHASE, PurchaseRequest.id),
         ]
         cr_filters = [
             CheckRequest.organization_id == org_id,
             CheckRequest.check_date >= date_start,
             CheckRequest.check_date <= date_end,
+            live_posting_clause(org_id, PAYMENT_CHECK, CheckRequest.id),
         ]
         er_filters = [
             ExpenseReport.organization_id == org_id,
             ExpenseReport.status == ExpenseReportStatus.PAID,
             ExpenseReport.paid_at >= date_start,
             ExpenseReport.paid_at <= date_end,
+            live_posting_clause(org_id, PAYMENT_REPORT, ExpenseReport.id),
             # A report a reimbursement check paid goes out as that check's
             # entry, so a void can reverse it (finance_reimbursement.py).
             ~exists().where(

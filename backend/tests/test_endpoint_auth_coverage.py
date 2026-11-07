@@ -79,6 +79,11 @@ ALLOWLISTED_PUBLIC = {
     # single-use pending attempt stored on the integration.
     ("google_calendar_oauth.py", "google_calendar_oauth_callback"),
     ("outlook_calendar_oauth.py", "outlook_calendar_oauth_callback"),
+    # QuickBooks Online: Intuit redirects the browser here, possibly after the
+    # session lapsed. Same three bindings (signed state, nonce cookie, single-use
+    # pending attempt on the connection), and the Treasurer must still hold
+    # finance.manage (quickbooks_sync_service.complete_connect).
+    ("quickbooks_online.py", "quickbooks_oauth_callback"),
 }
 
 BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

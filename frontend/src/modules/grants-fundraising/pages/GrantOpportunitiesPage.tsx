@@ -1,8 +1,14 @@
 /**
  * Grant Opportunities Page
  *
- * Searchable library of grant opportunities with category filtering,
- * deadline urgency indicators, and pre-loaded federal programs.
+ * Searchable library of grant opportunities with category filtering and
+ * deadline urgency indicators.
+ *
+ * AFG, SAFER, FP&S and the Firehouse Subs Foundation were once drawn here as
+ * four fixed "Federal Programs" cards nobody could start an application from.
+ * They are now each department's own opportunity records, seeded when the
+ * department is created (owner decision, 2026-11-01), so they are listed,
+ * edited, retired and started like any other.
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -19,14 +25,13 @@ import {
   ExternalLink,
   Shield,
   Loader2,
-  Landmark,
   Pencil,
   Archive,
   ArchiveRestore,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { grantsService } from '../services/api';
-import type { GrantOpportunity, GrantCategory } from '../types';
+import type { GrantOpportunity } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -49,49 +54,6 @@ const CATEGORY_COLORS: Record<string, string> = {
   community: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
   other: 'bg-theme-surface-secondary text-theme-text-secondary',
 };
-
-interface FederalProgram {
-  name: string;
-  code: string;
-  agency: string;
-  description: string;
-  category: GrantCategory;
-}
-
-const FEDERAL_PROGRAMS: FederalProgram[] = [
-  {
-    name: 'Assistance to Firefighters Grant (AFG)',
-    code: 'AFG',
-    agency: 'FEMA',
-    description:
-      'Provides funding for critically needed resources to equip and train emergency personnel, enhancing their capabilities to protect the public and reduce firefighter injuries.',
-    category: 'equipment',
-  },
-  {
-    name: 'Staffing for Adequate Fire and Emergency Response (SAFER)',
-    code: 'SAFER',
-    agency: 'FEMA',
-    description:
-      'Provides funding to help fire departments increase or maintain the number of trained firefighters available in their communities.',
-    category: 'staffing',
-  },
-  {
-    name: 'Fire Prevention & Safety (FP&S)',
-    code: 'FP&S',
-    agency: 'FEMA',
-    description:
-      'Supports projects that enhance the safety of the public and firefighters from fire and related hazards through prevention and safety activities.',
-    category: 'prevention',
-  },
-  {
-    name: 'Firehouse Subs Public Safety Foundation',
-    code: 'FIREHOUSE_SUBS',
-    agency: 'Firehouse Subs Foundation',
-    description:
-      'Provides funding for life-saving equipment, prevention education, scholarships, and continued training for first responders.',
-    category: 'equipment',
-  },
-];
 
 /** Returns urgency info based on how close the deadline is. */
 function getDeadlineUrgency(
@@ -293,32 +255,6 @@ export const GrantOpportunitiesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Federal Programs Section */}
-      <div>
-        <div className="mb-3 flex items-center gap-2">
-          <Landmark className="text-theme-text-muted h-5 w-5" />
-          <h2 className="text-theme-text-primary text-lg font-semibold">Federal Programs</h2>
-        </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {FEDERAL_PROGRAMS.map((program) => (
-            <div key={program.code} className="card p-4">
-              <div className="mb-2 flex items-start justify-between">
-                <div>
-                  <h3 className="text-theme-text-primary font-semibold">{program.name}</h3>
-                  <p className="text-theme-text-secondary text-xs">{program.agency}</p>
-                </div>
-                <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[program.category] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
-                >
-                  {CATEGORY_LABELS[program.category] ?? program.category}
-                </span>
-              </div>
-              <p className="text-theme-text-secondary text-sm">{program.description}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Opportunities Grid */}
       <div>
         <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">All Opportunities</h2>
@@ -376,7 +312,11 @@ export const GrantOpportunitiesPage: React.FC = () => {
                   <div className="mb-2 flex items-center gap-2 text-sm">
                     <Calendar className="text-theme-text-muted h-4 w-4 shrink-0" />
                     <span className={urgency.color}>
-                      {opp.deadlineDate ? formatDate(opp.deadlineDate, tz) : 'Rolling deadline'}
+                      {opp.deadlineDate
+                        ? formatDate(opp.deadlineDate, tz)
+                        : opp.deadlineType === 'recurring'
+                          ? 'Recurring deadline'
+                          : 'Rolling deadline'}
                     </span>
                     {urgency.isUrgent && (
                       <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-400">

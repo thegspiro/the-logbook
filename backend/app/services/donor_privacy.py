@@ -28,7 +28,8 @@ from app.schemas.grant import DonationResponse, DonorResponse
 MANAGE_PERMISSION = "fundraising.manage"
 
 # Cleared on an anonymous donation for a view-only caller.
-DONATION_IDENTITY_FIELDS = ("donor_name", "donor_email", "donor_id")
+# The pledge names its donor, so the link is identity too.
+DONATION_IDENTITY_FIELDS = ("donor_name", "donor_email", "donor_id", "pledge_id")
 
 # Cleared on an anonymous donor's record for a view-only caller. first_name/
 # last_name are Optional on the response (W69-6: an organization donor may

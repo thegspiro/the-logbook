@@ -129,8 +129,14 @@ Recommended crontab (add to host or container cron):
 # Daily at 8:10 AM — remind budget-line owners before a draft year's request deadline
 10 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=budget_request_reminders
 
+# Daily at 8:15 AM — email the Treasurer when a fiscal year's start or year-end close is due
+15 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=fiscal_year_due_reminders
+
 # Daily at 8:20 AM — remind about grant compliance tasks and pledges coming due
 20 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=grant_reminders
+
+# Daily at 8:25 AM — email quarterly statements for cash advances on the periodic method
+25 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=advance_statements
 -----------------------------------------------------
 """
 
@@ -346,13 +352,24 @@ SCHEDULE = {
     "budget_request_reminders": {
         "description": (
             "Email budget-line owners who still owe a request for a draft "
-            "fiscal year, 7 days and 1 day before its request deadline (once "
-            "per member, deadline and reminder — safe to run more than once a "
-            "day)"
+            "fiscal year, on the department's reminder days before its request "
+            "deadline (7 and 1 unless set), with a bell entry too if the "
+            "department turned those on (once per member, deadline and "
+            "reminder — safe to run more than once a day)"
         ),
         "frequency": "daily",
         "recommended_time": "08:10",
         "cron": "10 8 * * *",
+    },
+    "fiscal_year_due_reminders": {
+        "description": (
+            "Email the Treasurers when an adopted fiscal year reaches its "
+            "start date or the active one passes its end date (once per "
+            "Treasurer, year and date — safe to run more than once a day)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "08:15",
+        "cron": "15 8 * * *",
     },
     "evaluation_due_notices": {
         "description": (
@@ -377,6 +394,18 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "08:20",
         "cron": "20 8 * * *",
+    },
+    "advance_statements": {
+        "description": (
+            "Email the holder of each outstanding cash advance on the "
+            "periodic-statement method its quarterly statement, once the "
+            "quarter has ended on the department's calendar (once per advance "
+            "and quarter, unique in advance_statements — safe to run more "
+            "than once a day)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "08:25",
+        "cron": "25 8 * * *",
     },
     "prospect_attendance_advance": {
         "description": (
@@ -606,6 +635,12 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "quickbooks_sync": {
+        "description": "Post paid purchase requests, issued checks and paid expense reports to each connected QuickBooks Online company as Purchases, retrying failures with backoff (one posting per payment and Intuit's requestid, so a second run posts nothing twice; no-op unless QBO_CLIENT_ID, QBO_CLIENT_SECRET and QBO_REDIRECT_URI are set)",
+        "frequency": "every 5 minutes",
+        "recommended_time": "*/5 * * * *",
+        "cron": "*/5 * * * *",
+    },
     "calendar_sync": {
         "description": "Publish department events to each connected Google Calendar or Outlook integration's calendar: create, update and delete what changed, retrying failures with backoff (no-op unless CALENDAR_SYNC_ENABLED)",
         "frequency": "every 5 minutes",
@@ -617,6 +652,18 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
+    },
+    "dues_late_fees": {
+        "description": "Charge a dues schedule's late fee, once, on member dues still unpaid after the due date plus the grace period (schedules saved since 2026-11-01 only)",
+        "frequency": "daily",
+        "recommended_time": "06:00",
+        "cron": "0 6 * * *",
+    },
+    "dues_reminders": {
+        "description": "Email members whose dues fall due within a week, and once when they become overdue (optional 'Your dues' email kind; at most once per dues record and kind)",
+        "frequency": "daily",
+        "recommended_time": "09:00",
+        "cron": "0 9 * * *",
     },
     "mark_overdue_maintenance": {
         "description": "Flag incomplete apparatus/facility maintenance past its due date as overdue (the stored flag is otherwise never recomputed over time)",
@@ -7317,6 +7364,31 @@ async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "mark_overdue_dues", "marked_overdue": count}
 
 
+async def run_dues_late_fees(db: AsyncSession) -> Dict[str, Any]:
+    """Charge each overdue dues record its schedule's late fee, once. Daily.
+
+    Owner decision 2026-11-01; the rule, and why a second run is a no-op, are
+    in ``app/services/dues_terms.py``.
+    """
+    from app.services.dues_terms import apply_late_fees
+
+    charged = await apply_late_fees(db)
+    return {"task": "dues_late_fees", "charged": charged}
+
+
+async def run_dues_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Email members whose dues are coming due or overdue. Daily.
+
+    Owner decision 2026-11-01; see ``app/services/dues_reminders.py``.
+    """
+    from app.services.dues_reminders import send_dues_reminders
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        return await send_dues_reminders(db_session, org)
+
+    return await _for_each_org(db, "dues_reminders", process)
+
+
 async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
     """Flag incomplete maintenance records past their due date as overdue.
 
@@ -7667,6 +7739,18 @@ async def run_budget_request_reminders(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "budget_request_reminders", send_deadline_reminders)
 
 
+async def run_fiscal_year_due_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Email the Treasurers when a fiscal year's start or close is due.
+
+    Email only (CLAUDE.md pitfall #18). Nothing is started or closed: each
+    is an officer's decision. The sent-log that makes a second run send
+    nothing is in ``finance_year_due_notifications.send_year_due_reminders``.
+    """
+    from app.services.finance_year_due_notifications import send_year_due_reminders
+
+    return await _for_each_org(db, "fiscal_year_due_reminders", send_year_due_reminders)
+
+
 async def run_grant_reminders(db: AsyncSession) -> Dict[str, Any]:
     """Remind about grant compliance tasks and pledges coming due.
 
@@ -7677,6 +7761,18 @@ async def run_grant_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.services.grant_reminder_notifications import send_grant_reminders
 
     return await _for_each_org(db, "grant_reminders", send_grant_reminders)
+
+
+async def run_advance_statements(db: AsyncSession) -> Dict[str, Any]:
+    """Email quarterly statements for cash advances on the periodic method.
+
+    Email only (CLAUDE.md pitfall #18). Which statement is due and the
+    unique row that makes a second run send nothing are in
+    ``cash_advance_statements.send_advance_statements``.
+    """
+    from app.services.cash_advance_statements import send_advance_statements
+
+    return await _for_each_org(db, "advance_statements", send_advance_statements)
 
 
 async def run_prospect_attendance_advance(db: AsyncSession) -> Dict[str, Any]:
@@ -8222,6 +8318,52 @@ async def run_calendar_sync(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_quickbooks_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Post due payments to each connected QuickBooks Online company.
+
+    Does nothing while the Intuit app is not configured. Each department runs
+    on its own (app.services.quickbooks_sync_service.run_for_organization),
+    so one department's failure neither undoes nor stops another's.
+    """
+    from app.models.finance import QuickBooksConnection
+    from app.services import quickbooks_online_client as qbo
+    from app.services.quickbooks_sync_service import (
+        CONNECTED,
+        run_for_organization,
+    )
+
+    if qbo.configured_credentials() is None:
+        return {"task": "quickbooks_sync", "skipped": "QuickBooks is not configured"}
+    result = await db.execute(
+        select(QuickBooksConnection.organization_id)
+        .join(Organization, Organization.id == QuickBooksConnection.organization_id)
+        .where(
+            QuickBooksConnection.status == CONNECTED,
+            Organization.active.isnot(False),
+        )
+    )
+    org_ids = [str(org_id) for org_id in result.scalars().all()]
+    posted = 0
+    failed_orgs = 0
+    for org_id in org_ids:
+        try:
+            counts = await run_for_organization(db, org_id)
+            posted += int(counts.get("posted", 0) or 0)
+        except Exception as e:
+            await db.rollback()
+            logger.opt(exception=True).warning(
+                "QuickBooks sync failed for org {}", org_id
+            )
+            await persist_task_error_log(org_id, "QuickBooks sync", e)
+            failed_orgs += 1
+    return {
+        "task": "quickbooks_sync",
+        "organizations": len(org_ids),
+        "posted": posted,
+        "failed": failed_orgs,
+    }
+
+
 # Task runner map
 async def run_election_lifecycle(db: AsyncSession) -> Dict[str, Any]:
     """Run election lifecycle transitions for every organization.
@@ -8298,7 +8440,10 @@ TASK_RUNNERS = {
     "external_training_auto_sync": run_external_training_auto_sync,
     "salesforce_auto_sync": run_salesforce_auto_sync,
     "calendar_sync": run_calendar_sync,
+    "quickbooks_sync": run_quickbooks_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
+    "dues_late_fees": run_dues_late_fees,
+    "dues_reminders": run_dues_reminders,
     "directory_account_departure_check": run_directory_account_departure_check,
     "google_workspace_attention_digest": run_google_workspace_attention_digest,
     "google_workspace_suspension_sync": run_google_workspace_suspension_sync,
@@ -8317,8 +8462,10 @@ TASK_RUNNERS = {
     "prospect_attendance_advance": run_prospect_attendance_advance,
     "prospect_follow_up_reminders": run_prospect_follow_up_reminders,
     "budget_request_reminders": run_budget_request_reminders,
+    "fiscal_year_due_reminders": run_fiscal_year_due_reminders,
     "evaluation_due_notices": run_evaluation_due_notices,
     "grant_reminders": run_grant_reminders,
+    "advance_statements": run_advance_statements,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -8341,6 +8488,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Every 5 minutes: the first retry of a failed calendar push is due 5
     # minutes after it (calendar_sync_service.RETRY_DELAYS).
     "calendar_sync": 300,
+    # Every 5 minutes: the first retry of a QuickBooks posting is due 5
+    # minutes after it fails (quickbooks_sync_service.RETRY_DELAYS).
+    "quickbooks_sync": 300,
     # Every 15 minutes
     "inventory_notifications": 900,
     "election_lifecycle": 900,
@@ -8390,6 +8540,12 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "rolling_recurrence_extend": 86400,
     "trainee_report_escalation": 86400,
     "mark_overdue_dues": 86400,
+    # Daily; the UPDATE requires late_fee_applied IS NULL, so a second run
+    # charges nothing (dues_terms.apply_late_fees).
+    "dues_late_fees": 86400,
+    # Daily; idempotent per dues record and kind through due_reminder_sent_at
+    # and overdue_reminder_sent_at (dues_reminders.send_dues_reminders).
+    "dues_reminders": 86400,
     # Checked daily; sends at most once a day per org, only while overdue.
     "directory_account_departure_check": 86400,
     "google_workspace_attention_digest": 86400,
@@ -8416,11 +8572,15 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "prospect_follow_up_reminders": 3600,
     # Daily; idempotent per (year, deadline, member, offset) through a sent-log.
     "budget_request_reminders": 86400,
+    # Daily; idempotent per (year, event, date, Treasurer) through a sent-log.
+    "fiscal_year_due_reminders": 86400,
     # Daily; idempotent per step through reminder_sent_at and
     # overdue_notice_sent_at (EvaluationNoticeService.send_due_notices).
     "evaluation_due_notices": 86400,
     # Daily; idempotent per (item, due date, reminder, member) through a sent-log.
     "grant_reminders": 86400,
+    # Daily; idempotent per (advance, quarter) through a unique row.
+    "advance_statements": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,

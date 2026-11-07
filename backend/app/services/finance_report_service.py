@@ -43,20 +43,23 @@ from app.models.finance import (
     BudgetCategory,
     CheckRequest,
     CheckRequestStatus,
+    DuesStatus,
     ExpenseLineItem,
     ExpenseReport,
     ExpenseReportStatus,
     FiscalYear,
     FunctionalClass,
+    MemberDues,
     PurchaseRequest,
     PurchaseRequestStatus,
 )
 from app.models.user import User
 from app.services.expense_substantiation import incurred_day
+from app.services.finance_service import dues_overdue_clause
 from app.services.functional_expenses import FunctionalClassifier
 from app.services.restricted_funds import fund_balances
 from app.utils.member_names import format_display_name
-from app.utils.org_timezone import resolve_scheduling_timezone
+from app.utils.org_timezone import local_date, resolve_scheduling_timezone
 
 ZERO = Decimal("0.00")
 
@@ -84,6 +87,16 @@ def _day_start(day: date, tz: ZoneInfo) -> datetime:
 
 def _money(value) -> Decimal:
     return Decimal(value or 0).quantize(Decimal("0.01"))
+
+
+def _check_period(start: date, end: date) -> None:
+    if end < start:
+        raise ValueError("The period's end must be on or after its start.")
+    if (end - start).days + 1 > MAX_REGISTER_DAYS:
+        raise ValueError(
+            f"This report covers at most {MAX_REGISTER_DAYS} days; "
+            "choose a shorter period."
+        )
 
 
 def _name(first, last, preferred, username) -> str:
@@ -566,6 +579,7 @@ class FinanceReportService:
                             "budget_line": lines,
                             "check_number": cr.check_number,
                             "amount": _money(cr.amount),
+                            "member_id": report.submitted_by,
                         }
                     )
                 if (
@@ -587,6 +601,7 @@ class FinanceReportService:
                             "budget_line": lines,
                             "check_number": cr.check_number,
                             "amount": -_money(cr.amount),
+                            "member_id": report.submitted_by,
                         }
                     )
                 continue
@@ -673,6 +688,7 @@ class FinanceReportService:
                     "budget_line": lines,
                     "check_number": None,
                     "amount": owed,
+                    "member_id": er.submitted_by,
                 }
             )
 
@@ -1103,6 +1119,255 @@ class FinanceReportService:
         for item in result.scalars():
             items.setdefault(item.expense_report_id, []).append(item)
         return items
+
+    # ------------------------------------------------------------------
+    # Expense summary by member (owner decision 2026-11-01)
+    # ------------------------------------------------------------------
+
+    async def expense_summary_by_member(
+        self, org_id: str, start: date, end: date
+    ) -> dict:
+        """What each member was reimbursed in the period.
+
+        Built from the payments register for the same period, never summed
+        separately (Pitfall #29): a member's figure is the register's
+        reimbursement rows paid to them -- an expense report paid directly,
+        or the check that paid it -- less any of those checks voided in the
+        period. So the report's total is the register's reimbursements, and
+        what a cash advance already covered is not counted again.
+        """
+        register = await self.payments_register(org_id, start, end)
+        by_member: dict[str, dict[str, Any]] = {}
+        for row in register["rows"]:
+            member_id = row.get("member_id")
+            if not member_id:
+                continue
+            entry = by_member.setdefault(
+                member_id, {"reports": set(), "voided": 0, "amount": ZERO}
+            )
+            entry["amount"] += row["amount"]
+            if row["kind"] == "expense_report":
+                entry["reports"].add(row["entity_id"])
+            else:
+                entry["voided"] += 1
+        names = await self._member_names(org_id, list(by_member))
+        rows = [
+            {
+                "member_id": member_id,
+                "member_name": names.get(member_id, "Unknown"),
+                "report_count": len(entry["reports"]),
+                "voided_checks": entry["voided"],
+                "amount": entry["amount"],
+            }
+            for member_id, entry in by_member.items()
+        ]
+        rows.sort(key=lambda r: (r["member_name"].lower(), r["member_id"]))
+        return {
+            "start": start,
+            "end": end,
+            "rows": rows,
+            "total": sum((r["amount"] for r in rows), ZERO),
+        }
+
+    # ------------------------------------------------------------------
+    # Dues delinquency (owner decision 2026-11-01)
+    # ------------------------------------------------------------------
+
+    async def dues_delinquency(self, org_id: str, start: date, end: date) -> dict:
+        """Dues falling due in the period, and the members now behind on them.
+
+        "Overdue" is the dues code's own rule, ``dues_overdue_clause`` -- the
+        one the dues screen, its summary and the daily task use -- so this
+        report cannot call a member delinquent whom the dues screen does not
+        (Pitfall #29). A partly paid record is not overdue under that rule
+        and is not listed. What a member owes on an overdue record is its
+        amount due less what was paid; a late fee the daily task charged is
+        already in the amount due (app/services/dues_terms.py) and is also
+        shown on its own.
+
+        The collection totals are ``FinanceService.get_dues_summary``'s
+        expected, collected, waived and outstanding, over the records due in
+        the period instead of one schedule's.
+        """
+        _check_period(start, end)
+        tz = await resolve_scheduling_timezone(self.db, org_id)
+        window = _Window(_day_start(start, tz), _day_start(end + timedelta(days=1), tz))
+        now = datetime.now(timezone.utc)
+        today = now.astimezone(tz).date()
+
+        in_period = and_(
+            MemberDues.organization_id == org_id,
+            MemberDues.due_date >= window.start,
+            MemberDues.due_date < window.end,
+        )
+        records = (
+            await self.db.execute(
+                select(
+                    MemberDues.amount_due,
+                    MemberDues.amount_paid,
+                    MemberDues.status,
+                ).where(in_period)
+            )
+        ).all()
+        expected = sum((Decimal(r.amount_due) for r in records), ZERO)
+        collected = sum((Decimal(r.amount_paid) for r in records), ZERO)
+        waived = sum(
+            (Decimal(r.amount_due) for r in records if r.status == DuesStatus.WAIVED),
+            ZERO,
+        )
+
+        member = aliased(User)
+        overdue = (
+            await self.db.execute(
+                select(
+                    MemberDues.user_id,
+                    MemberDues.amount_due,
+                    MemberDues.amount_paid,
+                    MemberDues.late_fee_applied,
+                    MemberDues.due_date,
+                    member.first_name,
+                    member.last_name,
+                    member.preferred_name,
+                    member.username,
+                )
+                .outerjoin(
+                    member,
+                    and_(
+                        member.id == MemberDues.user_id,
+                        member.organization_id == org_id,
+                    ),
+                )
+                .where(in_period, dues_overdue_clause(now))
+            )
+        ).all()
+        by_member: dict[str, dict[str, Any]] = {}
+        for row in overdue:
+            entry = by_member.setdefault(
+                row.user_id,
+                {
+                    "member_id": row.user_id,
+                    "member_name": _name(
+                        row.first_name, row.last_name, row.preferred_name, row.username
+                    ),
+                    "overdue_records": 0,
+                    "amount_overdue": ZERO,
+                    "late_fees": ZERO,
+                    "oldest_due": None,
+                },
+            )
+            entry["overdue_records"] += 1
+            entry["amount_overdue"] += _money(row.amount_due) - _money(row.amount_paid)
+            entry["late_fees"] += _money(row.late_fee_applied)
+            due_day = local_date(row.due_date, tz)
+            if entry["oldest_due"] is None or due_day < entry["oldest_due"]:
+                entry["oldest_due"] = due_day
+        rows = list(by_member.values())
+        for entry in rows:
+            entry["days_overdue"] = (today - entry["oldest_due"]).days
+        rows.sort(key=lambda r: (-r["amount_overdue"], r["member_name"].lower()))
+        return {
+            "start": start,
+            "end": end,
+            "as_of": today,
+            "expected": expected,
+            "collected": collected,
+            "waived": waived,
+            "outstanding": expected - collected - waived,
+            "members_overdue": len(rows),
+            "rows": rows,
+            "total_overdue": sum((r["amount_overdue"] for r in rows), ZERO),
+        }
+
+    # ------------------------------------------------------------------
+    # Purchase orders by vendor (owner decision 2026-11-01)
+    # ------------------------------------------------------------------
+
+    async def purchases_by_vendor(self, org_id: str, fiscal_year_id: str) -> dict:
+        """A fiscal year's purchase requests, totalled by vendor.
+
+        Only requests the department has agreed to: approved, ordered and
+        received ones are **open** at their estimate, the figure their
+        approval encumbered; paid ones are **paid** at what the payments
+        register shows for them (the actual amount, else the estimate).
+        A request bought by the member and claimed back on an expense report
+        (reimbursed) is paid too, at the same figure, since the vendor was
+        still paid for it. Drafts, pending, denied and cancelled requests
+        commit nothing and are left out.
+
+        Vendor names are typed freely, so they are grouped ignoring case and
+        surrounding spaces, under the spelling used most often.
+        """
+        year = await self._year(fiscal_year_id, org_id)
+        open_statuses = (
+            PurchaseRequestStatus.APPROVED,
+            PurchaseRequestStatus.ORDERED,
+            PurchaseRequestStatus.RECEIVED,
+        )
+        paid_statuses = (PurchaseRequestStatus.PAID, PurchaseRequestStatus.REIMBURSED)
+        result = await self.db.execute(
+            select(
+                PurchaseRequest.vendor,
+                PurchaseRequest.status,
+                PurchaseRequest.estimated_amount,
+                PurchaseRequest.actual_amount,
+            ).where(
+                PurchaseRequest.organization_id == org_id,
+                PurchaseRequest.fiscal_year_id == fiscal_year_id,
+                PurchaseRequest.status.in_(open_statuses + paid_statuses),
+            )
+        )
+        groups: dict[str, dict[str, Any]] = {}
+        for vendor, status, estimated, actual in result.all():
+            name = " ".join((vendor or "").split())
+            entry = groups.setdefault(
+                name.lower(),
+                {"spellings": {}, "orders": 0, "open": ZERO, "paid": ZERO},
+            )
+            entry["spellings"][name] = entry["spellings"].get(name, 0) + 1
+            entry["orders"] += 1
+            if status in paid_statuses:
+                entry["paid"] += _money(actual or estimated)
+            else:
+                entry["open"] += _money(estimated)
+        rows = []
+        for key, entry in groups.items():
+            spelling = (
+                max(sorted(entry["spellings"]), key=lambda s: entry["spellings"][s])
+                if key
+                else ""
+            )
+            rows.append(
+                {
+                    "vendor": spelling or None,
+                    "orders": entry["orders"],
+                    "open": entry["open"],
+                    "paid": entry["paid"],
+                    "total": entry["open"] + entry["paid"],
+                }
+            )
+        rows.sort(key=lambda r: (-r["total"], (r["vendor"] or "").lower()))
+        return {
+            "fiscal_year_id": year.id,
+            "fiscal_year_name": year.name,
+            "rows": rows,
+            "total_open": sum((r["open"] for r in rows), ZERO),
+            "total_paid": sum((r["paid"] for r in rows), ZERO),
+            "total": sum((r["total"] for r in rows), ZERO),
+        }
+
+    async def _member_names(self, org_id: str, user_ids: list[str]) -> dict[str, str]:
+        if not user_ids:
+            return {}
+        result = await self.db.execute(
+            select(
+                User.id,
+                User.first_name,
+                User.last_name,
+                User.preferred_name,
+                User.username,
+            ).where(User.organization_id == org_id, User.id.in_(sorted(user_ids)))
+        )
+        return {row.id: _name(*row[1:]) for row in result.all()}
 
 
 def _paid_by_check(org_id: str):

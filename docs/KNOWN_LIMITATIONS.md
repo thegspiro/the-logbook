@@ -2479,7 +2479,7 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 | **Compliance: reporting correctness & email abuse-surface polish**                                                                                                              | Partially resolved (LOW/MED)                                                                                                            | **Fixed:** the report email HTML now `html.escape`s the org name, `report_type`, and period label (was raw interpolation of user-controlled values — mail-client HTML/script injection); `report_type` is constrained to `monthly`/`annual` (was free-form, persisted + interpolated). **Still flagged:** report emailing accepts client-supplied recipients (external auditors are a legitimate case — **owner decision 2026-08-09: allow any recipient, but audit-log each send to a non-member address**; `_email_report` now calls `audit_external_recipients`, which writes an `external_recipient_send` audit event listing every out-of-org address); attestation history over-fetch is **resolved** — this row previously said it was still blocked on a deferred `audit_logs.organization_id` column; that column was added and the query updated on 2026-07-30 (`d07a51821`, "Add organization_id to the audit log with org-scoped reads"), and `get_attestation_history` (`compliance_officer_service.py`) has filtered `AuditLog.organization_id == str(organization_id)` directly in the query — not a global fetch with Python-side filtering — since before this row's own last edit; corrected here during the CMP-20 security-review pass 8 re-verification (2026-10-16); `records_with_certification` mislabel left as-is (ambiguous intent). (CS-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Compliance: "notify non-compliant members" / reminder-days settings were stored but never sent**                                                                              | ✅ Resolved 2026-10-11 (owner decision: build the daily email task — settings work as configured, email-first)                          | **Resolved per the owner's decision.** The daily `compliance_member_notices` scheduled task (`app/services/compliance_member_notices.py`, registered in `TASK_RUNNERS`/`TASK_INTERVALS_SECONDS`) reads both settings, each on its own: `notify_days_before_deadline` emails a member a reminder for each unmet requirement whose deadline (the end of its current compliance window, or the member's catch-up deadline) is that many days away — the most urgent begun window, so a missed run still sends; `notify_non_compliant_members` emails a member whose standing is `non_compliant` a notice listing what is unmet. Members are graded by the shared evaluator (`training_compliance.grade_org_members`, the same rules as `compute_org_compliance_tally`), so the emails agree with the dashboard and matrix. Email only (`EmailKind.TRAINING_REMINDERS`, honouring a member's opt-out unless the department requires it); idempotent through email-channel `NotificationLog` rows keyed by (requirement, deadline, offset) and by the unmet (requirement, window) set. The panel's "Not yet active" warning is gone. **Behaviour to know on upgrade:** a department whose saved configuration holds the suggested `[30, 14, 7]` starts sending reminders on the first run; clearing the list stops them. **Not changed:** `grace_period_days` is still not consulted by any grading (outside this decision; the configuration page says so). Tests: `tests/test_compliance_member_notices.py`. (CMP2-1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Finance: no separation of duties on terminal money movement**                                                                                                                 | ✅ Resolved (owner decision: same-person guard, no new role)                                                                            | **Resolved 2026-10-11 per the owner's decision — guard the same person on every disbursement, add no new role.** The request **approval step** calls the shared `assert_different_person` guard, so one person cannot both raise a purchase/check request and approve it. `mark_pr_paid`, `mark_expense_paid`, `issue_check` and `waive_dues` each compare the actor against the request's `requested_by` / the expense's `submitted_by` / the dues member and refuse on a match. **`record_dues_payment` now does the same** (`recorded_by` vs `dues.user_id`, refused before the ledger is touched), matching its storefront analogue `record_payment` and its sibling `waive_dues` on the same record — the gap OPS-8 recorded. `void_check` and `unwaive_dues` take no actor and are reversals that move money _away_ from the actor, so they are correctly unguarded. **Accepted, by decision:** there is no distinct `finance.disburse` permission, so this is self-dealing prevention rather than three-way separation — a `finance.manage` holder can still execute an already-approved payment that somebody else raised. The owner chose this over a new role because a small department would need a second holder of it. A treasurer paying their own dues must have another `finance.manage` holder record it. Tests: `tests/test_dues_payment_guards.py::TestRecordingYourOwnDuesIsRefused`, `tests/test_money_separation_of_duties.py`. (FIN-4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| **Finance: dues administration has no UI — every write is API-only**                                                                                                            | ✅ Resolved (owner decision, 2026-10-11)                                                                                                | _Resolved 2026-10-11 (owner: "build it — documented click-paths become real")._ **Finance › Dues** now carries, for a `finance.manage` holder: **New schedule** / **Edit schedule** (`DuesScheduleDialog`), **Generate dues** behind a confirmation, **Record payment** (`DuesPaymentDialog`, amount prefilled with what is owed), **Waive** and **Reverse waiver** (reason required, `PromptDialog`), and a **Payment history** dialog over `GET /finance/dues/{id}/payments` for every reader. `GET /finance/dues` now sends each row's `memberName`, so the list names members instead of showing a user id. **Still open:** the schedule form offers only name, amount, frequency, due date, notes and active, because nothing reads the stored grace period, late fee, fiscal year or membership types (pitfall #19) — generation bills every active member and no late fee is ever charged; the payment history does not show who recorded each payment (the id is stored, the name is not sent). See `docs/training/11-finance.md`, "Dues & Assessments".                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Finance: dues administration has no UI — every write is API-only**                                                                                                            | ✅ Resolved (owner decision, 2026-10-11)                                                                                                | _Resolved 2026-10-11 (owner: "build it — documented click-paths become real")._ **Finance › Dues** now carries, for a `finance.manage` holder: **New schedule** / **Edit schedule** (`DuesScheduleDialog`), **Generate dues** behind a confirmation, **Record payment** (`DuesPaymentDialog`, amount prefilled with what is owed), **Waive** and **Reverse waiver** (reason required, `PromptDialog`), and a **Payment history** dialog over `GET /finance/dues/{id}/payments` for every reader. `GET /finance/dues` now sends each row's `memberName`, so the list names members instead of showing a user id. ~~**Still open:** the schedule form offers only name, amount, frequency, due date, notes and active, because nothing reads the stored grace period, late fee, fiscal year or membership types (pitfall #19) — generation bills every active member and no late fee is ever charged; the payment history does not show who recorded each payment (the id is stored, the name is not sent).~~ **✅ Resolved (owner decisions 2026-11-01: "Show the name" and "Build them"; built 2026-11-06).** The payment history names who recorded each payment (`recordedByName` on `GET /finance/dues/{id}/payments`; "a former member" when that account is gone). The schedule form offers the grace period, late fee, fiscal year and membership types, and all four now apply (`app/services/dues_terms.py`): generation bills only members whose membership standing is a listed tier (none listed bills everyone, as before; matched by `member_holds_tier`, the rule an event's "mandatory for" list uses), a due date outside the schedule's fiscal year is refused on save, and generation is refused once that year is closing or locked; the daily `dues_late_fees` task adds the late fee to `amount_due` once, recording it in `late_fee_applied`, on dues still owing after the due date plus the grace period. It is a stored charge, not an on-read rule, so every screen, export and report that totals `amount_due` already includes it; its UPDATE requires `late_fee_applied IS NULL`, so a second or concurrent run charges nothing (pitfall #36). **Existing schedules behave as before until saved:** the new `dues_schedules.terms_effective_at` is NULL for every schedule that existed at upgrade, and such a schedule keeps billing every active member and charging no fee whatever it stores (a late fee or membership list written through the API before now did nothing, and still does not). Saving it from the form sets it — the form says so first — and a fee is charged only where the grace period ends after that instant, so turning terms on never charges for lateness that already happened. A fee already charged is not re-priced when the schedule's fee changes. Tests: `tests/test_dues_terms_and_reminders.py`, `duesTerms.test.tsx`. See `docs/training/11-finance.md`, "Dues & Assessments".                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **Finance: correctness/DoS polish (export, pagination, request numbers, float aggregates)**                                                                                     | ⚠️ Mostly resolved (re-verified, security-review FIN-05 pass 4, 2026-09-08; corrected same-day, Codex review on PR #2398)               | This row had gone stale — the items marked "still flagged" below were already fixed on `main` (in the finance-approvals security-review's own earlier passes, never threaded back into this row). Re-verified directly against current code: `_generate_request_number` is MAX-of-suffix-based with a per-org unique constraint and a SAVEPOINT retry allocator (fixed 2026-07-31); every list method the original finding named (`list_purchase_requests`, `list_expense_reports`, `list_check_requests`, etc.) pushes `.offset()`/`.limit()` into the SQL query, none fetches-all-then-slices; `generate_export` caps at `max_records=10_000` and streams in 500-row batches via `SafeCsvWriter`; `_mutate_budget` takes a locking read and raises `BudgetLimitExceededError` whenever a spend/encumbrance would exceed `amount_budgeted`, fail-closed with no override. Money storage and arithmetic are `Decimal`/`Numeric(12,2)` throughout; the only remaining `float()` casts are two percentage/rate display roundings, not currency math (one needless `Decimal`→`float`→`Decimal` round-trip on `entity_amount` in `get_pending_approvals` was found and removed this pass). **Still open:** `list_dues_payments` (`GET /dues/{dues_id}/payments`) is also a list method and does not paginate — it eager-loads one member's entire payment ledger unbounded (this row's own first correction overclaimed "every list method" before Codex review caught the exception); left flagged rather than fixed since pagination would change the endpoint's response shape. **Owner decision (2026-10-05): leave as is** — one member's dues ledger is small, so `GET /dues/{dues_id}/payments` stays unpaginated. _(2026-10-04: `get_pending_approvals` now filters to the steps the caller is the named approver of — the step's `approver_type`/`approver_value`, matched by `finance_approver_matching.py`, needed no new assignee field — and approve/deny enforce the same rule; see `docs/FINANCE_MODULE.md` → "Who may act on a step".)_ (FIN-7/FIN-30; see `docs/module-audit/finance.md`'s FIN-7 entry for the full re-verification.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Recurring: create/update paths trust client-supplied FK ids without an org check (XC-1)**                                                                                     | ✅ Resolved (2026-10-11, owner decision XC-1: roll out per module)                                                                      | The dominant cross-cutting pattern — create/update methods stored `user_id`/`category_id`/`assignee_id`/etc. without verifying the referenced row is in-org. **Closed by the 2026-10 sweep:** every create/update path in the 134 services and their endpoints was reviewed; the ones still unvalidated now call `assert_in_org` / `assert_all_in_org` (`app/utils/org_scoping.py`) before any write — departure clearances, election eligible voters, minutes attendees, inline form conditions, training course/category/requirement/skill/program references, session locations, competency matrices, module-config apparatus, shift patterns, shift-report equipment checks, the event-request default coordinator, inventory requests/allowances/exposures, apparatus equipment catalog links and report filters. Everything else was already validated by an org-scoped fetch or a local helper. Tests: `backend/tests/test_xc1_*.py`. A JSON program import keeps only this department's own `target_roles` rather than refusing. New code must keep doing this — pitfall #14c; there is still no repo-wide machine check for it. Details in [`docs/module-audit/CROSS-CUTTING.md`](./module-audit/CROSS-CUTTING.md) (XC-1).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **Email attachments: the detected MIME type is validated, then discarded**                                                                                                      | ✅ Resolved 2026-10-08 (owner decision 2026-10-05: reject on mismatch, with OOXML/zip equivalence; LOW, 2026-09-09, app-review MAIL-22) | `upload_attachment` sniffs the real content type with `detect_mime_type` (`email_templates.py:616`), uses it to accept or reject the upload (`:623`), and then persists `content_type=file.content_type` (`:665`) — the **client's claim**, which is what the send path attaches the file as. Extension and content are each checked against their own allowlist and never against each other, so a file named `.pdf` whose bytes are `image/svg+xml` satisfies both and is mailed out declared as `application/pdf`. Impact is bounded by who can reach it — the uploader already holds `settings.manage` — which is why this is LOW; the substance is that the code does the expensive, correct thing and throws the answer away. **Why not fixed in the review that found it: the obvious fix is wrong.** `.docx`/`.xlsx`/`.pptx` are ZIP containers and libmagic commonly reports `application/zip` for them, which is exactly why `ALLOWED_EMAIL_MIME_TYPES` lists both `application/zip` and the three OOXML types — so simply storing `detected_mime` would attach a Word document as a zip and mail clients would present it as one. The real change is a consistency check between the extension and the detected type, carrying an explicit OOXML/zip equivalence, plus a decision on what to do on mismatch: reject the upload, or accept it and store the detected type. Both are defensible and the choice is the owner's. Note the `MAIL-` prefix is shared with `docs/security-review/MSG-25-messaging-notifications.md`, whose own MAIL-1…5 are unrelated to this row. See [`docs/app-review/email-templates.md`](./app-review/email-templates.md) → Pass 5. **Resolved in `ce50c5c6b` (2026-10-08).** `upload_attachment` (`email_templates.py`) now stores the file through `FileStorageService` with `keep_consistent_extension`, which rejects an upload whose extension and sniffed content disagree (`file_storage_service.py`), treating `application/zip` as consistent with `.docx`/`.xlsx`/`.pptx` (`mime_validation.py`); the stored `content_type` is the detected type, not the client's claim. The text above describes the code before that commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -2608,10 +2608,30 @@ dashboard's Outstanding Pledges tile links to the pledges page again.
 
 What remains, deliberately:
 
-- **A pledge is kept in step with donations by hand.** Nothing in the backend
+- ~~**A pledge is kept in step with donations by hand.** Nothing in the backend
   moves a pledge's received amount or status when a donation arrives, so the
   edit form asks for both. Linking a donation to a pledge would be a backend
-  change.
+  change.~~ **✅ Resolved (owner decision 2026-11-01: link donations to
+  pledges; built 2026-11-06).** A donation can name a pledge
+  (`donations.pledge_id`, migration `6dadac1674c8`): **Record Donation**
+  offers the chosen donor's open pledges (pending, partial or overdue). The
+  backend refuses another department's pledge (not found), another donor's,
+  and a fulfilled or cancelled one. A completed gift adds its amount to the
+  pledge's fulfilled amount, and editing it moves the difference — a new
+  amount, a refund or other non-completed status, unlinking, or moving it to
+  another pledge — with the pledges locked while they move. The status
+  follows: fulfilled once paid in full, otherwise partial or pending; a
+  cancelled pledge stays cancelled and an overdue one overdue until paid in
+  full. The fulfilled amount is moved by the gift's amount rather than
+  recomputed from linked gifts, so an amount entered by hand before the link
+  is kept and added to; the pledge form still edits both for money that
+  arrived another way. An anonymous gift's pledge is hidden from a view-only
+  caller, as its donor is. **Not covered:** there is no way to delete a
+  donation (no endpoint exists), so "deleting" a linked gift is done by
+  refunding or unlinking it, and no existing donation is linked on upgrade —
+  which gift paid which pledge was never recorded. Tests:
+  `tests/test_fundraising_donation_pledges.py`,
+  `DonationFormPage.test.tsx`.
 - **Not on the forms:** a pledge's payment schedule (nothing reads it), and
   an event's sponsors and calendar-event link. All stay API-only. The
   pledge's **Send reminders** switch is on the form, read by the daily
@@ -2667,6 +2687,25 @@ The Create Budget row is closed too — see
 [FINANCE_MODULE.md](./FINANCE_MODULE.md#budget-line-owners-stations-and-the-createedit-budget-screen-2026-10-08).
 
 ## Finance — Budget Request Reminders Go Out 7 Days and 1 Day Before, for Every Department (2026-10-08)
+
+**✅ Resolved (owner decision 2026-11-01: make it configurable; built
+2026-11-06).** Each department sets its own reminder days — up to five, 0 (the
+deadline day) to 60 — and whether each reminder also puts an entry in the
+owner's notification bell, on **Finance › Settings › Budget request
+reminders** (`GET`/`PUT /finance/settings/budget-request-reminders`,
+`finance.manage`; stored as `budget_request_reminder_days` and
+`budget_request_bell_notices` in the department's finance settings, read by
+`budget_request_reminders_in` in `app/utils/finance_settings.py`). Unset is
+today's schedule — 7 and 1, email only — so an upgrade changes nothing; an
+empty list turns the reminder off. The email always goes out with the bell
+entry (pitfall #18), and the bell entry goes to an owner who muted the
+emails too. Each channel is recorded per year, deadline, reminder day and
+member, so a second run sends neither again. Tests:
+`TestReminderSettingsReading`, `TestConfiguredReminders` and
+`TestReminderSettingsEndpoint` in
+`tests/test_finance_budget_request_notices.py`,
+`BudgetRequestReminderSettingsCard.test.tsx`. The text below is the record of
+the gap.
 
 The deadline reminder for next year's budget requests is sent 7 days and 1 day
 before a draft year's request deadline, to line owners who still owe a request.
@@ -2874,7 +2913,19 @@ year"). Three gaps remain, pending a decision:
   a banner once the end date passes (`closeDue`), but no email goes out and the
   year stays active until its close is begun; likewise an adopted year waits
   for **Start the year**. Both are deliberate — each step is an officer's
-  decision on the record.
+  decision on the record. **✅ Email resolved (owner decision 2026-11-01:
+  also email the Treasurer; built 2026-11-06).** The daily
+  `fiscal_year_due_reminders` task emails the Treasurers — the department's
+  active `finance.manage` holders, as every Treasurer notice resolves them,
+  under the _Treasurer duties_ email kind — when an adopted, unlocked draft
+  reaches its start date and when the active, unlocked year passes its end
+  date (the banner's own rule, `close_due` in
+  `app/services/finance_year_due_notifications.py`). Once per Treasurer, year
+  and date, through a sent-log: a moved end date that passes again is a new
+  close, and a Treasurer appointed later is told on the next run. A start
+  email names the year still active, if any, so its close is begun first.
+  Still nothing is started or closed automatically. Tests: `TestYearDue*` in
+  `tests/test_finance_budget_request_notices.py`.
 - **Drafts left in a closing year stay as drafts.** A purchase request, expense
   report or check request never submitted cannot be submitted once the close
   begins, and does not stop the lock. A requester who still needs it raises it
@@ -2886,10 +2937,28 @@ Every expense line needs an uploaded receipt before its report is submitted
 (see `docs/FINANCE_MODULE.md`, "Expense receipts are required"). Gaps,
 pending a decision:
 
-- **One receipt per line.** A hotel folio covering several lines is attached
-  to each of them.
-- **Mileage has no log of its own.** A mileage line needs a file like any
-  other; the guide asks for the trip log. Nothing checks what the file is.
+- ~~**One receipt per line.** A hotel folio covering several lines is attached
+  to each of them.~~ **✅ Resolved (owner decision 2026-11-01: share a receipt;
+  built 2026-11-06).** A line can use the receipt already uploaded to another
+  line of the same report (`POST …/items/{id}/receipt/share`), never one on
+  another report or another member's; on a draft, `DELETE …/items/{id}/receipt`
+  takes it off one line and leaves the others and the document. A document
+  that any line of a report past draft refers to still cannot be deleted. See
+  `docs/FINANCE_MODULE.md`, "One receipt on several lines, and the mileage
+  trip log". Tests: `tests/test_finance_shared_receipts_and_mileage.py`,
+  `expenseMileageAndSharedReceipts.test.tsx`.
+- ~~**Mileage has no log of its own.** A mileage line needs a file like any
+  other; the guide asks for the trip log. Nothing checks what the file is.~~
+  **✅ Resolved (owner decision 2026-11-01: built-in mileage log; built
+  2026-11-06).** A mileage line records its trips (date, from, to, purpose,
+  miles) in the form; the server prices it at the department's
+  `finance.mileage_rate`, dates it by its first trip, and the log stands in
+  for the receipt (migration `5f3bc23bc9a6`). There was no rate setting, so
+  one was added (Finance › Settings › Approval chains, `settings.manage`) with
+  no built-in figure: until a department sets it, a trip log is refused with a
+  message and mileage is claimed with an uploaded log as before. Left out: the
+  module does not check a trip's miles against a map, and a log is not
+  carried to QuickBooks beyond the line's amount.
 - ~~**Purchase requests and check requests do not require one.** A purchase
   request can carry an uploaded receipt, but nothing requires it before
   payment, and check requests take none.~~ **✅ Resolved (owner decision
@@ -3003,31 +3072,79 @@ purpose:
   voided before then, so this arises only if a row is edited directly.
 - **No server-side PDF**, and no scheduled delivery. The browser's print, or
   its _Save as PDF_, is the PDF.
-- **Not yet built from the original plan:** expense summary by member, dues
-  collection with delinquency, and purchase orders by vendor. Restricted funds
-  and functional expense classification (program / management / fundraising)
-  have reports of their own (Restricted funds, Functional expenses).
+- ~~**Not yet built from the original plan:** expense summary by member, dues
+  collection with delinquency, and purchase orders by vendor.~~ **✅ Resolved
+  (owner decision 2026-11-01: build them; built 2026-11-06).** _Expenses by
+  member_ (the payments register's reimbursements for a period, by member),
+  _Dues delinquency_ (collection totals for the dues falling due in a period,
+  and each member overdue today by the dues code's own `dues_overdue_clause`)
+  and _Purchases by vendor_ (a fiscal year's approved and paid purchase
+  requests) are tabs on Finance › Reports, `finance.view`, each with a
+  `SafeCsvWriter` CSV. Left out: a partly paid dues record is not overdue
+  under the dues rule and so is not listed as delinquent, and vendor names are
+  free text, grouped only by case and spacing. Restricted funds and functional
+  expense classification (program / management / fundraising) have reports of
+  their own (Restricted funds, Functional expenses). Tests:
+  `tests/test_finance_board_reports_members_dues_vendors.py`,
+  `financeReportsMembersDuesVendors.test.tsx`.
 
-## Finance — Cash Advances: What They Do Not Cover (2026-10-14)
+## Finance — Cash Advances: What They Do Not Cover (2026-10-14, three resolved 2026-11-06)
 
 Described in
 [FINANCE_MODULE.md](./FINANCE_MODULE.md#cash-advances-2026-10-14). Left out
 on purpose, or needing a decision first:
 
-- **Only the requester's own advance.** An advance is paid to the member who
+- ~~**Only the requester's own advance.** An advance is paid to the member who
   asks for it; the finance office cannot raise one on another member's behalf,
   since the member who owes it, the overdue block and the separation of duties
-  all key on the requester.
-- **Fixed-date method only.** The 120 days run from the check. The IRS's other
+  all key on the requester.~~ **✅ Resolved (owner decision 2026-11-01: allow
+  on behalf; built 2026-11-06).** A `finance.manage` holder raises an advance
+  for a named member (`advanceHolderId` on `POST /finance/check-requests`; the
+  form's **Advance for** picker, fed by `GET /finance/advances/holders`). The
+  member must be a current member of the department (active or probationary,
+  pitfall #32) and becomes `requested_by` — the holder, who owes it, is blocked
+  while it is overdue and is emailed its statements; the officer is stored as
+  `check_requests.raised_by` (migration `fd900bc2c9e7`), shown on the advance's
+  page and audit-logged `finance.advance_raised_on_behalf`. The officer may then
+  neither approve it (in-app or a manual approval; an emailed-link step whose
+  address is theirs is refused too) nor issue its check, beside the existing
+  rule that the holder may not. Only an advance can be raised on someone
+  else's behalf; an ordinary check request is still the requester's own.
+- ~~**Fixed-date method only.** The 120 days run from the check. The IRS's other
   safe harbor, the periodic statement method (quarterly statements, 120 days
-  from each), is not modelled.
+  from each), is not modelled.~~ **✅ Resolved (owner decision 2026-11-01: add
+  periodic statements; built 2026-11-06).** Organization settings
+  `finance.advance_return_method` chooses `fixed_date` (the default — every
+  existing department is unchanged) or `periodic_statement`, on **Finance ›
+  Approval Chains › Cash advance deadline** (`settings.manage`). Under the
+  periodic method a statement falls on each calendar-quarter end after the
+  check, on the department's calendar, and the advance is due through the
+  120th day after the **first** one: anything outstanding then was on it.
+  `AdvanceBalance.due_at` is the one computation, so overdue, the block on
+  another advance, the advance page and the advances report all follow it. An
+  advance takes the method in force when its check is issued
+  (`check_requests.advance_return_method`), so a change of setting moves no
+  running deadline; existing advances read as fixed-date. The daily
+  `advance_statements` task emails the holder each quarter's statement once
+  (unique per advance and quarter in `advance_statements`). What is still not
+  done: a quarter the scheduler misses entirely is not sent late (the next
+  quarter's lists the same balance); the statement is not subject to the
+  member's email preferences, since the deadline runs from it; and the
+  deadline counts from the quarter end, not from the day the email went out.
 - **Overdue is flagged, not reported to payroll.** The advances report lists
   what is overdue; turning it into wages on a W-2 is the treasurer's job, as for
   late reimbursements on _Outside the accountable plan_.
-- **Not part of the year-end close.** An advance still outstanding at year end
+- ~~**Not part of the year-end close.** An advance still outstanding at year end
   is not listed among the year's open items; the advances report is where to
-  look before closing. Returned cash can still be recorded against an advance
-  whose year is locked, since a return moves no budget figure.
+  look before closing.~~ **✅ Resolved (owner decision 2026-11-01: list at
+  close; built 2026-11-06).** `GET /finance/fiscal-years/{id}/open-items`
+  lists the year's issued advances not yet fully accounted for (kind
+  `cash_advance`, at what is outstanding, `overdue` or `outstanding`), and the
+  lock dialog shows them in their own list. They carry `blocksLock: false`
+  and do not stop the lock: a member may take the full deadline, and returned
+  cash can still be recorded against an advance whose year is locked, since a
+  return moves no budget figure. Only the year's own advances are listed; an
+  earlier year's advance still owed is on the advances report.
 - **Cash from petty cash is still a "check".** Issuing asks for a check number;
   an advance paid in cash is issued with a reference such as `CASH` in that
   field.
@@ -3045,7 +3162,18 @@ export, subcategory inheritance and exporting dues were closed on 2026-10-14. Th
 remain, and each needs a decision or a follow-up change rather than a fix
 inside that one:
 
-- **There is no live QuickBooks connection.** Posting entries and reading back
+- ✅ **Resolved (owner decision 2026-11-01: build it, posting as Purchases to
+  vendors; built 2026-11-06).** A department connects its QuickBooks Online
+  company on **Finance › QuickBooks Export** (`finance.manage`), with the
+  Intuit app named by `QBO_CLIENT_ID` / `QBO_CLIENT_SECRET` /
+  `QBO_REDIRECT_URI` / `QBO_ENVIRONMENT`; without them the page says it is not
+  configured. Paid purchase requests, issued checks and paid expense reports
+  then post as cash **Purchases** to their vendors, once each (see
+  `docs/FINANCE_MODULE.md`, "QuickBooks Online connection", and what is still
+  open under "Finance — QuickBooks Online Connection Limits" below). Reading
+  QuickBooks budgets and actuals back was not part of the decision and is not
+  built. The original entry follows.
+  **There is no live QuickBooks connection.** Posting entries and reading back
   the chart of accounts, budgets and actuals needs the QuickBooks Online
   Accounting API. That means an Intuit developer app, OAuth 2.0 with encrypted
   per-organization tokens, and a background sync, and it is planned as its own
@@ -3063,7 +3191,10 @@ inside that one:
   cannot see whether the Treasurer then imported the file. A file downloaded
   and never imported leaves its payments marked as sent; the Treasurer sends
   that period again with `includeExported`. The live connection would close
-  this, since it would know what QuickBooks accepted. _(2026-10-18)_ The
+  this, since it would know what QuickBooks accepted. _(2026-11-06)_ It does,
+  for the payments it posts: each reads **Accepted by QuickBooks**, with
+  QuickBooks' own record number, on its detail page and on the connection
+  card. A payment that goes in a file is unchanged. _(2026-10-18)_ The
   Treasurer can now mark a file as imported in **Export history**, and sending
   a marked file's payments again is refused until they confirm the earlier
   entries were deleted. That depends on the Treasurer marking it: an imported
@@ -3088,6 +3219,58 @@ inside that one:
   parser reads the Account List report's layout as Intuit has published it
   ("Account" or "Full name" columns); a future change to that report could
   need the parser updated.
+
+## Finance — QuickBooks Online Connection Limits (2026-11-06)
+
+The live connection (owner decision 2026-11-01) posts each paid purchase
+request, issued check and paid expense report as a QuickBooks Purchase to its
+vendor. Each Intuit detail it relies on was checked against Intuit's own
+documentation (the list and URLs are in
+`app/services/quickbooks_online_client.py`); what could not be confirmed there
+was left out rather than guessed, and is listed here with the other gaps. Each
+needs a decision or a follow-up change:
+
+- **Every payment posts as a cash expense from a bank account.** Intuit's
+  pages show a Purchase with `PaymentType` `Cash` paid from a Bank account,
+  and name check and credit card purchases without showing their
+  `PaymentType` values or the account type each needs. So a check is recorded
+  as an expense, not a QuickBooks Check (no check number on it), and a
+  category paid from a credit card account is refused live ("not a Bank
+  account") and goes in the CSV export instead. Posting checks as Checks and
+  card payments as credit card expenses needs Intuit's Purchase reference page
+  read and those two values confirmed.
+- **Some payments still need the CSV export.** Cash advances, expense reports
+  and reimbursement checks that account for an advance (a Purchase is paid from
+  one account, and those are paid partly from the advance), dues, returned
+  advance cash, and a report whose lines are paid from different accounts.
+  A department that is connected and has any of these runs both.
+- **Voiding a posted check does not reverse it in QuickBooks.** The CSV export
+  reverses a voided check; the live connection makes no change to a Purchase
+  it created (the scope it holds can, but deleting records was not part of the
+  decision). Void it in QuickBooks too.
+- **Vendors are matched by display name**, ignoring case. A vendor renamed in
+  QuickBooks gets a new one created under the old name on the next payment to
+  it; a name used by a QuickBooks customer or employee is refused (Intuit error 6240) and the posting says so. An inactive vendor is refused, not
+  reactivated.
+- **A subaccount is found by its `Parent:Child` name only when QuickBooks
+  returns `FullyQualifiedName` on the account.** That field was confirmed on
+  Intuit's Class and Item examples, not on Account; without it, a subaccount
+  matches only by its own name, and a mapping written `Parent:Child` is refused
+  with "QuickBooks has no account named …". Matching is exact, case included,
+  as the CSV export's chart check is.
+- **`TxnDate` and `DocNumber`** are set from the payment's day on the
+  department's calendar and its request number. Intuit documents both on
+  transaction entities generally and shows them on other transactions' examples;
+  they were not seen on a Purchase example.
+- **A payment waiting on a retry when the department disconnects stays out of
+  the CSV export**: QuickBooks may already hold it. Reconnecting to the same
+  company sends it again under the same request id, which Intuit answers with
+  the original Purchase. Reconnecting to a different company would create it
+  there as a new Purchase.
+- **Posting starts from the moment of connecting.** Earlier payments stay on
+  the CSV export; the Treasurer can move the date (**Post payments made on or
+  after**), and a payment already sent in a file is never posted.
+- **Reading budgets and actuals back from QuickBooks** is not built.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 
@@ -8193,7 +8376,7 @@ W64-5).
   - Tests: `tests/test_finance_paid_amounts_receipts_commitments.py`,
     `paidAmountsReceipts.test.tsx`.
 
-## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14, overpayments resolved 2026-10-27)
+## Finance — Dues: Overpayments, and Members Who Cannot See What They Owe (2026-10-14, overpayments resolved 2026-10-27, self-view and reminders resolved 2026-11-06)
 
 Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
 
@@ -8206,14 +8389,30 @@ Found driving W66 (`docs/workflow-review/W66-dues.md`, W66-3 and W66-4).
   none). If the dues are already paid, the whole amount is the donation. A
   retried submission with the same reference records neither twice. Covered by
   `tests/test_dues_overpayment_donation.py` and `DuesPaymentDialog.test.tsx`.
-- **A member cannot see their own dues.**
-  - No screen shows a member what they owe; `/finance/dues` needs
-    `finance.view`.
-  - `GET /finance/dues` already confines a non-manager to their own records,
-    but its `finance.view` gate refuses a plain member first.
-  - Nothing tells a member their dues are due or overdue.
-  - Decision: whether members get a "My dues" view (and on what gate), and
-    which dues reminders go out (email first, pitfall 18).
+- **A member cannot see their own dues — resolved 2026-11-06** (owner
+  decision 2026-11-01: "My dues view + email reminders").
+  - **Finance › My Dues** (`/finance/my-dues`, `GET /finance/my-dues`) needs
+    only a session: it lists the caller's own dues — amount, paid, still owed,
+    due date, status, any late fee charged, a late fee still to come and the
+    date after which it is added, and the payments. Status and late fee come
+    from the same rules the Treasurer's screen and the late-fee task use
+    (pitfall #29). It is in the Finance navigation for everyone who sees the
+    group.
+  - The daily `dues_reminders` task emails a member once when their dues fall
+    due within 7 days and once when they become overdue (naming any late fee
+    and when it is added). Email only, never SMS (pitfall #18), as the new
+    optional **Your dues** email kind (`dues_reminders`): on by default, and a
+    member may turn it off; a department may make it required. Each is sent at
+    most once per dues record (`member_dues.due_reminder_sent_at` /
+    `overdue_reminder_sent_at`); a failed send is retried the next day. Only the
+    member the dues belong to, while their account is current, is emailed.
+  - **Accepted limits.** The overdue email goes only for dues that became
+    overdue in the last 30 days, so the first run after an upgrade does not
+    email everyone about dues long overdue that the Treasurer has dealt with
+    by hand; such members are not reminded, and see the dues on My Dues. A
+    member with no dues still sees the My Dues entry and an empty page. The
+    `GET /finance/dues` list itself still needs `finance.view`. Tests:
+    `tests/test_dues_terms_and_reminders.py`, `myDues.test.tsx`.
 
 ## Department Store — The Cart Does Not Survive a Reload (2026-10-15, resolved 2026-10-27)
 
@@ -8239,9 +8438,20 @@ Found driving W68 (`docs/workflow-review/W68-grants.md`, W68-10).
   record, so applications started from it still name their program; **Show
   retired** lists retired ones and reinstates them. Retired opportunities offer
   no Start Application.
-- **Still open:** the four Federal Programs cards are fixed text with no way to
+- ~~**Still open:** the four Federal Programs cards are fixed text with no way to
   start an application from them. **Decision:** whether they become real,
-  seeded opportunities.
+  seeded opportunities.~~ **✅ Resolved (owner decision 2026-11-01: seed as
+  opportunities; built 2026-11-06).** AFG, SAFER, FP&S and the Firehouse Subs
+  Public Safety Foundation are each department's own opportunity records
+  (`app/services/grant_federal_programs.py`), with the cards' text, a
+  recurring deadline type and no award range or match (they change each
+  funding year; the department fills them in). A new department gets them at
+  creation; migration `3c1f5e2a9d47` gives them to every existing one. Both
+  skip a program code the department already holds, retired or typed in by
+  hand, so a retired program stays retired. The page's fixed cards are gone:
+  the records are listed with every other opportunity and can be started,
+  edited and retired. Tests: `tests/test_grant_federal_programs.py`,
+  `GrantOpportunitiesPage.federalPrograms.test.tsx`.
 
 ## Medical Screening — A Screening With No Expiration Date Never Fell Due (2026-10-16, grading resolved 2026-10-25)
 

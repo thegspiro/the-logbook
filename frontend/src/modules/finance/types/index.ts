@@ -299,15 +299,17 @@ export interface FiscalYearLockPayload {
   notes: string;
 }
 
-/** A request still in flight that stops a closing year from locking. */
+/** A request still in flight at a year's close. */
 export interface FiscalYearOpenItem {
   /** For `budget_amendment`, `entityId` is the budget line, not the amendment. */
-  kind: 'purchase_request' | 'expense_report' | 'check_request' | 'budget_amendment';
+  kind: 'purchase_request' | 'expense_report' | 'check_request' | 'budget_amendment' | 'cash_advance';
   entityId: string;
   number: string;
   description: string;
   status: string;
   amount?: number | string | null;
+  /** False for a cash advance still outstanding: listed, but it does not stop the lock. */
+  blocksLock?: boolean | undefined;
 }
 
 /**
@@ -1028,7 +1030,26 @@ export interface FinanceSettings {
   substantiationDays: number;
   /** A payment charged to a restricted fund for more than it has left. */
   fundOverspendMode: FundOverspendMode;
+  /** How a cash advance issued now has its return deadline worked out. */
+  advanceReturnMethod?: AdvanceReturnMethod | undefined;
+  /**
+   * Dollars per mile a mileage line's trip log is priced at; null until the
+   * department sets one, when a trip log cannot be recorded.
+   */
+  mileageRate?: MonetaryAmount | null | undefined;
 }
+
+/**
+ * The two IRS safe harbors for returning an advance (Treas. Reg.
+ * 1.62-2(g)(2)): 120 days from the check, or 120 days from the first
+ * quarterly statement after it. An advance keeps the method in force when its
+ * check was issued.
+ */
+export const AdvanceReturnMethod = {
+  FIXED_DATE: 'fixed_date',
+  PERIODIC_STATEMENT: 'periodic_statement',
+} as const;
+export type AdvanceReturnMethod = (typeof AdvanceReturnMethod)[keyof typeof AdvanceReturnMethod];
 
 export const FundOverspendMode = {
   OFF: 'off',
@@ -1118,7 +1139,25 @@ export interface ExpenseLineItem extends FunctionalClassFields, FundFields {
   merchant?: string;
   /** Submitted after the department's substantiation deadline; decided at submission. */
   substantiatedLate?: boolean;
+  /**
+   * A mileage line's trip log. A line with one is priced by the server from
+   * its miles at `mileageRate`, dated by its first trip, and needs no receipt.
+   */
+  mileageTrips?: MileageTrip[] | null;
+  mileageRate?: MonetaryAmount | null;
+  totalMiles?: string | null;
   createdAt: string;
+}
+
+/** One trip on a mileage line's log. */
+export interface MileageTrip {
+  /** `YYYY-MM-DD`. */
+  tripDate: string;
+  fromLocation: string;
+  toLocation: string;
+  purpose: string;
+  /** Tenths of a mile, as a decimal string. */
+  miles: string;
 }
 
 /** An edit to a draft report's line: omit a field to leave it, null to clear an optional one. */
@@ -1130,6 +1169,8 @@ export interface ExpenseLineItemUpdatePayload {
   merchant?: string | null | undefined;
   fundCampaignId?: string | null | undefined;
   budgetId?: string | null | undefined;
+  /** The whole log, replacing the stored one; null removes it. */
+  mileageTrips?: MileageTrip[] | null | undefined;
 }
 
 export interface ExpenseReport {
@@ -1203,6 +1244,13 @@ export interface CheckRequest extends FunctionalClassFields, FundFields {
   budgetId?: string;
   /** Cash advanced to the requester ahead of an expense; charges no budget line or fund. */
   isAdvance?: boolean;
+  /**
+   * Create only: the member a finance officer raises the advance for. The
+   * member holds it (`requestedBy`); the officer is `raisedBy`.
+   */
+  advanceHolderId?: string | undefined;
+  /** The finance officer who raised this advance on the member's behalf. */
+  raisedBy?: string | null;
   payeeName: string;
   payeeAddress?: string;
   amount: MonetaryAmount;
@@ -1251,7 +1299,13 @@ export interface DuesSchedule {
   gracePeriodDays: number;
   lateFeeAmount?: MonetaryAmount;
   fiscalYearId?: string;
-  appliesToMembershipTypes?: string[];
+  appliesToMembershipTypes?: string[] | null;
+  /**
+   * When the grace period, late fee, fiscal year and membership types began
+   * to apply. Null on a schedule saved before 2026-11-01: they are stored but
+   * not applied until it is next saved.
+   */
+  termsEffectiveAt?: string | null;
   isActive: boolean;
   notes?: string;
   /** QuickBooks accounts for its payments; null takes the department's default. */
@@ -1292,6 +1346,11 @@ export interface DuesScheduleCreatePayload {
   frequency: DuesFrequency;
   /** UTC instant of the due date. */
   dueDate: string;
+  gracePeriodDays?: number | undefined;
+  lateFeeAmount?: string | undefined;
+  fiscalYearId?: string | undefined;
+  /** Omitted bills every member. */
+  appliesToMembershipTypes?: string[] | undefined;
   notes?: string | undefined;
   qbIncomeAccount?: string | undefined;
   qbDepositAccount?: string | undefined;
@@ -1303,6 +1362,11 @@ export interface DuesScheduleUpdatePayload {
   amount?: string;
   frequency?: DuesFrequency;
   dueDate?: string;
+  gracePeriodDays?: number;
+  lateFeeAmount?: string | null;
+  fiscalYearId?: string | null;
+  /** `null` (or an empty list) bills every member. */
+  appliesToMembershipTypes?: string[] | null;
   isActive?: boolean;
   notes?: string | null;
   qbIncomeAccount?: string | null;
@@ -1330,8 +1394,38 @@ export interface DuesPayment {
   notes?: string | null;
   receivedAt: string;
   recordedBy?: string | null;
+  /** Who recorded it, by name; null when their account is gone. */
+  recordedByName?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** One payment on the member's own dues (`GET /finance/my-dues`). */
+export interface MyDuesPayment {
+  id: string;
+  amount: MonetaryAmount;
+  paymentMethod?: string | null;
+  receivedAt: string;
+}
+
+/** One of the signed-in member's own dues records (`GET /finance/my-dues`). */
+export interface MyDues {
+  id: string;
+  scheduleName: string;
+  /** Includes any late fee already charged. */
+  amountDue: MonetaryAmount;
+  amountPaid: MonetaryAmount;
+  /** Still owed; zero for paid, waived and exempt dues. */
+  balance: MonetaryAmount;
+  status: DuesStatus;
+  dueDate: string;
+  paidDate?: string | null;
+  lateFeeApplied?: MonetaryAmount | null;
+  /** A late fee not yet charged, and the instant after which it will be. */
+  lateFeeAmount?: MonetaryAmount | null;
+  lateFeeAfter?: string | null;
+  waiveReason?: string | null;
+  payments: MyDuesPayment[];
 }
 
 export interface DuesSummary {
@@ -1528,8 +1622,16 @@ export interface AdvanceSummary {
   purpose?: string | null;
   checkNumber?: string | null;
   issuedAt?: string | null;
-  /** 120 days after the check. */
+  /**
+   * The last moment to account for it: 120 days after the check, or through
+   * the 120th day after the first quarterly statement (`returnMethod`).
+   */
   dueAt?: string | null;
+  returnMethod?: AdvanceReturnMethod | undefined;
+  /** The periodic method's first statement (a calendar date). */
+  firstStatementDate?: string | null;
+  /** The finance officer who raised it on the member's behalf. */
+  raisedBy?: string | null;
   /** Covered by the member's submitted expense reports. */
   accounted: MonetaryAmount;
   returned: MonetaryAmount;
@@ -1567,9 +1669,30 @@ export interface AdvanceReturn {
   createdAt: string;
 }
 
+/** One quarterly statement under the periodic method. */
+export interface AdvanceStatement {
+  /** Calendar dates (YYYY-MM-DD) on the department's calendar. */
+  statementDate: string;
+  dueDate: string;
+  /** What it listed and when it was emailed; null until it has been. */
+  outstanding?: MonetaryAmount | null;
+  emailedAt?: string | null;
+  upcoming: boolean;
+}
+
 export interface AdvanceDetail extends AdvanceSummary {
+  raisedByName?: string | null;
+  statements?: AdvanceStatement[] | undefined;
   reports: AdvanceReportLink[];
   returns: AdvanceReturn[];
+}
+
+/** `GET /finance/advances/holders`: a member an advance can be raised for. */
+export interface AdvanceHolder {
+  id: string;
+  name: string;
+  /** The name of record the check is made out to. */
+  legalName: string;
 }
 
 /** `POST /finance/advances/{id}/returns`. */
@@ -1741,6 +1864,70 @@ export interface LateSubstantiationReport {
   total: MonetaryAmount;
 }
 
+/** One member's reimbursements in a period, from the payments register. */
+export interface ExpenseSummaryMemberRow {
+  memberId: string;
+  memberName: string;
+  reportCount: number;
+  /** Reimbursement checks to the member voided in the period. */
+  voidedChecks: number;
+  amount: MonetaryAmount;
+}
+
+export interface ExpenseSummaryByMemberReport {
+  start: string;
+  end: string;
+  rows: ExpenseSummaryMemberRow[];
+  total: MonetaryAmount;
+}
+
+/** A member with dues overdue today, by the dues screen's own rule. */
+export interface DuesDelinquencyRow {
+  memberId: string;
+  memberName: string;
+  overdueRecords: number;
+  /** Amount due (late fees included) less what was paid. */
+  amountOverdue: MonetaryAmount;
+  lateFees: MonetaryAmount;
+  /** `YYYY-MM-DD`, when the oldest overdue record fell due. */
+  oldestDue: string;
+  daysOverdue: number;
+}
+
+export interface DuesDelinquencyReport {
+  start: string;
+  end: string;
+  /** `YYYY-MM-DD`: delinquency is as of the day the report was run. */
+  asOf: string;
+  expected: MonetaryAmount;
+  collected: MonetaryAmount;
+  waived: MonetaryAmount;
+  outstanding: MonetaryAmount;
+  membersOverdue: number;
+  rows: DuesDelinquencyRow[];
+  totalOverdue: MonetaryAmount;
+}
+
+export interface VendorPurchasesRow {
+  /** Null: requests with no vendor named. */
+  vendor?: string | null;
+  orders: number;
+  /** Approved, ordered and received, at their estimate. */
+  open: MonetaryAmount;
+  /** Paid (or reimbursed to the member who bought it), at what was paid. */
+  paid: MonetaryAmount;
+  total: MonetaryAmount;
+}
+
+export interface PurchasesByVendorReport {
+  fiscalYearId: string;
+  fiscalYearName: string;
+  rows: VendorPurchasesRow[];
+  totalOpen: MonetaryAmount;
+  totalPaid: MonetaryAmount;
+  total: MonetaryAmount;
+}
+
 /** The restricted fund a payment is charged to (a fundraising campaign marked restricted). */
 export interface FundFields {
   fundCampaignId?: string | null;
@@ -1807,4 +1994,103 @@ export interface FunctionalExpensesReport {
   end: string;
   classes: FunctionalExpenseClass[];
   total: MonetaryAmount;
+}
+
+/**
+ * `GET`/`PUT /finance/settings/budget-request-reminders`: the days before a
+ * draft year's request deadline that line owners who still owe a request are
+ * reminded on, and whether a bell entry goes with each email. 7 and 1, no
+ * bell entries, until the department chooses (`isDefault`).
+ */
+export interface BudgetRequestReminderSettings {
+  /** Most distant first; empty when the department turned the reminder off. */
+  offsetsDays: number[];
+  bellNotices: boolean;
+  isDefault: boolean;
+}
+
+// ============================================
+// QuickBooks Online connection
+// ============================================
+
+export const QuickBooksConnectionStatus = {
+  DISCONNECTED: 'disconnected',
+  CONNECTED: 'connected',
+  RECONNECT_REQUIRED: 'reconnect_required',
+} as const;
+export type QuickBooksConnectionStatus = (typeof QuickBooksConnectionStatus)[keyof typeof QuickBooksConnectionStatus];
+
+export const QuickBooksPostingStatus = {
+  QUEUED: 'queued',
+  RETRYING: 'retrying',
+  POSTED: 'posted',
+  FAILED: 'failed',
+  SUPERSEDED: 'superseded',
+} as const;
+export type QuickBooksPostingStatus = (typeof QuickBooksPostingStatus)[keyof typeof QuickBooksPostingStatus];
+
+/** How each posting status reads to a Treasurer. */
+export const QUICKBOOKS_POSTING_STATUS_LABELS: Record<QuickBooksPostingStatus, string> = {
+  [QuickBooksPostingStatus.QUEUED]: 'Waiting to post',
+  [QuickBooksPostingStatus.RETRYING]: 'Retrying',
+  [QuickBooksPostingStatus.POSTED]: 'Accepted by QuickBooks',
+  [QuickBooksPostingStatus.FAILED]: 'Refused by QuickBooks',
+  [QuickBooksPostingStatus.SUPERSEDED]: 'Sent in a CSV file',
+};
+
+/** The payments a connection posts, as `quickbooks_postings.payment_type`. */
+export const QuickBooksPaymentType = {
+  PURCHASE_REQUEST: 'purchase_request',
+  CHECK_REQUEST: 'check_request',
+  EXPENSE_REPORT: 'expense_report',
+} as const;
+export type QuickBooksPaymentType = (typeof QuickBooksPaymentType)[keyof typeof QuickBooksPaymentType];
+
+export interface QuickBooksPostingCounts {
+  queued: number;
+  retrying: number;
+  posted: number;
+  failed: number;
+  superseded: number;
+}
+
+/** `GET /finance/quickbooks/connection`. */
+export interface QuickBooksConnection {
+  /** False while the server has no Intuit app (QBO_CLIENT_ID etc. blank). */
+  configured: boolean;
+  environment?: 'sandbox' | 'production' | null;
+  status: QuickBooksConnectionStatus;
+  connectedEnvironment?: string | null;
+  environmentMismatch: boolean;
+  realmId?: string | null;
+  connectedAt?: string | null;
+  connectedByName?: string | null;
+  postFrom?: string | null;
+  lastSyncAt?: string | null;
+  lastError?: string | null;
+  counts: QuickBooksPostingCounts;
+}
+
+export interface QuickBooksPosting {
+  id: string;
+  paymentType: QuickBooksPaymentType;
+  paymentId: string;
+  documentNumber: string;
+  status: QuickBooksPostingStatus;
+  vendorName?: string | null;
+  amount?: number | string | null;
+  qbPurchaseId?: string | null;
+  attempts: number;
+  nextAttemptAt?: string | null;
+  lastError?: string | null;
+  postedAt?: string | null;
+  createdAt: string;
+}
+
+export interface QuickBooksSyncResult {
+  queued: number;
+  posted: number;
+  failed: number;
+  retrying: number;
+  skipped?: string | null;
 }

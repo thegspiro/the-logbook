@@ -52,6 +52,7 @@ from app.services.finance_service import (
     FinanceEntityNotFoundError,
     FinanceService,
 )
+from app.services.finance_year_due_notifications import close_due
 from app.utils.member_names import format_display_name
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
@@ -181,13 +182,8 @@ class FinanceBudgetRequestService:
             )
             if fy.status == FiscalYearStatus.DRAFT:
                 row["planning_stage"] = planning_stage(fy.planning_stage).value
-            # An end date entered as a calendar day is that day's midnight
-            # UTC, so its UTC date is the last day of the year.
-            row["close_due"] = (
-                fy.status == FiscalYearStatus.ACTIVE
-                and not fy.is_locked
-                and today > fy.end_date.date()
-            )
+            # The same rule the Treasurer's close-due email follows.
+            row["close_due"] = close_due(fy, today)
             rows.append(row)
         return rows
 

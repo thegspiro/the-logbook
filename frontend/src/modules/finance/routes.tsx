@@ -50,6 +50,7 @@ const FinanceReportsPage = lazyWithRetry(() => import('./pages/FinanceReportsPag
 
 // Dues
 const DuesManagementPage = lazyWithRetry(() => import('./pages/DuesManagementPage'));
+const MyDuesPage = lazyWithRetry(() => import('./pages/MyDuesPage'));
 
 export const getFinanceRoutes = () => {
   return (
@@ -326,6 +327,15 @@ export const getFinanceRoutes = () => {
       />
 
       {/* Dues */}
+      {/* A member's own dues: needs only a session, like My Budgets. */}
+      <Route
+        path="/finance/my-dues"
+        element={
+          <ProtectedRoute requiredModule="finance" moduleLabel="Finance">
+            <MyDuesPage />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/finance/dues"
         element={
