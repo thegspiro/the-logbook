@@ -16,35 +16,55 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#4109](https://github.com/thegspiro/the-logbook/pull/4109)** (branch
-`claude/security-review-apparatus-nfc-p22`) — Feature 13 (Apparatus & NFC),
-pass 22, a watchdog pickup (the dedicated `/loop 30m /security-review`
-session remains unreachable; this iteration was handed Step 0/1 already
-done — no open `claude/security-review-*` PR, row 13 the next `⬜`). PR
-#4108 (Feature 12, Facilities, pass 15) had already merged — its
-bookkeeping rides along uncommitted from that merge, recorded here rather
-than with a PR of its own. Baseline `bb77eae12` (PR #3924's merge, pass
-21). Real delta: a dashboard-tile double-counting fix (DASH-38) that also
-wires the tile to a new list view over a pre-existing, already-reviewed,
-already-org-scoped `GET /apparatus/maintenance/due`; a 2-line, non-security
-boolean field threaded through an already org-scoped external-agency
-create/read (Training's own scope, not reviewed here); and a pure layout
-class swap. 0 application-code defects found; AP2-4 re-confirmed resolved
-from pass 21, unaffected. See `docs/security-review/AP-13-apparatus-nfc.md`'s
-**Pass 22** section.
+**PR [#4111](https://github.com/thegspiro/the-logbook/pull/4111)** (branch
+`claude/security-review-equipment-check-shifts-p15`) —
+Feature 14 (Equipment check & shifts), pass 15, a watchdog pickup. No
+other Claude session is running on this machine (`ListAgents` → "No
+reachable agents"), consistent with the dedicated `/loop 30m
+/security-review` session remaining unreachable through every prior pass.
+Two PRs had already merged since the last iteration: #4108 (Feature 12,
+Facilities, pass 15) and #4109 (Feature 13, Apparatus & NFC, pass 22) —
+both carried a real review verdict (0 fixed, 0 new findings each), so
+both already have their own **Log** entries below rather than fresh ones
+here. A fresh
+`list_pull_requests` (state=open) found 0 PRs with a
+`claude/security-review-*` head; row 14 is the next pending feature.
+
+Baseline `2a96a177d` (PR #3927's merge, pass 14) to head `0d2a8d2fa` (PR
+#4109's merge). Real delta: owner decision 2026-11-01 — editing an
+already-approved shift report's credit-bearing fields, in a department
+with review off, now restates the trainee's requirement credit through the
+same idempotent ledger the original approval used
+(`RequirementProgressCredit`, unique on `(progress_id, source_type,
+source_id)`), instead of leaving it stale against the edited figures.
+Verified org-scoped (runs on the same already-validated `report` object;
+no new by-id lookup) and idempotent (Pitfall #36 shape, pre-existing
+ledger and pre-existing `apply_requirement_credit`/
+`reverse_credits_for_source_except`, both unchanged this pass). Audited as
+`shift_report_credit_restated` with ids and unit counts only, no free
+text. `credit_restatement` is a transient, non-persisted attribute, never
+exposed to the frontend. EC-17 (OPEN/FLAGGED, owner-accepted) updated with
+a note: this tightens rather than widens that gap — the edit was always
+possible for the same person with the same audit trail; now the figures
+it changes also reach the credit ledger instead of going stale. 0
+application-code defects found. See
+`docs/security-review/EC-14-equipment-check-shifts.md`'s **Pass 15**
+section.
 
 Completion gate: `flake8`/`black --check`/`isort --check-only` on
 `app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 737
-revisions, single head; `check_route_permissions.py --strict` — 303
-routes, 0 errors/warnings; scoped backend suite (`-k "apparatus or nfc or
-evoc or driver_exception"`) — 1390 passed, 1 environment-only skip
-(`py_vapid`); standing guard suites — 166 passed; `npm run typecheck` — 0
-errors; `npm run lint` — 0 warnings; `npx vitest run src/modules/apparatus`
-— 123 passed (15 files).
+revisions, single head `c6b690cc33d6`; `check_route_permissions.py
+--strict` — 303 routes, 0 errors/warnings; scoped backend suite (`-k
+"equipment or shift_completion or shift_report or skill_checkoff or
+credit_restatement or requirement_progress_credit"`) — 884 passed, 1
+environment-only skip (`py_vapid`); standing guard suites (org-scoping
+ratchet, capacity locking, LIKE escaping, CSV sweep, `create_all`-table
+tolerance, migration chain, baseline member grants, logging escaping,
+log-call-shape sweep) — 195 passed; `npm run typecheck` — 0 errors; `npm
+run lint` — 0 errors/warnings.
 
-Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
-& shifts) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 15, PR #4108, merged), preserved for history</summary>
@@ -52,50 +72,27 @@ note.
 _None._ PR [#4108](https://github.com/thegspiro/the-logbook/pull/4108)
 (Feature 12, Facilities, pass 15, branch
 `claude/security-review-facilities-p15`) merged. Not docs-only — it
-carried a real delta, so it already has its own **Log** entry below (dated
-2026-11-06) rather than a fresh one here. Confirmed via a fresh
-`list_pull_requests` (state `open`): 0 results for a
-`claude/security-review-*` head. Rotation row 12 is ✅. Next is Feature 13
-(Apparatus & NFC) — the next `⬜` row.
+carried a real delta (the third `due_within_days` filter, the two new
+shared-condition classmethods, the Location-mirror race-handling refactor,
+and the LOC-37 fix), so it already has its own **Log** entry below rather
+than a fresh one here. Confirmed via a fresh `list_pull_requests`
+(state `open`): 0 results for a `claude/security-review-*` head. Rotation
+row 12 is ✅. Next is Feature 13 (Apparatus & NFC) — the next `⬜` row.
 
 </details>
 
 <details>
-<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 15, PR #4108, merged), preserved for history</summary>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 22, PR #4109, merged), preserved for history</summary>
 
-**PR [#4108](https://github.com/thegspiro/the-logbook/pull/4108)** (branch
-`claude/security-review-facilities-p15`) — Feature 12 (Facilities), pass
-15, a watchdog pickup (the dedicated `/loop 30m /security-review` session
-remains unreachable; this iteration was handed Step 0/1 already done — no
-open `claude/security-review-*` PR, row 12 the next `⬜`). PR #4106
-(Feature 11, Inventory, pass 15) had already merged — its bookkeeping,
-including the note on near-duplicate PR #4107's closure, rides along
-uncommitted from that merge, recorded here rather than with a PR of its
-own. Baseline `f2e7bd578` (PR #3923's merge, pass 14). Real delta: a third
-`due_within_days` filter on the maintenance list; two new
-`maintenance_overdue_conditions`/`maintenance_due_soon_conditions`
-classmethods giving the dashboard tiles and the cross-facility list one
-shared, org-scoped definition each (Pitfall #29); a facility room's
-Location mirror refactored onto `location_service.save_system_named_location`,
-whose race handling is the correct shape for Pitfall #27; and `routes.tsx`
-fixing the previously-flagged LOC-37 (room check-in now requires sign-in,
-closing the `postLoginRedirect` gap without widening access). A
-cross-feature migration (`986b38c2086b`, Documents-owned tables) reviewed
-for this feature's own invariants and found sound. 0 application-code
-defects found; FAC-30 (the one standing finding) re-confirmed OPEN,
-unaffected. See `docs/security-review/FAC-12-facilities.md`'s **Pass 15**
-section.
-
-Completion gate: `flake8`/`black --check`/`isort --check-only` on
-`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 737
-revisions, single head; `check_route_permissions.py --strict` — 303
-routes, 0 errors/warnings; scoped backend suite (`-k "facilit"`) — 318
-passed, 1 environment-only skip (`py_vapid`); the four tenancy/migration
-guard suites plus the two migration-integrity suites — 166 passed; `npm
-run typecheck` — 0 errors; `npm run lint` — 0 warnings; `npx vitest run
-src/modules/facilities` — 170 passed (22 files).
-
-Row 12 → ✅ (merged as `2ff2abf75`); next was Feature 13 (Apparatus & NFC).
+_None._ PR [#4109](https://github.com/thegspiro/the-logbook/pull/4109)
+(Feature 13, Apparatus & NFC, pass 22, branch
+`claude/security-review-apparatus-nfc-p22`) merged. Not docs-only on the
+findings — it carried a real review verdict (0 fixed, 0 new findings on a
+dashboard-tile fix and two unrelated-feature threadings), so it already
+has its own **Log** entry below rather than a fresh one here. Confirmed
+via a fresh `list_pull_requests` (state `open`): 0 results for a
+`claude/security-review-*` head. Rotation row 13 is ✅. Next is Feature 14
+(Equipment check & shifts) — the next `⬜` row.
 
 </details>
 
@@ -47629,7 +47626,7 @@ open items. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`'s
 
 **Completion gate:** `flake8`/`black --check`/`isort --check-only` on
 `app/ tests/ alembic/` all clean; `python3 scripts/validate_migrations.py
---strict` — 737 revisions, single head `c6b690cc33d6`; `python3
+--strict` — 737 revisions, single head; `python3
 scripts/check_route_permissions.py --strict` — 303 routes, 0
 errors/warnings; scoped backend suite (`-k "apparatus or nfc or evoc or
 driver_exception"`) — 1390 passed, 1 pre-existing skip (`py_vapid`);
@@ -47642,3 +47639,75 @@ files).
 Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
 & shifts) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+### 2026-11-06 — Feature 13 (Apparatus & NFC, pass 22) merged; Feature 14 (Equipment check & shifts, pass 15) — watchdog pickup, 0 fixed, 0 new findings
+
+No other Claude session is running on this machine (`ListAgents` → "No
+reachable agents"), consistent with the dedicated `/loop 30m
+/security-review` session remaining unreachable through every prior
+iteration recorded above. PR #4109 (Apparatus & NFC, pass 22, logged
+above) had merged. A fresh `list_pull_requests` (state=open) found 0 PRs
+with a `claude/security-review-*` head. Row 14 (Equipment check & shifts)
+is the next `⬜` row, confirmed directly: rows 00–13 are all `✅`.
+
+Baseline `2a96a177d` (PR #3927's merge, pass 14) to head `0d2a8d2fa` (PR
+#4109's merge, current `main`). `git log --no-merges` restricted to this
+feature's declared files (`equipment_check.py`, `shift_completion.py`,
+`equipment_check_service.py`, `shift_completion_service.py`,
+`schemas/equipment_check.py`, `schemas/shift_completion.py`) returns
+exactly one non-merge commit, `71a6fd75c` ("scheduling+training: build
+batch 4 of the owner's 2026-11-01 decisions"), read in full. It touches
+only `shift_completion.py` (+17, one new conditional audit event, no new
+route, no permission change) and `shift_completion_service.py`
+(+332/−30): owner decision 2026-11-01 — on a review-off department,
+editing an already-approved report's credit-bearing fields now restates
+the trainee's requirement credit through the same idempotent ledger the
+original approval used, instead of leaving it stale against the edited
+figures. Verified org-scoped (the new branch runs on the same
+already-validated `report` object the pre-existing update path resolves;
+no new by-id lookup) and idempotent (Pitfall #36 shape — the credit
+ledger's unique `(progress_id, source_type, source_id)` constraint,
+`apply_requirement_credit`, and `reverse_credits_for_source_except` all
+pre-existing and unchanged this pass). Audited as
+`shift_report_credit_restated` with ids and unit counts only (Pitfall
+#33). `credit_restatement` is a transient, non-persisted attribute, never
+serialized in `ShiftCompletionReportResponse`. `equipment_check.py`,
+`equipment_check_service.py`, and both schema files are byte-identical to
+pass 14's baseline.
+
+**EC-17 interaction, not a new finding.** Pass 11's EC-17 (OPEN/FLAGGED,
+owner-accepted: a review-off department's filing officer can edit a
+report's substantive fields indefinitely with no forced second check) had
+explicitly noted that such an edit did not move training credit. This
+pass's delta changes exactly that: the edit now does move credit, through
+the audited, idempotent path described above. This tightens the existing
+gap (a silent staleness bug becomes an audited recalculation) rather than
+widening it — nobody new can reach it, and no permission changed. EC-17
+itself stays OPEN/FLAGGED; `docs/KNOWN_LIMITATIONS.md` already carries the
+owner's 2026-11-04 resolution note for this item (item 3 under Scheduling)
+in full, including its residual edge cases, so nothing further was added
+there.
+
+**0 fixed, 0 new findings.** All findings from EC-14 passes 1–14
+re-confirmed unaffected by this window's diff.
+`docs/security-review/EC-14-equipment-check-shifts.md`'s **Pass 15**
+section has the full review; the new test
+`tests/test_shift_report_credit_restatement.py` (422 L, landed with the
+reviewed commit) was read in full and matches the described behavior.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `python3 scripts/validate_migrations.py
+--strict` — 737 revisions, single head `c6b690cc33d6`; `python3
+scripts/check_route_permissions.py --strict` — 303 routes, 0
+errors/warnings (76 routes re-enumerated for this feature, unchanged);
+scoped backend suite (`-k "equipment or shift_completion or shift_report
+or skill_checkoff or credit_restatement or requirement_progress_credit"`)
+— 884 passed, 1 environment-only skip (`py_vapid`); standing guard suites
+(org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep,
+`create_all`-table tolerance, migration chain, baseline member grants,
+logging escaping, log-call-shape sweep) — 195 passed; `npm run typecheck`
+— 0 errors; `npm run lint` — 0 errors/warnings (`eslint --max-warnings
+10`).
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests` fresh rather than trusting this note.
