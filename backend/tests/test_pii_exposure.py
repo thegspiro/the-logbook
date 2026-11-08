@@ -36,6 +36,7 @@ from app.schemas.user import (
     resolve_profile_visibility,
 )
 from app.services.user_service import UserService
+from tests.fake_request import fake_request
 
 pytestmark = [pytest.mark.unit]
 
@@ -646,6 +647,7 @@ async def _call_endpoint(subject: User, caller: MagicMock) -> UserProfileRespons
             user_id=uuid.UUID(subject.id),
             db=_db_returning(subject),
             current_user=caller,
+            request=fake_request(),
         )
 
 

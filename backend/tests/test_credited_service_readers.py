@@ -26,6 +26,7 @@ from app.services.member_service_history_service import (
     service_since,
     summarize,
 )
+from tests.fake_request import fake_request
 
 UTC = timezone.utc
 HIRED = date(2010, 1, 1)
@@ -195,7 +196,10 @@ async def _profile(db, member):
             rank=None,
         )
         return await get_user_with_roles(
-            user_id=uuid.UUID(member.id), db=db, current_user=caller
+            user_id=uuid.UUID(member.id),
+            db=db,
+            current_user=caller,
+            request=fake_request(),
         )
 
 
@@ -216,7 +220,10 @@ async def _profile_seen_by(db, member, permissions):
             rank=None,
         )
         return await get_user_with_roles(
-            user_id=uuid.UUID(member.id), db=db, current_user=caller
+            user_id=uuid.UUID(member.id),
+            db=db,
+            current_user=caller,
+            request=fake_request(),
         )
 
 
