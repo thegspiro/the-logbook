@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (number recorded in the follow-up commit)** (branch
+**PR [#4151](https://github.com/thegspiro/the-logbook/pull/4151)** (branch
 `claude/security-review-training-core-p14`): Feature 17 (Training core), pass
 14, a watchdog pickup. The dedicated `/loop 30m /security-review` session was
 unreachable. PR #4119 (Feature 16, Events & requests, pass 14) had already
@@ -48025,7 +48025,7 @@ Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
 requests) — re-check `list_pull_requests` fresh rather than trusting this
 note.
 
-### 2026-11-08 — Feature 16 (Events & requests, pass 14) merged; Feature 17 (Training core, pass 14): watchdog pickup, real delta, 1 fixed (TR14-1, LOW), 1 flagged (TR14-2, LOW), TR7-1 closed
+### 2026-11-08 — Feature 16 (Events & requests, pass 14) merged; Feature 17 (Training core, pass 14, PR #4151): watchdog pickup, real delta, 1 fixed (TR14-1, LOW), 1 flagged (TR14-2, LOW), TR7-1 closed
 
 PR #4119 merged as `51e6e1b5`. A fresh `list_pull_requests` (state=open)
 found no `claude/security-review-*` head, so row 17 was next. The baseline was
