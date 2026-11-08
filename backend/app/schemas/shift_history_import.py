@@ -291,6 +291,7 @@ class OptionUnit(BaseModel):
     # Own units: the seats the apparatus record lists, for the default-seat
     # picker.
     seats: List[str] = Field(default_factory=list)
+    # Own units: False when archived or deactivated, so no longer scheduled.
     # Outside units: False when the unit or its agency is hidden from members.
     is_active: bool = True
 

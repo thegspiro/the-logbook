@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints import shift_history_import as endpoint
 from app.core.security import email_fingerprint
+from app.models.apparatus import Apparatus, ApparatusStatus, ApparatusType
 from app.models.external_shift_hours import (
     ExternalAgency,
     ExternalApparatus,
@@ -264,6 +265,45 @@ class TestDrafts:
         # A hidden unit still matches the file: old files name retired units.
         analysis, _ = await service.analyze(draft)
         assert analysis.units[0].target_id == world.county_a106
+
+    async def test_options_flag_retired_own_units(self, db_session, world):
+        basic = await db_session.get(BasicApparatus, world.a106e)
+        assert basic is not None
+        basic.is_active = False
+        kind = ApparatusType(
+            id=_uid(), organization_id=world.org_id, name="Engine", code="ENG1"
+        )
+        status = ApparatusStatus(
+            id=_uid(), organization_id=world.org_id, name="Sold", code="sold"
+        )
+        db_session.add_all([kind, status])
+        await db_session.flush()
+        sold = Apparatus(
+            id=_uid(),
+            organization_id=world.org_id,
+            unit_number="E1",
+            apparatus_type_id=kind.id,
+            status_id=status.id,
+            is_archived=True,
+        )
+        current = Apparatus(
+            id=_uid(),
+            organization_id=world.org_id,
+            unit_number="E2",
+            apparatus_type_id=kind.id,
+            status_id=status.id,
+        )
+        db_session.add_all([sold, current])
+        await db_session.flush()
+        service, draft = await _draft(
+            db_session, world, _csv("Alice Ng,101,A106E,2025-03-01,0700,1900,,,")
+        )
+        options = (await service.detail(draft))["analysis"]["options"]
+        own = {u["id"]: u["is_active"] for u in options["units"] if u["kind"] == "own"}
+        assert own == {world.a106e: False, sold.id: False, current.id: True}
+        # A retired unit still matches the file: years of history ran on it.
+        analysis, _ = await service.analyze(draft)
+        assert analysis.units[0].target_id == world.a106e
 
     async def test_edits_correct_a_row_and_can_be_reverted(self, db_session, world):
         service, draft = await _draft(

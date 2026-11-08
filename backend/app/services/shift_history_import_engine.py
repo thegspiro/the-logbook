@@ -715,6 +715,10 @@ class OwnUnit:
     # The seats the unit is staffed by, as the apparatus record lists them.
     # Empty when the record lists none.
     seats: Tuple[str, ...] = ()
+    # False when the unit is archived (Apparatus module) or deactivated (basic
+    # list), which already keeps it out of the scheduling pickers. It still
+    # matches and can still be chosen here: years of history ran on it.
+    active: bool = True
 
 
 @dataclass(frozen=True)

@@ -522,6 +522,28 @@ describe('ShiftHistoryImportReviewPage', () => {
       });
     });
 
+    it('labels an own unit that is retired', async () => {
+      mockGet.mockResolvedValue(
+        draft({
+          units: [unmatchedM7],
+          options: {
+            members: [],
+            units: [
+              { kind: 'own', id: 'app-e1', name: 'E1', is_active: false },
+              { kind: 'own', id: 'app-e2', name: 'E2', is_active: true },
+            ],
+            seats: ['firefighter'],
+          },
+        })
+      );
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Units/ }));
+
+      expect(screen.getByRole('option', { name: 'E1 — retired' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'E2' })).toBeInTheDocument();
+    });
+
     it('labels an outside unit hidden from members', async () => {
       const user = userEvent.setup();
       renderPage();

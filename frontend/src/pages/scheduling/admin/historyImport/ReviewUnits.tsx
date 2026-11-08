@@ -8,7 +8,9 @@
  * outside-agency hours. A unit not yet in the outside list can be added here,
  * under an agency picked from the department's list so a misspelling cannot
  * create a second agency. Names that are not a vehicle at all (POV, "Other
- * EMS") can all go to one catch-all "Other" unit.
+ * EMS") can all go to one catch-all "Other" unit. Units no longer in use —
+ * own units archived or deactivated, outside units hidden from members — stay
+ * pickable, labelled, because an old file names them.
  */
 
 import React, { useState } from 'react';
@@ -168,6 +170,7 @@ const UnitRow: React.FC<{
                 {ownUnits.map((option) => (
                   <option key={option.id} value={`own:${option.id}`}>
                     {option.name}
+                    {option.is_active === false ? ' — retired' : ''}
                   </option>
                 ))}
               </optgroup>

@@ -622,6 +622,7 @@ class ShiftHistoryImportService:
                 Apparatus.unit_number,
                 Apparatus.name,
                 Apparatus.crew_positions.label("positions"),
+                Apparatus.is_archived.label("retired"),
             ).where(Apparatus.organization_id == str(organization_id))
         )
         basic = await self.db.execute(
@@ -630,17 +631,33 @@ class ShiftHistoryImportService:
                 BasicApparatus.unit_number,
                 BasicApparatus.name,
                 BasicApparatus.positions,
+                BasicApparatus.is_active,
             ).where(BasicApparatus.organization_id == str(organization_id))
         )
-        return [
+        units = [
             engine.OwnUnit(
                 id=r.id,
                 unit_number=r.unit_number or "",
                 name=r.name or "",
                 seats=_seat_names(r.positions),
+                active=not r.retired,
             )
-            for r in list(full.all()) + list(basic.all())
+            for r in full.all()
         ]
+        # ``is_active`` is nullable on the basic list; a NULL row predates the
+        # default and has always been offered, so only an explicit False is
+        # retired.
+        units.extend(
+            engine.OwnUnit(
+                id=r.id,
+                unit_number=r.unit_number or "",
+                name=r.name or "",
+                seats=_seat_names(r.positions),
+                active=r.is_active is not False,
+            )
+            for r in basic.all()
+        )
+        return units
 
     async def _external_units(self, organization_id: str) -> List[engine.ExternalUnit]:
         result = await self.db.execute(
@@ -847,6 +864,7 @@ class ShiftHistoryImportService:
                 "id": u.id,
                 "name": " - ".join(p for p in (u.unit_number, u.name) if p),
                 "seats": list(u.seats),
+                "is_active": u.active,
             }
             for u in await self._own_units(organization_id)
         ]

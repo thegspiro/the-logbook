@@ -226,7 +226,10 @@ export interface HistoryImportOptionUnit {
   agency_name?: string | null;
   /** Own units: the seats the apparatus record lists. */
   seats?: string[];
-  /** Outside units: false when the unit or its agency is hidden from members. */
+  /**
+   * Own units: false when archived or deactivated. Outside units: false when
+   * the unit or its agency is hidden from members.
+   */
   is_active?: boolean;
 }
 
