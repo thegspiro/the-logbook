@@ -204,6 +204,24 @@ def _resolve_event_reminder_target(event: Any) -> str:
     )
 
 
+def _rollup_call_types(call_types: List[str]) -> List[tuple[str, int]]:
+    """Group a member's per-call incident types into (type, count) pairs.
+
+    The end-of-shift summary receives one entry per call, so a shift of ten
+    EMS runs listed "EMS" ten times. Most frequent first; ties keep the order
+    the types were first seen, so the result is stable for a given shift.
+    """
+    counts: Dict[str, int] = {}
+    for call_type in call_types:
+        counts[call_type] = counts.get(call_type, 0) + 1
+    return sorted(counts.items(), key=lambda item: -item[1])
+
+
+def _format_call_type_rollup(rollup: List[tuple[str, int]]) -> str:
+    """Plain-text form of a call-type rollup, e.g. ``EMS (10), Fire (2)``."""
+    return ", ".join(f"{name} ({count})" for name, count in rollup)
+
+
 # Schedule definitions (for documentation and frontend display)
 SCHEDULE = {
     "election_lifecycle": {
@@ -3432,6 +3450,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     call_info = per_member_calls.get(uid, {"count": 0, "types": []})
                     call_count = call_info["count"]
                     call_types = call_info["types"]
+                    call_type_rollup = _rollup_call_types(call_types)
                     report_id = report_by_trainee.get(uid)
 
                     is_preliminary = not bool(shift.is_finalized)
@@ -3449,7 +3468,9 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     if apparatus_name:
                         summary_lines.insert(1, f"Apparatus: {apparatus_name}")
                     if call_types:
-                        summary_lines.append("Call types: " + ", ".join(call_types[:5]))
+                        summary_lines.append(
+                            "Call types: " + _format_call_type_rollup(call_type_rollup)
+                        )
                     if is_preliminary:
                         summary_lines.append(
                             "These figures are preliminary — your hours "
@@ -3572,14 +3593,20 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                             )
 
                             call_types_html = ""
-                            if call_types:
-                                items = "".join(
-                                    f"<li>{_html.escape(t)}</li>"
-                                    for t in call_types[:10]
+                            if call_type_rollup:
+                                type_rows = "".join(
+                                    "<tr><td style='padding:2px 8px'>"
+                                    f"{_html.escape(name)}</td>"
+                                    "<td style='padding:2px 8px;"
+                                    "text-align:right'><strong>"
+                                    f"{count}</strong></td></tr>"
+                                    for name, count in call_type_rollup
                                 )
                                 call_types_html = (
                                     "<p><strong>Call types:</strong></p>"
-                                    f"<ul>{items}</ul>"
+                                    "<table style='border-collapse:collapse;"
+                                    "margin:0 0 12px 0' role='presentation'>"
+                                    f"{type_rows}</table>"
                                 )
 
                             report_html = ""
@@ -3641,8 +3668,10 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                     + f"Hours recorded: {hours}\n"
                                     f"Calls responded: {call_count}\n"
                                     + (
-                                        "Call types: " + ", ".join(call_types) + "\n"
-                                        if call_types
+                                        "Call types: "
+                                        + _format_call_type_rollup(call_type_rollup)
+                                        + "\n"
+                                        if call_type_rollup
                                         else ""
                                     )
                                     + (
