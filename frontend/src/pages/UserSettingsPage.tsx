@@ -1101,6 +1101,8 @@ export const UserSettingsPage: React.FC = () => {
                               aria-hidden="true"
                             />
                           )}
+                          {/* The icon is decorative; this is the state a screen reader hears (W03-10). */}
+                          <span className="sr-only">{check.valid ? 'Met: ' : 'Not met: '}</span>
                           <span
                             className={check.valid ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}
                           >

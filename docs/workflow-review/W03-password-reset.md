@@ -105,3 +105,115 @@ The two documented `# noqa: BLE001` in `auth.py` stay: each gives its reason.
 | black --check            | ✅                                                                                    |
 | frontend tests (touched) | ✅ full suite — see the log entry; the new cases failed before their fixes            |
 | backend tests (touched)  | ✅ `test_forgot_password_expiry.py` (failed before), `test_endpoint_auth_coverage.py` |
+
+---
+
+## Second pass — reset as it stands after the October and November work (2026-11-08)
+
+**Driven:** 2026-11-08 · **As:** signed-out visitor, `member2`, `admin` · **Viewports:** 1280×900, 390×844
+**Commit:** `51e6e1b` plus this pass's fixes (each re-driven or, where noted, test-proven) · **Database:** continued from the W02 second pass; no reset
+
+The activity after W02, driven again. Since the first pass, W03-6 and W03-7
+were resolved, and the address match moved to fingerprints (2026-10-26).
+Email is off in the review install, so, as in the first pass, the reset link
+was minted directly. A random token was generated, and its SHA-256 hash and a
+30-minute expiry were written to `member2`. The pages and endpoints were the
+real ones.
+
+### What was driven
+
+1. Sign-in → "Forgot your password?" → `member`'s address, with email off. Read the response, the page and the audit row, then searched the department's audit log as `admin`.
+2. Reset links with no token and with a bad token.
+3. A minted link, entering:
+   - a password with a run (`Abcdef123!xyz`);
+   - a mismatched confirmation;
+   - a valid password (`Kestrel-Harbor-48!`).
+
+   Read the checklist as text, the way a screen reader gets it.
+
+4. After the reset: the used link, the old password, the new one, and the audit rows.
+5. Both pages at 390×844, on the form, invalid-link and rate-limited screens.
+
+Not driven: delivery of a real reset email (email is off), and a CAPTCHA-enabled install.
+
+### Held up ✅
+
+- **Email off (W03-6, resolved):** the server issues no token and answers "Password reset emails are turned off for this department. Ask an administrator to reset your password." The page heads it "No Reset Link Was Sent".
+- **Opening and submitting a link have their own budget (W03-7, resolved):** 10 per five minutes in a separate scope, so the three-request request budget is no longer spent by reloading the link.
+- **The links themselves:**
+  - a missing token gets "This link is incomplete";
+  - a bad or used token gets "invalid or has expired", with Request New Reset Link.
+- **The checklist:** it lists all seven server rules with the real 12-character minimum. Reset Password stays disabled for a password with a run, and for "Passwords do not match".
+- **A reset:** answers `200`, shows "Password Changed", and returns to sign-in. The new password signs in, the old one gets `401`, and the used link is refused.
+- **Audit:** `auth.password_reset_completed` appears in the department's audit log, named to the member.
+- **Phone:** no sideways scroll on either page. After W03-12, nothing on either page is under 44px.
+
+### W03-9 — MED — Reset requests never reached the department's audit log — ✅ FIXED
+
+**Did:** requested a reset for `member`, then searched the audit log as `admin` for `password_reset`.
+**Saw:** `total: 0`. In the database the row existed, with `organization_id` NULL and the department's id only inside `event_data`.
+**Where:** `forgot_password` (`backend/app/api/v1/endpoints/auth.py`) has two `log_audit_event` calls, one for email off and one for every other request. Neither passed `organization_id`, and neither knows an acting user. The audit log endpoint (`audit_logs.py`) reads by that column and excludes NULL rows as platform-level. So no administrator could see a reset request, whether a token was issued, email was off, or the address matched nobody.
+**Fix:** both calls stamp `organization_id`. A request that matched a member also carries `user_id`. Re-driven: the search returns the request. Test: `tests/test_forgot_password_audit_scope.py`, whose three cases failed before the fix.
+**Rows already written:** they keep their NULL column. The department's id is in their `event_data`, but the audit log is hash-chained, so they are left as they are.
+
+### W03-10 — MED — The password checklist's met/unmet state was silent to a screen reader — ✅ FIXED
+
+**Did:** typed `Abcdef123!xyz` on the reset page and read each rule's text.
+**Saw:** seven identical lines. Met and unmet differed only by an `aria-hidden` tick icon and colour, so a screen-reader user heard the rules but never which one failed, and faced a disabled Reset Password with no reason. My Account → Password renders its list the same way. The administrator's reset dialog and Add Member print ✓ / ○ in the text, so they were not affected.
+**Fix:** each rule now starts with a visually hidden "Met:" or "Not met:", on both pages. Re-driven: the run rule reads "Not met: No runs like 123 or abc". Tests: `ResetPasswordPage.test.tsx` and `UserSettingsPage.test.tsx`, "says which rules are met in text, not only by icon", which failed before the fix.
+
+### W03-11 — LOW — A stale link check could overwrite the current one — ✅ FIXED (test-proven)
+
+**Did:** reopened the used link, with two checks in flight.
+**Saw:** "Too Many Attempts", although the last response for that link was `400`, invalid.
+**Where:** `ResetPasswordPage`'s validation effect had no cancellation. Whichever answer arrived last set the verdict, and a stale `429` answer won. The dev build's StrictMode always runs the check twice. In production the same race needs a second link opened in the tab before the first check answers, which is the case W03-5 covered for errors.
+**Fix:** an effect run that has been superseded ignores its answer. Test: `ResetPasswordPage.test.tsx`, "ignores the answer to a check it has already replaced", which failed before the fix. The exact interleaving is not reproducible on demand in the browser, so this fix rests on the test.
+
+### W03-12 — LOW — "Back to sign in" was 40px tall on the reset page — ✅ FIXED
+
+**Did:** measured the reset page at 390×844.
+**Saw:** "Back to sign in" was 40px tall on the invalid-link screen, and the form and rate-limited screens used the same `px-3 py-2`. The forgot-password page already carries `touch:min-h-11`.
+**Fix:** `touch:min-h-11` on all three. Re-driven: nothing under 44px on the invalid-link and form screens. Tests: three cases in `ResetPasswordPage.test.tsx`, which failed before the fix.
+
+### W03-13 — MED — Reset requests write the typed email address into the audit log — FLAGGED
+
+**Saw:** the request row's `event_data` holds `"email": "review_member@example.org"`, and so does every row for an address that matches nobody. The administrator's audit log shows it.
+**Why it matters:** the audit log is hash-chained and kept for good, so the address can never be removed. The 2026-10-26 change ("keep addresses out of new audit entries") took addresses out of the OAuth and onboarding rows, on the grounds that each row already carries `user_id`. The reset request was left as it was.
+**Why not fixed:** what to keep is a call. A request that matched a member can rely on `user_id` alone, now that W03-9 stamps it. For an address that matches nobody, the typed value is the only record of what was tried, which is what spots a spray across addresses. The options are a keyed fingerprint (the `email_fingerprints` the lookup already uses), nothing, or the address as now. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+
+### W03-14 — NIT — Two pieces of copy — FLAGGED
+
+- With email off, the forgot-password page still opens with "we'll send you a link to reset your password". The answer after submit is correct (W03-6), but the page's opening promise is not. The public config could say so up front.
+- The invalid-link message ends "Please request a new one from the login page", directly above a **Request New Reset Link** button that does exactly that, without the login page.
+
+Left as wording calls.
+
+### Harness
+
+The reset changed `member2`'s password to `Kestrel-Harbor-48!`. It is recorded
+in `.workflow-review/accounts.json` (not committed), and `wr.as("member2")`
+signs in with it. The pass cleared the reset token it minted, the
+rate-limit keys, and `member2`'s failure count.
+
+### Checklist
+
+| Section                 | Result                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| 1. The job gets done    | ✅ link → new password → sign in; email off says so (W03-6 resolved)           |
+| 2. The right people     | ✅ same answer for every address; token hashed, in the fragment, single-use    |
+| 3. Wrong input, failure | ✅ run, mismatch, bad and used links refused; stale verdict fixed (W03-11)     |
+| 4. Browser signals      | ✅ only the expected 400s, and 429s from this pass's repeated loads            |
+| 5. Coming back to it    | ✅ a used link says so on a clean load                                         |
+| 6. On a phone           | ✅ no overflow; W03-12 fixed                                                   |
+| 7. Everyone can use it  | ✅ after W03-10: the checklist's state is in text                              |
+| 8. What happens around  | ✅ after W03-9: requests and completions in the department log; W03-13 flagged |
+
+### Completion gate
+
+| Check                  | Result                                                                                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| npm run typecheck      | ✅ clean                                                                                                                                                     |
+| npm run lint           | ✅ clean (8 GB heap, per the W77 tooling lead)                                                                                                               |
+| flake8 / black / isort | ✅ `auth.py`, `tests/test_forgot_password_audit_scope.py`                                                                                                    |
+| backend tests          | ✅ 24 passed: the new test plus the forgot-password expiry, reset race, sign-in audit and endpoint auth-coverage suites; the new cases failed before the fix |
+| frontend tests         | ✅ `vitest related` on the two pages: 12 files, 116 tests; every new case failed before its fix                                                              |

@@ -194,6 +194,36 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### W03 second pass — Forgot password and reset by link — 2026-11-08
+
+The owner asked to continue after W02, so W03 was driven again, as a
+signed-out visitor, `member2` and `admin`, at 1280×900 and 390×844, on the
+continued install. Email is off here, so the reset link was minted, as in the
+first pass.
+
+Held:
+
+- with email off, the server issues no token and says so (W03-6 resolved);
+- opening and submitting a link have their own budget (W03-7 resolved);
+- missing, bad and used links are refused;
+- the checklist lists the seven server rules and blocks a run or a mismatch;
+- a reset signs in with the new password, refuses the old, and kills the link;
+- the completed reset is in the department's audit log.
+
+Fixed:
+
+- W03-9 (MED): reset requests never reached the department's audit log; `forgot_password` left `organization_id` empty.
+- W03-10 (MED): the password checklist's met/unmet state was an aria-hidden icon, silent to a screen reader, on the reset page and in My Account.
+- W03-11 (LOW): a stale link check could overwrite the current verdict (test-proven).
+- W03-12 (LOW): the reset page's "Back to sign in" was 40px tall.
+
+Flagged:
+
+- W03-13 (MED): reset requests write the typed email address into the hash-chained audit log. Mirrored to KNOWN_LIMITATIONS.
+- W03-14 (NIT): two pieces of copy.
+
+Gate: typecheck and lint clean; flake8, black and isort clean on the backend files; 24 backend and 116 frontend tests pass, and every new case failed before its fix. Next: none pending; the owner may name the next second pass.
+
 ### Lead — Integration audit rows record the caller — 2026-11-06
 
 Read from code and tested over HTTP, not re-driven. Fixed (W75-5): the

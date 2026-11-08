@@ -1586,6 +1586,30 @@ existing rows were deliberately not rewritten: the correct date is derivable
 would change historical compliance results, and that was judged not worth it.
 An officer can correct an individual record's date where it matters.
 
+## Password Reset Requests Store the Typed Address in the Audit Log (W03-13, 2026-11-08)
+
+**Owner decision needed.** Every `POST /auth/forgot-password` writes an
+`auth.password_reset_requested` audit row with the address that was typed in
+`event_data.email`. That includes addresses that match nobody, and requests
+refused because email is off. The audit log is hash-chained and kept for
+good, and administrators read it, so these addresses stay there permanently.
+
+The 2026-10-26 change ("keep addresses out of new audit entries") removed the
+address from the OAuth and onboarding rows, on the grounds that each row
+already carries `user_id`. This row was not changed. Since W03-9 (2026-11-08)
+a request that matched a member carries `user_id`, and every request carries
+the department's `organization_id`.
+
+The open question is what to keep for an address that matches nobody, the
+only record of what was tried, which is what spots a spray across addresses:
+
+- **A keyed fingerprint** (`email_fingerprints`, as the account lookup uses). Repeats can be matched, but the address cannot be read back.
+- **Nothing**, relying on `user_id` when it matched and on the per-address rate limit otherwise.
+- **The address, as now.**
+
+Rows already written cannot be edited without breaking the hash chain, so any
+change applies from then on.
+
 ## Sign-in From a Shared Station Address (2026-10-05)
 
 **Resolved (2026-11-03), owner decision of 2026-11-01: count attempts per

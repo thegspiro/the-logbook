@@ -2613,6 +2613,9 @@ async def forgot_password(
                 "reason": "email_disabled",
                 "organization_id": str(organization.id),
             },
+            # The column, not only event_data: the department's audit log
+            # reads by it, and missed every reset request (W03-9).
+            organization_id=str(organization.id),
             ip_address=ip_address,
             user_agent=request.headers.get("user-agent"),
         )
@@ -2641,6 +2644,8 @@ async def forgot_password(
             "token_issued": bool(user and raw_token),
             "organization_id": str(organization.id),
         },
+        organization_id=str(organization.id),
+        user_id=str(user.id) if user and raw_token else None,
         ip_address=ip_address,
         user_agent=request.headers.get("user-agent"),
     )

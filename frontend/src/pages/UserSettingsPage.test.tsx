@@ -178,6 +178,19 @@ describe('UserSettingsPage', () => {
       expect(screen.getByText('No runs like 123 or abc')).toBeInTheDocument();
     });
 
+    it('says which rules are met in text, not only by icon', async () => {
+      // W03-10: the state was an aria-hidden icon, silent to a screen reader.
+      const user = userEvent.setup();
+      await openPasswordTab(user);
+
+      await user.type(screen.getByLabelText(/^new password/i), 'Abcdef123!xyz');
+
+      expect(screen.getByText('One number').closest('li')).toHaveTextContent('Met: One number');
+      expect(screen.getByText('No runs like 123 or abc').closest('li')).toHaveTextContent(
+        'Not met: No runs like 123 or abc'
+      );
+    });
+
     it('signs out and says why after a successful change', async () => {
       // W04-1: the change ends every session, so reloading the user hit a 401
       // and the member reached sign-in with no word that it had worked.
