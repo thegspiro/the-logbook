@@ -97,15 +97,24 @@ attachment`, `delete_event_attachment` — EV-17/EV-30's own code),
   `GuestEmailSignIn.tsx`, `AttendanceRequestsPage.tsx`,
   `EventCheckInMonitoringPage.tsx`.
 - **Frontend real diff:** `modules/events/routes.tsx` (+7/-1 — the
-  existing `/events/:id/check-in` route gains a `<ProtectedRoute>`
-  wrapper; this is **LOC-37**, a Locations & kiosk finding already
-  reviewed and fixed under that feature's own pass (per `FAC-12`'s and
-  `PROGRESS.md`'s cross-references), landing here only because it shares
-  this file. The backend `POST /{event_id}/self-check-in` this page calls
-  already required `get_current_user` before and after this change — read
-  at `events.py:3150-3158` — so the unwrapped route was a UX gap (no
-  redirect to login), never an unauthenticated write path; re-verified
-  rather than re-derived. `pages/events-settings/`
+  existing `/events/:id/check-in` route gains its own, inner
+  `<ProtectedRoute>` wrapper. **Not itself LOC-37** — that finding is a
+  different route, `/locations/:locationId/check-in` (`RoomCheckInPage`,
+  the generic room-tag check-in page, fixed under Locations & kiosk's
+  own pass per `FAC-12`). At baseline `cfce6ba2`,
+  `getEventsRoutes()` — and so this route — already sat inside
+  `App.tsx`'s parent-level `<ProtectedRoute>` wrapping the whole
+  `AppLayout` tree (confirmed by reading `App.tsx` at that commit), so
+  the inner wrapper does not repair a missing redirect or return
+  destination (Copilot review correction: an earlier draft of this
+  section described it as fixing a UX gap, which it is not). It makes
+  the existing authentication requirement explicit at this specific
+  route, which the added comment ties to the LOC-37 flow: this page is
+  where a room's NFC-tag check-in forwards to, so it is named here for
+  that reader rather than for any gap of its own. The backend
+  `POST /{event_id}/self-check-in` this page calls required
+  `get_current_user` before and after this change regardless — read at
+  `events.py:3150-3158`. `pages/events-settings/`
   (`PublicRequestsOverview.tsx` new, `OutreachSection.tsx`/
   `PipelineSection.tsx`/`index.ts`/`types.ts` reorganized around it — a
   pure UI grouping of already-reviewed settings, no new endpoint),
@@ -227,9 +236,10 @@ organization_id)` (Training's own file) — org-scoped on
   page silently read the schema default of `False`, so a manager was
   told guest check-in was off when it was on — a correctness bug, not an
   authorization one: the guest token itself stays out of this payload,
-  unchanged, per the fix's own comment), and `_is_event_mandatory_for`
-  moving from a direct `user.membership_type not in required_types`
-  comparison to `member_holds_tier(user, required_types)` (an
+  unchanged, per the fix's own comment), and `_was_expected_at`
+  (`event_service.py:888-931`) moving from a direct
+  `user.membership_type not in required_types` comparison to
+  `member_holds_tier(user, required_types)` (an
   administrative member on a tiered membership_type no longer reads as
   exempt from an event mandatory for their tier — a scope correction
   within already-authenticated, already-org-scoped request handling, not
