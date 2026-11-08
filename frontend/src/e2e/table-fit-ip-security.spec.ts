@@ -25,7 +25,7 @@ const BLOCKED_COUNTRIES = [
 // six-digit attempt count, the date added and an unblock action. Overflows its
 // card on a tablet with the side navigation open.
 test.describe('Blocked countries table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/ip-security — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: [...TEST_USER.permissions, 'security.manage'] });
