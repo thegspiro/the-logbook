@@ -1,7 +1,7 @@
 """Member position terms: a dated history of positions held
 
 Revision ID: 67ad01c43434
-Revises: e4c6e82acbc2
+Revises: cf93f3b65274
 Create Date: 2026-11-06 23:23:03.290976
 
 Adds ``member_position_terms`` (owner decision 2026-11-06): one row per
@@ -40,7 +40,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "67ad01c43434"
-down_revision: Union[str, None] = "e4c6e82acbc2"
+down_revision: Union[str, None] = "cf93f3b65274"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

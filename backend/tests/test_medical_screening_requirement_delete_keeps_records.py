@@ -106,7 +106,8 @@ class TestDeleteRequirementKeepsRecords:
         org_id = await _make_org(db_session)
         req_id, rec_id = await _make_requirement_with_record(db_session, org_id)
         loaded = await db_session.get(ScreeningRecord, rec_id)
-        assert loaded is not None and loaded.requirement_id == req_id
+        assert loaded is not None
+        assert loaded.requirement_id == req_id
 
         svc = MedicalScreeningService(db_session)
         assert await svc.delete_requirement(req_id, org_id) is True

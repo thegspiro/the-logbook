@@ -40,7 +40,7 @@ longer exists (the foreign key it restores would refuse such a row), restores
 the ENUM and the ``ON DELETE SET NULL`` foreign key.
 
 Revision ID: ac1687769b62
-Revises: e4c6e82acbc2
+Revises: 78f196079c95
 Create Date: 2026-11-08 12:00:00.000000
 
 """
@@ -52,7 +52,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "ac1687769b62"
-down_revision: Union[str, None] = "e4c6e82acbc2"
+down_revision: Union[str, None] = "78f196079c95"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -123,8 +123,10 @@ class TestUpgradeWithRows:
         raw = _raw(engine)
         for value in TYPES:
             link, kind = raw[f"r-{value}"]
-            assert kind.startswith("$gcm2$") and value not in kind
-            assert link.startswith("$gcm2$") and "req-1" not in link
+            assert kind.startswith("$gcm2$")
+            assert value not in kind
+            assert link.startswith("$gcm2$")
+            assert "req-1" not in link
             assert READ_TYPE.process_result_value(kind, None) is ScreeningType(value)
             assert READ_LINK.process_result_value(link, None) == "req-1"
         link, kind = raw["r-unlinked"]

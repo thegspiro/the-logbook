@@ -122,8 +122,10 @@ class TestWhatIsStored:
 
         raw_type, raw_link = await _raw(db_session, record.id)
 
-        assert raw_type.startswith("$gcm2$") and "psych" not in raw_type
-        assert raw_link.startswith("$gcm2$") and scene.req_id not in raw_link
+        assert raw_type.startswith("$gcm2$")
+        assert "psych" not in raw_type
+        assert raw_link.startswith("$gcm2$")
+        assert scene.req_id not in raw_link
         reread = await _reread(db_session, record.id)
         assert reread.screening_type is ScreeningType.PSYCHOLOGICAL
         assert reread.requirement_id == scene.req_id

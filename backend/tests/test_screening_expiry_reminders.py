@@ -320,7 +320,8 @@ class TestTheEmail:
         assert "Physical" not in kwargs["subject"]
         body = kwargs["text_body"]
         assert "Annual Physical" in body
-        assert "November 13, 2026" in body and "in 5 days" in body
+        assert "November 13, 2026" in body
+        assert "in 5 days" in body
         for leaked in ("BP 150/95", "passed", "physical_exam"):
             assert leaked not in body
             assert leaked not in kwargs["html_body"]
