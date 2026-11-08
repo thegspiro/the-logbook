@@ -32,7 +32,13 @@ async def _fake_session():
     yield SimpleNamespace()
 
 
-def _connect(enabled_modules, permissions=("inventory.manage",)):
+def _connect(
+    enabled_modules,
+    permissions=("inventory.manage",),
+    *,
+    url="/inventory/ws",
+    cookies=(("access_token", "t"),),
+):
     """Open the socket with auth and origin stubbed; return (close code, manager)."""
     user = SimpleNamespace(
         organization_id=ORG,
@@ -51,21 +57,23 @@ def _connect(enabled_modules, permissions=("inventory.manage",)):
         return False
 
     manager.connect = AsyncMock(side_effect=decline)
+    lookup = AsyncMock(return_value=user)
     with patch(f"{MODULE}.is_websocket_origin_allowed", return_value=True), patch(
         "app.core.database.async_session_factory", new=_fake_session
     ), patch(
         "app.services.auth_service.AuthService.get_user_from_token",
-        new=AsyncMock(return_value=user),
+        new=lookup,
     ), patch(
         f"{MODULE}.OrganizationService.get_enabled_modules",
         new=AsyncMock(return_value=SimpleNamespace(enabled_modules=enabled_modules)),
     ), patch(
         f"{MODULE}.ws_manager", new=manager
     ):
-        with TestClient(api) as client:
-            with client.websocket_connect("/inventory/ws?token=t") as sock:
+        with TestClient(api, cookies=dict(cookies)) as client:
+            with client.websocket_connect(url) as sock:
                 with pytest.raises(WebSocketDisconnect) as closed:
                     sock.receive_text()
+    manager.lookup = lookup
     return closed.value.code, manager
 
 
@@ -90,4 +98,16 @@ def test_a_member_without_inventory_manage_is_refused():
     code, manager = _connect(["members", "inventory"], permissions=["inventory.view"])
 
     assert code == 4003
+    manager.connect.assert_not_awaited()
+
+
+def test_a_token_in_the_query_string_is_not_accepted():
+    # A bearer token in a URL lands in proxy and access logs; only the
+    # httpOnly cookie authenticates the socket.
+    code, manager = _connect(
+        ["members", "inventory"], url="/inventory/ws?token=t", cookies=()
+    )
+
+    assert code == 4001
+    manager.lookup.assert_not_awaited()
     manager.connect.assert_not_awaited()

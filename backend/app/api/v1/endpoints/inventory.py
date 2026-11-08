@@ -6021,14 +6021,14 @@ async def get_nfpa_retirement_due(
 @router.websocket("/ws")
 async def inventory_websocket(
     websocket: WebSocket,
-    token: str | None = Query(None),
 ):
     """
     WebSocket endpoint for real-time inventory change notifications.
 
-    Authentication: Prefer httpOnly cookies (sent automatically by browsers
-    during the WebSocket handshake). Falls back to a query-param token for
-    non-browser clients.
+    Authentication: the httpOnly ``access_token`` cookie, which browsers send
+    with the handshake. A ``?token=`` query parameter is not accepted: a
+    bearer token in a URL is written to proxy and server access logs, where
+    anyone who reads them can replay it until it expires.
 
     Events pushed to clients:
         { "type": "inventory_changed", "action": "...", "data": {...} }
@@ -6055,13 +6055,11 @@ async def inventory_websocket(
     # which the browser surfaces as a generic error (no close code).
     await websocket.accept()
 
-    # Prefer httpOnly cookie, fall back to query param for non-browser clients
-    if not token:
-        token = websocket.cookies.get("access_token")
+    token = websocket.cookies.get("access_token")
     if not token:
         from loguru import logger
 
-        logger.warning("Inventory WS rejected: no access_token cookie or query param")
+        logger.warning("Inventory WS rejected: no access_token cookie")
         await websocket.close(code=4001, reason="Missing token")
         return
 

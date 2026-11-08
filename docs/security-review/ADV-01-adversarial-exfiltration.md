@@ -48,6 +48,8 @@ rotation's own open pull request.
   independently who may actually see a draft" is now true.
 - **ADV-6** — The socket closes with the final `4003` for callers without
   `inventory.manage`. Both pages that open it are already gated on it.
+  It also no longer accepts a `?token=` query parameter, which put a bearer
+  token in proxy and access logs; the httpOnly cookie is the only way in.
 - **ADV-7** — The three refusing branches call
   `burn_password_verification`, one verify against a hash built once.
 - **ADV-8** — A member's address answers exactly as an unknown one; the audit
@@ -65,8 +67,6 @@ CORS and `/docs` in production, `dangerouslySetInnerHTML` (DOMPurify),
 
 ## Residual
 
-- The inventory socket still accepts `?token=` for non-browser clients, which
-  puts a bearer token in proxy logs; browsers use the cookie.
 - Two `members.manage` holders acting together can still make one the other's
   crew's supervisor; each assignment is audited.
 - ADV-10 is recorded in `docs/KNOWN_LIMITATIONS.md` for the owner.
