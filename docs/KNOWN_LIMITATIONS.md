@@ -590,6 +590,36 @@ assignment; none existed in the development database when this was built.
 
 ## Members — No History of Positions Held (2026-11-01)
 
+**✅ Resolved (owner decision 2026-11-06: keep a dated history; built
+2026-11-08).** `member_position_terms` (migration `67ad01c43434`) records each
+stretch a member held a position: `started_at`, `ended_at` (NULL while held),
+and who assigned and removed it when the path knows (the position endpoints and
+the position service do; onboarding and the membership pipeline's conversion
+record no one). A session hook keeps it in step with `user_positions` on every
+path that goes through the relationship, in the same transaction; the paths
+that write `user_positions` with Core statements (member creation, the position
+service, the onboarding position step's bulk delete, the test-user seed) call
+the same reconciliation. One open term per member and position is held by a
+generated `open_marker` column under a unique key, and a repeated assignment or
+a removal of a position not held opens or closes nothing.
+
+What is kept and what is not:
+
+- A position deleted outright closes its open terms, and the terms survive
+  under the name and kind it had (`position_id` becomes NULL). A hard-deleted
+  member's terms go with them, as their `user_positions` rows do.
+- History starts at each member's current `assigned_at` when the migration
+  ran. Earlier changes are **not** reconstructed from the audit log's
+  `user_role_assigned` / `user_role_removed` events.
+- "Positions held" on an evaluation now lists every office and committee seat
+  held at any time during the review period (a term overlapping it), not only
+  those held when the figures were taken.
+- The member profile lists earlier offices and committee seats with their
+  dates, to everyone who sees the current ones, without the baseline Member
+  position or the rank mirrors.
+
+The original entry follows.
+
 `user_positions` records only who holds each position now: assigning one adds
 a row stamped `assigned_at`, and removing one deletes the row. Nothing keeps a
 member's earlier offices or committee seats.

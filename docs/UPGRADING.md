@@ -169,6 +169,26 @@ database cannot match ciphertext. Same rules as the status change below:
 - **Still plaintext:** the dates and which member a record belongs to (see
   `docs/KNOWN_LIMITATIONS.md`, MS-18).
 
+### Positions held now have a dated history (2026-11-08)
+
+A migration (`67ad01c43434`) runs on the next start, creates
+`member_position_terms` and gives every existing `user_positions` row one
+open term. It does not refuse to start on any data it meets, but what it
+records is worth knowing before an evaluation cycle relies on it:
+
+- Each current position's history starts at its `assigned_at` (or, where
+  that is empty, the member's `created_at`). **Nothing earlier is
+  reconstructed:** a position a member gave up before this upgrade does not
+  appear, and the audit log is not replayed into the history.
+- From then on every assignment and removal opens or closes a term in the
+  same transaction, whichever screen or service made it. A report or script
+  of your own that writes `user_positions` with raw SQL bypasses that; call
+  `sync_position_terms` (`app/models/member_position_term.py`) after it, as
+  `scripts/seed_test_users.py` now does.
+- The downgrade drops the table and the history with it; `user_positions` is
+  untouched, so the previous release boots. Take the backup first if the
+  history matters to you.
+
 ### A screening record's status is encrypted at rest (2026-11-05)
 
 A migration (`80fa2c83bf9d`) runs on the next start and turns
