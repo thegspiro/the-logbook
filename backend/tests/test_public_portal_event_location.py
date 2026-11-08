@@ -66,7 +66,7 @@ def _event(org_id: str, admin_id: str, title: str, **place) -> Event:
     )
 
 
-async def _published(db: AsyncSession, org_id: str) -> dict[str, str | None]:
+async def _published(db: AsyncSession, org_id: str) -> list[tuple[str, str | None]]:
     with (
         patch.object(portal, "check_portal_enabled", new=AsyncMock()),
         patch.object(portal, "log_public_api_request", new=AsyncMock()),
@@ -78,7 +78,8 @@ async def _published(db: AsyncSession, org_id: str) -> dict[str, str | None]:
             limit=10,
             offset=0,
         )
-    return {e.title or "": e.location for e in events}
+    # A list, not a dict keyed by title, so a duplicated event is not hidden.
+    return sorted((e.title or "", e.location) for e in events)
 
 
 class TestThePublishedLocation:
@@ -101,7 +102,7 @@ class TestThePublishedLocation:
 
         published = await _published(db_session, org_id)
 
-        assert published == {
-            "Open house": "Station 1",
-            "Park safety day": "City Park",
-        }
+        assert published == [
+            ("Open house", "Station 1"),
+            ("Park safety day", "City Park"),
+        ]
