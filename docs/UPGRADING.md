@@ -135,6 +135,40 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### A screening record's type and requirement link are encrypted at rest (2026-11-08)
+
+A migration (`ac1687769b62`) runs on the next start and turns
+`screening_records.screening_type` from an `ENUM` and
+`screening_records.requirement_id` from a `VARCHAR(36)` into `TEXT`, then
+**encrypts every existing value of both in place**. It first drops the
+**foreign key** from `requirement_id` to `screening_requirements` (whatever
+the constraint is named on your database) and the index under it: the
+database cannot match ciphertext. Same rules as the status change below:
+
+- `ENCRYPTION_KEY` must be set when screening records exist; with it missing
+  the migration stops with a clear error and changes nothing.
+- **Take the database backup first.** The downgrade decrypts both columns,
+  restores the `ENUM` and the `ON DELETE SET NULL` foreign key, and clears any
+  link whose requirement no longer exists (the restored key would refuse it).
+  Only the same `ENCRYPTION_KEY` / `ENCRYPTION_SALT` can read the ciphertext.
+  Backups taken before the upgrade still hold both columns in plaintext.
+- **Deleting a requirement still keeps its records**, now unlinking them in
+  the application rather than through the database. A requirement deleted by
+  hand in SQL leaves its records pointing at nothing; they then count toward
+  no requirement, as an unlinked record always has.
+- **New audit entries no longer name a screening's type**: the record-created
+  entry drops `screening_type`, and the records-list entry records only
+  `screening_type_filtered: true/false`. Existing entries are unchanged — the
+  audit log is hash-chained, and rewriting a row would break the chain.
+- The screens, compliance grading, the expiring list, the Members hub, the
+  membership pipeline's screening stage, the data export and anonymisation
+  behave as before. A report or query of your own that reads, filters or joins
+  on either column directly will now see ciphertext.
+- `scripts/rotate_encryption_key.py` and `scripts/reencrypt_to_aesgcm.py` cover
+  both columns.
+- **Still plaintext:** the dates and which member a record belongs to (see
+  `docs/KNOWN_LIMITATIONS.md`, MS-18).
+
 ### A screening record's status is encrypted at rest (2026-11-05)
 
 A migration (`80fa2c83bf9d`) runs on the next start and turns
@@ -720,6 +754,35 @@ every authentication and public endpoint at once.
 
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
+
+### Medical screening: expiry reminder emails, and new requirements recur by default (2026-11-08)
+
+Nothing blocks a restart. Migration `cf93f3b65274` creates an empty table,
+`screening_reminder_sends`, and lets `notification_rules.trigger` hold
+`medical_screening_expiry`. No existing row changes.
+
+- **Members start receiving emails.** A new daily scheduled task,
+  `medical_screening_expiry_reminders` (06:15 in the external crontab, and in
+  the in-process scheduler), emails a member 90, 60, 30 and 7 days before
+  one of their medical screenings falls due — the certification reminders'
+  tiers. Only the most urgent tier a screening has reached is sent, so on the
+  first run after the upgrade a member whose physical is due in three weeks
+  gets the 30-day email once, not three. The subject is "A medical screening
+  is due soon"; the body names the requirement and the due date, nothing
+  about the result.
+- **On by default** for every department with the Medical Screening module
+  switched on. To turn them off, add a **Medical Screening Expiry** rule under
+  **Notifications › Rules** and disable it. A member who has turned off
+  "Training and certification reminders" (or all reminder emails) is not
+  emailed. There is no text message and no notification-bell entry.
+- **Each reminder goes once.** A second run the same day, or two runs at once,
+  sends nothing more. An officer who corrects a screening's expiration date
+  re-arms the reminders for the new date.
+- **A new screening requirement starts recurring every 12 months**; the
+  One-time box starts unticked. Requirements already saved keep their setting.
+- **Downgrading** drops the table, so the next run after re-upgrading may send
+  a screening's current tier again, and deletes any Medical Screening Expiry
+  rule.
 
 ### Finance: an optional live QuickBooks Online connection (2026-11-06)
 

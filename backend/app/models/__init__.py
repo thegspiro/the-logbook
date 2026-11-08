@@ -337,6 +337,7 @@ from app.models.mcp_oauth import McpOAuthAuthorization, McpOAuthClient, McpOAuth
 from app.models.mcp_service_key import McpServiceKey
 from app.models.medical_screening import (
     ScreeningRecord,
+    ScreeningReminderSend,
     ScreeningRequirement,
     ScreeningStatus,
     ScreeningType,
@@ -860,6 +861,7 @@ __all__ = [
     # Medical screening models
     "ScreeningRequirement",
     "ScreeningRecord",
+    "ScreeningReminderSend",
     "ScreeningType",
     "ScreeningStatus",
     # Membership pipeline models

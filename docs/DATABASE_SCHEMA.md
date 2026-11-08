@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**359 tables · 5863 columns · 1206 foreign keys**
+**360 tables · 5869 columns · 1207 foreign keys**
 
 ---
 
@@ -480,6 +480,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`screening_records`](#screening_records) | `ScreeningRecord` | 19 | Individual screening instance for a user or prospective member. |
+| [`screening_reminder_sends`](#screening_reminder_sends) | `ScreeningReminderSend` | 6 | One expiry reminder sent for one screening, at one tier (W71b-4). |
 | [`screening_requirements`](#screening_requirements) | `ScreeningRequirement` | 11 | Organization-level definition of a required screening. |
 
 ### Meeting Minutes
@@ -7495,10 +7496,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `requirement_id` | VARCHAR(36) | yes | FK |  | → `screening_requirements.id` ON DELETE SET NULL |
+| `requirement_id` | TEXT | yes |  |  |  |
 | `user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `prospect_id` | VARCHAR(36) | yes | FK, IDX |  | → `prospective_members.id` ON DELETE CASCADE |
-| `screening_type` | ENUM(`physical_exam`, `medical_clearance`, `drug_screening`, `vision_hearing`, `fitness_assessment`, `psychological`) | no |  |  |  |
+| `screening_type` | TEXT | no |  |  |  |
 | `status` | TEXT | no |  | `'scheduled'` |  |
 | `scheduled_date` | DATE | yes |  |  |  |
 | `completed_date` | DATE | yes |  |  |  |
@@ -7518,6 +7519,29 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_screening_rec_expiration` (`organization_id`, `expiration_date`)
 - `idx_screening_rec_prospect` (`prospect_id`)
 - `idx_screening_rec_user` (`user_id`)
+
+### `screening_reminder_sends`
+
+**ScreeningReminderSend** · `app/models/medical_screening.py`
+
+> One expiry reminder sent for one screening, at one tier (W71b-4). The unique key ``(screening_record_id, tier_days, due_date)`` is what makes a second daily run, or two runs at once, a no-op (pitfall #36): the run inserts this row before it sends, and a duplicate insert means another run already has that reminder. ``due_date`` is part of the key so an officer who corrects the record's expiration date re-arms the reminders for the new date rather than leaving them spent on the old one. Holds no PHI beyond what ``screening_records`` already keeps in plaintext: the record id and the due date.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `screening_record_id` | VARCHAR(36) | no | FK |  | → `screening_records.id` ON DELETE CASCADE |
+| `tier_days` | INTEGER | no |  |  |  |
+| `due_date` | DATE | no |  |  |  |
+| `sent_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_screening_reminder_org` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_screening_reminder_send` (`screening_record_id`, `tier_days`, `due_date`)
 
 ### `screening_requirements`
 
@@ -8599,7 +8623,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
-| `trigger` | ENUM(`event_reminder`, `training_expiry`, `schedule_change`, `new_member`, `member_dropped`, `maintenance_due`, `election_started`, `form_submitted`, `action_item_assigned`, `meeting_scheduled`, `document_uploaded`, `suggestion_submitted`, `equipment_request_update`) | no |  |  |  |
+| `trigger` | ENUM(`event_reminder`, `training_expiry`, `schedule_change`, `new_member`, `member_dropped`, `maintenance_due`, `election_started`, `form_submitted`, `action_item_assigned`, `meeting_scheduled`, `document_uploaded`, `suggestion_submitted`, `equipment_request_update`, `medical_screening_expiry`) | no |  |  |  |
 | `category` | ENUM(`events`, `training`, `scheduling`, `members`, `maintenance`, `general`) | no |  | `general` |  |
 | `channel` | ENUM(`email`, `in_app`) | no |  | `in_app` |  |
 | `enabled` | BOOL | yes |  | `True` |  |
@@ -12915,7 +12939,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (297 references)
+### → `organizations` (298 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13148,6 +13172,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `scheduled_emails` | `organization_id` | CASCADE | no |
 | `scheduling_module_configs` | `organization_id` | CASCADE | no |
 | `screening_records` | `organization_id` | CASCADE | no |
+| `screening_reminder_sends` | `organization_id` | CASCADE | no |
 | `screening_requirements` | `organization_id` | CASCADE | no |
 | `self_report_configs` | `organization_id` | CASCADE | no |
 | `shift_assignments` | `organization_id` | CASCADE | no |
@@ -14325,11 +14350,11 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `apparatus_operators` | `completion_credit_id` | CASCADE | yes |
 
-### → `screening_requirements` (1 references)
+### → `screening_records` (1 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `screening_records` | `requirement_id` | SET NULL | yes |
+| `screening_reminder_sends` | `screening_record_id` | CASCADE | no |
 
 ### → `shift_history_imports` (1 references)
 

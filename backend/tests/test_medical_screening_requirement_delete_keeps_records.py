@@ -1,12 +1,15 @@
 """
 Deleting a screening requirement unlinks its records; it does not delete them.
 
-`screening_records.requirement_id` is `ondelete="SET NULL"` and nullable, so a
-record was always meant to outlive the requirement it was filed against. The
-ORM relationship said otherwise: `cascade="all, delete-orphan"` made
+A record was always meant to outlive the requirement it was filed against.
+The ORM relationship once said otherwise: `cascade="all, delete-orphan"` made
 SQLAlchemy delete every linked record before the database's SET NULL could
 apply, so removing a requirement from the catalogue silently destroyed the
 members' medical screening history filed under it.
+
+Since MS-18 (2026-11-06) the link is ciphertext with no foreign key and no
+relationship, and `MedicalScreeningService.delete_requirement` clears it in
+code; these tests hold that path to the same outcome.
 """
 
 import uuid
@@ -98,13 +101,12 @@ class TestDeleteRequirementKeepsRecords:
         assert requirement.scalar_one_or_none() is None
 
     async def test_loaded_record_survives_too(self, db_session: AsyncSession):
-        """With the collection already in the session, the ORM (not the DB)
-        decides -- it must unlink rather than delete there as well."""
+        """With the record already in the session, the in-session copy is
+        the one unlinked and flushed -- it must not be deleted either."""
         org_id = await _make_org(db_session)
         req_id, rec_id = await _make_requirement_with_record(db_session, org_id)
-        req = await db_session.get(ScreeningRequirement, req_id)
-        await db_session.refresh(req, ["records"])
-        assert [r.id for r in req.records] == [rec_id]
+        loaded = await db_session.get(ScreeningRecord, rec_id)
+        assert loaded is not None and loaded.requirement_id == req_id
 
         svc = MedicalScreeningService(db_session)
         assert await svc.delete_requirement(req_id, org_id) is True
@@ -125,7 +127,15 @@ class TestDeleteRequirementKeepsRecords:
 
         row = await _stored_requirement_id(db_session, rec_id)
         assert row is not None
-        assert row[0] == req_id
+        # Stored as ciphertext (MS-18); still the same link once decrypted.
+        record = (
+            await db_session.execute(
+                select(ScreeningRecord)
+                .where(ScreeningRecord.id == rec_id)
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one()
+        assert record.requirement_id == req_id
 
     async def test_unlinked_record_still_lists_and_grades(
         self, db_session: AsyncSession

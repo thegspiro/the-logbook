@@ -464,13 +464,44 @@ class MedicalScreeningService:
     async def delete_requirement(
         self, requirement_id: str, organization_id: str
     ) -> bool:
-        """Delete a screening requirement."""
+        """Delete a screening requirement, keeping the records filed under it.
+
+        A record is a member's medical history and outlives its requirement:
+        its link is cleared, never the record deleted. The link is ciphertext
+        since MS-18, so there is no foreign key to do that with ON DELETE SET
+        NULL; this does it in code, over this organization's records only,
+        matching the decrypted id.
+        """
         requirement = await self.get_requirement(requirement_id, organization_id)
         if not requirement:
             return False
+        await self.unlink_records_from_requirement(str(requirement.id), organization_id)
         await self.db.delete(requirement)
         await self.db.flush()
         return True
+
+    async def unlink_records_from_requirement(
+        self, requirement_id: str, organization_id: str
+    ) -> int:
+        """Clear ``requirement_id`` on this org's records linked to it.
+
+        Returns how many records were unlinked. The records keep everything
+        else: type, status, dates and results stay as compliance proof.
+        """
+        rows = await self.db.execute(
+            select(ScreeningRecord).where(
+                ScreeningRecord.organization_id == organization_id,
+                ScreeningRecord.requirement_id.isnot(None),
+            )
+        )
+        unlinked = 0
+        for record in rows.scalars().all():
+            if str(record.requirement_id) == requirement_id:
+                record.requirement_id = None
+                unlinked += 1
+        if unlinked:
+            await self.db.flush()
+        return unlinked
 
     # --- Screening Records ---
 
@@ -497,18 +528,22 @@ class MedicalScreeningService:
             query = query.where(ScreeningRecord.user_id == user_id)
         if prospect_id:
             query = query.where(ScreeningRecord.prospect_id == prospect_id)
-        if screening_type:
-            query = query.where(ScreeningRecord.screening_type == screening_type)
         # created_at has one-second resolution, so a batch entered together
         # ties on it; id keeps the order stable across page requests.
         query = query.order_by(ScreeningRecord.created_at.desc(), ScreeningRecord.id)
-        if not status:
+        if not status and not screening_type:
             result = await self.db.execute(_page(query, skip, limit))
             return list(result.scalars().all())
-        # The status is ciphertext (MS-18): filter the decrypted value, then
-        # page, so a page is never short while matches lie further on.
+        # The status and the type are ciphertext (MS-18): filter the decrypted
+        # values, then page, so a page is never short while matches lie
+        # further on.
         result = await self.db.execute(query)
-        matching = [r for r in result.scalars().all() if r.status == status]
+        matching = [
+            r
+            for r in result.scalars().all()
+            if (not status or r.status == status)
+            and (not screening_type or r.screening_type == screening_type)
+        ]
         end = None if limit is None else skip + limit
         return matching[skip:end]
 
@@ -1024,6 +1059,45 @@ class MedicalScreeningService:
 
         return expiring
 
+    async def get_reminder_candidates(
+        self,
+        organization_id: str,
+        today: date,
+        horizon_days: int,
+    ) -> List[Tuple[ScreeningRecord, ScreeningRequirement, ScreeningDeadline]]:
+        """Members' current screenings falling due within ``horizon_days``.
+
+        Feeds the expiry reminders (W71b-4). The records are the expiring
+        list's own (``_due_in_window``, so the reminder and the Compliance tab
+        agree on which screening is due and when, pitfall #29), narrowed to
+        what a reminder is for:
+
+        * members only — applicants are screened through the pipeline;
+        * not yet due — a screening past its due date is the Compliance tab's
+          business, not a "due soon" email;
+        * a requirement the member is graded on — a position-scoped
+          requirement the member no longer holds is not theirs to renew.
+
+        Whether the member is a current one is the caller's check, alongside
+        the email address it needs from the same row.
+        """
+        cutoff = today + timedelta(days=horizon_days)
+        due = [
+            item
+            for item in await self._due_in_window(
+                organization_id, today, cutoff, members_only=True
+            )
+            if item[2].due is not None and item[2].due >= today
+        ]
+        if not any(_requirement_roles(req) for _, req, _ in due):
+            return due
+        held = await self._position_keys(organization_id)
+        return [
+            (record, req, deadline)
+            for record, req, deadline in due
+            if _applicable_requirements([req], held.get(str(record.user_id), set()))
+        ]
+
     async def _due_in_window(
         self,
         organization_id: str,
@@ -1047,16 +1121,23 @@ class MedicalScreeningService:
         }
         if not requirements:
             return []
+        # The link is ciphertext (MS-18), so the records linked to an active
+        # requirement are picked after decryption, not by an IN in SQL.
         criteria = [
             ScreeningRecord.organization_id == organization_id,
-            ScreeningRecord.requirement_id.in_(list(requirements)),
+            ScreeningRecord.requirement_id.isnot(None),
         ]
         if members_only:
             criteria.append(ScreeningRecord.user_id.isnot(None))
         rows = await self.db.execute(select(ScreeningRecord).where(*criteria))
+        linked = [
+            record
+            for record in rows.scalars().all()
+            if str(record.requirement_id) in requirements
+        ]
         current = [
             record
-            for record in deciding_records(rows.scalars().all()).values()
+            for record in deciding_records(linked).values()
             if record.status in _SATISFYING_STATUSES
         ]
 

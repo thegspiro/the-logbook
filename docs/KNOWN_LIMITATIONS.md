@@ -2,32 +2,41 @@
 
 ## Medical Screening — What Is Still Plaintext at Rest (MS-18, 2026-11-05)
 
-**Decided 2026-11-04: encrypt the status first.** `screening_records.status` is
-now AES-256-GCM ciphertext (`EncryptedEnum`, migration `80fa2c83bf9d`), so a
+**Decided 2026-11-04: encrypt the status first.** `screening_records.status`
+is AES-256-GCM ciphertext (`EncryptedEnum`, migration `80fa2c83bf9d`), so a
 dump no longer says which member _failed_ a screening. The provider, results
 and notes were already encrypted (MS-1). Searchable fingerprints were ruled
 out: with seven statuses and six types, a keyed hash puts every "failed"
 record under one value, and one known record reveals the rest.
 
-Still plaintext, and each waiting on its own decision:
+✅ **Decided 2026-11-06: "type + link + audit", built.** Migration
+`ac1687769b62`:
 
-- **The screening type.** A dump still reads "this member — psychological
-  evaluation — 25 Oct 2026", without the outcome. Encrypting it is the same
-  shape of change as the status: the pipeline gate's lookup by type, the
-  Members hub's grouping by type and the records list's type filter move to
-  Python, and `screening_type` leaves `enum_normalization`.
-- **The requirement link reveals the type anyway.** `requirement_id` is a
-  plain foreign key to a requirement whose name and type are plaintext (for
-  example "Pre-membership Drug Screen"), and the record form links most
-  records. Encrypting the type without it protects only unlinked records.
-  Encrypting the link means giving up the database foreign key, so deleting a
-  requirement would clear its records' links in code instead.
-- **The audit log names the type.** Creating a record writes `screening_type`
-  into the audit entry, and the records-list filters are logged too. New
-  entries could stop doing that. Existing ones cannot be scrubbed: the audit
-  log is hash-chained, so rewriting a row breaks the chain.
-- **The dates and the member link** stay plaintext: grading, the expiring list
-  and every screen filter and join on them.
+- **The screening type is ciphertext** (`EncryptedEnum`). The pipeline gate's
+  lookup by type, the records list's type filter and the Members hub's
+  grouping by type match the decrypted value in Python, org-scoped;
+  `screening_records.screening_type` left `enum_normalization`. The
+  requirement's own type stays plaintext: it is the department's policy, not
+  a person's history.
+- **The requirement link is ciphertext** (`EncryptedReference`). The database
+  foreign key is gone; deleting a requirement clears its records' links in
+  `MedicalScreeningService.delete_requirement`, over the deleting
+  organization's records only. Grading and the expiring list match the link
+  after decryption. `tests/test_medical_screening_type_encrypted.py`.
+- **New audit entries do not name the type.** The record-created entry no
+  longer carries `screening_type`, and the records-list entry says only
+  whether a type filter was used (`screening_type_filtered`).
+
+Still plaintext, and staying that way unless decided otherwise:
+
+- **The dates and the member link.** Grading, the expiring list, the expiry
+  reminders and every screen filter and join on them.
+- **Audit entries written before 2026-11-06** still name the type of each
+  record created, and the type filter used on the records list. The audit log
+  is hash-chained, so rewriting a row breaks the chain.
+- **The records-list status filter** is still written into the audit entry,
+  as before; only the type was in scope.
+- **Backups taken before the upgrade** hold every one of these in plaintext.
 
 ## Owner Decisions of 2026-11-01
 
@@ -362,13 +371,27 @@ each changes saved members' standing, writes PHI rows, or adds behaviour.
   changes what the tile counts. Separately, decide whether a lapsed
   screening should in fact block scheduling, or the claim should go.
 - **Nothing reminds anyone a screening is about to expire (W71b-4, MED).**
-  Certifications get tiered 90/60/30/7-day emails, and screenings get none.
-  A lapse is visible only on the Compliance tab and the member's dashboard.
-  If added, reminders would be email-first (pitfall #18).
-- **A new requirement starts as one-time (W71b-5, LOW).** The One-time box
-  starts ticked, though the hidden frequency is pre-filled with 12, so an
-  annual physical added in a hurry never falls due. The fix is one line,
-  `ScreeningRequirementForm.tsx:32`.
+  ✅ **Resolved 2026-11-08 (owner decision 2026-11-06: the same as
+  certifications).** A daily task emails the member 90, 60, 30 and 7 days
+  before a screening falls due, once per tier per screening and due date
+  (`screening_reminder_sends`, unique on that key). Email only, gated by the
+  Medical Screening module, the `medical_screening_expiry` notification rule
+  (on with no rule) and the member's "Training and certification reminders"
+  choice. The email names the requirement and the due date only; there is no
+  bell entry, which would store the requirement name beside the member in
+  plaintext. Officers are not copied, unlike the certification 30- and 7-day
+  tiers: the owner's decision named the member, and a copy to officers would
+  tell them which screening a member owes. `tests/test_screening_expiry_reminders.py`.
+  Original finding: certifications get tiered 90/60/30/7-day emails, and
+  screenings got none; a lapse was visible only on the Compliance tab and the
+  member's dashboard.
+- **A new requirement starts as one-time (W71b-5, LOW).** ✅ **Resolved
+  2026-11-08 (owner decision 2026-11-06: recurring by default).** A new
+  requirement starts with One-time unticked and recurs every 12 months;
+  existing requirements open as they were saved.
+  `ScreeningRequirementForm.recurringDefault.test.tsx`. Original finding: the
+  box started ticked though the hidden frequency was pre-filled with 12, so an
+  annual physical added in a hurry never fell due.
 
 ## Zeffy — What the Integration Leaves to the Treasurer (2026-10-31)
 

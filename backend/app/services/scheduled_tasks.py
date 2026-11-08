@@ -13,6 +13,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 6:00 AM — certification expiration alerts
 0 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=cert_expiration_alerts
 
+# Daily at 6:15 AM — medical screening expiry reminders
+15 6 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=medical_screening_expiry_reminders
+
 # Weekly on Mondays at 7:00 AM — struggling member detection
 0 7 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=struggling_member_check
 
@@ -222,6 +225,15 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
+    },
+    "medical_screening_expiry_reminders": {
+        "description": (
+            "Email members before a medical screening falls due "
+            "(90/60/30/7-day tiers, once per tier per screening)"
+        ),
+        "frequency": "daily",
+        "recommended_time": "06:15",
+        "cron": "15 6 * * *",
     },
     "struggling_member_check": {
         "description": "Detect members falling behind on training programs and send notifications",
@@ -1085,6 +1097,22 @@ async def run_cert_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
         return result.get("alerts_sent", 0)
 
     return await _for_each_org(db, "cert_expiration_alerts", _process)
+
+
+async def run_medical_screening_expiry_reminders(db: AsyncSession) -> Dict[str, Any]:
+    """Email members before a screening falls due (W71b-4).
+
+    The module switch and the MEDICAL_SCREENING_EXPIRY rule are checked in
+    ``ScreeningReminderService.process_reminders``; a second daily run is a
+    no-op through ``screening_reminder_sends``' unique key.
+    """
+    from app.services.screening_reminder_service import ScreeningReminderService
+
+    async def _process(db_session, org):
+        result = await ScreeningReminderService(db_session).process_reminders(org.id)
+        return result.get("reminders_sent", 0)
+
+    return await _for_each_org(db, "medical_screening_expiry_reminders", _process)
 
 
 async def run_struggling_member_check(db: AsyncSession) -> Dict[str, Any]:
@@ -8389,6 +8417,7 @@ async def run_election_lifecycle(db: AsyncSession) -> Dict[str, Any]:
 
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
+    "medical_screening_expiry_reminders": run_medical_screening_expiry_reminders,
     "election_lifecycle": run_election_lifecycle,
     "struggling_member_check": run_struggling_member_check,
     "enrollment_deadline_warnings": run_enrollment_deadline_warnings,
@@ -8511,6 +8540,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "salesforce_auto_sync": 1800,
     # Daily (checked each loop tick; runs at most once per interval)
     "cert_expiration_alerts": 86400,
+    "medical_screening_expiry_reminders": 86400,
     "action_item_reminders": 86400,
     # Checked daily; the weekly list keeps its own last-sent day per org.
     "minutes_action_item_reminders": 86400,
