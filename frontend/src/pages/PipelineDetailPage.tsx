@@ -1827,7 +1827,7 @@ const PipelineDetailPage: React.FC = () => {
             <>
               <button
                 onClick={() => window.open(`/training/print/program?id=${programId}`, '_blank')}
-                className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm print:hidden"
+                className="btn-secondary flex items-center space-x-1 text-sm print:hidden"
               >
                 <Printer className="h-4 w-4" />
                 <span>Print</span>
@@ -1850,7 +1850,7 @@ const PipelineDetailPage: React.FC = () => {
               {canManage && (
                 <button
                   onClick={() => setShowEditProgram(true)}
-                  className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+                  className="btn-secondary flex items-center space-x-1 text-sm"
                 >
                   <Pencil className="h-4 w-4" />
                   <span>Edit</span>
@@ -1871,7 +1871,7 @@ const PipelineDetailPage: React.FC = () => {
                     void handleDuplicate();
                   }}
                   disabled={isDuplicating}
-                  className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm disabled:opacity-50"
+                  className="btn-secondary flex items-center space-x-1 text-sm"
                 >
                   <Copy className="h-4 w-4" />
                   <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
@@ -1881,7 +1881,7 @@ const PipelineDetailPage: React.FC = () => {
                 <button
                   onClick={() => void confirmDeleteProgram()}
                   title="Delete pipeline"
-                  className="flex items-center space-x-1 rounded-lg px-3 py-2 text-sm text-red-700 hover:bg-red-500/10 dark:text-red-400"
+                  className="btn-secondary flex items-center space-x-1 text-sm"
                 >
                   <Trash2 className="h-4 w-4" />
                   <span>Delete</span>

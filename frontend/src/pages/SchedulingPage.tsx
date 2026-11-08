@@ -526,7 +526,7 @@ const SchedulingPage: React.FC = () => {
             canManage && activeTab === 'schedule' ? (
               <button
                 onClick={() => setShowCreateShift(true)}
-                className="flex min-h-11 w-full items-center justify-center space-x-2 rounded-lg bg-violet-700 px-4 py-2 text-white transition-colors hover:bg-violet-800 sm:w-auto"
+                className="btn-primary flex w-full items-center justify-center space-x-2 sm:w-auto"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 <span>Create Shift</span>
