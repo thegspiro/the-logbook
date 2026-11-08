@@ -162,17 +162,17 @@ class HistoricalStaffingService:
         if kind not in engine.KINDS:
             raise ValueError("Choose the seats file or the events file.")
         record = await self.imports.get(organization_id, import_id, for_update=True)
-        removed = (
-            await self.db.execute(
-                delete(HistoricalStaffingFile).where(
-                    HistoricalStaffingFile.historical_import_id == record.id,
-                    HistoricalStaffingFile.organization_id == record.organization_id,
-                    HistoricalStaffingFile.kind == kind,
-                )
+        result = await self.db.execute(
+            delete(HistoricalStaffingFile).where(
+                HistoricalStaffingFile.historical_import_id == record.id,
+                HistoricalStaffingFile.organization_id == record.organization_id,
+                HistoricalStaffingFile.kind == kind,
             )
-        ).rowcount
+        )
         await self.db.commit()
-        return bool(removed)
+        # A DELETE's result is a CursorResult; the generic Result type the
+        # async session declares does not carry rowcount.
+        return bool(getattr(result, "rowcount", 0))
 
     async def _input(self, staffing_file: HistoricalStaffingFile) -> engine.FileInput:
         rows = (
