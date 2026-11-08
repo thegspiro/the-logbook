@@ -15,10 +15,13 @@
  * (pitfall #19).
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { blankToNull } from '../../../utils/formValues';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -29,6 +32,45 @@ import { PLEDGE_STATUS_LABELS, donorDisplayName } from '../utils/labels';
 
 /** The pledge columns are Numeric(10, 2). */
 const MAX_AMOUNT = 99_999_999.99;
+
+type PledgeField =
+  | 'donorId'
+  | 'campaignId'
+  | 'pledgedAmount'
+  | 'pledgeDate'
+  | 'dueDate'
+  | 'fulfilledAmount'
+  | 'status'
+  | 'notes'
+  | 'reminderEnabled';
+
+/**
+ * The fields as a 422 names them. Grant request schemas report the camelCase
+ * alias; the mapper reads both spellings. `PledgeCreate` sets no max_length.
+ */
+const SERVER_FIELDS: Record<PledgeField, ServerFieldSpec> = {
+  donorId: { label: 'Donor' },
+  campaignId: { label: 'Campaign' },
+  pledgedAmount: { label: 'Amount pledged' },
+  pledgeDate: { label: 'Pledge date' },
+  dueDate: { label: 'Due date' },
+  fulfilledAmount: { label: 'Amount received so far' },
+  status: { label: 'Status' },
+  notes: { label: 'Notes' },
+  reminderEnabled: { label: 'Send reminders' },
+};
+
+const FIELD_IDS: Record<PledgeField, string> = {
+  donorId: 'pledge-donor',
+  campaignId: 'pledge-campaign',
+  pledgedAmount: 'pledge-amount',
+  pledgeDate: 'pledge-date',
+  dueDate: 'pledge-due',
+  fulfilledAmount: 'pledge-fulfilled',
+  status: 'pledge-status',
+  notes: 'pledge-notes',
+  reminderEnabled: 'pledge-reminder',
+};
 
 interface PledgeDialogProps {
   pledge?: Pledge | undefined;
@@ -60,11 +102,41 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
   const [status, setStatus] = useState<string>(pledge?.status ?? PledgeStatus.PENDING);
   const [notes, setNotes] = useState(pledge?.notes ?? '');
   const [reminderEnabled, setReminderEnabled] = useState(pledge?.reminderEnabled ?? true);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Partial<Record<PledgeField, string>>>({});
   const [saving, setSaving] = useState(false);
+  // An edit that saved everything but a refused field stays open on that
+  // field; closing then still tells the caller something was saved.
+  const partlySaved = useRef(false);
+
+  const snapshot = JSON.stringify([
+    donorId,
+    campaignId,
+    pledgedAmount,
+    pledgeDate,
+    dueDate,
+    fulfilledAmount,
+    status,
+    notes,
+    reminderEnabled,
+  ]);
+  const initialSnapshot = useRef(snapshot);
+  const isDirty = snapshot !== initialSnapshot.current;
+  const close = () => (partlySaved.current ? onSaved() : onClose());
+  // Escape, the X and Cancel all ask before throwing away a changed form.
+  const requestClose = useDiscardGuard({ isDirty, onClose: close });
+  const clearError = (field: PledgeField) =>
+    setErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  const focusField = (field: PledgeField | undefined) => {
+    if (field) document.getElementById(FIELD_IDS[field])?.focus();
+  };
 
   const validate = (): boolean => {
-    const next: Record<string, string> = {};
+    const next: Partial<Record<PledgeField, string>> = {};
     const pledged = amountError(pledgedAmount, true);
     if (pledged) next.pledgedAmount = pledged;
     if (!pledgeDate) next.pledgeDate = 'Enter the date of the pledge.';
@@ -102,7 +174,32 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
         const fulfilled = Number(fulfilledAmount || 0).toFixed(2);
         if (fulfilled !== Number(pledge.fulfilledAmount).toFixed(2)) payload.fulfilledAmount = fulfilled;
         if (status !== pledge.status) payload.status = status as PledgeStatus;
-        await fundraisingService.updatePledge(pledge.id, payload);
+        let refused: Partial<Record<PledgeField, string>> = {};
+        try {
+          await fundraisingService.updatePledge(pledge.id, payload);
+        } catch (err: unknown) {
+          // Owner rule (2026-11-05) for a single-save form: a value the pledge
+          // cannot hold is not written, the rest saves, and the field keeps
+          // what was typed, flagged, until it is fixed. Anything the form has
+          // no field for is a real failure and is reported as one.
+          const mapped = mapServerFieldErrors(err, SERVER_FIELDS);
+          const keys = Object.keys(mapped?.fieldErrors ?? {}) as PledgeField[];
+          if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
+          refused = mapped.fieldErrors;
+          const rest: PledgeUpdatePayload = { ...payload };
+          for (const key of keys) delete rest[key];
+          await fundraisingService.updatePledge(pledge.id, rest);
+        }
+        const firstRefused = (Object.keys(refused) as PledgeField[])[0];
+        if (firstRefused) {
+          partlySaved.current = true;
+          setErrors(refused);
+          toast.error(
+            `Pledge saved, except ${SERVER_FIELDS[firstRefused].label.toLowerCase()}: ${refused[firstRefused] ?? ''} Fix it and save again.`
+          );
+          focusField(firstRefused);
+          return;
+        }
         toast.success('Pledge saved');
       } else {
         const payload: PledgeCreatePayload = {
@@ -119,25 +216,28 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
       }
       onSaved();
     } catch (err: unknown) {
+      // A new pledge is recorded only once nothing is refused, so each
+      // refusal goes on its field (forms review F-2).
+      const mapped = pledge ? null : mapServerFieldErrors(err, SERVER_FIELDS);
+      const keys = Object.keys(mapped?.fieldErrors ?? {}) as PledgeField[];
+      if (mapped && keys[0]) {
+        setErrors(mapped.fieldErrors);
+        focusField(keys[0]);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       toast.error(getErrorMessage(err, 'Could not save the pledge'));
     } finally {
       setSaving(false);
     }
   };
 
-  const errorText = (field: string) =>
-    errors[field] ? (
-      <p id={`pledge-${field}-error`} className="mt-1 text-xs text-red-700 dark:text-red-400">
-        {errors[field]}
-      </p>
-    ) : null;
-  const describedBy = (field: string) => (errors[field] ? `pledge-${field}-error` : undefined);
   const optional = <span className="text-theme-text-secondary font-normal">(optional)</span>;
 
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={isEdit ? 'Edit pledge' : 'Record pledge'}
       titleId="pledge-form-title"
       onSubmit={handleSubmit}
@@ -146,7 +246,7 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
           <button type="submit" disabled={saving} className="btn-primary">
             {isEdit ? 'Save pledge' : 'Record pledge'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -154,156 +254,169 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
     >
       <div className="space-y-4">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="pledge-donor" className="form-label">
-              Donor {optional}
-            </label>
-            <select
-              id="pledge-donor"
-              className="form-input"
-              value={donorId}
-              onChange={(e) => setDonorId(e.target.value)}
-            >
-              <option value="">Not in the donor directory</option>
-              {donors.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {donorDisplayName(d)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="pledge-campaign" className="form-label">
-              Campaign {optional}
-            </label>
-            <select
-              id="pledge-campaign"
-              className="form-input"
-              value={campaignId}
-              onChange={(e) => setCampaignId(e.target.value)}
-            >
-              <option value="">No campaign</option>
-              {campaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="pledge-amount" className="form-label">
-              Amount pledged
-            </label>
-            <input
-              id="pledge-amount"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              className="form-input"
-              value={pledgedAmount}
-              onChange={(e) => setPledgedAmount(e.target.value)}
-              aria-invalid={Boolean(errors.pledgedAmount)}
-              aria-describedby={describedBy('pledgedAmount')}
-            />
-            {errorText('pledgedAmount')}
-          </div>
-          <div>
-            <label htmlFor="pledge-date" className="form-label">
-              Pledge date
-            </label>
-            <input
-              id="pledge-date"
-              type="date"
-              className="form-input"
-              value={pledgeDate}
-              onChange={(e) => setPledgeDate(e.target.value)}
-              aria-invalid={Boolean(errors.pledgeDate)}
-              aria-describedby={describedBy('pledgeDate')}
-            />
-            {errorText('pledgeDate')}
-          </div>
-          <div>
-            <label htmlFor="pledge-due" className="form-label">
-              Due date {optional}
-            </label>
-            <input
-              id="pledge-due"
-              type="date"
-              className="form-input"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              aria-invalid={Boolean(errors.dueDate)}
-              aria-describedby={describedBy('dueDate')}
-            />
-            {errorText('dueDate')}
-          </div>
-        </div>
-
-        {isEdit && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="pledge-fulfilled" className="form-label">
-                Amount received so far
-              </label>
+          <FormField id={FIELD_IDS.donorId} label={<>Donor {optional}</>} error={errors.donorId}>
+            {(field) => (
+              <select
+                {...field}
+                className="form-input"
+                value={donorId}
+                onChange={(e) => {
+                  setDonorId(e.target.value);
+                  clearError('donorId');
+                }}
+              >
+                <option value="">Not in the donor directory</option>
+                {donors.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {donorDisplayName(d)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          <FormField id={FIELD_IDS.campaignId} label={<>Campaign {optional}</>} error={errors.campaignId}>
+            {(field) => (
+              <select
+                {...field}
+                className="form-input"
+                value={campaignId}
+                onChange={(e) => {
+                  setCampaignId(e.target.value);
+                  clearError('campaignId');
+                }}
+              >
+                <option value="">No campaign</option>
+                {campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          <FormField id={FIELD_IDS.pledgedAmount} label="Amount pledged" required error={errors.pledgedAmount}>
+            {(field) => (
               <input
-                id="pledge-fulfilled"
+                {...field}
                 type="number"
                 inputMode="decimal"
                 min="0"
                 step="0.01"
                 className="form-input"
-                value={fulfilledAmount}
-                onChange={(e) => setFulfilledAmount(e.target.value)}
-                aria-invalid={Boolean(errors.fulfilledAmount)}
-                aria-describedby={[describedBy('fulfilledAmount'), 'pledge-fulfilled-hint'].filter(Boolean).join(' ')}
+                value={pledgedAmount}
+                onChange={(e) => {
+                  setPledgedAmount(e.target.value);
+                  clearError('pledgedAmount');
+                }}
               />
-              <p id="pledge-fulfilled-hint" className="text-theme-text-secondary mt-1 text-xs">
-                Donations recorded against this pledge add to this and set the status for you.
-              </p>
-              {errorText('fulfilledAmount')}
-            </div>
-            <div>
-              <label htmlFor="pledge-status" className="form-label">
-                Status
-              </label>
-              <select
-                id="pledge-status"
+            )}
+          </FormField>
+          <FormField id={FIELD_IDS.pledgeDate} label="Pledge date" required error={errors.pledgeDate}>
+            {(field) => (
+              <input
+                {...field}
+                type="date"
                 className="form-input"
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-              >
-                {Object.values(PledgeStatus).map((value) => (
-                  <option key={value} value={value}>
-                    {PLEDGE_STATUS_LABELS[value]}
-                  </option>
-                ))}
-              </select>
-            </div>
+                value={pledgeDate}
+                onChange={(e) => {
+                  setPledgeDate(e.target.value);
+                  clearError('pledgeDate');
+                }}
+              />
+            )}
+          </FormField>
+          <FormField id={FIELD_IDS.dueDate} label={<>Due date {optional}</>} error={errors.dueDate}>
+            {(field) => (
+              <input
+                {...field}
+                type="date"
+                className="form-input"
+                value={dueDate}
+                onChange={(e) => {
+                  setDueDate(e.target.value);
+                  clearError('dueDate');
+                }}
+              />
+            )}
+          </FormField>
+        </div>
+
+        {isEdit && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <FormField
+              id={FIELD_IDS.fulfilledAmount}
+              label="Amount received so far"
+              error={errors.fulfilledAmount}
+              hint="Donations recorded against this pledge add to this and set the status for you."
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  className="form-input"
+                  value={fulfilledAmount}
+                  onChange={(e) => {
+                    setFulfilledAmount(e.target.value);
+                    clearError('fulfilledAmount');
+                  }}
+                />
+              )}
+            </FormField>
+            <FormField id={FIELD_IDS.status} label="Status" error={errors.status}>
+              {(field) => (
+                <select
+                  {...field}
+                  className="form-input"
+                  value={status}
+                  onChange={(e) => {
+                    setStatus(e.target.value);
+                    clearError('status');
+                  }}
+                >
+                  {Object.values(PledgeStatus).map((value) => (
+                    <option key={value} value={value}>
+                      {PLEDGE_STATUS_LABELS[value]}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
           </div>
         )}
 
-        <div>
-          <label htmlFor="pledge-notes" className="form-label">
-            Notes {optional}
-          </label>
-          <textarea
-            id="pledge-notes"
-            rows={2}
-            className="form-input"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
+        <FormField id={FIELD_IDS.notes} label={<>Notes {optional}</>} error={errors.notes}>
+          {(field) => (
+            <textarea
+              {...field}
+              rows={2}
+              className="form-input"
+              value={notes}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                clearError('notes');
+              }}
+            />
+          )}
+        </FormField>
 
         <div>
           <label className="text-theme-text-primary flex items-start gap-2 text-sm">
             <input
+              id={FIELD_IDS.reminderEnabled}
               type="checkbox"
               className="form-checkbox mt-0.5"
               checked={reminderEnabled}
-              onChange={(e) => setReminderEnabled(e.target.checked)}
-              aria-describedby="pledge-reminder-help"
+              onChange={(e) => {
+                setReminderEnabled(e.target.checked);
+                clearError('reminderEnabled');
+              }}
+              aria-invalid={errors.reminderEnabled ? true : undefined}
+              aria-describedby={
+                errors.reminderEnabled ? 'pledge-reminder-error pledge-reminder-help' : 'pledge-reminder-help'
+              }
             />
             Send reminders
           </label>
@@ -311,6 +424,11 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
             Emails the department&apos;s fundraising managers 14 days and 1 day before the due date while money is still
             owed. The donor is never emailed.
           </p>
+          {errors.reminderEnabled && (
+            <p id="pledge-reminder-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
+              {errors.reminderEnabled}
+            </p>
+          )}
         </div>
       </div>
     </Modal>

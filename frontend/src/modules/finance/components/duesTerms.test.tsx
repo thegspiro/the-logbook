@@ -8,9 +8,14 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, within } from '@testing-library/react';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import userEvent from '@testing-library/user-event';
 import type { DuesSchedule, MemberDues } from '../types';
+
+// The schedule dialog asks before discarding a changed form, so it needs the
+// provider the app shell mounts.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -70,11 +75,11 @@ describe('the schedule form', () => {
     const user = userEvent.setup();
     render(<DuesScheduleDialog onClose={vi.fn()} onSaved={vi.fn()} />);
     const dialog = screen.getByRole('dialog');
-    await user.type(within(dialog).getByLabelText('Name'), 'Life assessment');
-    await user.type(within(dialog).getByLabelText('Amount per member'), '50');
-    await user.type(within(dialog).getByLabelText('Due date'), '2027-03-01');
-    await user.clear(within(dialog).getByLabelText('Grace period (days)'));
-    await user.type(within(dialog).getByLabelText('Grace period (days)'), '14');
+    await user.type(within(dialog).getByLabelText(/^Name/), 'Life assessment');
+    await user.type(within(dialog).getByLabelText(/^Amount per member/), '50');
+    await user.type(within(dialog).getByLabelText(/^Due date/), '2027-03-01');
+    await user.clear(within(dialog).getByLabelText(/^Grace period \(days\)/));
+    await user.type(within(dialog).getByLabelText(/^Grace period \(days\)/), '14');
     await user.type(within(dialog).getByLabelText(/Late fee/), '15');
     await within(dialog).findByRole('option', { name: 'FY 2027' });
     await user.selectOptions(within(dialog).getByLabelText(/Fiscal year/), 'fy-27');
@@ -96,9 +101,9 @@ describe('the schedule form', () => {
     const user = userEvent.setup();
     render(<DuesScheduleDialog onClose={vi.fn()} onSaved={vi.fn()} />);
     const dialog = screen.getByRole('dialog');
-    await user.type(within(dialog).getByLabelText('Name'), 'Annual');
-    await user.type(within(dialog).getByLabelText('Amount per member'), '100');
-    await user.type(within(dialog).getByLabelText('Due date'), '2027-03-01');
+    await user.type(within(dialog).getByLabelText(/^Name/), 'Annual');
+    await user.type(within(dialog).getByLabelText(/^Amount per member/), '100');
+    await user.type(within(dialog).getByLabelText(/^Due date/), '2027-03-01');
     await user.click(within(dialog).getByRole('button', { name: 'Create schedule' }));
 
     await waitFor(() =>
@@ -155,7 +160,7 @@ describe('the schedule form', () => {
     const user = userEvent.setup();
     render(<DuesScheduleDialog schedule={schedule()} onClose={vi.fn()} onSaved={vi.fn()} />);
     const dialog = screen.getByRole('dialog');
-    await user.clear(within(dialog).getByLabelText('Grace period (days)'));
+    await user.clear(within(dialog).getByLabelText(/^Grace period \(days\)/));
     await user.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
     expect(screen.getByText(/whole number of days/i)).toBeInTheDocument();
     expect(updateSchedule).not.toHaveBeenCalled();
@@ -196,5 +201,45 @@ describe('the payment history', () => {
     listPayments.mockResolvedValue([{ ...payment, recordedBy: 'u-gone', recordedByName: null }]);
     render(<DuesLedgerDialog dues={dues} memberLabel="Terry" onClose={vi.fn()} />);
     expect(await screen.findByText('Recorded by a former member')).toBeInTheDocument();
+  });
+});
+
+describe('DuesScheduleDialog server refusals and discarding', () => {
+  const refusal = (field: string, message: string) => ({
+    response: { status: 422, data: { detail: [{ field, message }] } },
+  });
+
+  it("puts a new schedule's refused name under the name and creates nothing", async () => {
+    createSchedule.mockReset();
+    createSchedule.mockRejectedValue(refusal('name', 'Value is too long.'));
+    const onSaved = vi.fn();
+    const user = userEvent.setup();
+    render(<DuesScheduleDialog onClose={vi.fn()} onSaved={onSaved} />);
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/^Name/), 'Annual');
+    await user.type(within(dialog).getByLabelText(/^Amount per member/), '100');
+    await user.type(within(dialog).getByLabelText(/^Due date/), '2027-03-01');
+    await user.click(within(dialog).getByRole('button', { name: 'Create schedule' }));
+
+    const name = within(dialog).getByLabelText(/^Name/);
+    await waitFor(() => expect(name).toHaveAttribute('aria-invalid', 'true'));
+    expect(name).toHaveAccessibleDescription('Name is too long — keep it to 200 characters.');
+    expect(name).toHaveFocus();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('asks before Escape or Cancel throws away a changed form', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<DuesScheduleDialog schedule={schedule()} onClose={onClose} onSaved={vi.fn()} />);
+    await user.type(screen.getByLabelText(/^Notes/), 'Board approved');
+
+    await user.keyboard('{Escape}');
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

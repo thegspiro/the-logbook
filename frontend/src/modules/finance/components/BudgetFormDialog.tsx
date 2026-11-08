@@ -10,17 +10,52 @@
  * endpoint does not move a line, so on edit they are shown, not offered.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { blankToNull } from '../../../utils/formValues';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { budgetService } from '../services/api';
 import { useBudgetFormOptions, withCurrent } from '../hooks/useBudgetFormOptions';
 import { inheritedOwnerHint } from '../utils/budgetOwnership';
 import { categoryPathLabel, orderCategoryTree } from '../utils/budgetCategoryTree';
 import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE } from '../utils/moneyLimits';
 import type { Budget, BudgetCategory, BudgetCreatePayload, BudgetUpdatePayload, FiscalYear } from '../types';
+
+type BudgetField = 'fiscalYearId' | 'categoryId' | 'stationId' | 'amount' | 'ownerPositionId' | 'notes';
+
+/**
+ * The fields as a 422 names them (snake_case locs: `loc_by_alias=False`).
+ * `BudgetCreate` / `BudgetUpdate` set no max_length on any text field.
+ */
+const SERVER_FIELDS: Record<BudgetField, ServerFieldSpec> = {
+  fiscalYearId: { label: 'Fiscal year' },
+  categoryId: { label: 'Category' },
+  stationId: { label: 'Station' },
+  amount: { label: 'Amount budgeted', api: ['amount_budgeted', 'amountBudgeted'] },
+  ownerPositionId: { label: 'Owner position' },
+  notes: { label: 'Notes' },
+};
+
+/** The update payload's key for each field the edit form sends. */
+const UPDATE_KEYS: Partial<Record<BudgetField, keyof BudgetUpdatePayload>> = {
+  amount: 'amountBudgeted',
+  notes: 'notes',
+  stationId: 'stationId',
+  ownerPositionId: 'ownerPositionId',
+};
+
+const FIELD_IDS: Record<BudgetField, string> = {
+  fiscalYearId: 'budget-fiscal-year',
+  categoryId: 'budget-category',
+  stationId: 'budget-station',
+  amount: 'budget-amount',
+  ownerPositionId: 'budget-owner',
+  notes: 'budget-notes',
+};
 
 interface BudgetFormDialogProps {
   onClose: () => void;
@@ -60,8 +95,33 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
   const [amount, setAmount] = useState(budget ? String(Number(budget.amountBudgeted)) : '');
   const [ownerPositionId, setOwnerPositionId] = useState(budget?.ownerPositionId ?? '');
   const [notes, setNotes] = useState(budget?.notes ?? '');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Partial<Record<BudgetField, string>>>({});
   const [saving, setSaving] = useState(false);
+  // An edit that saved everything but a refused field stays open on that
+  // field; closing then still reports the saved line to the caller.
+  const partlySaved = useRef<Budget | null>(null);
+
+  const initial = useRef({ fiscalYearId: initialYear, categoryId, stationId, amount, ownerPositionId, notes });
+  const isDirty =
+    fiscalYearId !== initial.current.fiscalYearId ||
+    categoryId !== initial.current.categoryId ||
+    stationId !== initial.current.stationId ||
+    amount !== initial.current.amount ||
+    ownerPositionId !== initial.current.ownerPositionId ||
+    notes !== initial.current.notes;
+  const close = () => {
+    if (partlySaved.current) onSaved(partlySaved.current);
+    else onClose();
+  };
+  // Escape, the X and Cancel all ask before throwing away a changed form.
+  const requestClose = useDiscardGuard({ isDirty, onClose: close });
+  const clearError = (field: BudgetField) =>
+    setErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
 
   // In tree order and named by path, so "Quartermaster › Officer brass" is
   // told apart from an Officer brass anywhere else. A category under an
@@ -87,7 +147,7 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
   const amountFixed = amountLocked || amountByAmendment;
 
   const validate = (): string | null => {
-    const next: Record<string, string> = {};
+    const next: Partial<Record<BudgetField, string>> = {};
     if (!isEdit && !fiscalYearId) next.fiscalYearId = 'Choose a fiscal year.';
     if (!isEdit && !categoryId) next.categoryId = 'Choose a category.';
     const parsed = Number(amount);
@@ -120,7 +180,35 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
           stationId: blankToNull(stationId),
           ownerPositionId: blankToNull(ownerPositionId),
         };
-        saved = await budgetService.update(budget.id, payload);
+        let refused: Partial<Record<BudgetField, string>> = {};
+        try {
+          saved = await budgetService.update(budget.id, payload);
+        } catch (err: unknown) {
+          // Owner rule (2026-11-05) for a single-save form: a value the line
+          // cannot hold is not written, the rest saves, and the field keeps
+          // what was typed, flagged, until it is fixed. Anything the form has
+          // no field for is a real failure and is reported as one.
+          const mapped = mapServerFieldErrors(err, SERVER_FIELDS);
+          const keys = Object.keys(mapped?.fieldErrors ?? {}) as BudgetField[];
+          if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
+          refused = mapped.fieldErrors;
+          const rest: BudgetUpdatePayload = { ...payload };
+          for (const key of keys) {
+            const sent = UPDATE_KEYS[key];
+            if (sent) delete rest[sent];
+          }
+          saved = await budgetService.update(budget.id, rest);
+        }
+        const firstRefused = (Object.keys(refused) as BudgetField[])[0];
+        if (firstRefused) {
+          partlySaved.current = saved;
+          setErrors(refused);
+          toast.error(
+            `Budget line saved, except ${SERVER_FIELDS[firstRefused].label.toLowerCase()}: ${refused[firstRefused] ?? ''} Fix it and save again.`
+          );
+          document.getElementById(FIELD_IDS[firstRefused])?.focus();
+          return;
+        }
         toast.success('Budget line saved');
       } else {
         const payload: BudgetCreatePayload = {
@@ -136,6 +224,16 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
       }
       onSaved(saved);
     } catch (err: unknown) {
+      // A new line is created only once nothing is refused, so each refusal
+      // goes on its field (forms review F-2).
+      const mapped = budget ? null : mapServerFieldErrors(err, SERVER_FIELDS);
+      const keys = Object.keys(mapped?.fieldErrors ?? {}) as BudgetField[];
+      if (mapped && keys[0]) {
+        setErrors(mapped.fieldErrors);
+        document.getElementById(FIELD_IDS[keys[0]])?.focus();
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       // The API's own words: a closed year, a station or position that is
       // not the department's, or an amount below what is already committed.
       toast.error(getErrorMessage(err, isEdit ? 'Could not save the budget line' : 'Could not add the budget line'));
@@ -147,7 +245,7 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={isEdit ? 'Edit budget line' : 'Add budget line'}
       titleId="budget-form-title"
       onSubmit={handleSubmit}
@@ -156,7 +254,7 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
           <button type="submit" disabled={saving} className="btn-primary">
             {isEdit ? 'Save budget line' : 'Add budget line'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -173,140 +271,154 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
           </div>
         ) : (
           <>
-            <div>
-              <label htmlFor="budget-fiscal-year" className="form-label">
-                Fiscal year
-              </label>
-              <select
-                id="budget-fiscal-year"
-                className="form-input"
-                value={fiscalYearId}
-                onChange={(e) => setFiscalYearId(e.target.value)}
-                aria-invalid={Boolean(errors.fiscalYearId)}
-              >
-                <option value="">Choose a fiscal year</option>
-                {openYears.map((fy) => (
-                  <option key={fy.id} value={fy.id}>
-                    {fy.name} {fy.status === 'active' ? '(Active)' : '(Draft)'}
-                  </option>
-                ))}
-              </select>
-              {errors.fiscalYearId && (
-                <p className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.fiscalYearId}</p>
+            <FormField
+              id={FIELD_IDS.fiscalYearId}
+              label="Fiscal year"
+              required
+              error={errors.fiscalYearId}
+              hint={
+                openYears.length === 0 ? 'Create a draft or active fiscal year in Finance Settings first.' : undefined
+              }
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  className="form-input"
+                  value={fiscalYearId}
+                  onChange={(e) => {
+                    setFiscalYearId(e.target.value);
+                    clearError('fiscalYearId');
+                  }}
+                >
+                  <option value="">Choose a fiscal year</option>
+                  {openYears.map((fy) => (
+                    <option key={fy.id} value={fy.id}>
+                      {fy.name} {fy.status === 'active' ? '(Active)' : '(Draft)'}
+                    </option>
+                  ))}
+                </select>
               )}
-              {openYears.length === 0 && (
-                <p className="text-theme-text-secondary mt-1 text-xs">
-                  Create a draft or active fiscal year in Finance Settings first.
-                </p>
+            </FormField>
+            <FormField id={FIELD_IDS.categoryId} label="Category" required error={errors.categoryId}>
+              {(field) => (
+                <select
+                  {...field}
+                  className="form-input"
+                  value={categoryId}
+                  onChange={(e) => {
+                    setCategoryId(e.target.value);
+                    clearError('categoryId');
+                  }}
+                >
+                  <option value="">Choose a category</option>
+                  {categoryOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {categoryPathLabel(c)}
+                    </option>
+                  ))}
+                </select>
               )}
-            </div>
-            <div>
-              <label htmlFor="budget-category" className="form-label">
-                Category
-              </label>
-              <select
-                id="budget-category"
-                className="form-input"
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                aria-invalid={Boolean(errors.categoryId)}
-              >
-                <option value="">Choose a category</option>
-                {categoryOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {categoryPathLabel(c)}
-                  </option>
-                ))}
-              </select>
-              {errors.categoryId && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.categoryId}</p>}
-            </div>
+            </FormField>
           </>
         )}
 
-        <div>
-          <label htmlFor="budget-station" className="form-label">
-            Station
-          </label>
-          <select
-            id="budget-station"
-            className="form-input"
-            value={stationId}
-            onChange={(e) => setStationId(e.target.value)}
-          >
-            <option value="">Department-wide</option>
-            {stationOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="budget-amount" className="form-label">
-            Amount budgeted
-          </label>
-          <input
-            id="budget-amount"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            max={MAX_MONEY_AMOUNT}
-            step="0.01"
-            className="form-input"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            readOnly={amountFixed}
-            aria-invalid={Boolean(errors.amount)}
-            aria-describedby={amountFixed ? 'budget-amount-fixed' : undefined}
-          />
-          {amountFixed && (
-            <p id="budget-amount-fixed" className="text-theme-text-secondary mt-1 text-xs">
-              {amountLocked
-                ? 'This fiscal year is locked.'
-                : 'This budget has gone before the board. Change the amount with an amendment, which another officer confirms.'}
-            </p>
+        <FormField id={FIELD_IDS.stationId} label="Station" error={errors.stationId}>
+          {(field) => (
+            <select
+              {...field}
+              className="form-input"
+              value={stationId}
+              onChange={(e) => {
+                setStationId(e.target.value);
+                clearError('stationId');
+              }}
+            >
+              <option value="">Department-wide</option>
+              {stationOptions.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
           )}
-          {errors.amount && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{errors.amount}</p>}
-        </div>
+        </FormField>
 
-        <div>
-          <label htmlFor="budget-owner" className="form-label">
-            Owner position
-          </label>
-          <select
-            id="budget-owner"
-            className="form-input"
-            value={ownerPositionId}
-            onChange={(e) => setOwnerPositionId(e.target.value)}
-            aria-describedby="budget-owner-hint"
-          >
-            <option value="">{selectedCategory ? "Use the category's owner" : 'No owner of its own'}</option>
-            {positionOptions.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <p id="budget-owner-hint" className="text-theme-text-secondary mt-1 text-xs">
-            {ownerPositionId
+        <FormField
+          id={FIELD_IDS.amount}
+          label="Amount budgeted"
+          required
+          error={errors.amount}
+          hint={
+            amountFixed
+              ? amountLocked
+                ? 'This fiscal year is locked.'
+                : 'This budget has gone before the board. Change the amount with an amendment, which another officer confirms.'
+              : undefined
+          }
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max={MAX_MONEY_AMOUNT}
+              step="0.01"
+              className="form-input"
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                clearError('amount');
+              }}
+              readOnly={amountFixed}
+            />
+          )}
+        </FormField>
+
+        <FormField
+          id={FIELD_IDS.ownerPositionId}
+          label="Owner position"
+          error={errors.ownerPositionId}
+          hint={
+            ownerPositionId
               ? "This line's own owner, in place of the category's."
-              : inheritedOwnerHint(selectedCategory)}
-          </p>
-        </div>
+              : inheritedOwnerHint(selectedCategory)
+          }
+        >
+          {(field) => (
+            <select
+              {...field}
+              className="form-input"
+              value={ownerPositionId}
+              onChange={(e) => {
+                setOwnerPositionId(e.target.value);
+                clearError('ownerPositionId');
+              }}
+            >
+              <option value="">{selectedCategory ? "Use the category's owner" : 'No owner of its own'}</option>
+              {positionOptions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="budget-notes" className="form-label">
-            Notes
-          </label>
-          <textarea
-            id="budget-notes"
-            rows={3}
-            className="form-input"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
+        <FormField id={FIELD_IDS.notes} label="Notes" error={errors.notes}>
+          {(field) => (
+            <textarea
+              {...field}
+              rows={3}
+              className="form-input"
+              value={notes}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                clearError('notes');
+              }}
+            />
+          )}
+        </FormField>
       </div>
     </Modal>
   );
