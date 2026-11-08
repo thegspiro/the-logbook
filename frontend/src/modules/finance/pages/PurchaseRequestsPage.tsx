@@ -268,7 +268,7 @@ const PurchaseRequestsPage: React.FC = () => {
                     <td data-label="Title" className="text-theme-text-primary px-4 py-3 text-sm">
                       {pr.title}
                     </td>
-                    <td data-label="Vendor" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                    <td data-label="Vendor" className="text-theme-text-secondary px-4 py-3 text-sm">
                       {pr.vendor ?? '--'}
                     </td>
                     <td

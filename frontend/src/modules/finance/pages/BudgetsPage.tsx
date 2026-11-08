@@ -385,16 +385,10 @@ const BudgetsPage: React.FC = () => {
                             {categoryMap.get(budget.categoryId) ?? 'Unknown'}
                           </Link>
                         </td>
-                        <td
-                          data-label="Station"
-                          className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap"
-                        >
+                        <td data-label="Station" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {budget.stationId ? budget.stationName || 'Unknown station' : 'Department-wide'}
                         </td>
-                        <td
-                          data-label="Owner"
-                          className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap"
-                        >
+                        <td data-label="Owner" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {budgetOwnerLabel(budget)}
                         </td>
                         <td

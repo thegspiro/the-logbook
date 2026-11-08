@@ -88,7 +88,7 @@ async function openFinancePage(page: Page, viewport: { width: number; height: nu
 // footer. The widest list in finance, so it is shown as a table only on a
 // desktop.
 test.describe('Budgets table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/finance/budgets — ${viewport.name}`, async ({ page }) => {
       await openFinancePage(page, viewport);
       await page.route('**/api/v1/finance/budgets**', (route) => void route.fulfill(json(budgets)));
@@ -106,7 +106,7 @@ test.describe('Budgets table fits its card', () => {
 // The purchase requests list: request number, a long title, a long vendor kept
 // on one line, a six-digit amount, priority and status badges, and the date.
 test.describe('Purchase requests table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/finance/purchase-requests — ${viewport.name}`, async ({ page }) => {
       await openFinancePage(page, viewport);
       await page.route('**/api/v1/finance/purchase-requests**', (route) => void route.fulfill(json(purchaseRequests)));
