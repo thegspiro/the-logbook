@@ -27,6 +27,7 @@ from app.models.member_position_term import MemberPositionTerm, sync_position_te
 from app.models.user import Position, User, user_positions
 from app.services.member_position_term_service import past_positions_for
 from app.services.role_service import RoleManagementService
+from tests.fake_request import fake_request
 
 pytestmark = [pytest.mark.integration]
 
@@ -196,6 +197,7 @@ class TestTheRelationshipPath:
         await remove_role_from_user(
             user_id=UUID(dept["member"]),
             role_id=UUID(dept["treasurer"].id),
+            request=request,
             db=db,
             current_user=officer,
             _stepup=officer,
@@ -397,6 +399,7 @@ class TestTheProfile:
             user_id=UUID(dept["member"]),
             db=db,
             current_user=await _load(db, dept["member"]),
+            request=fake_request(),
         )
         assert [p.name for p in body.past_positions] == ["Treasurer"]
         assert body.past_positions[0].position_id == dept["treasurer"].id
