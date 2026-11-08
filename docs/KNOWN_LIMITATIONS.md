@@ -1586,6 +1586,29 @@ existing rows were deliberately not rewritten: the correct date is derivable
 would change historical compliance results, and that was judged not worth it.
 An officer can correct an individual record's date where it matters.
 
+## Department Contact Details — Settings Stores Them However They Are Typed (W06-6, 2026-11-08)
+
+**Owner decision needed.** Under Settings → Contact, the department's phone
+and website are saved as typed. The workflow review's W06 second pass stored
+"call us maybe" and "not a url", and both came back after a reload.
+`OrganizationProfileUpdate` (`backend/app/schemas/organization.py`) bounds
+their length and checks nothing else.
+
+The two writers of these fields disagree:
+
+- **Onboarding** refuses a website that doesn't look like an address ("Enter a valid website address", `OrganizationSetup.tsx`), and its schema adds `https://` when no scheme is given.
+- **The department's phone** gets none of the W04-7 rule that applies to members' own numbers (`app/utils/phone_numbers.py`).
+
+The website is printed in email footers (`organization_website`) and returned
+by the public portal API, so a bad value reaches members and the public. Only
+administrators can set it.
+
+Three questions are open, the same three as the emergency-contact entry below:
+
+- **Apply the onboarding website check and the W04-7 phone rule to the Settings path?**
+- **Refuse a bad value, or save it and flag the field** under the 2026-11-05 forms decision?
+- **What happens to values already stored?**
+
 ## Emergency Contacts — The Phone Has No Format Check (W04-12, 2026-11-08)
 
 **Owner decision needed.** A member's emergency contact is saved with any phone

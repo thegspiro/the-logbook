@@ -188,6 +188,32 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### W06 second pass — Organization settings and department setup — 2026-11-08
+
+The owner asked to keep going. Driven as `admin`, with `member` for the
+department's view, at 1280×900 and 390×844.
+
+Held:
+
+- an empty department name is held and flagged while other changes save (W06-1);
+- contact changes autosave and survive a reload;
+- a module switched off leaves the member's menu and explains itself where its pages were;
+- all 21 setup cards land where the step is done, including the new Public Portal step;
+- review progress counts, survives a reload and can be undone;
+- a member is refused on both pages and every write;
+- the five screens are clean at 390px.
+
+Fixed:
+
+- W06-5 (LOW): every review step's button was named only "Mark as reviewed".
+
+Flagged:
+
+- W06-6 (MED): the department's phone and website are stored however they are typed under Settings, while onboarding checks the website. Mirrored to KNOWN_LIMITATIONS.
+- W06-7 (NIT): "All changes saved" beside a name flagged as not saved.
+
+Gate: typecheck and lint clean; 64 related frontend tests pass, and the new case failed before the fix. Next: W07 when the owner asks.
+
 ### W05 second pass — Positions and permissions — 2026-11-08
 
 The owner asked to continue with W05. Driven as `member`, `admin` and
