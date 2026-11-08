@@ -188,6 +188,30 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### W05 second pass — Positions and permissions — 2026-11-08
+
+The owner asked to continue with W05. Driven as `member`, `admin` and
+`membership_coordinator` at 1280×900 and 390×844.
+
+Held:
+
+- a member is refused on both pages and by the API;
+- creating a position opens "Confirm it's you", refuses a wrong password, and completes the create once confirmed;
+- a grant reaches a signed-in member and a revoke takes it away;
+- delete confirms with the member count;
+- the grant ceiling holds past the step-up;
+- every change and step-up is audited with actor, IP and department;
+- the pages and dialogs are clean at 390px.
+
+Fixed:
+
+- W05-10 (LOW): every position card's buttons were named only "Edit" and "Delete".
+- W05-11 (LOW): the two-factor deadline banner's "Set it up now" opened the profile tab instead of Security.
+
+Flagged: W05-12 (NIT, "Role" on Role Management, "Position" everywhere else).
+
+Gate: typecheck and lint clean; 93 related frontend tests pass, and both new cases failed before their fixes. Next: W06 when the owner asks.
+
 ### W04 second pass — My account — 2026-11-08
 
 The owner asked to continue with W04. Driven as `member` at 1280×900 and
