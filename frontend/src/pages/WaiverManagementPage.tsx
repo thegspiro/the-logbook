@@ -16,9 +16,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router';
 import { useSearchParams } from 'react-router';
-import { memberStatusService, userService } from '../services/api';
+import { memberStatusService, trainingService, userService } from '../services/api';
 import type { LeaveOfAbsenceResponse, TrainingWaiverResponse } from '../services/api';
 import type { User } from '../types/user';
+import type { TrainingRequirement } from '../types/training';
 import { useAuthStore } from '../stores/authStore';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { getWaiverStatusBadge } from '../utils/waiverStatus';
@@ -91,6 +92,7 @@ export const WaiverManagementPage: React.FC = () => {
   const [leaves, setLeaves] = useState<LeaveOfAbsenceResponse[]>([]);
   const [trainingWaivers, setTrainingWaivers] = useState<TrainingWaiverResponse[]>([]);
   const [members, setMembers] = useState<User[]>([]);
+  const [requirements, setRequirements] = useState<TrainingRequirement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -104,6 +106,7 @@ export const WaiverManagementPage: React.FC = () => {
     end_date: '',
     is_permanent: false,
     exempt_from_training_waiver: false,
+    requirement_ids: [] as string[],
   });
   const [creating, setCreating] = useState(false);
   // Correcting a leave's dates happens here, beside where leaves are created
@@ -136,7 +139,7 @@ export const WaiverManagementPage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const [leavesData, waiversData, membersData] = await Promise.all([
+      const [leavesData, waiversData, membersData, requirementsData] = await Promise.all([
         memberStatusService.listLeavesOfAbsence({ active_only: false }),
         // Degrades to an empty list rather than failing the page. Training
         // waivers live behind the Training module's gate, so a department
@@ -146,8 +149,11 @@ export const WaiverManagementPage: React.FC = () => {
         // Training. The waivers tab shows its empty state instead.
         memberStatusService.listTrainingWaivers({ active_only: false }).catch(() => []),
         userService.getUsers(),
+        // For scoping a training-only waiver; degrades like the waivers above.
+        trainingService.getRequirements({ active_only: true }).catch(() => [] as TrainingRequirement[]),
       ]);
       setLeaves(leavesData);
+      setRequirements(requirementsData);
       setTrainingWaivers(waiversData);
       setMembers(membersData);
     } catch (_err) {
@@ -275,6 +281,7 @@ export const WaiverManagementPage: React.FC = () => {
           ...(formData.reason ? { reason: formData.reason } : {}),
           start_date: formData.start_date,
           end_date: endDate,
+          ...(formData.requirement_ids.length > 0 ? { requirement_ids: formData.requirement_ids } : {}),
         });
       } else if (hasMeetingsOrShifts) {
         // Meetings/shifts selected — create leave of absence
@@ -300,6 +307,7 @@ export const WaiverManagementPage: React.FC = () => {
         end_date: '',
         is_permanent: false,
         exempt_from_training_waiver: false,
+        requirement_ids: [],
       });
       void fetchData();
     } catch (err: unknown) {
@@ -616,6 +624,48 @@ export const WaiverManagementPage: React.FC = () => {
                           : 'Creates a leave of absence that automatically generates a training waiver.'}
                   </p>
                 </fieldset>
+
+                {/* Which requirements a training-only waiver excuses. Without a
+                    choice here, excusing one missed drill also waived that day
+                    for every other requirement, and under a "full month" leave
+                    rule took a month off the member's hours target (workflow
+                    review, training events). A leave of absence still waives
+                    everything, so the choice is offered only without one. */}
+                {formData.applies_to.includes('training') &&
+                  !formData.applies_to.includes('leave') &&
+                  requirements.length > 0 && (
+                    <fieldset>
+                      <legend className="text-theme-text-secondary mb-1 block text-sm font-medium">
+                        Training requirements excused
+                      </legend>
+                      <div className="mt-1 flex flex-col gap-2">
+                        {requirements.map((r) => (
+                          <label
+                            key={r.id}
+                            className="text-theme-text-primary flex cursor-pointer items-center gap-2 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={formData.requirement_ids.includes(r.id)}
+                              onChange={(e) => {
+                                const updated = e.target.checked
+                                  ? [...formData.requirement_ids, r.id]
+                                  : formData.requirement_ids.filter((id) => id !== r.id);
+                                setFormData({ ...formData, requirement_ids: updated });
+                              }}
+                              className="form-checkbox"
+                            />
+                            {r.name}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        {formData.requirement_ids.length === 0
+                          ? 'None ticked: the waiver excuses every training requirement for these dates.'
+                          : 'Only the ticked requirements are excused; the member is held to the rest.'}
+                      </p>
+                    </fieldset>
+                  )}
 
                 {/* Date Range */}
                 <div className="space-y-3">

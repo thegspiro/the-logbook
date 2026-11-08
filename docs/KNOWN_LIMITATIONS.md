@@ -9325,6 +9325,31 @@ edit only drafts; this governs `PUT /shift-reports/{id}`. Covered by
 `tests/test_shift_completion.py::TestAnEditedReportGoesBackToReview`; history
 in `docs/security-review/EC-14-equipment-check-shifts.md`.
 
+## W80 — Training Event Decisions Left Open (2026-11-08)
+
+From the training-event lifecycle pass
+([`workflow-review/W80-training-event-lifecycle.md`](./workflow-review/W80-training-event-lifecycle.md)).
+Decided and fixed in the same pass: over-credit is warned, not capped; an
+approver on a roster cannot approve it; a schedule change that strands
+check-ins is refused; a training-only waiver can name its requirements. Open:
+
+- **W80-11 — Postpone (decided, not built).** The owner chose a real Postpone
+  action with `postponed_at` / `postponed_from_start` / `postponement_reason`
+  columns. Its design is in the findings file and goes in its own pull request:
+  it adds a migration and a public endpoint.
+- **W80-8 — Recording one member on a past drill.** Check-in is refused once the
+  window closes, with a message telling the organizer to ask an organizer; the
+  only routes are adding the whole roster, or the member's own "I was there".
+  Whether an attendance manager may record a check-in after the window, with
+  times, needs a decision.
+- **W80-9 — "0/0 sessions — Complete".** A session-attendance requirement with no
+  held sessions in a member's window reads met, on My Training and the matrix.
+  Reporting "not applicable" (CLAUDE.md pitfall #29) changes compliance
+  percentages department-wide.
+- **W80-10 — Training waivers and "missed mandatory".** The missed-mandatory list
+  excludes leaves of absence only, so a drill excused by a training waiver stays
+  listed. Whether a training waiver also excuses the event is policy.
+
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
 mirrored here so they're visible outside the log. The parallel module-by-module

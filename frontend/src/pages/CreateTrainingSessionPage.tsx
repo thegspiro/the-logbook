@@ -196,10 +196,29 @@ const CreateTrainingSessionPage: React.FC = () => {
     return match?.label ?? recurrencePattern;
   };
 
+  // Both values are local "YYYY-MM-DDTHH:mm" strings in one timezone, so they
+  // order correctly as strings. Checked when leaving the first step as well as
+  // on submit: the server refuses the schedule too, but only after the officer
+  // has filled in three more steps (workflow review, training events).
+  const endsAfterStart = formData.end_datetime > formData.start_datetime;
+
+  const handleNext = () => {
+    if (currentStep === 1 && formData.start_datetime && formData.end_datetime && !endsAfterStart) {
+      toast.error('End time must be after the start time');
+      return;
+    }
+    setCurrentStep(currentStep + 1);
+  };
+
   const handleSubmit = async () => {
     // Validation
     if (!formData.title || !formData.start_datetime || !formData.end_datetime) {
       toast.error('Enter a title, start time, and end time');
+      return;
+    }
+
+    if (!endsAfterStart) {
+      toast.error('End time must be after the start time');
       return;
     }
 
@@ -1319,7 +1338,7 @@ const CreateTrainingSessionPage: React.FC = () => {
             </button>
 
             {currentStep < 4 ? (
-              <button onClick={() => setCurrentStep(currentStep + 1)} className="btn-primary px-6 py-3 font-medium">
+              <button onClick={handleNext} className="btn-primary px-6 py-3 font-medium">
                 Next
               </button>
             ) : (

@@ -1109,6 +1109,8 @@ class EventService:
         if end_dt <= start_dt:
             raise ValueError("End date must be after start date")
 
+        await self._refuse_orphaning_check_ins(event, update_data)
+
         # Check for location double-booking if location or times are changing
         check_location_id = update_data.get("location_id", event.location_id)
         if check_location_id:
@@ -1162,6 +1164,77 @@ class EventService:
             )
 
         return event
+
+    async def _refuse_orphaning_check_ins(
+        self, event: Event, update_data: Dict[str, Any]
+    ) -> None:
+        """Refuse a schedule change that would strand existing check-ins.
+
+        A check-in is a timestamp, and crediting clamps an early one forward
+        to the scheduled start (``_credited_check_in_time``). Moving an event
+        a week out therefore turned a tap at the original drill into a full
+        session's credit for the new date, for people who may never attend
+        it (workflow review, training events). A correction that still
+        contains every check-in — 10 AM fixed to 10:30 — goes through; a
+        move that leaves any check-in outside the new check-in window is
+        refused until those check-ins are dealt with (owner decision,
+        2026-11-08).
+
+        The window is the one check-in itself enforces, with the hour of
+        early grace that flexible and window events allow, so a check-in the
+        event would accept is never called stranded.
+        """
+        window_fields = {
+            "start_datetime",
+            "end_datetime",
+            "check_in_window_type",
+            "check_in_minutes_before",
+            "check_in_minutes_after",
+        }
+        if not window_fields.intersection(update_data):
+            return
+
+        def proposed(name: str) -> Any:
+            return update_data.get(name, getattr(event, name, None))
+
+        current = self._get_check_in_window(event)
+        # A transient Event, never added to the session: only the window
+        # arithmetic reads it.
+        moved = Event(
+            check_in_window_type=proposed("check_in_window_type"),
+            check_in_minutes_before=proposed("check_in_minutes_before"),
+            check_in_minutes_after=proposed("check_in_minutes_after"),
+            start_datetime=proposed("start_datetime"),
+            end_datetime=proposed("end_datetime"),
+            actual_start_time=event.actual_start_time,
+            actual_end_time=event.actual_end_time,
+        )
+        opens, closes = self._get_check_in_window(moved)
+        if (opens, closes) == current:
+            return
+        window_type = moved.check_in_window_type or CheckInWindowType.FLEXIBLE
+        if window_type != CheckInWindowType.STRICT:
+            opens -= timedelta(hours=1)
+
+        rows = await self.db.execute(
+            select(EventRSVP.checked_in_at).where(
+                EventRSVP.event_id == str(event.id),
+                EventRSVP.checked_in_at.is_not(None),
+            )
+        )
+        stranded = 0
+        for (checked_in_at,) in rows.all():
+            at = self._as_utc(checked_in_at)
+            if at is not None and not opens <= at <= closes:
+                stranded += 1
+        if stranded:
+            members = "member is" if stranded == 1 else "members are"
+            raise ValueError(
+                f"{stranded} {members} already checked in at a time outside "
+                "the new schedule, and would be credited for the new date. "
+                "Remove or correct those check-ins first, or cancel this "
+                "event and schedule a new one."
+            )
 
     async def complete_deferred_writes(self, organization_id: UUID | str) -> None:
         """Run what ``defer_commit`` writes owe once their batch has committed.

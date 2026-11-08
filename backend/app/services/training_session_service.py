@@ -2244,6 +2244,18 @@ class TrainingSessionService:
             for entry in (approval.attendee_data or [])
             if isinstance(entry, dict) and entry.get("user_id")
         }
+        # An approver may not sign off a roster they appear on. Approved
+        # minutes are free-form, so approving one's own entry is awarding
+        # oneself whatever credit one types (owner decision, 2026-11-08:
+        # instructors may attend, but another officer or the Chief approves).
+        # Refused whole rather than per entry: the approval completes every
+        # record at once, and leaving one entry pending would strand it.
+        if str(approved_by) in roster:
+            return (
+                False,
+                "You are on this roster, so you cannot approve it. Another "
+                "training officer or the Chief must approve this training credit.",
+            )
         submitted_ids = [str(a.user_id) for a in attendees]
         if any(uid not in roster for uid in submitted_ids):
             return False, "Attendee is not part of this approval"

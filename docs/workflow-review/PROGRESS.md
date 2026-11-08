@@ -143,6 +143,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ✅     |
 | W78 | Platform administration                                                   | admin            | `/admin/platform-analytics`                | ✅     |
 | W79 | Phone pass: W08, W19, W24, W33, W39 and W70 again at 390×844              | member, officers | as those rows                              | ✅     |
+| W80 | Training events: create, credit, correct, excuse, move (owner-asked)      | officer → member | `/training/admin`, `/events/:id`           | ✅     |
 
 ---
 
@@ -187,6 +188,26 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   code (W78).
 
 ## Log
+
+### W80 — Training event lifecycle: create, credit, correct, excuse, move — 2026-11-08
+
+Owner-requested, outside the rotation. Driven as: `training_officer` at
+1280×900, `member` at 390×844, `member2`, `chief` and `admin`. Held: the session
+wizard saved what was entered; self check-in and check-out; finalize, approval
+and requirement credit; the finalized event's schedule lock; reopen, delete and
+cancel keeping records consistent; waiver undo; the Chief-only override.
+Fixed: W80-1 (HIGH — moving an event kept its check-ins and would credit them
+for the new date; now refused), W80-2 (MED — approved minutes unbounded, 20 h on
+a 2 h drill; warned), W80-3 (MED — attendance-request times outside the event
+approved as shown; warned), W80-4 (MED — an officer approved their own credit;
+refused), W80-5 (MED — excusing one drill cut the hours target; requirement
+picker), W80-6 (LOW — wizard accepted an end before the start), W80-7 (LOW — a
+stray "0" after a quick check-out). Flagged: W80-11 (MED — no Postpone; design
+written and decided, for its own pull request), W80-8 (MED — no way to record
+one member on a past drill), W80-9 (LOW — "0/0 sessions — Complete"), W80-10
+(LOW — an excused drill stays in "missed mandatory"). Open: W80-12 to W80-15
+(NIT/LOW). Gate: typecheck, lint (with the larger heap of the W77 lead),
+flake8, black, isort and the touched suites clean. Next: W80-11's pull request.
 
 ### Lead — Member administration audit rows record the caller — 2026-11-08
 
