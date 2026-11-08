@@ -247,7 +247,9 @@ const StaffingMappingPanel: React.FC<StaffingMappingPanelProps> = ({ importId })
                   </label>
                   <p className="text-theme-text-muted text-xs">
                     {formatNumber(item.seats)} seats at {formatNumber(item.events)} events
-                    {item.examples.length > 1 ? ` · as ${item.examples.join(', ')}` : ''}
+                    {item.examples.length > 1
+                      ? ` · as ${item.examples.map((e) => e.trim() || '(blank)').join(', ')}`
+                      : ''}
                     {item.suggestion && !item.choice ? ` · suggested: ${labelOf(item.suggestion)}` : ''}
                   </p>
                 </div>
