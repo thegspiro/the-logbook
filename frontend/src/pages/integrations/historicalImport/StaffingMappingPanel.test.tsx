@@ -171,6 +171,30 @@ describe('StaffingMappingPanel', () => {
     );
   });
 
+  it('names a blank spelling rather than showing nothing', async () => {
+    const user = userEvent.setup();
+    mockGet.mockResolvedValue(
+      view({
+        list: 'event_titles',
+        items: [
+          {
+            key: '(no title)',
+            label: '(no title)',
+            seats: 157,
+            events: 28,
+            suggestion: null,
+            choice: null,
+            examples: ['', 'UT106', 'E116'],
+          },
+        ],
+      })
+    );
+    renderWithRouter(<StaffingMappingPanel importId="hist-1" />);
+    await user.click(await screen.findByRole('tab', { name: /Event roles/ }));
+
+    expect(await screen.findByText(/as \(blank\), UT106, E116/)).toBeInTheDocument();
+  });
+
   it('takes every suggestion at once', async () => {
     const user = userEvent.setup();
     renderWithRouter(<StaffingMappingPanel importId="hist-1" />);

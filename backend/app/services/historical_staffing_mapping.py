@@ -389,7 +389,9 @@ def build_lists(
     activities = [
         Item(
             key=key,
-            label=spellings.most_common(1)[0][0],
+            # Entities decoded for display: '&#128657; A102 Dayside' reads as
+            # its emoji, not as the code the export wrote.
+            label=html.unescape(spellings.most_common(1)[0][0]),
             seats=activity_seats[key],
             events=activity_events[key],
             suggestion=suggested_kind[key],
@@ -435,7 +437,7 @@ def build_lists(
                     events=len(title_events[kind][key]),
                     suggestion=suggestion,
                     choice=chosen.get(key),
-                    examples=[s for s, _ in spellings.most_common(3)],
+                    examples=[html.unescape(s) for s, _ in spellings.most_common(3)],
                 )
             )
         return _ranked(out)

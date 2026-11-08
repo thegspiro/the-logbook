@@ -155,7 +155,7 @@ class TestDecisions:
     def test_titles_follow_their_events_activity(self):
         lists = m.build_lists(_joined(), m.Decisions(), ["LA106"], SEATS, ROLES)
         assert {(i.label, i.suggestion) for i in lists.activities} == {
-            ("&#128680; LA106 Day Staff", m.SHIFT),
+            ("\U0001f6a8 LA106 Day Staff", m.SHIFT),
             ("A106E NS", m.SHIFT),
             ("Birthday Party", m.EVENT),
             ("Santamobile", m.EVENT),
