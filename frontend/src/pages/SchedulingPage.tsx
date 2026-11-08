@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
 import { useDialog } from '../hooks/useDialog';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { FormField } from '../components/ux/FormField';
 import {
   Clock,
   CalendarDays,
@@ -127,6 +129,17 @@ const TabLoadingFallback = () => (
     <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
   </div>
 );
+
+type CreateShiftField = 'start_date' | 'end_date' | 'apparatus';
+
+// The Create Shift fields a check or the server can report against. `start_time`
+// and `end_time` are built from the dates, so a refusal of either is the
+// date's to show.
+const CREATE_SHIFT_FIELDS: FieldSpecs<CreateShiftField> = {
+  start_date: { id: 'create-shift-start-date', label: 'Start date', apiKeys: ['shift_date', 'start_time'] },
+  end_date: { id: 'create-shift-end-date', label: 'End date', apiKeys: ['end_time'] },
+  apparatus: { id: 'create-shift-apparatus', label: 'Apparatus', apiKeys: ['apparatus_id'] },
+};
 
 const SchedulingPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -262,7 +275,14 @@ const SchedulingPage: React.FC = () => {
   // shift panel must reach whichever tab the panel was opened from.
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const createErrors = useFieldErrors(CREATE_SHIFT_FIELDS);
+  // Dismissing the dialog (X, Escape, Cancel) discards its errors, so the next
+  // Create Shift opens clean. Keyed on the request to show it, not on whether
+  // it is drawn: withdrawn behind the shift-detail dialog, it keeps them.
+  const clearCreateErrors = createErrors.clear;
+  useEffect(() => {
+    if (!showCreateShift) clearCreateErrors();
+  }, [showCreateShift, clearCreateErrors]);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [templateSearch, setTemplateSearch] = useState('');
 
@@ -366,22 +386,26 @@ const SchedulingPage: React.FC = () => {
   }, [loadSummary]);
 
   const handleCreateShift = async () => {
-    if (!shiftForm.startDate) {
-      setCreateError('Start date is required.');
-      return;
-    }
+    // The button is never disabled for a missing value (forms review F-3);
+    // pressing it says what is missing, on the field, and moves focus there.
+    const missing: FieldErrors<CreateShiftField> = {};
+    if (!shiftForm.startDate) missing.start_date = 'Choose the date the shift starts.';
     if (apparatusList.length > 0 && !shiftForm.apparatus_id) {
-      setCreateError('Select the apparatus for this shift.');
+      missing.apparatus = 'Choose the apparatus for this shift.';
+    }
+    createErrors.setErrors(missing);
+    createErrors.setFormError(null);
+    if (Object.keys(missing).length > 0) {
+      createErrors.focusFirst(missing);
       return;
     }
 
     setCreating(true);
-    setCreateError(null);
 
     try {
       const template = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
       if (!template) {
-        setCreateError('No shift template is available. Create a template first.');
+        createErrors.setFormError('No shift template is available. Create a template first.');
         setCreating(false);
         return;
       }
@@ -449,8 +473,10 @@ const SchedulingPage: React.FC = () => {
       });
       setShowCreateShift(false);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to create shift';
-      setCreateError(message);
+      // A refusal lands on the field it names; anything else becomes the
+      // dialog's message, through getErrorMessage rather than err.message,
+      // which for an API error is axios's "Request failed with status code".
+      createErrors.focusFirst(createErrors.setFromApiError(err, 'Could not create the shift. Try again.'));
     } finally {
       setCreating(false);
     }
@@ -839,43 +865,54 @@ const SchedulingPage: React.FC = () => {
 
                     {/* Start / End Date — always visible */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <FormField
+                        id={CREATE_SHIFT_FIELDS.start_date.id}
+                        label="Start Date"
+                        required
+                        error={createErrors.errors.start_date}
+                      >
+                        {(field) => (
+                          <input
+                            {...field}
+                            type="date"
+                            value={shiftForm.startDate}
+                            onChange={(e) => {
+                              const newStart = e.target.value;
+                              if (newStart) createErrors.setError('start_date', null);
+                              const tmpl =
+                                effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+                              setShiftForm((prev) => ({
+                                ...prev,
+                                startDate: newStart,
+                                endDate: computeEndDate(newStart, tmpl),
+                              }));
+                            }}
+                            className="form-input focus:ring-violet-500"
+                          />
+                        )}
+                      </FormField>
                       <div>
-                        <label htmlFor="create-shift-start-date" className="form-label">
-                          Start Date *
-                        </label>
-                        <input
-                          id="create-shift-start-date"
-                          type="date"
-                          value={shiftForm.startDate}
-                          onChange={(e) => {
-                            const newStart = e.target.value;
-                            const tmpl =
-                              effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
-                            setShiftForm((prev) => ({
-                              ...prev,
-                              startDate: newStart,
-                              endDate: computeEndDate(newStart, tmpl),
-                            }));
-                          }}
-                          className="form-input focus:ring-violet-500"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="create-shift-end-date" className="form-label">
-                          End Date
-                        </label>
-                        <input
-                          id="create-shift-end-date"
-                          type="date"
-                          value={shiftForm.endDate}
-                          onChange={(e) =>
-                            setShiftForm({
-                              ...shiftForm,
-                              endDate: e.target.value,
-                            })
-                          }
-                          className="form-input focus:ring-violet-500"
-                        />
+                        <FormField
+                          id={CREATE_SHIFT_FIELDS.end_date.id}
+                          label="End Date"
+                          error={createErrors.errors.end_date}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              type="date"
+                              value={shiftForm.endDate}
+                              onChange={(e) => {
+                                createErrors.setError('end_date', null);
+                                setShiftForm({
+                                  ...shiftForm,
+                                  endDate: e.target.value,
+                                });
+                              }}
+                              className="form-input focus:ring-violet-500"
+                            />
+                          )}
+                        </FormField>
                         {shiftForm.startDate &&
                           shiftForm.endDate &&
                           (() => {
@@ -896,31 +933,38 @@ const SchedulingPage: React.FC = () => {
                     {/* Apparatus Selection */}
                     {apparatusList.length > 0 && (
                       <div>
-                        <label htmlFor="create-shift-apparatus" className="form-label">
-                          <span className="flex items-center gap-1.5">
-                            <Truck className="h-4 w-4" /> Apparatus <span aria-hidden="true">*</span>
-                          </span>
-                        </label>
-                        <select
-                          id="create-shift-apparatus"
-                          value={shiftForm.apparatus_id}
-                          onChange={(e) =>
-                            setShiftForm({
-                              ...shiftForm,
-                              apparatus_id: e.target.value,
-                            })
+                        <FormField
+                          id={CREATE_SHIFT_FIELDS.apparatus.id}
+                          label={
+                            <span className="inline-flex items-center gap-1.5">
+                              <Truck className="h-4 w-4" aria-hidden="true" /> Apparatus
+                            </span>
                           }
-                          className="form-input focus:ring-violet-500"
                           required
-                          aria-required="true"
+                          error={createErrors.errors.apparatus}
                         >
-                          <option value="">Select apparatus...</option>
-                          {apparatusList.map((a) => (
-                            <option key={a.id} value={a.id}>
-                              {a.unit_number} — {a.name}
-                            </option>
-                          ))}
-                        </select>
+                          {(field) => (
+                            <select
+                              {...field}
+                              value={shiftForm.apparatus_id}
+                              onChange={(e) => {
+                                if (e.target.value) createErrors.setError('apparatus', null);
+                                setShiftForm({
+                                  ...shiftForm,
+                                  apparatus_id: e.target.value,
+                                });
+                              }}
+                              className="form-input focus:ring-violet-500"
+                            >
+                              <option value="">Select apparatus...</option>
+                              {apparatusList.map((a) => (
+                                <option key={a.id} value={a.id}>
+                                  {a.unit_number} — {a.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </FormField>
                         {(() => {
                           const selected = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
                           if (selected?.positions && selected.positions.length > 0) {
@@ -1095,11 +1139,14 @@ const SchedulingPage: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    {createError && (
-                      <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                    {createErrors.formError && (
+                      <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
                         <div className="flex items-start space-x-2">
-                          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
-                          <p className="text-sm text-red-700 dark:text-red-300">{createError}</p>
+                          <AlertCircle
+                            className="mt-0.5 h-4 w-4 shrink-0 text-red-800 dark:text-red-300"
+                            aria-hidden="true"
+                          />
+                          <p className="text-sm text-red-800 dark:text-red-300">{createErrors.formError}</p>
                         </div>
                       </div>
                     )}
@@ -1109,7 +1156,7 @@ const SchedulingPage: React.FC = () => {
                   <button
                     onClick={() => {
                       setShowCreateShift(false);
-                      setCreateError(null);
+                      createErrors.clear();
                     }}
                     className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
                   >
@@ -1119,9 +1166,9 @@ const SchedulingPage: React.FC = () => {
                     onClick={() => {
                       void handleCreateShift();
                     }}
-                    disabled={creating || !shiftForm.startDate}
+                    disabled={creating}
                     className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors ${
-                      creating || !shiftForm.startDate
+                      creating
                         ? 'cursor-not-allowed bg-violet-700 text-white opacity-50'
                         : 'bg-violet-700 text-white hover:bg-violet-800'
                     }`}

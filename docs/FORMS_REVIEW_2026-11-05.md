@@ -117,6 +117,11 @@ backend's snake_case key, no limit stated, and no field highlighted.
 
 ### F-3 — MED — Seventy create dialogs refuse an empty submit four different ways
 
+**Status: in progress.** The shared pattern is built (`FormField`,
+`ErrorSummary`, `useFieldErrors`) and Scheduling's Create Shift is on it: the
+button stays enabled, a missing value is named on its field, and a 422 lands on
+the field it names. The other dialogs move over module by module.
+
 Pressing the primary button of an empty create dialog was probed 70 times
 (about 40 distinct dialogs). The outcomes:
 
@@ -140,6 +145,11 @@ Finance/Grants dialogs in the last row already do exactly this and are the
 template.
 
 ### F-4 — MED — Error messages are visible but not connected to their fields
+
+**Status: in progress.** Submit Training now shows a message under each missing
+field, tied by `aria-describedby`, plus a summary at the top linking to each
+one; `/account` and Create Shift tie theirs the same way. Add Member is not yet
+moved.
 
 **Add Member** (`/members/admin?tab=add`, as `membership_coordinator`): an empty
 Save Member shows a toast and a red message under every required field — good —

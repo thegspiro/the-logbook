@@ -476,6 +476,51 @@ describe('UserSettingsPage', () => {
     });
   });
 
+  // Forms review F-2 / F-4: a refused value came back as a toast reading
+  // "Mobile: Enter a phone number…", with nothing marked on the field.
+  describe('server refusals land on their field', () => {
+    beforeEach(() => {
+      vi.mocked(userService.updateUserProfile).mockReset();
+    });
+
+    it('shows a refused mobile number under Mobile and moves focus there', async () => {
+      vi.mocked(userService.updateUserProfile).mockRejectedValue({
+        response: {
+          status: 422,
+          data: {
+            detail: [{ field: 'mobile', message: 'Enter a phone number using digits, spaces or dashes.' }],
+            code: 'LB-VAL-001',
+          },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const mobile = await screen.findByLabelText('Mobile');
+      await user.type(mobile, 'call me maybe');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() =>
+        expect(mobile).toHaveAccessibleDescription('Enter a phone number using digits, spaces or dashes.')
+      );
+      expect(mobile).toHaveAttribute('aria-invalid', 'true');
+      await waitFor(() => expect(mobile).toHaveFocus());
+      expect(toast.error).toHaveBeenCalledWith('Check the highlighted fields and save again.');
+
+      await user.type(mobile, 'x');
+      expect(mobile).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('limits each field to the length the server stores', async () => {
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByLabelText(/^First Name/)).toHaveAttribute('maxLength', '100');
+      expect(screen.getByLabelText('Mobile')).toHaveAttribute('maxLength', '20');
+      expect(screen.getByLabelText('Street Address')).toHaveAttribute('maxLength', '255');
+      expect(screen.getByLabelText('State')).toHaveAttribute('maxLength', '50');
+    });
+  });
+
   it('should default to the Account tab', () => {
     renderWithRouter(<UserSettingsPage />);
 

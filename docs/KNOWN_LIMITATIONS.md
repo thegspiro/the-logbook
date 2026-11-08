@@ -263,10 +263,17 @@ finalizing is.
   flagged with a message until it is fixed.
 
 Built so far: the legal-name fields on `/account` and the officer's
-edit-member page (forms review F-1, `docs/FORMS_REVIEW_2026-11-05.md`). The
-rest of the app's forms still refuse a save on error in various ways (F-3 in
-that review); they come into line through the shared form-field work that
-review recommends.
+edit-member page (forms review F-1, `docs/FORMS_REVIEW_2026-11-05.md`), and
+the shared pieces the rest move onto — `FormField` and `ErrorSummary` in
+`components/ux/` and `useFieldErrors` in `hooks/` — piloted on Submit
+Training, `/account` and Scheduling's Create Shift. The rest of the app's
+forms still refuse a save on error in various ways (F-3 in that review) and
+come into line module by module.
+
+Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
+needs a course name and a completion date, because both are NOT NULL
+columns, and making them nullable was declined. Every other field follows
+the rule above.
 
 ## Fundraising — The Donations List's Receipt Column Is Never Filled (2026-11-05)
 

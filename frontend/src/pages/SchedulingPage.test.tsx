@@ -654,3 +654,82 @@ describe('SchedulingPage', () => {
     });
   });
 });
+
+// Forms review F-3: Create Shift greyed out its button until a start date was
+// picked, with nothing to say why. The button now stays enabled; pressing it
+// says what is missing, on the field, and puts focus there.
+describe('SchedulingPage — Create Shift validation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCheckPermission.mockImplementation((perm: string) => perm === 'scheduling.manage');
+    vi.mocked(schedulingService.createShift).mockReset();
+    vi.mocked(schedulingService.getBasicApparatus).mockResolvedValue([]);
+    window.history.replaceState({}, '', '/scheduling?create=shift');
+  });
+
+  it('keeps Create enabled and flags a missing start date on the field', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<SchedulingPage />);
+    const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+
+    const create = within(dialog).getByRole('button', { name: 'Create Shift' });
+    expect(create).toBeEnabled();
+    await user.click(create);
+
+    const startDate = within(dialog).getByLabelText(/^Start Date/);
+    expect(startDate).toHaveAttribute('aria-invalid', 'true');
+    expect(startDate).toHaveAccessibleDescription('Choose the date the shift starts.');
+    expect(startDate).toHaveFocus();
+    expect(schedulingService.createShift).not.toHaveBeenCalled();
+  });
+
+  it('opens clean after a cancelled attempt', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<SchedulingPage />);
+    let dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+
+    await user.click(within(dialog).getByRole('button', { name: 'Create Shift' }));
+    expect(within(dialog).getByLabelText(/^Start Date/)).toHaveAttribute('aria-invalid', 'true');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+    dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+    expect(within(dialog).getByLabelText(/^Start Date/)).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('puts a refused date from the server on the Start Date field', async () => {
+    vi.mocked(schedulingService.createShift).mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'shift_date', message: 'Shift date is too far in the past.' }], code: 'LB-VAL-001' },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<SchedulingPage />);
+    const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+
+    fireEvent.change(within(dialog).getByLabelText(/^Start Date/), { target: { value: '2020-01-01' } });
+    await user.click(within(dialog).getByRole('button', { name: 'Create Shift' }));
+
+    const startDate = within(dialog).getByLabelText(/^Start Date/);
+    await waitFor(() => expect(startDate).toHaveAccessibleDescription('Shift date is too far in the past.'));
+    expect(startDate).toHaveFocus();
+  });
+
+  it('shows a failure that names no field as a sentence, not the raw request error', async () => {
+    vi.mocked(schedulingService.createShift).mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 409'), {
+        response: { status: 409, data: { detail: 'A shift already exists at that time.', code: 'LB-API-409' } },
+      })
+    );
+    const user = userEvent.setup();
+    renderWithRouter(<SchedulingPage />);
+    const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+
+    fireEvent.change(within(dialog).getByLabelText(/^Start Date/), { target: { value: '2026-12-10' } });
+    await user.click(within(dialog).getByRole('button', { name: 'Create Shift' }));
+
+    expect(await within(dialog).findByText(/A shift already exists at that time/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/status code 409/)).not.toBeInTheDocument();
+  });
+});
