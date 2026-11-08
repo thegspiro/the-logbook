@@ -435,7 +435,9 @@ each changes saved members' standing, writes PHI rows, or adds behaviour.
 
 The Zeffy integration ([ZEFFY_INTEGRATION.md](ZEFFY_INTEGRATION.md)) applies
 Zeffy payments to donations, fundraising-event revenue and member dues. These
-were chosen deliberately and are open for the owner to confirm or change:
+were chosen deliberately and are open for the owner to confirm or change.
+**Owner decision (2026-11-06): all five confirmed as built.** The list is kept
+as the record of what the integration leaves to the treasurer:
 
 - **A refund of dues already credited is flagged, not reversed.** The dues
   ledger has no reversal entry, so the payment shows **Needs review** and the
@@ -3321,15 +3323,29 @@ documentation (the list and URLs are in
 was left out rather than guessed, and is listed here with the other gaps. Each
 needs a decision or a follow-up change:
 
-- **Every payment posts as a cash expense from a bank account.** Intuit's
-  pages show a Purchase with `PaymentType` `Cash` paid from a Bank account,
-  and name check and credit card purchases without showing their
-  `PaymentType` values or the account type each needs. So a check is recorded
-  as an expense, not a QuickBooks Check (no check number on it), and a
-  category paid from a credit card account is refused live ("not a Bank
-  account") and goes in the CSV export instead. Posting checks as Checks and
-  card payments as credit card expenses needs Intuit's Purchase reference page
-  read and those two values confirmed.
+- **✅ Resolved 2026-11-08 — checks post as checks, card payments as credit
+  card expenses.** Owner decision (2026-11-06): "checks and cards". An issued
+  check posts as a QuickBooks Check with its check number (`DocNumber`; the
+  request number goes in the private note) and is not queued to print; a
+  payment from a category whose paid-from account is a QuickBooks Credit Card
+  account posts as a credit card expense instead of being refused; the rest
+  stay cash expenses from a bank account. The values were confirmed against
+  what Intuit publishes beside its Purchase reference (its v3 schema in the
+  PHP and Java SDKs, the .NET SDK's tests, and its Java "Data services
+  extensions" page; sources in `quickbooks_online_client.py`), because the
+  reference page itself renders only in a browser. What remains:
+  - Purchase requests and expense reports record no payment method, so one
+    paid by check from a bank account posts as a cash expense, not a Check.
+    Recording how a request was paid would be its own change.
+  - A check whose paid-from account is a credit card account is refused
+    live and goes in the CSV export; a check number longer than QuickBooks'
+    21 characters likewise. A check number QuickBooks already holds is
+    refused by QuickBooks (it is not sent with `allowduplicatedocnum`), and
+    the posting shows QuickBooks' reason.
+  - A check posted before this change stays in QuickBooks as the cash expense
+    it was posted as. A payment refused as "not a Bank account" before it
+    stays refused until the Treasurer presses **Send again**, or sends it in
+    the CSV export.
 - **Some payments still need the CSV export.** Cash advances, expense reports
   and reimbursement checks that account for an advance (a Purchase is paid from
   one account, and those are paid partly from the advance), dues, returned
@@ -3338,7 +3354,8 @@ needs a decision or a follow-up change:
 - **Voiding a posted check does not reverse it in QuickBooks.** The CSV export
   reverses a voided check; the live connection makes no change to a Purchase
   it created (the scope it holds can, but deleting records was not part of the
-  decision). Void it in QuickBooks too.
+  decision). Void it in QuickBooks too. Owner decision (2026-11-06): not built
+  now.
 - **Vendors are matched by display name**, ignoring case. A vendor renamed in
   QuickBooks gets a new one created under the old name on the next payment to
   it; a name used by a QuickBooks customer or employee is refused (Intuit error 6240) and the posting says so. An inactive vendor is refused, not
@@ -3350,9 +3367,10 @@ needs a decision or a follow-up change:
   with "QuickBooks has no account named …". Matching is exact, case included,
   as the CSV export's chart check is.
 - **`TxnDate` and `DocNumber`** are set from the payment's day on the
-  department's calendar and its request number. Intuit documents both on
-  transaction entities generally and shows them on other transactions' examples;
-  they were not seen on a Purchase example.
+  department's calendar and its request number (a check's `DocNumber` is its
+  check number). _(2026-11-08)_ Both are confirmed on Purchase: Intuit's schema
+  puts them on the Transaction type Purchase extends, and its own SDK tests set
+  them on a Purchase.
 - **A payment waiting on a retry when the department disconnects stays out of
   the CSV export**: QuickBooks may already hold it. Reconnecting to the same
   company sends it again under the same request id, which Intuit answers with
@@ -3361,7 +3379,8 @@ needs a decision or a follow-up change:
 - **Posting starts from the moment of connecting.** Earlier payments stay on
   the CSV export; the Treasurer can move the date (**Post payments made on or
   after**), and a payment already sent in a file is never posted.
-- **Reading budgets and actuals back from QuickBooks** is not built.
+- **Reading budgets and actuals back from QuickBooks** is not built. Owner
+  decision (2026-11-06): not built now.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 

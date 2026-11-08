@@ -804,6 +804,29 @@ Nothing blocks a restart. Migration `cf93f3b65274` creates an empty table,
   a screening's current tier again, and deletes any Medical Screening Expiry
   rule.
 
+### QuickBooks Online: checks post as checks, card payments as credit card expenses (2026-11-08)
+
+Nothing blocks a restart, and nothing changes for a department that has not
+connected QuickBooks Online. No migration. For a connected department, from
+the next posting run:
+
+- **An issued check posts as a QuickBooks Check**, numbered with its check
+  number, with the check request's number in the transaction's private note.
+  It used to post as a cash expense numbered with the request number. Checks
+  already in QuickBooks are left as they were posted.
+- **A payment from a category whose paid-from account is a QuickBooks Credit
+  Card account now posts** as a credit card expense. It used to be refused
+  ("not a Bank account") and left for the CSV export. A payment refused that
+  way before the upgrade stays refused: press **Send again** on it to post it
+  live, or send it in the CSV export as before — not both.
+- **A check paid from a credit card account, or numbered past QuickBooks' 21
+  characters, is refused** and left for the CSV export. A check number already
+  used in the QuickBooks company is refused by QuickBooks, with its reason on
+  the posting.
+- A posting already waiting on a retry is resent under its original request
+  id; if QuickBooks had created it, QuickBooks answers with that original
+  (cash) Purchase rather than creating a Check beside it.
+
 ### Finance: an optional live QuickBooks Online connection (2026-11-06)
 
 Nothing blocks a restart. Migration `e4c6e82acbc2` creates two empty tables,
