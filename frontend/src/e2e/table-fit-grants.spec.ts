@@ -172,7 +172,7 @@ const grantApplication = {
 // A grant's Budget tab: category, a long line description, three six-digit
 // amounts, a progress bar, edit/delete actions and a totals footer.
 test.describe('Grant budget table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/grants/applications/:id Budget tab — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, {
