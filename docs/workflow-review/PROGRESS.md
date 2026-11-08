@@ -194,6 +194,34 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### W04 second pass — My account — 2026-11-08
+
+The owner asked to continue with W04. Driven as `member` at 1280×900 and
+390×844, on the continued install.
+
+Held:
+
+- a blank legal name saves around it (F-1);
+- a member phone in the wrong format is refused (W04-7);
+- the department fields are read-only;
+- a password change refuses a wrong or reused password, then signs out everywhere and says so (W04-1);
+- MFA enrolment shows the recovery codes once (W04-2);
+- new codes and turning MFA off need a current code;
+- notification settings survive a reload;
+- every tab is clean at 390px.
+
+Fixed:
+
+- W04-10 (MED): a code typed "123 456" was still refused on enrolment, step-up, new recovery codes and turning MFA off; W02-10 had fixed only sign-in. The three code schemas now drop whitespace.
+- W04-11 (LOW): the member's own name, phone and address fields had no autocomplete hint (WCAG 1.3.5).
+
+Flagged:
+
+- W04-12 (MED): an emergency contact's phone has no format check. Mirrored to KNOWN_LIMITATIONS.
+- Also seen: a bad member phone still refuses the whole Account save, with no flag on the field (tracked as F-3 in the forms review), and two NITs.
+
+Gate: typecheck and lint clean; flake8, black and isort clean; 125 backend and 108 frontend tests pass, and every new case failed before its fix. Next: W05 when the owner asks.
+
 ### W03 second pass — Forgot password and reset by link — 2026-11-08
 
 The owner asked to continue after W02, so W03 was driven again, as a

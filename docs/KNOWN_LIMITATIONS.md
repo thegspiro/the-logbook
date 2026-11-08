@@ -1586,6 +1586,23 @@ existing rows were deliberately not rewritten: the correct date is derivable
 would change historical compliance results, and that was judged not worth it.
 An officer can correct an individual record's date where it matters.
 
+## Emergency Contacts — The Phone Has No Format Check (W04-12, 2026-11-08)
+
+**Owner decision needed.** A member's emergency contact is saved with any phone
+up to 20 characters. The workflow review's W04 second pass saved "nope", and
+the server stored it. `EmergencyContact.phone` (`backend/app/schemas/user.py`)
+has no rule. The W04-7 rule (`app/utils/phone_numbers.py`, owner decision
+2026-10-05) covers a member's own phone and mobile only. It accepts digits,
+spaces, dashes, dots, brackets, a leading `+` and an extension, with 7 to 15
+digits.
+
+This is the number the department calls when something has happened to the
+member. Three questions are open:
+
+- **Extend the W04-7 rule to emergency-contact phones?** As there, it would apply to new writes only, with a value sent back unchanged still accepted.
+- **What happens to contacts already stored?** They are encrypted (`emergency_contacts` is an encrypted column), so finding bad ones means decrypting each.
+- **Follow the 2026-11-05 forms decision?** A contact with a bad phone could be kept and flagged rather than refused.
+
 ## Password Reset Requests Store the Typed Address in the Audit Log (W03-13, 2026-11-08)
 
 **Resolved (2026-11-08), owner decision: a keyed fingerprint for unknown

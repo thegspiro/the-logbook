@@ -714,6 +714,7 @@ export const UserSettingsPage: React.FC = () => {
                         <input
                           ref={firstNameRef}
                           id="firstName"
+                          autoComplete="given-name"
                           type="text"
                           required
                           aria-invalid={blankNames.includes('first_name') || undefined}
@@ -738,6 +739,7 @@ export const UserSettingsPage: React.FC = () => {
                         </label>
                         <input
                           id="middleName"
+                          autoComplete="additional-name"
                           type="text"
                           value={profileForm.middle_name || ''}
                           onChange={(e) => handleProfileChange('middle_name', e.target.value)}
@@ -755,6 +757,7 @@ export const UserSettingsPage: React.FC = () => {
                         <input
                           ref={lastNameRef}
                           id="lastName"
+                          autoComplete="family-name"
                           type="text"
                           required
                           aria-invalid={blankNames.includes('last_name') || undefined}
@@ -780,6 +783,7 @@ export const UserSettingsPage: React.FC = () => {
                       </label>
                       <input
                         id="preferredName"
+                        autoComplete="nickname"
                         type="text"
                         maxLength={100}
                         value={profileForm.preferred_name || ''}
@@ -807,6 +811,7 @@ export const UserSettingsPage: React.FC = () => {
                         </label>
                         <input
                           id="phone"
+                          autoComplete="tel"
                           type="tel"
                           value={profileForm.phone || ''}
                           onChange={(e) => handleProfileChange('phone', e.target.value)}
@@ -820,6 +825,7 @@ export const UserSettingsPage: React.FC = () => {
                         </label>
                         <input
                           id="mobile"
+                          autoComplete="tel"
                           type="tel"
                           value={profileForm.mobile || ''}
                           onChange={(e) => handleProfileChange('mobile', e.target.value)}
@@ -904,6 +910,7 @@ export const UserSettingsPage: React.FC = () => {
                         </label>
                         <input
                           id="addressStreet"
+                          autoComplete="street-address"
                           type="text"
                           value={profileForm.address_street || ''}
                           onChange={(e) => handleProfileChange('address_street', e.target.value)}
@@ -921,6 +928,7 @@ export const UserSettingsPage: React.FC = () => {
                           </label>
                           <input
                             id="addressCity"
+                            autoComplete="address-level2"
                             type="text"
                             value={profileForm.address_city || ''}
                             onChange={(e) => handleProfileChange('address_city', e.target.value)}
@@ -937,6 +945,7 @@ export const UserSettingsPage: React.FC = () => {
                           </label>
                           <input
                             id="addressState"
+                            autoComplete="address-level1"
                             type="text"
                             value={profileForm.address_state || ''}
                             onChange={(e) => handleProfileChange('address_state', e.target.value)}
@@ -953,6 +962,7 @@ export const UserSettingsPage: React.FC = () => {
                           </label>
                           <input
                             id="addressZip"
+                            autoComplete="postal-code"
                             type="text"
                             value={profileForm.address_zip || ''}
                             onChange={(e) => handleProfileChange('address_zip', e.target.value)}

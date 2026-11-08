@@ -357,6 +357,31 @@ describe('UserSettingsPage', () => {
     expect(screen.getByText('Notifications')).toBeInTheDocument();
   });
 
+  // W04-11: the member's own name, phone and address fields carried no
+  // autocomplete hint, so a browser or assistive tool could not fill them
+  // (WCAG 2.2 SC 1.3.5, Identify Input Purpose).
+  describe('Account Tab input purpose', () => {
+    it("names the purpose of each of the member's own fields", async () => {
+      renderWithRouter(<UserSettingsPage />);
+      const expected: Record<string, string> = {
+        firstName: 'given-name',
+        middleName: 'additional-name',
+        lastName: 'family-name',
+        preferredName: 'nickname',
+        phone: 'tel',
+        mobile: 'tel',
+        addressStreet: 'street-address',
+        addressCity: 'address-level2',
+        addressState: 'address-level1',
+        addressZip: 'postal-code',
+      };
+      await screen.findByLabelText(/first name/i);
+      for (const [id, token] of Object.entries(expected)) {
+        expect(document.getElementById(id), id).toHaveAttribute('autocomplete', token);
+      }
+    });
+  });
+
   describe('preferred name', () => {
     beforeEach(() => {
       mockLoadUser.mockReset();
