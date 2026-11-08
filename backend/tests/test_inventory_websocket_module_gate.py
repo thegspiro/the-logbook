@@ -5,7 +5,8 @@ resolve a session from one without a ``Request``), so ``inventory_websocket``
 checks the flag after it has authenticated the caller. A department that has
 switched Inventory off must not keep receiving inventory change events, and
 the refusal must use a close code the client treats as final — 4003, which
-``useInventoryWebSocket`` does not retry.
+``useInventoryWebSocket`` does not retry. A caller without inventory.manage is
+refused the same way: the stream names which member holds which item.
 """
 
 from contextlib import asynccontextmanager
@@ -31,8 +32,14 @@ async def _fake_session():
     yield SimpleNamespace()
 
 
-def _connect(enabled_modules):
+def _connect(enabled_modules, permissions=("inventory.manage",)):
     """Open the socket with auth and origin stubbed; return (close code, manager)."""
+    user = SimpleNamespace(
+        organization_id=ORG,
+        rank=None,
+        positions=[SimpleNamespace(permissions=list(permissions))],
+        roles=[],
+    )
     api = FastAPI()
     api.include_router(inventory.router, prefix="/inventory")
     manager = MagicMock()
@@ -48,7 +55,7 @@ def _connect(enabled_modules):
         "app.core.database.async_session_factory", new=_fake_session
     ), patch(
         "app.services.auth_service.AuthService.get_user_from_token",
-        new=AsyncMock(return_value=SimpleNamespace(organization_id=ORG)),
+        new=AsyncMock(return_value=user),
     ), patch(
         f"{MODULE}.OrganizationService.get_enabled_modules",
         new=AsyncMock(return_value=SimpleNamespace(enabled_modules=enabled_modules)),
@@ -75,3 +82,12 @@ def test_an_enabled_module_registers_the_socket():
 
     assert code == CAP_REACHED
     manager.connect.assert_awaited_once()
+
+
+def test_a_member_without_inventory_manage_is_refused():
+    # The stream names who is issued which item; reading another member's
+    # gear is inventory.manage only (INV-9).
+    code, manager = _connect(["members", "inventory"], permissions=["inventory.view"])
+
+    assert code == 4003
+    manager.connect.assert_not_awaited()

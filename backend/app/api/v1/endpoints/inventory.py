@@ -6082,6 +6082,13 @@ async def inventory_websocket(
                 await websocket.close(code=4001, reason="Invalid or revoked session")
                 return
             org_id = user.organization_id
+            # The stream names which member is issued, assigned or checked out
+            # which item. Reading another member's gear is inventory.manage
+            # only (INV-9), and both pages that open this socket are already
+            # gated on it, so nobody else has a reason to hold one open.
+            may_watch = _has_permission(
+                "inventory.manage", _collect_user_permissions(user)
+            )
 
             # The router's module gate stands aside for WebSocket handshakes
             # (see get_request_enabled_modules), so the switch is enforced
@@ -6096,6 +6103,11 @@ async def inventory_websocket(
     if "inventory" not in enabled:
         # 4003 is final on the client: useInventoryWebSocket does not retry it.
         await websocket.close(code=4003, reason="Inventory module is not enabled")
+        return
+
+    if not may_watch:
+        # 4003 is final on the client, so a refused caller does not retry.
+        await websocket.close(code=4003, reason="Requires inventory.manage")
         return
 
     if not await ws_manager.connect(websocket, org_id):
