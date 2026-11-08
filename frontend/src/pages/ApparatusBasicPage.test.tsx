@@ -192,7 +192,9 @@ describe('ApparatusBasicPage save validation', () => {
     await user.clear(within(dialog).getByRole('spinbutton', { name: /^Minimum Staffing/ }));
     await user.click(within(dialog).getByRole('button', { name: 'Add Apparatus' }));
 
-    expect(mockToastError).toHaveBeenCalledWith('Minimum staffing must be a whole number from 1 to 50');
+    expect(within(dialog).getByRole('spinbutton', { name: /^Minimum Staffing/ })).toHaveAccessibleDescription(
+      'Minimum staffing must be a whole number from 1 to 50.'
+    );
     expect(mockCreateBasicApparatus).not.toHaveBeenCalled();
 
     await user.type(within(dialog).getByRole('spinbutton', { name: /^Minimum Staffing/ }), '3');
@@ -215,8 +217,37 @@ describe('ApparatusBasicPage save validation', () => {
     });
     await user.click(within(dialog).getByRole('button', { name: 'Add Apparatus' }));
 
-    expect(mockToastError).toHaveBeenCalledWith('Unit number must be 20 characters or fewer');
+    expect(within(dialog).getByRole('textbox', { name: /^Unit Number/ })).toHaveAccessibleDescription(
+      'Unit number must be 20 characters or fewer.'
+    );
     expect(mockCreateBasicApparatus).not.toHaveBeenCalled();
+  });
+
+  it('puts a server refusal on its field and adds nothing', async () => {
+    mockCreateBasicApparatus.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    const dialog = await openAdd(user);
+
+    // Enter submits: the dialog is a real form (forms review F-7).
+    await user.type(within(dialog).getByRole('textbox', { name: /^Name/ }), '{Enter}');
+
+    const name = within(dialog).getByRole('textbox', { name: /^Name/ });
+    await waitFor(() => expect(name).toHaveAccessibleDescription('Name is too long — keep it to 100 characters.'));
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAttribute('maxLength', '100');
+    expect(mockCreateBasicApparatus).toHaveBeenCalledTimes(1);
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel discards a half-filled vehicle', async () => {
+    const user = userEvent.setup();
+    const dialog = await openAdd(user);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByRole('textbox', { name: /^Unit Number/ })).toHaveValue('E-52');
   });
 
   it("shows the server's reason when the save fails", async () => {

@@ -36,6 +36,9 @@ import { formatForDateTimeInput, getTodayLocalDate, localToUTC } from '../../uti
 import { getErrorMessage } from '../../utils/errorHandling';
 import { blankToNull } from '../../utils/formValues';
 import { formatHours } from '../../utils/hoursFormatting';
+import { FormField } from '../../components/ux/FormField';
+import { useDiscardGuard } from '../../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../utils/serverFieldErrors';
 
 /** Matches the backend's ceiling: one entry is one shift. */
 export const MAX_EXTERNAL_SHIFT_HOURS = 48;
@@ -50,6 +53,42 @@ const instant = (iso: string): number => (iso ? new Date(iso).getTime() : NaN);
 
 /** Select value standing for the unit an edited entry already has. */
 const CURRENT = '__current__';
+
+type ShiftField = 'start' | 'end' | 'shiftDate' | 'hours' | 'agency' | 'apparatus' | 'role' | 'notes';
+
+// Limits from ExternalShiftHoursCreate / Update
+// (backend/app/schemas/external_shift_hours.py).
+const SHIFT_FIELDS: Record<ShiftField, ServerFieldSpec> = {
+  start: { label: 'Start', api: 'start_at' },
+  end: { label: 'End', api: 'end_at' },
+  shiftDate: { label: 'Date', api: 'shift_date' },
+  hours: { label: 'Hours', api: 'hours' },
+  agency: { label: 'Department', api: [] },
+  apparatus: { label: 'Apparatus', api: 'external_apparatus_id' },
+  role: { label: 'Position', maxLength: 100, api: 'role' },
+  notes: { label: 'Notes', maxLength: 2000, api: 'notes' },
+};
+const SHIFT_FIELD_IDS: Record<ShiftField, string> = {
+  start: 'external-shift-start',
+  end: 'external-shift-end',
+  shiftDate: 'external-shift-date',
+  hours: 'external-shift-hours',
+  agency: 'external-shift-agency',
+  apparatus: 'external-shift-apparatus',
+  role: 'external-shift-role',
+  notes: 'external-shift-notes',
+};
+/** The keys an edit leaves out when the server refuses a field; times travel together. */
+const SHIFT_FIELD_KEYS: Record<ShiftField, readonly string[]> = {
+  start: ['start_at', 'end_at'],
+  end: ['start_at', 'end_at'],
+  shiftDate: ['shift_date'],
+  hours: ['hours'],
+  agency: [],
+  apparatus: ['external_apparatus_id'],
+  role: ['role'],
+  notes: ['notes'],
+};
 
 export const NOT_LISTED_HINT =
   "Don't see it? Ask a scheduling officer to add it under Scheduling → Settings → Outside Apparatus.";
@@ -85,6 +124,19 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
   const [options, setOptions] = useState<ExternalAgency[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [optionsError, setOptionsError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<ShiftField, string | undefined>>>({});
+  // Set by the member's own edits, not by the re-seed or the unit lookup, so
+  // a dialog opened and closed untouched never asks about discarding.
+  const [changed, setChanged] = useState(false);
+  const edited = (...fields: ShiftField[]) => {
+    setChanged(true);
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      for (const field of fields) next[field] = undefined;
+      return next;
+    });
+  };
+  const requestClose = useDiscardGuard({ isDirty: isOpen && changed, onClose });
 
   // Re-seeded on every open, so a half-typed entry for one shift cannot be
   // saved against the next one the member opens.
@@ -108,6 +160,8 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
     setApparatusId('');
     setRole(entry?.role ?? '');
     setNotes(entry?.notes ?? '');
+    setFieldErrors({});
+    setChanged(false);
   }, [isOpen, entry, today, tz]);
 
   useEffect(() => {
@@ -146,6 +200,7 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
   const hasAnyUnit = options.some((a) => a.apparatus.length > 0);
 
   const handleStartChange = (value: string) => {
+    edited('start', 'end');
     const synced = syncEndToStartExact(start, value, end, endPin, tz);
     setStart(value);
     setEnd(synced.local);
@@ -153,6 +208,7 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
   };
 
   const handlePreset = (presetHours: number) => {
+    edited('end');
     const derived = addHoursExact(start, presetHours, tz);
     setEnd(derived?.local ?? '');
     setEndPin(derived);
@@ -173,35 +229,91 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
   const hoursValid =
     hours !== '' && Number.isFinite(hoursValue) && hoursValue > 0 && hoursValue <= MAX_EXTERNAL_SHIFT_HOURS;
   const dateValid = shiftDate !== '' && shiftDate <= today;
-  const timingValid = mode === 'times' ? timesValid : hoursValid && dateValid;
-  const canSave = timingValid && apparatusId !== '' && !saving;
+
+  const showFieldErrors = (errors: Partial<Record<ShiftField, string | undefined>>) => {
+    setFieldErrors(errors);
+    const first = (Object.keys(SHIFT_FIELD_IDS) as ShiftField[]).find((f) => errors[f]);
+    if (first) document.getElementById(SHIFT_FIELD_IDS[first])?.focus();
+  };
+
+  /** What stops a save, on the field it concerns (forms review F-3). */
+  const missingFields = (): Partial<Record<ShiftField, string>> => {
+    const missing: Partial<Record<ShiftField, string>> = {};
+    if (mode === 'times') {
+      if (!start) missing.start = 'Enter when the shift started.';
+      if (!end) missing.end = 'Enter when the shift ended.';
+    } else {
+      if (!dateValid) missing.shiftDate = shiftDate ? 'The date cannot be in the future.' : 'Enter the date.';
+      if (!hoursValid) missing.hours = `Enter the hours, more than 0 and up to ${MAX_EXTERNAL_SHIFT_HOURS}.`;
+    }
+    if (agencyId === '') missing.agency = 'Choose the department.';
+    else if (apparatusId === '') missing.apparatus = 'Choose the apparatus.';
+    return missing;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSave) return;
+    if (saving) return;
+    const missing = missingFields();
+    // A times problem is already shown under End; focus it rather than save.
+    if (Object.keys(missing).length > 0 || (mode === 'times' && !timesValid)) {
+      showFieldErrors(missing);
+      if (Object.keys(missing).length === 0) document.getElementById(SHIFT_FIELD_IDS.end)?.focus();
+      return;
+    }
     setSaving(true);
     try {
+      let refused: Partial<Record<ShiftField, string>> = {};
       if (entry) {
         // The unit goes on the wire only when the member picked a different
         // one: an entry whose unit has left the list has nothing to re-send.
         const unitChanged = apparatusId !== CURRENT && apparatusId !== entry.external_apparatus_id;
-        const saved = await schedulingService.updateExternalShift(entry.id, {
+        const update: Record<string, unknown> = {
           ...(mode === 'times' ? { start_at: startUtc, end_at: endUtc } : { shift_date: shiftDate, hours: hoursValue }),
           ...(unitChanged ? { external_apparatus_id: apparatusId } : {}),
           role: blankToNull(role),
           notes: blankToNull(notes),
-        });
+        };
+        let saved;
+        try {
+          saved = await schedulingService.updateExternalShift(entry.id, update);
+        } catch (err: unknown) {
+          // Single-save rule (owner, 2026-11-05): what the entry cannot hold
+          // is left out, the rest is written, and the field stays flagged.
+          const mapped = mapServerFieldErrors(err, SHIFT_FIELDS);
+          const keys = mapped ? (Object.keys(mapped.fieldErrors) as ShiftField[]) : [];
+          if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
+          refused = mapped.fieldErrors;
+          const rest = { ...update };
+          for (const key of keys) for (const apiKey of SHIFT_FIELD_KEYS[key]) delete rest[apiKey];
+          saved = await schedulingService.updateExternalShift(entry.id, rest);
+        }
+        if (Object.keys(refused).length > 0) {
+          onSaved();
+          showFieldErrors(refused);
+          toast.error('Shift saved, except the field marked in the form. Fix it and save again.');
+          return;
+        }
         toast.success(
           saved.status === 'pending' ? 'Shift updated; it counts once an officer approves it' : 'Shift updated'
         );
       } else {
-        const saved = await schedulingService.logExternalShift({
-          start_at: startUtc,
-          end_at: endUtc,
-          external_apparatus_id: apparatusId,
-          role: role.trim() || undefined,
-          notes: notes.trim() || undefined,
-        });
+        let saved;
+        try {
+          saved = await schedulingService.logExternalShift({
+            start_at: startUtc,
+            end_at: endUtc,
+            external_apparatus_id: apparatusId,
+            role: role.trim() || undefined,
+            notes: notes.trim() || undefined,
+          });
+        } catch (err: unknown) {
+          // Nothing is logged until each refused field is fixed.
+          const mapped = mapServerFieldErrors(err, SHIFT_FIELDS);
+          if (!mapped || Object.keys(mapped.fieldErrors).length === 0 || mapped.unmatched.length > 0) throw err;
+          showFieldErrors(mapped.fieldErrors);
+          return;
+        }
         toast.success(
           saved.status === 'pending' ? 'Shift logged; it counts once an officer approves it' : 'Shift logged'
         );
@@ -218,17 +330,17 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={isEdit ? 'Edit outside shift' : 'Log a shift with another department'}
       onSubmit={(e) => void handleSubmit(e)}
       footer={
         <>
-          <button type="submit" className="btn-primary" disabled={!canSave}>
+          <button type="submit" className="btn-primary" disabled={saving}>
             {saving ? 'Saving…' : isEdit ? 'Save changes' : 'Log shift'}
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-md border px-4 py-2 text-sm font-medium"
           >
             Cancel
@@ -245,37 +357,39 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
         {mode === 'times' ? (
           <div className="space-y-3">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="external-shift-start" className="form-label">
-                  Start
-                </label>
-                <DateTimeQuarterHour
-                  id="external-shift-start"
-                  value={start}
-                  onChange={handleStartChange}
-                  required
-                  className="form-input"
-                  timezone={tz}
-                  timeLabel="Start time"
-                />
-              </div>
-              <div>
-                <label htmlFor="external-shift-end" className="form-label">
-                  End
-                </label>
-                <DateTimeQuarterHour
-                  id="external-shift-end"
-                  value={end}
-                  onChange={(value) => {
-                    setEnd(value);
-                    setEndPin(null);
-                  }}
-                  required
-                  className="form-input"
-                  timezone={tz}
-                  timeLabel="End time"
-                />
-              </div>
+              <FormField label="Start" required id={SHIFT_FIELD_IDS.start} error={fieldErrors.start}>
+                {(field) => (
+                  <DateTimeQuarterHour
+                    {...field}
+                    value={start}
+                    onChange={handleStartChange}
+                    className="form-input"
+                    timezone={tz}
+                    timeLabel="Start time"
+                  />
+                )}
+              </FormField>
+              <FormField
+                label="End"
+                required
+                id={SHIFT_FIELD_IDS.end}
+                error={fieldErrors.end ?? timesProblem ?? undefined}
+              >
+                {(field) => (
+                  <DateTimeQuarterHour
+                    {...field}
+                    value={end}
+                    onChange={(value) => {
+                      edited('end');
+                      setEnd(value);
+                      setEndPin(null);
+                    }}
+                    className="form-input"
+                    timezone={tz}
+                    timeLabel="End time"
+                  />
+                )}
+              </FormField>
             </div>
             <QuickDurationButtons
               onSelect={handlePreset}
@@ -283,17 +397,11 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
               presets={EXTERNAL_SHIFT_PRESET_HOURS}
               signed
             />
-            {timesProblem ? (
-              <p className="text-sm text-red-700 dark:text-red-400" role="alert">
-                {timesProblem}
+            {timesValid && (
+              <p className="text-theme-text-secondary text-sm">
+                Counts as{' '}
+                <span className="text-theme-text-primary font-medium">{formatHours(spanMinutes / 60)} hours</span>
               </p>
-            ) : (
-              timesValid && (
-                <p className="text-theme-text-secondary text-sm">
-                  Counts as{' '}
-                  <span className="text-theme-text-primary font-medium">{formatHours(spanMinutes / 60)} hours</span>
-                </p>
-              )
             )}
           </div>
         ) : (
@@ -302,98 +410,111 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
               This shift was logged as a date and hours, without its start and end times.
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="external-shift-date" className="form-label">
-                  Date
-                </label>
-                <input
-                  id="external-shift-date"
-                  type="date"
-                  className="form-input"
-                  value={shiftDate}
-                  max={today}
-                  required
-                  onChange={(e) => setShiftDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="external-shift-hours" className="form-label">
-                  Hours
-                </label>
-                <input
-                  id="external-shift-hours"
-                  type="number"
-                  inputMode="decimal"
-                  className="form-input"
-                  value={hours}
-                  min={0.25}
-                  max={MAX_EXTERNAL_SHIFT_HOURS}
-                  step={0.25}
-                  required
-                  aria-describedby="external-shift-hours-hint"
-                  onChange={(e) => setHours(e.target.value)}
-                />
-                <p id="external-shift-hours-hint" className="text-theme-text-muted mt-1 text-xs">
-                  Up to {MAX_EXTERNAL_SHIFT_HOURS} hours per entry.
-                </p>
-              </div>
+              <FormField label="Date" required id={SHIFT_FIELD_IDS.shiftDate} error={fieldErrors.shiftDate}>
+                {(field) => (
+                  <input
+                    {...field}
+                    type="date"
+                    className="form-input"
+                    value={shiftDate}
+                    max={today}
+                    onChange={(e) => {
+                      edited('shiftDate');
+                      setShiftDate(e.target.value);
+                    }}
+                  />
+                )}
+              </FormField>
+              <FormField
+                label="Hours"
+                required
+                id={SHIFT_FIELD_IDS.hours}
+                error={fieldErrors.hours}
+                hint={`Up to ${MAX_EXTERNAL_SHIFT_HOURS} hours per entry.`}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    inputMode="decimal"
+                    className="form-input"
+                    value={hours}
+                    min={0.25}
+                    max={MAX_EXTERNAL_SHIFT_HOURS}
+                    step={0.25}
+                    onChange={(e) => {
+                      edited('hours');
+                      setHours(e.target.value);
+                    }}
+                  />
+                )}
+              </FormField>
             </div>
-            <button type="button" className="text-sm font-medium underline" onClick={() => setMode('times')}>
+            <button
+              type="button"
+              className="text-sm font-medium underline"
+              onClick={() => {
+                edited('shiftDate', 'hours');
+                setMode('times');
+              }}
+            >
               Enter start and end times instead
             </button>
           </div>
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="external-shift-agency" className="form-label">
-              Department
-            </label>
-            <select
-              id="external-shift-agency"
-              className="form-input"
-              value={agencyId}
-              required
-              disabled={optionsLoading}
-              onChange={(e) => {
-                setAgencyId(e.target.value);
-                setApparatusId('');
-              }}
-            >
-              <option value="">{optionsLoading ? 'Loading…' : 'Choose a department'}</option>
-              {entry && agencyId === CURRENT && <option value={CURRENT}>{entry.agency_name} (no longer listed)</option>}
-              {options.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="external-shift-apparatus" className="form-label">
-              Apparatus
-            </label>
-            <select
-              id="external-shift-apparatus"
-              className="form-input"
-              value={apparatusId}
-              required
-              disabled={optionsLoading || agencyId === ''}
-              onChange={(e) => setApparatusId(e.target.value)}
-            >
-              <option value="">Choose an apparatus</option>
-              {entry && agencyId === CURRENT && (
-                <option value={CURRENT}>{entry.apparatus_name} (no longer listed)</option>
-              )}
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.apparatus_type ? `${u.name} (${u.apparatus_type})` : u.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FormField label="Department" required id={SHIFT_FIELD_IDS.agency} error={fieldErrors.agency}>
+            {(field) => (
+              <select
+                {...field}
+                className="form-input"
+                value={agencyId}
+                disabled={optionsLoading}
+                onChange={(e) => {
+                  edited('agency', 'apparatus');
+                  setAgencyId(e.target.value);
+                  setApparatusId('');
+                }}
+              >
+                <option value="">{optionsLoading ? 'Loading…' : 'Choose a department'}</option>
+                {entry && agencyId === CURRENT && (
+                  <option value={CURRENT}>{entry.agency_name} (no longer listed)</option>
+                )}
+                {options.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          <FormField label="Apparatus" required id={SHIFT_FIELD_IDS.apparatus} error={fieldErrors.apparatus}>
+            {(field) => (
+              <select
+                {...field}
+                className="form-input"
+                value={apparatusId}
+                disabled={optionsLoading || agencyId === ''}
+                onChange={(e) => {
+                  edited('apparatus');
+                  setApparatusId(e.target.value);
+                }}
+              >
+                <option value="">Choose an apparatus</option>
+                {entry && agencyId === CURRENT && (
+                  <option value={CURRENT}>{entry.apparatus_name} (no longer listed)</option>
+                )}
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.apparatus_type ? `${u.name} (${u.apparatus_type})` : u.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
         </div>
         {optionsError ? (
-          <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+          <p className="text-sm text-red-800 dark:text-red-300" role="alert">
             {optionsError}
           </p>
         ) : (
@@ -405,33 +526,51 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
           )
         )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="external-shift-role" className="form-label">
-              Position <span className="text-theme-text-muted font-normal">(optional)</span>
-            </label>
-            <input
-              id="external-shift-role"
+          <FormField
+            label="Position"
+            optional
+            id={SHIFT_FIELD_IDS.role}
+            error={fieldErrors.role}
+            maxLength={SHIFT_FIELDS.role.maxLength}
+            count={role.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                autoComplete="off"
+                className="form-input"
+                value={role}
+                placeholder="e.g. Driver"
+                onChange={(e) => {
+                  edited('role');
+                  setRole(e.target.value);
+                }}
+              />
+            )}
+          </FormField>
+        </div>
+        <FormField
+          label="Notes"
+          optional
+          id={SHIFT_FIELD_IDS.notes}
+          error={fieldErrors.notes}
+          maxLength={SHIFT_FIELDS.notes.maxLength}
+          count={notes.length}
+        >
+          {(field) => (
+            <textarea
+              {...field}
               className="form-input"
-              value={role}
-              maxLength={100}
-              placeholder="e.g. Driver"
-              onChange={(e) => setRole(e.target.value)}
+              rows={3}
+              value={notes}
+              onChange={(e) => {
+                edited('notes');
+                setNotes(e.target.value);
+              }}
             />
-          </div>
-        </div>
-        <div>
-          <label htmlFor="external-shift-notes" className="form-label">
-            Notes <span className="text-theme-text-muted font-normal">(optional)</span>
-          </label>
-          <textarea
-            id="external-shift-notes"
-            className="form-input"
-            rows={3}
-            value={notes}
-            maxLength={2000}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
+          )}
+        </FormField>
       </div>
     </Modal>
   );

@@ -15,6 +15,39 @@ import { PositionKind } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { AdminPageHeader } from '../components/admin/AdminPageHeader';
+import { FormField } from '../components/ux/FormField';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
+
+type RoleField = 'name' | 'description' | 'priority';
+
+// RoleCreate / RoleUpdate (backend/app/schemas/role.py): only the name has a
+// max_length; priority is ge=0 le=100.
+const ROLE_FIELDS: Record<RoleField, ServerFieldSpec> = {
+  name: { label: 'Role name', maxLength: 100 },
+  description: { label: 'Description' },
+  priority: { label: 'Priority' },
+};
+const ROLE_FIELD_IDS: Record<RoleField, string> = {
+  name: 'role-name',
+  description: 'role-description',
+  priority: 'role-priority',
+};
+
+interface RoleForm {
+  name: string;
+  description: string;
+  permissions: string[];
+  priority: number;
+  kind: 'office' | 'committee';
+}
+
+const sameRoleForm = (a: RoleForm, b: RoleForm) =>
+  a.name === b.name &&
+  a.description === b.description &&
+  a.priority === b.priority &&
+  a.kind === b.kind &&
+  [...a.permissions].sort().join('|') === [...b.permissions].sort().join('|');
 
 export const RoleManagementPage: React.FC = () => {
   const { confirm } = useConfirm();
@@ -41,13 +74,10 @@ export const RoleManagementPage: React.FC = () => {
   }, [roles]);
 
   // Form state
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    permissions: [] as string[],
-    priority: 50,
-    kind: PositionKind.OFFICE as 'office' | 'committee',
-  });
+  const emptyForm: RoleForm = { name: '', description: '', permissions: [], priority: 50, kind: PositionKind.OFFICE };
+  const [formData, setFormData] = useState<RoleForm>(emptyForm);
+  const [initialForm, setInitialForm] = useState<RoleForm>(emptyForm);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<RoleField, string | undefined>>>({});
 
   useEffect(() => {
     void fetchData();
@@ -72,31 +102,39 @@ export const RoleManagementPage: React.FC = () => {
     }
   };
 
-  const handleCreate = () => {
-    setFormData({
-      name: '',
-      description: '',
-      permissions: [],
-      priority: 50,
-      kind: PositionKind.OFFICE,
-    });
-    setEditingRole(null);
+  const openRoleDialog = (role: Role | null, form: RoleForm) => {
+    setFormData(form);
+    setInitialForm(form);
+    setFieldErrors({});
+    setEditingRole(role);
     setError(null);
     setShowCreateModal(true);
   };
 
-  const handleEdit = (role: Role) => {
-    setFormData({
+  const handleCreate = () => openRoleDialog(null, emptyForm);
+
+  const handleEdit = (role: Role) =>
+    openRoleDialog(role, {
       name: role.name,
       description: role.description || '',
       permissions: role.permissions,
       priority: role.priority,
       kind: role.kind === PositionKind.COMMITTEE ? PositionKind.COMMITTEE : PositionKind.OFFICE,
     });
-    setEditingRole(role);
-    setError(null);
-    setShowCreateModal(true);
+
+  // Escape and Cancel ask before a changed role is discarded (forms review F-6).
+  const requestCloseRole = useDiscardGuard({
+    isDirty: showCreateModal && !sameRoleForm(formData, initialForm),
+    onClose: () => setShowCreateModal(false),
+  });
+
+  const showFieldErrors = (errors: Partial<Record<RoleField, string | undefined>>) => {
+    setFieldErrors(errors);
+    const first = (Object.keys(ROLE_FIELD_IDS) as RoleField[]).find((f) => errors[f]);
+    if (first) document.getElementById(ROLE_FIELD_IDS[first])?.focus();
   };
+
+  const clearFieldError = (field: RoleField) => setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
 
   // ORU-7c: the baseline `member` position is held by every member, so a
   // permission change to it is an organization-wide grant (or revocation) in
@@ -134,11 +172,12 @@ export const RoleManagementPage: React.FC = () => {
     run(async () => {
       try {
         setError(null);
+        setFieldErrors({});
         // Checked here so the reason is ours rather than the server's
         // "name: Value is too short" (workflow review W05).
         const name = formData.name.trim();
         if (!name) {
-          setError('Give the role a name.');
+          showFieldErrors({ name: 'Give the role a name.' });
           return;
         }
 
@@ -146,9 +185,10 @@ export const RoleManagementPage: React.FC = () => {
           return;
         }
 
+        let refused: Partial<Record<RoleField, string>> = {};
         if (editingRole) {
           // Update existing role
-          await roleService.updateRole(editingRole.id, {
+          const update = {
             name: name !== editingRole.name ? name : undefined,
             description: formData.description !== editingRole.description ? formData.description : undefined,
             permissions: formData.permissions,
@@ -156,13 +196,40 @@ export const RoleManagementPage: React.FC = () => {
             // The platform's own positions keep their kind; the server refuses
             // a change there, so none is sent.
             kind: !editingRole.is_system && formData.kind !== editingRole.kind ? formData.kind : undefined,
-          });
+          };
+          try {
+            await roleService.updateRole(editingRole.id, update);
+          } catch (err: unknown) {
+            // Single-save rule (owner, 2026-11-05): a value the role cannot
+            // hold is left out, the rest is written, and the field stays
+            // flagged with the server's reason until it is fixed.
+            const mapped = mapServerFieldErrors(err, ROLE_FIELDS);
+            const keys = mapped ? (Object.keys(mapped.fieldErrors) as RoleField[]) : [];
+            if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
+            refused = mapped.fieldErrors;
+            const rest = { ...update };
+            for (const key of keys) rest[key] = undefined;
+            await roleService.updateRole(editingRole.id, rest);
+          }
         } else {
-          // Create new role
-          await roleService.createRole({ ...formData, name });
+          // Create new role. A refusal lands on its field and nothing is
+          // created until it is fixed.
+          try {
+            await roleService.createRole({ ...formData, name });
+          } catch (err: unknown) {
+            const mapped = mapServerFieldErrors(err, ROLE_FIELDS);
+            if (!mapped || Object.keys(mapped.fieldErrors).length === 0 || mapped.unmatched.length > 0) throw err;
+            showFieldErrors(mapped.fieldErrors);
+            return;
+          }
         }
 
         await fetchData();
+        if (Object.keys(refused).length > 0) {
+          setError('The role was saved, except the field marked below. Fix it and save again.');
+          showFieldErrors(refused);
+          return;
+        }
         setShowCreateModal(false);
       } catch (err: unknown) {
         setError(getErrorMessage(err, 'Could not save the role. Check the details and try again.'));
@@ -347,201 +414,221 @@ export const RoleManagementPage: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="role-modal-title"
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setShowCreateModal(false);
-            }}
           >
             <DialogPanel
-              onClose={() => setShowCreateModal(false)}
+              onClose={requestCloseRole}
               className="mx-4 flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden"
             >
-              <div className="border-theme-surface-border shrink-0 border-b px-6 py-4">
-                <h3 id="role-modal-title" className="text-theme-text-primary text-lg font-medium">
-                  {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
-                </h3>
-              </div>
-
-              <div
-                className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4"
-                data-testid="role-modal-scroll-area"
+              <form
+                noValidate
+                className="flex min-h-0 flex-1 flex-col"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleSubmit();
+                }}
               >
-                {error && (
-                  <div
-                    role="alert"
-                    className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10"
-                  >
-                    <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
-                  </div>
-                )}
-
-                {editingRole?.is_system && (
-                  <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-400">
-                      {editingRole.slug === 'member'
-                        ? 'This is the regular-member system role. Its display name may be customized; the internal “member” slug remains unchanged.'
-                        : 'This is a system role. Only the description and permissions can be modified.'}
-                    </p>
-                  </div>
-                )}
-
-                <div>
-                  <label htmlFor="role-name" className="text-theme-text-secondary block text-sm font-medium">
-                    Role Name
-                  </label>
-                  <input
-                    id="role-name"
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    disabled={editingRole?.is_system && editingRole.slug !== 'member'}
-                    required
-                    aria-required="true"
-                    className="form-input mt-1"
-                  />
+                <div className="border-theme-surface-border shrink-0 border-b px-6 py-4">
+                  <h3 id="role-modal-title" className="text-theme-text-primary text-lg font-medium">
+                    {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New Role'}
+                  </h3>
                 </div>
 
-                <div>
-                  <label htmlFor="role-description" className="text-theme-text-secondary block text-sm font-medium">
-                    Description
-                  </label>
-                  <textarea
-                    id="role-description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={2}
-                    className="form-input mt-1"
-                  />
-                </div>
-
-                {!editingRole?.is_system && (
-                  <fieldset>
-                    <legend className="text-theme-text-secondary block text-sm font-medium">Kind</legend>
-                    <div className="mt-1 flex flex-wrap gap-4">
-                      {(
-                        [
-                          [
-                            PositionKind.OFFICE,
-                            'Office',
-                            'A job with permissions, such as Treasurer or Training Officer',
-                          ],
-                          [
-                            PositionKind.COMMITTEE,
-                            'Committee',
-                            'A group a member serves on, shown apart from their offices',
-                          ],
-                        ] as const
-                      ).map(([value, label, help]) => (
-                        <label key={value} className="flex items-start gap-2">
-                          <input
-                            type="radio"
-                            name="role-kind"
-                            value={value}
-                            checked={formData.kind === value}
-                            onChange={() => setFormData({ ...formData, kind: value })}
-                            className="form-checkbox mt-0.5"
-                          />
-                          <span className="text-theme-text-secondary text-sm">
-                            {label}
-                            <span className="text-theme-text-muted block text-xs">{help}</span>
-                          </span>
-                        </label>
-                      ))}
+                <div
+                  className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4"
+                  data-testid="role-modal-scroll-area"
+                >
+                  {error && (
+                    <div
+                      role="alert"
+                      className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10"
+                    >
+                      <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
                     </div>
-                  </fieldset>
-                )}
+                  )}
 
-                {!editingRole?.is_system && (
-                  <div>
-                    <label htmlFor="role-priority" className="text-theme-text-secondary block text-sm font-medium">
-                      Priority (0-100)
-                    </label>
-                    <input
-                      id="role-priority"
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={formData.priority}
-                      onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) || 0 })}
-                      className="form-input mt-1 w-32"
-                    />
-                    {/* Priority orders lists and picks a member's main position
-                        (label_service, inventory_service); no permission check
-                        reads it, so it must not be described as authority
-                        (workflow review W05). */}
-                    <p className="text-theme-text-muted mt-1 text-xs">
-                      Sets the order roles are listed in, and which of a member&apos;s roles counts as their main one.
-                      It grants no permissions.
-                    </p>
-                  </div>
-                )}
+                  {editingRole?.is_system && (
+                    <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-400">
+                        {editingRole.slug === 'member'
+                          ? 'This is the regular-member system role. Its display name may be customized; the internal “member” slug remains unchanged.'
+                          : 'This is a system role. Only the description and permissions can be modified.'}
+                      </p>
+                    </div>
+                  )}
 
-                <div>
-                  <label className="text-theme-text-secondary mb-3 block text-sm font-medium">Permissions</label>
-                  <div className="space-y-4">
-                    {permissionCategories.map((category) => {
-                      const categoryPermissions = category.permissions.map((p) => p.name);
-                      const allSelected = categoryPermissions.every((p) => formData.permissions.includes(p));
-                      const someSelected = categoryPermissions.some((p) => formData.permissions.includes(p));
+                  <FormField
+                    label="Role Name"
+                    required
+                    id={ROLE_FIELD_IDS.name}
+                    error={fieldErrors.name}
+                    maxLength={ROLE_FIELDS.name.maxLength}
+                    count={formData.name.length}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        autoComplete="off"
+                        value={formData.name}
+                        onChange={(e) => {
+                          setFormData({ ...formData, name: e.target.value });
+                          clearFieldError('name');
+                        }}
+                        disabled={editingRole?.is_system && editingRole.slug !== 'member'}
+                        className="form-input"
+                      />
+                    )}
+                  </FormField>
 
-                      return (
-                        <div key={category.category} className="border-theme-surface-border rounded-lg border p-4">
-                          <label className="mb-2 flex cursor-pointer items-center">
+                  <FormField label="Description" id={ROLE_FIELD_IDS.description} error={fieldErrors.description}>
+                    {(field) => (
+                      <textarea
+                        {...field}
+                        value={formData.description}
+                        onChange={(e) => {
+                          setFormData({ ...formData, description: e.target.value });
+                          clearFieldError('description');
+                        }}
+                        rows={2}
+                        className="form-input"
+                      />
+                    )}
+                  </FormField>
+
+                  {!editingRole?.is_system && (
+                    <fieldset>
+                      <legend className="text-theme-text-secondary block text-sm font-medium">Kind</legend>
+                      <div className="mt-1 flex flex-wrap gap-4">
+                        {(
+                          [
+                            [
+                              PositionKind.OFFICE,
+                              'Office',
+                              'A job with permissions, such as Treasurer or Training Officer',
+                            ],
+                            [
+                              PositionKind.COMMITTEE,
+                              'Committee',
+                              'A group a member serves on, shown apart from their offices',
+                            ],
+                          ] as const
+                        ).map(([value, label, help]) => (
+                          <label key={value} className="flex items-start gap-2">
                             <input
-                              type="checkbox"
-                              checked={allSelected}
-                              ref={(input) => {
-                                if (input) input.indeterminate = someSelected && !allSelected;
-                              }}
-                              onChange={() => handleToggleCategory(category)}
-                              className="form-checkbox border-theme-surface-border"
+                              type="radio"
+                              name="role-kind"
+                              value={value}
+                              checked={formData.kind === value}
+                              onChange={() => setFormData({ ...formData, kind: value })}
+                              className="form-checkbox mt-0.5"
                             />
-                            <span className="text-theme-text-primary ml-2 text-sm font-medium uppercase">
-                              {category.category.replace(/_/g, ' ')}
+                            <span className="text-theme-text-secondary text-sm">
+                              {label}
+                              <span className="text-theme-text-muted block text-xs">{help}</span>
                             </span>
                           </label>
-                          <div className="ml-6 space-y-1">
-                            {category.permissions.map((perm) => (
-                              <label key={perm.name} className="flex cursor-pointer items-start">
-                                <input
-                                  type="checkbox"
-                                  checked={formData.permissions.includes(perm.name)}
-                                  onChange={() => handleTogglePermission(perm.name)}
-                                  className="form-checkbox border-theme-surface-border mt-0.5"
-                                />
-                                <div className="ml-2">
-                                  <div className="text-theme-text-primary text-sm">{perm.name}</div>
-                                  <div className="text-theme-text-muted text-xs">{perm.description}</div>
-                                </div>
-                              </label>
-                            ))}
+                        ))}
+                      </div>
+                    </fieldset>
+                  )}
+
+                  {!editingRole?.is_system && (
+                    <FormField
+                      label="Priority (0-100)"
+                      id={ROLE_FIELD_IDS.priority}
+                      error={fieldErrors.priority}
+                      // Priority orders lists and picks a member's main position
+                      // (label_service, inventory_service); no permission check
+                      // reads it, so it must not be described as authority
+                      // (workflow review W05).
+                      hint="Sets the order roles are listed in, and which of a member's roles counts as their main one. It grants no permissions."
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={formData.priority}
+                          onChange={(e) => {
+                            setFormData({ ...formData, priority: parseInt(e.target.value) || 0 });
+                            clearFieldError('priority');
+                          }}
+                          className="form-input w-32"
+                        />
+                      )}
+                    </FormField>
+                  )}
+
+                  <div role="group" aria-labelledby="role-permissions-label">
+                    <p id="role-permissions-label" className="text-theme-text-secondary mb-3 block text-sm font-medium">
+                      Permissions
+                    </p>
+                    <div className="space-y-4">
+                      {permissionCategories.map((category) => {
+                        const categoryPermissions = category.permissions.map((p) => p.name);
+                        const allSelected = categoryPermissions.every((p) => formData.permissions.includes(p));
+                        const someSelected = categoryPermissions.some((p) => formData.permissions.includes(p));
+
+                        return (
+                          <div key={category.category} className="border-theme-surface-border rounded-lg border p-4">
+                            <label className="mb-2 flex cursor-pointer items-center">
+                              <input
+                                type="checkbox"
+                                checked={allSelected}
+                                ref={(input) => {
+                                  if (input) input.indeterminate = someSelected && !allSelected;
+                                }}
+                                onChange={() => handleToggleCategory(category)}
+                                className="form-checkbox border-theme-surface-border"
+                              />
+                              <span className="text-theme-text-primary ml-2 text-sm font-medium uppercase">
+                                {category.category.replace(/_/g, ' ')}
+                              </span>
+                            </label>
+                            <div className="ml-6 space-y-1">
+                              {category.permissions.map((perm) => (
+                                <label key={perm.name} className="flex cursor-pointer items-start">
+                                  <input
+                                    type="checkbox"
+                                    checked={formData.permissions.includes(perm.name)}
+                                    onChange={() => handleTogglePermission(perm.name)}
+                                    className="form-checkbox border-theme-surface-border mt-0.5"
+                                  />
+                                  <div className="ml-2">
+                                    <div className="text-theme-text-primary text-sm">{perm.name}</div>
+                                    <div className="text-theme-text-muted text-xs">{perm.description}</div>
+                                  </div>
+                                </label>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div
-                className="bg-theme-surface-modal border-theme-surface-border flex shrink-0 justify-end gap-3 border-t px-6 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]"
-                data-testid="role-modal-actions"
-              >
-                <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="btn-secondary text-theme-text-secondary text-sm font-medium"
+                <div
+                  className="bg-theme-surface-modal border-theme-surface-border flex shrink-0 justify-end gap-3 border-t px-6 py-4 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]"
+                  data-testid="role-modal-actions"
                 >
-                  Cancel
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    void handleSubmit();
-                  }}
-                  className="btn-info rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {editingRole ? 'Save Changes' : 'Create Role'}
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={requestCloseRole}
+                    className="btn-secondary text-theme-text-secondary text-sm font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="btn-info rounded-md text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {editingRole ? 'Save Changes' : 'Create Role'}
+                  </button>
+                </div>
+              </form>
             </DialogPanel>
           </div>
         )}

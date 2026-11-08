@@ -33,6 +33,9 @@ import { useAuthStore } from '../stores/authStore';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { EmptyState, Pagination } from '../components/ux';
 import { Modal } from '../components/Modal';
+import { FormField } from '../components/ux/FormField';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
 import { actionItemStatusLabel } from '../modules/minutes/utils/actionItemStatus';
 import { DEFAULT_PAGE_SIZE } from '../constants/config';
@@ -70,6 +73,19 @@ const MEETING_PRIORITY_LABELS: Record<string, string> = {
 };
 
 const CLOSED_STATUSES: readonly string[] = ['completed', 'cancelled'];
+
+type ActionItemEditField = 'status' | 'completion_notes';
+
+// ActionItemUpdate (backend/app/schemas/minute.py) sets no max_length on
+// either field, so neither input carries one.
+const ACTION_ITEM_EDIT_FIELDS: Record<ActionItemEditField, ServerFieldSpec> = {
+  status: { label: 'Status' },
+  completion_notes: { label: 'Completion notes' },
+};
+const ACTION_ITEM_EDIT_IDS: Record<ActionItemEditField, string> = {
+  status: 'assignee-status',
+  completion_notes: 'assignee-notes',
+};
 
 /**
  * Whether a row still offers "Mark complete". The counts and the Open filter
@@ -146,6 +162,7 @@ const ActionItemsPage: React.FC = () => {
   const [editingMeetingItem, setEditingMeetingItem] = useState<ActionItemSummary | null>(null);
   const [editStatus, setEditStatus] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [editErrors, setEditErrors] = useState<Partial<Record<ActionItemEditField, string | undefined>>>({});
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -225,19 +242,56 @@ const ActionItemsPage: React.FC = () => {
     setEditing(item);
     setEditStatus(item.status);
     setEditNotes(item.completion_notes ?? '');
+    setEditErrors({});
   };
+
+  const closeEditor = () => {
+    setEditing(null);
+    setEditErrors({});
+  };
+  const editDirty =
+    editing !== null && (editStatus !== editing.status || editNotes !== (editing.completion_notes ?? ''));
+  // One guard for Escape, the header X and Cancel, so the question is asked
+  // once whichever way the member leaves (forms review F-6).
+  const requestCloseEditor = useDiscardGuard({ isDirty: editDirty, onClose: closeEditor });
 
   const saveEdit = async () => {
     if (!editing) return;
     setSaving(true);
+    const payload: Record<string, unknown> = {
+      status: editStatus,
+      completion_notes: blankToNull(editNotes),
+    };
     try {
-      await minutesService.updateActionItem(editing.source_id, editing.id, {
-        status: editStatus,
-        completion_notes: blankToNull(editNotes),
-      });
-      toast.success('Action item updated');
-      setEditing(null);
+      let refused: Partial<Record<ActionItemEditField, string>> = {};
+      try {
+        await minutesService.updateActionItem(editing.source_id, editing.id, payload);
+      } catch (err: unknown) {
+        // Single-save rule (owner, 2026-11-05): a value the record cannot hold
+        // is not written, the rest saves, and the field stays flagged with the
+        // server's reason. A refusal the form has no field for is a failure.
+        const mapped = mapServerFieldErrors(err, ACTION_ITEM_EDIT_FIELDS);
+        const keys = mapped ? (Object.keys(mapped.fieldErrors) as ActionItemEditField[]) : [];
+        if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
+        refused = mapped.fieldErrors;
+        const rest = { ...payload };
+        for (const key of keys) delete rest[key];
+        if (Object.keys(rest).length > 0) {
+          await minutesService.updateActionItem(editing.source_id, editing.id, rest);
+        }
+      }
       await fetchItems();
+      const firstRefused = (Object.keys(ACTION_ITEM_EDIT_FIELDS) as ActionItemEditField[]).find((f) => refused[f]);
+      if (firstRefused) {
+        setEditErrors(refused);
+        toast.error(
+          `Saved, except ${ACTION_ITEM_EDIT_FIELDS[firstRefused].label.toLowerCase()}. Fix it and save again.`
+        );
+        document.getElementById(ACTION_ITEM_EDIT_IDS[firstRefused])?.focus();
+        return;
+      }
+      toast.success('Action item updated');
+      closeEditor();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not update the action item'));
     } finally {
@@ -556,21 +610,20 @@ const ActionItemsPage: React.FC = () => {
 
       <Modal
         isOpen={editing !== null}
-        onClose={() => setEditing(null)}
+        onClose={requestCloseEditor}
         title="Update action item"
         size="sm"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void saveEdit();
+        }}
         footer={
           <div className="flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={() => setEditing(null)}
-              className="btn-secondary rounded-lg px-4 py-2 text-sm"
-            >
+            <button type="button" onClick={requestCloseEditor} className="btn-secondary rounded-lg px-4 py-2 text-sm">
               Cancel
             </button>
             <button
-              type="button"
-              onClick={() => void saveEdit()}
+              type="submit"
               disabled={saving}
               className="btn-primary rounded-lg px-4 py-2 text-sm disabled:opacity-50"
             >
@@ -595,35 +648,39 @@ const ActionItemsPage: React.FC = () => {
                 'As the assignee you can change the status and add completion notes. Anything else is changed by whoever keeps the minutes.'
               )}
             </p>
-            <div>
-              <label htmlFor="assignee-status" className="form-label">
-                Status
-              </label>
-              <select
-                id="assignee-status"
-                value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value)}
-                className="form-input"
-              >
-                {MINUTES_STATUS_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="assignee-notes" className="form-label">
-                Completion notes
-              </label>
-              <textarea
-                id="assignee-notes"
-                rows={3}
-                value={editNotes}
-                onChange={(e) => setEditNotes(e.target.value)}
-                className="form-input"
-              />
-            </div>
+            <FormField label="Status" id="assignee-status" error={editErrors.status}>
+              {(field) => (
+                <select
+                  {...field}
+                  value={editStatus}
+                  onChange={(e) => {
+                    setEditStatus(e.target.value);
+                    setEditErrors((prev) => ({ ...prev, status: undefined }));
+                  }}
+                  className="form-input"
+                >
+                  {MINUTES_STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            <FormField label="Completion notes" id="assignee-notes" error={editErrors.completion_notes}>
+              {(field) => (
+                <textarea
+                  {...field}
+                  rows={3}
+                  value={editNotes}
+                  onChange={(e) => {
+                    setEditNotes(e.target.value);
+                    setEditErrors((prev) => ({ ...prev, completion_notes: undefined }));
+                  }}
+                  className="form-input"
+                />
+              )}
+            </FormField>
           </div>
         )}
       </Modal>
