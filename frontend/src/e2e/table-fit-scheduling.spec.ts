@@ -114,7 +114,7 @@ const MEMBER_HOURS_REPORT = {
     const [firstName = '', lastName = ''] = member.split(' ');
     return {
       user_id: `member-${i}`,
-      email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@northfield-oakville-fire.gov`,
+      email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@northfield-oakville-fire.example.org`,
       first_name: firstName,
       last_name: lastName,
       shifts_attended: 141 + i,
