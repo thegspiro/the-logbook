@@ -15,7 +15,8 @@ only when all of these hold:
   what the course was accredited for, and stand;
 * it is still linked to the library course its provider course is mapped to —
   a record an officer linked to another course by hand is left alone;
-* it holds zero hours — hours an officer typed in are left alone;
+* it holds zero hours and no credit hours — hours or credit an officer typed
+  in are left alone (the record screen edits the two apart);
 * the course credits some hours.
 
 ``hours_completed`` and ``credit_hours`` both take the course's hours. Every
@@ -23,9 +24,18 @@ condition is re-checked on a second run, which then finds nothing to change.
 
 The downgrade returns to zero the records that match the same conditions and
 hold exactly the course's hours, which is what the code before this revision
-would have written for them; ``credit_hours`` goes back to what the staged
-import reported. A record whose officer set it to the course's hours by hand
-cannot be told apart and is returned to zero with the rest.
+would have written for them, in both ``hours_completed`` and ``credit_hours``;
+``credit_hours`` goes back to what the staged import reported. A record whose
+officer set both to the course's hours by hand cannot be told apart and is
+returned to zero with the rest.
+
+Edited after publication (2026-11-08): the credit-hours condition was added to
+both directions. The first version replaced a credit an officer had entered on
+a record still at zero hours, and its downgrade cleared one on a record whose
+hours matched the course. A child revision cannot restore a credit an upgrade
+already overwrote, so the narrower upgrade is placed here, where it reaches
+every installation that has not yet run this revision; the downgrade is read
+from this file whenever it runs, so its fix reaches every installation.
 
 Any of these tables may be built by ``create_all`` rather than a migration on
 a database that has not started the app, so the step is skipped when one is
@@ -87,6 +97,7 @@ UPGRADE_SQL = f"""
         tr.credit_hours = {_COURSE_HOURS}
     WHERE {_CONDITIONS}
       AND tr.hours_completed <= 0
+      AND COALESCE(tr.credit_hours, 0) <= 0
 """
 
 # Hours are single-precision FLOAT, so "holds the course's hours" needs a
@@ -97,6 +108,7 @@ DOWNGRADE_SQL = f"""
         tr.credit_hours = eti.credit_hours
     WHERE {_CONDITIONS}
       AND ABS(tr.hours_completed - {_COURSE_HOURS}) < 0.005
+      AND ABS(COALESCE(tr.credit_hours, 0) - {_COURSE_HOURS}) < 0.005
 """
 
 
