@@ -195,6 +195,84 @@ const enrollments = () => [
  * what pushed the remove button off a 320px card, and a short one cannot
  * reproduce that.
  */
+const requestDay = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+
+const EVENT_REQUESTS = [
+  {
+    id: 'req-demo-1',
+    contact_name: 'Maria Lopez',
+    contact_email: 'mlopez@example.test',
+    organization_name: 'Oakville Elementary',
+    outreach_type: 'fire_safety_demo',
+    status: 'submitted',
+    date_flexibility: 'specific_dates',
+    preferred_date_start: requestDay(9),
+    audience_size: 120,
+    short_notice: false,
+    created_at: requestDay(-1),
+  },
+  {
+    id: 'req-demo-2',
+    contact_name: 'Tom Becker',
+    contact_email: 'tbecker@example.test',
+    organization_name: 'Maple Street HOA',
+    outreach_type: 'station_tour',
+    status: 'in_progress',
+    date_flexibility: 'specific_dates',
+    preferred_date_start: requestDay(5),
+    audience_size: 200,
+    assigned_to: TEST_USER.id,
+    assignee_name: 'Alex Tester',
+    short_notice: true,
+    task_completions: {
+      review_request: { completed: true, completed_by: TEST_USER.id, completed_at: requestDay(-2) },
+    },
+    created_at: requestDay(-6),
+  },
+  {
+    id: 'req-demo-3',
+    contact_name: 'Kevin Wu',
+    contact_email: 'kwu@example.test',
+    organization_name: 'Scout Troop 12',
+    outreach_type: 'station_tour',
+    status: 'scheduled',
+    date_flexibility: 'specific_dates',
+    event_date: requestDay(3),
+    audience_size: 14,
+    assigned_to: TEST_USER.id,
+    assignee_name: 'Alex Tester',
+    staffing_shift_id: 'shift-demo-1',
+    staffing_slots_filled: 4,
+    staffing_slots_total: 6,
+    created_at: requestDay(-20),
+  },
+  {
+    id: 'req-demo-4',
+    contact_name: 'Greg Holt',
+    contact_email: 'gholt@example.test',
+    organization_name: 'Holt Auto Group',
+    outreach_type: 'other',
+    status: 'completed',
+    date_flexibility: 'specific_dates',
+    event_date: requestDay(-10),
+    created_at: requestDay(-45),
+  },
+];
+
+const EVENT_REQUEST_DETAIL = {
+  organization_id: 'org-1',
+  contact_phone: '(555) 201-4410',
+  description: 'Our block party would love an engine and a short talk on home fire escape plans.',
+  preferred_time_of_day: 'afternoon',
+  age_group: 'Families, all ages',
+  venue_preference: 'their_location',
+  venue_address: '400 block of Maple Street',
+  special_requests: 'Street closed to traffic from 3 to 8 pm.',
+  status_token: 'tok-demo',
+  updated_at: requestDay(-1),
+  activity_log: [],
+};
+
 const eventSettings = () => ({
   enabled_event_types: [
     'business_meeting',
@@ -914,6 +992,11 @@ const routes = ({
     ],
   ],
   ['**/api/v1/event-requests/forms**', () => ({ forms: [], total: 0, skip: 0, limit: 50 })],
+  // The Requests tab's triage list. Without these the phone sweep measured only
+  // the tab's load-error state, so the list and the drawer it opens had no
+  // layout coverage at all. One request per open group, one closed.
+  ['**/api/v1/event-requests', () => (empty ? [] : EVENT_REQUESTS)],
+  ['**/api/v1/event-requests/req-demo-*', () => ({ ...EVENT_REQUESTS[1], ...EVENT_REQUEST_DETAIL })],
   ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
   ['**/api/v1/admin-hub/training/metrics', trainingMetricSettings],
   // The notifications page lists rules and needs a list, not the catch-all

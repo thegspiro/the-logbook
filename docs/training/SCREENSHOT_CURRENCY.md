@@ -1,5 +1,15 @@
 # Screenshot currency
 
+## Queued by the Requests tab triage redesign (2026-11-08)
+
+The Requests tab became a grouped triage list with a side drawer. Nothing was
+captured; the demo stack was not running for this change.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 04 | `04-20-event-requests` — now the grouped list (Needs a reply / In progress / Scheduled / Postponed, Closed folded) | Replace |
+| 04 | A request open in the drawer: the main action, **More** expanded, the checklist | Create |
+
 ## Queued by the November 4 – 5 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).

@@ -1033,6 +1033,11 @@ export interface EventRequestListItem {
   task_completions?: Record<string, TaskCompletion>;
   event_date?: string;
   staffing_shift_id?: string;
+  /** Intake flagged it as arriving inside the department's lead time. */
+  short_notice?: boolean;
+  /** Seats on the live signup sheet; both null when the request has none. */
+  staffing_slots_filled?: number | null;
+  staffing_slots_total?: number | null;
   created_at: string;
 }
 
