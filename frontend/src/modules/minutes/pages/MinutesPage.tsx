@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { FormField } from '../../../components/ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import toast from 'react-hot-toast';
 import {
   BookOpen,
@@ -87,6 +90,40 @@ const MINUTES_STATUS_LABELS: Record<string, string> = {
   rejected: 'Returned for changes',
 };
 
+type MeetingField = 'title' | 'meetingType' | 'calledBy' | 'meetingDate' | 'meetingTime' | 'location' | 'notes';
+
+/** MeetingCreate in schemas/meetings.py: snake_case, and its limits. */
+const MEETING_FIELDS: Record<MeetingField, ServerFieldSpec> = {
+  title: { label: 'Meeting title', maxLength: 255, api: 'title' },
+  meetingType: { label: 'Meeting type', api: 'meeting_type' },
+  calledBy: { label: 'Called by', maxLength: 255, api: 'called_by' },
+  meetingDate: { label: 'Meeting date', api: 'meeting_date' },
+  meetingTime: { label: 'Meeting time', api: 'start_time' },
+  location: { label: 'Location', maxLength: 255, api: 'location' },
+  notes: { label: 'Initial notes', api: 'notes' },
+};
+
+/** In the order they appear, so the first failing one takes focus. */
+const MEETING_FIELD_IDS: Record<MeetingField, string> = {
+  title: 'meeting-title',
+  meetingType: 'meeting-type',
+  calledBy: 'called-by',
+  meetingDate: 'meeting-date',
+  meetingTime: 'meeting-time',
+  location: 'meeting-location',
+  notes: 'meeting-notes',
+};
+
+const EMPTY_MEETING_FORM = {
+  title: '',
+  meetingType: 'business' as MeetingType,
+  meetingDate: '',
+  meetingTime: '',
+  location: '',
+  calledBy: '',
+  notes: '',
+};
+
 const MinutesPage: React.FC = () => {
   const navigate = useNavigate();
   const { confirm } = useConfirm();
@@ -127,15 +164,17 @@ const MinutesPage: React.FC = () => {
   const [waivers, setWaivers] = useState<Record<string, Array<Record<string, unknown>>>>({});
   const [loadingWaivers, setLoadingWaivers] = useState<string | null>(null);
 
-  const [minutesForm, setMinutesForm] = useState({
-    title: '',
-    meetingType: 'business' as MeetingType,
-    meetingDate: '',
-    meetingTime: '',
-    location: '',
-    calledBy: '',
-    notes: '',
-  });
+  const [minutesForm, setMinutesForm] = useState(EMPTY_MEETING_FORM);
+  const [meetingErrors, setMeetingErrors] = useState<Partial<Record<MeetingField, string>>>({});
+  const setMeetingField = <K extends MeetingField>(field: K, value: (typeof EMPTY_MEETING_FORM)[K]) => {
+    setMinutesForm((prev) => ({ ...prev, [field]: value }));
+    setMeetingErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+  const showMeetingErrors = (next: Partial<Record<MeetingField, string>>) => {
+    setMeetingErrors(next);
+    const first = (Object.keys(MEETING_FIELD_IDS) as MeetingField[]).find((field) => next[field]);
+    if (first) window.setTimeout(() => document.getElementById(MEETING_FIELD_IDS[first])?.focus(), 0);
+  };
 
   // -------------------------------------------------------
   // Data fetching
@@ -183,7 +222,15 @@ const MinutesPage: React.FC = () => {
   // -------------------------------------------------------
 
   const handleCreateMeeting = async () => {
-    if (!minutesForm.title.trim()) return;
+    // Said on the field rather than by a button that stayed disabled with no
+    // reason given (forms review F-3). A meeting is created whole or not at all.
+    const missing: Partial<Record<MeetingField, string>> = {};
+    if (!minutesForm.title.trim()) missing.title = 'Give the meeting a title.';
+    if (!minutesForm.meetingDate) missing.meetingDate = 'Choose the date the meeting was held.';
+    if (Object.keys(missing).length > 0) {
+      showMeetingErrors(missing);
+      return;
+    }
     setCreating(true);
     setCreateError(null);
     try {
@@ -198,17 +245,17 @@ const MinutesPage: React.FC = () => {
       };
       await meetingsService.createMeeting(data);
       setShowCreateModal(false);
-      setMinutesForm({
-        title: '',
-        meetingType: 'business',
-        meetingDate: '',
-        meetingTime: '',
-        location: '',
-        calledBy: '',
-        notes: '',
-      });
+      setMinutesForm(EMPTY_MEETING_FORM);
+      setMeetingErrors({});
       await fetchData();
     } catch (err: unknown) {
+      // A refused field is shown on that field, in its own words (forms review F-2).
+      const mapped = mapServerFieldErrors(err, MEETING_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        showMeetingErrors(mapped.fieldErrors);
+        setCreateError(mapped.unmatched.length ? mapped.unmatched.join(' ') : null);
+        return;
+      }
       setCreateError(
         getErrorMessage(err, 'Unable to create the meeting. Make sure it has a title and a date, then try again.')
       );
@@ -323,7 +370,20 @@ const MinutesPage: React.FC = () => {
   // Render
   // -------------------------------------------------------
 
-  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showCreateModal, onClose: () => setShowCreateModal(false) });
+  // Closing discards what was entered, so the dialog's "Discard changes"
+  // means what it says; Escape, the X and Cancel ask first once anything is
+  // entered (forms review F-6).
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    setMinutesForm(EMPTY_MEETING_FORM);
+    setMeetingErrors({});
+    setCreateError(null);
+  };
+  const requestCloseCreateModal = useDiscardGuard({
+    isDirty: JSON.stringify(minutesForm) !== JSON.stringify(EMPTY_MEETING_FORM),
+    onClose: closeCreateModal,
+  });
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showCreateModal, onClose: requestCloseCreateModal });
 
   return (
     <div className="min-h-screen">
@@ -771,171 +831,175 @@ const MinutesPage: React.FC = () => {
                 aria-labelledby="create-minutes-title"
                 className="modal-panel relative w-full max-w-2xl"
               >
-                <div className="px-6 pt-5 pb-4">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 id="create-minutes-title" className="text-theme-text-primary text-lg font-medium">
-                      Record Meeting Minutes
-                    </h3>
+                <form
+                  noValidate
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleCreateMeeting();
+                  }}
+                >
+                  <div className="px-6 pt-5 pb-4">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 id="create-minutes-title" className="text-theme-text-primary text-lg font-medium">
+                        Record Meeting Minutes
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={requestCloseCreateModal}
+                        className="text-theme-text-muted hover:text-theme-text-primary"
+                        aria-label="Close dialog"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+
+                    {createError && (
+                      <div role="alert" className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                        <div className="flex items-center space-x-2">
+                          <AlertCircle className="h-4 w-4 shrink-0 text-red-800 dark:text-red-300" aria-hidden="true" />
+                          <p className="text-sm text-red-800 dark:text-red-300">{createError}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-4">
+                      <FormField
+                        label="Meeting Title"
+                        required
+                        error={meetingErrors.title}
+                        id="meeting-title"
+                        maxLength={MEETING_FIELDS.title.maxLength}
+                        count={minutesForm.title.length}
+                      >
+                        {(field) => (
+                          <input
+                            {...field}
+                            type="text"
+                            autoComplete="off"
+                            value={minutesForm.title}
+                            onChange={(e) => setMeetingField('title', e.target.value)}
+                            className="form-input"
+                            placeholder="e.g., Regular Business Meeting - February 2026"
+                          />
+                        )}
+                      </FormField>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <FormField label="Meeting Type" error={meetingErrors.meetingType} id="meeting-type">
+                          {(field) => (
+                            <select
+                              {...field}
+                              value={minutesForm.meetingType}
+                              onChange={(e) => setMeetingField('meetingType', e.target.value as MeetingType)}
+                              className="form-input"
+                            >
+                              {MEETING_TYPES.map((t) => (
+                                <option key={t.value} value={t.value}>
+                                  {t.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </FormField>
+                        <FormField
+                          label="Called By"
+                          error={meetingErrors.calledBy}
+                          id="called-by"
+                          maxLength={MEETING_FIELDS.calledBy.maxLength}
+                          count={minutesForm.calledBy.length}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              type="text"
+                              autoComplete="off"
+                              value={minutesForm.calledBy}
+                              onChange={(e) => setMeetingField('calledBy', e.target.value)}
+                              className="form-input"
+                              placeholder="e.g., Chief Johnson"
+                            />
+                          )}
+                        </FormField>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <FormField label="Meeting Date" required error={meetingErrors.meetingDate} id="meeting-date">
+                          {(field) => (
+                            <input
+                              {...field}
+                              type="date"
+                              value={minutesForm.meetingDate}
+                              onChange={(e) => setMeetingField('meetingDate', e.target.value)}
+                              className="form-input"
+                            />
+                          )}
+                        </FormField>
+                        {/* TimeQuarterHour takes no aria-invalid / aria-describedby,
+                          so a refusal here is shown under it but not announced. */}
+                        <FormField label="Meeting Time" error={meetingErrors.meetingTime} id="meeting-time">
+                          {(field) => (
+                            <TimeQuarterHour
+                              id={field.id}
+                              value={minutesForm.meetingTime}
+                              onChange={(e) => setMeetingField('meetingTime', e.target.value)}
+                              className="form-input"
+                            />
+                          )}
+                        </FormField>
+                      </div>
+
+                      <FormField
+                        label="Location"
+                        error={meetingErrors.location}
+                        id="meeting-location"
+                        maxLength={MEETING_FIELDS.location.maxLength}
+                        count={minutesForm.location.length}
+                      >
+                        {(field) => (
+                          <input
+                            {...field}
+                            type="text"
+                            autoComplete="off"
+                            value={minutesForm.location}
+                            onChange={(e) => setMeetingField('location', e.target.value)}
+                            className="form-input"
+                            placeholder="e.g., Station 1 Meeting Room"
+                          />
+                        )}
+                      </FormField>
+
+                      <FormField label="Initial Notes" error={meetingErrors.notes} id="meeting-notes">
+                        {(field) => (
+                          <textarea
+                            {...field}
+                            rows={4}
+                            value={minutesForm.notes}
+                            onChange={(e) => setMeetingField('notes', e.target.value)}
+                            className="form-input"
+                            placeholder="Meeting opened at... Roll call taken... Old business..."
+                          />
+                        )}
+                      </FormField>
+                    </div>
+                  </div>
+                  <div className="bg-theme-input-bg flex justify-end space-x-3 rounded-b-lg px-6 py-3">
                     <button
-                      onClick={() => setShowCreateModal(false)}
-                      className="text-theme-text-muted hover:text-theme-text-primary"
-                      aria-label="Close dialog"
+                      type="button"
+                      onClick={requestCloseCreateModal}
+                      className="border-theme-input-border text-theme-text-secondary hover:bg-theme-input-bg rounded-lg border px-4 py-2 transition-colors"
                     >
-                      <X className="h-5 w-5" />
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={creating}
+                      className="flex items-center space-x-2 rounded-lg bg-cyan-700 px-4 py-2 text-white transition-colors hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {creating && <Loader2 className="h-4 w-4 animate-spin" />}
+                      <span>{creating ? 'Creating...' : 'Start Recording'}</span>
                     </button>
                   </div>
-
-                  {createError && (
-                    <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
-                      <div className="flex items-center space-x-2">
-                        <AlertCircle className="h-4 w-4 shrink-0 text-red-700" />
-                        <p className="text-sm text-red-700 dark:text-red-300">{createError}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-4">
-                    <div>
-                      <label
-                        htmlFor="meeting-title"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Meeting Title <span aria-hidden="true">*</span>
-                      </label>
-                      <input
-                        id="meeting-title"
-                        type="text"
-                        required
-                        value={minutesForm.title}
-                        onChange={(e) => setMinutesForm({ ...minutesForm, title: e.target.value })}
-                        className="form-input"
-                        placeholder="e.g., Regular Business Meeting - February 2026"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <label
-                          htmlFor="meeting-type"
-                          className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                        >
-                          Meeting Type
-                        </label>
-                        <select
-                          id="meeting-type"
-                          value={minutesForm.meetingType}
-                          onChange={(e) =>
-                            setMinutesForm({ ...minutesForm, meetingType: e.target.value as MeetingType })
-                          }
-                          className="form-input"
-                        >
-                          {MEETING_TYPES.map((t) => (
-                            <option key={t.value} value={t.value}>
-                              {t.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="called-by" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                          Called By
-                        </label>
-                        <input
-                          id="called-by"
-                          type="text"
-                          value={minutesForm.calledBy}
-                          onChange={(e) => setMinutesForm({ ...minutesForm, calledBy: e.target.value })}
-                          className="form-input"
-                          placeholder="e.g., Chief Johnson"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <label
-                          htmlFor="meeting-date"
-                          className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                        >
-                          Meeting Date <span aria-hidden="true">*</span>
-                        </label>
-                        <input
-                          id="meeting-date"
-                          type="date"
-                          value={minutesForm.meetingDate}
-                          onChange={(e) => setMinutesForm({ ...minutesForm, meetingDate: e.target.value })}
-                          className="form-input"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          htmlFor="meeting-time"
-                          className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                        >
-                          Meeting Time
-                        </label>
-                        <TimeQuarterHour
-                          id="meeting-time"
-                          value={minutesForm.meetingTime}
-                          onChange={(e) => setMinutesForm({ ...minutesForm, meetingTime: e.target.value })}
-                          className="form-input"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="meeting-location"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Location
-                      </label>
-                      <input
-                        id="meeting-location"
-                        type="text"
-                        value={minutesForm.location}
-                        onChange={(e) => setMinutesForm({ ...minutesForm, location: e.target.value })}
-                        className="form-input"
-                        placeholder="e.g., Station 1 Meeting Room"
-                      />
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="meeting-notes"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Initial Notes
-                      </label>
-                      <textarea
-                        id="meeting-notes"
-                        rows={4}
-                        value={minutesForm.notes}
-                        onChange={(e) => setMinutesForm({ ...minutesForm, notes: e.target.value })}
-                        className="form-input"
-                        placeholder="Meeting opened at... Roll call taken... Old business..."
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="bg-theme-input-bg flex justify-end space-x-3 rounded-b-lg px-6 py-3">
-                  <button
-                    onClick={() => setShowCreateModal(false)}
-                    className="border-theme-input-border text-theme-text-secondary hover:bg-theme-input-bg rounded-lg border px-4 py-2 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      void handleCreateMeeting();
-                    }}
-                    disabled={creating || !minutesForm.title.trim() || !minutesForm.meetingDate}
-                    className="flex items-center space-x-2 rounded-lg bg-cyan-700 px-4 py-2 text-white transition-colors hover:bg-cyan-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {creating && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <span>{creating ? 'Creating...' : 'Start Recording'}</span>
-                  </button>
-                </div>
+                </form>
               </div>
             </div>
           </div>

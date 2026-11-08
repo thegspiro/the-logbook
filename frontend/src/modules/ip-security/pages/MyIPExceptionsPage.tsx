@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import { useIPSecurityStore } from '../store/ipSecurityStore';
 import { IPExceptionTable } from '../components/IPExceptionTable';
 import { IPExceptionRequestForm } from '../components/IPExceptionRequestForm';
+import { mapServerFieldErrors } from '../../../utils/serverFieldErrors';
 import type { IPExceptionRequestCreate } from '../types';
 
 const MyIPExceptionsPage: React.FC = () => {
@@ -32,10 +33,14 @@ const MyIPExceptionsPage: React.FC = () => {
 
   // Resolves false on a refusal so the form keeps what the member typed; the
   // store has already put the reason in `error`, which the effect above toasts.
+  // A validation refusal is the exception: the store leaves it out of
+  // `error`, and it goes back to the form, which puts it on the field it
+  // names (forms review F-2).
   const handleRequestSubmit = async (data: IPExceptionRequestCreate): Promise<boolean> => {
     try {
       await requestException(data);
-    } catch {
+    } catch (err: unknown) {
+      if (mapServerFieldErrors(err, {})) throw err;
       return false;
     }
     toast.success('IP exception request submitted');

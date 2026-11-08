@@ -253,6 +253,12 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
     const dialog = screen.getByRole('dialog', { name: 'Record Meeting Minutes' });
     await user.type(within(dialog).getByLabelText(/Meeting Title/), 'December Business Meeting');
 
-    expect(within(dialog).getByRole('button', { name: 'Start Recording' })).toBeDisabled();
+    // Said on the field, not by a button that stayed disabled with no reason
+    // given (forms review F-3).
+    await user.click(within(dialog).getByRole('button', { name: 'Start Recording' }));
+    const date = within(dialog).getByLabelText(/Meeting Date/);
+    expect(date).toHaveAccessibleDescription('Choose the date the meeting was held.');
+    expect(date).toHaveAttribute('aria-required', 'true');
+    expect(mockCreateMeeting).not.toHaveBeenCalled();
   });
 });

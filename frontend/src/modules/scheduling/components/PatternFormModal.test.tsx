@@ -191,3 +191,69 @@ describe('PatternFormModal deactivated templates', () => {
     expect(screen.getByLabelText('Shift Template')).toHaveValue('tpl-old');
   });
 });
+
+describe('PatternFormModal errors and leaving', () => {
+  const onSubmit = vi.fn<(data: Record<string, unknown>) => Promise<void>>();
+
+  beforeEach(() => {
+    onSubmit.mockReset();
+    onSubmit.mockResolvedValue(undefined);
+  });
+
+  it('puts a server refusal on the field it names and leaves the dialog open', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    onSubmit.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'start_date', message: 'Invalid date format.' }] } },
+    });
+    renderWithRouter(
+      <PatternFormModal isOpen onClose={onClose} onSubmit={onSubmit} title="Create Pattern" templates={templates} />
+    );
+
+    fireEvent.change(screen.getByLabelText(/^Start Date/), { target: { value: '2026-02-01' } });
+    // Enter in a field submits: the dialog is a real form (forms review F-7).
+    await user.type(screen.getByLabelText(/^Name/), 'Daily Days{Enter}');
+
+    const start = screen.getByLabelText(/^Start Date/);
+    await waitFor(() => expect(start).toHaveAccessibleDescription('Start date needs a valid date.'));
+    expect(start).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryByText(/start_date/)).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('says on the field what a new pattern is missing, and saves nothing', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <PatternFormModal isOpen onClose={vi.fn()} onSubmit={onSubmit} title="Create Pattern" templates={templates} />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save Pattern' }));
+
+    expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Give the pattern a name.');
+    expect(screen.getByLabelText(/^Name/)).toHaveAttribute('aria-required', 'true');
+    expect(screen.getByLabelText(/^Start Date/)).toHaveAccessibleDescription('Choose the date the pattern starts.');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('asks before Escape discards a changed pattern', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithRouter(
+      <PatternFormModal
+        isOpen
+        onClose={onClose}
+        onSubmit={onSubmit}
+        initialData={storedPattern}
+        title="Edit Pattern"
+        templates={templates}
+      />
+    );
+
+    await user.type(screen.getByLabelText(/^Name/), ' (2027)');
+    await user.keyboard('{Escape}');
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^Name/)).toHaveValue('24/48 Rotation (2027)');
+  });
+});

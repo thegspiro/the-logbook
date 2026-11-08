@@ -10,6 +10,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { renderWithRouter } from '../../../test/utils';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import type { ScreeningRecord } from '../types';
@@ -98,7 +99,7 @@ describe('ScreeningRecordForm — without the narrative', () => {
   it('neither shows nor sends the narrative fields on edit', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(
+    renderWithRouter(
       <ScreeningRecordForm record={record} requirements={[]} onSave={onSave} onClose={vi.fn()} showNarrative={false} />
     );
 
@@ -116,7 +117,7 @@ describe('ScreeningRecordForm — without the narrative', () => {
   it('lets an officer link an existing record to a requirement', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(
+    renderWithRouter(
       <ScreeningRecordForm
         record={{ ...record, requirement_id: undefined }}
         requirements={[
