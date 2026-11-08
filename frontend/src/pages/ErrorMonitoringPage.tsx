@@ -342,8 +342,12 @@ const ErrorMonitoringPage: React.FC = () => {
                           message set the table's width. One wrapper also keeps the
                           two lines stacked when the row reflows into a card. The
                           titles keep the full text, and the detail row repeats the
-                          technical message. */}
-                        <div className="max-w-xs min-w-0">
+                          technical message. The block is a one-column grid because
+                          a truncated line still reports its whole length as its
+                          min-content width, which held a phone card 320px wide;
+                          a minmax(0, 1fr) track lets it shrink and still truncate.
+                          Page & Action below relies on the same. */}
+                        <div className="grid max-w-xs min-w-0 grid-cols-1">
                           <div className="truncate" title={error.userMessage}>
                             {error.userMessage}
                           </div>
@@ -361,7 +365,7 @@ const ErrorMonitoringPage: React.FC = () => {
                         </div>
                       </td>
                       <td data-label="Page & Action" className="text-theme-text-secondary px-6 py-4 text-sm">
-                        <div className="max-w-xs">
+                        <div className="grid max-w-xs grid-cols-1">
                           <div className="truncate text-xs" title={errorPage(error.context)}>
                             <span className="text-theme-text-muted font-medium">Page:</span>{' '}
                             <span className="font-mono">{errorPage(error.context)}</span>

@@ -57,7 +57,7 @@ const AUDIT_LOGS = PEOPLE.map((name, i) => ({
 // and technical messages and the page and action beside each other; it was
 // wider than the widest desktop, hiding the View details button.
 test.describe('Error monitoring — errors table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/admin/errors — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
