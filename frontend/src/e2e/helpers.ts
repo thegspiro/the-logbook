@@ -996,7 +996,12 @@ const routes = ({
   // the tab's load-error state, so the list and the drawer it opens had no
   // layout coverage at all. One request per open group, one closed.
   ['**/api/v1/event-requests', () => (empty ? [] : EVENT_REQUESTS)],
-  ['**/api/v1/event-requests/req-demo-*', () => ({ ...EVENT_REQUESTS[1], ...EVENT_REQUEST_DETAIL })],
+  // One route per request, so the drawer the sweep opens shows the row it
+  // clicked, not one shared detail behind every id.
+  ...EVENT_REQUESTS.map((request): [string, () => unknown] => [
+    `**/api/v1/event-requests/${request.id}`,
+    () => ({ ...request, ...EVENT_REQUEST_DETAIL }),
+  ]),
   ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
   ['**/api/v1/admin-hub/training/metrics', trainingMetricSettings],
   // The notifications page lists rules and needs a list, not the catch-all

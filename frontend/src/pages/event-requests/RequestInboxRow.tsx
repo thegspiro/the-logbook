@@ -116,7 +116,7 @@ const RequestInboxRow: React.FC<RequestInboxRowProps> = ({
   wide,
 }) => {
   const progress = taskProgress(request, tasks);
-  const step = request.status === 'submitted' ? null : nextStep(request, tasks);
+  const step = nextStep(request, tasks);
   const stale = awaitingReplyTooLong(request, timezone);
   const title = request.organization_name || request.contact_name;
   const hasSheet = request.staffing_slots_total != null && request.staffing_slots_filled != null;

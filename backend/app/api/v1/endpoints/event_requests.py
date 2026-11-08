@@ -89,6 +89,7 @@ from app.services.event_request_service import (
     sync_calendar_event_date,
     sync_staffing_shift_cancelled,
     sync_staffing_shift_date,
+    user_names_by_id,
 )
 from app.services.forms_service import FormsService
 from app.utils.model_updates import apply_updates
@@ -644,13 +645,18 @@ async def list_event_requests(
         db, current_user.organization_id, requests
     )
     short_notice = await short_notice_request_ids(db, [r.id for r in requests])
+    names = await user_names_by_id(
+        db, current_user.organization_id, [r.assigned_to for r in requests]
+    )
 
     items = []
     for req in requests:
-        filled, total = staffing.get(str(req.id), (None, None))
-        assignee_name = None
-        if req.assigned_to:
-            assignee_name = await get_user_name(db, req.assigned_to)
+        # A request with no live sheet is absent from `staffing`, and reports
+        # both counts as null rather than as an empty sheet.
+        counts = staffing.get(str(req.id))
+        filled: int | None = counts[0] if counts else None
+        total: int | None = counts[1] if counts else None
+        assignee_name = names.get(str(req.assigned_to)) if req.assigned_to else None
 
         items.append(
             EventRequestListItem(

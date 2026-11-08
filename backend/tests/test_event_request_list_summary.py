@@ -223,3 +223,15 @@ class TestStaffingSummary:
         rows = await _rows(db_session, members[0])
 
         assert rows["Crossed"].staffing_slots_total is None
+
+
+class TestAssigneeNames:
+    async def test_each_assigned_row_names_its_coordinator(self, db_session, dept):
+        org, members = dept
+        await _request(db_session, org, "Assigned", assigned_to=members[1].id)
+        await _request(db_session, org, "Unassigned")
+
+        rows = await _rows(db_session, members[0])
+
+        assert rows["Assigned"].assignee_name == "Member 1"
+        assert rows["Unassigned"].assignee_name is None

@@ -289,6 +289,7 @@ const EventRequestsTab: React.FC = () => {
     setShowPostponeForm(false);
     setShowMore(false);
     setShowEmail(false);
+    setShowDecline(false);
     setAssigningId(null);
     setStaffing(null);
     setShowVolunteerCall(false);

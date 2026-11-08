@@ -429,6 +429,30 @@ async def get_user_name(db: AsyncSession, user_id: str) -> Optional[str]:
     return None
 
 
+async def user_names_by_id(
+    db: AsyncSession, organization_id: str, user_ids: Iterable[Optional[str]]
+) -> dict[str, str]:
+    """Display names for many members in one query, formatted as ``get_user_name`` does.
+
+    The requests list named each assignee with its own query, one per row.
+    Scoped to the organization: an assignee is validated as in-org when
+    assigned, so this changes no name, but a by-id read on client-reachable
+    ids belongs inside the tenant (CLAUDE.md pitfall #14).
+    """
+    ids = sorted({str(i) for i in user_ids if i})
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(User.id, User.first_name, User.last_name, User.preferred_name).where(
+            User.id.in_(ids), User.organization_id == str(organization_id)
+        )
+    )
+    return {
+        str(user_id): format_display_name(first, last, preferred)
+        for user_id, first, last, preferred in rows.all()
+    }
+
+
 async def apply_default_assignee(
     db: AsyncSession, event_request: EventRequest, pipeline: dict
 ) -> Optional[str]:
