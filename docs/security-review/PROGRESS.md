@@ -33,14 +33,19 @@ pending time-off request may now be approved or denied by the
 requester's current supervisor (not only a `scheduling.manage` holder),
 and an officer may seat a member in a custom seat no rank, certification,
 program or open position grants, by an audited override. Both gates
-verified org-scoped, fail-closed, and re-checked under lock at the
-moment of decision — see
-`docs/security-review/SCH-15-scheduling.md`'s **Pass 14** section for the
-full trace, including the opportunistic review of the new, previously
+verified org-scoped and fail-closed; the time-off row itself is locked for
+the decision, but the supervisor-relationship check behind it is a plain
+`SELECT` that can answer from the request's own REPEATABLE READ snapshot
+rather than the latest commit (new LOW/accepted finding, SCH-20, below) —
+see `docs/security-review/SCH-15-scheduling.md`'s **Pass 14** section for
+the full trace, including the opportunistic review of the new, previously
 unreviewed `member_supervisor_service.py` the time-off gate depends on.
 **1 fixed:** SCH-19 (uncapped `reported_call_types`/`member_call_counts`
-close-out fields) is now closed — both fields carry a `max_length` cap.
-0 new findings.
+close-out fields) is now closed — both fields carry a `max_length` cap,
+with dedicated regression tests already in place
+(`tests/test_call_volume_payload_caps.py`,
+`closeoutCallCredits.test.ts`). **1 new finding:** SCH-20 (LOW, flagged,
+accepted as a self-documented TOCTOU, same shape as SCH-16) — see above.
 
 Completion gate: `flake8`/`black --check`/`isort --check-only` on
 `app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 749
@@ -49,12 +54,15 @@ revisions, single head `78f196079c95`; `check_route_permissions.py
 "scheduling or time_off or shift_assignment or shift_swap or
 seat_override or supervisor or widget_preferences or shift_eligibility or
 member_hours or on_call"`) — 346 passed, 1 environment-only skip
-(`py_vapid`); standing guard suites (org-scoping ratchet, capacity
+(`py_vapid`); `tests/test_call_volume_payload_caps.py` (SCH-19's own
+regression test, not matched by the keyword filter above) — 6 passed;
+standing guard suites (org-scoping ratchet, capacity
 locking, LIKE escaping, CSV sweep, `create_all`-table tolerance,
 migration chain, baseline member grants, logging escaping,
 log-call-shape sweep) — 174 passed; `npm run typecheck` — 0 errors; `npm
 run lint` — 0 errors/warnings; `npx vitest run src/modules/scheduling
-src/pages/scheduling` — 1132 passed (76 files).
+src/pages/scheduling` — 1132 passed (76 files, includes
+`closeoutCallCredits.test.ts`).
 
 Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
 requests) — re-check `list_pull_requests` fresh rather than trusting this
@@ -47761,7 +47769,7 @@ logging escaping, log-call-shape sweep) — 195 passed; `npm run typecheck`
 Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
 re-check `list_pull_requests` fresh rather than trusting this note.
 
-### 2026-11-08 — Feature 14 (Equipment check & shifts, pass 15) merged; Feature 15 (Scheduling, pass 14) — watchdog pickup, real delta, 1 fixed (SCH-19 closed), 0 new findings
+### 2026-11-08 — Feature 14 (Equipment check & shifts, pass 15) merged; Feature 15 (Scheduling, pass 14) — watchdog pickup, real delta, 1 fixed (SCH-19 closed), 1 new finding (SCH-20, LOW, accepted)
 
 No other Claude session is running on this machine (`ListAgents` → "No
 reachable agents"), consistent with the dedicated `/loop 30m
@@ -47783,14 +47791,24 @@ main finding-worthy surface depends on.
 seven `CHECKLIST.md` dimensions:**
 
 1. **Time-off review opens to the requester's supervisor**
-   (`PUT /time-off/{id}/review` moved from `require_permission("scheduling.manage")`
-   to `get_current_user`, with the authorization check moved into the
-   service). Verified fail-closed: the request row is fetched with a
-   locking read (Pitfall #27), and a non-manager reviewer's claim to be
-   the requester's supervisor is re-checked under that lock, at the
-   moment of the decision, against the caller's own organization and
-   today's date on the org's calendar — never a cached or client-asserted
-   relationship. A decided request cannot be re-decided by either path.
+   (`POST /time-off/{id}/review` — a `POST`, not a `PUT` as an earlier
+   draft of this entry said — moved from
+   `require_permission("scheduling.manage")` to `get_current_user`, with
+   the authorization check moved into the service). The request row
+   itself is fetched with a locking read (Pitfall #27), which serializes
+   two concurrent decisions on the same request and makes the
+   already-decided check reliable. The supervisor-relationship check
+   behind it, however, is a plain `SELECT` with no lock of its own, so
+   under InnoDB REPEATABLE READ it can still answer from the request's
+   starting snapshot rather than the latest commit — a real but narrow
+   (one-request-duration) staleness window, not the "at the moment of
+   the decision" guarantee an earlier draft of this entry claimed. New
+   finding **SCH-20** (LOW, flagged, accepted as a self-documented
+   TOCTOU, same shape as SCH-16) records this; see the findings file.
+   The read side (`GET /time-off`) also includes a non-manager's crew
+   requests **by default** whenever no `user_id` is supplied, not only
+   when one names a crew member as an earlier draft said — a supplied
+   `user_id` only narrows the response, never widens it.
 2. **An officer may seat a member in a custom seat nothing in the
    department grants**, by an explicit, audited override
    (`override_seat_eligibility`/`override_reason` on
@@ -47807,16 +47825,29 @@ feature's security pass), was read in full opportunistically: every read
 and write filters `organization_id`, writes lock the organization row
 before the member row in a stated order to avoid deadlock, and loop
 detection re-derives its edge set under that lock with a locking read
-(Pitfall #27) rather than a stale snapshot.
+(Pitfall #27) rather than a stale snapshot. (The supervisor _check_ that
+SCH-20 flags is a read-only path and is not covered by this write-side
+locking — the distinction SCH-20 turns on.)
 
 **1 fixed: SCH-19 closed.** `ShiftFinalizeRequest.reported_call_types`/
 `member_call_counts` and `CloseoutCallsRequest.reported_call_types` — the
 exact two fields SCH-19 (LOW, flagged since pass 8) named as uncapped —
 now carry `max_length` caps (`MAX_REPORTED_CALL_TYPES=200`,
 `MAX_MEMBER_CALL_CREDITS=100`), with a matching client-side bound in the
-close-out wizard. **0 new findings.** SCH-9, SCH-10, SCH-13, SCH-15,
-SCH-16, SCH-17, SCH-18 all re-verified unchanged; `calcom_service.py` is
-byte-identical to pass 6, now eight passes running.
+close-out wizard and dedicated regression tests already in place
+(`tests/test_call_volume_payload_caps.py`,
+`closeoutCallCredits.test.ts`). **1 new finding (SCH-20, above).**
+SCH-9, SCH-10, SCH-13, SCH-15, SCH-16, SCH-17, SCH-18 all re-verified
+unchanged; `calcom_service.py` is byte-identical to pass 6, now eight
+passes running.
+
+**Correction note:** this entry and the Open PR note above it originally
+said the time-off review route was `PUT`, claimed the supervisor check
+was re-verified "at the moment of the decision" under lock, described
+crew-request access as opt-in per `user_id`, and said SCH-19 needed no
+dedicated regression test. All four were caught by a Copilot review on
+PR #4115 and corrected here and in the findings file before merge — see
+that PR for the review thread.
 
 `docs/security-review/SCH-15-scheduling.md`'s **Pass 14** section has the
 full review.

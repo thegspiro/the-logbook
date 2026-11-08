@@ -24,9 +24,9 @@ in Scheduling itself — EC-17, shared with Feature 14, closed by a commit
 riding along in scope — 0 new findings),
 pass 13 (0 fixed, 0 new findings; real delta — the Shift Evaluations feature's
 own close-out gate plus an unbounded-pattern-generation guard),
-pass 14 (1 fixed — SCH-19 closed — 0 new findings; real delta — the
-requester's-supervisor time-off approval path and an officer seat-eligibility
-override, both owner decisions of 2026-11-01)
+pass 14 (1 fixed — SCH-19 closed — 1 new finding, SCH-20, LOW/accepted; real
+delta — the requester's-supervisor time-off approval path and an officer
+seat-eligibility override, both owner decisions of 2026-11-01)
 
 **Backend:** `api/v1/endpoints/scheduling.py` (110 routes, up from 109 — new
 `GET /members/{user_id}/hours-history`),
@@ -76,7 +76,7 @@ belongs to the Members feature's own migration, reviewed there).
 
 ---
 
-## Pass 14 (2026-11-08) — watchdog pickup, real delta (18 non-merge commits touch declared scope, 7 of 15 declared backend files carry real content, out of 379 non-merge commits repo-wide since baseline), 1 new route, 1 fixed (SCH-19 closed), 0 new findings
+## Pass 14 (2026-11-08) — watchdog pickup, real delta (18 non-merge commits touch declared scope, 7 of 15 declared backend files carry real content, out of 379 non-merge commits repo-wide since baseline), 1 new route, 1 fixed (SCH-19 closed), 1 new finding (SCH-20, LOW, accepted)
 
 **Watchdog pickup.** `list_pull_requests` (state=open) found 0 open PRs with
 a `claude/security-review-` head branch (or any head branch at all). PR #4111
@@ -178,40 +178,72 @@ Every one of the 8 commits touching the real backend diff, read in full:
 
 ### Close-out and approval gates (the pass's main finding-worthy surface)
 
-**Time-off review opens to the requester's supervisor.** `PUT
-/time-off/{id}/review` changed from `Depends(require_permission("scheduling.manage"))`
-to `Depends(get_current_user)` — a broadened route whose authorization now
-lives entirely in the service, which is exactly the shape Checklist §2 and
-Pitfall #14b warn is easy to get wrong. Verified by reading
-`review_time_off` (`scheduling_service.py:8778`) directly, not inferred from
-the docstring: the request row is fetched with `get_time_off_by_id(...,
-for_update=True)` — a locking read, not a snapshot one (Pitfall #27, since a
-scheduling officer and the supervisor can now both reach the same pending
-request) — and, when the caller does not hold `scheduling.manage`
-(`as_supervisor=True`, set by the endpoint), `MemberSupervisorService.is_current_supervisor`
-is re-checked **under that lock, at the moment of the decision**, against
-`str(organization_id)` — never a cached or client-asserted relationship — and
-fails closed with `NOT_REQUESTERS_SUPERVISOR` (mapped to 403 by the endpoint)
-when it is false. `is_current_supervisor` itself (`member_supervisor_service.py:182`)
-requires both people to belong to `organization_id`, the supervisor to be a
-current, non-deleted, active-status member, and the assignment to cover
-today's date on the org's own calendar (`resolve_org_today`) — a relationship
-from another organization, a lapsed assignment, or a removed supervisor's
-account all answer `False`. The pending-status check (`time_off.status !=
-TimeOffStatus.PENDING`) runs after the supervisor check, so a decided request
-cannot be re-decided by either path.
+**Time-off review opens to the requester's supervisor.** `POST
+/time-off/{id}/review` (`scheduling.py:3339` — a `POST`, not a `PUT`; an
+earlier draft of this section named the wrong method) changed from
+`Depends(require_permission("scheduling.manage"))` to
+`Depends(get_current_user)` — a broadened route whose authorization now lives
+entirely in the service, which is exactly the shape Checklist §2 and Pitfall
+#14b warn is easy to get wrong. Verified by reading `review_time_off`
+(`scheduling_service.py:8778`) directly, not inferred from the docstring: the
+request row is fetched with `get_time_off_by_id(..., for_update=True)` — a
+locking read, not a snapshot one (Pitfall #27, since a scheduling officer and
+the supervisor can now both reach the same pending request), which is what
+serializes two concurrent decisions on the _same_ request and makes the
+pending-status check (`time_off.status != TimeOffStatus.PENDING`, which runs
+after the supervisor check) reliable — a decided request cannot be
+re-decided by either path.
 
-The read side matches: `GET /time-off` and `GET /time-off/{id}` extend a non-
-manager's own-request scope to include their current crew
-(`MemberSupervisorService.current_crew_ids`, same org/today-scoped query) only
-when a client-supplied `user_id` names someone in that crew — a `user_id`
-outside it is silently ignored and the response narrows back to the caller's
-own requests, never widened to an arbitrary id (confirmed by reading the
-three-way branch in `list_time_off_requests`). `_time_off_items` adds
-`reviewable_as_supervisor` per row via `time_off_ids_reviewable_as_supervisor`,
-which re-derives the same crew set and intersects it with the row's own
-`PENDING` status — a `scheduling.manage` holder's rows are left unflagged
-rather than looked up, since they review every request regardless.
+**The supervisor check itself is a caveat, not a closed gate, and this
+section previously overstated it.** When the caller does not hold
+`scheduling.manage` (`as_supervisor=True`), `MemberSupervisorService.is_current_supervisor`
+(`member_supervisor_service.py:182`) is called under the time-off row's lock,
+but `is_current_supervisor` and the `_is_current_member` check it chains into
+are both plain `SELECT`s with no `.with_for_update()` of their own. Under
+InnoDB's default REPEATABLE READ, locking the time-off row does not refresh
+the snapshot a plain `SELECT` on a _different_ table answers from (the same
+mechanism Pitfall #27 describes for a capacity count): the request's
+transaction took its snapshot at its first read (inside `get_current_user`),
+so a supervisor reassignment or removal that commits after that point but
+before this check runs is not reflected, for the remainder of this one
+request. This is a real but narrow window — bounded to the lifetime of a
+single HTTP request/transaction, not a persistent cache, and it can only ever
+let a _just-replaced_ supervisor's decision through for the brief overlap of
+one in-flight request with the reassignment, never grant a relationship that
+never existed. Recorded here as a new standing item, **SCH-20 (LOW,
+accepted, self-documented TOCTOU)** — the same shape SCH-16 already
+describes for `_reject_deleting_a_used_call_type` — rather than fixed this
+pass: closing it needs the supervisor check itself to force a current read
+(e.g. its own `.with_for_update()`, coordinated with `set_supervisor`'s own
+locking), which is a behavior change to a shared file outside this pass's
+safe-fix bar, not a verifiable one-line correction. Both people still must
+belong to `organization_id`, the supervisor must be a current, non-deleted,
+active-status member as of the snapshot, and the assignment must cover
+today's date (`resolve_org_today`) — a relationship from another
+organization, a lapsed assignment, or a removed supervisor's account still
+answer `False`; what is not guaranteed is that the snapshot is the latest
+commit.
+
+**The read side's default scope is wider than an earlier draft of this
+section said.** `GET /time-off` includes a non-manager's current crew's
+requests **by default**, not only when a client-supplied `user_id` names a
+crew member: reading `list_time_off_requests`'s three-way branch directly,
+`crew = await MemberSupervisorService(db).current_crew_ids(...)` is resolved
+unconditionally, and when `user_id is None` **and** `crew` is non-empty, the
+scope is `[caller, *crew]` — the caller's own requests plus every current
+crew member's, with no filter supplied at all. A supplied `user_id` only
+_narrows_ the response: to that one id when it is in `crew`, or back to the
+caller's own requests alone when it is not (never widened to an arbitrary
+id). `GET /time-off/{id}` matches: a crew member's request is readable
+without naming them specifically. This is still bounded and intentional —
+the crew-wide read matches the crew-wide _write_ access the owner decision
+grants the same supervisor (reviewing a request needs seeing it) — but the
+earlier wording made it sound opt-in per id, which it is not.
+`_time_off_items` adds `reviewable_as_supervisor` per row via
+`time_off_ids_reviewable_as_supervisor`, which re-derives the same crew set
+and intersects it with the row's own `PENDING` status — a `scheduling.manage`
+holder's rows are left unflagged rather than looked up, since they review
+every request regardless.
 
 **Officer seat-eligibility override for ungranted custom seats.** A custom
 seat (Scheduling → Position Names) that no rank, certification, training
@@ -304,25 +336,39 @@ than a raw 422) — belt-and-suspenders, the server-side cap is what actually
 closes the finding. Verified by reading both files directly, not assumed from
 the commit message.
 
-### No new findings
+### SCH-20 (LOW, flagged, accepted as self-documented TOCTOU) — new this pass
 
-Worked against all seven `CHECKLIST.md` dimensions for the delta:
+See "Close-out and approval gates" above for the full trace. In short:
+`review_time_off`'s supervisor check (`MemberSupervisorService.is_current_supervisor`)
+runs under the time-off row's own lock, but is itself a plain `SELECT` with
+no row lock of its own, so under InnoDB REPEATABLE READ it can answer from
+the request transaction's starting snapshot rather than the latest commit.
+Window is bounded to one HTTP request's duration; **accepted, no code
+change this pass** — closing it means giving the supervisor check its own
+current read, which is a behavior change to a shared file, not a safe
+one-line fix.
+
+### No new application-code defects; one new standing item (SCH-20, above)
+
+Otherwise worked against all seven `CHECKLIST.md` dimensions for the delta:
 authentication (the one new route carries `get_current_user`, confirmed
 above; the broadened time-off review route still requires sign-in and is
 re-gated in the service, confirmed above), authorization (the seat override
-and the time-off supervisor path are both covered in detail above; every
-other permission check in the delta is unchanged), tenant isolation (every
-new/changed query — member hours history, widget preferences, time-off crew
-scope, seat-grant lookup, leave-month adjustment, the probable-matches route
-— filters `organization_id` directly or resolves through an already-org-
-scoped parent; no new client-supplied FK stored without validation), injection
-(no new `.like()`/`.ilike()`), data exposure (the member-hours-history
-endpoint answers 404 rather than 403 for a cross-org id, confirmed above; the
-seat-override audit event carries only ids and the caller's own typed reason),
-abuse resistance (SCH-19's caps, above, are this pass's own abuse-resistance
-fix; no new unbounded query), schema/migration integrity (no new model or
-migration in this feature's own scope this pass; `validate_migrations.py
---strict` below is clean against the whole chain regardless).
+and the time-off supervisor path are both covered in detail above, SCH-20
+aside; every other permission check in the delta is unchanged), tenant
+isolation (every new/changed query — member hours history, widget
+preferences, time-off crew scope, seat-grant lookup, leave-month
+adjustment, the probable-matches route — filters `organization_id`
+directly or resolves through an already-org-scoped parent; no new
+client-supplied FK stored without validation), injection (no new
+`.like()`/`.ilike()`), data exposure (the member-hours-history endpoint
+answers 404 rather than 403 for a cross-org id, confirmed above; the
+seat-override audit event carries only ids and the caller's own typed
+reason), abuse resistance (SCH-19's caps, above, are this pass's own
+abuse-resistance fix; no new unbounded query), schema/migration integrity
+(no new model or migration in this feature's own scope this pass;
+`validate_migrations.py --strict` below is clean against the whole chain
+regardless).
 
 ### Re-verified standing items
 
@@ -338,11 +384,19 @@ migration in this feature's own scope this pass; `validate_migrations.py
 
 ### Guard tests
 
-None added by this pass. SCH-19's own fix is itself the guard (a `Field(...,
-max_length=...)` on the schema, which Pydantic enforces unconditionally on
-every request — there is no code path that can skip it the way a hand-written
-check could be forgotten in a new branch, so no separate regression test is
-needed beyond the schemas' own validation).
+None added by this security pass, but SCH-19's own fix commit already
+carries dedicated regression tests, confirmed by reading both files: the
+backend's `backend/tests/test_call_volume_payload_caps.py` asserts the caps
+are the owner-picked numbers (100/200), that exactly the cap is accepted on
+both `ShiftFinalizeRequest` and `CloseoutCallsRequest`, and that one over
+either cap (101/201) is refused; the frontend's
+`frontend/src/pages/scheduling/closeoutCallCredits.test.ts` covers
+`boundMemberCallCredits`. An earlier draft of this section said no separate
+regression test was needed because Pydantic's `Field(..., max_length=...)`
+enforces the cap unconditionally — true of the mechanism, but beside the
+point: the implementation itself proves nothing about a future regression
+that removes the `max_length` kwarg, which is exactly what these tests
+guard against. Cited rather than duplicated here.
 
 ### Completion gate
 
@@ -354,6 +408,7 @@ needed beyond the schemas' own validation).
 | `validate_migrations.py --strict`                                                                                                                                                                      | PASSED — 749 revisions, single head `78f196079c95` |
 | `check_route_permissions.py --strict`                                                                                                                                                                  | 305 routes, 0 errors/warnings                      |
 | Scoped backend suite (scheduling/time-off/supervisor/seat-override/widget/eligibility/member-hours/on-call keywords)                                                                                   | 346 passed, 1 environment-only skip (`py_vapid`)   |
+| `tests/test_call_volume_payload_caps.py` (SCH-19's own regression test — not matched by the keyword filter above, run directly)                                                                        | 6 passed                                           |
 | Standing guard suites (org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep, `create_all`-table tolerance, migration chain, baseline member grants, logging escaping, log-call-shape sweep) | 174 passed                                         |
 | `npm run typecheck`                                                                                                                                                                                    | 0 errors                                           |
 | `npm run lint`                                                                                                                                                                                         | 0 errors/warnings (`--max-warnings 10`)            |
