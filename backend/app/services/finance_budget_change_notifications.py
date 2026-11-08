@@ -87,9 +87,12 @@ CONFIRMER_PERMISSIONS = ("finance.budget_review", "finance.manage")
 def _instant(value: Optional[datetime]) -> str:
     """A timestamp as an idempotency key, the same before and after a save.
 
-    The column keeps whole seconds and may come back naive, while the value
-    the review just set carries microseconds and a zone: compared raw, the
-    same review would read as two.
+    The column keeps whole seconds and may come back naive: compared raw, a
+    zoned value and its naive read-back would read as two. Dropping the
+    fraction here is only safe because the writer stores whole seconds
+    (``FinanceBudgetRequestService.review_request``): MySQL 8 rounds a
+    fraction on save rather than truncating it, so a key truncated from a
+    value with microseconds can be a second behind what the database returns.
     """
     if value is None:
         return ""

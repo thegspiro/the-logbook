@@ -883,7 +883,13 @@ class FinanceBudgetRequestService:
         request.review_amount = Decimal(amount)
         request.review_note = note.strip()
         request.reviewed_by = reviewer_id
-        request.reviewed_at = datetime.now(timezone.utc)
+        # Whole seconds, as the column stores them. MySQL 8 rounds a fraction
+        # on save and MariaDB truncates it, so a value carrying microseconds
+        # can read back a second later than it was written -- and the
+        # leadership-change email keys its sent-log on this instant, so the
+        # same review would then email the owners again
+        # (finance_budget_change_notifications._instant).
+        request.reviewed_at = datetime.now(timezone.utc).replace(microsecond=0)
         await self.db.flush()
         await self.db.refresh(request, ["updated_at"])
         return request

@@ -20,12 +20,12 @@ idempotent: each send is recorded in the email sent-log, and a second call
 for the same amendment, or the same review, sends nothing again (#36).
 """
 
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import (
@@ -33,6 +33,7 @@ from app.models.finance import (
     BudgetAmendment,
     BudgetAmendmentStatus,
     BudgetCategory,
+    BudgetRequest,
     FiscalYearStatus,
 )
 from app.models.notification import NotificationLog
@@ -483,6 +484,65 @@ class TestLeadershipChangeEmail:
         )
         assert again == 0
         assert len(mailer.sends) == sends
+
+    async def test_a_second_call_sends_nothing_when_the_engine_rounds_seconds(
+        self, db_session, dept, mailer, monkeypatch
+    ):
+        # MySQL 8 rounds a DATETIME's fractional seconds on save; MariaDB, the
+        # local engine, truncates them. A review taken at :00.7 must key its
+        # email to the second the database will hand back whichever it does,
+        # so the stored value is made here what MySQL 8 would store from the
+        # value the review assigned.
+        taken = datetime(2026, 11, 6, 22, 30, 0, 700000, tzinfo=timezone.utc)
+
+        class _Clock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return taken if tz is not None else taken.replace(tzinfo=None)
+
+        monkeypatch.setattr(
+            "app.services.finance_budget_request_service.datetime", _Clock
+        )
+        assigned = []
+
+        def _capture(target, value, oldvalue, initiator):
+            if value is not None:
+                assigned.append(value)
+
+        event.listen(BudgetRequest.reviewed_at, "set", _capture)
+        try:
+            request_id = await _approved_request(db_session, dept)
+            mailer.sends.clear()
+            await _review(db_session, dept, request_id)
+        finally:
+            event.remove(BudgetRequest.reviewed_at, "set", _capture)
+        assert len(mailer.sends) == 1
+        assert assigned
+
+        mysql_stored = (assigned[-1] + timedelta(microseconds=500000)).replace(
+            microsecond=0
+        )
+        await db_session.execute(
+            update(BudgetRequest)
+            .where(BudgetRequest.id == request_id)
+            .values(reviewed_at=mysql_stored)
+        )
+        request = (
+            await db_session.execute(
+                select(BudgetRequest).where(BudgetRequest.id == request_id)
+            )
+        ).scalar_one()
+        db_session.expire(request)
+
+        again = await change_notices.notify_leadership_change(
+            db_session,
+            dept["org_id"],
+            request_id,
+            dept["president"].id,
+            previous_amount=Decimal("2400.00"),
+        )
+        assert again == 0
+        assert len(mailer.sends) == 1
 
     async def test_an_opted_out_owner_is_left_out(self, db_session, dept, mailer):
         dept["co_trainer"].notification_preferences = {
