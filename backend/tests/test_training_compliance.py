@@ -1238,6 +1238,7 @@ class TestEvaluateRequirementDetailFields:
             "window_end",
             "window_months",
             "monthly_hours",
+            "course_checklist",
         }
         assert set(result.keys()) == expected_fields
 

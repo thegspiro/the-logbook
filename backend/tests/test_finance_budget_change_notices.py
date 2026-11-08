@@ -38,6 +38,7 @@ from app.models.finance import (
 )
 from app.models.notification import NotificationLog
 from app.services import finance_budget_change_notifications as change_notices
+from app.services.finance_budget_request_service import FinanceBudgetRequestService
 from tests.test_finance_budget_owners import (
     _client,
     _org,
@@ -543,6 +544,26 @@ class TestLeadershipChangeEmail:
         )
         assert again == 0
         assert len(mailer.sends) == 1
+
+    async def test_the_review_time_is_kept_in_whole_seconds(
+        self, db_session, dept, mailer
+    ):
+        # The column keeps whole seconds, and MySQL 8 rounds a fraction where
+        # MariaDB truncates it. The notice keys on the time with the fraction
+        # cut off, so a review at hh:mm:ss.6 was stored a second later than
+        # its key on MySQL and a second call for it emailed everyone again.
+        # Writing whole seconds makes the stored value and the key agree on
+        # either engine.
+        request_id = await _approved_request(db_session, dept)
+        reviewed = await FinanceBudgetRequestService(db_session).review_request(
+            request_id,
+            dept["org_id"],
+            str(dept["president"].id),
+            amount=Decimal("2000.00"),
+            note="Chief's priorities",
+        )
+        assert reviewed.reviewed_at is not None
+        assert reviewed.reviewed_at.microsecond == 0
 
     async def test_an_opted_out_owner_is_left_out(self, db_session, dept, mailer):
         dept["co_trainer"].notification_preferences = {
