@@ -1,11 +1,12 @@
 /**
- * The side navigation reaches the footer.
+ * The side navigation reaches the footer, and the content meets it.
  *
  * The nav is `fixed` and sized to the viewport, so on a page taller than the
  * window the column beneath it, beside the footer, showed the page gradient:
  * the sidebar stopped short of the footer in a full-page capture. AppLayout
- * now paints the nav's background down the whole page at the width the nav
- * renders (`--side-nav-rail-width`).
+ * now paints the nav's background down the whole page at `--side-nav-width`,
+ * the width the nav occupies, and offsets the content column by the same
+ * variable, so collapsing the rail no longer leaves a stripe beside it.
  *
  * Paint cannot be read from the DOM, so this samples a full-page screenshot:
  * decoded on a canvas in the page, which needs no image library.
@@ -79,18 +80,34 @@ test.describe('Side navigation beside the footer', () => {
     expect(close(inRail ?? [0, 0, 0], nav), `beside footer ${String(inRail)}, nav ${String(nav)}`).toBe(true);
   });
 
-  test('the collapsed rail runs down to the footer, and no wider than the rail', async ({ page }) => {
+  test('the collapsed rail runs down to the footer, and the content meets it', async ({ page }) => {
     await page.getByRole('button', { name: 'Collapse navigation' }).click();
     await expect(page.locator('#side-navigation')).toHaveAttribute('data-collapsed', 'true');
+
+    // The content column starts where the 5rem rail ends — not at the 16rem
+    // the expanded nav needs, which left an empty stripe beside the rail. Polled
+    // because the offset eases over the nav's 300ms transition.
+    const edges = () =>
+      page.evaluate(() => ({
+        rail: document.getElementById('side-navigation')?.getBoundingClientRect().right ?? -1,
+        content: document.getElementById('main-content')?.getBoundingClientRect().left ?? -1,
+      }));
+    await expect.poll(async () => (await edges()).rail).toBe(80);
+    await expect.poll(async () => (await edges()).content).toBe(80);
+
     const y = await footerRow(page);
     const nav = await navBackground(page);
-    // 5rem rail: x=40 is inside it, x=160 is past it in the gap before the
-    // content column, where the page gradient still shows.
-    const [inRail, pastRail] = await pixelsAt(page, [
-      { x: 40, y },
-      { x: 160, y },
-    ]);
+    // The strip's width is the same variable as the content offset checked
+    // above, so sampling inside the rail is what is left to prove.
+    const [inRail] = await pixelsAt(page, [{ x: 40, y }]);
     expect(close(inRail ?? [0, 0, 0], nav), `in rail ${String(inRail)}, nav ${String(nav)}`).toBe(true);
-    expect(close(pastRail ?? [0, 0, 0], nav), `past rail ${String(pastRail)}`).toBe(false);
+  });
+
+  test('expanding the rail again gives the content back its 16rem offset', async ({ page }) => {
+    await page.getByRole('button', { name: 'Collapse navigation' }).click();
+    await page.getByRole('button', { name: 'Expand navigation' }).click();
+    await expect
+      .poll(() => page.evaluate(() => document.getElementById('main-content')?.getBoundingClientRect().left ?? -1))
+      .toBe(256);
   });
 });

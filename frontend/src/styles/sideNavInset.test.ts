@@ -10,8 +10,9 @@ const appLayout = readFileSync(join(srcDir, 'components/layout/AppLayout.tsx'), 
  * The content-column inset contract, read from the source rather than a render.
  *
  * A page-level element fixed to the viewport cannot inherit the content
- * column's offset. In the left-navigation layout that offset is `md:ml-64`
- * while `SideNavigation` is itself `fixed left-0 z-40`, so a bar at `left-0`
+ * column's offset. In the left-navigation layout that offset is
+ * `md:ml-(--side-nav-width)` while `SideNavigation` is itself
+ * `fixed left-0 z-40`, so a bar at `left-0`
  * and the same z-index paints over the navigation's bottom. The fix is not a
  * hardcoded `md:left-64`: the top-navigation layout renders content full width,
  * and that correction would leave those departments a 256px dead gap.
@@ -35,10 +36,18 @@ const collectTsxFiles = (dir: string): string[] =>
 describe('side navigation inset contract', () => {
   it('declares the inset as zero by default and the nav width from md up', () => {
     expect(stylesheet).toMatch(/\.has-side-nav \{\s*--side-nav-width:\s*0px;\s*\}/);
-    // 16rem is SideNavigation's `w-64` and AppLayout's `md:ml-64`; 768px is the
-    // breakpoint at which that layout stops being an off-canvas drawer.
+    // 16rem is SideNavigation's `w-64`; 768px is the breakpoint at which that
+    // layout stops being an off-canvas drawer.
     expect(stylesheet).toMatch(
       /@media \(min-width: 768px\) \{\s*\.has-side-nav \{\s*--side-nav-width:\s*16rem;\s*\}\s*\}/
+    );
+  });
+
+  it('narrows the inset to the collapsed rail from md up only', () => {
+    // 5rem is SideNavigation's collapsed `w-20`. Inside a 768px block, because
+    // below it the nav is an off-canvas drawer and the inset must stay 0px.
+    expect(stylesheet).toMatch(
+      /@media \(min-width: 768px\) \{\s*\.has-side-nav:has\(#side-navigation\[data-collapsed='true'\]\) \{\s*--side-nav-width:\s*5rem;\s*\}\s*\}/
     );
   });
 
@@ -46,8 +55,11 @@ describe('side navigation inset contract', () => {
     // Exactly one root carries it. Two would mean the top-navigation branch had
     // been given it as well, which is the gap this variable exists to close.
     expect(appLayout.match(/has-side-nav/g)).toHaveLength(1);
-    // …and it is the branch that offsets its own content by the same width.
-    expect(appLayout).toMatch(/md:ml-64/);
+    // …and it is the branch that offsets its own content by the same width,
+    // read from the variable so the offset follows the collapsed rail. A
+    // literal `md:ml-64` left an empty stripe beside the rail.
+    expect(appLayout).toMatch(/md:ml-\(--side-nav-width\)/);
+    expect(appLayout).not.toMatch(/md:ml-64/);
   });
 
   it('keeps page action bars below the mobile navigation drawer', () => {
