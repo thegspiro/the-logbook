@@ -122,6 +122,14 @@ backend's snake_case key, no limit stated, and no field highlighted.
 button stays enabled, a missing value is named on its field, and a 422 lands on
 the field it names. The other dialogs move over module by module.
 
+Every dialog in the table's first row — a button disabled until valid, with no
+message — has now moved: Create Shift with the shared pieces, New Pattern and
+New Template in the next batch, and the rest in the one after (Add Station and
+Add Room, Add Facility, the facility type / status / maintenance type dialog,
+New Folder, Create Form, Add supply, Add several items, Request Equipment, the
+suggestion box form and Apparatus (basic)). Each keeps its button enabled,
+names what is missing on its field, and puts a 422 on the field it names.
+
 Pressing the primary button of an empty create dialog was probed 70 times
 (about 40 distinct dialogs). The outcomes:
 
