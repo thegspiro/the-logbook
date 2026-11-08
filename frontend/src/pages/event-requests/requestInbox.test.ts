@@ -193,3 +193,18 @@ describe('requestInbox', () => {
     });
   });
 });
+
+describe('groupRequests with a status this screen does not know', () => {
+  it('keeps the request visible in the working group rather than dropping it', () => {
+    const unknown = {
+      id: 'odd',
+      contact_name: 'New Status',
+      contact_email: 'n@example.test',
+      outreach_type: 'other',
+      status: 'awaiting_review',
+      date_flexibility: 'flexible',
+      created_at: '2026-11-01T00:00:00Z',
+    } as unknown as EventRequestListItem;
+    expect(groupRequests([unknown]).working.map((r) => r.id)).toEqual(['odd']);
+  });
+});

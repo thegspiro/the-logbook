@@ -52,7 +52,11 @@ export const requestDate = (req: EventRequestListItem): string | null => {
   return null;
 };
 
-/** Within a week counts as soon: one weekly meeting away from being missed. */
+/**
+ * Within a week counts as soon: one weekly meeting away from being missed. A
+ * date already past on a request still open is urgent too, deliberately: it
+ * is the most overdue thing on the screen, not the least.
+ */
 export const URGENT_WITHIN_DAYS = 7;
 
 export interface DateUrgency {
@@ -177,8 +181,11 @@ export const groupRequests = (requests: EventRequestListItem[]): Record<InboxGro
     closed: [],
   };
   for (const req of requests) {
+    // A status this screen does not know yet (the backend gained one) lands in
+    // In progress rather than vanishing: a request nobody can see is a
+    // request nobody answers.
     const group = INBOX_GROUPS.find((g) => g.statuses.includes(req.status));
-    if (group) grouped[group.key].push(req);
+    grouped[group?.key ?? 'working'].push(req);
   }
   for (const group of INBOX_GROUPS) grouped[group.key].sort(ORDER[group.key]);
   return grouped;
