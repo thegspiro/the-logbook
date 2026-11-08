@@ -169,9 +169,10 @@ test.describe('Reorder requests table', () => {
 
 const CHARGES = {
   total: 4,
+  // Item 0 is pending and items 1–3 are charged, at 123,456.78 each.
   total_pending: 123456.78,
-  total_charged: 654321.09,
-  total_waived: 3,
+  total_charged: 370370.34,
+  total_waived: 0,
   items: [0, 1, 2, 3].map((i) => ({
     issuance_id: `issuance-${i}`,
     item_id: `item-${i}`,
