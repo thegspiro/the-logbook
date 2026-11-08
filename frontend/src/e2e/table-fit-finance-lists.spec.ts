@@ -88,7 +88,7 @@ async function openFinancePage(page: Page, viewport: { width: number; height: nu
 // The expense reports list: report number, a long trip title, a six-digit
 // total, item count, status and date. Overflows a phone and a narrow tablet.
 test.describe('Expense reports table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/finance/expenses — ${viewport.name}`, async ({ page }) => {
       await openFinancePage(page, viewport);
       await page.route('**/api/v1/finance/expense-reports**', (route) => void route.fulfill(json(expenseReports)));
@@ -106,7 +106,7 @@ test.describe('Expense reports table fits its card', () => {
 // The check requests list: request number, a long payee, a six-digit amount,
 // check number, status and date.
 test.describe('Check requests table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/finance/check-requests — ${viewport.name}`, async ({ page }) => {
       await openFinancePage(page, viewport);
       await page.route('**/api/v1/finance/check-requests**', (route) => void route.fulfill(json(checkRequests)));
@@ -124,7 +124,7 @@ test.describe('Check requests table fits its card', () => {
 // The restricted funds report: fund with its purpose, five six- and seven-digit
 // amounts, and a totals footer. Overflows a tablet with the navigation open.
 test.describe('Restricted funds table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/finance/reports?report=fund-balances — ${viewport.name}`, async ({ page }) => {
       await openFinancePage(page, viewport);
       await page.route('**/api/v1/finance/reports/fund-balances**', (route) => void route.fulfill(json(fundBalances)));
