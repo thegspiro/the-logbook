@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -45,6 +45,20 @@ APPROVED_MEETING_DELETE_REFUSAL = (
 
 class MeetingDeleteRefusedError(Exception):
     """A meeting that may not be deleted. Answered 409 by the endpoint."""
+
+
+def member_visible_meeting():
+    """The meetings a member without meetings.manage or minutes.manage may read.
+
+    The same rule the Minutes API applies (MM-24): approved, and not an
+    executive session. A draft's notes are unratified, and an executive
+    session's are the disciplinary and personnel deliberations it was closed
+    to hold.
+    """
+    return and_(
+        Meeting.status == MeetingStatus.APPROVED,
+        Meeting.meeting_type != MeetingType.EXECUTIVE,
+    )
 
 
 class MeetingsService:
@@ -212,9 +226,12 @@ class MeetingsService:
         from_date: Optional[date] = None,
         skip: int = 0,
         limit: int = 100,
+        member_visible_only: bool = False,
     ) -> Tuple[List[Meeting], int]:
         """Get meetings with filtering and pagination"""
         query = select(Meeting).where(Meeting.organization_id == str(organization_id))
+        if member_visible_only:
+            query = query.where(member_visible_meeting())
 
         if from_date:
             query = query.where(Meeting.meeting_date >= from_date)
@@ -327,10 +344,13 @@ class MeetingsService:
             m.action_item_count = row.get("action_items", 0)
 
     async def get_meeting_by_id(
-        self, meeting_id: UUID, organization_id: UUID | str
+        self,
+        meeting_id: UUID,
+        organization_id: UUID | str,
+        member_visible_only: bool = False,
     ) -> Optional[Meeting]:
         """Get a meeting by ID with attendees and action items"""
-        result = await self.db.execute(
+        query = (
             select(Meeting)
             .where(Meeting.id == str(meeting_id))
             .where(Meeting.organization_id == str(organization_id))
@@ -339,6 +359,9 @@ class MeetingsService:
                 selectinload(Meeting.action_items),
             )
         )
+        if member_visible_only:
+            query = query.where(member_visible_meeting())
+        result = await self.db.execute(query)
         meeting: Optional[Meeting] = result.scalar_one_or_none()
         return meeting
 
@@ -597,7 +620,10 @@ class MeetingsService:
             return False, str(e)
 
     async def get_open_action_items(
-        self, organization_id: UUID | str, assigned_to: Optional[UUID] = None
+        self,
+        organization_id: UUID | str,
+        assigned_to: Optional[UUID] = None,
+        member_visible_only: bool = False,
     ) -> List[MeetingActionItem]:
         """Get all open action items for the organization"""
         query = (
@@ -612,6 +638,13 @@ class MeetingsService:
 
         if assigned_to:
             query = query.where(MeetingActionItem.assigned_to == str(assigned_to))
+
+        if member_visible_only:
+            # An item's description and completion notes are drawn from the
+            # meeting's deliberation, so it is visible only where the meeting is.
+            query = query.join(
+                Meeting, Meeting.id == MeetingActionItem.meeting_id
+            ).where(member_visible_meeting())
 
         query = query.order_by(MeetingActionItem.due_date.asc())
         result = await self.db.execute(query)

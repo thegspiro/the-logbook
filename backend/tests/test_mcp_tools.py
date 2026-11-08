@@ -49,6 +49,7 @@ from app.models.meeting import (
     ActionItemStatus,
     Meeting,
     MeetingActionItem,
+    MeetingStatus,
     MeetingType,
 )
 from app.models.training import (
@@ -1195,6 +1196,7 @@ class TestEighthRoundFindings:
             organization_id=org_id,
             title="Monthly business meeting",
             meeting_type=MeetingType.BUSINESS,
+            status=MeetingStatus.APPROVED,
             meeting_date=date.today(),
         )
         db_session.add(meeting)
@@ -1684,6 +1686,7 @@ class TestThirteenthRoundFindings:
                 organization_id=org_id,
                 title="Special meeting",
                 meeting_type=MeetingType.SPECIAL,
+                status=MeetingStatus.APPROVED,
                 meeting_date=date.today(),
                 called_by="Chief Smith",
             )
@@ -2366,6 +2369,7 @@ class TestSeventeenthRoundFindings:
             organization_id=org_id,
             title="Agenda meeting",
             meeting_type=MeetingType.BUSINESS,
+            status=MeetingStatus.APPROVED,
             meeting_date=date.today(),
             agenda=agenda,
         )
@@ -2541,6 +2545,7 @@ class TestNineteenthRoundFindings:
             organization_id=org_id,
             title="Task meeting",
             meeting_type=MeetingType.BUSINESS,
+            status=MeetingStatus.APPROVED,
             meeting_date=date.today(),
         )
         db_session.add(meeting)
@@ -4024,6 +4029,7 @@ class TestTwentyEighthRoundFindings:
                     organization_id=org_id,
                     title="Same day",
                     meeting_type=MeetingType.BUSINESS,
+                    status=MeetingStatus.APPROVED,
                     meeting_date=date(2027, 3, 1),
                 )
             )
@@ -5113,3 +5119,69 @@ class TestExpiringScreeningsComputeDueDates:
         assert second["due_by_frequency"] is True
         assert second["in_grace_period"] is False
         assert second["member_name"] == "Sam Rivera"
+
+
+class TestMeetingsShowOnlyPublishedRecords:
+    """Drafts and executive sessions stay out of the meeting tools.
+
+    The minutes tools already list only approved, non-executive minutes; the
+    meeting tools returned every meeting's agenda and every open action
+    item's description, executive sessions and drafts included.
+    """
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_drafts_and_executive_sessions_are_not_readable(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        meetings = {
+            label: Meeting(
+                organization_id=org_id,
+                title=label,
+                meeting_type=meeting_type,
+                status=meeting_status,
+                meeting_date=date.today(),
+                agenda=f"{label} agenda",
+            )
+            for label, meeting_type, meeting_status in (
+                ("Published", MeetingType.BUSINESS, MeetingStatus.APPROVED),
+                ("Draft", MeetingType.BUSINESS, MeetingStatus.DRAFT),
+                ("Executive", MeetingType.EXECUTIVE, MeetingStatus.APPROVED),
+            )
+        }
+        db_session.add_all(meetings.values())
+        await db_session.flush()
+        items = {
+            label: MeetingActionItem(
+                organization_id=org_id,
+                meeting_id=m.id,
+                description=f"{label} item",
+                status=ActionItemStatus.OPEN,
+            )
+            for label, m in meetings.items()
+        }
+        db_session.add_all(items.values())
+        await db_session.flush()
+        principal = _principal(org_id, admin_id)
+
+        listed = await _call(server, principal, "list_meetings")
+        assert [m["title"] for m in listed["items"]] == ["Published"]
+
+        open_items = await _call(server, principal, "list_open_action_items")
+        assert [i["id"] for i in open_items["items"]] == [items["Published"].id]
+
+        for label in ("Draft", "Executive"):
+            with pytest.raises(ToolError, match="not found"):
+                await _call(
+                    server,
+                    principal,
+                    "get_meeting_agenda",
+                    meeting_id=meetings[label].id,
+                )
+            with pytest.raises(ToolError, match="not found"):
+                await _call(
+                    server,
+                    principal,
+                    "get_action_item_description",
+                    action_item_id=items[label].id,
+                )
