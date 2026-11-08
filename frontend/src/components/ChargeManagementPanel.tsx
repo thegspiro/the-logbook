@@ -229,7 +229,7 @@ const ChargeManagementPanel: React.FC = () => {
                       {item.quantity_issued}
                     </td>
                     <td data-label="Condition" className="text-theme-text-secondary p-3 capitalize">
-                      {item.return_condition?.replace('_', ' ') || '--'}
+                      {item.return_condition?.replace(/_/g, ' ') || '--'}
                     </td>
                     <td data-label="Amount" className="text-theme-text-primary p-3 text-right font-medium">
                       {formatCurrency(
@@ -313,7 +313,7 @@ const ChargeManagementPanel: React.FC = () => {
                     </p>
                     {actionModal.item.return_condition && (
                       <p className="text-theme-text-muted mt-1 text-xs capitalize">
-                        Returned in {actionModal.item.return_condition.replace('_', ' ')} condition
+                        Returned in {actionModal.item.return_condition.replace(/_/g, ' ')} condition
                       </p>
                     )}
                   </div>
