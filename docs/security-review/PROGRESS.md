@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD** (branch `claude/security-review-scheduling-p14`) —
+**PR [#4115](https://github.com/thegspiro/the-logbook/pull/4115)** (branch
+`claude/security-review-scheduling-p14`) —
 Feature 15 (Scheduling), pass 14, a watchdog pickup. No other Claude
 session is running on this machine (`ListAgents` → "No reachable
 agents"), consistent with the dedicated `/loop 30m /security-review`
