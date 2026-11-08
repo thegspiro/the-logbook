@@ -258,8 +258,8 @@ const TrainingWaiversTab: React.FC = () => {
           <p className="text-theme-text-muted">No training waivers match the current filter.</p>
         </div>
       ) : (
-        <div className="card overflow-hidden overflow-x-auto">
-          <table className="divide-theme-surface-border min-w-full divide-y">
+        <div className="rwd-table-container card overflow-hidden overflow-x-auto">
+          <table className="rwd-table rwd-table-xwide divide-theme-surface-border min-w-full divide-y">
             <thead className="bg-theme-surface-hover">
               <tr>
                 <th
@@ -311,7 +311,7 @@ const TrainingWaiversTab: React.FC = () => {
                 const badge = getStatusBadge(waiver, getTodayLocalDate(tz));
                 return (
                   <tr key={waiver.id} className="hover:bg-theme-surface-hover">
-                    <td className="px-4 py-3">
+                    <td data-label="Member" className="px-4 py-3">
                       <Link
                         to={`/members/${waiver.user_id}`}
                         className="text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
@@ -320,26 +320,26 @@ const TrainingWaiversTab: React.FC = () => {
                       </Link>
                       {waiver.member_rank && <p className="text-theme-text-muted text-xs">{waiver.member_rank}</p>}
                     </td>
-                    <td className="px-4 py-3">
+                    <td data-label="Status" className="px-4 py-3">
                       <span className={`rounded-full px-2 py-1 text-xs font-medium ${badge.color}`}>{badge.label}</span>
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                    <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm">
                       {WAIVER_TYPE_LABELS[waiver.waiver_type] || waiver.waiver_type}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                    <td data-label="Period" className="text-theme-text-secondary px-4 py-3 text-sm">
                       <span>{formatDate(waiver.start_date, tz)}</span>
                       <span className="text-theme-text-muted mx-1">to</span>
                       <span>{waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}</span>
                     </td>
-                    <td className="text-theme-text-muted px-4 py-3 text-sm">
+                    <td data-label="Scope" className="text-theme-text-muted px-4 py-3 text-sm">
                       {waiver.requirement_ids
                         ? `${waiver.requirement_ids.length} requirement${waiver.requirement_ids.length !== 1 ? 's' : ''}`
                         : 'All requirements'}
                     </td>
-                    <td className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
+                    <td data-label="Reason" className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
                       {waiver.reason || '-'}
                     </td>
-                    <td className="px-4 py-3">
+                    <td data-label="Source" className="px-4 py-3">
                       <span
                         className={`rounded px-2 py-0.5 text-xs ${
                           waiver.source === 'leave_linked'
