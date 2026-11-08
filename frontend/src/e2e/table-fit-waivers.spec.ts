@@ -72,7 +72,7 @@ async function mockWaivers(page: Page): Promise<void> {
 // The active waivers list: member, type, the areas waived, period, a long
 // reason and Edit/Deactivate actions. Overflows its card on a tablet.
 test.describe('Active waivers table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/members/admin/waivers?tab=active — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: WAIVER_PERMISSIONS });
@@ -91,7 +91,7 @@ test.describe('Active waivers table fits its card', () => {
 // Every waiver, current or not: the active list's columns plus a status badge.
 // Overflows its card on a tablet and on a 1280px laptop.
 test.describe('All waivers table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/members/admin/waivers?tab=history — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: WAIVER_PERMISSIONS });
