@@ -13334,11 +13334,29 @@ export const SHOTS = [
     anchor:
       "Screenshot of the Event Requests tab showing a list of requests with",
     alt: "Event requests tab listing incoming requests with status badges",
+    // The triage list's first group heading: present only once the list has
+    // loaded with a new request in it, which the seeder guarantees.
+    expect: "Needs a reply",
     // /events/admin defaults to the Create Event tab, so this was
     // byte-identical to 04-05-create-event under a different caption — the
     // same defect as 02-21/02-41.
     route: "/events/admin?tab=requests",
     fullPage: true,
+  },
+  {
+    // The drawer a request opens in, taken on the in-progress request the
+    // seeder assigns and part-ticks, so the shot carries a coordinator, the
+    // Schedule event action, a next step and a part-done checklist. Viewport,
+    // not full page: the drawer is fixed to the viewport, and a full-page
+    // capture would photograph the page scrolled behind it.
+    id: "04-99-event-request-drawer",
+    doc: "04-events-meetings.md",
+    line: 2357,
+    anchor: "A request in progress open in the drawer",
+    alt: "A request in progress open in the drawer: the Schedule event, Email requester and More buttons under its title, the next step, and a checklist with one of three steps done",
+    route: "/events/admin?tab=requests",
+    expect: "Next:",
+    prepare: clickByName(/^Maple Street HOA/),
   },
   {
     id: "08-01-setup-checklist",

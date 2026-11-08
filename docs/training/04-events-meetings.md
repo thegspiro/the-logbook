@@ -2354,6 +2354,11 @@ In the panel you can also:
 Close the panel with the **X** or **Escape**. A click outside it does nothing,
 so a half-written schedule or comment is never lost to a stray click.
 
+<!-- Screenshot needed:
+A request in progress open in the drawer: its title, date, coordinator, the
+Schedule event / Email requester / More action bar, the next step and the checklist
+-->
+
 > **Send the requester their status link yourself.** Neither the confirmation
 > screen nor the default acknowledgement email gives the requester the status
 > page. Copying it from here is the only way they get it.
