@@ -393,10 +393,14 @@ const SchedulingPage: React.FC = () => {
     if (apparatusList.length > 0 && !shiftForm.apparatus_id) {
       missing.apparatus = 'Choose the apparatus for this shift.';
     }
-    createErrors.setErrors(missing);
     createErrors.setFormError(null);
     if (Object.keys(missing).length > 0) {
-      createErrors.focusFirst(missing);
+      // Merged, not replaced: a refusal the server gave another field still
+      // stands, since nothing was sent to settle it. Editing a field clears
+      // its own error.
+      const merged = { ...createErrors.errors, ...missing };
+      createErrors.setErrors(merged);
+      createErrors.focusFirst(merged);
       return;
     }
 

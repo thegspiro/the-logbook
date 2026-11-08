@@ -209,6 +209,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   // message is derived from the live form below, so it clears as it is filled.
   const trainingErrors = useFieldErrors(TRAINING_FIELDS);
   const clearTrainingErrors = trainingErrors.clear;
+  const setTrainingError = trainingErrors.setError;
+  // Editing a field answers the server's refusal of it; the missing-value
+  // message is derived from the live value and clears on its own.
+  const edited = (name: TrainingField) => setTrainingError(name, null);
   // The id of a draft this form has just saved. Saving echoes it back in as
   // `editSubmission`, and the open fields must stay flagged across that
   // re-seed (owner rule, 2026-11-05), where any other submission opens clean.
@@ -232,11 +236,17 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     setCertificationNumber(editSubmission.certification_number || '');
     setIssuingAgency(editSubmission.issuing_agency || '');
     setExpirationDate(editSubmission.expiration_date || '');
+    // The draft this form just saved comes straight back here. The two
+    // certification choices are the member's and are not stored, so they are
+    // kept as they were rather than re-derived; any other submission opens
+    // with them derived from what was filed.
+    const continuingDraft = draftJustSaved.current === editSubmission.id;
+    draftJustSaved.current = null;
     // Never inferred from an absent date. A submission an officer sent back
     // *because* the expiry was missing would otherwise reopen with "does not
     // expire" already ticked and the field disabled — answering for the member,
     // and letting them resubmit without the date they were asked for.
-    setCertificationNeverExpires(false);
+    if (!continuingDraft) setCertificationNeverExpires(false);
     setStoredAttachments(editSubmission.attachments ?? []);
     // Reported start times are kept now. 09:00 is the fallback only for rows
     // written before the column existed, which genuinely have none.
@@ -253,11 +263,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
       editSubmission.expiration_date
     );
     certificationTouched.current = true;
-    setHasCertification(hasCertData || editSubmission.training_type === 'certification');
+    if (!continuingDraft) setHasCertification(hasCertData || editSubmission.training_type === 'certification');
     setReceipt(null);
     setError('');
-    setAttemptedSave(draftJustSaved.current === editSubmission.id);
-    draftJustSaved.current = null;
+    setAttemptedSave(continuingDraft);
     clearTrainingErrors();
   }, [editSubmission, maxDurationMinutes, defaultTrainingType, clearTrainingErrors]);
 
@@ -501,7 +510,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     setError('');
     // A draft is a half-finished note, so only the two columns the API cannot
     // store without are asked for; a real submission needs everything.
-    trainingErrors.clear();
+    // Only the form-level message is cleared here. A field's server refusal
+    // stands until that field is edited or a request is actually sent: the
+    // draft-minimum return below sends nothing that could settle it.
+    trainingErrors.setFormError(null);
     // Owner rule (2026-11-05): a draft saves with fields still open, which stay
     // flagged; only submitting is held back by one. A draft does still need
     // the two NOT NULL columns, by the owner's choice of the same day, not to
@@ -515,6 +527,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
       fieldRefs.current[missing[0] ?? '']?.focus();
       return;
     }
+    trainingErrors.setErrors({});
     // Counted before the save resets anything, for the draft's toast.
     const stillOpen = options.asDraft ? findMissingFields().length : 0;
     const draftRemainder =
@@ -593,6 +606,13 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     ...trainingErrors.errors,
     ...Object.fromEntries(missingNow.map((name) => [name, MISSING_MESSAGES[name as TrainingField]])),
   };
+  // Switched off, the certification block is not drawn, so its fields must not
+  // report: a summary link would point at a control that is not there.
+  if (!hasCertification) {
+    delete fieldErrors.certification_number;
+    delete fieldErrors.issuing_agency;
+    delete fieldErrors.expiration_date;
+  }
   const errorSummary = buildSummary(TRAINING_FIELDS, fieldErrors);
   const invalidClass = (name: TrainingField) =>
     fieldErrors[name] ? 'border-red-600 focus:border-red-600 dark:border-red-500' : '';
@@ -685,7 +705,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                   type="text"
                   list="dept-requirement-suggestions"
                   value={courseName}
-                  onChange={(e) => setCourseName(e.target.value)}
+                  onChange={(e) => {
+                    edited('course_name');
+                    setCourseName(e.target.value);
+                  }}
                   placeholder="Start typing — suggestions appear"
                   className={`form-input ${invalidClass('course_name')}`}
                   autoComplete="off"
@@ -731,7 +754,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                       {...field}
                       ref={registerField('category_id')}
                       value={categoryId}
-                      onChange={(e) => setCategoryId(e.target.value)}
+                      onChange={(e) => {
+                        edited('category_id');
+                        setCategoryId(e.target.value);
+                      }}
                       className={`form-input ${invalidClass('category_id')}`}
                     >
                       <option value="">Select...</option>
@@ -765,7 +791,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                     type="date"
                     value={completionDate}
                     max={getTodayLocalDate(timezone)}
-                    onChange={(e) => setCompletionDate(e.target.value)}
+                    onChange={(e) => {
+                      edited('completion_date');
+                      setCompletionDate(e.target.value);
+                    }}
                     className={`form-input font-mono ${invalidClass('completion_date')}`}
                   />
                 )}
@@ -780,7 +809,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                     type="time"
                     step={DURATION_STEP_MINUTES * 60}
                     value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
+                    onChange={(e) => {
+                      edited('start_time');
+                      setStartTime(e.target.value);
+                    }}
                     className={`form-input font-mono ${invalidClass('start_time')}`}
                   />
                 )}
@@ -831,7 +863,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                       ref={registerField('instructor')}
                       type="text"
                       value={instructor}
-                      onChange={(e) => setInstructor(e.target.value)}
+                      onChange={(e) => {
+                        edited('instructor');
+                        setInstructor(e.target.value);
+                      }}
                       placeholder="Name or agency"
                       className={`form-input ${invalidClass('instructor')}`}
                     />
@@ -855,7 +890,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                       ref={registerField('location')}
                       type="text"
                       value={location}
-                      onChange={(e) => setLocation(e.target.value)}
+                      onChange={(e) => {
+                        edited('location');
+                        setLocation(e.target.value);
+                      }}
                       placeholder="Facility or address"
                       className={`form-input ${invalidClass('location')}`}
                     />
@@ -879,7 +917,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                     ref={registerField('description')}
                     rows={3}
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    onChange={(e) => {
+                      edited('description');
+                      setDescription(e.target.value);
+                    }}
                     placeholder="A sentence or two is enough."
                     className={`form-input resize-y ${invalidClass('description')}`}
                   />
@@ -917,7 +958,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                         ref={registerField('certification_number')}
                         type="text"
                         value={certificationNumber}
-                        onChange={(e) => setCertificationNumber(e.target.value)}
+                        onChange={(e) => {
+                          edited('certification_number');
+                          setCertificationNumber(e.target.value);
+                        }}
                         className={`form-input font-mono ${invalidClass('certification_number')}`}
                       />
                     )}
@@ -939,7 +983,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                         ref={registerField('issuing_agency')}
                         type="text"
                         value={issuingAgency}
-                        onChange={(e) => setIssuingAgency(e.target.value)}
+                        onChange={(e) => {
+                          edited('issuing_agency');
+                          setIssuingAgency(e.target.value);
+                        }}
                         placeholder="VDFP, NREMT..."
                         className={`form-input ${invalidClass('issuing_agency')}`}
                       />
@@ -963,7 +1010,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                         type="date"
                         value={certificationNeverExpires ? '' : expirationDate}
                         disabled={certificationNeverExpires}
-                        onChange={(e) => setExpirationDate(e.target.value)}
+                        onChange={(e) => {
+                          edited('expiration_date');
+                          setExpirationDate(e.target.value);
+                        }}
                         className={`form-input font-mono disabled:opacity-50 ${invalidClass('expiration_date')}`}
                       />
                     )}
@@ -1140,6 +1190,7 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
             required={attachmentRequired}
             invalid={!!fieldErrors.attachments}
             onSelect={(file) => {
+              edited('attachments');
               const rejection = file ? attachmentRejection(file) : null;
               setAttachmentError(rejection ?? '');
               setAttachment(rejection ? null : file);

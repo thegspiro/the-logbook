@@ -511,6 +511,48 @@ describe('UserSettingsPage', () => {
       expect(mobile).not.toHaveAttribute('aria-invalid');
     });
 
+    it('keeps a blank name flagged when the save fails for another reason', async () => {
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue({ ...defaultProfile, first_name: '' } as never);
+      vi.mocked(userService.updateUserProfile).mockRejectedValue({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'mobile', message: 'Enter a phone number.' }], code: 'LB-VAL-001' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const first = await screen.findByLabelText(/^First Name/);
+      await waitFor(() => expect(first).toHaveAttribute('aria-invalid', 'true'));
+      await user.type(screen.getByLabelText('Mobile'), 'call me');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(screen.getByLabelText('Mobile')).toHaveAttribute('aria-invalid', 'true'));
+      expect(first).toHaveAccessibleDescription('Enter your first name.');
+    });
+
+    it('shows a refusal the server could not pin on a field, beside the ones it could', async () => {
+      vi.mocked(userService.updateUserProfile).mockRejectedValue({
+        response: {
+          status: 422,
+          data: {
+            detail: [
+              { field: 'mobile', message: 'Enter a phone number.' },
+              { field: 'request', message: 'Your profile is locked while an officer edits it.' },
+            ],
+            code: 'LB-VAL-001',
+          },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      await user.type(await screen.findByLabelText('Mobile'), 'call me');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      expect(await screen.findByText('Your profile is locked while an officer edits it.')).toBeInTheDocument();
+    });
+
     it('limits each field to the length the server stores', async () => {
       renderWithRouter(<UserSettingsPage />);
 

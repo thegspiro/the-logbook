@@ -664,7 +664,40 @@ describe('SchedulingPage — Create Shift validation', () => {
     mockCheckPermission.mockImplementation((perm: string) => perm === 'scheduling.manage');
     vi.mocked(schedulingService.createShift).mockReset();
     vi.mocked(schedulingService.getBasicApparatus).mockResolvedValue([]);
+    useSchedulingStore.setState({ shiftApparatus: [], shiftApparatusLoaded: true });
     window.history.replaceState({}, '', '/scheduling?create=shift');
+  });
+
+  it('keeps a refusal the server gave one field when a check on another fails', async () => {
+    useSchedulingStore.setState({
+      shiftApparatus: [{ id: 'app-1', name: 'Engine 1', unit_number: 'E1', apparatus_type: 'engine', source: 'basic' }],
+      shiftApparatusLoaded: true,
+    });
+    vi.mocked(schedulingService.createShift).mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'shift_date', message: 'Shift date is too far in the past.' }], code: 'LB-VAL-001' },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<SchedulingPage />);
+    const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+
+    fireEvent.change(within(dialog).getByLabelText(/^Start Date/), { target: { value: '2020-01-01' } });
+    await user.selectOptions(within(dialog).getByLabelText(/Apparatus/), 'app-1');
+    await user.click(within(dialog).getByRole('button', { name: 'Create Shift' }));
+    const startDate = within(dialog).getByLabelText(/^Start Date/);
+    await waitFor(() => expect(startDate).toHaveAccessibleDescription('Shift date is too far in the past.'));
+
+    // Nothing is sent this time, so nothing has settled the date's refusal.
+    await user.selectOptions(within(dialog).getByLabelText(/Apparatus/), '');
+    await user.click(within(dialog).getByRole('button', { name: 'Create Shift' }));
+
+    expect(within(dialog).getByLabelText(/Apparatus/)).toHaveAccessibleDescription(
+      'Choose the apparatus for this shift.'
+    );
+    expect(startDate).toHaveAccessibleDescription('Shift date is too far in the past.');
+    expect(schedulingService.createShift).toHaveBeenCalledTimes(1);
   });
 
   it('keeps Create enabled and flags a missing start date on the field', async () => {

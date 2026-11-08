@@ -437,6 +437,123 @@ describe('SubmitTrainingPage', () => {
       expect(screen.getByLabelText(/Course or class name/)).toHaveFocus();
     });
 
+    const refuseInstructor = () =>
+      mockCreateSubmission.mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'instructor', message: 'Value is too long.' }], code: 'LB-VAL-001' },
+        },
+      });
+
+    it('keeps a server refusal when a draft is stopped before anything is sent', async () => {
+      refuseInstructor();
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Course or class name/);
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+      const instructor = screen.getByLabelText(/Instructor/);
+      await waitFor(() => expect(instructor).toHaveAccessibleDescription('Value is too long.'));
+
+      await user.clear(screen.getByLabelText(/Course or class name/));
+      await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+      expect(mockCreateSubmission).toHaveBeenCalledTimes(1);
+      expect(instructor).toHaveAccessibleDescription('Value is too long.');
+    });
+
+    it('drops a server refusal once its field is edited', async () => {
+      refuseInstructor();
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Course or class name/);
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+      const instructor = screen.getByLabelText(/Instructor/);
+      await waitFor(() => expect(instructor).toHaveAttribute('aria-invalid', 'true'));
+
+      await user.type(instructor, 'x');
+      expect(instructor).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('stops reporting certification fields once the section is switched off', async () => {
+      mockCreateSubmission.mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'certification_number', message: 'Value is too long.' }], code: 'LB-VAL-001' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Course or class name/);
+      await fillRequiredFields(user);
+      await user.click(screen.getByLabelText('This training earned a certification'));
+      await user.type(screen.getByLabelText(/Certificate no\./), 'NREMT-99120');
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+      await waitFor(() =>
+        expect(screen.getByRole('alert', { name: /Fix these/ })).toHaveTextContent(
+          'Certificate no.: Value is too long.'
+        )
+      );
+
+      await user.click(screen.getByLabelText('This training earned a certification'));
+      expect(screen.queryByRole('alert', { name: /Fix these/ })).not.toBeInTheDocument();
+    });
+
+    it('keeps "Does not expire" ticked on the draft it just saved', async () => {
+      mockGetConfig.mockResolvedValue({
+        ...mockConfig,
+        field_config: {
+          ...mockConfig.field_config,
+          expiration_date: { visible: true, required: true, label: 'Expires' },
+        },
+      });
+      mockCreateSubmission.mockResolvedValueOnce({
+        id: 'sub-draft',
+        status: 'draft',
+        course_name: 'Half-written entry',
+        training_type: 'continuing_education',
+        completion_date: '2026-03-12',
+        hours_completed: 4,
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await user.type(await screen.findByLabelText(/Course or class name/), 'Half-written entry');
+      await user.type(screen.getByLabelText(/^Date/), '2026-03-12');
+      await user.click(screen.getByLabelText('This training earned a certification'));
+      await user.click(screen.getByLabelText('Does not expire'));
+      await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+      await waitFor(() => expect(mockCreateSubmission).toHaveBeenCalledTimes(1));
+      expect(await screen.findByLabelText('Does not expire')).toBeChecked();
+      expect(screen.getByLabelText(/Expires/)).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('announces the certificate field like the others when it is missing', async () => {
+      mockGetConfig.mockResolvedValue({
+        ...mockConfig,
+        field_config: {
+          ...mockConfig.field_config,
+          attachments: { visible: true, required: true, label: 'Certificate' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Course or class name/);
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+      const file = screen.getByLabelText(/Attach certificate/);
+      expect(file).toHaveAttribute('aria-required', 'true');
+      expect(file).toHaveAttribute('aria-invalid', 'true');
+      expect(file).toHaveAccessibleDescription('Attach the certificate.');
+    });
+
     it('puts a server refusal on the field it names', async () => {
       mockCreateSubmission.mockRejectedValue({
         response: {

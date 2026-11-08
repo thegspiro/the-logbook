@@ -319,6 +319,7 @@ export const UserSettingsPage: React.FC = () => {
     const firstName = profileForm.first_name?.trim() ?? '';
     const lastName = profileForm.last_name?.trim() ?? '';
     setSavingProfile(true);
+    profileErrors.setFormError(null);
     try {
       // Strip fields that are only editable by Membership Coordinators via Members admin
       const {
@@ -371,10 +372,19 @@ export const UserSettingsPage: React.FC = () => {
     } catch (err: unknown) {
       // A refusal lands on the field it names; the toast only says to look.
       const flagged = profileErrors.setFromApiError(err, 'Could not save your profile. Try again.');
+      // A legal name left blank is still blank whatever else failed, so its
+      // flag is kept beside the server's (F-1).
+      profileErrors.setErrors({
+        ...blankLegalNameErrors({ first_name: firstName, last_name: lastName }),
+        ...flagged,
+      });
       if (Object.keys(flagged).length > 0) {
+        // A message the server could not pin on a field stays on the page,
+        // under the button, rather than being lost behind the generic toast.
         toast.error('Check the highlighted fields and save again.');
         focusAfterSave.current = flagged;
       } else {
+        profileErrors.setFormError(null);
         toast.error(getErrorMessage(err, 'Could not save your profile. Try again.'));
       }
     } finally {
@@ -1053,6 +1063,11 @@ export const UserSettingsPage: React.FC = () => {
                     >
                       {savingProfile ? 'Saving...' : 'Save Profile'}
                     </button>
+                    {profileErrors.formError && (
+                      <p role="alert" className="mt-2 text-sm text-red-800 dark:text-red-300">
+                        {profileErrors.formError}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
