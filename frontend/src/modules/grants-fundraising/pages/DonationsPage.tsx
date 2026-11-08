@@ -224,10 +224,10 @@ const DonationsPage: React.FC = () => {
                       {formatDate(donation.donationDate, tz)}
                     </td>
                     <td data-label="Donor" className="px-4 py-3 text-sm">
-                      <div>
+                      <div className="min-w-0">
                         <span className="text-theme-text-primary font-medium">{nameOf(donation)}</span>
                         {donation.donorEmail && (
-                          <p className="text-theme-text-secondary text-xs">{donation.donorEmail}</p>
+                          <p className="text-theme-text-secondary text-xs break-all">{donation.donorEmail}</p>
                         )}
                       </div>
                     </td>

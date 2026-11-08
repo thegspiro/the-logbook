@@ -1160,10 +1160,7 @@ export const GrantDetailPage: React.FC = () => {
                             <td data-label="Description" className="text-theme-text-primary px-4 py-3 text-sm">
                               {exp.description}
                             </td>
-                            <td
-                              data-label="Vendor"
-                              className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap"
-                            >
+                            <td data-label="Vendor" className="text-theme-text-secondary px-4 py-3 text-sm">
                               {exp.vendor ?? '--'}
                             </td>
                             <td
@@ -1172,10 +1169,7 @@ export const GrantDetailPage: React.FC = () => {
                             >
                               {formatCurrency(exp.amount)}
                             </td>
-                            <td
-                              data-label="Budget Category"
-                              className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap"
-                            >
+                            <td data-label="Budget Category" className="text-theme-text-secondary px-4 py-3 text-sm">
                               {linkedBudgetItem ? budgetCategoryLabel(linkedBudgetItem.category) : '--'}
                             </td>
                             <td data-label="Receipt" className="px-4 py-3 text-sm whitespace-nowrap">

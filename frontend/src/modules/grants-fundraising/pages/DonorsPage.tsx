@@ -588,9 +588,9 @@ export const DonorsPage: React.FC = () => {
                     {/* Email */}
                     <td data-label="Email" className="text-theme-text-secondary px-4 py-3 text-sm">
                       {donor.email ? (
-                        <span className="inline-flex items-center gap-1">
+                        <span className="inline-flex min-w-0 items-center gap-1">
                           <Mail className="h-3.5 w-3.5 shrink-0" />
-                          {donor.email}
+                          <span className="min-w-0 break-all">{donor.email}</span>
                         </span>
                       ) : donor.contactHidden ? (
                         <span className="text-theme-text-muted text-xs">Managers only</span>

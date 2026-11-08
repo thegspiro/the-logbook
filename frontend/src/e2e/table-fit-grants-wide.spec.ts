@@ -153,7 +153,7 @@ const grantApplication = {
 // The donations list: date, donor with email, a six-digit recurring amount,
 // method, status, receipt, a long dedication and an edit action.
 test.describe('Donations table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/grants/donations — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
@@ -173,7 +173,7 @@ test.describe('Donations table fits its card', () => {
 // The donor directory: name with company, a long email, type, total, count,
 // last donation and email/phone actions.
 test.describe('Donors table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/grants/donors — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
@@ -192,7 +192,7 @@ test.describe('Donors table fits its card', () => {
 // A grant's Expenditures tab: date, a long description, a long vendor kept on
 // one line, a six-digit amount, the budget category, receipt and actions.
 test.describe('Grant expenditures table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/grants/applications/:id Expenditures tab — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
