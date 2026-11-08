@@ -2595,6 +2595,8 @@ async def forgot_password(
             "auth_provider": auth_config.provider,
         }
 
+    org_id = str(organization.id)
+
     # Email off is a fact about the department, not the account, so saying so
     # reveals nothing about which addresses exist. Issue no token: one nobody
     # can receive only starts the cooldown, and the member's way back is an
@@ -2616,11 +2618,11 @@ async def forgot_password(
                 "email_fingerprint": email_fingerprint(reset_request.email),
                 "token_issued": False,
                 "reason": "email_disabled",
-                "organization_id": str(organization.id),
+                "organization_id": org_id,
             },
             # The column, not only event_data: the department's audit log
             # reads by it, and missed every reset request (W03-9).
-            organization_id=str(organization.id),
+            organization_id=org_id,
             ip_address=ip_address,
             user_agent=request.headers.get("user-agent"),
         )
@@ -2634,7 +2636,7 @@ async def forgot_password(
     auth_service = AuthService(db)
     user, raw_token = await auth_service.create_password_reset_token(
         email=reset_request.email,
-        organization_id=str(organization.id),
+        organization_id=org_id,
         ip_address=ip_address,
     )
 
@@ -2654,9 +2656,9 @@ async def forgot_password(
                 else {"email_fingerprint": email_fingerprint(reset_request.email)}
             ),
             "token_issued": issued,
-            "organization_id": str(organization.id),
+            "organization_id": org_id,
         },
-        organization_id=str(organization.id),
+        organization_id=org_id,
         user_id=str(user.id) if issued else None,
         ip_address=ip_address,
         user_agent=request.headers.get("user-agent"),
@@ -2671,7 +2673,6 @@ async def forgot_password(
         # Use URL fragment (#) instead of query param so the token is
         # never sent to the server in Referer headers or logged in access logs.
         reset_url = f"{settings.FRONTEND_URL}/reset-password#token={raw_token}"
-        org_id = str(organization.id)
         org_name = organization.name
         expiry_minutes = RESET_TOKEN_EXPIRY_MINUTES
         recipient_email = user.email
