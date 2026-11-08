@@ -576,8 +576,11 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged, sto
               )}
 
               <h4 className="text-theme-text-primary mb-1 text-sm font-semibold">Line detail</h4>
-              <div className="overflow-x-auto">
-                <table className="rwd-table w-full text-sm">
+              {/* The panel gives this table a ~622px card at every screen size,
+                  and the seven columns need ~629px with WebKit's wider text, so
+                  it reflows on its card's width rather than the viewport's. */}
+              <div className="rwd-table-container overflow-x-auto">
+                <table className="rwd-table rwd-table-wide w-full text-sm">
                   <thead>
                     <tr className="text-theme-text-muted text-left">
                       <th className="py-1 pr-2 font-medium">Item</th>
