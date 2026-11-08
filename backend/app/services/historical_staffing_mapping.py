@@ -102,10 +102,14 @@ def _plain(value: str) -> str:
     return _SPACE_RE.sub(" ", text).strip()
 
 
+# The key of every event whose activity is blank: one decision covers them.
+NO_ACTIVITY_KEY = "(no activity)"
+
+
 def activity_key(activity: str) -> str:
     """One decision per activity text, whatever its case, entities or emoji:
     "&#128680; LA106 Call Back Staff" and "LA106 call back staff" agree."""
-    return _plain(activity).casefold()[:MAX_KEY_LENGTH]
+    return _plain(activity).casefold()[:MAX_KEY_LENGTH] or NO_ACTIVITY_KEY
 
 
 def title_core(title: str) -> str:
@@ -120,8 +124,13 @@ def title_core(title: str) -> str:
     return _SPACE_RE.sub(" ", _plain(text)).strip()
 
 
+# The key of a title with nothing left once its unit and times are taken off
+# (a blank title, or "LA106 (0800-1800)"): one decision covers all of them.
+NO_TITLE_KEY = "(no title)"
+
+
 def title_key(title: str) -> str:
-    return title_core(title).casefold()[:MAX_KEY_LENGTH]
+    return title_core(title).casefold()[:MAX_KEY_LENGTH] or NO_TITLE_KEY
 
 
 def _compare_key(value: str) -> str:
