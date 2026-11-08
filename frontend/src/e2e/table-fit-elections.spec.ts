@@ -74,7 +74,7 @@ const roster = {
 // status badges, item count, ballot delivery with its send time, and the
 // ineligibility reason. One row is expanded to show its per-item detail.
 test.describe('Voter eligibility roster fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/elections/:id?tab=eligibility — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: [...TEST_USER.permissions, 'elections.view', 'elections.manage'] });
