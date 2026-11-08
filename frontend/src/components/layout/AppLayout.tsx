@@ -192,8 +192,15 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <div
         className="has-bottom-nav has-side-nav flex min-h-screen flex-col"
         style={{
-          background:
+          // The first two layers repeat SideNavigation's background and right
+          // border down the full height of the page, beneath the fixed nav, so
+          // the sidebar reaches the footer however tall the document is. See
+          // `--side-nav-rail-width` in index.css.
+          background: [
+            'linear-gradient(var(--surface-border), var(--surface-border)) calc(var(--side-nav-rail-width) - 1px) 0 / 1px 100% no-repeat',
+            'linear-gradient(var(--nav-bg), var(--nav-bg)) 0 0 / var(--side-nav-rail-width) 100% no-repeat',
             'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))',
+          ].join(', '),
         }}
       >
         <TopProgressBar />

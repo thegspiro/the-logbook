@@ -785,6 +785,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         ref={sideNavRef}
         id="side-navigation"
         aria-label="Main navigation"
+        data-collapsed={collapsed ? 'true' : 'false'}
         className={`mobile-navigation-drawer safe-top bg-theme-nav-bg border-theme-surface-border fixed left-0 z-40 overscroll-contain border-r transition-all duration-300 md:top-0 md:h-full ${
           collapsed ? 'w-20' : 'w-64'
         } ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}

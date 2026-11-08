@@ -1991,6 +1991,21 @@
   }
 }
 
+/* The width the navigation actually paints, which the collapsed rail narrows
+ * to its `w-20` while the content column keeps its 16rem offset. AppLayout
+ * paints the navigation's background and border down the whole page at this
+ * width. The nav is `fixed` and sized to the viewport, so anywhere the page
+ * extends past what it covers — a full-page screenshot or PDF, or a browser
+ * whose viewport height shifts under it — the column showed the page gradient
+ * and the sidebar visibly stopped short of the footer. `--side-nav-width` is
+ * 0px below 768px, so the off-canvas drawer gets no strip. */
+.has-side-nav {
+  --side-nav-rail-width: var(--side-nav-width);
+}
+.has-side-nav:has(#side-navigation[data-collapsed='true']) {
+  --side-nav-rail-width: min(var(--side-nav-width), 5rem);
+}
+
 /* A form grid beside the side navigation, on a tablet.
  *
  * `sm:` and `md:` ask about the viewport, and the side navigation takes 16rem
