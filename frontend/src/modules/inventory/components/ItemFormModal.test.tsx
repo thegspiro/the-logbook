@@ -1021,3 +1021,82 @@ describe('ItemFormModal', () => {
     expect(screen.getByLabelText('Inspection Interval (days)')).not.toBeRequired();
   });
 });
+
+describe('ItemFormModal server errors on their fields', () => {
+  const tooLong = (field: string) => ({
+    response: { status: 422, data: { detail: [{ field, message: 'Value is too long.' }] } },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCreateItem.mockReset();
+    mockCreateItem.mockResolvedValue({ id: 'new-1' });
+    mockUpdateItem.mockReset();
+    mockUpdateItem.mockResolvedValue({});
+    mockGetVendors.mockResolvedValue([]);
+    mockGetVariantGroups.mockReset();
+    mockGetVariantGroups.mockResolvedValue([]);
+  });
+
+  it('puts a refusal of a new item on its field, announced, and creates nothing', async () => {
+    mockCreateItem.mockRejectedValueOnce(tooLong('barcode'));
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<ItemFormModal {...baseProps} isOpen onClose={onClose} />);
+    await user.type(screen.getByLabelText(/^Name/), 'Halligan');
+    await user.type(screen.getByLabelText('Barcode'), '0123456789');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    const barcode = screen.getByLabelText('Barcode');
+    await waitFor(() =>
+      expect(barcode).toHaveAccessibleDescription('Barcode is too long — keep it to 255 characters.')
+    );
+    expect(barcode).toHaveAttribute('aria-invalid', 'true');
+    expect(mockToastError).toHaveBeenCalledWith('Fix the fields marked below, then save again.');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('flags a missing name on the field rather than in a toast', async () => {
+    const user = userEvent.setup();
+    render(<ItemFormModal {...baseProps} isOpen />);
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Name is required.');
+    expect(mockCreateItem).not.toHaveBeenCalled();
+  });
+
+  it('saves the rest of an edit, keeps the stored value of a refused field and tells the page on close', async () => {
+    mockUpdateItem.mockRejectedValueOnce(tooLong('barcode'));
+    const onSaved = vi.fn();
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ItemFormModal
+        {...baseProps}
+        isOpen
+        onSaved={onSaved}
+        onClose={onClose}
+        editItem={makeItem({ barcode: 'OLD-1', notes: 'Keep oiled' })}
+      />
+    );
+    await user.type(screen.getByLabelText('Barcode'), '-EXTENDED');
+    await user.clear(screen.getByLabelText('Notes'));
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(2));
+    const retry = mockUpdateItem.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(retry).not.toHaveProperty('barcode');
+    expect(retry).toMatchObject({ notes: null });
+    expect(screen.getByLabelText('Barcode')).toHaveAccessibleDescription(
+      'Barcode is too long — keep it to 255 characters.'
+    );
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Only the refused barcode is unsaved now, so closing still asks.
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

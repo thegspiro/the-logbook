@@ -7,7 +7,10 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { getTodayLocalDate, localToUTC } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { apparatusFuelLogService } from '../services/api';
@@ -60,22 +63,80 @@ const FUEL_TYPES: { value: FuelType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
+type FuelField =
+  | 'fuelDate'
+  | 'fuelType'
+  | 'gallons'
+  | 'pricePerGallon'
+  | 'totalCost'
+  | 'mileageAtFill'
+  | 'hoursAtFill'
+  | 'stationName'
+  | 'stationAddress'
+  | 'notes';
+
+/** How the fuel-log endpoint's field names land on this dialog (forms review F-2). */
+const FUEL_FIELDS: Record<FuelField, ServerFieldSpec> = {
+  fuelDate: { label: 'Date' },
+  fuelType: { label: 'Fuel type' },
+  gallons: { label: 'Gallons' },
+  pricePerGallon: { label: 'Price per gallon' },
+  totalCost: { label: 'Total cost' },
+  mileageAtFill: { label: 'Mileage at fill' },
+  hoursAtFill: { label: 'Engine hours at fill' },
+  // `ApparatusFuelLogBase.station_name` max_length.
+  stationName: { label: 'Station name', maxLength: 200 },
+  stationAddress: { label: 'Station address' },
+  notes: { label: 'Notes' },
+};
+
+/** Field order on screen, and each control's id, so the first refusal takes focus. */
+const FUEL_FIELD_IDS: Record<FuelField, string> = {
+  fuelDate: 'fuel-date',
+  fuelType: 'fuel-type',
+  gallons: 'fuel-gallons',
+  pricePerGallon: 'fuel-price',
+  totalCost: 'fuel-total',
+  mileageAtFill: 'fuel-mileage',
+  hoursAtFill: 'fuel-hours',
+  stationName: 'fuel-station-name',
+  stationAddress: 'fuel-station-address',
+  notes: 'fuel-notes',
+};
+
 const inputClass = 'form-input px-3 focus:ring-red-500/50 focus:border-red-500';
-const labelClass = 'form-label';
 const selectClass = inputClass;
 
 export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onSaved, apparatusId }) => {
   const tz = useTimezone();
   const [f, setF] = useState<FormData>(() => emptyForm(tz));
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<FuelField, string>>>({});
+  // What the form held when it opened, so Escape, the X and Cancel can ask
+  // before discarding anything typed since (forms review F-6).
+  const [baseline, setBaseline] = useState('');
+  const isDirty = baseline !== '' && JSON.stringify(f) !== baseline;
+  const requestClose = useDiscardGuard({ isDirty, onClose });
 
   useEffect(() => {
     if (isOpen) {
-      setF(emptyForm(tz));
+      const seeded = emptyForm(tz);
+      setF(seeded);
+      setBaseline(JSON.stringify(seeded));
+      setErrors({});
     }
   }, [isOpen, tz]);
 
-  const up = (k: keyof FormData, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
+  const up = (k: keyof FormData, v: string | boolean) => {
+    setF((p) => ({ ...p, [k]: v }));
+    if (k in FUEL_FIELDS) setErrors((p) => ({ ...p, [k]: undefined }));
+  };
+
+  const showErrors = (next: Partial<Record<FuelField, string>>) => {
+    setErrors(next);
+    const first = (Object.keys(FUEL_FIELD_IDS) as FuelField[]).find((k) => next[k]);
+    if (first) window.setTimeout(() => document.getElementById(FUEL_FIELD_IDS[first])?.focus(), 0);
+  };
 
   const handleGallonsChange = (gallons: string) => {
     up('gallons', gallons);
@@ -93,12 +154,11 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!f.gallons || Number(f.gallons) <= 0) {
-      toast.error('Enter gallons greater than 0');
-      return;
-    }
-    if (!f.fuelDate) {
-      toast.error('Select the fill-up date');
+    const missing: Partial<Record<FuelField, string>> = {};
+    if (!f.fuelDate) missing.fuelDate = 'Select the fill-up date.';
+    if (!f.gallons || Number(f.gallons) <= 0) missing.gallons = 'Enter gallons greater than 0.';
+    if (Object.keys(missing).length > 0) {
+      showErrors(missing);
       return;
     }
 
@@ -128,7 +188,14 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
       onSaved();
       onClose();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to add fuel log'));
+      // A refused field is flagged on that field rather than named in a toast (forms review F-2).
+      const mapped = mapServerFieldErrors(err, FUEL_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        showErrors(mapped.fieldErrors);
+        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then save again.');
+      } else {
+        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to add fuel log'));
+      }
     } finally {
       setSaving(false);
     }
@@ -137,7 +204,7 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title="Add Fuel Log"
       size="md"
       onSubmit={(e) => void handleSubmit(e)}
@@ -148,7 +215,7 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
           >
             Cancel
@@ -159,114 +226,110 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
       <div className="space-y-4">
         {/* Date & Type */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="fuel-date" className={labelClass}>
-              Date *
-            </label>
-            <input
-              id="fuel-date"
-              type="date"
-              className={inputClass}
-              value={f.fuelDate}
-              onChange={(e) => up('fuelDate', e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="fuel-type" className={labelClass}>
-              Fuel Type *
-            </label>
-            <select
-              id="fuel-type"
-              className={selectClass}
-              value={f.fuelType}
-              onChange={(e) => up('fuelType', e.target.value)}
-            >
-              {FUEL_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FormField label="Date" required error={errors.fuelDate} id={FUEL_FIELD_IDS.fuelDate}>
+            {(field) => (
+              <input
+                {...field}
+                type="date"
+                className={inputClass}
+                value={f.fuelDate}
+                onChange={(e) => up('fuelDate', e.target.value)}
+              />
+            )}
+          </FormField>
+          <FormField label="Fuel Type" required error={errors.fuelType} id={FUEL_FIELD_IDS.fuelType}>
+            {(field) => (
+              <select
+                {...field}
+                className={selectClass}
+                value={f.fuelType}
+                onChange={(e) => up('fuelType', e.target.value)}
+              >
+                {FUEL_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
         </div>
 
         {/* Gallons, Price, Total */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <label htmlFor="fuel-gallons" className={labelClass}>
-              Gallons *
-            </label>
-            <input
-              id="fuel-gallons"
-              type="number"
-              step="0.01"
-              min="0"
-              className={inputClass}
-              value={f.gallons}
-              onChange={(e) => handleGallonsChange(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="fuel-price" className={labelClass}>
-              Price / Gallon ($)
-            </label>
-            <input
-              id="fuel-price"
-              type="number"
-              step="0.001"
-              min="0"
-              className={inputClass}
-              value={f.pricePerGallon}
-              onChange={(e) => handlePriceChange(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="fuel-total" className={labelClass}>
-              Total Cost ($)
-            </label>
-            <input
-              id="fuel-total"
-              type="number"
-              step="0.01"
-              min="0"
-              className={inputClass}
-              value={f.totalCost}
-              onChange={(e) => up('totalCost', e.target.value)}
-            />
-          </div>
+          <FormField label="Gallons" required error={errors.gallons} id={FUEL_FIELD_IDS.gallons}>
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                className={inputClass}
+                value={f.gallons}
+                onChange={(e) => handleGallonsChange(e.target.value)}
+              />
+            )}
+          </FormField>
+          <FormField label="Price / Gallon ($)" error={errors.pricePerGallon} id={FUEL_FIELD_IDS.pricePerGallon}>
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="decimal"
+                step="0.001"
+                min="0"
+                className={inputClass}
+                value={f.pricePerGallon}
+                onChange={(e) => handlePriceChange(e.target.value)}
+              />
+            )}
+          </FormField>
+          <FormField label="Total Cost ($)" error={errors.totalCost} id={FUEL_FIELD_IDS.totalCost}>
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                className={inputClass}
+                value={f.totalCost}
+                onChange={(e) => up('totalCost', e.target.value)}
+              />
+            )}
+          </FormField>
         </div>
 
         {/* Mileage & Hours */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="fuel-mileage" className={labelClass}>
-              Mileage at Fill
-            </label>
-            <input
-              id="fuel-mileage"
-              type="number"
-              min="0"
-              className={inputClass}
-              value={f.mileageAtFill}
-              onChange={(e) => up('mileageAtFill', e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="fuel-hours" className={labelClass}>
-              Engine Hours at Fill
-            </label>
-            <input
-              id="fuel-hours"
-              type="number"
-              min="0"
-              step="0.1"
-              className={inputClass}
-              value={f.hoursAtFill}
-              onChange={(e) => up('hoursAtFill', e.target.value)}
-            />
-          </div>
+          <FormField label="Mileage at Fill" error={errors.mileageAtFill} id={FUEL_FIELD_IDS.mileageAtFill}>
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="numeric"
+                min="0"
+                className={inputClass}
+                value={f.mileageAtFill}
+                onChange={(e) => up('mileageAtFill', e.target.value)}
+              />
+            )}
+          </FormField>
+          <FormField label="Engine Hours at Fill" error={errors.hoursAtFill} id={FUEL_FIELD_IDS.hoursAtFill}>
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.1"
+                className={inputClass}
+                value={f.hoursAtFill}
+                onChange={(e) => up('hoursAtFill', e.target.value)}
+              />
+            )}
+          </FormField>
         </div>
 
         {/* Full Tank */}
@@ -276,7 +339,7 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
               type="checkbox"
               checked={f.isFullTank}
               onChange={(e) => up('isFullTank', e.target.checked)}
-              className="border-theme-surface-border h-4 w-4 rounded text-red-600 focus:ring-red-500"
+              className="form-checkbox"
             />
             <span className="text-theme-text-secondary text-sm">Full tank fill-up</span>
           </label>
@@ -284,46 +347,50 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
 
         {/* Station */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="fuel-station-name" className={labelClass}>
-              Station Name
-            </label>
-            <input
-              id="fuel-station-name"
-              type="text"
-              className={inputClass}
-              value={f.stationName}
-              onChange={(e) => up('stationName', e.target.value)}
-              placeholder="Fuel station name"
-            />
-          </div>
-          <div>
-            <label htmlFor="fuel-station-address" className={labelClass}>
-              Station Address
-            </label>
-            <input
-              id="fuel-station-address"
-              type="text"
-              className={inputClass}
-              value={f.stationAddress}
-              onChange={(e) => up('stationAddress', e.target.value)}
-            />
-          </div>
+          <FormField
+            label="Station Name"
+            error={errors.stationName}
+            id={FUEL_FIELD_IDS.stationName}
+            maxLength={FUEL_FIELDS.stationName.maxLength}
+            count={f.stationName.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                className={inputClass}
+                value={f.stationName}
+                onChange={(e) => up('stationName', e.target.value)}
+                placeholder="Fuel station name"
+              />
+            )}
+          </FormField>
+          <FormField label="Station Address" error={errors.stationAddress} id={FUEL_FIELD_IDS.stationAddress}>
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                autoComplete="off"
+                className={inputClass}
+                value={f.stationAddress}
+                onChange={(e) => up('stationAddress', e.target.value)}
+              />
+            )}
+          </FormField>
         </div>
 
         {/* Notes */}
-        <div>
-          <label htmlFor="fuel-notes" className={labelClass}>
-            Notes
-          </label>
-          <textarea
-            id="fuel-notes"
-            className={inputClass}
-            rows={2}
-            value={f.notes}
-            onChange={(e) => up('notes', e.target.value)}
-          />
-        </div>
+        <FormField label="Notes" error={errors.notes} id={FUEL_FIELD_IDS.notes}>
+          {(field) => (
+            <textarea
+              {...field}
+              className={inputClass}
+              rows={2}
+              value={f.notes}
+              onChange={(e) => up('notes', e.target.value)}
+            />
+          )}
+        </FormField>
       </div>
     </Modal>
   );

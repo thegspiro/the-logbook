@@ -2,10 +2,14 @@
  * CreateFacilityModal — Modal dialog for adding a new facility.
  */
 
-import { useState } from 'react';
-import { useDialog } from '../../../hooks/useDialog';
-import { X, Loader2 } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { organizationEmailError } from '../../../utils/organizationProfile';
 import type { FacilityCreate } from '../../../services/facilitiesServices';
@@ -18,36 +22,87 @@ interface Props {
   onCreated: (facility: Facility) => void;
 }
 
-export default function CreateFacilityModal({ facilityTypes, facilityStatuses, onClose, onCreated }: Props) {
-  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+const EMPTY = {
+  name: '',
+  facility_number: '',
+  address_line1: '',
+  city: '',
+  state: '',
+  zip_code: '',
+  phone: '',
+  email: '',
+  facility_type_id: '',
+  status_id: '',
+  notes: '',
+};
 
+type FacilityField = keyof typeof EMPTY;
+
+/**
+ * How the facility create endpoint's field names land on this dialog (forms
+ * review F-2), in screen order. Lengths are `FacilityBase`'s max_length.
+ */
+const FACILITY_FIELDS: Record<FacilityField, ServerFieldSpec> = {
+  name: { label: 'Name', maxLength: 200 },
+  facility_number: { label: 'Facility number', maxLength: 50 },
+  address_line1: { label: 'Address', maxLength: 200 },
+  city: { label: 'City', maxLength: 100 },
+  state: { label: 'State', maxLength: 50 },
+  zip_code: { label: 'Zip code', maxLength: 20 },
+  phone: { label: 'Phone', maxLength: 50 },
+  email: { label: 'Email', maxLength: 200 },
+  facility_type_id: { label: 'Type' },
+  status_id: { label: 'Status' },
+  notes: { label: 'Notes' },
+};
+
+// The ids the dialog has always used, so labels and focus keep their targets.
+const IDS: Record<FacilityField, string> = {
+  name: 'facility-name',
+  facility_number: 'facility-facility-number',
+  address_line1: 'facility-address',
+  city: 'facility-city',
+  state: 'facility-state',
+  zip_code: 'facility-zip',
+  phone: 'facility-phone',
+  email: 'facility-email',
+  facility_type_id: 'facility-type',
+  status_id: 'facility-status',
+  notes: 'facility-notes',
+};
+
+export default function CreateFacilityModal({ facilityTypes, facilityStatuses, onClose, onCreated }: Props) {
   const { createFacility } = useFacilitiesStore();
   const [isCreating, setIsCreating] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    facility_number: '',
-    address_line1: '',
-    city: '',
-    state: '',
-    zip_code: '',
-    facility_type_id: '',
-    status_id: '',
-    phone: '',
-    email: '',
-    notes: '',
-  });
+  const [formData, setFormData] = useState(EMPTY);
+  const [errors, setErrors] = useState<Partial<Record<FacilityField, string>>>({});
+  // The dialog mounts empty each time it opens, so anything typed is a change
+  // that Escape, the X and Cancel ask about first (forms review F-6).
+  const isDirty = (Object.keys(EMPTY) as FacilityField[]).some((k) => formData[k] !== EMPTY[k]);
+  const requestClose = useDiscardGuard({ isDirty, onClose });
 
-  const setField = (field: string, value: string) => setFormData((prev) => ({ ...prev, [field]: value }));
-  // The modal submits from a button rather than a form, so type="email" is
-  // never checked by the browser, and the server accepts any string.
+  const setField = (field: FacilityField, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+  // The server accepts any string as the address, so the form checks it.
   const emailError = organizationEmailError(formData.email);
 
-  const handleCreate = async () => {
-    if (!formData.name.trim()) {
-      toast.error('Facility name is required');
+  const showErrors = (next: Partial<Record<FacilityField, string>>) => {
+    setErrors(next);
+    const first = (Object.keys(IDS) as FacilityField[]).find((k) => next[k]);
+    if (first) window.setTimeout(() => document.getElementById(IDS[first])?.focus(), 0);
+  };
+
+  const handleCreate = async (e: FormEvent) => {
+    e.preventDefault();
+    const missing: Partial<Record<FacilityField, string>> = {};
+    if (!formData.name.trim()) missing.name = 'Facility name is required.';
+    if (emailError) missing.email = emailError;
+    if (Object.keys(missing).length > 0) {
+      showErrors(missing);
       return;
     }
-    if (emailError) return;
     setIsCreating(true);
     try {
       // Use || to coerce empty strings to undefined (not ?? — see CLAUDE.md pitfall #1)
@@ -68,174 +123,217 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
       const facility = await createFacility(payload);
       toast.success('Facility created');
       onCreated(facility);
-    } catch {
-      toast.error('Failed to create facility');
+    } catch (err) {
+      // A refused field is flagged on that field rather than in a toast that
+      // names nothing (forms review F-2); nothing is created until it is fixed.
+      const mapped = mapServerFieldErrors(err, FACILITY_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        showErrors(mapped.fieldErrors);
+        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then save again.');
+      } else {
+        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to create facility'));
+      }
     } finally {
       setIsCreating(false);
     }
   };
 
+  // autoComplete is off throughout: these are the station's address and
+  // contacts, and the browser would offer the member's own.
   const inputCls = 'form-input py-2.5';
 
   return (
-    <div
-      className="modal-overlay z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-facility-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
-    >
-      <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-md overflow-y-auto">
-        <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-          <h2 id="create-facility-title" className="text-theme-text-primary text-lg font-bold">
+    <Modal
+      isOpen
+      onClose={requestClose}
+      title="Add Facility"
+      titleId="create-facility-title"
+      size="md"
+      onSubmit={(e) => void handleCreate(e)}
+      footer={
+        <>
+          <button type="submit" disabled={isCreating} className="btn-primary flex items-center gap-2 px-5">
+            {isCreating && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             Add Facility
-          </h2>
+          </button>
           <button
             type="button"
-            data-dialog-close
-            onClick={onClose}
-            className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-            aria-label="Close dialog"
+            onClick={requestClose}
+            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
           >
-            <X className="h-5 w-5" aria-hidden="true" />
+            Cancel
           </button>
-        </div>
-
-        <div className="space-y-4 p-6">
-          <div>
-            <label htmlFor="facility-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Name *
-            </label>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <FormField
+          label="Name"
+          required
+          error={errors.name}
+          id={IDS.name}
+          maxLength={FACILITY_FIELDS.name.maxLength}
+          count={formData.name.length}
+        >
+          {(field) => (
             <input
-              id="facility-name"
+              {...field}
+              className={inputCls}
               type="text"
+              placeholder="e.g., Station 1"
+              autoFocus
               value={formData.name}
               onChange={(e) => setField('name', e.target.value)}
-              placeholder="e.g., Station 1"
-              className={inputCls}
-              autoFocus
             />
-          </div>
-
-          <div>
-            <label
-              htmlFor="facility-facility-number"
-              className="text-theme-text-secondary mb-1 block text-sm font-medium"
-            >
-              Facility Number
-            </label>
+          )}
+        </FormField>
+        <FormField
+          label="Facility Number"
+          error={errors.facility_number}
+          id={IDS.facility_number}
+          maxLength={FACILITY_FIELDS.facility_number.maxLength}
+          count={formData.facility_number.length}
+        >
+          {(field) => (
             <input
-              id="facility-facility-number"
+              {...field}
+              className={inputCls}
               type="text"
+              placeholder="e.g., STA-01"
+              autoComplete="off"
               value={formData.facility_number}
               onChange={(e) => setField('facility_number', e.target.value)}
-              placeholder="e.g., STA-01"
-              className={inputCls}
             />
-          </div>
-
-          <div>
-            <label htmlFor="facility-address" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Address
-            </label>
+          )}
+        </FormField>
+        <FormField
+          label="Address"
+          error={errors.address_line1}
+          id={IDS.address_line1}
+          maxLength={FACILITY_FIELDS.address_line1.maxLength}
+          count={formData.address_line1.length}
+        >
+          {(field) => (
             <input
-              id="facility-address"
+              {...field}
+              className={inputCls}
               type="text"
+              placeholder="123 Main St"
+              autoComplete="off"
               value={formData.address_line1}
               onChange={(e) => setField('address_line1', e.target.value)}
-              placeholder="123 Main St"
-              className={inputCls}
             />
-          </div>
+          )}
+        </FormField>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div>
-              <label htmlFor="facility-city" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                City
-              </label>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <FormField
+            label="City"
+            error={errors.city}
+            id={IDS.city}
+            maxLength={FACILITY_FIELDS.city.maxLength}
+            count={formData.city.length}
+          >
+            {(field) => (
               <input
-                id="facility-city"
+                {...field}
+                className={inputCls}
                 type="text"
+                autoComplete="off"
                 value={formData.city}
                 onChange={(e) => setField('city', e.target.value)}
-                className={inputCls}
               />
-            </div>
-            <div>
-              <label htmlFor="facility-state" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                State
-              </label>
+            )}
+          </FormField>
+          <FormField
+            label="State"
+            error={errors.state}
+            id={IDS.state}
+            maxLength={FACILITY_FIELDS.state.maxLength}
+            count={formData.state.length}
+          >
+            {(field) => (
               <input
-                id="facility-state"
+                {...field}
+                className={inputCls}
                 type="text"
+                autoComplete="off"
                 value={formData.state}
                 onChange={(e) => setField('state', e.target.value)}
-                className={inputCls}
               />
-            </div>
-            <div>
-              <label htmlFor="facility-zip" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Zip Code
-              </label>
+            )}
+          </FormField>
+          <FormField
+            label="Zip Code"
+            error={errors.zip_code}
+            id={IDS.zip_code}
+            maxLength={FACILITY_FIELDS.zip_code.maxLength}
+            count={formData.zip_code.length}
+          >
+            {(field) => (
               <input
-                id="facility-zip"
+                {...field}
+                className={inputCls}
                 type="text"
+                inputMode="numeric"
+                autoComplete="off"
                 value={formData.zip_code}
                 onChange={(e) => setField('zip_code', e.target.value)}
-                className={inputCls}
               />
-            </div>
-          </div>
+            )}
+          </FormField>
+        </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="facility-phone" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Phone
-              </label>
+        <div className="grid grid-cols-2 gap-3">
+          <FormField
+            label="Phone"
+            error={errors.phone}
+            id={IDS.phone}
+            maxLength={FACILITY_FIELDS.phone.maxLength}
+            count={formData.phone.length}
+          >
+            {(field) => (
               <input
-                id="facility-phone"
+                {...field}
+                className={inputCls}
                 type="tel"
+                placeholder="(555) 123-4567"
+                autoComplete="off"
                 value={formData.phone}
                 onChange={(e) => setField('phone', e.target.value)}
-                placeholder="(555) 123-4567"
-                className={inputCls}
               />
-            </div>
-            <div>
-              <label htmlFor="facility-email" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Email
-              </label>
+            )}
+          </FormField>
+          <FormField
+            label="Email"
+            error={errors.email ?? (emailError || undefined)}
+            id={IDS.email}
+            maxLength={FACILITY_FIELDS.email.maxLength}
+            count={formData.email.length}
+          >
+            {(field) => (
               <input
-                id="facility-email"
+                {...field}
+                className={inputCls}
                 type="email"
+                placeholder="station@example.com"
+                autoComplete="off"
                 value={formData.email}
                 onChange={(e) => setField('email', e.target.value)}
-                placeholder="station@example.com"
-                className={inputCls}
-                aria-invalid={Boolean(emailError)}
-                aria-describedby={emailError ? 'facility-email-error' : undefined}
               />
-              {emailError && (
-                <p id="facility-email-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-                  {emailError}
-                </p>
-              )}
-            </div>
-          </div>
+            )}
+          </FormField>
+        </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            {facilityTypes.length > 0 && (
-              <div>
-                <label htmlFor="facility-type" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                  Type
-                </label>
+        <div className="grid grid-cols-2 gap-3">
+          {facilityTypes.length > 0 && (
+            <FormField label="Type" error={errors.facility_type_id} id={IDS.facility_type_id}>
+              {(field) => (
                 <select
-                  id="facility-type"
+                  {...field}
+                  className={inputCls}
                   value={formData.facility_type_id}
                   onChange={(e) => setField('facility_type_id', e.target.value)}
-                  className={inputCls}
                 >
                   <option value="">Select type...</option>
                   {facilityTypes.map((t) => (
@@ -244,18 +342,17 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
                     </option>
                   ))}
                 </select>
-              </div>
-            )}
-            {facilityStatuses.length > 0 && (
-              <div>
-                <label htmlFor="facility-status" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                  Status
-                </label>
+              )}
+            </FormField>
+          )}
+          {facilityStatuses.length > 0 && (
+            <FormField label="Status" error={errors.status_id} id={IDS.status_id}>
+              {(field) => (
                 <select
-                  id="facility-status"
+                  {...field}
+                  className={inputCls}
                   value={formData.status_id}
                   onChange={(e) => setField('status_id', e.target.value)}
-                  className={inputCls}
                 >
                   <option value="">Select status...</option>
                   {facilityStatuses.map((s) => (
@@ -264,44 +361,23 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
                     </option>
                   ))}
                 </select>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label htmlFor="facility-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Notes
-            </label>
+              )}
+            </FormField>
+          )}
+        </div>
+        <FormField label="Notes" error={errors.notes} id={IDS.notes}>
+          {(field) => (
             <textarea
-              id="facility-notes"
-              value={formData.notes}
-              onChange={(e) => setField('notes', e.target.value)}
+              {...field}
+              className={inputCls + ' resize-none'}
               rows={3}
               placeholder="Optional notes..."
-              className={inputCls + ' resize-none'}
+              value={formData.notes}
+              onChange={(e) => setField('notes', e.target.value)}
             />
-          </div>
-        </div>
-
-        <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-          <button
-            onClick={onClose}
-            className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => {
-              void handleCreate();
-            }}
-            disabled={isCreating || !formData.name.trim() || Boolean(emailError)}
-            className="btn-primary flex items-center gap-2 px-5"
-          >
-            {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
-            Add Facility
-          </button>
-        </div>
+          )}
+        </FormField>
       </div>
-    </div>
+    </Modal>
   );
 }

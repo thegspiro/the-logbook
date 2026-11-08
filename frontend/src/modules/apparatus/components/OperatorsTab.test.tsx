@@ -13,6 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import userEvent from '@testing-library/user-event';
 import type { ApparatusOperator } from '../types';
 
@@ -73,7 +74,9 @@ const renderTab = (operators: ApparatusOperator[]) =>
       timezone="America/New_York"
       apparatusId="app-1"
       onRefresh={vi.fn()}
-    />
+    />,
+    // The operator dialog asks before discarding, which needs the app shell's ConfirmProvider.
+    { wrapper: ConfirmProvider }
   );
 
 beforeEach(() => {

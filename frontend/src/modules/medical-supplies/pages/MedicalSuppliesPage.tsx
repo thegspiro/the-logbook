@@ -1517,6 +1517,7 @@ const MedicalSuppliesPage: React.FC = () => {
           item={editingItem}
           onClose={() => setEditingItem(null)}
           onSaved={handleSaved}
+          onSavedExcept={() => void refresh()}
         />
       )}
 

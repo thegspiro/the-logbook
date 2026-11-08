@@ -10,7 +10,10 @@ import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { formCoercions } from '../../../utils/formValues';
 import { storefrontService, type WindowOfferingInput } from '../services/api';
 import { toDateInputValue } from '../utils/formatting';
@@ -52,16 +55,53 @@ const emptyForm: FormState = {
   notes: '',
 };
 
+type WindowField =
+  'name' | 'description' | 'opensAt' | 'closesAt' | 'expectedDeliveryDate' | 'pickupInstructions' | 'notes';
+
+/**
+ * How the order-window endpoints' field names land on this dialog (forms
+ * review F-2), in screen order. The length is `StoreOrderWindowBase`'s.
+ */
+const WINDOW_FIELDS: Record<WindowField, ServerFieldSpec> = {
+  name: { label: 'Name', maxLength: 200 },
+  description: { label: 'Description' },
+  opensAt: { label: 'Opens' },
+  closesAt: { label: 'Closes' },
+  expectedDeliveryDate: { label: 'Expected delivery date' },
+  pickupInstructions: { label: 'Pickup instructions' },
+  notes: { label: 'Internal notes' },
+};
+
+// The ids the dialog has always used, so labels and focus keep their targets.
+const IDS: Record<WindowField, string> = {
+  name: 'window-name',
+  description: 'window-description',
+  opensAt: 'window-opens',
+  closesAt: 'window-closes',
+  expectedDeliveryDate: 'window-delivery',
+  pickupInstructions: 'window-pickup',
+  notes: 'window-notes',
+};
+
 export const WindowFormModal: React.FC<WindowFormModalProps> = ({ isOpen, window, products, onClose, onSaved }) => {
   const tz = useTimezone();
   const [form, setForm] = useState<FormState>(emptyForm);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<WindowField, string>>>({});
+  // What the form held when it opened (or last saved), so Escape, the X and
+  // Cancel can ask before discarding anything typed since (forms review F-6).
+  const [baseline, setBaseline] = useState('');
+  const snapshot = JSON.stringify({ form, selectedProducts });
+  const isDirty = baseline !== '' && snapshot !== baseline;
+  const requestClose = useDiscardGuard({ isDirty, onClose });
 
   useEffect(() => {
     if (!isOpen) return;
+    let seeded = emptyForm;
+    let seededProducts: string[] = [];
     if (window) {
-      setForm({
+      seeded = {
         name: window.name,
         description: window.description ?? '',
         opensAt: formatForDateTimeInput(window.opensAt, tz),
@@ -73,25 +113,54 @@ export const WindowFormModal: React.FC<WindowFormModalProps> = ({ isOpen, window
         includeAllProducts: window.includeAllProducts,
         notifyOnOpen: window.notifyOnOpen,
         notes: window.notes ?? '',
-      });
-      setSelectedProducts(window.offerings.map((o) => o.productId));
-    } else {
-      setForm(emptyForm);
-      setSelectedProducts([]);
+      };
+      seededProducts = window.offerings.map((o) => o.productId);
     }
+    setForm(seeded);
+    setSelectedProducts(seededProducts);
+    setBaseline(JSON.stringify({ form: seeded, selectedProducts: seededProducts }));
+    setErrors({});
   }, [isOpen, window, tz]);
 
-  const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+  const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    if (key in WINDOW_FIELDS) setErrors((prev) => ({ ...prev, [key]: undefined }));
+  };
+
+  const showErrors = (next: Partial<Record<WindowField, string>>) => {
+    setErrors(next);
+    const first = (Object.keys(IDS) as WindowField[]).find((k) => next[k]);
+    if (first) globalThis.setTimeout(() => document.getElementById(IDS[first])?.focus(), 0);
+  };
+
+  /** After an edit that wrote everything but `refused`: flag those, and count only them as unsaved. */
+  const keepRefused = (refused: Partial<Record<WindowField, string>>) => {
+    showErrors(refused);
+    const stored = (JSON.parse(baseline) as { form: FormState }).form;
+    const keys = Object.keys(refused) as WindowField[];
+    const kept = { ...form, ...Object.fromEntries(keys.map((k) => [k, stored[k]])) };
+    setBaseline(JSON.stringify({ form: kept, selectedProducts }));
+    const first = (Object.keys(IDS) as WindowField[]).find((k) => refused[k]);
+    if (first) {
+      toast.error(
+        `Order window saved, except ${WINDOW_FIELDS[first].label.toLowerCase()}: ${refused[first] ?? ''} Fix it and save again.`
+      );
+    }
+  };
 
   const toggleProduct = (productId: string) =>
     setSelectedProducts((prev) =>
       prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
     );
 
-  const handleSave = async () => {
-    if (!form.name.trim()) {
-      toast.error('Give the order window a name');
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const missing: Partial<Record<WindowField, string>> = {};
+    if (!form.name.trim()) missing.name = 'Give the order window a name.';
+    // A new window is not created until every field is fixed; an edit saves
+    // the rest and keeps the stored value of a refused one (below).
+    if (!window && Object.keys(missing).length > 0) {
+      showErrors(missing);
       return;
     }
 
@@ -125,7 +194,29 @@ export const WindowFormModal: React.FC<WindowFormModalProps> = ({ isOpen, window
     setSaving(true);
     try {
       if (window) {
-        await storefrontService.updateWindow(window.id, payload);
+        // Single-save rule (owner, 2026-11-05): a value the record cannot hold
+        // is not written — its key is left out, which the backend reads as
+        // "leave alone", so the stored value is kept — the rest saves, and the
+        // field stays flagged until it is fixed.
+        let refused: Partial<Record<WindowField, string>> = missing;
+        const send = (skip: Partial<Record<WindowField, string>>) => {
+          const rest: Record<string, unknown> = { ...payload };
+          for (const key of Object.keys(skip)) delete rest[key];
+          return storefrontService.updateWindow(window.id, rest);
+        };
+        try {
+          await send(refused);
+        } catch (err) {
+          const mapped = mapServerFieldErrors(err, WINDOW_FIELDS);
+          if (!mapped || Object.keys(mapped.fieldErrors).length === 0 || mapped.unmatched.length > 0) throw err;
+          refused = { ...refused, ...mapped.fieldErrors };
+          await send(refused);
+        }
+        if (Object.keys(refused).length > 0) {
+          onSaved();
+          keepRefused(refused);
+          return;
+        }
         toast.success('Order window updated');
       } else {
         await storefrontService.createWindow(payload);
@@ -134,7 +225,15 @@ export const WindowFormModal: React.FC<WindowFormModalProps> = ({ isOpen, window
       onSaved();
       onClose();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not save the order window'));
+      // A refused field is flagged on that field rather than named in a toast
+      // (forms review F-2); a new record is not created until it is fixed.
+      const mapped = mapServerFieldErrors(err, WINDOW_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        showErrors(mapped.fieldErrors);
+        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then save again.');
+      } else {
+        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Could not save the order window'));
+      }
     } finally {
       setSaving(false);
     }
@@ -143,80 +242,77 @@ export const WindowFormModal: React.FC<WindowFormModalProps> = ({ isOpen, window
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={window ? 'Edit order window' : 'New order window'}
       size="lg"
+      onSubmit={(e) => void handleSave(e)}
       footer={
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn-secondary btn-md" onClick={onClose}>
+          <button type="button" className="btn-secondary btn-md" onClick={requestClose}>
             Cancel
           </button>
-          <button
-            type="button"
-            className="btn-primary btn-md"
-            disabled={saving}
-            onClick={() => {
-              void handleSave();
-            }}
-          >
+          <button type="submit" className="btn-primary btn-md" disabled={saving}>
             {saving ? 'Saving…' : 'Save window'}
           </button>
         </div>
       }
     >
       <div className="space-y-4">
-        <div>
-          <label htmlFor="window-name" className="form-label">
-            Name
-          </label>
-          <input
-            id="window-name"
-            type="text"
-            value={form.name}
-            onChange={(e) => update('name', e.target.value)}
-            className="form-input"
-            placeholder="Fall 2026 apparel order"
-          />
-        </div>
+        <FormField
+          label="Name"
+          required
+          error={errors.name}
+          id={IDS.name}
+          maxLength={WINDOW_FIELDS.name.maxLength}
+          count={form.name.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              className="form-input"
+              type="text"
+              placeholder="Fall 2026 apparel order"
+              value={form.name}
+              onChange={(e) => update('name', e.target.value)}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="window-description" className="form-label">
-            Description
-          </label>
-          <textarea
-            id="window-description"
-            rows={2}
-            value={form.description}
-            onChange={(e) => update('description', e.target.value)}
-            className="form-input"
-          />
-        </div>
+        <FormField label="Description" error={errors.description} id={IDS.description}>
+          {(field) => (
+            <textarea
+              {...field}
+              className="form-input"
+              rows={2}
+              value={form.description}
+              onChange={(e) => update('description', e.target.value)}
+            />
+          )}
+        </FormField>
 
         <div className="form-grid-2">
-          <div>
-            <label htmlFor="window-opens" className="form-label">
-              Opens
-            </label>
-            <input
-              id="window-opens"
-              type="datetime-local"
-              value={form.opensAt}
-              onChange={(e) => update('opensAt', e.target.value)}
-              className="form-input"
-            />
-          </div>
-          <div>
-            <label htmlFor="window-closes" className="form-label">
-              Closes
-            </label>
-            <input
-              id="window-closes"
-              type="datetime-local"
-              value={form.closesAt}
-              onChange={(e) => update('closesAt', e.target.value)}
-              className="form-input"
-            />
-          </div>
+          <FormField label="Opens" error={errors.opensAt} id={IDS.opensAt}>
+            {(field) => (
+              <input
+                {...field}
+                className="form-input"
+                type="datetime-local"
+                value={form.opensAt}
+                onChange={(e) => update('opensAt', e.target.value)}
+              />
+            )}
+          </FormField>
+          <FormField label="Closes" error={errors.closesAt} id={IDS.closesAt}>
+            {(field) => (
+              <input
+                {...field}
+                className="form-input"
+                type="datetime-local"
+                value={form.closesAt}
+                onChange={(e) => update('closesAt', e.target.value)}
+              />
+            )}
+          </FormField>
         </div>
 
         <div className="flex flex-wrap gap-4">
@@ -250,31 +346,29 @@ export const WindowFormModal: React.FC<WindowFormModalProps> = ({ isOpen, window
         </div>
 
         <div className="form-grid-2">
-          <div>
-            <label htmlFor="window-delivery" className="form-label">
-              Expected delivery date
-            </label>
-            <input
-              id="window-delivery"
-              type="date"
-              value={form.expectedDeliveryDate}
-              onChange={(e) => update('expectedDeliveryDate', e.target.value)}
-              className="form-input"
-            />
-          </div>
-          <div>
-            <label htmlFor="window-pickup" className="form-label">
-              Pickup instructions
-            </label>
-            <input
-              id="window-pickup"
-              type="text"
-              value={form.pickupInstructions}
-              onChange={(e) => update('pickupInstructions', e.target.value)}
-              className="form-input"
-              placeholder="Pick up at Station 1, weekdays 9–5"
-            />
-          </div>
+          <FormField label="Expected delivery date" error={errors.expectedDeliveryDate} id={IDS.expectedDeliveryDate}>
+            {(field) => (
+              <input
+                {...field}
+                className="form-input"
+                type="date"
+                value={form.expectedDeliveryDate}
+                onChange={(e) => update('expectedDeliveryDate', e.target.value)}
+              />
+            )}
+          </FormField>
+          <FormField label="Pickup instructions" error={errors.pickupInstructions} id={IDS.pickupInstructions}>
+            {(field) => (
+              <input
+                {...field}
+                className="form-input"
+                type="text"
+                placeholder="Pick up at Station 1, weekdays 9–5"
+                value={form.pickupInstructions}
+                onChange={(e) => update('pickupInstructions', e.target.value)}
+              />
+            )}
+          </FormField>
         </div>
 
         <div>
@@ -309,18 +403,17 @@ export const WindowFormModal: React.FC<WindowFormModalProps> = ({ isOpen, window
           )}
         </div>
 
-        <div>
-          <label htmlFor="window-notes" className="form-label">
-            Internal notes
-          </label>
-          <textarea
-            id="window-notes"
-            rows={2}
-            value={form.notes}
-            onChange={(e) => update('notes', e.target.value)}
-            className="form-input"
-          />
-        </div>
+        <FormField label="Internal notes" error={errors.notes} id={IDS.notes}>
+          {(field) => (
+            <textarea
+              {...field}
+              className="form-input"
+              rows={2}
+              value={form.notes}
+              onChange={(e) => update('notes', e.target.value)}
+            />
+          )}
+        </FormField>
       </div>
     </Modal>
   );

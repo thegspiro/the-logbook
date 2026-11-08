@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { InventoryCategory, InventoryItem } from '../../../services/eventServices';
@@ -539,5 +539,95 @@ describe('MedicalItemFormModal', () => {
 
       expect(mockUpdateItem).toHaveBeenCalledWith('item-7', expect.objectContaining({ quantity: 0 }));
     });
+  });
+});
+
+describe('MedicalItemFormModal errors and discarding', () => {
+  const stored = {
+    id: 'item-9',
+    name: 'Gauze Pads',
+    category_id: 'cat-bandages',
+    vendor: 'Bound Tree',
+    quantity: 10,
+    unit_of_measure: 'each',
+  } as unknown as InventoryItem;
+  const tooLong = (field: string) => ({
+    response: { status: 422, data: { detail: [{ field, message: 'Value is too long.' }] } },
+  });
+
+  beforeEach(() => {
+    mockCreateItem.mockReset();
+    mockCreateItem.mockResolvedValue({ id: 'item-1' });
+    mockUpdateItem.mockReset();
+    mockUpdateItem.mockResolvedValue({});
+    mockGetStorageOptions.mockReset();
+    mockGetStorageOptions.mockResolvedValue(storageOptions);
+  });
+
+  it('puts a refusal of a new supply on its field, announced, and adds nothing', async () => {
+    mockCreateItem.mockRejectedValueOnce(tooLong('manufacturer'));
+    const onSaved = vi.fn();
+    const user = userEvent.setup();
+    renderWithRouter(
+      <MedicalItemFormModal categories={[category]} categoriesError={null} onClose={vi.fn()} onSaved={onSaved} />
+    );
+    await user.type(screen.getByLabelText(/^Name/), 'Gauze pads');
+    await user.selectOptions(screen.getByLabelText(/^Category/), 'cat-bandages');
+    await user.type(screen.getByLabelText('Manufacturer'), 'Acme');
+    await user.click(screen.getByRole('button', { name: 'Add supply' }));
+
+    const field = screen.getByLabelText('Manufacturer');
+    await waitFor(() =>
+      expect(field).toHaveAccessibleDescription('Manufacturer is too long — keep it to 255 characters.')
+    );
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('saves the rest of an edit, keeps the stored value of a refused field and flags it', async () => {
+    mockUpdateItem.mockRejectedValueOnce(tooLong('vendor'));
+    const onSaved = vi.fn();
+    const onSavedExcept = vi.fn();
+    const user = userEvent.setup();
+    renderWithRouter(
+      <MedicalItemFormModal
+        categories={[category]}
+        categoriesError={null}
+        item={stored}
+        onClose={vi.fn()}
+        onSaved={onSaved}
+        onSavedExcept={onSavedExcept}
+      />
+    );
+    await user.type(screen.getByLabelText('Vendor'), ' and Sons');
+    await user.type(screen.getByLabelText('Size'), 'Large');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(2));
+    const retry = mockUpdateItem.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(retry).not.toHaveProperty('vendor');
+    expect(retry).toMatchObject({ size: 'Large' });
+    expect(onSavedExcept).toHaveBeenCalledTimes(1);
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Vendor')).toHaveAccessibleDescription(
+      'Vendor is too long — keep it to 255 characters.'
+    );
+  });
+
+  it('asks before Escape or Cancel discards what was typed', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderWithRouter(
+      <MedicalItemFormModal categories={[category]} categoriesError={null} onClose={onClose} onSaved={vi.fn()} />
+    );
+    await user.type(screen.getByLabelText(/^Name/), 'Gauze pads');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
