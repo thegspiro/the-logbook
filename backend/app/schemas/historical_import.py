@@ -367,3 +367,93 @@ class DrillPreview(BaseModel):
 
 class SuggestionsAccepted(BaseModel):
     mapped: int
+
+
+# ---------------------------------------------------------------------------
+# Staffing roster
+# ---------------------------------------------------------------------------
+
+StaffingFileKind = Literal["seats", "events"]
+
+
+class StaffingMappingUpdate(BaseModel):
+    """The whole mapping for one file, replacing what was stored. A null or
+    empty header leaves that field unmapped."""
+
+    column_mapping: Dict[str, Optional[str]]
+
+    @field_validator("column_mapping")
+    @classmethod
+    def _check(cls, value: Dict[str, Any]) -> Dict[str, Any]:
+        checked = _bounded(value)
+        return checked if checked is not None else {}
+
+
+class StaffingFileView(BaseModel):
+    kind: StaffingFileKind
+    source_filename: str
+    headers: List[str]
+    column_mapping: Dict[str, str]
+    row_count: int
+    created_at: Optional[datetime] = None
+
+
+class StaffingMissingEvent(BaseModel):
+    event_key: str
+    seats: int
+
+
+class StaffingSeatSummary(BaseModel):
+    rows: int
+    filled: int
+    unfilled: int
+    without_event_key: int
+    # Seats whose event key the events file does not have: no date to place
+    # them on.
+    missing_event: int
+    missing_event_filled: int
+    missing_event_keys: int
+    missing_event_examples: List[StaffingMissingEvent]
+
+
+class StaffingUnusualEvent(BaseModel):
+    line_number: int
+    date: date
+    activity: str
+    seats: int
+
+
+class StaffingEventSummary(BaseModel):
+    rows: int
+    staffed: int
+    unstaffed: int
+    undated: int
+    undated_examples: List[int]
+    # The years most of the file's events fall in; an event outside them is
+    # flagged as a possible test entry.
+    usual_first_year: Optional[int] = None
+    usual_last_year: Optional[int] = None
+    outside_usual_range: int
+    outside_usual_range_examples: List[StaffingUnusualEvent]
+    upcoming: int
+    overnight: int
+    duplicate_keys: int
+    first_date: Optional[date] = None
+    last_date: Optional[date] = None
+
+
+class StaffingSummary(BaseModel):
+    seats: StaffingSeatSummary
+    events: StaffingEventSummary
+
+
+class StaffingPreview(BaseModel):
+    files: List[StaffingFileView]
+    # The fields each kind of file can map, in display order.
+    fields: Dict[str, List[str]]
+    # True when the seats file carries its events' dates and no events file
+    # is needed.
+    flat_file: bool
+    # What must be chosen before the files can be read together.
+    problems: List[str]
+    summary: Optional[StaffingSummary] = None

@@ -20,6 +20,8 @@ import type {
   HistoricalImportSummary,
   ShiftBatch,
   DrillPreview,
+  StaffingFileKind,
+  StaffingPreview,
   TrainingPreview,
   TrainingSettingsUpdate,
 } from '../types/historicalImport';
@@ -135,6 +137,41 @@ export const historicalImportService = {
   /** Make each held drill a session linked to the chosen requirements; safe to run again. */
   async commitDrills(importId: string): Promise<DrillPreview> {
     const response = await api.post<DrillPreview>(`${BASE}/${importId}/drills/commit`, null, { timeout: 0 });
+    return response.data;
+  },
+
+  async getStaffing(importId: string): Promise<StaffingPreview> {
+    const response = await api.get<StaffingPreview>(`${BASE}/${importId}/staffing`, { timeout: 0 });
+    return response.data;
+  },
+
+  /** Store the seats or events file, replacing one of that kind. */
+  async uploadStaffingFile(importId: string, kind: StaffingFileKind, file: File): Promise<StaffingPreview> {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await api.post<StaffingPreview>(`${BASE}/${importId}/staffing/${kind}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0,
+    });
+    return response.data;
+  },
+
+  /** Replace the whole column mapping of one staffing file; a null header unmaps a field. */
+  async updateStaffingMapping(
+    importId: string,
+    kind: StaffingFileKind,
+    columnMapping: Record<string, string | null>
+  ): Promise<StaffingPreview> {
+    const response = await api.patch<StaffingPreview>(
+      `${BASE}/${importId}/staffing/${kind}`,
+      { column_mapping: columnMapping },
+      { timeout: 0 }
+    );
+    return response.data;
+  },
+
+  async removeStaffingFile(importId: string, kind: StaffingFileKind): Promise<StaffingPreview> {
+    const response = await api.delete<StaffingPreview>(`${BASE}/${importId}/staffing/${kind}`, { timeout: 0 });
     return response.data;
   },
 
