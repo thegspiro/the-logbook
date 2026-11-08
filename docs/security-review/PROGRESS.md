@@ -47813,21 +47813,28 @@ seven `CHECKLIST.md` dimensions:**
    department grants**, by an explicit, audited override
    (`override_seat_eligibility`/`override_reason` on
    `ShiftAssignmentCreate`/`Update`). The permission boundary
-   (`scheduling.manage` + a required reason) is enforced at the endpoint,
-   before the service is ever called, and a self-signup path forces the
-   override off regardless of what the request body carries. A
+   (`scheduling.manage` + a required reason) is enforced at the endpoint
+   before the service is ever called. The two paths get there
+   differently: `create_assignment` forces the override off in its own
+   body for a self-signup, whatever the request carries; `update_assignment`
+   has no such branch, and instead cannot be reached by a self-signing
+   member at all — its endpoint already requires `scheduling.assign` or
+   being the shift's own officer before `update_assignment` runs. A
    successful override is recorded on the assignment's own notes and
    audit-logged only when it actually waived something.
 
 Both gates' shared dependency, `services/member_supervisor_service.py`
 (new, Members feature's own file, not previously reviewed by any
 feature's security pass), was read in full opportunistically: every read
-and write filters `organization_id`, writes lock the organization row
-before the member row in a stated order to avoid deadlock, and loop
-detection re-derives its edge set under that lock with a locking read
-(Pitfall #27) rather than a stale snapshot. (The supervisor _check_ that
-SCH-20 flags is a read-only path and is not covered by this write-side
-locking — the distinction SCH-20 turns on.)
+and write filters `organization_id`. The two writers lock differently:
+`set_supervisor` (which can _add_ a supervision edge) locks the
+organization row before the member row and re-derives the loop-detection
+edge set under that lock with a locking read (Pitfall #27) rather than a
+stale snapshot; `end_current` (which only _removes_ an edge, so cannot
+itself create a loop) locks only the member row and its own assignment
+rows, with no organization lock and no loop check. (The supervisor
+_check_ that SCH-20 flags is a third, read-only path, covered by neither
+writer's locking — the distinction SCH-20 turns on.)
 
 **1 fixed: SCH-19 closed.** `ShiftFinalizeRequest.reported_call_types`/
 `member_call_counts` and `CloseoutCallsRequest.reported_call_types` — the
@@ -47844,10 +47851,14 @@ passes running.
 **Correction note:** this entry and the Open PR note above it originally
 said the time-off review route was `PUT`, claimed the supervisor check
 was re-verified "at the moment of the decision" under lock, described
-crew-request access as opt-in per `user_id`, and said SCH-19 needed no
-dedicated regression test. All four were caught by a Copilot review on
-PR #4115 and corrected here and in the findings file before merge — see
-that PR for the review thread.
+crew-request access as opt-in per `user_id`, said SCH-19 needed no
+dedicated regression test, claimed `update_assignment` has the same
+self-signup override guard `create_assignment` does, and stated the
+organization-lock/loop-detection guarantee as applying to both
+`member_supervisor_service.py` writers rather than to `set_supervisor`
+alone. All six were caught across two rounds of Copilot review on PR
+#4115 and corrected here and in the findings file before merge — see
+that PR for the review threads.
 
 `docs/security-review/SCH-15-scheduling.md`'s **Pass 14** section has the
 full review.

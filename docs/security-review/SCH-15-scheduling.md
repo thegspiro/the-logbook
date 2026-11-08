@@ -257,40 +257,60 @@ reading the `overridable` guard, which requires the position to be
 non-canonical **and** fail `ShiftEligibilityService.seat_is_granted`) raises
 `CodedValueError(SCHED_SEAT_NOT_GRANTED)` so the screen can offer the
 override; `True` waives only that one check. The permission boundary is
-enforced **before** the service is ever called:
-`_seat_override_requested` (`scheduling.py:2631`) 403s unless the caller holds
-`scheduling.manage` and 400s unless a non-empty `override_reason` was given,
-and both `create_assignment`/`update_assignment` force `seat_override=None`
-on a self-signup regardless of what the request body carries
-(`seat_override=None if self_signup else seat_override`) — a member cannot
-reach this path by any payload shape. A successful override is recorded on
-the assignment's own `notes` (`SEAT_OVERRIDE_NOTE` + the reason, never
-silently) and audited by the endpoint (`shift_seat_eligibility_override`,
-WARNING, carrying the org id, assignment id, shift id, member id, seat, and
-the typed reason) only when `last_assignment_overrode_seat` is actually set —
-request-scoped state, reset at the top of every `create_assignment`/
-`update_assignment` call, confirmed by reading both reset sites, so a reused
-`SchedulingService` instance cannot leak one request's override flag into
-another's audit decision (a per-request service instantiation is this
-codebase's own convention, not assumed). `seat_is_granted`
-(`shift_eligibility_service.py:1027`) asks the department, not a member,
-across the same four sources `get_eligible_positions` draws on for an
-individual (open positions, certification-to-seat mapping, training-program
-targets, held position slugs) — a seat none of them name is one nobody could
-ever be eligible for by the ordinary path, which is exactly SCHED-CUSTOM-SEAT's
-own boundary (per-shift waivers are deliberately excluded as sources, since
-they open a seat on one shift rather than granting it).
+enforced **before** the service is ever called, and **the two creation and
+update paths enforce it differently — a distinction an earlier draft of
+this section collapsed into one claim.** `create_assignment` forces
+`seat_override=None if self_signup else seat_override` in its own body, so
+a self-signup payload cannot reach the override whatever it carries —
+confirmed at that one call site. `update_assignment` has no `self_signup`
+parameter or branch at all; it passes `seat_override` straight through to
+`_validate_assignment_edit`. Its safety is a different mechanism, not the
+same one: the endpoint's `_authorize_assignment_management` already
+requires `scheduling.assign` org-wide or being the assignment's own shift
+officer before `update_assignment` is reachable at all (`scheduling.py:351-372`),
+so a self-signing member cannot call this path in the first place, and on
+top of that `_seat_override_requested` (`scheduling.py:2631`) 403s unless
+the caller holds `scheduling.manage` and 400s unless a non-empty
+`override_reason` was given. Both paths end up member-proof; only one does
+it with a `self_signup` guard inside the service itself. A successful
+override is recorded on the assignment's own `notes` (`SEAT_OVERRIDE_NOTE`
+
+- the reason, never silently) and audited by the endpoint
+  (`shift_seat_eligibility_override`, WARNING, carrying the org id,
+  assignment id, shift id, member id, seat, and the typed reason) only when
+  `last_assignment_overrode_seat` is actually set — request-scoped state,
+  reset at the top of every `create_assignment`/`update_assignment` call,
+  confirmed by reading both reset sites, so a reused `SchedulingService`
+  instance cannot leak one request's override flag into another's audit
+  decision (a per-request service instantiation is this
+  codebase's own convention, not assumed). `seat_is_granted`
+  (`shift_eligibility_service.py:1027`) asks the department, not a member,
+  across the same four sources `get_eligible_positions` draws on for an
+  individual (open positions, certification-to-seat mapping, training-program
+  targets, held position slugs) — a seat none of them name is one nobody could
+  ever be eligible for by the ordinary path, which is exactly SCHED-CUSTOM-SEAT's
+  own boundary (per-shift waivers are deliberately excluded as sources, since
+  they open a seat on one shift rather than granting it).
 
 **Opportunistically reviewed, shared dependency:**
 `services/member_supervisor_service.py` is new, backs both gates above, and
 had not been reviewed by any feature's security pass (not mentioned in any
 `docs/security-review/*.md` before this one). Read in full: every read and
-write filters `organization_id` directly; `set_supervisor`/`end_current` lock
-the organization row before the member row (stated lock order, so two writers
-cannot deadlock on each other) and re-derive the loop-detection edge set under
-that lock with a `.with_for_update()` read (Pitfall #27 — a plain `SELECT`
-would answer from the transaction's snapshot, which predates the lock);
-`_require_supervisor` answers the same "must be a current member of the
+write filters `organization_id` directly. **The two writers' locking differs,
+and an earlier draft of this section stated it as one blanket guarantee.**
+`set_supervisor` locks the organization row before the member row (stated
+lock order, so two writers cannot deadlock on each other) and re-derives the
+loop-detection edge set under that lock with a `.with_for_update()` read
+(Pitfall #27 — a plain `SELECT` would answer from the transaction's
+snapshot, which predates the lock) — it is the writer that can _add_ an
+edge, so it is the one that needs the organization-wide lock and the loop
+check. `end_current` (`member_supervisor_service.py:585-612`) only ever
+_removes_ an edge, so it cannot itself create a loop: it locks only the
+member row and that member's own assignment rows
+(`.with_for_update()` on `list_assignments`), takes no organization lock,
+and runs no loop detection — correctly narrower, not under-locked, for what
+it does. `_require_supervisor` answers the same "must be a current member of
+the
 department" message whether the supervisor id belongs to another organization
 or simply does not exist, so the response is not an oracle for ids outside the
 caller's org (Pitfall #14's casing-mismatch-adjacent disclosure shape, handled
