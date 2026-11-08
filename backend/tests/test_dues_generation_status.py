@@ -33,7 +33,11 @@ def _service(due_date: datetime) -> tuple[FinanceService, list]:
     db.add = MagicMock(side_effect=added.append)
 
     service = FinanceService(db)
-    schedule = SimpleNamespace(amount=Decimal("120.00"), due_date=due_date)
+    # A schedule from before the 2026-11-01 terms: bills every member, so the
+    # stand-in needs no membership types or fiscal year.
+    schedule = SimpleNamespace(
+        amount=Decimal("120.00"), due_date=due_date, terms_effective_at=None
+    )
     service.get_dues_schedule = AsyncMock(return_value=schedule)
     return service, added
 

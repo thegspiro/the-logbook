@@ -30,12 +30,14 @@ const createDonation = vi.fn();
 const listDonations = vi.fn();
 const listDonors = vi.fn();
 const listCampaigns = vi.fn();
+const listPledges = vi.fn();
 vi.mock('../services/api', () => ({
   fundraisingService: {
     createDonation: (...args: unknown[]) => createDonation(...args) as unknown,
     listDonations: (...args: unknown[]) => listDonations(...args) as unknown,
     listDonors: (...args: unknown[]) => listDonors(...args) as unknown,
     listCampaigns: (...args: unknown[]) => listCampaigns(...args) as unknown,
+    listPledges: (...args: unknown[]) => listPledges(...args) as unknown,
   },
 }));
 
@@ -62,11 +64,12 @@ const renderAt = (path: string) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
-  for (const m of [createDonation, listDonations, listDonors, listCampaigns]) m.mockReset();
+  for (const m of [createDonation, listDonations, listDonors, listCampaigns, listPledges]) m.mockReset();
   createDonation.mockResolvedValue({ id: 'don-1' });
   listDonations.mockResolvedValue([]);
   listDonors.mockResolvedValue([donor]);
   listCampaigns.mockResolvedValue([campaign]);
+  listPledges.mockResolvedValue([]);
   granted = new Set(['fundraising.view', 'fundraising.manage']);
 });
 
@@ -174,5 +177,81 @@ describe('DonationFormPage', () => {
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Campaign not found'));
     expect(screen.getByRole('heading', { name: 'Record Donation' })).toBeInTheDocument();
+  });
+});
+
+describe('paying toward a pledge', () => {
+  const pledge = (id: string, status: string, overrides: Record<string, unknown> = {}) => ({
+    id,
+    donorId: 'donor-1',
+    campaignId: null,
+    pledgedAmount: '500.00',
+    fulfilledAmount: '100.00',
+    pledgeDate: '2026-09-01',
+    dueDate: null,
+    status,
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    listPledges.mockReset();
+    listPledges.mockResolvedValue([
+      pledge('p-open', 'partial'),
+      pledge('p-late', 'overdue', { pledgedAmount: '900.00' }),
+      pledge('p-done', 'fulfilled', { pledgedAmount: '50.00' }),
+      pledge('p-off', 'cancelled', { pledgedAmount: '75.00' }),
+      pledge('p-other', 'pending', { donorId: 'donor-2', pledgedAmount: '60.00' }),
+    ]);
+  });
+
+  it("offers only the chosen donor's open pledges and sends the one picked", async () => {
+    const user = userEvent.setup();
+    renderAt('/grants/donations/new');
+
+    await screen.findByRole('option', { name: 'Ann Lee (Lee Hardware)' });
+    expect(screen.queryByLabelText(/pays toward a pledge/i)).not.toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText(/^donor \(optional\)/i), 'donor-1');
+
+    const picker = await screen.findByLabelText(/pays toward a pledge/i);
+    expect(listPledges).toHaveBeenCalledWith({ donorId: 'donor-1', limit: 1000 });
+    const offered = Array.from((picker as HTMLSelectElement).options).map((o) => o.value);
+    expect(offered).toEqual(['', 'p-open', 'p-late']);
+
+    await user.type(screen.getByLabelText('Amount'), '150');
+    await user.selectOptions(picker, 'p-open');
+    await user.click(screen.getByRole('button', { name: 'Record donation' }));
+
+    await waitFor(() => expect(createDonation).toHaveBeenCalledTimes(1));
+    const payload = createDonation.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.pledgeId).toBe('p-open');
+    expect(payload.donorId).toBe('donor-1');
+  });
+
+  it('drops the pledge when the donor changes', async () => {
+    const user = userEvent.setup();
+    renderAt('/grants/donations/new?donorId=donor-1');
+
+    await user.selectOptions(await screen.findByLabelText(/pays toward a pledge/i), 'p-open');
+    await user.selectOptions(screen.getByLabelText(/^donor \(optional\)/i), '');
+    expect(screen.queryByLabelText(/pays toward a pledge/i)).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Amount'), '20');
+    await user.click(screen.getByRole('button', { name: 'Record donation' }));
+    await waitFor(() => expect(createDonation).toHaveBeenCalledTimes(1));
+    const payload = createDonation.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.pledgeId).toBeUndefined();
+  });
+
+  it('records the gift without a pledge when the list cannot load', async () => {
+    listPledges.mockReset();
+    listPledges.mockRejectedValue(new Error('down'));
+    const user = userEvent.setup();
+    renderAt('/grants/donations/new?donorId=donor-1');
+
+    await waitFor(() => expect(listPledges).toHaveBeenCalled());
+    expect(screen.queryByLabelText(/pays toward a pledge/i)).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Amount'), '20');
+    await user.click(screen.getByRole('button', { name: 'Record donation' }));
+    await waitFor(() => expect(createDonation).toHaveBeenCalledTimes(1));
   });
 });

@@ -20,6 +20,7 @@ from fastapi import BackgroundTasks, HTTPException
 
 from app.api.v1.endpoints.users import update_contact_info
 from app.schemas.user import ContactInfoUpdate
+from tests.fake_request import fake_request
 
 pytestmark = pytest.mark.unit
 
@@ -76,6 +77,7 @@ async def _save(caller, target, payload, *, stepup=None):
             BackgroundTasks(),
             db=db,
             current_user=caller,
+            request=fake_request(),
         )
     return SimpleNamespace(db=db, audit=audit, notify=notify, stepup=ensure)
 

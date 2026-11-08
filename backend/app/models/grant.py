@@ -1168,6 +1168,15 @@ class Donation(Base):
         ForeignKey("donors.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # The pledge this gift pays toward (owner decision, 2026-11-01). Recording,
+    # editing or refunding such a donation moves the pledge's fulfilled amount
+    # and status (FundraisingService). SET NULL: a gift outlives a pledge
+    # record somebody removes.
+    pledge_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("pledges.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Financial
     amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
@@ -1258,6 +1267,7 @@ class Donation(Base):
     __table_args__ = (
         Index("idx_donations_campaign", "campaign_id"),
         Index("idx_donations_donor", "donor_id"),
+        Index("idx_donations_pledge", "pledge_id"),
         Index("idx_donations_date", "donation_date"),
         Index("idx_donations_status", "organization_id", "payment_status"),
         Index("idx_donations_method", "organization_id", "payment_method"),

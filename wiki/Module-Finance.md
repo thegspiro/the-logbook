@@ -65,6 +65,7 @@ may still deny (withdraw) it.
 | Check requests           | `/finance/check-requests`           | `finance.request`, `finance.view` or `finance.manage` |
 | Approvals                | `/finance/approvals`                | `finance.approve`                                     |
 | Reports                  | `/finance/reports`                  | `finance.view`                                        |
+| My Dues                  | `/finance/my-dues`                  | any member (their own dues)                           |
 | Dues                     | `/finance/dues`                     | `finance.view` (writes need `finance.manage`)         |
 | Finance Settings         | `/finance/settings`                 | `finance.manage`                                      |
 | Approval Chains          | `/finance/settings/approval-chains` | `finance.configure_approvals`                         |
@@ -125,7 +126,10 @@ will actually take before it is sent.
   The member picks each expense's **budget line**; approving the report
   **commits** those amounts to the lines, and paying it moves them to spent.
   **Every line needs an uploaded receipt** before **Submit for Approval** is
-  enabled. Lines can be edited or removed only while the report is a draft.
+  enabled; one upload can be used on several lines of the same report, and a
+  **Mileage** line can record its trips instead (priced at the department's
+  mileage rate, set under **Settings → Approval chains**). Lines can be edited
+  or removed only while the report is a draft.
 - **Check request** — a payment by check; **Issue Check** records the check
   number and date, and waits until the **receipt or invoice is uploaded** to
   the request (not for a cash advance or a reimbursement check, whose
@@ -205,9 +209,19 @@ cannot give the second approval as well.
 - **Cash advance** — on a new check request, tick **This is a cash advance to
   me**. It charges no budget line. The member accounts for it with an expense
   report (**Accounts for a cash advance**) and the office records any unspent
-  cash with **Record returned cash**. An advance still outstanding **120 days**
-  after its check is overdue, and the member cannot take another until it is
+  cash with **Record returned cash**. An advance still outstanding past its
+  deadline is overdue, and the member cannot take another until it is
   settled. **Reports → Cash advances** lists what is owed.
+- **Advance deadline** _(2026-11-06)_ — the department chooses the IRS method
+  on **Approval Chains → Cash advance deadline**: **Fixed date** (120 days
+  after the check, the default) or **Quarterly statements** (the member is
+  emailed a statement at each calendar-quarter end, and has 120 days from the
+  first). An advance keeps the method in force when its check was issued.
+- **On a member's behalf** _(2026-11-06)_ — the finance office can raise an
+  advance for a member (**Advance for**). The member holds it and is the payee;
+  the officer who raised it cannot approve it or issue its check.
+- **At year-end close** _(2026-11-06)_ — the lock dialog lists the year's
+  outstanding advances apart; they do not stop the lock.
 - **Paying back a purchase** — a member who paid for an approved purchase with
   their own money chooses **Request Reimbursement** on it. That creates a draft
   expense report with the purchase copied in. Once the report is approved, the
@@ -248,9 +262,15 @@ Next year is built in a **draft** fiscal year, which moves through stages on
 
 Any stage before adoption can be moved back one step. Emails go out when a
 deadline is set or changed, when a request is submitted (to the Treasurer) and
-decided (to the owner), and 7 days and 1 day before the deadline to owners who
-have not asked. They are **email only**, under two optional email kinds that are
-on by default: _Next year's budget requests_ and _Treasurer duties_.
+decided (to the owner), and before the deadline to owners who have not asked —
+7 days and 1 day before unless the department sets its own days under **Budget
+request reminders** on **Finance › Settings** (`finance.manage`), which can
+also add a notification-bell entry to each reminder. Otherwise they are
+**email only**, under two optional email kinds that are on by default: _Next
+year's budget requests_ and _Treasurer duties_. Finance managers are also
+emailed, once, when an adopted year reaches its start date and when the
+active year passes its end date (`fiscal_year_due_reminders`); neither starts
+or closes anything.
 
 ## Closing the year
 
@@ -265,18 +285,23 @@ on by default: _Next year's budget requests_ and _Treasurer duties_.
 ## Dues
 
 **Finance → Dues** (`finance.manage` for every write): **New schedule** (name,
-amount, frequency, due date), **Generate dues** for the eligible members,
-**Record payment** (partial payments add up), **Waive**, **Reverse waiver** and
-**Payment history**. A payment with a transaction reference cannot be recorded
-twice.
+amount, frequency, due date, grace period, late fee, fiscal year, the
+membership types it applies to), **Generate dues** for the members it applies
+to, **Record payment** (partial payments add up), **Waive**, **Reverse waiver**
+and **Payment history**, which names who recorded each payment. A payment with
+a transaction reference cannot be recorded twice.
 
-- **No dues reminders are sent** — nothing emails a member about dues.
-- A schedule's grace period, late fee and membership-type fields are stored but
-  not used, so the form does not offer them.
+- **Late fees** _(2026-11-06)_ are added once, by a daily task, to dues still
+  owing after the due date plus the grace period.
+- **Schedules from before 2026-11-06** keep billing every active member with no
+  late fee until saved; the form warns first.
+- **Finance → My Dues** shows every member their own dues, and members are
+  emailed a week before their dues fall due and once when overdue (the optional
+  _Your dues_ email kind).
 
 ## Reports
 
-**Reports** (`finance.view`) has seven tabs, each with a CSV download and a
+**Reports** (`finance.view`) has ten tabs, each with a CSV download and a
 **Print** view (use the browser's _Save as PDF_ for a PDF):
 
 | Report                       | Answers                                                                                     |
@@ -288,6 +313,9 @@ twice.
 | Restricted funds             | Each restricted fund's received, spent, committed and available                             |
 | Cash advances                | Advances not yet fully accounted for, and the overdue part                                  |
 | Outside the accountable plan | Expense lines claimed after the deadline, for payroll                                       |
+| Expenses by member           | What each member was reimbursed in a period (the payments register, by member)              |
+| Dues delinquency             | Dues due in a period: collection totals, and each member overdue today                      |
+| Purchases by vendor          | A year's approved and paid purchase requests, by vendor                                     |
 
 The functional class is set on a budget category and inherited by its
 subcategories; the office can override it on a single payment.
@@ -325,6 +353,30 @@ Rules worth knowing:
 - One export runs at a time per department.
 - In QuickBooks itself, turn off account numbers and the duplicate journal
   number warning before importing; the page lists QuickBooks' requirements.
+
+### QuickBooks Online connection (2026-11-06)
+
+Instead of importing files, a department can connect its QuickBooks Online
+company: **Connect to QuickBooks** at the top of **QuickBooks Export**
+(`finance.manage`). It appears once the server has an Intuit app configured
+(`QBO_CLIENT_ID`, `QBO_CLIENT_SECRET`, `QBO_REDIRECT_URI`, `QBO_ENVIRONMENT` —
+see [Upgrading](https://github.com/thegspiro/the-logbook/blob/main/docs/UPGRADING.md));
+until then the card says it is not configured and the export works as above.
+
+- Paid purchase requests, issued checks and paid expense reports made on or
+  after the connection date post every five minutes (or with **Post now**) as
+  QuickBooks expenses to their vendors, using the same account mappings. A
+  missing vendor is created.
+- Each is posted once, and shows **Accepted by QuickBooks** with QuickBooks'
+  record number on the card and on its detail page. A posted payment never
+  goes in a file.
+- The paid-from account must be a QuickBooks **Bank** account. A payment
+  QuickBooks refuses shows the reason and **Send again**; it may instead go in
+  the next file.
+- Cash advances, dues, advance returns and voided checks still go in the file.
+  Void a posted check in QuickBooks too.
+- **Disconnect** revokes the connection; payments still waiting go back to
+  the file.
 
 ## Edge cases
 

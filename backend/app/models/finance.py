@@ -1415,6 +1415,19 @@ class ExpenseLineItem(Base):
         nullable=True,
     )
     merchant: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    # A mileage line's trip log (owner decision 2026-11-01: record trips in
+    # the form instead of uploading a log). One canonical shape, settled by
+    # app/services/expense_mileage.py on every write (Pitfall #20):
+    # [{"trip_date": "YYYY-MM-DD", "from_location", "to_location", "purpose",
+    #   "miles": "12.5"}], miles as a decimal string so no float rounds them.
+    # A line with a log takes its amount from miles x mileage_rate and needs
+    # no uploaded receipt; null or empty is an ordinary line.
+    mileage_trips: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    # The department's rate per mile when the log was priced, kept so a later
+    # change to the rate does not reprice a line already claimed.
+    mileage_rate: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(6, 3), nullable=True
+    )
     # Submitted more than the department's substantiation deadline after it
     # was incurred, decided once at submission so a later change to the rule
     # does not re-grade a submitted report.
@@ -1491,6 +1504,22 @@ class CheckRequest(Base):
     # budget line or fund: the expense report that accounts for it does.
     is_advance: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
+    )
+    # The finance officer who raised an advance on behalf of the member in
+    # ``requested_by`` (owner decision 2026-11-01). The member stays the
+    # holder -- the one who owes it, is reminded and is blocked while it is
+    # overdue -- and the raiser may neither approve nor issue it. Null: the
+    # member raised it themselves.
+    raised_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    # How an advance's return deadline is worked out, fixed when its check is
+    # issued from the department's setting at that moment, so changing the
+    # setting never moves the deadline of an advance already paid out
+    # (app/services/cash_advances.py). Null reads as the fixed-date method,
+    # the only one before 2026-11-06.
+    advance_return_method: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
     )
     # The approved expense report this check reimburses the member for. Like
     # an advance it charges no budget line or fund -- the report's lines do --
@@ -1683,6 +1712,53 @@ class AdvanceReturn(Base):
     )
 
 
+class AdvanceStatement(Base):
+    """A quarterly statement emailed to a cash advance's holder.
+
+    Only an advance on the periodic-statement method has them
+    (app/services/cash_advances.py works out when each is due, and
+    app/services/cash_advance_statements.py sends them). The row is the
+    delivery record: what the statement listed as outstanding and when it
+    reached the member's inbox. The unique key is what makes a second run of
+    the scheduled task, or two at once, send a statement once (CLAUDE.md
+    pitfall #36).
+    """
+
+    __tablename__ = "advance_statements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    advance_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("check_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # The quarter's last day on the department's calendar.
+    statement_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # The last day to account for or return what it lists.
+    due_date: Mapped[date] = mapped_column(Date, nullable=False)
+    outstanding: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    # Null until the mailer accepted it; a row left null by a crash is sent
+    # on the next run.
+    emailed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "advance_id", "statement_date", name="uq_advance_statement_quarter"
+        ),
+        Index("ix_advance_statements_org", "organization_id"),
+    )
+
+
 # ============================================
 # Phase 4: Dues & Assessments
 # ============================================
@@ -1720,6 +1796,16 @@ class DuesSchedule(Base):
     )
     applies_to_membership_types: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
+    )
+    # When the four terms above (grace period, late fee, fiscal year,
+    # membership types) began to apply. NULL is a schedule saved before they
+    # were read (owner decision 2026-11-01): it keeps billing every active
+    # member and charges no late fee, whatever those columns hold, until it is
+    # next saved. A late fee is charged only on dues whose grace period ends
+    # after this instant, so turning the terms on never charges a fee for a
+    # lateness that happened before. Set by create/update_dues_schedule.
+    terms_effective_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     # The QuickBooks accounts this schedule's payments post to: the income
     # account credited and the bank account debited. Null takes the
@@ -1799,8 +1885,19 @@ class MemberDues(Base):
     transaction_reference: Mapped[Optional[str]] = mapped_column(
         String(200), nullable=True
     )
+    # The late fee charged on these dues, already included in amount_due. Its
+    # being set is also what stops the daily dues_late_fees task charging it
+    # again (pitfall #36): the task's UPDATE requires it to be NULL.
     late_fee_applied: Mapped[Optional[Decimal]] = mapped_column(
         Numeric(12, 2), nullable=True
+    )
+    # When the dues_reminders task emailed the member that these dues are
+    # coming due / are overdue; each is sent at most once per record.
+    due_reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    overdue_reminder_sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     waived_by: Mapped[Optional[str]] = mapped_column(
         String(36),
@@ -2075,3 +2172,140 @@ class QuickBooksChartAccount(Base):
     )
 
     __table_args__ = (Index("ix_finance_qb_chart_accounts_org_id", "organization_id"),)
+
+
+class QuickBooksConnection(Base):
+    """A department's connection to its QuickBooks Online company.
+
+    One row per department. The tokens Intuit issues are encrypted at rest;
+    the refresh token changes as Intuit rotates it, and the newest one is the
+    only one kept ("Always store the latest refresh_token value", Intuit's
+    OAuth 2.0 guide). ``pending_attempt`` holds the one connect attempt in
+    flight (its nonce, who started it, when it expires), encrypted too, so a
+    callback can be completed once and only by the browser that began it.
+    """
+
+    __tablename__ = "quickbooks_connections"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    # disconnected, connected, or reconnect_required (Intuit refused the
+    # refresh token or the scope; posting waits until someone reconnects).
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="disconnected"
+    )
+    # sandbox or production: the environment the tokens were issued for, so a
+    # change of QBO_ENVIRONMENT does not send them to the other one.
+    environment: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    # The QuickBooks company (Intuit's realmId) the tokens reach.
+    realm_id: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    access_token: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    refresh_token: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    access_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    refresh_token_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    pending_attempt: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    # Payments made before this are left to the CSV export: connecting must
+    # not post a department's history into books that already hold it.
+    post_from: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    connected_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    connected_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_sync_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # A run holds this lease while it talks to Intuit, so the scheduled task
+    # and a Treasurer's "Post now" never refresh the same token at once.
+    sync_lease_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class QuickBooksPosting(Base):
+    """One payment's journey to QuickBooks Online as a Purchase.
+
+    The unique key on (organization, payment type, payment) is what makes a
+    payment post once whatever runs twice: a second sweep finds the row and
+    leaves it. ``request_id`` is sent as Intuit's ``requestid``, which makes
+    Intuit answer a resent create with the original response instead of a
+    second Purchase; it is kept across transient failures and replaced only
+    after Intuit refused the request outright, when nothing was created.
+    """
+
+    __tablename__ = "quickbooks_postings"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # purchase_request, check_request or expense_report.
+    payment_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    payment_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    document_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    # queued, retrying (sent, outcome unknown or temporarily refused: resent
+    # with the same request id), posted, failed (refused; nothing created),
+    # or superseded (sent in a CSV export file instead).
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
+    request_id: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    realm_id: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    qb_purchase_id: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    qb_vendor_id: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    vendor_name: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    next_attempt_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_error: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    posted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "payment_type",
+            "payment_id",
+            name="uq_quickbooks_postings_payment",
+        ),
+        # QuickBooks ids are unique within one company; two postings naming
+        # the same Purchase would mean one payment was recorded twice.
+        UniqueConstraint(
+            "realm_id", "qb_purchase_id", name="uq_quickbooks_postings_purchase"
+        ),
+        Index("ix_quickbooks_postings_org_status", "organization_id", "status"),
+    )

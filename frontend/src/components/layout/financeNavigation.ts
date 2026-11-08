@@ -54,6 +54,9 @@ export function financeNavItems(
     ...(options.plansNextYear
       ? [{ label: "Next year's budget", path: '/finance/budget-requests', anyPermission: [...FINANCE_NAV_PERMISSIONS] }]
       : []),
+    // Every member who sees the group: anyone may owe dues, and the page says
+    // so plainly when they owe none (owner decision 2026-11-01).
+    { label: 'My Dues', path: '/finance/my-dues', anyPermission: [...FINANCE_NAV_PERMISSIONS] },
     {
       label: 'Budget requests',
       path: '/finance/budget-requests/review',

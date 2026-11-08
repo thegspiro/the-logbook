@@ -33,8 +33,10 @@ import {
   CheckRequestStatus,
   CHECK_REQUEST_STATUS_COLORS,
   APPROVAL_STEP_STATUS_COLORS,
+  QuickBooksPaymentType,
 } from '../types';
 import { ApprovalStepActions } from '../components/ApprovalStepActions';
+import { QuickBooksPostingNote } from '../components/QuickBooksPostingNote';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Draft',
@@ -391,6 +393,7 @@ const CheckRequestDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-sm">{formatDateTime(cr.qbExportedAt, tz)}</p>
             </div>
           )}
+          <QuickBooksPostingNote paymentType={QuickBooksPaymentType.CHECK_REQUEST} paymentId={cr.id} />
           {cr.voidedAt && (
             <div>
               <p className="text-theme-text-secondary text-xs">Voided</p>

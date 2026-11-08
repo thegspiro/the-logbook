@@ -481,6 +481,35 @@ describe('locking a closing year', () => {
     expect(within(dialog).getByRole('button', { name: 'Lock the year' })).toBeDisabled();
   });
 
+  it('lists an outstanding cash advance apart, without it stopping the lock', async () => {
+    const user = userEvent.setup();
+    openItems.mockResolvedValue([
+      {
+        kind: 'cash_advance',
+        entityId: 'cr-adv',
+        number: 'CK-2026-0007',
+        description: 'Alice Member',
+        status: 'overdue',
+        amount: '120.00',
+        blocksLock: false,
+      },
+    ]);
+    renderPage(closing());
+
+    await user.click(screen.getByRole('button', { name: 'Lock' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(await within(dialog).findByRole('link', { name: 'CK-2026-0007' })).toHaveAttribute(
+      'href',
+      '/finance/check-requests/cr-adv'
+    );
+    expect(dialog).toHaveTextContent('1 cash advance still outstanding');
+    expect(dialog).toHaveTextContent('Cash advance · overdue · $120.00');
+    expect(dialog).toHaveTextContent('Nothing is open');
+    expect(dialog).not.toHaveTextContent('still open');
+    expect(within(dialog).getByRole('button', { name: 'Lock the year' })).toBeEnabled();
+  });
+
   it('needs the reconciliation notes, then locks with them', async () => {
     const user = userEvent.setup();
     renderPage(closing());

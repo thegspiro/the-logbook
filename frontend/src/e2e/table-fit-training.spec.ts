@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { json, signIn, TEST_USER } from './helpers';
 import { TABLE_FIT_VIEWPORTS, expectTableFitsItsCard } from './tableFit';
 
@@ -59,11 +59,13 @@ const skillTemplates = TEMPLATE_NAMES.map((name, i) => ({
 
 const TRAINING_PERMISSIONS = [...TEST_USER.permissions, 'training.view', 'training.manage'];
 
-// A member's training history: eight columns (course with code and
-// certificate number, type, dates, hours, status with a void reason, files,
-// actions). It sits in an overflow-hidden card, so a table wider than the card
-// on a tablet or laptop is clipped rather than scrolled.
-test.describe('Member training history table fits its card', () => {
+// A member's training history: one list item per record, carrying a long
+// course name and code, certificate number, a void reason, status badges and
+// up to three action buttons that grow to 44px on a touch screen. It sits in
+// an overflow-hidden card, so anything wider than the card is clipped rather
+// than scrolled. It was an eight-column table until 2026-11; the list has to
+// fit at every width the table had to.
+test.describe('Member training history list fits its card', () => {
   for (const viewport of TABLE_FIT_VIEWPORTS) {
     test(`/members/:userId/training — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
@@ -71,11 +73,21 @@ test.describe('Member training history table fits its card', () => {
       await page.route('**/api/v1/training/records**', (route) => void route.fulfill(json(trainingRecords)));
       await page.goto(`/members/${MEMBER_ID}/training`);
 
-      const table = page
-        .getByRole('table')
-        .filter({ has: page.getByRole('columnheader', { includeHidden: true, name: 'Expires', exact: true }) });
-      await table.waitFor();
-      await expectTableFitsItsCard(table, 'Member training history table');
+      // All Time, because the fixtures are dated 2026-03-14 and the default
+      // period would hide them once the calendar year turns.
+      await page.getByRole('combobox', { name: 'Training period' }).selectOption('lifetime');
+      const list = page.getByRole('list', { name: 'Training records' });
+      await expect(list.getByRole('listitem').first()).toBeVisible();
+      const overflow = await list.evaluate((el) => {
+        const card = el.parentElement;
+        const room = card ? card.clientWidth : 0;
+        const widest = Math.max(
+          Math.ceil(el.getBoundingClientRect().width),
+          ...Array.from(el.children).map((li) => li.scrollWidth)
+        );
+        return widest - room;
+      });
+      expect(overflow, `Member training history list is ${overflow}px wider than its card`).toBeLessThanOrEqual(0);
     });
   }
 });

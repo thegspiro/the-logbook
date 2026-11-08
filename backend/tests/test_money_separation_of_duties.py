@@ -3,7 +3,9 @@ FIN-4 / storefront SoD (owner decision 2026-08-09): the person who disburses
 money must not be the same person the record is about. A finance requester can't
 mark their own PR/expense paid or issue their own check or waive their own dues;
 a storefront manager can't settle/waive/refund their own order. The out-of-band
-reconciliation path (actor_id=None) is exempt. DB mocked; no MySQL.
+reconciliation path (actor_id=None) is exempt. A finance officer who raised a
+cash advance on a member's behalf can neither approve nor issue it (owner
+decision 2026-11-01). DB mocked; no MySQL.
 """
 
 from decimal import Decimal
@@ -12,8 +14,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.models.finance import ApprovalEntityType
 from app.models.storefront import StoreOrderStatus, StorePaymentStatus
 from app.services.finance_service import FinanceService
+from app.services.separation_of_duties import SeparationOfDutiesError
 from app.services.storefront_service import StorefrontService
 
 
@@ -51,6 +55,29 @@ class TestFinanceDisbursementSoD:
         svc = FinanceService(db)
         with pytest.raises(ValueError, match="cannot issue your own check request"):
             await svc.issue_check("cr1", "org1", "1001", acted_by="u1")
+
+    async def test_officer_cannot_issue_an_advance_they_raised_for_a_member(self):
+        # Owner decision 2026-11-01: a finance officer may raise a cash
+        # advance for a named member, who holds it; the officer is recorded
+        # as raised_by and is then bound like a requester.
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=_one(SimpleNamespace(requested_by="member", raised_by="u2"))
+        )
+        db.scalar = AsyncMock(return_value=None)
+        svc = FinanceService(db)
+        with pytest.raises(SeparationOfDutiesError, match="You raised this cash"):
+            await svc.issue_check("cr1", "org1", "1001", acted_by="u2")
+
+    async def test_officer_cannot_approve_an_advance_they_raised_for_a_member(self):
+        svc = FinanceService(MagicMock())
+        svc._lock_unrouted_entity = AsyncMock(return_value=SimpleNamespace())
+        svc._entity_creator_id = AsyncMock(return_value="member")
+        svc._entity_raiser_id = AsyncMock(return_value="u2")
+        with pytest.raises(SeparationOfDutiesError, match="You raised this cash"):
+            await svc.manual_approve(
+                ApprovalEntityType.CHECK_REQUEST, "cr1", "u2", org_id="org1"
+            )
 
     async def test_member_cannot_waive_own_dues(self):
         db = MagicMock()

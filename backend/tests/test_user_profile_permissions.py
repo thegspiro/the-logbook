@@ -16,6 +16,7 @@ from fastapi import BackgroundTasks, HTTPException
 
 from app.api.v1.endpoints.users import update_contact_info, update_user_profile
 from app.schemas.user import ContactInfoUpdate, UserUpdate
+from tests.fake_request import fake_request
 
 pytestmark = [pytest.mark.unit]
 
@@ -52,7 +53,11 @@ class TestColleagueProfileWrite:
 
         with pytest.raises(HTTPException) as exc:
             await update_user_profile(
-                uuid4(), UserUpdate(first_name="Changed"), db, caller
+                uuid4(),
+                UserUpdate(first_name="Changed"),
+                db,
+                caller,
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 403
@@ -68,7 +73,11 @@ class TestColleagueProfileWrite:
 
         with pytest.raises(HTTPException) as exc:
             await update_user_profile(
-                uuid4(), UserUpdate(first_name="Changed"), db, caller
+                uuid4(),
+                UserUpdate(first_name="Changed"),
+                db,
+                caller,
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 404
@@ -80,7 +89,11 @@ class TestColleagueProfileWrite:
 
         with pytest.raises(HTTPException) as exc:
             await update_user_profile(
-                caller.id, UserUpdate(first_name="Changed"), db, caller
+                caller.id,
+                UserUpdate(first_name="Changed"),
+                db,
+                caller,
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 404
@@ -98,6 +111,7 @@ class TestColleagueContactInfoWrite:
                 BackgroundTasks(),
                 db=db,
                 current_user=caller,
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 403
@@ -116,6 +130,7 @@ class TestColleagueContactInfoWrite:
                 BackgroundTasks(),
                 db=db,
                 current_user=caller,
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 404
@@ -132,6 +147,7 @@ class TestColleagueContactInfoWrite:
                 BackgroundTasks(),
                 db=db,
                 current_user=caller,
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 404
@@ -153,6 +169,7 @@ async def test_a_member_cannot_change_their_own_hire_date():
             UserUpdate(hire_date=date(1980, 1, 1)),
             db,
             caller,
+            request=fake_request(),
         )
 
     assert exc.value.status_code == 403
@@ -185,6 +202,7 @@ async def test_a_member_cannot_probe_the_tier_ladder_through_member_status():
             UserUpdate(member_status="not-a-real-tier"),
             db,
             caller,
+            request=fake_request(),
         )
 
     assert exc.value.status_code == 403
@@ -210,6 +228,7 @@ async def test_members_manage_still_reaches_the_tier_validator():
             UserUpdate(member_status="not-a-real-tier"),
             db,
             caller,
+            request=fake_request(),
         )
 
     assert exc.value.status_code == 400

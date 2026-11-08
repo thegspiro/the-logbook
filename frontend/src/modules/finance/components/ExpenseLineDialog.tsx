@@ -10,6 +10,11 @@
  * 2026-11-01); approving the report commits it there. A line copied from a
  * purchase request keeps the request's, which stays selectable even under an
  * inactive category, as the server accepts it unchanged.
+ *
+ * A mileage line may carry a trip log instead of an amount and a receipt
+ * (owner decision 2026-11-01). While it has trips the server prices and
+ * dates it, so the amount and date fields give way to the log; every save
+ * sends the log, or null once it is emptied, so a removed log is cleared.
  */
 
 import React, { useState } from 'react';
@@ -26,6 +31,9 @@ import { budgetOptionLabel, selectableBudgetOptions, useRequestFormOptions } fro
 import { EXPENSE_TYPE_OPTIONS, expenseLineSchema } from '../utils/expenseLines';
 import { MAX_MONEY_AMOUNT, MIN_MONEY_AMOUNT } from '../utils/moneyLimits';
 import { FundSelect } from './FundSelect';
+import { MileageTripLog } from './MileageTripLog';
+import { useMileageRate } from '../hooks/useMileageRate';
+import { fromStoredTrips, priceTrips, toTripPayload, tripLogError, type TripEntry } from '../utils/mileage';
 import { ExpenseType, type ExpenseLineItem } from '../types';
 
 interface ExpenseLineDialogProps {
@@ -57,13 +65,29 @@ export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({
   const [merchant, setMerchant] = useState(line?.merchant ?? '');
   const [fundCampaignId, setFundCampaignId] = useState(line?.fundCampaignId ?? '');
   const [budgetId, setBudgetId] = useState(line?.budgetId ?? '');
+  const [trips, setTrips] = useState<TripEntry[]>(fromStoredTrips(line?.mileageTrips));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const { rate: mileageRate } = useMileageRate();
 
-  const late = lateWarning(dateIncurred);
+  const isMileage = expenseType === ExpenseType.MILEAGE;
+  // A log only counts while the line is mileage and the department has a rate.
+  const logged = isMileage && Boolean(mileageRate) && trips.length > 0;
+  const previewAmount = logged ? priceTrips(trips, mileageRate) : null;
+  const late = logged ? null : lateWarning(dateIncurred);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (logged) {
+      const problem = description.trim() ? tripLogError(trips) : 'Description is required';
+      if (problem) {
+        setError(problem);
+        return;
+      }
+      setError('');
+      void save();
+      return;
+    }
     const parsed = expenseLineSchema.safeParse({
       description: description.trim(),
       amount: Number(amount),
@@ -86,23 +110,26 @@ export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({
     setSaving(true);
     try {
       const value = Number(amount).toFixed(2);
+      // With a log, the server works out the amount and the date.
+      const priced = logged
+        ? { mileageTrips: toTripPayload(trips) }
+        : { amount: value, ...(line && dateIncurred === initialDate ? {} : { dateIncurred: dateValue() }) };
       if (line) {
         await expenseReportService.updateLineItem(reportId, line.id, {
           description: description.trim(),
-          amount: value,
           expenseType: expenseType as ExpenseType,
           merchant: blankToNull(merchant),
           fundCampaignId: blankToNull(fundCampaignId),
           budgetId: blankToNull(budgetId),
-          ...(dateIncurred !== initialDate ? { dateIncurred: dateValue() } : {}),
+          mileageTrips: null,
+          ...priced,
         });
         toast.success('Line updated');
       } else {
         await expenseReportService.addLineItem(reportId, {
           description: description.trim(),
-          amount: value,
-          dateIncurred: dateValue(),
           expenseType: expenseType as ExpenseType,
+          ...priced,
           ...(merchant.trim() ? { merchant: merchant.trim() } : {}),
           ...(fundCampaignId ? { fundCampaignId } : {}),
           ...(budgetId ? { budgetId } : {}),
@@ -156,41 +183,45 @@ export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({
           />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="expense-line-amount" className="form-label">
-              Amount *
-            </label>
-            <input
-              id="expense-line-amount"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min={MIN_MONEY_AMOUNT}
-              max={MAX_MONEY_AMOUNT}
-              className="form-input"
-              placeholder="0.00"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </div>
-          <div>
-            <label htmlFor="expense-line-date" className="form-label">
-              Date *
-            </label>
-            <input
-              id="expense-line-date"
-              type="date"
-              className="form-input"
-              value={dateIncurred}
-              onChange={(e) => setDateIncurred(e.target.value)}
-              aria-describedby={late ? 'expense-line-late' : undefined}
-            />
-            {late && (
-              <p id="expense-line-late" className="mt-1 text-xs text-amber-800 dark:text-amber-300" role="status">
-                {late}
-              </p>
-            )}
-          </div>
+          {!logged && (
+            <div>
+              <label htmlFor="expense-line-amount" className="form-label">
+                Amount *
+              </label>
+              <input
+                id="expense-line-amount"
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min={MIN_MONEY_AMOUNT}
+                max={MAX_MONEY_AMOUNT}
+                className="form-input"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+          )}
+          {!logged && (
+            <div>
+              <label htmlFor="expense-line-date" className="form-label">
+                Date *
+              </label>
+              <input
+                id="expense-line-date"
+                type="date"
+                className="form-input"
+                value={dateIncurred}
+                onChange={(e) => setDateIncurred(e.target.value)}
+                aria-describedby={late ? 'expense-line-late' : undefined}
+              />
+              {late && (
+                <p id="expense-line-late" className="mt-1 text-xs text-amber-800 dark:text-amber-300" role="status">
+                  {late}
+                </p>
+              )}
+            </div>
+          )}
           <div>
             <label htmlFor="expense-line-type" className="form-label">
               Type *
@@ -223,6 +254,15 @@ export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({
             />
           </div>
         </div>
+        {isMileage && (
+          <MileageTripLog
+            idPrefix="expense-line"
+            trips={trips}
+            onChange={setTrips}
+            rate={mileageRate}
+            today={getTodayLocalDate(tz)}
+          />
+        )}
         <div>
           <label htmlFor="expense-line-budget" className="form-label">
             Budget line
@@ -249,7 +289,7 @@ export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({
           id="expense-line-fund"
           value={fundCampaignId}
           onChange={setFundCampaignId}
-          amount={Number(amount) || 0}
+          amount={Number(previewAmount ?? amount) || 0}
           funds={funds}
           mode={fundMode}
         />

@@ -1504,6 +1504,35 @@ class Settings(BaseSettings):
     AUTHENTIK_ALLOWED_DOMAINS: str = ""
 
     # ============================================
+    # QuickBooks Online (Finance live posting)
+    # ============================================
+    # The Intuit developer app a department connects its QuickBooks Online
+    # company through (Finance > QuickBooks Export). While any of the three
+    # is blank the connection reads "not configured" and nothing is posted;
+    # the CSV export works either way. Take the keys from the app's Keys &
+    # OAuth page on developer.intuit.com: the Development keys for a sandbox
+    # company, the Production keys for real books.
+    QBO_CLIENT_ID: str | None = None
+    QBO_CLIENT_SECRET: str | None = None
+    # Absolute URL Intuit redirects back to after consent. Must exactly match
+    # a redirect URI listed on the app (casing, scheme and trailing slash
+    # included), e.g.
+    # https://app.example.org/api/v1/finance/quickbooks/oauth/callback
+    QBO_REDIRECT_URI: str | None = None
+    # "sandbox" posts to Intuit's sandbox companies, "production" to real
+    # ones. Sandbox by default, so keys pasted without this set cannot post
+    # into a department's live books by accident.
+    QBO_ENVIRONMENT: str = "sandbox"
+
+    @field_validator("QBO_ENVIRONMENT")
+    @classmethod
+    def _validate_qbo_environment(cls, value: str) -> str:
+        normalized = (value or "").strip().lower()
+        if normalized not in ("sandbox", "production"):
+            raise ValueError("QBO_ENVIRONMENT must be 'sandbox' or 'production'")
+        return normalized
+
+    # ============================================
     # Calendar publishing (Google Calendar / Outlook)
     # ============================================
     # One-way publishing of department events to a dedicated Google or

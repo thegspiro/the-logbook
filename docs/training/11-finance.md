@@ -180,7 +180,7 @@ The year becomes the current period for all financial operations, and each line 
 
 ### Closing and Locking a Fiscal Year
 
-When the year ends, the Treasurer closes it in two steps. Once the end date has passed, a banner on **Finance > Settings** reminds you.
+When the year ends, the Treasurer closes it in two steps. Once the end date has passed, a banner on **Finance > Settings** reminds you, and every finance manager is emailed once, _"{year} has ended: begin its year-end close"_. Likewise, when an adopted year reaches its start date you are emailed _"{year} can be started"_. Neither step happens on its own; the emails come under the _Treasurer duties_ email kind.
 
 **1. Begin year-end close.** Select **Begin year-end close** on the active year and confirm. The year's badge reads **Closing**. From now on:
 
@@ -190,7 +190,7 @@ When the year ends, the Treasurer closes it in two steps. Once the end date has 
 
 If you began the close by mistake, **Reopen** makes it the active year again (as long as no other year has been started).
 
-**2. Lock it.** Once everything is settled, select **Lock**. The dialog lists anything still open — submitted requests awaiting a decision, approved purchases or reports not yet paid, approved checks not yet issued — each linked so you can finish it. The lock stays disabled until the list is empty. Then enter your **reconciliation notes** (for example, _"Reconciled to the June 30 bank statement; reviewed by the audit committee"_) and select **Lock the year**.
+**2. Lock it.** Once everything is settled, select **Lock**. The dialog lists anything still open — submitted requests awaiting a decision, approved purchases or reports not yet paid, approved checks not yet issued — each linked so you can finish it. The lock stays disabled until the list is empty. Below it, the year's **cash advances still outstanding** are listed apart, with what each member still owes and whether it is overdue. They do **not** stop the lock: a member can still account for an advance, or hand back the cash, after the year is locked. Use the list to see what may have to go on a member's W-2. Then enter your **reconciliation notes** (for example, _"Reconciled to the June 30 bank statement; reviewed by the audit committee"_) and select **Lock the year**.
 
 A locked year's badge reads **Closed**, and its row shows _"Locked {date} · {notes}"_ with who locked it kept on record. A locked year cannot be reopened, nothing in it can be paid or changed, and its budget amounts are final. A line's notes, station and owner can still be edited. A draft year cannot be locked.
 
@@ -229,7 +229,7 @@ Moving back to **Taking requests** reopens the year to owners until the deadline
 
 ### Requesting Next Year's Budget (Line Owners)
 
-If your position owns a budget line (see [Budget Owners](#budget-owners)), you propose what it needs next year. When the Treasurer sets a request deadline you get an email, _"Budget requests for {year} are open until {date}"_, and reminders 7 days and 1 day before the deadline while a line still has no submitted request.
+If your position owns a budget line (see [Budget Owners](#budget-owners)), you propose what it needs next year. When the Treasurer sets a request deadline you get an email, _"Budget requests for {year} are open until {date}"_, and reminders before the deadline while a line still has no submitted request — 7 days and 1 day before, unless the finance office has set other days under **Budget request reminders** on **Finance > Settings**, where it can also have each reminder appear in your notification bell.
 
 1. Open **Finance > Next year's budget**. The entry appears once your position owns a line in next year's draft budget, or you have made a request.
 2. The banner says _"Requests close {date}"_ (or _"No deadline set"_). After the deadline it reads _"Requests are closed"_ and everything on the page is read-only.
@@ -1159,8 +1159,21 @@ Expense report numbers are made automatically in the form **ER-YYYY-0001**, wher
 | **Merchant**      | No       | Where the purchase was made                              |
 
 5. Select **Create Report**. The report is saved as a **Draft** and opens on its detail page. The total amount is automatically calculated as the sum of all line items.
-6. **Attach a receipt to every line.** In the **Receipt** column, select **Attach receipt** on each line and choose the file — a PDF or a photo. **Replace** attaches a different file; the earlier one stays on record. For a mileage line, attach your trip log (dates, destinations, purpose and miles).
-7. Select **Submit for Approval**. The button stays disabled, with _"Attach a receipt to … before submitting"_ beside it, until every line has a receipt.
+6. **Attach a receipt to every line.** In the **Receipt** column, select **Attach receipt** on each line and choose the file — a PDF or a photo. **Replace** attaches a different file; the earlier one stays on record. One receipt can cover several lines: upload it once, then on each other line pick it from **Use the receipt from…** (a hotel folio for the room and the parking, say). On a draft, **Remove from this line** takes it off one line and leaves the others.
+7. Select **Submit for Approval**. The button stays disabled, with _"Attach a receipt to … before submitting"_ beside it, until every line has a receipt (or, for mileage, a trip log).
+
+#### Claiming mileage with a trip log
+
+Once the Treasurer has set the department's **mileage rate**, a **Mileage** line records its trips instead of an amount and a receipt:
+
+1. Choose **Mileage** as the line's type. A **Trips** list appears.
+2. Select **Add a trip** for each trip and enter its **Date**, **From**, **To**, **Purpose** and **Miles** (to a tenth of a mile).
+3. The total miles and the amount — the miles at the department's rate — show under the list. The line is dated by its first trip.
+4. Save. A line with trips needs no receipt; the trips are listed on the report for the approvers.
+
+If the department has not set a rate, the form says so: enter the amount and attach your mileage log as the receipt, as before. Leaving the trip list empty does the same. The amount is worked out at the rate in force when the trips were entered; a later change to the rate does not change a line already claimed.
+
+**Setting the rate (Treasurer or an administrator with organization settings).** Go to **Finance > Settings > Approval Chains** and, under **Mileage rate**, enter dollars a mile (for example `0.700`) and select **Save rate**. **Clear rate** turns trip logs off again.
 
 ![Create Expense Report form with header fields and the line items section](./images/11-10-create-expense-report.png)
 
@@ -1387,7 +1400,14 @@ The check status changes to **Voided**. The amount is taken off the budget's spe
 
 ## Cash Advances
 
-A cash advance is money the department gives a member **before** an expense — travel to a conference, a supply run — instead of reimbursing them afterwards. The IRS lets the department do this tax-free only if the member accounts for the money: receipts within 60 days of each expense, and anything not spent handed back within **120 days of the advance**. What is left after that may have to be reported as the member's wages.
+A cash advance is money the department gives a member **before** an expense — travel to a conference, a supply run — instead of reimbursing them afterwards. The IRS lets the department do this tax-free only if the member accounts for the money: receipts within 60 days of each expense, and anything not spent handed back by the advance's **deadline**. What is left after that may have to be reported as the member's wages.
+
+The deadline follows one of the IRS's two methods, which your department chooses:
+
+- **Fixed date** (the default): **120 days after the check**.
+- **Quarterly statements**: at the end of each calendar quarter after the check (March 31, June 30, September 30, December 31), the member is emailed a statement of what is still outstanding. The deadline is **120 days after the first statement**. Later statements are reminders; they do not move it.
+
+An advance keeps the method in force on the day its check was issued, so changing the setting never moves the deadline of an advance already paid out.
 
 ### Asking for an Advance (members)
 
@@ -1397,7 +1417,21 @@ A cash advance is money the department gives a member **before** an expense — 
 
 It is approved and issued like any check. The Treasurer cannot issue a check to themselves; another officer does.
 
-> **Hint:** You cannot submit a new advance while one of yours is **more than 120 days old and not fully accounted for**. The form warns you, naming it. Reimbursements and other requests are not affected.
+> **Hint:** You cannot submit a new advance while one of yours is **past its deadline and not fully accounted for**. The form warns you, naming it. Reimbursements and other requests are not affected.
+
+### Raising an Advance for a Member (Treasurer)
+
+The finance office can raise an advance on a member's behalf — for example, for a member who is travelling and cannot fill in the form.
+
+1. Go to **Finance › Check Requests** and select **New Check Request**.
+2. Tick **This is a cash advance**, then choose the member under **Advance for**. The payee changes to the member's legal name.
+3. Enter the amount, the fiscal year and the purpose, then **Create Check Request** and **Submit for Approval**.
+
+The member **holds** the advance: it is paid to them, they account for it, its statements are emailed to them, and an overdue advance of theirs stops this one being submitted. The advance's page shows **Raised by** you **for** the member. Because you raised it, you **cannot approve it or issue its check** — another officer must, just as the member cannot. Only current members of the department (active or probationary) are offered.
+
+### Choosing the Deadline Method (administrator)
+
+**Finance › Approval Chains › Cash advance deadline** shows the method in force and, for a settings administrator (`settings.manage`), lets you change it between **Fixed date** and **Quarterly statements**. The change applies to advances issued afterwards.
 
 ### Accounting for an Advance (members)
 
@@ -1407,7 +1441,7 @@ When you have spent the money, create an expense report as usual and choose the 
 - If you spent **less**, hand the rest back to the Treasurer, who records it.
 - You can split an advance over several reports. Once it is fully accounted for, a further report against it is refused; submit it as an ordinary reimbursement.
 
-The advance's own page (open the check request) shows **Accounting for this advance**: what was advanced, what your reports cover, what you returned, what is outstanding and the date it is due by.
+The advance's own page (open the check request) shows **Accounting for this advance**: what was advanced, what your reports cover, what you returned, what is outstanding and the date it is due by. Under the quarterly-statement method it also lists the **Quarterly statements**: each quarter's date, the date to account for it by, when it was emailed and what it listed, and the next one coming.
 
 ### Recording Returned Cash (Treasurer)
 
@@ -1419,6 +1453,39 @@ The member who owes the advance cannot record their own return. A return entered
 
 **Finance › Reports › Cash advances** lists every advance not yet fully accounted for, who has it, when it is due and which are overdue, with a CSV.
 
+### Connecting QuickBooks Online
+
+**Required Permission:** finance manager (viewing the connection: finance viewer)
+
+Instead of downloading and importing files, you can connect the department's QuickBooks Online company. Payments then go to QuickBooks by themselves, as **expenses to their vendors**, so they appear on each vendor's record and its 1099 report, which imported journal entries may not.
+
+The **QuickBooks Online connection** card is at the top of **Finance › QuickBooks Export**. If it says **Not configured on this server**, your system administrator has to register the department's app with Intuit first (see `docs/FINANCE_MODULE.md`, "QuickBooks Online connection"); until then use the export as described above.
+
+1. Select **Connect to QuickBooks**. Sign in to QuickBooks, choose the company, and allow access. You come back to the same page, which says **Connected**.
+2. Check **Post payments made on or after**. It starts at the moment you connected, so payments already in your books are not sent again; earlier payments stay on the export file. Change it and select **Save date** if needed.
+3. From then on, every five minutes, each paid purchase request, issued check and paid expense report is posted to QuickBooks, to the expense account and paid-from account on this page. **Post now** sends them straight away.
+
+What each payment shows, on the card and on its own detail page under **QuickBooks Online**:
+
+| Status                     | Meaning                                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Waiting to post**        | It goes with the next run                                                                                                       |
+| **Retrying**               | QuickBooks could not be reached or was busy. It is tried again automatically (the time is shown), and it will not be duplicated |
+| **Accepted by QuickBooks** | QuickBooks recorded it; its QuickBooks number is shown                                                                          |
+| **Refused by QuickBooks**  | QuickBooks (or this page) said why. Fix it, then select **Send again** — or let it go in the next export file instead           |
+| **Sent in a CSV file**     | An export file carried it, so it is not posted as well                                                                          |
+
+Things to know:
+
+- **The paid-from account must be a QuickBooks bank account.** A category paid from a credit card is refused with "not a Bank account"; export those payments in the file.
+- **A purchase request needs a vendor.** One with none is refused until you add it. A vendor QuickBooks does not have is created under the name on the request (for an expense report, the member's name). If QuickBooks has a customer or employee with that name, the posting is refused and says so.
+- **Some payments still go in the file:** cash advances, expense reports that account for one, dues, returned advance cash and voided checks. If the department uses any of these, keep exporting them.
+- **A posted check that you void here is not voided in QuickBooks.** Void it there as well.
+- **Reconnect required** means QuickBooks no longer accepts the connection — for example, access was removed in QuickBooks, or the server's QuickBooks setting changed. (The connection is renewed automatically, so a quiet spell does not end it.) Select **Reconnect to QuickBooks**; nothing is lost while it waits.
+- **Disconnect** stops posting. Payments still waiting go back to the export file; what QuickBooks accepted stays there.
+
+> **Hint:** Try it with an Intuit sandbox company before connecting your real books. Your administrator chooses which one the server connects to.
+
 ### Edge Cases
 
 | Scenario                                                     | Behavior                                                                              |
@@ -1429,6 +1496,10 @@ The member who owes the advance cannot record their own return. A return entered
 | Voiding an advance a report or return already counts against | Refused. Void only an advance nothing has been recorded against                       |
 | Changing which advance a report accounts for                 | Only while the report is a draft                                                      |
 | An advance and the budget                                    | The budget is charged when the expense report is paid, not when the advance is issued |
+| An advance issued on the last day of a quarter               | Its first statement is the **next** quarter's end, not that day                       |
+| The department changes the deadline method                   | Advances already issued keep theirs; new ones take the new method                     |
+| The Treasurer raised the advance for a member                | The Treasurer cannot approve it or issue its check                                    |
+| An advance still outstanding at year-end close               | Listed in the lock dialog, but does not stop the lock                                 |
 
 ---
 
@@ -1459,11 +1530,25 @@ A dues schedule defines the terms of a recurring fee:
 | **Active**    | Whether the schedule is in use. Shown on Edit only; an inactive schedule cannot generate dues  |
 | **Notes**     | Optional notes about the schedule                                                              |
 
-> **No grace period, late fee or member filter.** None of these can be
-> set. No late fee is ever charged. Dues with nothing paid show as Overdue the
-> day after the due date; part-paid dues stay Partial. **Generate dues** bills
-> every active member, whatever their member class or membership status
-> _(2026-10-29)_.
+_(2026-11-06)_ Four more fields decide who is billed and what lateness costs:
+
+| Field                   | Description                                                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Grace period (days)** | How long after the due date a member may still pay before the late fee is added. Default 30                                 |
+| **Late fee**            | Added once to dues still owing when the grace period ends. Blank charges no fee                                             |
+| **Fiscal year**         | Optional. The due date must fall inside it, and dues cannot be generated once the year is closing or locked                 |
+| **Applies to**          | The membership types (the department's membership tiers) billed by **Generate dues**. Tick none to bill every active member |
+
+Dues with nothing paid show as Overdue the day after the due date; part-paid
+dues stay Partial. The late fee is added by a daily check: the member's amount
+due grows by the fee, the dues record notes it, and it is never added twice.
+Changing the fee later does not change a fee already added.
+
+> **Schedules set up before 2026-11-06** keep working as they did — billing
+> every active member, with no late fee — until you save them. **Edit
+> schedule** says so above the fields; saving applies what they show. A late
+> fee is then added only where the grace period ends after the save, never for
+> lateness that had already happened.
 
 ### Frequencies
 
@@ -1480,7 +1565,7 @@ A dues schedule defines the terms of a recurring fee:
 
 1. Open **Finance > Dues**.
 2. Select **New schedule**.
-3. Enter the name, the amount per member, the frequency and the due date, and optionally notes.
+3. Enter the name, the amount per member, the frequency and the due date, and optionally the grace period, a late fee, the fiscal year, the membership types it applies to, and notes.
 4. Select **Create schedule**. The new schedule is selected; it has billed nobody yet.
 
 To change a schedule, select it and select **Edit schedule**. Changes affect dues generated afterwards only; dues already generated keep their amount and due date. Untick **Active** to retire a schedule — it stays in the list, marked inactive, and can be reactivated.
@@ -1491,8 +1576,9 @@ After creating a schedule, you need to generate individual dues records for each
 
 1. On the **Finance > Dues** page, select the dues schedule.
 2. Select **Generate dues** and confirm.
-3. The Logbook bills every active member who does not already have dues for
-   this schedule. A member who already has them is skipped.
+3. The Logbook bills every active member the schedule applies to (every
+   active member if no membership type is ticked) who does not already have
+   dues for this schedule. A member who already has them is skipped.
 4. Each new record is **Pending**, for the schedule's full amount and due date.
 5. A message reports how many members were billed — or that every active member already had dues for this schedule.
 
@@ -1579,9 +1665,9 @@ well as **Manage fundraising**. See
 **Required Permission:** finance viewer
 
 Click the history icon on a member's row to open **Payment history**: the full
-list of payments received against those dues -- amount, method, reference, notes
-and when it was received. (Which officer entered each payment is recorded, but
-the dialog does not show it.) The dues record itself shows only the running total and the most recent
+list of payments received against those dues -- amount, method, reference, notes,
+when it was received and **who recorded it** _(2026-11-06)_ ("a former member" if
+that officer's account is gone; nothing for a payment Zeffy recorded). The dues record itself shows only the running total and the most recent
 payment's detail, so the history is where you go to answer "what did they
 actually pay, and when?"
 
@@ -1663,18 +1749,35 @@ Selecting a schedule narrows the summary to that schedule.
 | Waiver reversed                                                    | Status returns to whatever the payment history says -- Pending, Partial or Paid. The original waive reason is erased and not copied to the audit log      |
 | Waiving dues that are already waived                               | Refused: "These dues are already waived." The first waiver's officer, date and reason stay. Reverse it first to record a new one                          |
 | Partial payment followed by waiver                                 | The waiver sets the status to Waived. The amount already paid is not refunded -- this is an administrative decision                                       |
-| Which members Generate Dues bills                                  | All active users in the organization. No member class or membership status filter is applied                                                              |
+| Which members Generate Dues bills                                  | Active members of the membership types the schedule applies to; every active member when none is ticked, or for a schedule not saved since 2026-11-06     |
 | Changing the dues amount on a schedule                             | Only affects dues generated afterwards. Existing dues keep their original amount                                                                          |
 | Member status changes to inactive                                  | Existing dues records are not automatically waived or cancelled. An officer should manually waive them if appropriate                                     |
-| Late fees                                                          | Not available -- nothing charges or records a late fee                                                                                                    |
+| Late fees                                                          | Added once by a daily check to dues still owing after the due date plus the grace period; never for a schedule not saved since 2026-11-06                 |
 | Dues summary with no records                                       | Returns zeroes for all metrics and 0% collection rate                                                                                                     |
 
 ---
 
+### My Dues — for every member
+
+**Required Permission:** none beyond signing in _(2026-11-06)_
+
+Open **Finance > My Dues** to see your own dues: each schedule you are billed
+for, the amount, what you have paid, what you still owe, the due date and the
+status. If a late fee has been added it says so; if one will be added, it says
+how much and after which date. Your payments are listed under each. Payments
+are recorded by the Treasurer, so one you have just made may take a little
+while to appear. You see only your own dues.
+
+**Dues reminder emails.** You are emailed a week before your dues fall due,
+and once when they become overdue (with any late fee and when it is added).
+Each is sent once per dues record. They are the **Your dues** emails on your
+email preferences: on unless you turn them off, unless your department has made
+them required. No text messages are sent about dues.
+
 ## Board Reports
 
 Open **Finance > Reports** (or the **Reports** quick link on the
-dashboard). You need to be a finance viewer. Six reports sit on tabs across the top:
+dashboard). You need to be a finance viewer. The reports sit on tabs across the top:
 
 - **Budget vs actual** -- every budget line for a fiscal year: its original
   amount, confirmed amendments, the amended budget, what has been spent, what
@@ -1693,6 +1796,18 @@ dashboard). You need to be a finance viewer. Six reports sit on tabs across the 
 - **Outside the accountable plan** -- every expense reimbursed in a period that
   was claimed after the department's deadline, with who confirmed it. See
   [The Deadline for Claiming Expenses](#the-deadline-for-claiming-expenses).
+- **Expenses by member** -- what each member was reimbursed in a period, with
+  how many reports were paid. It is the payments register's reimbursements
+  added up by member, so the two always agree; a reimbursement check voided in
+  the period comes off.
+- **Dues delinquency** -- for the dues falling due in a period: what was
+  expected, collected, waived and is still outstanding, and each member who is
+  overdue today, with the oldest due date, late fees charged and the amount
+  overdue. "Overdue" is exactly what the Dues screen calls overdue; a member
+  who has paid part is not listed.
+- **Purchases by vendor** -- a fiscal year's purchase requests by vendor:
+  approved, ordered and received ones as **Open**, paid ones as **Paid**.
+  Vendor names that differ only in capitals or spacing are counted together.
 
 Each report has **Download CSV**, which opens in Excel or Google Sheets with
 amounts as numbers, and **Print**, which prints just the report under a

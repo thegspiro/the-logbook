@@ -22,7 +22,9 @@ import { SkeletonPage } from '@/components/ux/Skeleton';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { DualApprovalSettingsCard } from '../components/DualApprovalSettingsCard';
 import { SubstantiationSettingsCard } from '../components/SubstantiationSettingsCard';
+import { MileageRateSettingsCard } from '../components/MileageRateSettingsCard';
 import { FundOverspendSettingsCard } from '../components/FundOverspendSettingsCard';
+import { AdvanceReturnMethodSettingsCard } from '../components/AdvanceReturnMethodSettingsCard';
 import { EmptyState } from '@/components/ux/EmptyState';
 import { ApprovalEntityType, ApprovalStepType, ApproverCoverageProblem, ApproverType } from '../types';
 import type { ApprovalChain, ApprovalChainStep, ApprovalChainUpdatePayload, ApproverCoverageRow } from '../types';
@@ -602,7 +604,9 @@ const ApprovalChainsSettingsPage: React.FC = () => {
 
       <DualApprovalSettingsCard positions={approverOptions.positions} />
       <SubstantiationSettingsCard />
+      <MileageRateSettingsCard />
       <FundOverspendSettingsCard />
+      <AdvanceReturnMethodSettingsCard />
 
       {/* Error */}
       {error && (

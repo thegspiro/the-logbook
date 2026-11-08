@@ -10,6 +10,13 @@
  * `?donorId=` and `?campaignId=` preselect the links, so a donor's or a
  * campaign's own screen can send the user here already filled in.
  *
+ * Once a donor is chosen, the gift can pay toward one of that donor's open
+ * pledges (owner decision, 2026-11-01). The backend adds a completed gift to
+ * the pledge's received amount and settles its status, and refuses a pledge
+ * of another donor or one already fulfilled or cancelled; the form offers
+ * only the donor's open ones, plus, when editing, the pledge the gift already
+ * pays toward (which that gift may itself have fulfilled).
+ *
  * Blank optional fields are omitted (pitfall #1).
  *
  * At `/grants/donations/:donationId/edit` the same form edits one gift
@@ -22,17 +29,25 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fundraisingService } from '../services/api';
-import { PaymentMethod } from '../types';
-import type { Donation, DonationCreatePayload, Donor, FundraisingCampaign } from '../types';
+import { PaymentMethod, PledgeStatus } from '../types';
+import type { Donation, DonationCreatePayload, Donor, FundraisingCampaign, Pledge } from '../types';
 import { getErrorMessage } from '@/utils/errorHandling';
-import { getTodayLocalDate, localToUTC, toLocalISODate } from '@/utils/dateFormatting';
+import { formatCalendarDate, getTodayLocalDate, localToUTC, toLocalISODate } from '@/utils/dateFormatting';
 import { blankToNull } from '@/utils/formValues';
 import { useTimezone } from '@/hooks/useTimezone';
+import { formatCurrency } from '@/utils/currencyFormatting';
 import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, donorDisplayName } from '../utils/labels';
 
 /** The API's page ceiling; a department's donor list is well inside it. */
 const PICKER_LIMIT = 1000;
 const MAX_AMOUNT = 9_999_999_999.99;
+
+/** The statuses a gift may still be recorded against. */
+const OPEN_PLEDGE_STATUSES: ReadonlySet<string> = new Set([
+  PledgeStatus.PENDING,
+  PledgeStatus.PARTIAL,
+  PledgeStatus.OVERDUE,
+]);
 
 const DonationFormPage: React.FC = () => {
   const navigate = useNavigate();
@@ -45,6 +60,11 @@ const DonationFormPage: React.FC = () => {
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'failed'>(isEdit ? 'loading' : 'ready');
   const [donors, setDonors] = useState<Donor[]>([]);
   const [campaigns, setCampaigns] = useState<FundraisingCampaign[]>([]);
+  const [pledges, setPledges] = useState<Pledge[]>([]);
+  const [pledgeId, setPledgeId] = useState('');
+  // The donor and pledge the edited gift was saved with, so the pledge
+  // picker can keep that link while the donor is unchanged.
+  const [savedLink, setSavedLink] = useState<{ donorId: string; pledgeId: string } | null>(null);
 
   const [donorId, setDonorId] = useState(searchParams.get('donorId') ?? '');
   const [campaignId, setCampaignId] = useState(searchParams.get('campaignId') ?? '');
@@ -96,6 +116,7 @@ const DonationFormPage: React.FC = () => {
       setDedicationName(d.dedicationName ?? '');
       setTaxDeductible(d.taxDeductible);
       setNotes(d.notes ?? '');
+      setSavedLink({ donorId: d.donorId ?? '', pledgeId: d.pledgeId ?? '' });
     };
     fundraisingService
       .getDonation(donationId)
@@ -111,6 +132,32 @@ const DonationFormPage: React.FC = () => {
       cancelled = true;
     };
   }, [donationId, tz]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // A different donor's pledges are not this gift's to pay; only the
+    // edited gift's own donor keeps the pledge it was saved against.
+    const keptPledgeId = donorId && savedLink?.donorId === donorId ? savedLink.pledgeId : '';
+    setPledgeId(keptPledgeId);
+    setPledges([]);
+    if (!donorId) return undefined;
+    // Without the list the gift is still recorded; it just names no new pledge.
+    fundraisingService
+      .listPledges({ donorId, limit: PICKER_LIMIT })
+      .then((rows) => {
+        if (cancelled) return;
+        setPledges(
+          rows.filter(
+            (p) =>
+              p.donorId === donorId && (OPEN_PLEDGE_STATUSES.has(p.status) || (keptPledgeId && p.id === keptPledgeId))
+          )
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [donorId, savedLink]);
 
   const validate = (): boolean => {
     const next: Record<string, string> = {};
@@ -144,6 +191,7 @@ const DonationFormPage: React.FC = () => {
       paymentStatus: paymentStatus as DonationCreatePayload['paymentStatus'],
       donorId: donorId || undefined,
       campaignId: campaignId || undefined,
+      pledgeId: (donorId && pledgeId) || undefined,
       // A linked donor already carries the name and email.
       donorName: (!donorId && donorName.trim()) || undefined,
       donorEmail: (!donorId && donorEmail.trim()) || undefined,
@@ -179,6 +227,8 @@ const DonationFormPage: React.FC = () => {
         paymentStatus,
         donorId: blankToNull(donorId),
         campaignId: blankToNull(campaignId),
+        // null unlinks the gift from its pledge, which gives the amount back.
+        pledgeId: donorId ? blankToNull(pledgeId) : null,
         // A linked donor carries the name and email, as on create.
         donorName: donorId ? null : blankToNull(donorName),
         donorEmail: donorId ? null : blankToNull(donorEmail),
@@ -362,6 +412,36 @@ const DonationFormPage: React.FC = () => {
                 ))}
               </select>
             </div>
+            {donorId && (pledges.length > 0 || pledgeId) && (
+              <div>
+                <label htmlFor="donation-pledge" className="form-label">
+                  Pays toward a pledge {optional}
+                </label>
+                <select
+                  id="donation-pledge"
+                  className="form-input"
+                  value={pledgeId}
+                  onChange={(e) => setPledgeId(e.target.value)}
+                  aria-describedby="donation-pledge-hint"
+                >
+                  <option value="">Not toward a pledge</option>
+                  {/* Keeps the saved pledge selectable if the list could not
+                    load, so saving does not silently unlink the gift. */}
+                  {pledgeId && !pledges.some((p) => p.id === pledgeId) && (
+                    <option value={pledgeId}>Current pledge</option>
+                  )}
+                  {pledges.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {`${formatCurrency(p.pledgedAmount)} pledged ${formatCalendarDate(p.pledgeDate)}, ${formatCurrency(p.fulfilledAmount)} received`}
+                    </option>
+                  ))}
+                </select>
+                <p id="donation-pledge-hint" className="text-theme-text-secondary mt-1 text-xs">
+                  A completed gift is added to the pledge&apos;s amount received, and the pledge is marked fulfilled
+                  once paid in full.
+                </p>
+              </div>
+            )}
             {!donorId && (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>

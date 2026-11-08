@@ -16,35 +16,168 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#4109](https://github.com/thegspiro/the-logbook/pull/4109)** (branch
-`claude/security-review-apparatus-nfc-p22`) — Feature 13 (Apparatus & NFC),
-pass 22, a watchdog pickup (the dedicated `/loop 30m /security-review`
-session remains unreachable; this iteration was handed Step 0/1 already
-done — no open `claude/security-review-*` PR, row 13 the next `⬜`). PR
-#4108 (Feature 12, Facilities, pass 15) had already merged — its
-bookkeeping rides along uncommitted from that merge, recorded here rather
-than with a PR of its own. Baseline `bb77eae12` (PR #3924's merge, pass
-21). Real delta: a dashboard-tile double-counting fix (DASH-38) that also
-wires the tile to a new list view over a pre-existing, already-reviewed,
-already-org-scoped `GET /apparatus/maintenance/due`; a 2-line, non-security
-boolean field threaded through an already org-scoped external-agency
-create/read (Training's own scope, not reviewed here); and a pure layout
-class swap. 0 application-code defects found; AP2-4 re-confirmed resolved
-from pass 21, unaffected. See `docs/security-review/AP-13-apparatus-nfc.md`'s
-**Pass 22** section.
+**PR [#4119](https://github.com/thegspiro/the-logbook/pull/4119)** (branch
+`claude/security-review-events-requests`) —
+Feature 16 (Events & requests), pass 14, a watchdog pickup. No other
+Claude session is running on this machine (`ListAgents` → "No reachable
+agents"), consistent with the dedicated `/loop 30m /security-review`
+session remaining unreachable through every prior pass recorded in this
+file. PR #4115 (Feature 15, Scheduling, pass 14) had already merged
+(`df47203d`); a fresh `list_pull_requests` (state=open) found 0 PRs with
+a `claude/security-review-*` head; row 16 was the next pending feature.
+
+Baseline `cfce6ba2` (PR #3931's merge, pass 13) to head `df47203d`
+(current `main`). Real delta — several 2026-11-01 owner-decision batches
+touched this feature's declared files: `event_requests.status_token` is
+now hashed (SHA-256, lookup key) and AES-256-GCM encrypted at rest
+(mirroring the already-reviewed membership-pipeline pattern, PP-6), with
+a migration that converts existing rows in place and dedicated unit,
+integration and migration-against-rows tests already in place;
+`event_location_id`'s FK moved `SET NULL` → `RESTRICT` (owned by
+Locations & kiosk, checked for breakage here and found none); `events.py`
+list/detail routes gained a read-only, org-scoped
+`counts_toward_attendance` flag; a new `SessionAttendanceRequirements.tsx`
+component calls a Training-owned, `events.manage`-gated, org-scoped
+endpoint; a guest check-in double-confirm race (already fixed under
+Locations & kiosk pass 12) and two low-risk `event_service.py` logic
+fixes were re-verified rather than re-derived; and a new migration clears
+reminder/validation markers a recurring-series save had copied onto later
+occurrences, checking `notification_logs` first so a marker cannot be
+wrongly cleared while its log survives — though that log is
+department-configurable down to a 30-day retention floor, so the
+guarantee does not hold indefinitely (Copilot review finding, recorded
+rather than fixed here since it touches the migration itself, outside
+this docs-only PR's safe-fix bar). **0 fixed, 0 new findings** — see
+`docs/security-review/EV-16-events-requests.md`'s **Pass 14** section
+for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+749 revisions, single head `78f196079c95`; `check_route_permissions.py
+--strict` — 305 routes, 0 errors/warnings; `generate_schema_docs.py
+--check` — up to date; scoped backend suite (`-k "event or guest or rsvp
+or attendance"`) — 2233 passed, 1 environment-only skip (`pywebpush`);
+standing guard suites (org-scoping ratchet, capacity locking, LIKE
+escaping, CSV sweep, `create_all`-table tolerance, migration chain,
+baseline member grants, logging escaping, log-call-shape sweep) — 195
+passed; `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run` (this feature's modules/pages/
+components) — 303 passed (19 files).
+
+Row 16 → ✅ (pending this PR's merge); next is Feature 17 (Training core)
+— re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 14, PR #4115, merged), preserved for history</summary>
+
+**PR [#4115](https://github.com/thegspiro/the-logbook/pull/4115)** (branch
+`claude/security-review-scheduling-p14`) —
+Feature 15 (Scheduling), pass 14, a watchdog pickup. No other Claude
+session is running on this machine (`ListAgents` → "No reachable
+agents"), consistent with the dedicated `/loop 30m /security-review`
+session remaining unreachable through every prior pass recorded in this
+file. PR #4111 (Feature 14, Equipment check & shifts, pass 15) had
+already merged; a fresh `list_pull_requests` (state=open) found 0 PRs
+with a `claude/security-review-*` head (or any head at all); row 15 was
+the next pending feature.
+
+Baseline `4d87a43bb` (PR #3930's merge, pass 13) to head `4f19f9a17`
+(current `main`). Real delta — two owner decisions of 2026-11-01: a
+pending time-off request may now be approved or denied by the
+requester's current supervisor (not only a `scheduling.manage` holder),
+and an officer may seat a member in a custom seat no rank, certification,
+program or open position grants, by an audited override. Both gates
+verified org-scoped and fail-closed; the time-off row itself is locked for
+the decision, but the supervisor-relationship check behind it is a plain
+`SELECT` that can answer from the request's own REPEATABLE READ snapshot
+rather than the latest commit (new LOW/accepted finding, SCH-20, below) —
+see `docs/security-review/SCH-15-scheduling.md`'s **Pass 14** section for
+the full trace, including the opportunistic review of the new, previously
+unreviewed `member_supervisor_service.py` the time-off gate depends on.
+**1 fixed:** SCH-19 (uncapped `reported_call_types`/`member_call_counts`
+close-out fields) is now closed — both fields carry a `max_length` cap,
+with dedicated regression tests already in place
+(`tests/test_call_volume_payload_caps.py`,
+`closeoutCallCredits.test.ts`). **1 new finding:** SCH-20 (LOW, flagged,
+accepted as a self-documented TOCTOU, same shape as SCH-16) — see above.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 749
+revisions, single head `78f196079c95`; `check_route_permissions.py
+--strict` — 305 routes, 0 errors/warnings; scoped backend suite (`-k
+"scheduling or time_off or shift_assignment or shift_swap or
+seat_override or supervisor or widget_preferences or shift_eligibility or
+member_hours or on_call"`) — 346 passed, 1 environment-only skip
+(`py_vapid`); `tests/test_call_volume_payload_caps.py` (SCH-19's own
+regression test, not matched by the keyword filter above) — 6 passed;
+standing guard suites (org-scoping ratchet, capacity
+locking, LIKE escaping, CSV sweep, `create_all`-table tolerance,
+migration chain, baseline member grants, logging escaping,
+log-call-shape sweep) — 174 passed; `npm run typecheck` — 0 errors; `npm
+run lint` — 0 errors/warnings; `npx vitest run src/modules/scheduling
+src/pages/scheduling` — 1132 passed (76 files, includes
+`closeoutCallCredits.test.ts`).
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 15, PR #4111, merged), preserved for history</summary>
+
+**PR [#4111](https://github.com/thegspiro/the-logbook/pull/4111)** (branch
+`claude/security-review-equipment-check-shifts-p15`) —
+Feature 14 (Equipment check & shifts), pass 15, a watchdog pickup. No
+other Claude session is running on this machine (`ListAgents` → "No
+reachable agents"), consistent with the dedicated `/loop 30m
+/security-review` session remaining unreachable through every prior pass.
+Two PRs had already merged since the last iteration: #4108 (Feature 12,
+Facilities, pass 15) and #4109 (Feature 13, Apparatus & NFC, pass 22) —
+both carried a real review verdict (0 fixed, 0 new findings each), so
+both already have their own **Log** entries below rather than fresh ones
+here. A fresh
+`list_pull_requests` (state=open) found 0 PRs with a
+`claude/security-review-*` head; row 14 is the next pending feature.
+
+Baseline `2a96a177d` (PR #3927's merge, pass 14) to head `0d2a8d2fa` (PR
+#4109's merge). Real delta: owner decision 2026-11-01 — editing an
+already-approved shift report's credit-bearing fields, in a department
+with review off, now restates the trainee's requirement credit through the
+same idempotent ledger the original approval used
+(`RequirementProgressCredit`, unique on `(progress_id, source_type,
+source_id)`), instead of leaving it stale against the edited figures.
+Verified org-scoped (runs on the same already-validated `report` object;
+no new by-id lookup) and idempotent (Pitfall #36 shape, pre-existing
+ledger and pre-existing `apply_requirement_credit`/
+`reverse_credits_for_source_except`, both unchanged this pass). Audited as
+`shift_report_credit_restated` with ids and unit counts only, no free
+text. `credit_restatement` is a transient, non-persisted attribute, never
+exposed to the frontend. EC-17 (OPEN/FLAGGED, owner-accepted) updated with
+a note: this tightens rather than widens that gap — the edit was always
+possible for the same person with the same audit trail; now the figures
+it changes also reach the credit ledger instead of going stale. 0
+application-code defects found. See
+`docs/security-review/EC-14-equipment-check-shifts.md`'s **Pass 15**
+section.
 
 Completion gate: `flake8`/`black --check`/`isort --check-only` on
 `app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 737
-revisions, single head; `check_route_permissions.py --strict` — 303
-routes, 0 errors/warnings; scoped backend suite (`-k "apparatus or nfc or
-evoc or driver_exception"`) — 1390 passed, 1 environment-only skip
-(`py_vapid`); standing guard suites — 166 passed; `npm run typecheck` — 0
-errors; `npm run lint` — 0 warnings; `npx vitest run src/modules/apparatus`
-— 123 passed (15 files).
+revisions, single head `c6b690cc33d6`; `check_route_permissions.py
+--strict` — 303 routes, 0 errors/warnings; scoped backend suite (`-k
+"equipment or shift_completion or shift_report or skill_checkoff or
+credit_restatement or requirement_progress_credit"`) — 884 passed, 1
+environment-only skip (`py_vapid`); standing guard suites (org-scoping
+ratchet, capacity locking, LIKE escaping, CSV sweep, `create_all`-table
+tolerance, migration chain, baseline member grants, logging escaping,
+log-call-shape sweep) — 195 passed; `npm run typecheck` — 0 errors; `npm
+run lint` — 0 errors/warnings.
 
-Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
-& shifts) — re-check `list_pull_requests` fresh rather than trusting this
-note.
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 15, PR #4108, merged), preserved for history</summary>
@@ -52,50 +185,27 @@ note.
 _None._ PR [#4108](https://github.com/thegspiro/the-logbook/pull/4108)
 (Feature 12, Facilities, pass 15, branch
 `claude/security-review-facilities-p15`) merged. Not docs-only — it
-carried a real delta, so it already has its own **Log** entry below (dated
-2026-11-06) rather than a fresh one here. Confirmed via a fresh
-`list_pull_requests` (state `open`): 0 results for a
-`claude/security-review-*` head. Rotation row 12 is ✅. Next is Feature 13
-(Apparatus & NFC) — the next `⬜` row.
+carried a real delta (the third `due_within_days` filter, the two new
+shared-condition classmethods, the Location-mirror race-handling refactor,
+and the LOC-37 fix), so it already has its own **Log** entry below rather
+than a fresh one here. Confirmed via a fresh `list_pull_requests`
+(state `open`): 0 results for a `claude/security-review-*` head. Rotation
+row 12 is ✅. Next is Feature 13 (Apparatus & NFC) — the next `⬜` row.
 
 </details>
 
 <details>
-<summary>Superseded — prior Open PR note (Feature 12, Facilities, pass 15, PR #4108, merged), preserved for history</summary>
+<summary>Superseded — prior Open PR note (Feature 13, Apparatus & NFC, pass 22, PR #4109, merged), preserved for history</summary>
 
-**PR [#4108](https://github.com/thegspiro/the-logbook/pull/4108)** (branch
-`claude/security-review-facilities-p15`) — Feature 12 (Facilities), pass
-15, a watchdog pickup (the dedicated `/loop 30m /security-review` session
-remains unreachable; this iteration was handed Step 0/1 already done — no
-open `claude/security-review-*` PR, row 12 the next `⬜`). PR #4106
-(Feature 11, Inventory, pass 15) had already merged — its bookkeeping,
-including the note on near-duplicate PR #4107's closure, rides along
-uncommitted from that merge, recorded here rather than with a PR of its
-own. Baseline `f2e7bd578` (PR #3923's merge, pass 14). Real delta: a third
-`due_within_days` filter on the maintenance list; two new
-`maintenance_overdue_conditions`/`maintenance_due_soon_conditions`
-classmethods giving the dashboard tiles and the cross-facility list one
-shared, org-scoped definition each (Pitfall #29); a facility room's
-Location mirror refactored onto `location_service.save_system_named_location`,
-whose race handling is the correct shape for Pitfall #27; and `routes.tsx`
-fixing the previously-flagged LOC-37 (room check-in now requires sign-in,
-closing the `postLoginRedirect` gap without widening access). A
-cross-feature migration (`986b38c2086b`, Documents-owned tables) reviewed
-for this feature's own invariants and found sound. 0 application-code
-defects found; FAC-30 (the one standing finding) re-confirmed OPEN,
-unaffected. See `docs/security-review/FAC-12-facilities.md`'s **Pass 15**
-section.
-
-Completion gate: `flake8`/`black --check`/`isort --check-only` on
-`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 737
-revisions, single head; `check_route_permissions.py --strict` — 303
-routes, 0 errors/warnings; scoped backend suite (`-k "facilit"`) — 318
-passed, 1 environment-only skip (`py_vapid`); the four tenancy/migration
-guard suites plus the two migration-integrity suites — 166 passed; `npm
-run typecheck` — 0 errors; `npm run lint` — 0 warnings; `npx vitest run
-src/modules/facilities` — 170 passed (22 files).
-
-Row 12 → ✅ (merged as `2ff2abf75`); next was Feature 13 (Apparatus & NFC).
+_None._ PR [#4109](https://github.com/thegspiro/the-logbook/pull/4109)
+(Feature 13, Apparatus & NFC, pass 22, branch
+`claude/security-review-apparatus-nfc-p22`) merged. Not docs-only on the
+findings — it carried a real review verdict (0 fixed, 0 new findings on a
+dashboard-tile fix and two unrelated-feature threadings), so it already
+has its own **Log** entry below rather than a fresh one here. Confirmed
+via a fresh `list_pull_requests` (state `open`): 0 results for a
+`claude/security-review-*` head. Rotation row 13 is ✅. Next is Feature 14
+(Equipment check & shifts) — the next `⬜` row.
 
 </details>
 
@@ -25096,9 +25206,9 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (7089 L), `inventory_service.py`                                                                                                                   | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (4394 L), `facilities_service.py`                                                                                                                 | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                               | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                 | ⬜     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                            | ⬜     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                   | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                 | ✅     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                            | ✅     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                   | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13) | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`                             | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                      | ⬜     |
@@ -25135,6 +25245,46 @@ them to be re-discovered by SEC-00 every lap.
 ---
 
 ## Log
+
+### 2026-11-08 — Feature 15 (Scheduling, pass 14) merged; Feature 16 (Events & requests, pass 14) — watchdog pickup, real delta, 0 fixed, 0 new findings
+
+Watchdog pickup (this scheduled check-in session, not the dedicated
+`/loop 30m /security-review` session, which remains unreachable per
+every prior entry here). PR #4115 (Feature 15, Scheduling, pass 14) was
+open, clean (no conflicts, all Copilot review threads resolved) and
+waiting only on CI; this iteration watched CI to completion (all green)
+and merged it (`df47203d`) before starting the next feature, per the
+rotation's "one PR at a time" rule. Row 16 (Events & requests) was the
+next `⬜` on a freshly re-read table.
+
+Baseline `cfce6ba2` (PR #3931's merge, pass 13) to head `df47203d`.
+687 commits repo-wide; scoped to this feature's declared files, a
+handful of real changes from the 2026-11-01 owner-decision batches: the
+event-request public status token is now hashed and encrypted at rest
+(mirrors the already-reviewed membership-pipeline pattern, with its own
+migration-against-rows test); an unrelated Locations-owned FK tightening
+(`SET NULL` → `RESTRICT` on `event_location_id`) checked for breakage and
+found none; a read-only attendance-linkage flag added to `events.py`'s
+list/detail responses, resolved through an already org-scoped
+Training-service call; a new attendance-linkage UI entry point into a
+Training-owned, `events.manage`-gated, org-scoped endpoint; a guest
+check-in double-confirm race already fixed under Locations & kiosk pass
+12, re-verified rather than re-derived; two low-risk `event_service.py`
+correctness fixes; and a new migration clearing reminder/validation
+markers a recurring-series save had copied onto later occurrences,
+gated on `notification_logs` surviving — which Copilot review noted is
+not unconditional, since that table's retention is
+department-configurable down to 30 days (recorded, not fixed here; the
+migration itself is outside this docs-only PR's safe-fix bar). 0 fixed,
+0 new findings — see `docs/security-review/EV-16-events-requests.md`'s
+**Pass 14** section.
+
+Completion gate: all green (flake8/black/isort, `validate_migrations.py
+--strict` — 749 revisions single head, `check_route_permissions.py
+--strict` — 305 routes 0 errors/warnings, `generate_schema_docs.py
+--check`, scoped backend suite 2233 passed, standing guard suites 195
+passed, `npm run typecheck`/`npm run lint` clean, scoped `npx vitest run`
+303 passed).
 
 ### 2026-11-06 — Feature 10 (Documents & legal, pass 15) merged; Feature 11 (Inventory, pass 15) — watchdog pickup, real delta, 0 fixed, 0 new findings, INV-22 re-confirmed OPEN
 
@@ -47629,7 +47779,7 @@ open items. Full write-up: `docs/security-review/AP-13-apparatus-nfc.md`'s
 
 **Completion gate:** `flake8`/`black --check`/`isort --check-only` on
 `app/ tests/ alembic/` all clean; `python3 scripts/validate_migrations.py
---strict` — 737 revisions, single head `c6b690cc33d6`; `python3
+--strict` — 737 revisions, single head; `python3
 scripts/check_route_permissions.py --strict` — 303 routes, 0
 errors/warnings; scoped backend suite (`-k "apparatus or nfc or evoc or
 driver_exception"`) — 1390 passed, 1 pre-existing skip (`py_vapid`);
@@ -47641,4 +47791,191 @@ files).
 
 Row 13 → ✅ (pending this PR's merge); next is Feature 14 (Equipment check
 & shifts) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+### 2026-11-06 — Feature 13 (Apparatus & NFC, pass 22) merged; Feature 14 (Equipment check & shifts, pass 15) — watchdog pickup, 0 fixed, 0 new findings
+
+No other Claude session is running on this machine (`ListAgents` → "No
+reachable agents"), consistent with the dedicated `/loop 30m
+/security-review` session remaining unreachable through every prior
+iteration recorded above. PR #4109 (Apparatus & NFC, pass 22, logged
+above) had merged. A fresh `list_pull_requests` (state=open) found 0 PRs
+with a `claude/security-review-*` head. Row 14 (Equipment check & shifts)
+is the next `⬜` row, confirmed directly: rows 00–13 are all `✅`.
+
+Baseline `2a96a177d` (PR #3927's merge, pass 14) to head `0d2a8d2fa` (PR
+#4109's merge, current `main`). `git log --no-merges` restricted to this
+feature's declared files (`equipment_check.py`, `shift_completion.py`,
+`equipment_check_service.py`, `shift_completion_service.py`,
+`schemas/equipment_check.py`, `schemas/shift_completion.py`) returns
+exactly one non-merge commit, `71a6fd75c` ("scheduling+training: build
+batch 4 of the owner's 2026-11-01 decisions"), read in full. It touches
+only `shift_completion.py` (+17, one new conditional audit event, no new
+route, no permission change) and `shift_completion_service.py`
+(+332/−30): owner decision 2026-11-01 — on a review-off department,
+editing an already-approved report's credit-bearing fields now restates
+the trainee's requirement credit through the same idempotent ledger the
+original approval used, instead of leaving it stale against the edited
+figures. Verified org-scoped (the new branch runs on the same
+already-validated `report` object the pre-existing update path resolves;
+no new by-id lookup) and idempotent (Pitfall #36 shape — the credit
+ledger's unique `(progress_id, source_type, source_id)` constraint,
+`apply_requirement_credit`, and `reverse_credits_for_source_except` all
+pre-existing and unchanged this pass). Audited as
+`shift_report_credit_restated` with ids and unit counts only (Pitfall
+#33). `credit_restatement` is a transient, non-persisted attribute, never
+serialized in `ShiftCompletionReportResponse`. `equipment_check.py`,
+`equipment_check_service.py`, and both schema files are byte-identical to
+pass 14's baseline.
+
+**EC-17 interaction, not a new finding.** Pass 11's EC-17 (OPEN/FLAGGED,
+owner-accepted: a review-off department's filing officer can edit a
+report's substantive fields indefinitely with no forced second check) had
+explicitly noted that such an edit did not move training credit. This
+pass's delta changes exactly that: the edit now does move credit, through
+the audited, idempotent path described above. This tightens the existing
+gap (a silent staleness bug becomes an audited recalculation) rather than
+widening it — nobody new can reach it, and no permission changed. EC-17
+itself stays OPEN/FLAGGED; `docs/KNOWN_LIMITATIONS.md` already carries the
+owner's 2026-11-04 resolution note for this item (item 3 under Scheduling)
+in full, including its residual edge cases, so nothing further was added
+there.
+
+**0 fixed, 0 new findings.** All findings from EC-14 passes 1–14
+re-confirmed unaffected by this window's diff.
+`docs/security-review/EC-14-equipment-check-shifts.md`'s **Pass 15**
+section has the full review; the new test
+`tests/test_shift_report_credit_restatement.py` (422 L, landed with the
+reviewed commit) was read in full and matches the described behavior.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `python3 scripts/validate_migrations.py
+--strict` — 737 revisions, single head `c6b690cc33d6`; `python3
+scripts/check_route_permissions.py --strict` — 303 routes, 0
+errors/warnings (76 routes re-enumerated for this feature, unchanged);
+scoped backend suite (`-k "equipment or shift_completion or shift_report
+or skill_checkoff or credit_restatement or requirement_progress_credit"`)
+— 884 passed, 1 environment-only skip (`py_vapid`); standing guard suites
+(org-scoping ratchet, capacity locking, LIKE escaping, CSV sweep,
+`create_all`-table tolerance, migration chain, baseline member grants,
+logging escaping, log-call-shape sweep) — 195 passed; `npm run typecheck`
+— 0 errors; `npm run lint` — 0 errors/warnings (`eslint --max-warnings
+10`).
+
+Row 14 → ✅ (pending this PR's merge); next is Feature 15 (Scheduling) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+### 2026-11-08 — Feature 14 (Equipment check & shifts, pass 15) merged; Feature 15 (Scheduling, pass 14) — watchdog pickup, real delta, 1 fixed (SCH-19 closed), 1 new finding (SCH-20, LOW, accepted)
+
+No other Claude session is running on this machine (`ListAgents` → "No
+reachable agents"), consistent with the dedicated `/loop 30m
+/security-review` session remaining unreachable through every prior
+iteration recorded above. PR #4111 (Equipment check & shifts, pass 15,
+logged above) had merged. A fresh `list_pull_requests` (state=open) found
+0 PRs with a `claude/security-review-*` head. Row 15 (Scheduling) was the
+next `⬜` row, confirmed directly: rows 00–14 are all `✅`.
+
+Baseline `4d87a43bb` (PR #3930's merge, pass 13) to head `4f19f9a17`
+(current `main`). `git log --no-merges` restricted to this feature's
+declared scope returns 18 non-merge commits, out of 379 non-merge commits
+repo-wide in the same window; real content changed in 7 of the 15
+declared backend files, read in full, together with one previously
+unreviewed shared dependency (`member_supervisor_service.py`) the pass's
+main finding-worthy surface depends on.
+
+**Two owner decisions of 2026-11-01, both reviewed in full against all
+seven `CHECKLIST.md` dimensions:**
+
+1. **Time-off review opens to the requester's supervisor**
+   (`POST /time-off/{id}/review` — a `POST`, not a `PUT` as an earlier
+   draft of this entry said — moved from
+   `require_permission("scheduling.manage")` to `get_current_user`, with
+   the authorization check moved into the service). The request row
+   itself is fetched with a locking read (Pitfall #27), which serializes
+   two concurrent decisions on the same request and makes the
+   already-decided check reliable. The supervisor-relationship check
+   behind it, however, is a plain `SELECT` with no lock of its own, so
+   under InnoDB REPEATABLE READ it can still answer from the request's
+   starting snapshot rather than the latest commit — a real but narrow
+   (one-request-duration) staleness window, not the "at the moment of
+   the decision" guarantee an earlier draft of this entry claimed. New
+   finding **SCH-20** (LOW, flagged, accepted as a self-documented
+   TOCTOU, same shape as SCH-16) records this; see the findings file.
+   The read side (`GET /time-off`) also includes a non-manager's crew
+   requests **by default** whenever no `user_id` is supplied, not only
+   when one names a crew member as an earlier draft said — a supplied
+   `user_id` only narrows the response, never widens it.
+2. **An officer may seat a member in a custom seat nothing in the
+   department grants**, by an explicit, audited override
+   (`override_seat_eligibility`/`override_reason` on
+   `ShiftAssignmentCreate`/`Update`). The permission boundary
+   (`scheduling.manage` + a required reason) is enforced at the endpoint
+   before the service is ever called. The two paths get there
+   differently: `create_assignment` forces the override off in its own
+   body for a self-signup, whatever the request carries; `update_assignment`
+   has no such branch, and instead cannot be reached by a self-signing
+   member at all — its endpoint already requires `scheduling.assign` or
+   being the shift's own officer before `update_assignment` runs. A
+   successful override is recorded on the assignment's own notes and
+   audit-logged only when it actually waived something.
+
+Both gates' shared dependency, `services/member_supervisor_service.py`
+(new, Members feature's own file, not previously reviewed by any
+feature's security pass), was read in full opportunistically: every read
+and write filters `organization_id`. The two writers lock differently:
+`set_supervisor` (which can _add_ a supervision edge) locks the
+organization row before the member row and re-derives the loop-detection
+edge set under that lock with a locking read (Pitfall #27) rather than a
+stale snapshot; `end_current` (which only _removes_ an edge, so cannot
+itself create a loop) locks only the member row and its own assignment
+rows, with no organization lock and no loop check. (The supervisor
+_check_ that SCH-20 flags is a third, read-only path, covered by neither
+writer's locking — the distinction SCH-20 turns on.)
+
+**1 fixed: SCH-19 closed.** `ShiftFinalizeRequest.reported_call_types`/
+`member_call_counts` and `CloseoutCallsRequest.reported_call_types` — the
+exact two fields SCH-19 (LOW, flagged since pass 8) named as uncapped —
+now carry `max_length` caps (`MAX_REPORTED_CALL_TYPES=200`,
+`MAX_MEMBER_CALL_CREDITS=100`), with a matching client-side bound in the
+close-out wizard and dedicated regression tests already in place
+(`tests/test_call_volume_payload_caps.py`,
+`closeoutCallCredits.test.ts`). **1 new finding (SCH-20, above).**
+SCH-9, SCH-10, SCH-13, SCH-15, SCH-16, SCH-17, SCH-18 all re-verified
+unchanged; `calcom_service.py` is byte-identical to pass 6, now eight
+passes running.
+
+**Correction note:** this entry and the Open PR note above it originally
+said the time-off review route was `PUT`, claimed the supervisor check
+was re-verified "at the moment of the decision" under lock, described
+crew-request access as opt-in per `user_id`, said SCH-19 needed no
+dedicated regression test, claimed `update_assignment` has the same
+self-signup override guard `create_assignment` does, and stated the
+organization-lock/loop-detection guarantee as applying to both
+`member_supervisor_service.py` writers rather than to `set_supervisor`
+alone. All six were caught across two rounds of Copilot review on PR
+#4115 and corrected here and in the findings file before merge — see
+that PR for the review threads.
+
+`docs/security-review/SCH-15-scheduling.md`'s **Pass 14** section has the
+full review.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 749
+revisions, single head `78f196079c95`; `check_route_permissions.py
+--strict` — 305 routes, 0 errors/warnings (114 routes re-enumerated for
+this feature by AST, up from 113 — the one new
+`GET /members/{user_id}/hours-history`, 0 missing an auth dependency);
+scoped backend suite (`-k "scheduling or time_off or shift_assignment or
+shift_swap or seat_override or supervisor or widget_preferences or
+shift_eligibility or member_hours or on_call"`) — 346 passed, 1
+environment-only skip (`py_vapid`); standing guard suites (org-scoping
+ratchet, capacity locking, LIKE escaping, CSV sweep, `create_all`-table
+tolerance, migration chain, baseline member grants, logging escaping,
+log-call-shape sweep) — 174 passed; `npm run typecheck` — 0 errors; `npm
+run lint` — 0 errors/warnings (`eslint --max-warnings 10`); `npx vitest
+run src/modules/scheduling src/pages/scheduling` — 1132 passed (76
+files).
+
+Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
+requests) — re-check `list_pull_requests` fresh rather than trusting this
 note.

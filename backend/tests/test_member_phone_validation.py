@@ -19,6 +19,7 @@ from app.api.v1.endpoints.users import update_contact_info, update_user_profile
 from app.models.user import Organization, User, UserStatus
 from app.schemas.user import AdminUserCreate, ContactInfoUpdate, UserUpdate
 from app.utils.phone_numbers import is_valid_member_phone, validate_member_phone
+from tests.fake_request import fake_request
 
 
 class TestRule:
@@ -119,6 +120,7 @@ class TestUpdatePaths:
                 background_tasks=BackgroundTasks(),
                 db=db_session,
                 current_user=member,
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 400
@@ -136,6 +138,7 @@ class TestUpdatePaths:
             background_tasks=BackgroundTasks(),
             db=db_session,
             current_user=member,
+            request=fake_request(),
         )
 
         assert member.phone == "call me maybe"
@@ -150,6 +153,7 @@ class TestUpdatePaths:
             background_tasks=BackgroundTasks(),
             db=db_session,
             current_user=member,
+            request=fake_request(),
         )
 
         assert member.mobile is None
@@ -163,6 +167,7 @@ class TestUpdatePaths:
                 profile_update=UserUpdate(mobile="text me"),
                 db=db_session,
                 current_user=member,
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 400

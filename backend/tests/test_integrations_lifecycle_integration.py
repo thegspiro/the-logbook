@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user
 from app.api.v1.endpoints import integrations as endpoints
 from app.core.database import get_db
+from app.models.audit import AuditLog
 from app.models.integration import Integration
 from app.models.user import User
 from app.schemas.integration import SECRET_CONFIG_KEYS
@@ -267,3 +268,62 @@ class TestConnectNeedsADestination:
         assert other.status_code == 200
         await db_session.refresh(row)
         assert (row.config or {}).get("url") == "https://example.org/hook"
+
+
+class TestLifecycleAuditRowsCarryTheCaller:
+    """The connect, update and disconnect rows say where the change came from.
+
+    The audit trail's IP and browser columns were empty on these three rows
+    (W75), so a reviewer could not tell an administrator's change from one made
+    elsewhere with the same account.
+    """
+
+    async def test_each_row_records_the_ip_and_user_agent(
+        self, db_session: AsyncSession, user: User
+    ) -> None:
+        ical = await _row(db_session, user, "ical")
+        headers = {"user-agent": "W75-bench/1.0"}
+        async with _client(db_session, user) as client:
+            connected = await client.post(
+                f"/integrations/{ical.id}/connect",
+                json={"config": {}},
+                headers=headers,
+            )
+            updated = await client.patch(
+                f"/integrations/{ical.id}", json={"config": {}}, headers=headers
+            )
+            disconnected = await client.post(
+                f"/integrations/{ical.id}/disconnect", headers=headers
+            )
+        assert connected.status_code == 200
+        assert updated.status_code == 200
+        assert disconnected.status_code == 200
+
+        rows = (
+            (
+                await db_session.execute(
+                    select(AuditLog).where(
+                        AuditLog.organization_id == user.organization_id,
+                        AuditLog.event_type.in_(
+                            [
+                                "integration.connected",
+                                "integration.updated",
+                                "integration.disconnected",
+                            ]
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_type = {row.event_type: row for row in rows}
+        assert set(by_type) == {
+            "integration.connected",
+            "integration.updated",
+            "integration.disconnected",
+        }
+        for event_type, row in by_type.items():
+            # httpx's ASGI transport presents the peer as 127.0.0.1.
+            assert row.ip_address == "127.0.0.1", event_type
+            assert row.user_agent == "W75-bench/1.0", event_type

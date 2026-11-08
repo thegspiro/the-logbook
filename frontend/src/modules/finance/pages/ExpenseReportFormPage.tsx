@@ -3,9 +3,13 @@
  *
  * Form for creating expense reports with line items.
  * Uses react-hook-form + zod for validation.
+ *
+ * A mileage line may record its trips instead of an amount (owner decision
+ * 2026-11-01); the server prices it at the department's rate, and the total
+ * shown here previews that figure.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -25,6 +29,11 @@ import { useMyOpenAdvances } from '../hooks/useMyOpenAdvances';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
 import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
+import { MileageTripLog } from '../components/MileageTripLog';
+import { useMileageRate } from '../hooks/useMileageRate';
+import { useTimezone } from '@/hooks/useTimezone';
+import { getTodayLocalDate } from '@/utils/dateFormatting';
+import { priceTrips, toTripPayload, tripLogError, type TripEntry } from '../utils/mileage';
 
 // =============================================================================
 // Validation Schema
@@ -48,6 +57,8 @@ interface LineItemEntry {
   fundCampaignId: string;
   /** The budget line the member charges; approval commits the amount there. */
   budgetId: string;
+  /** A mileage line's trips; with any, the server prices the line. */
+  trips: TripEntry[];
 }
 
 // =============================================================================
@@ -93,6 +104,14 @@ const ExpenseReportFormPage: React.FC = () => {
   // The member's own advances with something left to account for; only they
   // can be chosen (the server checks the same).
   const advances = useMyOpenAdvances();
+  const { rate: mileageRate } = useMileageRate();
+  const tz = useTimezone();
+
+  // A line's log counts only while it is mileage and the department has a rate.
+  const isLogged = (item: LineItemEntry) =>
+    item.expenseType === ExpenseType.MILEAGE && Boolean(mileageRate) && item.trips.length > 0;
+  const lineAmount = (item: LineItemEntry) =>
+    isLogged(item) ? Number(priceTrips(item.trips, mileageRate) ?? 0) : item.amount || 0;
 
   const {
     register,
@@ -134,21 +153,16 @@ const ExpenseReportFormPage: React.FC = () => {
     }
   }, [fiscalYears, reset]);
 
-  const totalAmount = useMemo(() => {
-    return lineItems.reduce((sum, item) => sum + (item.amount || 0), 0);
-  }, [lineItems]);
+  const totalAmount = lineItems.reduce((sum, item) => sum + lineAmount(item), 0);
 
   // A fund's warning weighs every line charged to it, since together they
   // are what an approval would take out of it.
-  const chargedToFund = useMemo(() => {
-    const totals: Record<string, number> = {};
-    for (const item of lineItems) {
-      if (item.fundCampaignId) {
-        totals[item.fundCampaignId] = (totals[item.fundCampaignId] ?? 0) + (item.amount || 0);
-      }
+  const chargedToFund: Record<string, number> = {};
+  for (const item of lineItems) {
+    if (item.fundCampaignId) {
+      chargedToFund[item.fundCampaignId] = (chargedToFund[item.fundCampaignId] ?? 0) + lineAmount(item);
     }
-    return totals;
-  }, [lineItems]);
+  }
 
   const addLineItem = () => {
     setLineItems((prev) => [
@@ -161,6 +175,7 @@ const ExpenseReportFormPage: React.FC = () => {
         merchant: '',
         fundCampaignId: '',
         budgetId: '',
+        trips: [],
       },
     ]);
   };
@@ -174,7 +189,7 @@ const ExpenseReportFormPage: React.FC = () => {
     });
   };
 
-  const updateLineItem = (index: number, field: keyof LineItemEntry, value: string | number) => {
+  const updateLineItem = (index: number, field: keyof LineItemEntry, value: string | number | TripEntry[]) => {
     setLineItems((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)));
   };
 
@@ -183,6 +198,11 @@ const ExpenseReportFormPage: React.FC = () => {
     for (let i = 0; i < lineItems.length; i++) {
       const item = lineItems[i];
       if (!item) continue;
+      if (isLogged(item)) {
+        const problem = item.description.trim() ? tripLogError(item.trips) : 'Description is required';
+        if (problem) newErrors[i] = problem;
+        continue;
+      }
       const result = expenseLineSchema.safeParse({
         ...item,
         amount: Number(item.amount),
@@ -212,15 +232,22 @@ const ExpenseReportFormPage: React.FC = () => {
         title: data.title,
         fiscalYearId: data.fiscalYearId,
         lineItems: lineItems.map((item) => {
-          const li: Record<string, unknown> = {
-            description: item.description,
-            // A DecimalString, matching PurchaseRequestFormPage/
-            // CheckRequestFormPage -- never Number()/parseFloat() at the
-            // wire boundary, which round-trips through a JS float.
-            amount: item.amount.toFixed(2),
-            dateIncurred: item.dateIncurred,
-            expenseType: item.expenseType,
-          };
+          // With a log, the server works out the amount and the date.
+          const li: Record<string, unknown> = isLogged(item)
+            ? {
+                description: item.description,
+                expenseType: item.expenseType,
+                mileageTrips: toTripPayload(item.trips),
+              }
+            : {
+                description: item.description,
+                // A DecimalString, matching PurchaseRequestFormPage/
+                // CheckRequestFormPage -- never Number()/parseFloat() at the
+                // wire boundary, which round-trips through a JS float.
+                amount: item.amount.toFixed(2),
+                dateIncurred: item.dateIncurred,
+                expenseType: item.expenseType,
+              };
           const merchant = item.merchant?.trim();
           if (merchant) li.merchant = merchant;
           if (item.fundCampaignId) li.fundCampaignId = item.fundCampaignId;
@@ -382,7 +409,7 @@ const ExpenseReportFormPage: React.FC = () => {
           {lineItems.length === 0 ? (
             <p className="text-theme-text-secondary py-8 text-center text-sm">
               No line items yet. Use &quot;Add Item&quot; to add each expense. After saving, attach a receipt to each
-              line — the report cannot be submitted without them.
+              line — the report cannot be submitted without them. A mileage line can record its trips here instead.
             </p>
           ) : (
             <div className="space-y-4">
@@ -413,44 +440,48 @@ const ExpenseReportFormPage: React.FC = () => {
                         onChange={(e) => updateLineItem(index, 'description', e.target.value)}
                       />
                     </div>
-                    <div>
-                      <label htmlFor={`line-${String(index)}-amount`} className={labelClass}>
-                        Amount *
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min={MIN_MONEY_AMOUNT}
-                        max={MAX_MONEY_AMOUNT}
-                        className={inputClass}
-                        id={`line-${String(index)}-amount`}
-                        placeholder="0.00"
-                        value={item.amount || ''}
-                        onChange={(e) => updateLineItem(index, 'amount', parseFloat(e.target.value) || 0)}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor={`line-${String(index)}-date`} className={labelClass}>
-                        Date *
-                      </label>
-                      <input
-                        id={`line-${String(index)}-date`}
-                        type="date"
-                        className={inputClass}
-                        value={item.dateIncurred}
-                        onChange={(e) => updateLineItem(index, 'dateIncurred', e.target.value)}
-                        aria-describedby={lateWarning(item.dateIncurred) ? `line-${String(index)}-late` : undefined}
-                      />
-                      {lateWarning(item.dateIncurred) && (
-                        <p
-                          id={`line-${String(index)}-late`}
-                          className="mt-1 text-xs text-amber-800 dark:text-amber-300"
-                          role="status"
-                        >
-                          {lateWarning(item.dateIncurred)}
-                        </p>
-                      )}
-                    </div>
+                    {!isLogged(item) && (
+                      <div>
+                        <label htmlFor={`line-${String(index)}-amount`} className={labelClass}>
+                          Amount *
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min={MIN_MONEY_AMOUNT}
+                          max={MAX_MONEY_AMOUNT}
+                          className={inputClass}
+                          id={`line-${String(index)}-amount`}
+                          placeholder="0.00"
+                          value={item.amount || ''}
+                          onChange={(e) => updateLineItem(index, 'amount', parseFloat(e.target.value) || 0)}
+                        />
+                      </div>
+                    )}
+                    {!isLogged(item) && (
+                      <div>
+                        <label htmlFor={`line-${String(index)}-date`} className={labelClass}>
+                          Date *
+                        </label>
+                        <input
+                          id={`line-${String(index)}-date`}
+                          type="date"
+                          className={inputClass}
+                          value={item.dateIncurred}
+                          onChange={(e) => updateLineItem(index, 'dateIncurred', e.target.value)}
+                          aria-describedby={lateWarning(item.dateIncurred) ? `line-${String(index)}-late` : undefined}
+                        />
+                        {lateWarning(item.dateIncurred) && (
+                          <p
+                            id={`line-${String(index)}-late`}
+                            className="mt-1 text-xs text-amber-800 dark:text-amber-300"
+                            role="status"
+                          >
+                            {lateWarning(item.dateIncurred)}
+                          </p>
+                        )}
+                      </div>
+                    )}
                     <div>
                       <label htmlFor={`line-${String(index)}-type`} className={labelClass}>
                         Type *
@@ -481,6 +512,17 @@ const ExpenseReportFormPage: React.FC = () => {
                         onChange={(e) => updateLineItem(index, 'merchant', e.target.value)}
                       />
                     </div>
+                    {item.expenseType === ExpenseType.MILEAGE && (
+                      <div className="sm:col-span-3">
+                        <MileageTripLog
+                          idPrefix={`line-${String(index)}`}
+                          trips={item.trips}
+                          onChange={(trips) => updateLineItem(index, 'trips', trips)}
+                          rate={mileageRate}
+                          today={getTodayLocalDate(tz)}
+                        />
+                      </div>
+                    )}
                     <div className="sm:col-span-3">
                       <label htmlFor={`line-${String(index)}-budget`} className={labelClass}>
                         Budget line

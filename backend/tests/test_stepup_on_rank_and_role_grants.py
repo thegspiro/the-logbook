@@ -19,6 +19,7 @@ from sqlalchemy import select
 from app.api.v1.endpoints.users import create_member, update_user_profile
 from app.models.user import Organization, Role, User, UserStatus
 from app.schemas.user import AdminUserCreate, UserUpdate
+from tests.fake_request import fake_request
 
 USERS = "app.api.v1.endpoints.users"
 REFUSED = HTTPException(status_code=403, detail="Please confirm your identity.")
@@ -95,6 +96,7 @@ class TestProfileUpdate:
                 caller,
                 authorization=None,
                 access_token="session-token",
+                request=fake_request(),
             )
         return db
 

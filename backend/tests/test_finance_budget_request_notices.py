@@ -29,7 +29,8 @@ Pinned here:
   ``plansNextYear``.
 """
 
-from datetime import timedelta
+import copy
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -41,15 +42,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.finance import (
     Budget,
     BudgetCategory,
+    BudgetPlanningStage,
     BudgetRequest,
     BudgetRequestStatus,
     FiscalYear,
     FiscalYearStatus,
 )
-from app.models.notification import NotificationLog
+from app.models.notification import NotificationChannel, NotificationLog
 from app.models.user import Organization
 from app.services import finance_budget_request_notifications as notices
+from app.services import finance_year_due_notifications as year_due
 from app.services import scheduled_tasks
+from app.services.email_policy import EmailKind
+from app.utils.finance_settings import budget_request_reminders_in
 from app.utils.org_timezone import org_today
 from tests.test_finance_budget_owners import (
     _client,
@@ -804,3 +809,403 @@ class TestPlansNextYear:
         await db_session.flush()
         body = await self._summary(db_session, dept["their_trainer"])
         assert body == {"ownsAny": True, "plansNextYear": False}
+
+
+# ============================================
+# 5. The department's reminder schedule and bell notices (owner decision,
+#    2026-11-01: "make it configurable")
+# ============================================
+
+
+@pytest.mark.unit
+class TestReminderSettingsReading:
+    def _read(self, section):
+        return budget_request_reminders_in({"finance": section})
+
+    def test_absent_is_todays_schedule_without_bell_entries(self):
+        for settings in (None, {}, {"finance": None}, {"finance": {}}):
+            resolved = budget_request_reminders_in(settings)
+            assert resolved.offsets_days == (7, 1)
+            assert resolved.bell_notices is False
+            assert resolved.is_default is True
+
+    def test_a_chosen_schedule_most_distant_first_without_repeats(self):
+        resolved = self._read(
+            {
+                "budget_request_reminder_days": [3, 14, 3, 0],
+                "budget_request_bell_notices": True,
+            }
+        )
+        assert resolved.offsets_days == (14, 3, 0)
+        assert resolved.bell_notices is True
+        assert resolved.is_default is False
+
+    def test_an_empty_list_turns_the_reminder_off(self):
+        assert self._read({"budget_request_reminder_days": []}).offsets_days == ()
+
+    @pytest.mark.parametrize(
+        "raw",
+        ["7,1", [61], [-1], [True], ["7"], [1.5], [1, 2, 3, 4, 5, 6]],
+    )
+    def test_anything_malformed_reads_as_the_default(self, raw):
+        resolved = self._read({"budget_request_reminder_days": raw})
+        assert resolved.offsets_days == (7, 1)
+        assert resolved.is_default is True
+
+    def test_only_a_literal_true_turns_the_bell_on(self):
+        assert self._read({"budget_request_bell_notices": "yes"}).bell_notices is False
+
+    @pytest.mark.parametrize(
+        ("days_left", "expected"),
+        [(15, None), (14, 14), (4, 14), (3, 3), (1, 3), (0, 0), (-1, None)],
+    )
+    def test_due_offset_follows_the_department_schedule(self, days_left, expected):
+        today = org_today(None)
+        deadline = today + timedelta(days=days_left)
+        assert notices.due_offset(deadline, today, (14, 3, 0)) == expected
+
+    def test_no_schedule_means_nothing_is_ever_due(self):
+        today = org_today(None)
+        assert notices.due_offset(today, today, ()) is None
+
+
+async def _set_reminder_settings(db, dept, **section):
+    org = await _org_row(db, dept)
+    settings = copy.deepcopy(org.settings or {})
+    settings.setdefault("finance", {}).update(section)
+    org.settings = settings
+    await db.flush()
+    return org
+
+
+def _bell_rows(rows):
+    return [r for r in rows if r.channel == NotificationChannel.IN_APP]
+
+
+async def _reminder_logs(db, dept):
+    result = await db.execute(
+        select(NotificationLog).where(
+            NotificationLog.organization_id == dept["org_id"],
+            NotificationLog.category == notices.REMINDER_LOG_CATEGORY,
+        )
+    )
+    return list(result.scalars().all())
+
+
+@pytest.mark.integration
+class TestConfiguredReminders:
+    async def test_a_department_schedule_replaces_seven_and_one(
+        self, db_session, dept, mailer
+    ):
+        await _set_reminder_settings(db_session, dept, budget_request_reminder_days=[3])
+        org = await _deadline_in(db_session, dept, 7)
+        assert await notices.send_deadline_reminders(db_session, org) == 0
+        org = await _deadline_in(db_session, dept, 3)
+        assert await notices.send_deadline_reminders(db_session, org) == 3
+        logs = await _reminder_logs(db_session, dept)
+        assert {log.notification_metadata["offset_days"] for log in logs} == {3}
+
+    async def test_an_empty_schedule_sends_nothing(self, db_session, dept, mailer):
+        await _set_reminder_settings(db_session, dept, budget_request_reminder_days=[])
+        org = await _deadline_in(db_session, dept, 1)
+        assert await notices.send_deadline_reminders(db_session, org) == 0
+        assert mailer.sends == []
+
+    async def test_bell_entries_go_with_the_emails_once(self, db_session, dept, mailer):
+        await _set_reminder_settings(db_session, dept, budget_request_bell_notices=True)
+        org = await _deadline_in(db_session, dept, 7)
+        assert await notices.send_deadline_reminders(db_session, org) == 3
+        bell = _bell_rows(await _reminder_logs(db_session, dept))
+        assert {row.recipient_id for row in bell} == {
+            dept["trainer"].id,
+            dept["co_trainer"].id,
+            dept["chief"].id,
+        }
+        assert all(row.action_url == notices.OWNER_PATH for row in bell)
+        assert all("FY2027" in row.subject for row in bell)
+        # A second run the same day: no email, no second bell entry.
+        assert await notices.send_deadline_reminders(db_session, org) == 0
+        assert len(_bell_rows(await _reminder_logs(db_session, dept))) == 3
+        assert len(mailer.sends) == 1
+
+    async def test_no_bell_entries_unless_the_department_asks(
+        self, db_session, dept, mailer
+    ):
+        org = await _deadline_in(db_session, dept, 7)
+        await notices.send_deadline_reminders(db_session, org)
+        assert _bell_rows(await _reminder_logs(db_session, dept)) == []
+
+    async def test_a_member_who_muted_the_emails_still_gets_the_bell_entry(
+        self, db_session, dept, mailer
+    ):
+        await _set_reminder_settings(db_session, dept, budget_request_bell_notices=True)
+        chief = dept["chief"]
+        chief.notification_preferences = {
+            "email_kinds": {EmailKind.BUDGET_REQUESTS.value: False}
+        }
+        await db_session.flush()
+        org = await _deadline_in(db_session, dept, 7)
+        await notices.send_deadline_reminders(db_session, org)
+        assert chief.email not in mailer.to("Reminder")
+        bell = _bell_rows(await _reminder_logs(db_session, dept))
+        assert chief.id in {row.recipient_id for row in bell}
+
+
+@pytest.mark.integration
+class TestReminderSettingsEndpoint:
+    PATH = "/finance/settings/budget-request-reminders"
+
+    async def test_reports_todays_schedule_until_one_is_chosen(self, db_session, dept):
+        resp = await _call(db_session, dept["treasurer"], "GET", self.PATH)
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {
+            "offsetsDays": [7, 1],
+            "bellNotices": False,
+            "isDefault": True,
+        }
+
+    async def test_the_treasurer_sets_it_and_the_reminder_reads_it(
+        self, db_session, dept, mailer
+    ):
+        resp = await _call(
+            db_session,
+            dept["treasurer"],
+            "PUT",
+            self.PATH,
+            {"offsetsDays": [3, 14, 3], "bellNotices": True},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {
+            "offsetsDays": [14, 3],
+            "bellNotices": True,
+            "isDefault": False,
+        }
+        org = await _deadline_in(db_session, dept, 14)
+        assert await notices.send_deadline_reminders(db_session, org) == 3
+        assert len(_bell_rows(await _reminder_logs(db_session, dept))) == 3
+
+    async def test_other_finance_settings_survive_the_save(self, db_session, dept):
+        await _set_reminder_settings(db_session, dept, fund_overspend_mode="block")
+        resp = await _call(
+            db_session,
+            dept["treasurer"],
+            "PUT",
+            self.PATH,
+            {"offsetsDays": [], "bellNotices": False},
+        )
+        assert resp.status_code == 200, resp.text
+        org = await _org_row(db_session, dept)
+        await db_session.refresh(org)
+        assert org.settings["finance"]["fund_overspend_mode"] == "block"
+        assert org.settings["finance"]["budget_request_reminder_days"] == []
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"offsetsDays": [61], "bellNotices": False},
+            {"offsetsDays": [-1], "bellNotices": False},
+            {"offsetsDays": [1, 2, 3, 4, 5, 6], "bellNotices": False},
+        ],
+    )
+    async def test_an_impossible_schedule_is_refused(self, db_session, dept, body):
+        resp = await _call(db_session, dept["treasurer"], "PUT", self.PATH, body)
+        assert resp.status_code == 422, resp.text
+
+    async def test_a_member_without_finance_manage_cannot_change_it(
+        self, db_session, dept
+    ):
+        resp = await _call(
+            db_session,
+            dept["trainer"],
+            "PUT",
+            self.PATH,
+            {"offsetsDays": [3], "bellNotices": True},
+        )
+        assert resp.status_code == 403
+
+
+# ============================================
+# 6. The Treasurer is emailed when a year's start or close is due (owner
+#    decision, 2026-11-01)
+# ============================================
+
+
+@pytest.mark.unit
+class TestYearDuePredicates:
+    def _fy(self, status, *, start, end, stage=None, locked=False):
+        return SimpleNamespace(
+            status=status,
+            planning_stage=stage,
+            is_locked=locked,
+            start_date=datetime(
+                start.year, start.month, start.day, tzinfo=timezone.utc
+            ),
+            end_date=datetime(end.year, end.month, end.day, tzinfo=timezone.utc),
+        )
+
+    def test_close_is_due_the_day_after_the_end_date(self):
+        today = date(2027, 1, 1)
+        fy = self._fy(
+            FiscalYearStatus.ACTIVE, start=date(2026, 1, 1), end=date(2026, 12, 31)
+        )
+        assert year_due.close_due(fy, today)
+        assert not year_due.close_due(fy, date(2026, 12, 31))
+        locked = self._fy(
+            FiscalYearStatus.ACTIVE,
+            start=date(2026, 1, 1),
+            end=date(2026, 12, 31),
+            locked=True,
+        )
+        assert not year_due.close_due(locked, today)
+        closed = self._fy(
+            FiscalYearStatus.CLOSED, start=date(2026, 1, 1), end=date(2026, 12, 31)
+        )
+        assert not year_due.close_due(closed, today)
+
+    def test_start_is_due_on_the_start_date_once_adopted(self):
+        adopted = self._fy(
+            FiscalYearStatus.DRAFT,
+            start=date(2027, 1, 1),
+            end=date(2027, 12, 31),
+            stage=BudgetPlanningStage.ADOPTED,
+        )
+        assert year_due.start_due(adopted, date(2027, 1, 1))
+        assert not year_due.start_due(adopted, date(2026, 12, 31))
+        in_review = self._fy(
+            FiscalYearStatus.DRAFT,
+            start=date(2027, 1, 1),
+            end=date(2027, 12, 31),
+            stage=BudgetPlanningStage.BOARD_REVIEW,
+        )
+        assert not year_due.start_due(in_review, date(2027, 1, 2))
+
+
+async def _year_logs(db, dept):
+    result = await db.execute(
+        select(NotificationLog).where(
+            NotificationLog.organization_id == dept["org_id"],
+            NotificationLog.category.in_(
+                [year_due.START_DUE_CATEGORY, year_due.CLOSE_DUE_CATEGORY]
+            ),
+        )
+    )
+    return list(result.scalars().all())
+
+
+def _midnight(day):
+    return datetime(day.year, day.month, day.day, tzinfo=timezone.utc)
+
+
+@pytest.mark.integration
+class TestYearDueEmails:
+    async def _close_due(self, db, dept):
+        org = await _org_row(db, dept)
+        fy = await db.get(FiscalYear, dept["active"])
+        fy.end_date = _midnight(org_today(org) - timedelta(days=1))
+        await db.flush()
+        return org
+
+    async def _start_due(self, db, dept, **extra):
+        org = await _org_row(db, dept)
+        fy = await db.get(FiscalYear, dept["draft"])
+        fy.planning_stage = BudgetPlanningStage.ADOPTED
+        fy.start_date = _midnight(org_today(org))
+        for key, value in extra.items():
+            setattr(fy, key, value)
+        await db.flush()
+        return org
+
+    async def test_a_due_close_reaches_the_treasurers_once(
+        self, db_session, dept, mailer
+    ):
+        org = await self._close_due(db_session, dept)
+        assert await year_due.send_year_due_reminders(db_session, org) == 2
+        assert mailer.to("FY2026 has ended") == _emails(dept, "treasurer", "it")
+        assert "year-end close" in mailer.sends[0]["text"]
+        assert await year_due.send_year_due_reminders(db_session, org) == 0
+        assert len(mailer.sends) == 1
+
+    async def test_a_due_start_reaches_the_treasurers_once(
+        self, db_session, dept, mailer
+    ):
+        org = await self._start_due(db_session, dept)
+        assert await year_due.send_year_due_reminders(db_session, org) == 2
+        assert mailer.to("FY2027 can be started") == _emails(dept, "treasurer", "it")
+        # FY2026 is still active: the Treasurer is told to close it first.
+        assert "FY2026" in mailer.sends[0]["text"]
+        assert await year_due.send_year_due_reminders(db_session, org) == 0
+
+    async def test_nothing_before_it_is_due(self, db_session, dept, mailer):
+        org = await _org_row(db_session, dept)
+        fy = await db_session.get(FiscalYear, dept["draft"])
+        fy.planning_stage = BudgetPlanningStage.ADOPTED
+        fy.start_date = _midnight(org_today(org) + timedelta(days=1))
+        active = await db_session.get(FiscalYear, dept["active"])
+        active.end_date = _midnight(org_today(org))
+        await db_session.flush()
+        assert await year_due.send_year_due_reminders(db_session, org) == 0
+        assert mailer.sends == []
+
+    async def test_a_locked_or_unadopted_year_is_not_due(
+        self, db_session, dept, mailer
+    ):
+        org = await self._start_due(
+            db_session, dept, planning_stage=BudgetPlanningStage.BOARD_REVIEW
+        )
+        assert await year_due.send_year_due_reminders(db_session, org) == 0
+        await self._start_due(db_session, dept, is_locked=True)
+        assert await year_due.send_year_due_reminders(db_session, org) == 0
+        assert mailer.sends == []
+
+    async def test_a_moved_end_date_is_a_new_close(self, db_session, dept, mailer):
+        org = await self._close_due(db_session, dept)
+        await year_due.send_year_due_reminders(db_session, org)
+        fy = await db_session.get(FiscalYear, dept["active"])
+        fy.end_date = _midnight(org_today(org) - timedelta(days=2))
+        await db_session.flush()
+        assert await year_due.send_year_due_reminders(db_session, org) == 2
+
+    async def test_the_send_is_recorded_per_treasurer(self, db_session, dept, mailer):
+        org = await self._close_due(db_session, dept)
+        await year_due.send_year_due_reminders(db_session, org)
+        logs = await _year_logs(db_session, dept)
+        assert {log.recipient_id for log in logs} == {
+            dept["treasurer"].id,
+            dept["it"].id,
+        }
+        assert all(log.channel == NotificationChannel.EMAIL for log in logs)
+        assert {log.notification_metadata["fiscal_year_id"] for log in logs} == {
+            dept["active"]
+        }
+
+    async def test_a_treasurer_who_muted_duty_emails_is_left_out(
+        self, db_session, dept, mailer
+    ):
+        it = dept["it"]
+        it.notification_preferences = {
+            "email_kinds": {EmailKind.FINANCE_DUTIES.value: False}
+        }
+        await db_session.flush()
+        org = await self._close_due(db_session, dept)
+        assert await year_due.send_year_due_reminders(db_session, org) == 1
+        assert mailer.to("FY2026") == _emails(dept, "treasurer")
+
+    async def test_another_departments_year_is_not_reported(
+        self, db_session, dept, mailer
+    ):
+        org = await _org_row(db_session, dept)
+        theirs = await db_session.get(FiscalYear, dept["their_draft"])
+        theirs.planning_stage = BudgetPlanningStage.ADOPTED
+        theirs.start_date = _midnight(org_today(org))
+        await db_session.flush()
+        assert await year_due.send_year_due_reminders(db_session, org) == 0
+
+
+@pytest.mark.unit
+class TestYearDueTask:
+    def test_it_is_registered_and_scheduled(self):
+        name = "fiscal_year_due_reminders"
+        runner = scheduled_tasks.run_fiscal_year_due_reminders
+        assert scheduled_tasks.TASK_RUNNERS[name] is runner
+        assert name in scheduled_tasks.SCHEDULE
+        assert scheduled_tasks.TASK_INTERVALS_SECONDS[name] == 86400

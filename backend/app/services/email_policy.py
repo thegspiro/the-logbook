@@ -87,6 +87,7 @@ class EmailKind(str, enum.Enum):
     SUGGESTION_BOX = "suggestion_box"
     BUDGET_REQUESTS = "budget_requests"
     FINANCE_REQUESTS = "finance_requests"
+    DUES_REMINDERS = "dues_reminders"
     MINUTES_ACTION_ITEMS = "minutes_action_items"
     MINUTES_CIRCULATED = "minutes_circulated"
     WEATHER_ALERTS = "weather_alerts"
@@ -386,6 +387,18 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "was approved or denied",
         ),
         rationale="The request's own page shows the same decision.",
+    ),
+    # Owner decision 2026-11-01 ("My dues view + email reminders"); sent by
+    # app/services/dues_reminders.py.
+    EmailKind.DUES_REMINDERS: EmailPolicy(
+        label="Your dues",
+        required=False,
+        audience=_M,
+        includes=(
+            "Your dues fall due within a week",
+            "Your dues are overdue, with any late fee and when it is added",
+        ),
+        rationale="Finance > My Dues shows the same balances and due dates.",
     ),
     # Sent only when the department turned on email for its NWS weather
     # integration (owner decision 2026-10-29); otherwise no member gets one.

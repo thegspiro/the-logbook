@@ -36,6 +36,8 @@ vi.mock('@/stores/authStore', () => ({
 const fiscalYearOptions = vi.fn();
 const budgetOptions = vi.fn();
 vi.mock('../services/api', () => ({
+  // The detail pages ask whether the payment went to QuickBooks Online; it did not.
+  quickBooksOnlineService: { postings: () => Promise.resolve([]) },
   fiscalYearService: { options: () => fiscalYearOptions() as unknown },
   budgetService: { options: (fy: string) => budgetOptions(fy) as unknown },
   purchaseRequestService: {},

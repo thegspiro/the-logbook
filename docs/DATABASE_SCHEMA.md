@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**356 tables · 5811 columns · 1199 foreign keys**
+**359 tables · 5863 columns · 1206 foreign keys**
 
 ---
 
@@ -278,6 +278,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`advance_returns`](#advance_returns) | `AdvanceReturn` | 12 | Unspent cash a member handed back against a cash advance. |
+| [`advance_statements`](#advance_statements) | `AdvanceStatement` | 8 | A quarterly statement emailed to a cash advance's holder. |
 | [`approval_chain_steps`](#approval_chain_steps) | `ApprovalChainStep` | 13 | A single step in an approval chain |
 | [`approval_chains`](#approval_chains) | `ApprovalChain` | 13 | Configurable approval chain template |
 | [`approval_step_records`](#approval_step_records) | `ApprovalStepRecord` | 17 | Tracks actual approval step progression for a specific entity |
@@ -286,17 +287,19 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`budget_category_charge_positions`](#budget_category_charge_positions) | `BudgetCategoryChargePosition` | 5 | A position named as able to charge a restricted category's lines. |
 | [`budget_requests`](#budget_requests) | `BudgetRequest` | 22 | A line owner's proposed amount for a budget line in a draft year. |
 | [`budgets`](#budgets) | `Budget` | 13 | Budget line for a category within a fiscal year |
-| [`check_requests`](#check_requests) | `CheckRequest` | 36 | Request to cut a check for payment |
+| [`check_requests`](#check_requests) | `CheckRequest` | 38 | Request to cut a check for payment |
 | [`dues_payments`](#dues_payments) | `DuesPayment` | 13 | A single payment received against a member's dues (FIN-6). |
-| [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 17 | Schedule for dues collection |
-| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 14 | Individual line item within an expense report |
+| [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 18 | Schedule for dues collection |
+| [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 16 | Individual line item within an expense report |
 | [`expense_reports`](#expense_reports) | `ExpenseReport` | 29 | Expense report submitted by a member for reimbursement |
 | [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 14 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 9 | Mapping between internal budget categories and QuickBooks accounts |
 | [`finance_qb_chart_accounts`](#finance_qb_chart_accounts) | `QuickBooksChartAccount` | 6 | One account of the department's QuickBooks chart of accounts, as the |
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 21 | Fiscal year definition for the organization |
-| [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
+| [`member_dues`](#member_dues) | `MemberDues` | 20 | Individual member dues payment record |
 | [`purchase_requests`](#purchase_requests) | `PurchaseRequest` | 33 | Purchase request submitted by a member |
+| [`quickbooks_connections`](#quickbooks_connections) | `QuickBooksConnection` | 18 | A department's connection to its QuickBooks Online company. |
+| [`quickbooks_postings`](#quickbooks_postings) | `QuickBooksPosting` | 18 | One payment's journey to QuickBooks Online as a Purchase. |
 
 ### Forms
 
@@ -315,7 +318,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`donations`](#donations) | `Donation` | 26 | Donation model mapping to the existing donations table. |
+| [`donations`](#donations) | `Donation` | 27 | Donation model mapping to the existing donations table. |
 | [`donors`](#donors) | `Donor` | 27 | Donor model mapping to the existing donors table. |
 | [`fundraising_campaigns`](#fundraising_campaigns) | `FundraisingCampaign` | 24 | Fundraising campaign model mapping to the existing fundraising_campaigns table. |
 | [`fundraising_events`](#fundraising_events) | `FundraisingEvent` | 22 | Fundraising event model mapping to the existing fundraising_events table. |
@@ -4205,6 +4208,31 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_advance_returns_advance` (`advance_id`)
 - `ix_advance_returns_org_returned` (`organization_id`, `returned_at`)
 
+### `advance_statements`
+
+**AdvanceStatement** · `app/models/finance.py`
+
+> A quarterly statement emailed to a cash advance's holder. Only an advance on the periodic-statement method has them (app/services/cash_advances.py works out when each is due, and app/services/cash_advance_statements.py sends them). The row is the delivery record: what the statement listed as outstanding and when it reached the member's inbox. The unique key is what makes a second run of the scheduled task, or two at once, send a statement once (CLAUDE.md pitfall #36).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `advance_id` | VARCHAR(36) | no | FK |  | → `check_requests.id` ON DELETE CASCADE |
+| `statement_date` | DATE | no |  |  |  |
+| `due_date` | DATE | no |  |  |  |
+| `outstanding` | NUMERIC(12, 2) | no |  |  |  |
+| `emailed_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_advance_statements_org` (`organization_id`)
+
+**Constraints**
+
+- UNIQUE `uq_advance_statement_quarter` (`advance_id`, `statement_date`)
+
 ### `approval_chain_steps`
 
 **ApprovalChainStep** · `app/models/finance.py`
@@ -4457,6 +4485,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `functional_class` | ENUM(`program`, `management_general`, `fundraising`) | yes |  |  |  |
 | `fund_campaign_id` | VARCHAR(36) | yes | FK, IDX |  | → `fundraising_campaigns.id` ON DELETE SET NULL |
 | `is_advance` | BOOL | no |  | `0` |  |
+| `raised_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `advance_return_method` | VARCHAR(20) | yes |  |  |  |
 | `expense_report_id` | VARCHAR(36) | yes | FK, IDX |  | → `expense_reports.id` ON DELETE SET NULL |
 | `payee_name` | VARCHAR(300) | no |  |  |  |
 | `payee_address` | TEXT | yes |  |  |  |
@@ -4545,6 +4575,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `late_fee_amount` | NUMERIC(12, 2) | yes |  |  |  |
 | `fiscal_year_id` | VARCHAR(36) | yes | FK |  | → `fiscal_years.id` ON DELETE SET NULL |
 | `applies_to_membership_types` | JSON | yes |  |  |  |
+| `terms_effective_at` | DATETIME | yes |  |  |  |
 | `qb_income_account` | VARCHAR(200) | yes |  |  |  |
 | `qb_deposit_account` | VARCHAR(200) | yes |  |  |  |
 | `is_active` | BOOL | no |  | `True` |  |
@@ -4577,6 +4608,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `receipt_url` | VARCHAR(500) | yes |  |  |  |
 | `receipt_document_id` | VARCHAR(36) | yes | FK |  | → `documents.id` ON DELETE SET NULL |
 | `merchant` | VARCHAR(300) | yes |  |  |  |
+| `mileage_trips` | JSON | yes |  |  |  |
+| `mileage_rate` | NUMERIC(6, 3) | yes |  |  |  |
 | `substantiated_late` | BOOL | no |  | `0` |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
@@ -4755,6 +4788,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `payment_method` | VARCHAR(50) | yes |  |  |  |
 | `transaction_reference` | VARCHAR(200) | yes |  |  |  |
 | `late_fee_applied` | NUMERIC(12, 2) | yes |  |  |  |
+| `due_reminder_sent_at` | DATETIME | yes |  |  |  |
+| `overdue_reminder_sent_at` | DATETIME | yes |  |  |  |
 | `waived_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `waived_at` | DATETIME | yes |  |  |  |
 | `waive_reason` | TEXT | yes |  |  |  |
@@ -4819,6 +4854,74 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_purchase_requests_org_number` (`organization_id`, `request_number`)
+
+### `quickbooks_connections`
+
+**QuickBooksConnection** · `app/models/finance.py`
+
+> A department's connection to its QuickBooks Online company. One row per department. The tokens Intuit issues are encrypted at rest; the refresh token changes as Intuit rotates it, and the newest one is the only one kept ("Always store the latest refresh_token value", Intuit's OAuth 2.0 guide). ``pending_attempt`` holds the one connect attempt in flight (its nonce, who started it, when it expires), encrypted too, so a callback can be completed once and only by the browser that began it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, UQ |  | → `organizations.id` ON DELETE CASCADE |
+| `status` | VARCHAR(20) | no |  | `'disconnected'` |  |
+| `environment` | VARCHAR(20) | yes |  |  |  |
+| `realm_id` | VARCHAR(32) | yes |  |  |  |
+| `access_token` | TEXT | yes |  |  |  |
+| `refresh_token` | TEXT | yes |  |  |  |
+| `access_token_expires_at` | DATETIME | yes |  |  |  |
+| `refresh_token_expires_at` | DATETIME | yes |  |  |  |
+| `pending_attempt` | TEXT | yes |  |  |  |
+| `post_from` | DATETIME | yes |  |  |  |
+| `connected_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `connected_at` | DATETIME | yes |  |  |  |
+| `last_sync_at` | DATETIME | yes |  |  |  |
+| `last_error` | VARCHAR(500) | yes |  |  |  |
+| `sync_lease_until` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_quickbooks_connections_organization_id` (`organization_id`)
+
+### `quickbooks_postings`
+
+**QuickBooksPosting** · `app/models/finance.py`
+
+> One payment's journey to QuickBooks Online as a Purchase. The unique key on (organization, payment type, payment) is what makes a payment post once whatever runs twice: a second sweep finds the row and leaves it. ``request_id`` is sent as Intuit's ``requestid``, which makes Intuit answer a resent create with the original response instead of a second Purchase; it is kept across transient failures and replaced only after Intuit refused the request outright, when nothing was created.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `payment_type` | VARCHAR(20) | no |  |  |  |
+| `payment_id` | VARCHAR(36) | no |  |  |  |
+| `document_number` | VARCHAR(20) | no |  |  |  |
+| `status` | VARCHAR(20) | no |  | `'queued'` |  |
+| `request_id` | VARCHAR(50) | no | UQ |  |  |
+| `realm_id` | VARCHAR(32) | yes |  |  |  |
+| `qb_purchase_id` | VARCHAR(32) | yes |  |  |  |
+| `qb_vendor_id` | VARCHAR(32) | yes |  |  |  |
+| `vendor_name` | VARCHAR(300) | yes |  |  |  |
+| `amount` | NUMERIC(12, 2) | yes |  |  |  |
+| `attempts` | INTEGER | no |  | `0` |  |
+| `next_attempt_at` | DATETIME | yes |  |  |  |
+| `last_error` | VARCHAR(500) | yes |  |  |  |
+| `posted_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_quickbooks_postings_org_status` (`organization_id`, `status`)
+
+**Constraints**
+
+- UNIQUE `uq_quickbooks_postings_payment` (`organization_id`, `payment_type`, `payment_id`)
+- UNIQUE `uq_quickbooks_postings_purchase` (`realm_id`, `qb_purchase_id`)
+- UNIQUE `uq_quickbooks_postings_request_id` (`request_id`)
 
 ## Forms
 
@@ -4965,6 +5068,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `campaign_id` | VARCHAR(36) | yes | FK, IDX |  | → `fundraising_campaigns.id` ON DELETE SET NULL |
 | `donor_id` | VARCHAR(36) | yes | FK, IDX |  | → `donors.id` ON DELETE SET NULL |
+| `pledge_id` | VARCHAR(36) | yes | FK, IDX |  | → `pledges.id` ON DELETE SET NULL |
 | `amount` | NUMERIC(10, 2) | no |  |  |  |
 | `currency` | VARCHAR(3) | no |  | `USD` |  |
 | `donation_date` | DATETIME | no | IDX |  |  |
@@ -4994,6 +5098,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_donations_date` (`donation_date`)
 - `idx_donations_donor` (`donor_id`)
 - `idx_donations_method` (`organization_id`, `payment_method`)
+- `idx_donations_pledge` (`pledge_id`)
 - `idx_donations_status` (`organization_id`, `payment_status`)
 
 ### `donors`
@@ -12362,7 +12467,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (441 references)
+### → `users` (443 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12413,6 +12518,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_item_deployed_lots` | `deployed_by` | SET NULL | yes |
 | `check_requests` | `approved_by` | SET NULL | yes |
 | `check_requests` | `first_approved_by` | SET NULL | yes |
+| `check_requests` | `raised_by` | SET NULL | yes |
 | `check_requests` | `requested_by` | RESTRICT | no |
 | `check_template_items` | `restock_reported_by` | SET NULL | yes |
 | `checkout_records` | `checked_in_by` | RESTRICT | yes |
@@ -12689,6 +12795,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `purchase_requests` | `first_approved_by` | SET NULL | yes |
 | `purchase_requests` | `requested_by` | RESTRICT | no |
 | `push_subscriptions` | `user_id` | CASCADE | no |
+| `quickbooks_connections` | `connected_by` | SET NULL | yes |
 | `recertification_pathways` | `created_by` | SET NULL | yes |
 | `renewal_tasks` | `user_id` | CASCADE | no |
 | `reorder_receipts` | `received_by` | SET NULL | yes |
@@ -12808,7 +12915,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (294 references)
+### → `organizations` (297 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12816,6 +12923,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `admin_hours_entries` | `organization_id` | CASCADE | no |
 | `admin_hub_metric_preferences` | `organization_id` | CASCADE | no |
 | `advance_returns` | `organization_id` | CASCADE | no |
+| `advance_statements` | `organization_id` | CASCADE | no |
 | `apparatus` | `organization_id` | CASCADE | no |
 | `apparatus_component_notes` | `organization_id` | CASCADE | no |
 | `apparatus_components` | `organization_id` | CASCADE | no |
@@ -13028,6 +13136,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `public_portal_data_whitelist` | `organization_id` | CASCADE | no |
 | `purchase_requests` | `organization_id` | CASCADE | no |
 | `push_subscriptions` | `organization_id` | CASCADE | no |
+| `quickbooks_connections` | `organization_id` | CASCADE | no |
+| `quickbooks_postings` | `organization_id` | CASCADE | no |
 | `recertification_pathways` | `organization_id` | CASCADE | no |
 | `renewal_tasks` | `organization_id` | CASCADE | no |
 | `reorder_receipts` | `organization_id` | CASCADE | no |
@@ -13620,6 +13730,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestions` | `box_id` | CASCADE | no |
 | `suggestions` | `routed_from_box_id` | SET NULL | yes |
 
+### → `check_requests` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `advance_returns` | `advance_id` | CASCADE | no |
+| `advance_statements` | `advance_id` | CASCADE | no |
+| `expense_reports` | `advance_id` | SET NULL | yes |
+
 ### → `course_cohort_classes` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -13750,13 +13868,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `approval_chain_steps` | `chain_id` | CASCADE | no |
 | `approval_step_records` | `chain_id` | CASCADE | no |
-
-### → `check_requests` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `advance_returns` | `advance_id` | CASCADE | no |
-| `expense_reports` | `advance_id` | SET NULL | yes |
 
 ### → `check_template_items` (2 references)
 
@@ -14171,6 +14282,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `org_call_responses` | `call_id` | CASCADE | no |
+
+### → `pledges` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `donations` | `pledge_id` | SET NULL | yes |
 
 ### → `public_portal_api_keys` (1 references)
 

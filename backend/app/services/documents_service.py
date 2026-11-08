@@ -136,7 +136,9 @@ FACILITY_SENSITIVE_PERMISSIONS = FACILITY_FOLDER_PERMISSIONS
 #
 # * Finance follows it when it is about to point a record at a document: the
 #   reimbursement path share-locks the receipt it copies before the purchase
-#   (``lock_documents_for_reference``), and the receipt uploads share-lock
+#   (``lock_documents_for_reference``), as does a line taking another line's
+#   receipt (``FinanceService.share_line_receipt``, before the report), and
+#   the receipt uploads share-lock
 #   Finance > Receipts before the request or report
 #   (``lock_finance_receipts_folder``). A foreign key check takes a shared
 #   lock on the parent row when the reference is written; taken that late it

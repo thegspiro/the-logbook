@@ -1161,6 +1161,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         anyPermission: FINANCE_REQUEST_READ_GATE,
         module: 'finance',
       },
+      {
+        path: '/finance/my-dues',
+        label: 'My dues',
+        note: "The member's own dues: owed, paid, due dates and late fees; empty for a member with none",
+        module: 'finance',
+      },
       { path: '/finance/dues', label: 'Dues management', permission: 'finance.view', module: 'finance' },
       { path: '/finance/reports', label: 'Finance reports', permission: 'finance.view', module: 'finance' },
       { path: '/finance/approvals', label: 'Approvals', permission: 'finance.approve', module: 'finance' },

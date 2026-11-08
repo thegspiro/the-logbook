@@ -207,7 +207,7 @@ describe('CourseLibraryPage course form', () => {
 
     expect(screen.getByLabelText(/^Duration \(hours\)$/)).toHaveAccessibleDescription('How long the class runs.');
     expect(screen.getByLabelText(/^Credit Hours$/)).toHaveAccessibleDescription(
-      'The training hours a member is credited with. Left blank, a session from this course credits its duration.'
+      'The training hours a member is credited with, by a session of this course or by a mapped provider completion that reports no hours. Left blank, the course credits its duration.'
     );
   });
 

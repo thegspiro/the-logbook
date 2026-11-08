@@ -79,6 +79,7 @@ from app.api.v1.endpoints import (
     organizations,
     outlook_calendar_oauth,
     platform_analytics,
+    quickbooks_online,
     reports,
     roles,
     salesforce_sync,
@@ -582,6 +583,12 @@ api_router.include_router(
 api_router.include_router(
     finance.router,
     prefix="/finance",
+    tags=["finance"],
+    dependencies=module_gate("finance", "Finance"),
+)
+api_router.include_router(
+    quickbooks_online.router,
+    prefix="/finance/quickbooks",
     tags=["finance"],
     dependencies=module_gate("finance", "Finance"),
 )
