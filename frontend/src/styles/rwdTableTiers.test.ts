@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 const stylesheet = readFileSync(join(__dirname, 'index.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 
 const TIERS = [
+  { cls: 'rwd-table-narrow', width: '32rem' },
   { cls: 'rwd-table-wide', width: '64rem' },
   { cls: 'rwd-table-xwide', width: '80rem' },
   { cls: 'rwd-table-2xwide', width: '96rem' },
@@ -25,7 +26,7 @@ const bodyOf = (open: string, from = 0): { start: number; body: string } => {
 const blockFor = (width: string): string => bodyOf(`@container rwd-table (width < ${width}) {`).body;
 
 /**
- * The container-query reflow tiers are three copies of one rule set, differing
+ * The container-query reflow tiers are four copies of one rule set, differing
  * only in the tier class and the width — CSS cannot vary an @container
  * condition per class. A fix made to one copy and not the others would leave
  * the same table reflowing differently depending on its tier, which nothing
