@@ -11,6 +11,11 @@
  * drafting the period would leave out and why — the same preview "Draft a
  * review period" shows — so a member with no fitting form turns up here
  * rather than halfway through a bulk draft.
+ *
+ * The first two steps name the header's New template and New review period
+ * buttons rather than repeating them: two buttons doing one thing on one
+ * screen read as two different actions. Each is named only to a viewer the
+ * header shows it to, since both are gated the same way here and there.
  */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
@@ -35,8 +40,6 @@ interface EvaluationSetupChecklistProps {
   canConfigure: boolean;
   canManage: boolean;
   canOpenConductList: boolean;
-  onNewTemplate: () => void;
-  onNewPeriod: () => void;
 }
 
 interface Step {
@@ -53,8 +56,6 @@ export const EvaluationSetupChecklist: React.FC<EvaluationSetupChecklistProps> =
   canConfigure,
   canManage,
   canOpenConductList,
-  onNewTemplate,
-  onNewPeriod,
 }) => {
   const myId = useAuthStore((state) => state.user?.id);
   const canManageRoles = useAuthStore((state) => state.checkPermission('positions.manage_permissions'));
@@ -128,13 +129,9 @@ export const EvaluationSetupChecklist: React.FC<EvaluationSetupChecklistProps> =
       done: templateDone,
       detail: templateDone
         ? `${published.length} published.`
-        : 'Start from a ready-made form and change its wording, or build your own. Only a published form can be used.',
-      action:
-        !templateDone && canConfigure ? (
-          <button type="button" className="btn-secondary btn-sm" onClick={onNewTemplate}>
-            New template
-          </button>
-        ) : undefined,
+        : `Start from a ready-made form and change its wording, or build your own${
+            canConfigure ? ' with New template at the top of this page' : ''
+          }. Only a published form can be used.`,
     },
     {
       id: 'period',
@@ -142,13 +139,9 @@ export const EvaluationSetupChecklist: React.FC<EvaluationSetupChecklistProps> =
       done: periodDone,
       detail: periodDone
         ? `${openPeriod?.name ?? ''} is open.`
-        : 'The dates the evaluations cover, such as January 1 to December 31.',
-      action:
-        !periodDone && canManage ? (
-          <button type="button" className="btn-secondary btn-sm" onClick={onNewPeriod}>
-            New review period
-          </button>
-        ) : undefined,
+        : `The dates the evaluations cover, such as January 1 to December 31.${
+            canManage ? ' Open one with New review period at the top of this page.' : ''
+          }`,
     },
     {
       id: 'conduct',

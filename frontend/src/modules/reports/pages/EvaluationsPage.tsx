@@ -278,8 +278,6 @@ const EvaluationsPage: React.FC = () => {
             canConfigure={canConfigure}
             canManage={canManage}
             canOpenConductList={canOpenConductList}
-            onNewTemplate={() => setTemplateForm(EMPTY_TEMPLATE)}
-            onNewPeriod={() => setPeriodForm(EMPTY_PERIOD)}
           />
         )}
 
