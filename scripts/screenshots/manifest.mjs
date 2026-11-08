@@ -13353,7 +13353,7 @@ export const SHOTS = [
     doc: "04-events-meetings.md",
     line: 2357,
     anchor: "A request in progress open in the drawer",
-    alt: "A request in progress open in the drawer: the Schedule event, Email requester and More buttons under its title, the next step, and a checklist with one of three steps done",
+    alt: "A request in progress open in the drawer: the Schedule event, Email requester and More buttons under its title, the next step, and a part-done checklist",
     route: "/events/admin?tab=requests",
     expect: "Next:",
     prepare: clickByName(/^Maple Street HOA/),

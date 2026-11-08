@@ -14209,8 +14209,8 @@ class Seeder:
                     "for about 45 students."
                 ),
                 "date_flexibility": "general_timeframe",
-                "timeframe_description": "Any weekday morning in the next month",
-                "expected_attendees": 45,
+                "preferred_timeframe": "Any weekday morning in the next month",
+                "audience_size": 45,
             },
         )
 
@@ -14276,12 +14276,15 @@ class Seeder:
                 ),
                 "date_flexibility": "specific_dates",
                 "preferred_date_start": (now + timedelta(days=40)).isoformat(),
-                "expected_attendees": 200,
+                "audience_size": 200,
             }
         )
         if fresh:
             assign(block_party, "okittredge")
-            tick(block_party, "review_request")
+            # Assigning is itself a checklist step, so a coordinator ticks it
+            # on assigning; leaving it open put "Next: Assign Coordinator" on
+            # a request that plainly had one.
+            tick(block_party, "review_request", "assign_coordinator")
 
         # Scheduled, a few days out, with a signup sheet nobody has joined yet,
         # so the row reads "0 of 3 signed up" and its next step asks for
@@ -14297,7 +14300,7 @@ class Seeder:
                     "like a station tour."
                 ),
                 "date_flexibility": "flexible",
-                "expected_attendees": 14,
+                "audience_size": 14,
             }
         )
         if fresh:
@@ -14331,13 +14334,13 @@ class Seeder:
                 "outreach_type": "career_talk",
                 "description": "A career talk for our teen summer program.",
                 "date_flexibility": "general_timeframe",
-                "timeframe_description": "Spring, any Saturday",
-                "expected_attendees": 30,
+                "preferred_timeframe": "Spring, any Saturday",
+                "audience_size": 30,
             }
         )
         if fresh:
             assign(library, "okittredge")
-            tick(library, "review_request")
+            tick(library, "review_request", "assign_coordinator")
             self.api.patch(
                 f"/event-requests/{library}/postpone",
                 {"reason": "The library is closed for renovation until spring."},
