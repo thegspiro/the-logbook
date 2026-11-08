@@ -59,7 +59,7 @@ async function openPortalTab(page: Page, tab: string): Promise<void> {
 // a full IPv6 address, response time, flag and a details toggle. Wider than
 // any desktop before its URL and address could break.
 test.describe('Public portal access logs table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/admin/public-portal — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await openPortalTab(page, 'Access Logs');

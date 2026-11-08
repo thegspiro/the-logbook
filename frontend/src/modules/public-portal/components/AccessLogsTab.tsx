@@ -296,7 +296,7 @@ export const AccessLogsTab: React.FC = () => {
                 {logs.map((log) => (
                   <React.Fragment key={log.id}>
                     <tr className={`hover:bg-theme-surface-hover ${log.flagged_suspicious ? 'bg-red-500/10' : ''}`}>
-                      <td data-label="Timestamp" className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
+                      <td data-label="Timestamp" className="text-theme-text-muted px-6 py-4 text-sm">
                         {formatDateTime(log.timestamp, tz)}
                       </td>
                       <td data-label="Method" className="px-6 py-4 whitespace-nowrap">
