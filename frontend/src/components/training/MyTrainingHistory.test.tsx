@@ -16,7 +16,10 @@ vi.mock('../../services/api', () => ({
 
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 
-vi.mock('../../utils/dateFormatting', () => ({
+// The real module, so month headings render through formatCalendarDate;
+// only the row dates are simplified to their raw value.
+vi.mock('../../utils/dateFormatting', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../utils/dateFormatting')>()),
   formatDate: (date: string | null) => date ?? 'N/A',
 }));
 
@@ -167,5 +170,67 @@ describe('MyTrainingHistory', () => {
     mockGetRecords.mockRejectedValue(new Error('boom'));
     render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
     expect(await screen.findByRole('alert')).toHaveTextContent(/boom|Failed to load/);
+  });
+
+  describe('month headers', () => {
+    const monthYears = [
+      {
+        year: '2026',
+        records: 3,
+        hours: 4.5,
+        months: [
+          { month: '2026-10', records: 2, hours: 3.5 },
+          { month: '2026-03', records: 1, hours: 1 },
+        ],
+      },
+    ];
+
+    beforeEach(() => {
+      mockGetRecords.mockReset();
+      mockGetRecords.mockImplementation(
+        (params: { year?: string }) =>
+          Promise.resolve(
+            params.year === '2026'
+              ? {
+                  // A page that ends part-way through October: the header
+                  // must still carry October's full total from the server.
+                  items: [record('x', 'Ladders', '2026-10-28'), record('y', 'Hazmat', '2026-03-02')],
+                  total: 3,
+                  page: 1,
+                  page_size: 25,
+                  years: monthYears,
+                }
+              : { items: [], total: 3, page: 1, page_size: 1, years: monthYears }
+          ) as unknown
+      );
+    });
+
+    it('heads each month with its full totals from the server, above its own rows', async () => {
+      render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
+
+      const october = await screen.findByRole('columnheader', { name: /October 2026/ });
+      expect(october).toHaveTextContent('October 2026· 2 records · 3.5 hrs');
+      expect(screen.getByRole('columnheader', { name: /March 2026/ })).toHaveTextContent(
+        'March 2026· 1 record · 1 hrs'
+      );
+
+      const rows = within(screen.getByRole('table'))
+        .getAllByRole('row')
+        .map((r) => r.textContent ?? '');
+      const at = (text: string) => rows.findIndex((t) => t.includes(text));
+      expect(at('October 2026')).toBeLessThan(at('Ladders'));
+      expect(at('Ladders')).toBeLessThan(at('March 2026'));
+      expect(at('March 2026')).toBeLessThan(at('Hazmat'));
+    });
+
+    it('leaves hours out of the month headers when the department hides hours', async () => {
+      render(
+        <MyTrainingHistory visibility={{ ...visibility, show_training_hours: false }} hoursSummary={hoursSummary} />
+      );
+
+      const october = await screen.findByRole('columnheader', { name: /October 2026/ });
+      expect(october).toHaveTextContent('October 2026· 2 records');
+      expect(october).not.toHaveTextContent('hrs');
+    });
   });
 });

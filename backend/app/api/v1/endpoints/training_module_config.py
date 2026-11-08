@@ -984,10 +984,37 @@ async def get_my_training_records(
         entry: dict[str, Any] = {
             "year": str(int(row[0])) if row[0] is not None else UNDATED_YEAR,
             "records": row[1],
+            "months": [],
         }
         if show_hours:
             entry["hours"] = float(row[2])
         years.append(entry)
+
+    # The same totals per calendar month, so the history can head each month
+    # with its whole total even while only one page of its rows is loaded.
+    # A separate query rather than summing these into the year figures: the
+    # year totals stay exactly what they were. Only months with a record
+    # appear; undated records have no month and keep an empty list.
+    month_col = func.extract("month", TrainingRecord.completion_date)
+    month_result = await db.execute(
+        select(month_col, *aggregate_columns)
+        .where(*filters, TrainingRecord.completion_date.is_not(None))
+        .group_by(year_col, month_col)
+    )
+    by_year = {y["year"]: y for y in years}
+    for row in month_result.all():
+        year_entry = by_year.get(str(int(row[1])))
+        if year_entry is None:
+            continue
+        month_entry: dict[str, Any] = {
+            "month": f"{int(row[1]):04d}-{int(row[0]):02d}",
+            "records": row[2],
+        }
+        if show_hours:
+            month_entry["hours"] = float(row[3])
+        year_entry["months"].append(month_entry)
+    for year_entry in years:
+        year_entry["months"].sort(key=lambda m: m["month"], reverse=True)
     # Newest year first, undated records (no year) ahead of all of them.
     years.sort(key=lambda y: (y["year"] == UNDATED_YEAR, y["year"]), reverse=True)
 
