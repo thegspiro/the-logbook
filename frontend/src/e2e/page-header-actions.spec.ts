@@ -26,9 +26,9 @@ async function box(page: Page, name: string) {
   return { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width) };
 }
 
-async function open(page: Page, path: string, width: number) {
+async function open(page: Page, path: string, width: number, extra: string[] = []) {
   await page.setViewportSize({ width, height: 844 });
-  await signIn(page, { permissions: PERMISSIONS });
+  await signIn(page, { permissions: [...PERMISSIONS, ...extra] });
   await page.goto(path);
 }
 
@@ -73,6 +73,19 @@ test.describe('page header buttons on a phone', () => {
     expect(Math.round(icon?.width ?? 0)).toBe(44);
     expect(Math.round(icon?.y ?? -1)).toBe(admin.y);
     expect(admin.width).toBeGreaterThan(200);
+  });
+
+  test('an icon-only link a manager is shown stays square', async ({ page }) => {
+    // The Elections settings link sits straight in the header and was styled
+    // by hand, without btn-icon-sm; the rule above stretched it across the
+    // row. Only managers see it, so a fixture without the grant never did.
+    await open(page, '/elections', 390, ['elections.manage']);
+    const settings = page.getByRole('link', { name: 'Election settings' });
+    await expect(settings).toBeVisible();
+    const rect = await settings.boundingBox();
+
+    expect(Math.round(rect?.width ?? 0)).toBe(44);
+    expect(Math.round(rect?.height ?? 0)).toBe(44);
   });
 });
 
