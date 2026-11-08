@@ -18,7 +18,7 @@ from app.mcp.tools._common import (
     parse_datetime,
     parse_uuid,
 )
-from app.models.event import AttendeeVisibility
+from app.models.event import AttendeeVisibility, Event
 from app.models.user import Organization
 from app.services.event_service import EventService, resolve_attendee_visibility
 
@@ -121,10 +121,14 @@ def _may_see_drafts(principal: McpPrincipal) -> bool:
     return permission_matches("events.manage", set(principal.member_permissions))
 
 
-def _refuse_hidden_draft(principal: McpPrincipal, event: Any) -> None:
-    # The same answer as an unknown id, so a draft's id confirms nothing.
+def _visible_event(principal: McpPrincipal, event: Optional[Event]) -> Event:
+    """The event, or "not found" for a missing one or a draft this caller may not see.
+
+    The same answer for both, so a draft's id confirms nothing.
+    """
     if event is None or (event.is_draft and not _may_see_drafts(principal)):
         raise ValueError("Event not found")
+    return event
 
 
 def register(server: Any) -> None:
@@ -175,10 +179,10 @@ def register(server: Any) -> None:
         RSVP settings."""
         # get_event answers (None, None) for an unknown or foreign id. The
         # RSVP roster is not read here, so it is not loaded.
-        event, _ = await EventService(db).get_event(
+        found, _ = await EventService(db).get_event(
             parse_uuid(event_id, "event_id"), org_uuid(principal), load_rsvps=False
         )
-        _refuse_hidden_draft(principal, event)
+        event = _visible_event(principal, found)
         return _event(event)
 
     @logbook_tool(
@@ -199,10 +203,10 @@ def register(server: Any) -> None:
         if field not in _EVENT_TEXT_FIELDS:
             raise ValueError("field must be one of: " + ", ".join(_EVENT_TEXT_FIELDS))
         content_offset = clamp_offset(content_offset)
-        event, _ = await EventService(db).get_event(
+        found, _ = await EventService(db).get_event(
             parse_uuid(event_id, "event_id"), org_uuid(principal), load_rsvps=False
         )
-        _refuse_hidden_draft(principal, event)
+        event = _visible_event(principal, found)
         body = _chunk(getattr(event, field) or "", content_offset)
         body.update({"event_id": event.id, "title": event.title, "field": field})
         return body
