@@ -2390,6 +2390,20 @@ export interface MyTrainingHistoryYear {
   year: string;
   records: number;
   hours?: number;
+  /**
+   * The year's totals per calendar month, newest first, counted the way the
+   * year is. Only months with a record; empty for the undated group. Absent
+   * from a server older than this field.
+   */
+  months?: MyTrainingHistoryMonth[];
+}
+
+export interface MyTrainingHistoryMonth {
+  /** `YYYY-MM`. */
+  month: string;
+  records: number;
+  /** Absent when the department hides training hours from members. */
+  hours?: number;
 }
 
 export interface MyTrainingHistoryPage {

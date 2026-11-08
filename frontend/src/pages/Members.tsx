@@ -731,8 +731,8 @@ const Members: React.FC = () => {
 
             {/* Desktop table view */}
             <div className="card hidden overflow-hidden md:block">
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="rwd-table-container overflow-x-auto">
+                <table className="rwd-table rwd-table-2xwide w-full">
                   <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
                       {canPrintBadges && (
@@ -818,7 +818,7 @@ const Members: React.FC = () => {
                         className={`hover:bg-theme-surface-secondary cursor-pointer transition-colors ${selectedIds.has(member.id) ? 'bg-blue-500/5' : ''}`}
                       >
                         {canPrintBadges && (
-                          <td className="w-10 py-4 pr-1 pl-4">
+                          <td data-label="Select" className="w-10 py-4 pr-1 pl-4">
                             <input
                               type="checkbox"
                               checked={selectedIds.has(member.id)}
@@ -828,7 +828,7 @@ const Members: React.FC = () => {
                             />
                           </td>
                         )}
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td data-label="Member" className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <Avatar
                               firstName={member.first_name}
@@ -850,11 +850,11 @@ const Members: React.FC = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
+                        <td data-label="Rank" className="text-theme-text-secondary px-6 py-4 text-sm whitespace-nowrap">
                           {member.rank ? formatRank(member.rank) : <span className="text-theme-text-muted">-</span>}
                         </td>
                         {showMemberNumber && (
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td data-label="Member #" className="px-6 py-4 whitespace-nowrap">
                             {member.membership_number && (
                               <div className="text-theme-text-primary font-mono text-sm">
                                 {member.membership_number}
@@ -864,7 +864,7 @@ const Members: React.FC = () => {
                           </td>
                         )}
                         {contactInfoEnabled.enabled && (
-                          <td className="px-6 py-4">
+                          <td data-label="Contact" className="px-6 py-4">
                             <div className="text-sm">
                               {contactInfoEnabled.show_phone && member.phone && (
                                 <div className="text-theme-text-secondary mb-1 flex items-center">
@@ -890,7 +890,7 @@ const Members: React.FC = () => {
                             </div>
                           </td>
                         )}
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td data-label="Status" className="px-6 py-4 whitespace-nowrap">
                           <span
                             className={`rounded border px-2 py-1 text-xs font-semibold ${getStatusColor(
                               member.status
@@ -900,14 +900,14 @@ const Members: React.FC = () => {
                           </span>
                         </td>
                         {canManageMembers && (
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td data-label="Hire Date" className="px-6 py-4 whitespace-nowrap">
                             <div className="text-theme-text-secondary text-sm">
                               {member.hire_date ? formatDate(member.hire_date, tz) : '-'}
                             </div>
                           </td>
                         )}
                         {canManageMembers && (
-                          <td className="px-6 py-4 text-right whitespace-nowrap">
+                          <td data-label="Actions" className="px-6 py-4 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end space-x-2">
                               <button
                                 onClick={() => openMemberProfile(member.id)}

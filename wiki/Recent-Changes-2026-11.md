@@ -5,6 +5,25 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 6 – 8, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-6--8-2026).
+
+- **My Training**: a Courses requirement lists the courses it needs, ticked as
+  you finish them, and counts in courses rather than hours. Certification
+  requirements no longer show "hrs".
+- **Training History** lists each record in two or three compact lines instead
+  of a wide table.
+- **Provider imports**: a completion the provider reports as 0 hours (a policy
+  acknowledgment, for example) now takes the mapped course's Credit Hours.
+- **Finance**: partial reversal of budget amendments, a pending-amendments
+  queue, My Dues, mileage trip logs, shared receipts, board reports and an
+  optional live QuickBooks Online connection. See
+  [Module Finance](Module-Finance).
+- **Integrations**: connecting, changing or disconnecting an integration now
+  records the IP address in the audit log.
+
 ## Recent changes: November 5 – 6, 2026
 
 The engineering audit is
