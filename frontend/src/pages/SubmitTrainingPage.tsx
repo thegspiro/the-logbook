@@ -613,7 +613,11 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     delete fieldErrors.issuing_agency;
     delete fieldErrors.expiration_date;
   }
-  const errorSummary = buildSummary(TRAINING_FIELDS, fieldErrors);
+  // The summary names each field the way the field itself is labelled, which
+  // a department can change in its submission settings.
+  const errorSummary = buildSummary(TRAINING_FIELDS, fieldErrors, (name) =>
+    fieldLabel(name, TRAINING_FIELDS[name].label)
+  );
   const invalidClass = (name: TrainingField) =>
     fieldErrors[name] ? 'border-red-600 focus:border-red-600 dark:border-red-500' : '';
 

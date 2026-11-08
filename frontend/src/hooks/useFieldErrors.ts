@@ -43,16 +43,24 @@ interface ValidationEntry {
  * fields. Exported for a form whose errors are partly derived from its live
  * values rather than all held in this hook.
  */
-export function buildSummary<F extends string>(fields: FieldSpecs<F>, errors: FieldErrors<F>): SummaryItem[] {
+export function buildSummary<F extends string>(
+  fields: FieldSpecs<F>,
+  errors: FieldErrors<F>,
+  /** The label the field shows, where a form lets a department rename it. */
+  labelFor: (name: F) => string = (name) => fields[name].label
+): SummaryItem[] {
   return (Object.keys(fields) as F[]).flatMap((name) => {
     const message = errors[name];
-    return message ? [{ id: fields[name].id, label: fields[name].label, message }] : [];
+    return message ? [{ id: fields[name].id, label: labelFor(name), message }] : [];
   });
 }
 
+// Field-level entries only on a 422: another status carrying a list is still
+// shown, as the form-level message, but is not pinned on fields.
 function validationEntries(error: unknown): ValidationEntry[] | null {
-  const detail = (error as { response?: { data?: { detail?: unknown } } } | null)?.response?.data?.detail;
-  return Array.isArray(detail) ? (detail as ValidationEntry[]) : null;
+  const response = (error as { response?: { status?: number; data?: { detail?: unknown } } } | null)?.response;
+  const detail = response?.data?.detail;
+  return response?.status === 422 && Array.isArray(detail) ? (detail as ValidationEntry[]) : null;
 }
 
 function terminate(message: string): string {

@@ -101,6 +101,18 @@ describe('ErrorSummary', () => {
     expect(screen.getByRole('alert')).toHaveFocus();
   });
 
+  it('gives two summaries on one page their own accessible names', () => {
+    render(
+      <>
+        <ErrorSummary items={items} title="Shift" />
+        <ErrorSummary items={items} title="Report" />
+      </>
+    );
+
+    expect(screen.getByRole('alert', { name: 'Shift' })).toBeInTheDocument();
+    expect(screen.getByRole('alert', { name: 'Report' })).toBeInTheDocument();
+  });
+
   it('shows a message that belongs to no field', () => {
     render(<ErrorSummary items={[]} formError="The server is busy." />);
     expect(screen.getByRole('alert')).toHaveTextContent('The server is busy.');

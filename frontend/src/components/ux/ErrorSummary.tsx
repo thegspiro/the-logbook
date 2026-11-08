@@ -6,7 +6,7 @@
  * focus stayed on the button). A refused submit moves focus here: a screen
  * reader announces the count and the list, and each link moves to its field.
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { AlertCircle } from 'lucide-react';
 import type { SummaryItem } from '../../hooks/useFieldErrors';
 import { FIELD_ERROR_CLASS } from './FormField';
@@ -30,6 +30,8 @@ export const ErrorSummary: React.FC<ErrorSummaryProps> = ({
   title = 'Fix these before submitting',
 }) => {
   const ref = useRef<HTMLDivElement>(null);
+  // Generated, so two summaries on one page never share a heading id.
+  const titleId = useId();
 
   useEffect(() => {
     if (focusKey > 0) ref.current?.focus();
@@ -42,10 +44,10 @@ export const ErrorSummary: React.FC<ErrorSummaryProps> = ({
       ref={ref}
       tabIndex={-1}
       role="alert"
-      aria-labelledby="error-summary-title"
+      aria-labelledby={titleId}
       className="rounded-lg border border-red-500/40 bg-red-500/10 p-4 focus:outline-2 focus:outline-offset-2 focus:outline-red-700"
     >
-      <h2 id="error-summary-title" className={`flex items-center gap-2 text-sm font-semibold ${FIELD_ERROR_CLASS}`}>
+      <h2 id={titleId} className={`flex items-center gap-2 text-sm font-semibold ${FIELD_ERROR_CLASS}`}>
         <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
         {items.length > 0 ? title : 'Something went wrong'}
       </h2>

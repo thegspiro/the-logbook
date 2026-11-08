@@ -408,6 +408,25 @@ describe('SubmitTrainingPage', () => {
       expect(mockCreateSubmission).not.toHaveBeenCalled();
     });
 
+    it('names each field in the summary the way the department labels it', async () => {
+      mockGetConfig.mockResolvedValue({
+        ...mockConfig,
+        field_config: {
+          ...mockConfig.field_config,
+          course_name: { visible: true, required: true, label: 'Class title' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Class title/);
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+      expect(
+        within(screen.getByRole('alert', { name: /Fix these/ })).getByRole('link', { name: /^Class title: / })
+      ).toBeInTheDocument();
+    });
+
     it('saves a draft with fields still open and keeps them flagged', async () => {
       const user = userEvent.setup();
       renderWithRouter(<SubmitTrainingPage />);

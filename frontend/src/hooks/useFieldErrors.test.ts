@@ -61,6 +61,21 @@ describe('useFieldErrors', () => {
     expect(result.current.formError).toBe('A shift already exists then. (Error code: LB-API-409)');
   });
 
+  it('reads an array detail as field errors only on a 422', () => {
+    const { result } = renderHook(() => useFieldErrors(FIELDS));
+
+    let matched: object = { stale: true };
+    act(() => {
+      matched = result.current.setFromApiError({
+        response: { status: 400, data: { detail: [{ field: 'first_name', message: 'Not allowed.' }] } },
+      });
+    });
+
+    expect(matched).toEqual({});
+    expect(result.current.errors).toEqual({});
+    expect(result.current.formError).toBe('first_name: Not allowed.');
+  });
+
   it('lists the summary in the order the form declares its fields', () => {
     const { result } = renderHook(() => useFieldErrors(FIELDS));
 
