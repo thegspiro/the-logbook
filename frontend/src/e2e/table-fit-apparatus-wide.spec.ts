@@ -70,7 +70,7 @@ const APPARATUS_LIST = {
 // a deficiency flag, crew, mileage, hours and up to four row actions. Wider
 // than a laptop's card before its free-text cells could wrap.
 test.describe('Apparatus list table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/apparatus — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: [...TEST_USER.permissions, 'apparatus.view', 'apparatus.manage'] });
