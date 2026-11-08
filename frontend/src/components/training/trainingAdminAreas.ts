@@ -208,6 +208,16 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
         icon: ClipboardList,
       },
       {
+        // A way in from Settings & Data, where officers look for setup; the
+        // requirements themselves stay under Curriculum, which this links to.
+        // Its id differs from Curriculum's `requirements` because destination
+        // ids must be unique across the hub for the flat `?tab=` links.
+        id: 'requirements-link',
+        label: 'Requirements',
+        hint: 'Hours, certifications and courses members owe — opens Curriculum',
+        icon: ListChecks,
+      },
+      {
         id: 'compliance-settings',
         label: 'Compliance Settings',
         hint: 'Thresholds, profiles and scheduled compliance reports',
@@ -279,6 +289,9 @@ export const tabPanelId = (area: string, tab: string) => `training-admin-tabpane
  */
 export const PROGRAM_WIZARD_VIEW = 'new';
 export const NEW_PROGRAM_HREF = `/training/admin?page=curriculum&tab=pipelines&view=${PROGRAM_WIZARD_VIEW}`;
+
+/** Curriculum's Requirements destination, which Settings & Data links to. */
+export const REQUIREMENTS_HREF = '/training/admin?page=curriculum&tab=requirements';
 
 /** The compliance configuration screen, a route of its own outside the hub. */
 export const COMPLIANCE_CONFIG_HREF = '/training/compliance-config';

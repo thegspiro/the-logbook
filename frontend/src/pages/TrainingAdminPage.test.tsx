@@ -325,4 +325,23 @@ describe('TrainingAdminPage', () => {
       await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent('Manual Entry'));
     });
   });
+
+  // The panel is rendered for real here, not mocked, so the test follows its
+  // link the way an officer would.
+  describe('Requirements under Settings & Data', () => {
+    it('is listed for training.manage and opens Curriculum → Requirements', async () => {
+      const user = userEvent.setup();
+      window.history.replaceState({}, '', '/training/admin?page=settings&tab=requirements-link');
+      renderWithRouter(<TrainingAdminPage />);
+
+      const pages = screen.getByRole('tablist', { name: 'Settings & Data pages' });
+      expect(within(pages).getByRole('tab', { name: 'Requirements' })).toHaveAttribute('aria-selected', 'true');
+
+      await user.click(await screen.findByRole('link', { name: 'Open requirements' }));
+
+      expect(window.location.search).toBe('?page=curriculum&tab=requirements');
+      expect(areaTab('Curriculum')).toHaveAttribute('aria-selected', 'true');
+      await waitFor(() => expect(screen.getByTestId('lazy-component')).toHaveTextContent('Requirements'));
+    });
+  });
 });
