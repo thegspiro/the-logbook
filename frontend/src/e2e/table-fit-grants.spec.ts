@@ -110,3 +110,89 @@ test.describe('Pledges table fits its card', () => {
     });
   }
 });
+
+const GRANT_BUDGET_CATEGORIES = ['equipment', 'personnel', 'training', 'contractual'];
+
+const grantApplication = {
+  id: 'grant-1',
+  organizationId: 'org-1',
+  opportunityId: null,
+  grantProgramName: 'Assistance to Firefighters Grant (AFG) — Operations and Safety',
+  grantAgency: 'Federal Emergency Management Agency',
+  applicationStatus: 'awarded',
+  amountRequested: 845000,
+  amountAwarded: 812500,
+  matchAmount: 81250,
+  matchSource: null,
+  applicationDeadline: '2026-02-01',
+  submittedDate: '2026-01-20',
+  awardDate: '2026-06-01',
+  grantStartDate: '2026-07-01',
+  grantEndDate: '2027-06-30',
+  projectDescription: null,
+  narrativeSummary: null,
+  budgetSummary: null,
+  keyContacts: null,
+  federalAwardId: 'EMW-2026-FG-01234',
+  nfirsCompliant: true,
+  performancePeriodMonths: 12,
+  reportingFrequency: null,
+  nextReportDue: null,
+  finalReportDue: null,
+  assignedTo: null,
+  priority: 'high',
+  linkedCampaignId: null,
+  notes: null,
+  createdBy: null,
+  createdAt: '2026-01-20T00:00:00Z',
+  updatedAt: '2026-06-01T00:00:00Z',
+  allowedNextStatuses: [],
+  totalExpended: '693003.00',
+  overspentBy: null,
+  budgetItems: GRANT_BUDGET_CATEGORIES.map((category, i) => ({
+    id: `budget-item-${i}`,
+    applicationId: 'grant-1',
+    category,
+    description: 'Self-contained breathing apparatus packs, spare cylinders and RIT bags for all front-line engines',
+    amountBudgeted: '284500.00',
+    amountSpent: '173250.75',
+    federalShare: null,
+    localMatch: null,
+    notes: null,
+    sortOrder: i,
+    createdAt: '2026-06-01T00:00:00Z',
+    updatedAt: '2026-06-01T00:00:00Z',
+    overspentBy: null,
+  })),
+  expenditures: [],
+  complianceTasks: [],
+  grantNotes: [],
+};
+
+// A grant's Budget tab: category, a long line description, three six-digit
+// amounts, a progress bar, edit/delete actions and a totals footer.
+test.describe('Grant budget table fits its card', () => {
+  for (const viewport of TABLE_FIT_VIEWPORTS) {
+    test(`/grants/applications/:id Budget tab — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await signIn(page, {
+        permissions: [
+          ...TEST_USER.permissions,
+          'fundraising.view',
+          'fundraising.manage',
+          'grants.view',
+          'grants.manage',
+        ],
+      });
+      await page.route('**/api/v1/grants/applications/grant-1', (route) => void route.fulfill(json(grantApplication)));
+      await page.goto('/grants/applications/grant-1');
+      await page.getByRole('button', { name: 'Budget', exact: true }).click();
+
+      const table = page
+        .getByRole('table')
+        .filter({ has: page.getByRole('columnheader', { includeHidden: true, name: 'Progress', exact: true }) });
+      await table.waitFor();
+      await expectTableFitsItsCard(table, 'Grant budget table');
+    });
+  }
+});
