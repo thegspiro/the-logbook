@@ -1063,10 +1063,14 @@ export const GrantDetailPage: React.FC = () => {
                     {/* In the card layout the empty footer cells hide, and the totals keep their labels. */}
                     <tfoot className="border-theme-surface-border border-t">
                       <tr className="bg-theme-surface-secondary font-semibold">
-                        <td data-label="Total" className="rwd-table-lead text-theme-text-primary px-4 py-3 text-sm">
+                        <th
+                          scope="row"
+                          data-label="Total"
+                          className="rwd-table-lead text-theme-text-primary px-4 py-3 text-left text-sm"
+                        >
                           Total
-                        </td>
-                        <td className="px-4 py-3" />
+                        </th>
+                        <td aria-hidden="true" className="px-4 py-3" />
                         <td
                           data-label="Budgeted"
                           className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
@@ -1085,8 +1089,8 @@ export const GrantDetailPage: React.FC = () => {
                         >
                           {formatCurrency(remainingTotal)}
                         </td>
-                        <td className="px-4 py-3" />
-                        {canManage && <td className="px-4 py-3" />}
+                        <td aria-hidden="true" className="px-4 py-3" />
+                        {canManage && <td aria-hidden="true" className="px-4 py-3" />}
                       </tr>
                     </tfoot>
                   </table>
