@@ -725,7 +725,9 @@ const EventRequestsTab: React.FC = () => {
                     type="button"
                     onClick={() => setScope(s.key)}
                     aria-pressed={scope === s.key}
-                    className={`settings-section-tab ${scope === s.key ? 'settings-nav-item-active' : ''}`}
+                    // The pill sets a touch minimum height only, and "All" is short enough
+                    // to fall under 44px wide with a narrower system font.
+                    className={`settings-section-tab touch:min-w-11 justify-center ${scope === s.key ? 'settings-nav-item-active' : ''}`}
                   >
                     {s.label}
                     {s.key === 'unassigned' && unassignedOpen > 0 && (
