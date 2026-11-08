@@ -142,7 +142,7 @@ const tableWithHeader = (page: Page, header: string) =>
 // The active pipeline's table view: selection, name, email, stage, status,
 // days in stage, target type, applied date and a row menu.
 test.describe('Applicant pipeline table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/prospective-members table view — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await openPipeline(page);
@@ -166,7 +166,7 @@ const ARCHIVE_TABS = [
 
 for (const { tab, header } of ARCHIVE_TABS) {
   test.describe(`${tab} applicants table fits its card`, () => {
-    for (const viewport of TABLE_FIT_VIEWPORTS) {
+    for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
       test(`/prospective-members ${tab} — ${viewport.name}`, async ({ page }) => {
         await page.setViewportSize(viewport);
         await openPipeline(page);
