@@ -1898,6 +1898,20 @@ class TrainingProgramService:
         A COMPLETED enrollment is never reopened by a reactivation: it is not
         in scope, as it is not for the ``is_required`` toggle.
         """
+        enrollment_ids = await self.live_enrollment_ids_for_requirement(
+            requirement_id, organization_id
+        )
+        await self.recalculate_enrollments(enrollment_ids)
+        return len(enrollment_ids)
+
+    async def live_enrollment_ids_for_requirement(
+        self, requirement_id: UUID | str, organization_id: UUID | str
+    ) -> List[str]:
+        """ACTIVE / ON_HOLD enrollments whose program links this requirement.
+
+        A permanent requirement delete reads these before the links go, since
+        afterwards nothing connects the enrollments to the requirement.
+        """
         rows = await self.db.execute(
             select(ProgramEnrollment.id)
             .join(TrainingProgram, TrainingProgram.id == ProgramEnrollment.program_id)
@@ -1912,11 +1926,13 @@ class TrainingProgramService:
             )
             .distinct()
         )
-        enrollment_ids = [str(row[0]) for row in rows.all()]
+        return [str(row[0]) for row in rows.all()]
+
+    async def recalculate_enrollments(self, enrollment_ids: List[str]) -> None:
+        """Recalculate each enrollment and re-check it for phase advancement."""
         for eid in enrollment_ids:
             await self._recalculate_enrollment_progress(UUID(eid))
             await self._maybe_auto_advance_phase(UUID(eid))
-        return len(enrollment_ids)
 
     async def _validate_phase_prerequisites(
         self,
