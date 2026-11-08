@@ -498,8 +498,8 @@ const AnnualReportSection: React.FC = () => {
           <div className="border-theme-surface-border border-b px-4 py-3">
             <h3 className="text-theme-text-secondary text-sm font-medium">Member Compliance Status</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-wide min-w-full text-sm">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th
@@ -552,20 +552,22 @@ const AnnualReportSection: React.FC = () => {
                     key={member.user_id}
                     className="border-theme-surface-border hover:bg-theme-surface-hover border-b"
                   >
-                    <td className="text-theme-text-primary px-4 py-2 font-medium">{member.name}</td>
-                    <td className="text-theme-text-secondary px-4 py-2 text-center">
+                    <td data-label="Member" className="text-theme-text-primary px-4 py-2 font-medium">
+                      {member.name}
+                    </td>
+                    <td data-label="Training Hrs" className="text-theme-text-secondary px-4 py-2 text-center">
                       {formatHours(member.hours_completed)}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-2 text-center">
+                    <td data-label="Admin Hrs" className="text-theme-text-secondary px-4 py-2 text-center">
                       {formatHours(member.admin_hours_approved)}
                     </td>
-                    <td className="px-4 py-2 text-center font-semibold text-green-500">
+                    <td data-label="Total Hrs" className="px-4 py-2 text-center font-semibold text-green-500">
                       {formatHours(sumHoursToQuarter([member.hours_completed, member.admin_hours_approved]))}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-2 text-center">
+                    <td data-label="Requirements" className="text-theme-text-secondary px-4 py-2 text-center">
                       {member.requirements_met}/{member.requirements_total}
                     </td>
-                    <td className="px-4 py-2 text-center">
+                    <td data-label="Expired Certs" className="px-4 py-2 text-center">
                       <span
                         className={
                           member.expired_certifications > 0 ? 'font-semibold text-red-500' : 'text-theme-text-muted'
@@ -574,7 +576,7 @@ const AnnualReportSection: React.FC = () => {
                         {member.expired_certifications}
                       </span>
                     </td>
-                    <td className="px-4 py-2 text-center">
+                    <td data-label="Status" className="px-4 py-2 text-center">
                       <StatusBadge status={member.status} />
                     </td>
                   </tr>
@@ -1108,8 +1110,8 @@ const ForecastSection: React.FC = () => {
         <div className="border-theme-surface-border border-b px-4 py-3">
           <h3 className="text-theme-text-secondary text-sm font-medium">Member Compliance Projections</h3>
         </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+        <div className="rwd-table-container overflow-x-auto">
+          <table className="rwd-table rwd-table-wide min-w-full text-sm">
             <thead>
               <tr className="border-theme-surface-border border-b">
                 <th scope="col" className="text-theme-text-secondary px-4 py-2 text-left text-xs font-medium uppercase">
@@ -1150,20 +1152,22 @@ const ForecastSection: React.FC = () => {
             <tbody>
               {forecasts.map((f) => (
                 <tr key={f.user_id} className="border-theme-surface-border hover:bg-theme-surface-hover border-b">
-                  <td className="text-theme-text-primary px-4 py-2 font-medium">{f.user_name}</td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="Member" className="text-theme-text-primary px-4 py-2 font-medium">
+                    {f.user_name}
+                  </td>
+                  <td data-label="Current" className="px-4 py-2 text-center">
                     <PctBadge pct={f.current_compliance_percentage} />
                   </td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="30 Days" className="px-4 py-2 text-center">
                     <PctBadge pct={f.forecast_30_days} />
                   </td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="60 Days" className="px-4 py-2 text-center">
                     <PctBadge pct={f.forecast_60_days} />
                   </td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="90 Days" className="px-4 py-2 text-center">
                     <PctBadge pct={f.forecast_90_days} />
                   </td>
-                  <td className="px-4 py-2 text-center">
+                  <td data-label="Expiring Certs" className="px-4 py-2 text-center">
                     <span
                       className={
                         f.expiring_certifications.length > 0 ? 'font-semibold text-red-500' : 'text-theme-text-muted'
