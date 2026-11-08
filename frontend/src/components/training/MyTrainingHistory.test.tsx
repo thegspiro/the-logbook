@@ -208,19 +208,25 @@ describe('MyTrainingHistory', () => {
     it('heads each month with its full totals from the server, above its own rows', async () => {
       render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
 
-      const october = await screen.findByRole('columnheader', { name: /October 2026/ });
+      const october = await screen.findByRole('rowheader', { name: /October 2026/ });
       expect(october).toHaveTextContent('October 2026· 2 records · 3.5 hrs');
-      expect(screen.getByRole('columnheader', { name: /March 2026/ })).toHaveTextContent(
-        'March 2026· 1 record · 1 hrs'
-      );
+      expect(screen.getByRole('rowheader', { name: /March 2026/ })).toHaveTextContent('March 2026· 1 record · 1 hrs');
 
-      const rows = within(screen.getByRole('table'))
-        .getAllByRole('row')
-        .map((r) => r.textContent ?? '');
-      const at = (text: string) => rows.findIndex((t) => t.includes(text));
-      expect(at('October 2026')).toBeLessThan(at('Ladders'));
-      expect(at('Ladders')).toBeLessThan(at('March 2026'));
-      expect(at('March 2026')).toBeLessThan(at('Hazmat'));
+      // Each month is its own row group, holding its header and its rows only.
+      const groups = within(screen.getByRole('table'))
+        .getAllByRole('rowgroup')
+        .slice(1) // the thead
+        .map((g) =>
+          within(g)
+            .getAllByRole('row')
+            .map((r) => r.textContent ?? '')
+        );
+      expect(groups).toHaveLength(2);
+      expect(groups[0]?.[0]).toContain('October 2026');
+      expect(groups[0]?.slice(1).join()).toContain('Ladders');
+      expect(groups[0]?.join()).not.toContain('Hazmat');
+      expect(groups[1]?.[0]).toContain('March 2026');
+      expect(groups[1]?.slice(1).join()).toContain('Hazmat');
     });
 
     it('leaves hours out of the month headers when the department hides hours', async () => {
@@ -228,9 +234,38 @@ describe('MyTrainingHistory', () => {
         <MyTrainingHistory visibility={{ ...visibility, show_training_hours: false }} hoursSummary={hoursSummary} />
       );
 
-      const october = await screen.findByRole('columnheader', { name: /October 2026/ });
+      const october = await screen.findByRole('rowheader', { name: /October 2026/ });
       expect(october).toHaveTextContent('October 2026· 2 records');
       expect(october).not.toHaveTextContent('hrs');
+    });
+
+    it('keeps one header for a month that a "Show more" page continues', async () => {
+      const user = userEvent.setup();
+      mockGetRecords.mockImplementation(
+        (params: { year?: string; page?: number }) =>
+          Promise.resolve(
+            params.year === '2026'
+              ? {
+                  items:
+                    params.page === 2
+                      ? [record('y', 'Pumps', '2026-10-02'), record('z', 'Hazmat', '2026-03-02')]
+                      : [record('x', 'Ladders', '2026-10-28')],
+                  total: 3,
+                  page: params.page ?? 1,
+                  page_size: 1,
+                  years: monthYears,
+                }
+              : { items: [], total: 3, page: 1, page_size: 1, years: monthYears }
+          ) as unknown
+      );
+      render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
+
+      await screen.findByText('Ladders');
+      await user.click(screen.getByRole('button', { name: 'Show more' }));
+      await screen.findByText('Pumps');
+
+      expect(screen.getAllByRole('rowheader', { name: /October 2026/ })).toHaveLength(1);
+      expect(screen.getAllByRole('rowheader', { name: /March 2026/ })).toHaveLength(1);
     });
   });
 });

@@ -60,7 +60,7 @@ const MonthHeader: React.FC<{
 }> = ({ month, totals, showHours, columns }) => (
   <tr>
     <th
-      scope="colgroup"
+      scope="rowgroup"
       colSpan={columns}
       className="text-theme-text-primary px-4 pt-4 pb-1 text-left text-xs font-semibold tracking-wide uppercase"
     >
@@ -75,6 +75,55 @@ const MonthHeader: React.FC<{
   </tr>
 );
 
+const HistoryRow: React.FC<{ record: MyTrainingHistoryRecord; showHours: boolean }> = ({ record, showHours }) => {
+  const tz = useTimezone();
+  return (
+    <tr className="text-theme-text-secondary">
+      <td className="px-4 py-2">{record.course_name}</td>
+      <td className="px-4 py-2 whitespace-nowrap">
+        {TRAINING_TYPE_LABELS[record.training_type] ?? record.training_type.replace('_', ' ')}
+      </td>
+      <td className="px-4 py-2 whitespace-nowrap">{formatDate(record.completion_date, tz)}</td>
+      {showHours && <td className="px-4 py-2 whitespace-nowrap">{formatHours(record.hours_completed)}</td>}
+      <td className="px-4 py-2">
+        {record.voided_at ? (
+          <div className="flex flex-col gap-1">
+            <span className="w-fit rounded-sm bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+              voided
+            </span>
+            {record.void_reason && (
+              <span className="text-theme-text-secondary text-xs whitespace-pre-line">
+                Reason: {record.void_reason}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(record.status)}`}>
+            {getTrainingStatusLabel(record.status)}
+          </span>
+        )}
+      </td>
+    </tr>
+  );
+};
+
+/**
+ * The loaded rows split into runs by completion month. Rows arrive newest
+ * first, so a month's rows are adjacent; a "Show more" page that continues a
+ * month extends its run rather than starting a second one. Undated rows form
+ * a run with an empty month.
+ */
+const monthGroups = (items: MyTrainingHistoryRecord[]): { month: string; items: MyTrainingHistoryRecord[] }[] => {
+  const groups: { month: string; items: MyTrainingHistoryRecord[] }[] = [];
+  for (const item of items) {
+    const month = item.completion_date?.slice(0, 7) ?? '';
+    const last = groups[groups.length - 1];
+    if (last && last.month === month) last.items.push(item);
+    else groups.push({ month, items: [item] });
+  }
+  return groups;
+};
+
 const YearGroup: React.FC<{
   year: MyTrainingHistoryYear;
   open: boolean;
@@ -83,8 +132,8 @@ const YearGroup: React.FC<{
   onToggle: () => void;
   onMore: () => void;
 }> = ({ year, open, rows, showHours, onToggle, onMore }) => {
-  const tz = useTimezone();
   const panelId = `history-year-${year.year}`;
+  const monthTotals = new Map((year.months ?? []).map((m) => [m.month, m]));
   return (
     <div className="card-secondary overflow-clip">
       <button
@@ -138,55 +187,23 @@ const YearGroup: React.FC<{
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-theme-surface-border divide-y">
-                  {rows.items.map((r, i) => {
-                    // Rows arrive newest first, so a month's rows are adjacent
-                    // and a header goes wherever the month changes — including
-                    // at the top of a "Show more" page that continues one.
-                    const month = r.completion_date?.slice(0, 7) ?? '';
-                    const previous = i > 0 ? (rows.items[i - 1]?.completion_date?.slice(0, 7) ?? '') : null;
-                    return (
-                      <React.Fragment key={r.id}>
-                        {month && month !== previous && (
-                          <MonthHeader
-                            month={month}
-                            totals={year.months?.find((m) => m.month === month)}
-                            showHours={showHours}
-                            columns={showHours ? 5 : 4}
-                          />
-                        )}
-                        <tr className="text-theme-text-secondary">
-                          <td className="px-4 py-2">{r.course_name}</td>
-                          <td className="px-4 py-2 whitespace-nowrap">
-                            {TRAINING_TYPE_LABELS[r.training_type] ?? r.training_type.replace('_', ' ')}
-                          </td>
-                          <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date, tz)}</td>
-                          {showHours && (
-                            <td className="px-4 py-2 whitespace-nowrap">{formatHours(r.hours_completed)}</td>
-                          )}
-                          <td className="px-4 py-2">
-                            {r.voided_at ? (
-                              <div className="flex flex-col gap-1">
-                                <span className="w-fit rounded-sm bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
-                                  voided
-                                </span>
-                                {r.void_reason && (
-                                  <span className="text-theme-text-secondary text-xs whitespace-pre-line">
-                                    Reason: {r.void_reason}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(r.status)}`}>
-                                {getTrainingStatusLabel(r.status)}
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
+                {monthGroups(rows.items).map((group) => (
+                  // One tbody per month, so its header is a true row-group
+                  // header (scope="rowgroup") for that month's rows alone.
+                  <tbody key={group.month || UNDATED_YEAR} className="divide-theme-surface-border divide-y">
+                    {group.month && (
+                      <MonthHeader
+                        month={group.month}
+                        totals={monthTotals.get(group.month)}
+                        showHours={showHours}
+                        columns={showHours ? 5 : 4}
+                      />
+                    )}
+                    {group.items.map((r) => (
+                      <HistoryRow key={r.id} record={r} showHours={showHours} />
+                    ))}
+                  </tbody>
+                ))}
               </table>
             </div>
           )}
