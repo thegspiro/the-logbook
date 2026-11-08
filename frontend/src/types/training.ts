@@ -2271,6 +2271,8 @@ export interface RequirementDetail {
   id: string;
   name: string;
   description?: string;
+  /** What `completed_hours` / `required_hours` count — hours only for `hours`. */
+  requirement_type?: RequirementType;
   frequency: string;
   training_type?: string;
   required_hours: number;
@@ -2315,6 +2317,21 @@ export interface RequirementDetail {
    * target was prorated by. Null for every other requirement type.
    */
   monthly_hours?: RequirementMonth[] | null;
+  /**
+   * For a `courses` requirement: each required course, in the requirement's
+   * order, ticked by the same test the count uses. Null for every other type.
+   */
+  course_checklist?: RequirementCourseEntry[] | null;
+}
+
+export interface RequirementCourseEntry {
+  course_id: string;
+  /** Null when the course is no longer in the department's library. */
+  name: string | null;
+  code: string | null;
+  completed: boolean;
+  /** Latest completion inside the window; null when the record carries no date. */
+  completed_on: string | null;
 }
 
 export interface RequirementMonth {

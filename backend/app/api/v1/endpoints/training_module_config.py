@@ -65,6 +65,9 @@ from app.services.training_course_names import (
 )
 from app.services.training_module_config_service import TrainingModuleConfigService
 from app.services.training_program_service import TrainingProgramService
+from app.services.training_requirement_courses import (
+    load_required_course_catalog,
+)
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import (
     fetch_user_waivers,
@@ -305,6 +308,7 @@ async def _evaluate_member_requirements(
         )
     ).get(user_id, [])
     held_sessions = await load_held_sessions(db, str(org_id), applicable)
+    course_catalog = await load_required_course_catalog(db, str(org_id), applicable)
 
     # Evaluate every applicable requirement using the shared helper which
     # handles all requirement types (hours, courses, certification,
@@ -323,6 +327,7 @@ async def _evaluate_member_requirements(
             join_date=join_date,
             shift_dates=shift_dates,
             held_sessions=held_sessions,
+            course_catalog=course_catalog,
         )
         requirements_detail.append(detail)
         # Listed with its deadline, but left out of the summary until the
