@@ -238,8 +238,8 @@ export const AccessLogsTab: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="card overflow-x-auto">
-            <table className="divide-theme-surface-border min-w-full divide-y">
+          <div className="card rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-xwide divide-theme-surface-border min-w-full divide-y">
               <thead className="bg-theme-surface-secondary">
                 <tr>
                   <th
@@ -296,34 +296,45 @@ export const AccessLogsTab: React.FC = () => {
                 {logs.map((log) => (
                   <React.Fragment key={log.id}>
                     <tr className={`hover:bg-theme-surface-hover ${log.flagged_suspicious ? 'bg-red-500/10' : ''}`}>
-                      <td className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
+                      <td data-label="Timestamp" className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
                         {formatDateTime(log.timestamp, tz)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td data-label="Method" className="px-6 py-4 whitespace-nowrap">
                         <span className={`rounded-sm px-2 py-1 text-xs font-semibold ${getMethodColor(log.method)}`}>
                           {log.method}
                         </span>
                       </td>
-                      <td className="text-theme-text-primary px-6 py-4 font-mono text-sm">{log.endpoint}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td
+                        data-label="Endpoint"
+                        className="text-theme-text-primary px-6 py-4 font-mono text-sm break-all"
+                      >
+                        {log.endpoint}
+                      </td>
+                      <td data-label="Status" className="px-6 py-4 whitespace-nowrap">
                         <span className={`text-sm font-semibold ${getStatusColor(log.status_code)}`}>
                           {log.status_code}
                         </span>
                       </td>
-                      <td className="text-theme-text-muted px-6 py-4 font-mono text-sm whitespace-nowrap">
+                      <td
+                        data-label="IP Address"
+                        className="text-theme-text-muted px-6 py-4 font-mono text-sm break-all"
+                      >
                         {log.ip_address}
                       </td>
-                      <td className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
+                      <td
+                        data-label="Response Time"
+                        className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap"
+                      >
                         {log.response_time_ms ? `${log.response_time_ms}ms` : '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td data-label="Flag" className="px-6 py-4 whitespace-nowrap">
                         {log.flagged_suspicious && (
                           <span className="rounded-sm bg-red-100 px-2 py-1 text-xs font-semibold text-red-800 dark:bg-red-500/20 dark:text-red-400">
                             Suspicious
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
+                      <td data-label="Actions" className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
                         <button
                           type="button"
                           onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
@@ -338,7 +349,7 @@ export const AccessLogsTab: React.FC = () => {
                     </tr>
                     {expandedLog === log.id && (
                       <tr id={`access-log-${log.id}`} className="bg-theme-surface-secondary">
-                        <td colSpan={8} className="px-6 py-4">
+                        <td colSpan={8} data-label="Details" className="rwd-table-lead px-6 py-4">
                           <div className="space-y-2 text-sm">
                             {log.user_agent && (
                               <div>
