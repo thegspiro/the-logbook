@@ -262,9 +262,12 @@ const StaffingSummaryView: React.FC<{ summary: StaffingSummary; flatFile: boolea
       {events.outside_usual_range > 0 && (
         <div className="alert-warning space-y-1 text-sm">
           <p>
-            {formatNumber(events.outside_usual_range)} events fall outside {events.usual_first_year}–
-            {events.usual_last_year}, the years most of the file covers. They look like test entries or typing slips and
-            are skipped.
+            {events.outside_usual_range === 1
+              ? '1 event falls'
+              : `${formatNumber(events.outside_usual_range)} events fall`}{' '}
+            outside {events.usual_first_year}–{events.usual_last_year}, the years most of the file covers.{' '}
+            {events.outside_usual_range === 1 ? 'It looks' : 'They look'} like a test entry or typing slip and{' '}
+            {events.outside_usual_range === 1 ? 'is' : 'are'} skipped.
           </p>
           <ul className="list-disc pl-5 text-xs">
             {events.outside_usual_range_examples.slice(0, 10).map((e) => (
