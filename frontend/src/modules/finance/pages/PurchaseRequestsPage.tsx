@@ -202,8 +202,13 @@ const PurchaseRequestsPage: React.FC = () => {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Purchase requests">
-            <table className="w-full">
+          <div
+            className="rwd-table-container overflow-x-auto"
+            tabIndex={0}
+            role="region"
+            aria-label="Purchase requests"
+          >
+            <table className="rwd-table rwd-table-xwide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th
@@ -257,29 +262,36 @@ const PurchaseRequestsPage: React.FC = () => {
                     onClick={() => void navigate(`/finance/purchase-requests/${pr.id}`)}
                     className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
                   >
-                    <td className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-600">{pr.requestNumber}</td>
-                    <td className="text-theme-text-primary px-4 py-3 text-sm">{pr.title}</td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                    <td data-label="Request #" className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-600">
+                      {pr.requestNumber}
+                    </td>
+                    <td data-label="Title" className="text-theme-text-primary px-4 py-3 text-sm">
+                      {pr.title}
+                    </td>
+                    <td data-label="Vendor" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                       {pr.vendor ?? '--'}
                     </td>
-                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+                    <td
+                      data-label="Amount"
+                      className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap"
+                    >
                       {formatCurrencyWhole(pr.estimatedAmount)}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td data-label="Priority" className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[pr.priority] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'}`}
                       >
                         {PRIORITY_LABELS[pr.priority] ?? pr.priority}
                       </span>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td data-label="Status" className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PURCHASE_REQUEST_STATUS_COLORS[pr.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                       >
                         {STATUS_LABEL_MAP[pr.status] ?? pr.status}
                       </span>
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                    <td data-label="Date" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                       {formatDate(pr.createdAt, tz)}
                     </td>
                   </tr>
