@@ -9174,6 +9174,33 @@ the frontend still calls only `/training/programs/enrollments`; no owner
 decision on delegating, locking in place, or removing the route has been
 recorded yet.
 
+## Training — Event Organizers Decide Which Sessions Count Toward a Session-Attendance Requirement (2026-11-08, security review TR14-2)
+
+**Open, awaiting an owner decision.** A training officer (`training.manage`)
+creates a session-attendance requirement, for example "attend 60% of the
+company drills this year". The decision about _which_ sessions count toward it
+is made with `events.manage` alone:
+`PUT /api/v1/training/sessions/{id}/attendance-requirements` and the
+`attendance_requirement_ids` field on `POST /training/sessions` and
+`/training/sessions/recurring` (`training_sessions.py`). Linking a session is
+allowed after attendance is finalized, on purpose, so that past drills can count
+toward a requirement created after them.
+
+The consequence is that an event organizer with no training grant can change
+members' compliance standing on every training screen. Linking past drills to
+the requirement lowers everyone's attended share. Unlinking a drill a member
+missed raises that member's share. The ids are validated (each must be a
+session-attendance requirement in the department), and every change is audited
+(`training_session_updated`, `action: attendance_requirements_set`, with the
+full id list). Nothing beyond the audit trail stops it.
+
+This matches the gate every other training-session mutation already uses
+(create, attach, finalize and linkage are all `events.manage`), which is why it
+was flagged rather than changed. The options are to keep it, to require
+`training.manage` for the link (an organizer could still schedule and finalize
+the drill, and a training officer would link it), or to require both grants.
+Found by `docs/security-review/TR-17-training-core.md` pass 14.
+
 ## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06, resolved 2026-10-29)
 
 Found by security review SKT-19 pass 7

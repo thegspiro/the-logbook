@@ -16,6 +16,49 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR (number recorded in the follow-up commit)** (branch
+`claude/security-review-training-core-p14`): Feature 17 (Training core), pass
+14, a watchdog pickup. The dedicated `/loop 30m /security-review` session was
+unreachable. PR #4119 (Feature 16, Events & requests, pass 14) had already
+merged (`51e6e1b5`). A fresh `list_pull_requests` (state=open) found 0 PRs with
+a `claude/security-review-*` head, and row 17 was the next pending feature.
+
+The baseline was `740e7118` (pass 13's commit) and the head `51e6e1b5`. In that
+window 14 commits touch this feature's files, and four of them add new
+surfaces: Chief requirement overrides (three position-gated routes, plus a new
+`requirement_override_service.py`), session-attendance requirements (a session
+link table and `PUT /training/sessions/{id}/attendance-requirements`),
+evaluations of outside-agency shifts (four new `training.manage` routes), and
+supervisor crew reads of training data. All 129 routes in the six endpoint
+files were listed again by AST. **1 fixed:** TR14-1 (LOW): two Chief overrides
+granted at the same time could both pass the overlapping-dates check. `grant`
+now locks the requirement row and reads overrides with a locking read. The new
+guard `TestChiefOverrideOverlapLocking` failed before the fix. **1 flagged:**
+TR14-2 (LOW): `events.manage` alone decides which sessions count toward a
+session-attendance requirement. That is a role-fit question, mirrored to
+`docs/KNOWN_LIMITATIONS.md`. **TR7-1 closed:** the owner decided to remove the
+duplicate `POST /training/enrollments` route, and it was removed in `71a6fd75`.
+See `docs/security-review/TR-17-training-core.md`'s **Pass 14** section for the
+full trace.
+
+Completion gate: `flake8`, `black --check` (26.10.1) and `isort --check-only`
+on `app/ tests/ alembic/` are all clean. `validate_migrations.py --strict`
+reports 749 revisions and a single head, `78f196079c95`.
+`check_route_permissions.py --strict` checked 305 routes with 0 errors and 0
+warnings. `generate_schema_docs.py --check` reports the docs up to date. The
+scoped backend suite (`-k "training or compliance or knowledge_test or
+shift_evaluation or requirement_override or session_attendance or
+capacity_locking or legacy_enrollment"`) had 2798 passed and 1
+environment-only skip (`py_vapid`). The standing guard suites had 136 passed.
+`npm run typecheck` reports 0 errors, and `npm run lint` reports 0 errors and 0
+warnings.
+
+Row 17 → ✅ (pending this PR's merge). Next is Feature 18 (Training extended).
+Check `list_pull_requests` again rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 16, Events & requests, pass 14, PR #4119, merged), preserved for history</summary>
+
 **PR [#4119](https://github.com/thegspiro/the-logbook/pull/4119)** (branch
 `claude/security-review-events-requests`) —
 Feature 16 (Events & requests), pass 14, a watchdog pickup. No other
@@ -66,6 +109,8 @@ components) — 303 passed (19 files).
 
 Row 16 → ✅ (pending this PR's merge); next is Feature 17 (Training core)
 — re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 14, PR #4115, merged), preserved for history</summary>
@@ -25209,7 +25254,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                 | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                            | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                   | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13) | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13) | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`                             | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                      | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                             | ⬜     |
@@ -47979,3 +48024,48 @@ files).
 Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
 requests) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+### 2026-11-08 — Feature 16 (Events & requests, pass 14) merged; Feature 17 (Training core, pass 14): watchdog pickup, real delta, 1 fixed (TR14-1, LOW), 1 flagged (TR14-2, LOW), TR7-1 closed
+
+PR #4119 merged as `51e6e1b5`. A fresh `list_pull_requests` (state=open)
+found no `claude/security-review-*` head, so row 17 was next. The baseline was
+`740e7118` (pass 13). Fourteen commits in the window touch this feature's
+files, and they add four surfaces:
+
+- Chief requirement overrides: three routes gated on a Chief _position_ rather
+  than a permission, recorded in the permissionless-route baseline, with an
+  encrypted reason and audit rows that carry ids only.
+- Session-attendance requirements: a session link table, with every
+  requirement id required to be a session-attendance requirement in the
+  department.
+- Evaluations of outside-agency shifts: four `training.manage` routes. An
+  evaluation is offered only for a `COUNTED` entry, self-evaluation is still
+  refused, and a unique key per scope makes a double submit a no-op.
+- Supervisor crew reads of training data, through the org-scoped and
+  date-bounded `is_current_supervisor`.
+
+All 129 routes were listed again by AST, and none lacks an auth dependency.
+
+**Fixed: TR14-1 (LOW, Pitfall #27).**
+`RequirementOverrideService.grant` read the existing overrides and then
+inserted, so two grants sent at once could both pass the overlapping-dates
+refusal. It now locks the requirement row and reads overrides with a locking
+read. The guard `tests/test_capacity_locking.py::TestChiefOverrideOverlapLocking`
+was seen red before the fix. **Flagged: TR14-2 (LOW, role fit).** `events.manage`
+alone links or unlinks the sessions a session-attendance requirement counts,
+including past finalized drills, which moves members' compliance standing. It
+matches the existing session gate, so it is left for the owner and mirrored to
+`docs/KNOWN_LIMITATIONS.md`. **TR7-1 closed:** the duplicate
+`POST /training/enrollments` route was removed by owner decision in
+`71a6fd75`, and `tests/test_legacy_enrollment_route_removed.py` pins it.
+
+**Completion gate:** `flake8`, `black --check` (26.10.1) and
+`isort --check-only` on `app/ tests/ alembic/` are all clean.
+`validate_migrations.py --strict` reports 749 revisions and a single head,
+`78f196079c95`. `check_route_permissions.py --strict` checked 305 routes with 0
+errors and 0 warnings. The schema docs are up to date. The scoped backend suite
+had 2798 passed and 1 environment-only skip. The standing guard suites had 136
+passed. `npm run typecheck` reports 0 errors, and `npm run lint` reports 0
+errors and 0 warnings.
+
+Row 17 → ✅ (pending this PR's merge). Next is Feature 18 (Training extended).
