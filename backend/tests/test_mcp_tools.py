@@ -5185,3 +5185,65 @@ class TestMeetingsShowOnlyPublishedRecords:
                     "get_action_item_description",
                     action_item_id=items[label].id,
                 )
+
+
+class TestEventDraftsFollowTheMembersGrant:
+    """A member's OAuth connection sees drafts only with events.manage.
+
+    The HTTP API hides drafts from everyone but events.manage holders; the MCP
+    event tools called EventService directly and passed include_drafts
+    through, so a member holding only events.view could read them here.
+    """
+
+    async def _draft(self, db_session, org_id, admin_id):
+        from app.models.event import Event, EventType
+
+        draft = Event(
+            organization_id=org_id,
+            title="Unannounced drill",
+            description="Draft details",
+            event_type=EventType.TRAINING,
+            start_datetime=datetime(2030, 1, 1, 10, tzinfo=timezone.utc),
+            end_datetime=datetime(2030, 1, 1, 12, tzinfo=timezone.utc),
+            is_draft=True,
+            created_by=admin_id,
+        )
+        db_session.add(draft)
+        await db_session.flush()
+        return draft
+
+    def _member(self, org_id, admin_id, permissions):
+        return _principal(
+            org_id,
+            admin_id,
+            auth_method="oauth",
+            member_permissions=frozenset(permissions),
+        )
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_a_view_only_member_cannot_reach_a_draft(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        draft = await self._draft(db_session, org_id, admin_id)
+        member = self._member(org_id, admin_id, ["events.view"])
+
+        listed = await _call(server, member, "list_events", include_drafts=True)
+        assert draft.id not in {e["id"] for e in listed["items"]}
+        with pytest.raises(ToolError, match="not found"):
+            await _call(server, member, "get_event", event_id=draft.id)
+        with pytest.raises(ToolError, match="not found"):
+            await _call(server, member, "get_event_description", event_id=draft.id)
+
+    @pytest.mark.usefixtures("_use_test_session")
+    async def test_an_events_manager_still_can(
+        self, server, org_with_members, db_session
+    ):
+        org_id, admin_id, _ = org_with_members
+        draft = await self._draft(db_session, org_id, admin_id)
+        manager = self._member(org_id, admin_id, ["events.manage"])
+
+        listed = await _call(server, manager, "list_events", include_drafts=True)
+        assert draft.id in {e["id"] for e in listed["items"]}
+        got = await _call(server, manager, "get_event", event_id=draft.id)
+        assert got["is_draft"] is True

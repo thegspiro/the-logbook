@@ -4,6 +4,7 @@ from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import permission_matches
 from app.mcp.principal import McpPrincipal
 from app.mcp.redaction import scrub_text
 from app.mcp.registry import logbook_tool
@@ -107,6 +108,25 @@ def _event(event: Any, counts: Optional[dict] = None) -> dict:
     }
 
 
+def _may_see_drafts(principal: McpPrincipal) -> bool:
+    """Whether this connection may read unpublished (draft) events.
+
+    The HTTP API shows drafts to events.manage holders only. A member's OAuth
+    connection carries that member's permissions and gets the same answer; a
+    service key has no member behind it and is department-wide by design, as
+    for every other tool it reaches.
+    """
+    if principal.member_permissions is None:
+        return True
+    return permission_matches("events.manage", set(principal.member_permissions))
+
+
+def _refuse_hidden_draft(principal: McpPrincipal, event: Any) -> None:
+    # The same answer as an unknown id, so a draft's id confirms nothing.
+    if event is None or (event.is_draft and not _may_see_drafts(principal)):
+        raise ValueError("Event not found")
+
+
 def register(server: Any) -> None:
     @logbook_tool(
         server, title="List events", permissions=("events.view", "events.manage")
@@ -137,7 +157,7 @@ def register(server: Any) -> None:
             start_after=parse_datetime(start_after, "start_after"),
             start_before=parse_datetime(start_before, "start_before"),
             include_cancelled=include_cancelled,
-            include_drafts=include_drafts,
+            include_drafts=include_drafts and _may_see_drafts(principal),
             skip=offset,
             limit=limit,
         )
@@ -158,8 +178,7 @@ def register(server: Any) -> None:
         event, _ = await EventService(db).get_event(
             parse_uuid(event_id, "event_id"), org_uuid(principal), load_rsvps=False
         )
-        if event is None:
-            raise ValueError("Event not found")
+        _refuse_hidden_draft(principal, event)
         return _event(event)
 
     @logbook_tool(
@@ -183,8 +202,7 @@ def register(server: Any) -> None:
         event, _ = await EventService(db).get_event(
             parse_uuid(event_id, "event_id"), org_uuid(principal), load_rsvps=False
         )
-        if event is None:
-            raise ValueError("Event not found")
+        _refuse_hidden_draft(principal, event)
         body = _chunk(getattr(event, field) or "", content_offset)
         body.update({"event_id": event.id, "title": event.title, "field": field})
         return body
