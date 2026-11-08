@@ -25,6 +25,21 @@ Nothing was captured by this pass.
 | 15 | Applicant board with selection on, card content inset | Replace (`15-46` was re-shot) |
 | 02 | `02-135` Operational members: the button now ticks Active, Probationary and Life, not Retired (2026-11-06) | Replace |
 
+## Queued by the November 6 – 8 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-6--8-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 02 | My Training with a Courses requirement and **Show required courses (n)** open | Create |
+| 02 | `02-40` member Training History as the compact record list | Replace |
+| 11 | **My Dues** page | Create |
+| 11 | **Pending Amendments** queue | Create |
+| 11 | Expense line with the mileage **Trips** list; **Mark Paid** dialog | Create |
+| 11 | Settings → Connecting QuickBooks Online | Create |
+| 08 | Audit Log row for an integration event showing the IP column | Create |
+
 ## Queued by the November 5 – 6 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-5--6-2026).

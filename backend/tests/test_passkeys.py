@@ -36,6 +36,7 @@ from app.schemas.auth import (
     StepUpRequest,
 )
 from app.services import mfa_service, passkey_service
+from tests.fake_request import fake_request
 
 SITE = "https://logbook.example.org"
 RP_ID = "logbook.example.org"
@@ -849,6 +850,7 @@ class TestAdministratorControls:
                 db_session,
                 admin,
                 admin,
+                request=fake_request(),
             )
         remaining = await passkey_service.list_passkeys(db_session, member.id)
         assert [p.id for p in remaining] == [laptop.id]
@@ -878,7 +880,12 @@ class TestAdministratorControls:
             new=AsyncMock(),
         ):
             await admin_reset_mfa(
-                uuid.UUID(member.id), MagicMock(), db_session, admin, admin
+                uuid.UUID(member.id),
+                MagicMock(),
+                db_session,
+                admin,
+                admin,
+                request=fake_request(),
             )
         assert await passkey_service.list_passkeys(db_session, member.id) == []
         assert await passkey_service.has_second_factor(db_session, member) is False
