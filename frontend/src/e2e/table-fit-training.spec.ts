@@ -206,7 +206,7 @@ const instructorQualifications = COMPLIANCE_MEMBER_NAMES.map((userName, i) => ({
 // requirements met, expired certificates and a status badge. Overflows its
 // card on a tablet with the side navigation open.
 test.describe('Annual report member compliance table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/training/admin?page=compliance&tab=annual-report — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: COMPLIANCE_PERMISSIONS });
@@ -225,7 +225,7 @@ test.describe('Annual report member compliance table fits its card', () => {
 // The compliance officer's per-member projections: current, 30/60/90-day
 // percentages and expiring certificates.
 test.describe('Compliance forecast projections table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/training/admin?page=compliance&tab=forecast — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: COMPLIANCE_PERMISSIONS });
@@ -247,7 +247,7 @@ test.describe('Compliance forecast projections table fits its card', () => {
 // Instructor qualifications: instructor, type, a long course name, level,
 // certificate number, expiry and a standing badge.
 test.describe('Instructor qualifications table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/training/admin?page=enhancements&tab=instructors — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: TRAINING_PERMISSIONS });
