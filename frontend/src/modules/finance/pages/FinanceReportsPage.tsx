@@ -444,38 +444,48 @@ const AmendmentLog: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYear
                     {data.rows.map((row) => (
                       <tr key={row.amendmentId}>
                         <td data-label="Entered" className={tdClass}>
-                          {formatDate(row.enteredAt, tz)}
-                          {row.enteredByName && (
-                            <span className="text-theme-text-secondary block text-xs">{row.enteredByName}</span>
-                          )}
+                          <div className="min-w-0">
+                            {formatDate(row.enteredAt, tz)}
+                            {row.enteredByName && (
+                              <span className="text-theme-text-secondary block text-xs">{row.enteredByName}</span>
+                            )}
+                          </div>
                         </td>
                         <td data-label="Budget line" className={tdClass}>
                           {lineName(row.categoryName, row.stationName)}
                         </td>
                         <td data-label="Amount" className={numClass}>
-                          {formatCurrency(row.amount)}
-                          {row.isReversal && <span className="text-theme-text-secondary block text-xs">Reversal</span>}
+                          <div className="min-w-0">
+                            {formatCurrency(row.amount)}
+                            {row.isReversal && (
+                              <span className="text-theme-text-secondary block text-xs">Reversal</span>
+                            )}
+                          </div>
                         </td>
                         <td data-label="Reason" className={tdClass}>
                           {row.reason}
                         </td>
                         <td data-label="Approved by" className={tdClass}>
-                          {row.approvedBy}
-                          <span className="text-theme-text-secondary block text-xs">
-                            {formatCalendarDate(row.approvedOn)}
-                          </span>
+                          <div className="min-w-0">
+                            {row.approvedBy}
+                            <span className="text-theme-text-secondary block text-xs">
+                              {formatCalendarDate(row.approvedOn)}
+                            </span>
+                          </div>
                         </td>
                         <td data-label="Status" className={tdClass}>
-                          {AMENDMENT_STATUS_LABELS[row.status] ?? row.status}
-                          {row.decidedByName && (
-                            <span className="text-theme-text-secondary block text-xs">
-                              {row.decidedByName}
-                              {row.decidedAt ? `, ${formatDate(row.decidedAt, tz)}` : ''}
-                            </span>
-                          )}
-                          {row.decisionNote && (
-                            <span className="text-theme-text-secondary block text-xs">{row.decisionNote}</span>
-                          )}
+                          <div className="min-w-0">
+                            {AMENDMENT_STATUS_LABELS[row.status] ?? row.status}
+                            {row.decidedByName && (
+                              <span className="text-theme-text-secondary block text-xs">
+                                {row.decidedByName}
+                                {row.decidedAt ? `, ${formatDate(row.decidedAt, tz)}` : ''}
+                              </span>
+                            )}
+                            {row.decisionNote && (
+                              <span className="text-theme-text-secondary block text-xs">{row.decisionNote}</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}

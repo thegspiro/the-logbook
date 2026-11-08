@@ -85,7 +85,7 @@ const pledges = DONOR_NAMES.map((_, i) => ({
 // six-digit amounts, due date, status and an edit action. Wide enough to
 // overflow its card on a tablet with the side navigation open.
 test.describe('Pledges table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/grants/pledges — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, {

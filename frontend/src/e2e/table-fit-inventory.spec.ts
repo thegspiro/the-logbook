@@ -120,7 +120,7 @@ async function openItemsPage(page: Page): Promise<void> {
 // adds Status, so those two are the widest and can overflow their card on a
 // tablet or laptop with the side navigation open.
 test.describe('Inventory items — Pinned table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/inventory/admin/items — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await openItemsPage(page);
@@ -132,7 +132,7 @@ test.describe('Inventory items — Pinned table', () => {
 });
 
 test.describe('Inventory items — Unavailable table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/inventory/admin/items — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await openItemsPage(page);
@@ -147,7 +147,7 @@ test.describe('Inventory items — Unavailable table', () => {
 // buttons, inside a card that clips below md — it can overflow on a tablet or
 // laptop.
 test.describe('Reorder requests table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/inventory/admin/reorder — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
