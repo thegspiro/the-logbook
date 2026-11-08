@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 from app.api.v1.endpoints.users import update_contact_info, update_user_profile
 from app.schemas.user import ContactInfoUpdate, UserUpdate
@@ -93,7 +93,11 @@ class TestColleagueContactInfoWrite:
 
         with pytest.raises(HTTPException) as exc:
             await update_contact_info(
-                uuid4(), ContactInfoUpdate(phone="555-0100"), db, caller
+                uuid4(),
+                ContactInfoUpdate(phone="555-0100"),
+                BackgroundTasks(),
+                db=db,
+                current_user=caller,
             )
 
         assert exc.value.status_code == 403
@@ -107,7 +111,11 @@ class TestColleagueContactInfoWrite:
 
         with pytest.raises(HTTPException) as exc:
             await update_contact_info(
-                uuid4(), ContactInfoUpdate(phone="555-0100"), db, caller
+                uuid4(),
+                ContactInfoUpdate(phone="555-0100"),
+                BackgroundTasks(),
+                db=db,
+                current_user=caller,
             )
 
         assert exc.value.status_code == 404
@@ -119,7 +127,11 @@ class TestColleagueContactInfoWrite:
 
         with pytest.raises(HTTPException) as exc:
             await update_contact_info(
-                caller.id, ContactInfoUpdate(phone="555-0100"), db, caller
+                caller.id,
+                ContactInfoUpdate(phone="555-0100"),
+                BackgroundTasks(),
+                db=db,
+                current_user=caller,
             )
 
         assert exc.value.status_code == 404
