@@ -403,3 +403,27 @@ def test_the_day_is_read_in_the_departments_zone():
     )
     assert start == datetime(2016, 5, 2, 23, tzinfo=timezone.utc)
     assert end == datetime(2016, 5, 3, 11, tzinfo=timezone.utc)
+
+
+@pytest.mark.unit
+def test_an_unfilled_seat_with_a_date_passes_the_response_schema():
+    from app.schemas.historical_import import StaffingUnfilledView
+
+    view = StaffingUnfilledView.model_validate(
+        {
+            "items": [
+                {
+                    "line_number": 4,
+                    "date": date(2016, 5, 2),
+                    "activity": "LA106 Day Staff",
+                    "title": "Technician",
+                    "maps_to": "Firefighter",
+                    "required": False,
+                }
+            ],
+            "total": 1,
+            "assigned": 0,
+            "member_options": [],
+        }
+    )
+    assert view.items[0].date == date(2016, 5, 2)

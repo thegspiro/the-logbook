@@ -5,7 +5,9 @@ snake_case on the wire, like the shift history import whose batches this
 creates (``schemas/shift_history_import.py`` carries no alias generator).
 """
 
-from datetime import date, datetime
+from datetime import date
+from datetime import date as CalendarDate
+from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -543,7 +545,10 @@ class StaffingOptionsUpdate(BaseModel):
 
 class StaffingUnfilledSeat(BaseModel):
     line_number: int
-    date: Optional[date] = None
+    # Annotated through an alias: a field named ``date`` with a default
+    # shadows the type inside the class body, and pydantic would then accept
+    # only None.
+    date: Optional[CalendarDate] = None
     activity: str
     title: str
     # The department's seat, role or attendance the title maps to.
