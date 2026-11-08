@@ -56,7 +56,9 @@ async def past_positions_for(
                 )
             ),
         )
-        .order_by(MemberPositionTerm.ended_at.desc(), MemberPositionTerm.started_at)
+        .order_by(
+            MemberPositionTerm.ended_at.desc(), MemberPositionTerm.started_at.desc()
+        )
     )
     return [
         {

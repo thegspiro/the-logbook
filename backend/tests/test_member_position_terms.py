@@ -359,6 +359,32 @@ class TestTheProfile:
         ]
         assert names == ["History", "Treasurer"]
 
+    async def test_terms_ending_together_list_the_later_one_first(self, dept):
+        """Newest first holds within a shared end date too: two seats given up
+        in one save list the one taken later first."""
+        db = dept["db"]
+        committee = await _position(db, dept["org"], "History", kind="committee")
+        user = await _load(db, dept["member"])
+        user.positions = [dept["treasurer"], committee]
+        await db.flush()
+        user.positions = []
+        await db.flush()
+        ended = datetime.now(timezone.utc)
+        for position, started in (
+            (dept["treasurer"], ended - timedelta(days=300)),
+            (committee, ended - timedelta(days=30)),
+        ):
+            await db.execute(
+                update(MemberPositionTerm)
+                .where(MemberPositionTerm.position_id == position.id)
+                .values(started_at=started, ended_at=ended)
+            )
+
+        names = [
+            p["name"] for p in await past_positions_for(db, dept["member"], dept["org"])
+        ]
+        assert names == ["History", "Treasurer"]
+
     async def test_the_profile_response_carries_them_in_org(self, dept):
         db = dept["db"]
         user = await _load(db, dept["member"])
