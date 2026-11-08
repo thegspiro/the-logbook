@@ -175,7 +175,7 @@ const SHIFT_COMPLIANCE_REPORT = {
 // columns; on a tablet with the side navigation open that is wider than the
 // report card, which hid the difference and per-shift average off to the right.
 test.describe('Scheduling reports — member hours table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/scheduling/admin/reports — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
@@ -197,7 +197,7 @@ test.describe('Scheduling reports — member hours table', () => {
 // shifts, hours, a progress bar and a status badge — wider than the expanded
 // panel on a phone, where the status that answers the question was cut off.
 test.describe('Scheduling reports — shift compliance members table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/scheduling/admin/reports (Shift Compliance) — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
