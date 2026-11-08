@@ -21,6 +21,7 @@ vi.mock('../../../modules/integrations/services/historicalImportApi', () => ({
     updateStaffingMapping: (...a: unknown[]) => mockMapping(...a) as unknown,
     removeStaffingFile: (...a: unknown[]) => mockRemove(...a) as unknown,
     getStaffingMapping: (...a: unknown[]) => mockMappingView(...a) as unknown,
+    getStaffingCommit: (...a: unknown[]) => mockMappingView(...a) as unknown,
   },
 }));
 
@@ -130,7 +131,7 @@ const openSection = async () => {
 describe('StaffingSection', () => {
   beforeEach(() => {
     for (const mock of [mockGet, mockUpload, mockMapping, mockRemove, mockMappingView]) mock.mockReset();
-    // The decisions panel below the summary has its own tests.
+    // The decisions and commit panels below the summary have their own tests.
     mockMappingView.mockReturnValue(new Promise(() => {}));
     mockGet.mockResolvedValue(joined);
     mockUpload.mockResolvedValue(joined);

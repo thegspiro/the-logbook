@@ -24,6 +24,7 @@ import {
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import StaffingCommitPanel from './StaffingCommitPanel';
 import StaffingMappingPanel from './StaffingMappingPanel';
 
 const MAX_UPLOAD_MB = 40;
@@ -212,6 +213,8 @@ const StaffingSection: React.FC<StaffingSectionProps> = ({ detail }) => {
           {preview.summary && <StaffingSummaryView summary={preview.summary} flatFile={preview.flat_file} />}
 
           {preview.summary && <StaffingMappingPanel importId={importId} />}
+
+          {preview.summary && <StaffingCommitPanel importId={importId} />}
         </>
       )}
     </section>

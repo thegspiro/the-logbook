@@ -102,10 +102,14 @@ def _plain(value: str) -> str:
     return _SPACE_RE.sub(" ", text).strip()
 
 
+# The key of every event whose activity is blank: one decision covers them.
+NO_ACTIVITY_KEY = "(no activity)"
+
+
 def activity_key(activity: str) -> str:
     """One decision per activity text, whatever its case, entities or emoji:
     "&#128680; LA106 Call Back Staff" and "LA106 call back staff" agree."""
-    return _plain(activity).casefold()[:MAX_KEY_LENGTH]
+    return _plain(activity).casefold()[:MAX_KEY_LENGTH] or NO_ACTIVITY_KEY
 
 
 def title_core(title: str) -> str:
@@ -120,8 +124,13 @@ def title_core(title: str) -> str:
     return _SPACE_RE.sub(" ", _plain(text)).strip()
 
 
+# The key of a title with nothing left once its unit and times are taken off
+# (a blank title, or "LA106 (0800-1800)"): one decision covers all of them.
+NO_TITLE_KEY = "(no title)"
+
+
 def title_key(title: str) -> str:
-    return title_core(title).casefold()[:MAX_KEY_LENGTH]
+    return title_core(title).casefold()[:MAX_KEY_LENGTH] or NO_TITLE_KEY
 
 
 def _compare_key(value: str) -> str:
@@ -209,6 +218,11 @@ class Decisions:
     activity_kinds: Dict[str, str] = field(default_factory=dict)
     seat_titles: Dict[str, str] = field(default_factory=dict)
     event_titles: Dict[str, str] = field(default_factory=dict)
+    # Unfilled seats the reviewer assigned a member to: seat line -> user id.
+    seat_members: Dict[str, str] = field(default_factory=dict)
+    # Whether events with no seats become calendar events (the department's
+    # decision: yes, unless the reviewer turns it off).
+    include_unstaffed: bool = True
 
     @classmethod
     def from_stored(cls, stored: Any) -> "Decisions":
@@ -227,10 +241,13 @@ class Decisions:
             for k, v in strings(data.get("activity_kinds")).items()
             if v in ACTIVITY_KINDS
         }
+        include = data.get("include_unstaffed")
         return cls(
             activity_kinds=kinds,
             seat_titles=strings(data.get("seat_titles")),
             event_titles=strings(data.get("event_titles")),
+            seat_members=strings(data.get("seat_members")),
+            include_unstaffed=include if isinstance(include, bool) else True,
         )
 
     def to_stored(self) -> Dict[str, Any]:
@@ -238,6 +255,8 @@ class Decisions:
             "activity_kinds": dict(self.activity_kinds),
             "seat_titles": dict(self.seat_titles),
             "event_titles": dict(self.event_titles),
+            "seat_members": dict(self.seat_members),
+            "include_unstaffed": self.include_unstaffed,
         }
 
     def mapping(self, list_name: str) -> Dict[str, str]:
@@ -287,6 +306,8 @@ def merge(
         activity_kinds=dict(decisions.activity_kinds),
         seat_titles=dict(decisions.seat_titles),
         event_titles=dict(decisions.event_titles),
+        seat_members=dict(decisions.seat_members),
+        include_unstaffed=decisions.include_unstaffed,
     )
     if list_name == ACTIVITIES:
         merged.activity_kinds = current

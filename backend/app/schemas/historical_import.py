@@ -517,3 +517,60 @@ class StaffingMappingView(BaseModel):
     # may take, besides attendance (events) and leaving it out.
     seat_choices: List[StaffingChoice]
     role_choices: List[StaffingChoice]
+
+
+class StaffingCommitPreview(BaseModel):
+    """What writing the roster would do, and what it leaves out."""
+
+    # shifts, shift_seats, events, upcoming_events, check_ins, outreach_seats,
+    # assigned_unfilled
+    counts: Dict[str, int]
+    # Seats left out, by reason (no_event, undated, outside_usual_range,
+    # activity_left_out, activity_undecided, title_left_out, title_undecided,
+    # unfilled).
+    skipped: Dict[str, int]
+    unfilled_seats: int
+    include_unstaffed: bool
+    members: List[AdminMember]
+    member_options: List[AdminMemberOption]
+    can_commit: bool
+    result: Optional[Dict[str, Any]] = None
+
+
+class StaffingOptionsUpdate(BaseModel):
+    include_unstaffed: bool
+
+
+class StaffingUnfilledSeat(BaseModel):
+    line_number: int
+    date: Optional[date] = None
+    activity: str
+    title: str
+    # The department's seat, role or attendance the title maps to.
+    maps_to: str
+    required: bool
+    assigned_user_id: Optional[str] = None
+
+
+class StaffingUnfilledView(BaseModel):
+    items: List[StaffingUnfilledSeat]
+    total: int
+    assigned: int
+    member_options: List[AdminMemberOption]
+
+
+class StaffingUnfilledUpdate(BaseModel):
+    """Members for unfilled seats, by seat line; a null empties the seat."""
+
+    assignments: Dict[str, Optional[str]]
+
+    @field_validator("assignments")
+    @classmethod
+    def _check(cls, value: Dict[str, Any]) -> Dict[str, Any]:
+        if len(value) > 2_000:
+            raise ValueError("At most 2000 entries per request.")
+        if any(len(k) > 10 for k in value):
+            raise ValueError("A seat is named by its line number.")
+        if any(v is not None and len(str(v)) > 36 for v in value.values()):
+            raise ValueError("A member id is too long.")
+        return value

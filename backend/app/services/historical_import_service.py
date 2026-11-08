@@ -1735,6 +1735,17 @@ class HistoricalImportService:
         for resolution in resolutions:
             ref = resolution.ref or ""
             user_by_key[resolution.key] = created.get(ref, ref)
+        if created:
+            # A "create" decision is spent once the member exists. Left as it
+            # was, the next step of this import (or a second run of this one)
+            # would create them again, and the second record collides on the
+            # membership number. It now names the member it made.
+            stored = copy.deepcopy(record.member_mappings or {})
+            for resolution in resolutions:
+                made = created.get(resolution.ref or "")
+                if made:
+                    stored[resolution.key] = {"action": "map", "user_id": made}
+            record.member_mappings = stored
         return created, user_by_key
 
     async def _flush_ledgered(self) -> None:

@@ -82,6 +82,15 @@ class TestNormalizing:
         assert m.title_core("Santa&#39;s Helper") == "Santa's Helper"
         assert m.title_key("UT 106 Driver") == m.title_key("driver")
 
+    def test_a_title_with_nothing_left_is_still_decidable(self):
+        assert m.title_key("") == m.NO_TITLE_KEY
+        assert m.activity_key("  ") == m.NO_ACTIVITY_KEY
+        assert m.title_key("LA106 (0800-1800)") == m.NO_TITLE_KEY
+        merged = m.merge(
+            m.Decisions(), m.SEAT_TITLES, {m.NO_TITLE_KEY: m.TITLE_SKIP}, SEATS, ROLES
+        )
+        assert merged.seat_titles == {m.NO_TITLE_KEY: m.TITLE_SKIP}
+
     def test_an_activity_is_decided_whatever_its_case_or_emoji(self):
         assert m.activity_key("&#128680; LA106 Call Back Staff") == m.activity_key(
             "la106 call back staff"
