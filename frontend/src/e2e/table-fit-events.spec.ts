@@ -48,9 +48,7 @@ test.describe('Event analytics — top events by attendance table', () => {
       });
       await page.goto('/events/analytics');
 
-      const table = page
-        .getByRole('table')
-        .filter({ has: page.getByRole('columnheader', { includeHidden: true, name: 'Checked In', exact: true }) });
+      const table = page.getByRole('region', { name: 'Top events by attendance' }).getByRole('table');
       await table.waitFor();
       await expectTableFitsItsCard(table, 'Top events by attendance table');
     });
