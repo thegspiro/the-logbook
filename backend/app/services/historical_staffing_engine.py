@@ -374,6 +374,12 @@ def mapping_problems(
                 "Upload the events file, or choose the seats file's date column "
                 "if each seat row carries its event's date."
             )
+        elif not mapping.get("event_key") and not mapping.get("activity"):
+            # Without either, every seat on a day falls into one event.
+            problems.append(
+                "Choose the seats file's event column, or its activity column, "
+                "so seats on the same day are told apart by event."
+            )
     else:
         if not mapping.get("event_key"):
             problems.append("Choose the seats file's event column.")
@@ -426,6 +432,11 @@ def summarize(joined: Joined, today: date) -> Dict[str, Any]:
     usual = [e for e in dated if not outside_usual_range(e.day, years)]
     upcoming = [e for e in usual if e.day is not None and e.day > today]
     staffed = [e for e in events if e.seat_count]
+    # Unstaffed events the import makes calendar events: those it can place
+    # on a date in the usual range (past ones, and upcoming ones as scheduled).
+    unstaffed_importable = sum(
+        1 for e in usual if e.day is not None and not e.seat_count
+    )
     in_range = [e.day for e in usual if e.day is not None]
     return {
         "seats": {
@@ -446,6 +457,7 @@ def summarize(joined: Joined, today: date) -> Dict[str, Any]:
             "rows": len(events),
             "staffed": len(staffed),
             "unstaffed": len(events) - len(staffed),
+            "unstaffed_importable": unstaffed_importable,
             "undated": len(undated),
             "undated_examples": _examples([e.line_number for e in undated]),
             "usual_first_year": years[0] if years else None,

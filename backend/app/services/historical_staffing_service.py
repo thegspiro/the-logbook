@@ -101,6 +101,18 @@ class HistoricalStaffingService:
         self.db.add(staffing_file)
         try:
             await self.db.flush()
+            for start in range(0, len(rows), _INSERT_CHUNK):
+                self.db.add_all(
+                    HistoricalStaffingRow(
+                        id=generate_uuid(),
+                        file_id=staffing_file.id,
+                        # Line 1 is the header; blank lines were dropped.
+                        line_number=start + index + 2,
+                        raw=row,
+                    )
+                    for index, row in enumerate(rows[start : start + _INSERT_CHUNK])
+                )
+                await self.db.flush()
         except IntegrityError:
             # Locking the import serializes uploads to it, so this is only
             # reached by a database without that lock honoured.
@@ -108,18 +120,10 @@ class HistoricalStaffingService:
             raise ValueError(
                 "Another upload of this file finished first. Reload the page."
             )
-        for start in range(0, len(rows), _INSERT_CHUNK):
-            self.db.add_all(
-                HistoricalStaffingRow(
-                    id=generate_uuid(),
-                    file_id=staffing_file.id,
-                    # Line 1 is the header; blank lines were dropped.
-                    line_number=start + index + 2,
-                    raw=row,
-                )
-                for index, row in enumerate(rows[start : start + _INSERT_CHUNK])
-            )
-            await self.db.flush()
+        except Exception:
+            # Leave no half-written file behind, and the session usable.
+            await self.db.rollback()
+            raise
         await self.db.commit()
         await self.db.refresh(staffing_file)
         return staffing_file

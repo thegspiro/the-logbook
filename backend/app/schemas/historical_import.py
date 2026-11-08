@@ -427,6 +427,9 @@ class StaffingEventSummary(BaseModel):
     rows: int
     staffed: int
     unstaffed: int
+    # Unstaffed events with a date in the usual range: these become calendar
+    # events (scheduled ones when upcoming).
+    unstaffed_importable: int
     undated: int
     undated_examples: List[int]
     # The years most of the file's events fall in; an event outside them is

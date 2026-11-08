@@ -330,6 +330,8 @@ export interface StaffingEventSummary {
   rows: number;
   staffed: number;
   unstaffed: number;
+  /** Unstaffed events with a date in the usual range: these become calendar events. */
+  unstaffed_importable: number;
   undated: number;
   undated_examples: number[];
   usual_first_year?: number | null;

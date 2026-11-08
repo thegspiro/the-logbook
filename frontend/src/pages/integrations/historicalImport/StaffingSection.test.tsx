@@ -100,6 +100,7 @@ const joined: StaffingPreview = {
       rows: 13185,
       staffed: 5633,
       unstaffed: 7552,
+      unstaffed_importable: 7551,
       undated: 0,
       undated_examples: [],
       usual_first_year: 2000,
@@ -160,7 +161,9 @@ describe('StaffingSection', () => {
     await openSection();
     const status = await screen.findByRole('status');
     expect(status).toHaveTextContent('36,213 seats: 20,733 filled, 15,480 unfilled');
-    expect(status).toHaveTextContent('7,552 without, which become past calendar events');
+    expect(status).toHaveTextContent(
+      '7,552 without. Of those, 7,551 have a date in the usual range and become calendar events.'
+    );
     expect(status).toHaveTextContent('12,659 seats (7,124 filled) name 2,547 events the events file does not have');
     expect(status).toHaveTextContent('55582345 (65 seats)');
     expect(status).toHaveTextContent('1 events fall outside 2000–2027');

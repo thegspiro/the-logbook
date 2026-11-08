@@ -225,7 +225,8 @@ const StaffingSummaryView: React.FC<{ summary: StaffingSummary; flatFile: boolea
         {formatNumber(seats.filled)} filled, {formatNumber(seats.unfilled)} unfilled.{' '}
         <strong className="text-theme-text-primary">{formatNumber(events.rows)}</strong> events
         {flatFile ? ' (from the seat rows)' : ''}: {formatNumber(events.staffed)} with seats,{' '}
-        {formatNumber(events.unstaffed)} without, which become past calendar events.
+        {formatNumber(events.unstaffed)} without. Of those, {formatNumber(events.unstaffed_importable)} have a date in
+        the usual range and become calendar events.
         {events.first_date && events.last_date
           ? ` They run from ${formatDate(events.first_date, tz)} to ${formatDate(events.last_date, tz)}.`
           : ''}

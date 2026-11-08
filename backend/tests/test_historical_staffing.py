@@ -15,6 +15,7 @@ Pins what was agreed with the department:
 """
 
 from datetime import date, time
+from unittest.mock import patch
 
 import pytest
 from sqlalchemy import func, select
@@ -132,6 +133,7 @@ class TestReadingTheFiles:
         }
         events = summary["events"]
         assert (events["rows"], events["staffed"], events["unstaffed"]) == (3, 2, 1)
+        assert events["unstaffed_importable"] == 1
         assert (events["overnight"], events["upcoming"]) == (1, 0)
         # Three events in one year are too few to judge a usual range by.
         assert events["usual_first_year"] is None
@@ -183,6 +185,18 @@ class TestReadingTheFiles:
             (1, 1),
             (2, 1),
         ]
+
+    def test_a_flat_file_needs_something_to_tell_a_days_events_apart(self):
+        flat = engine.FileInput(
+            mapping={"date": "Date", "title": "Position", "member_name": "Name"},
+            rows=[],
+        )
+        assert engine.mapping_problems(flat, None) == [
+            "Choose the seats file's event column, or its activity column, "
+            "so seats on the same day are told apart by event."
+        ]
+        flat.mapping = {**flat.mapping, "activity": "Activity"}
+        assert engine.mapping_problems(flat, None) == []
 
     def test_what_must_be_chosen_is_named(self):
         seats = engine.FileInput(mapping={"title": "Title"}, rows=[])
@@ -302,6 +316,27 @@ class TestStoringTheFiles:
             )
         with pytest.raises(HistoricalImportNotFound):
             await service.preview(other_org, record.id)
+
+    async def test_a_failed_upload_leaves_no_file_behind(self, db_session):
+        org, admin, record = await _import(db_session)
+        # The rollback expires every loaded object; keep the id.
+        import_id = record.id
+        service = HistoricalStaffingService(db_session)
+        real_flush = db_session.flush
+        calls = {"n": 0}
+
+        async def failing_flush(*args, **kwargs):
+            calls["n"] += 1
+            # The file row flushes first; fail on the first chunk of rows.
+            if calls["n"] == 2:
+                raise RuntimeError("connection lost")
+            return await real_flush(*args, **kwargs)
+
+        with patch.object(db_session, "flush", failing_flush):
+            with pytest.raises(RuntimeError, match="connection lost"):
+                await service.upload(org, import_id, "seats", "s.csv", SEATS_CSV, admin)
+
+        assert (await service.preview(org, import_id))["files"] == []
 
     async def test_an_unreadable_kind_or_file_is_refused(self, db_session):
         org, admin, record = await _import(db_session)
