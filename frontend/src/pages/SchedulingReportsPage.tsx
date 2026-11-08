@@ -495,8 +495,13 @@ export const SchedulingReportsPage: React.FC = () => {
                   <p className="text-theme-text-muted">No data for this period</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Member hours">
-                  <table className="w-full text-sm">
+                <div
+                  className="rwd-table-container overflow-x-auto"
+                  tabIndex={0}
+                  role="region"
+                  aria-label="Member hours"
+                >
+                  <table className="rwd-table rwd-table-wide w-full text-sm">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
                         <th scope="col" className="text-theme-text-secondary px-4 py-3 text-left font-medium">
@@ -533,7 +538,7 @@ export const SchedulingReportsPage: React.FC = () => {
                             key={m.user_id}
                             className="border-theme-surface-border hover:bg-theme-surface-hover border-b"
                           >
-                            <td className="px-4 py-3">
+                            <td data-label="Member" className="px-4 py-3">
                               <div>
                                 <p className="text-theme-text-primary font-medium">
                                   {m.first_name || m.last_name ? `${m.first_name} ${m.last_name}`.trim() : m.email}
@@ -541,21 +546,26 @@ export const SchedulingReportsPage: React.FC = () => {
                                 <p className="text-theme-text-muted text-xs">{m.email}</p>
                               </div>
                             </td>
-                            <td className="text-theme-text-primary px-4 py-3 text-right">{m.shifts_attended}</td>
-                            <td className="text-theme-text-primary px-4 py-3 text-right font-medium">
+                            <td data-label="Shifts Worked" className="text-theme-text-primary px-4 py-3 text-right">
+                              {m.shifts_attended}
+                            </td>
+                            <td
+                              data-label="Hours Worked"
+                              className="text-theme-text-primary px-4 py-3 text-right font-medium"
+                            >
                               {formatHours(m.worked_hours)}
                             </td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-right">
+                            <td data-label="Outside Hours" className="text-theme-text-secondary px-4 py-3 text-right">
                               {formatHours(m.external_hours ?? 0)}
                             </td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-right">
+                            <td data-label="Scheduled Hours" className="text-theme-text-secondary px-4 py-3 text-right">
                               {formatHours(m.scheduled_hours)}
                             </td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-right">
+                            <td data-label="Difference" className="text-theme-text-secondary px-4 py-3 text-right">
                               {variance >= 0 ? '+' : ''}
                               {formatHours(variance)}
                             </td>
-                            <td className="text-theme-text-muted px-4 py-3 text-right">
+                            <td data-label="Avg Per Shift" className="text-theme-text-muted px-4 py-3 text-right">
                               {m.shifts_attended > 0 ? formatHoursExact(m.worked_hours / m.shifts_attended) : '0'}h
                             </td>
                           </tr>
@@ -1143,7 +1153,7 @@ export const SchedulingReportsPage: React.FC = () => {
                       {/* Expanded member list */}
                       {isExpanded && (
                         <div
-                          className="border-theme-surface-border overflow-x-auto border-t"
+                          className="border-theme-surface-border rwd-table-container overflow-x-auto border-t"
                           tabIndex={0}
                           role="region"
                           aria-label="Member shift compliance"
@@ -1153,7 +1163,7 @@ export const SchedulingReportsPage: React.FC = () => {
                               {complianceFilter === 'non-compliant' ? 'All members are compliant!' : 'No members found'}
                             </div>
                           ) : (
-                            <table className="w-full text-sm">
+                            <table className="rwd-table rwd-table-wide w-full text-sm">
                               <thead>
                                 <tr className="border-theme-surface-border bg-theme-surface-secondary border-b">
                                   <th scope="col" className="text-theme-text-secondary px-4 py-2 text-left font-medium">
@@ -1194,19 +1204,19 @@ export const SchedulingReportsPage: React.FC = () => {
                                     key={member.user_id}
                                     className="border-theme-surface-border hover:bg-theme-surface-hover border-b"
                                   >
-                                    <td className="px-4 py-2">
+                                    <td data-label="Member" className="px-4 py-2">
                                       <span className="text-theme-text-primary font-medium">
                                         {member.full_name ||
                                           `${member.first_name || ''} ${member.last_name || ''}`.trim() ||
                                           member.user_id}
                                       </span>
                                     </td>
-                                    <td className="px-4 py-2">
+                                    <td data-label="Rank" className="px-4 py-2">
                                       <span className="text-theme-text-secondary text-xs">
                                         {formatRank(member.rank) || '-'}
                                       </span>
                                     </td>
-                                    <td className="text-theme-text-primary px-4 py-2 text-right">
+                                    <td data-label="Shifts" className="text-theme-text-primary px-4 py-2 text-right">
                                       {member.shift_count}
                                       {(member.external_shift_count ?? 0) > 0 && (
                                         <span className="text-theme-text-muted block text-xs">
@@ -1214,7 +1224,7 @@ export const SchedulingReportsPage: React.FC = () => {
                                         </span>
                                       )}
                                     </td>
-                                    <td className="text-theme-text-primary px-4 py-2 text-right">
+                                    <td data-label="Hours" className="text-theme-text-primary px-4 py-2 text-right">
                                       {formatHours(member.total_hours)}
                                       {(member.external_hours ?? 0) > 0 && (
                                         <span className="text-theme-text-muted block text-xs">
@@ -1222,7 +1232,7 @@ export const SchedulingReportsPage: React.FC = () => {
                                         </span>
                                       )}
                                     </td>
-                                    <td className="px-4 py-2 text-right">
+                                    <td data-label="Progress" className="px-4 py-2 text-right">
                                       <div className="flex items-center justify-end gap-2">
                                         <div className="bg-theme-surface-secondary h-1.5 w-16 overflow-hidden rounded-full">
                                           <div
@@ -1235,7 +1245,7 @@ export const SchedulingReportsPage: React.FC = () => {
                                         </span>
                                       </div>
                                     </td>
-                                    <td className="px-4 py-2 text-center">
+                                    <td data-label="Status" className="px-4 py-2 text-center">
                                       {member.compliant ? (
                                         <span className="inline-flex items-center gap-1 rounded-sm bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-500/20 dark:text-green-400">
                                           <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
