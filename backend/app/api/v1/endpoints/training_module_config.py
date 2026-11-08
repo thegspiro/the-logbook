@@ -65,6 +65,9 @@ from app.services.training_course_names import (
 )
 from app.services.training_module_config_service import TrainingModuleConfigService
 from app.services.training_program_service import TrainingProgramService
+from app.services.training_requirement_courses import (
+    load_required_course_catalog,
+)
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import (
     fetch_user_waivers,
@@ -238,8 +241,14 @@ async def _evaluate_member_requirements(
     member_with_roles: User | None,
     org_id: str,
     today: date,
+    include_course_checklist: bool = True,
 ) -> tuple[list[dict[str, Any]], list[str], float]:
     """Every active requirement that applies to ``member``, evaluated.
+
+    ``include_course_checklist`` loads the course names a COURSES
+    requirement's ``course_checklist`` lists. A caller that will not return
+    the per-requirement breakdown passes False and skips that query; the
+    checklist is then null, and no figure depends on it.
 
     One definition for the member's own page and the officer's view of that
     member (CLAUDE.md pitfall 29), so the two cannot disagree about a target,
@@ -305,6 +314,11 @@ async def _evaluate_member_requirements(
         )
     ).get(user_id, [])
     held_sessions = await load_held_sessions(db, str(org_id), applicable)
+    course_catalog = (
+        await load_required_course_catalog(db, str(org_id), applicable)
+        if include_course_checklist
+        else None
+    )
 
     # Evaluate every applicable requirement using the shared helper which
     # handles all requirement types (hours, courses, certification,
@@ -323,6 +337,7 @@ async def _evaluate_member_requirements(
             join_date=join_date,
             shift_dates=shift_dates,
             held_sessions=held_sessions,
+            course_catalog=course_catalog,
         )
         requirements_detail.append(detail)
         # Listed with its deadline, but left out of the summary until the
@@ -477,9 +492,17 @@ async def get_my_training_summary(
     result["hours_summary"] = hours_summary
 
     # --- Requirements Summary (always returned for core stats) ---
+    shows_requirement_details = is_officer or visibility.get(
+        "show_requirement_details", True
+    )
     requirements_detail, statuses, total_progress_pct = (
         await _evaluate_member_requirements(
-            db, current_user, user_with_roles, org_id, today
+            db,
+            current_user,
+            user_with_roles,
+            org_id,
+            today,
+            include_course_checklist=shows_requirement_details,
         )
     )
 
@@ -510,7 +533,7 @@ async def get_my_training_summary(
     # ``show_requirement_details`` names, and until now only the copy nested
     # inside Pipeline Progress honoured it while this one — hours, due dates,
     # overdue-by-N-days — was returned to everybody.
-    if is_officer or visibility.get("show_requirement_details", True):
+    if shows_requirement_details:
         result["requirements_detail"] = requirements_detail
 
     # --- Certification Status ---
@@ -622,7 +645,7 @@ async def get_my_training_summary(
             }
 
             # Requirement details (if allowed)
-            if is_officer or visibility.get("show_requirement_details", True):
+            if shows_requirement_details:
                 rp_result = await db.execute(
                     select(RequirementProgress).where(
                         RequirementProgress.enrollment_id == str(enrollment.id)
