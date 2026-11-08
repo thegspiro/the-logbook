@@ -132,6 +132,8 @@ export interface HistoryImportUnit {
   target_id?: string | null;
   candidates: { kind: string; id: string }[];
   new_agency_name: string;
+  /** Set when the reviewer picked an existing agency for the new unit. */
+  new_agency_id?: string | null;
   new_unit_name: string;
   /** The seat a member takes on this unit when the file names no position. */
   default_seat?: string | null;
@@ -224,6 +226,14 @@ export interface HistoryImportOptionUnit {
   agency_name?: string | null;
   /** Own units: the seats the apparatus record lists. */
   seats?: string[];
+  /** Outside units: false when the unit or its agency is hidden from members. */
+  is_active?: boolean;
+}
+
+export interface HistoryImportOptionAgency {
+  id: string;
+  name: string;
+  is_active: boolean;
 }
 
 export interface HistoryImportCallType {
@@ -234,6 +244,7 @@ export interface HistoryImportCallType {
 export interface HistoryImportOptions {
   members: HistoryImportOptionMember[];
   units: HistoryImportOptionUnit[];
+  agencies?: HistoryImportOptionAgency[];
   seats: string[];
 }
 
@@ -275,7 +286,7 @@ export type MemberMapping =
 export type UnitMapping =
   | { action: 'own'; id: string; default_seat?: string | undefined }
   | { action: 'external'; id: string }
-  | { action: 'create_external'; agency_name: string; unit_name: string };
+  | { action: 'create_external'; agency_id?: string | undefined; agency_name: string; unit_name: string };
 
 export interface PositionMapping {
   seat: string;

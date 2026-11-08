@@ -82,6 +82,9 @@ class MemberMapping(BaseModel):
 class UnitMapping(BaseModel):
     action: Literal["own", "external", "create_external"]
     id: Optional[str] = Field(None, max_length=36)
+    # ``create_external`` only: an existing agency for the new unit, picked
+    # rather than typed so a misspelling cannot create a second agency.
+    agency_id: Optional[str] = Field(None, max_length=36)
     agency_name: Optional[str] = Field(None, max_length=255)
     unit_name: Optional[str] = Field(None, max_length=100)
     # Own units only: the seat a member takes when the file names no position.
@@ -206,6 +209,7 @@ class ImportUnitView(BaseModel):
     target_id: Optional[str] = None
     candidates: List[UnitCandidate]
     new_agency_name: str
+    new_agency_id: Optional[str] = None
     new_unit_name: str
     default_seat: Optional[str] = None
     row_count: int
@@ -287,6 +291,14 @@ class OptionUnit(BaseModel):
     # Own units: the seats the apparatus record lists, for the default-seat
     # picker.
     seats: List[str] = Field(default_factory=list)
+    # Outside units: False when the unit or its agency is hidden from members.
+    is_active: bool = True
+
+
+class OptionAgency(BaseModel):
+    id: str
+    name: str
+    is_active: bool
 
 
 class CallTypeOption(BaseModel):
@@ -299,6 +311,7 @@ class ImportOptions(BaseModel):
 
     members: List[OptionMember]
     units: List[OptionUnit]
+    agencies: List[OptionAgency] = Field(default_factory=list)
     seats: List[str]
 
 

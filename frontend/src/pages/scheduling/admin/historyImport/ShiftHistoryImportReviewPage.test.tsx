@@ -453,6 +453,84 @@ describe('ShiftHistoryImportReviewPage', () => {
     });
   });
 
+  describe('outside units', () => {
+    const unmatchedM7 = {
+      key: '|m7',
+      unit: 'M7',
+      agency: '',
+      status: 'unmatched',
+      candidates: [],
+      new_agency_name: '',
+      new_unit_name: '',
+      row_count: 2,
+      remembered: false,
+    };
+    const outsideDraft = () =>
+      draft({
+        units: [unmatchedM7],
+        options: {
+          members: [],
+          units: [{ kind: 'external', id: 'ext-a106', name: 'A106', agency_name: 'County EMS', is_active: false }],
+          agencies: [{ id: 'ag-county', name: 'County EMS', is_active: true }],
+          seats: ['firefighter'],
+        },
+      });
+
+    beforeEach(() => {
+      mockGet.mockReset();
+      mockGet.mockResolvedValue(outsideDraft());
+    });
+
+    it('adds a new unit under an agency picked from the list', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Units/ }));
+      await user.selectOptions(screen.getByLabelText('Which unit is M7?'), "Add as an outside agency's unit…");
+      await user.selectOptions(screen.getByLabelText('Agency'), 'ag-county');
+
+      expect(screen.queryByLabelText('New agency name')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Use this unit' }));
+
+      expect(mockMappings).toHaveBeenCalledWith('imp-1', {
+        units: {
+          '|m7': { action: 'create_external', agency_id: 'ag-county', agency_name: 'County EMS', unit_name: 'M7' },
+        },
+      });
+    });
+
+    it('still lets a new agency be typed', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Units/ }));
+      await user.selectOptions(screen.getByLabelText('Which unit is M7?'), "Add as an outside agency's unit…");
+      await user.type(screen.getByLabelText('New agency name'), 'Metro Fire');
+      await user.click(screen.getByRole('button', { name: 'Use this unit' }));
+
+      expect(mockMappings).toHaveBeenCalledWith('imp-1', {
+        units: { '|m7': { action: 'create_external', agency_name: 'Metro Fire', unit_name: 'M7' } },
+      });
+    });
+
+    it('sends a name to the catch-all Other unit', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Units/ }));
+      await user.selectOptions(screen.getByLabelText('Which unit is M7?'), 'Catch-all: Other');
+
+      expect(mockMappings).toHaveBeenCalledWith('imp-1', {
+        units: { '|m7': { action: 'create_external', agency_id: undefined, agency_name: 'Other', unit_name: 'Other' } },
+      });
+    });
+
+    it('labels an outside unit hidden from members', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Units/ }));
+
+      expect(screen.getByRole('option', { name: 'A106 (County EMS) — hidden from members' })).toBeInTheDocument();
+    });
+  });
+
   it('names a former member the file knows only by number', async () => {
     mockGet.mockResolvedValue(
       draft({

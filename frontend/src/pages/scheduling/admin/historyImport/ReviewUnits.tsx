@@ -5,7 +5,10 @@
  * and one may belong to the department while the other belongs to the county.
  * A name can map to one of the department's own units — its rows become
  * shifts on the schedule — or to an outside agency's unit, whose rows become
- * outside-agency hours. A unit not yet in the outside list can be added here.
+ * outside-agency hours. A unit not yet in the outside list can be added here,
+ * under an agency picked from the department's list so a misspelling cannot
+ * create a second agency. Names that are not a vehicle at all (POV, "Other
+ * EMS") can all go to one catch-all "Other" unit.
  */
 
 import React, { useState } from 'react';
@@ -29,6 +32,14 @@ interface ReviewUnitsProps {
 
 const AUTOMATIC = '';
 const NEW_OUTSIDE = '__new_outside__';
+const CATCH_ALL = '__catch_all_other__';
+const NEW_AGENCY = '__new_agency__';
+// The catch-all is an outside agency and unit both named this; commit reuses
+// them by name once they exist, so every import lands on the same unit.
+const CATCH_ALL_NAME = 'Other';
+
+const sameName = (a: string | null | undefined, b: string): boolean =>
+  (a ?? '').trim().toLowerCase() === b.trim().toLowerCase();
 
 const UnitRow: React.FC<{
   unit: HistoryImportUnit;
@@ -36,8 +47,13 @@ const UnitRow: React.FC<{
   busy: boolean;
   onMappings: (payload: HistoryImportMappingsUpdate) => void;
 }> = ({ unit, analysis, busy, onMappings }) => {
+  const agencies = analysis.options.agencies ?? [];
+  const initialAgency =
+    agencies.find((a) => a.id === unit.new_agency_id) ??
+    agencies.find((a) => sameName(a.name, unit.new_agency_name || unit.agency));
   const [addingOutside, setAddingOutside] = useState(false);
-  const [agencyName, setAgencyName] = useState(unit.agency || unit.new_agency_name);
+  const [agencyChoice, setAgencyChoice] = useState(initialAgency?.id ?? NEW_AGENCY);
+  const [agencyName, setAgencyName] = useState(initialAgency ? '' : unit.new_agency_name || unit.agency);
   const [unitName, setUnitName] = useState(unit.new_unit_name || unit.unit);
 
   const label = unit.agency ? `${unit.unit} (${unit.agency})` : unit.unit;
@@ -49,14 +65,39 @@ const UnitRow: React.FC<{
       )
     : null;
   const selectId = `unit-decision-${unit.key}`;
-  const current =
-    unit.status === 'mapped' && unit.target_kind !== UnitTargetKind.NEW_EXTERNAL
+  const isNewExternal = unit.target_kind === UnitTargetKind.NEW_EXTERNAL;
+  const isCatchAll =
+    isNewExternal && sameName(unit.new_agency_name, CATCH_ALL_NAME) && sameName(unit.new_unit_name, CATCH_ALL_NAME);
+  // Opening the add form wins over the current mapping, or choosing it on a
+  // unit already mapped elsewhere would leave the form closed.
+  const current = addingOutside
+    ? NEW_OUTSIDE
+    : unit.status === 'mapped' && !isNewExternal
       ? `${unit.target_kind ?? ''}:${unit.target_id ?? ''}`
-      : unit.target_kind === UnitTargetKind.NEW_EXTERNAL || addingOutside
-        ? NEW_OUTSIDE
-        : AUTOMATIC;
+      : isCatchAll
+        ? CATCH_ALL
+        : isNewExternal
+          ? NEW_OUTSIDE
+          : AUTOMATIC;
 
   const send = (mapping: UnitMapping | null) => onMappings({ units: { [unit.key]: mapping } });
+
+  const chooseCatchAll = () => {
+    const agency = agencies.find((a) => sameName(a.name, CATCH_ALL_NAME));
+    const existing = analysis.options.units.find(
+      (u) => u.kind === 'external' && sameName(u.name, CATCH_ALL_NAME) && sameName(u.agency_name, CATCH_ALL_NAME)
+    );
+    if (existing) {
+      send({ action: 'external', id: existing.id });
+      return;
+    }
+    send({
+      action: 'create_external',
+      agency_id: agency?.id,
+      agency_name: agency?.name ?? CATCH_ALL_NAME,
+      unit_name: CATCH_ALL_NAME,
+    });
+  };
 
   const choose = (value: string) => {
     if (value === NEW_OUTSIDE) {
@@ -68,9 +109,17 @@ const UnitRow: React.FC<{
       send(null);
       return;
     }
+    if (value === CATCH_ALL) {
+      chooseCatchAll();
+      return;
+    }
     const [kind, id] = value.split(':');
     if ((kind === 'own' || kind === 'external') && id) send({ action: kind, id });
   };
+
+  const pickedAgency = agencies.find((a) => a.id === agencyChoice);
+  const newAgencyName = agencyName.trim();
+  const canAdd = Boolean(unitName.trim()) && (pickedAgency !== undefined || Boolean(newAgencyName));
 
   const ownUnits = analysis.options.units.filter((u) => u.kind === 'own');
   const outsideUnits = analysis.options.units.filter((u) => u.kind === 'external');
@@ -113,6 +162,7 @@ const UnitRow: React.FC<{
           >
             <option value={AUTOMATIC}>{unit.status === 'matched' ? 'Matched automatically' : 'Choose…'}</option>
             <option value={NEW_OUTSIDE}>Add as an outside agency's unit…</option>
+            <option value={CATCH_ALL}>Catch-all: {CATCH_ALL_NAME}</option>
             {ownUnits.length > 0 && (
               <optgroup label="This department's units">
                 {ownUnits.map((option) => (
@@ -128,6 +178,7 @@ const UnitRow: React.FC<{
                   <option key={option.id} value={`external:${option.id}`}>
                     {option.name}
                     {option.agency_name ? ` (${option.agency_name})` : ''}
+                    {option.is_active === false ? ' — hidden from members' : ''}
                   </option>
                 ))}
               </optgroup>
@@ -163,43 +214,82 @@ const UnitRow: React.FC<{
       )}
 
       {current === NEW_OUTSIDE && (
-        <form
-          className="bg-theme-surface-secondary flex flex-col gap-3 rounded-lg p-3 sm:flex-row sm:items-end"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!agencyName.trim() || !unitName.trim()) return;
-            send({ action: 'create_external', agency_name: agencyName.trim(), unit_name: unitName.trim() });
-          }}
-        >
-          <div className="flex-1">
-            <label htmlFor={`${selectId}-agency`} className="form-label">
-              Agency
-            </label>
-            <input
-              id={`${selectId}-agency`}
-              className="form-input"
-              maxLength={255}
-              value={agencyName}
-              onChange={(e) => setAgencyName(e.target.value)}
-              placeholder="e.g. County EMS"
-            />
-          </div>
-          <div className="flex-1">
-            <label htmlFor={`${selectId}-unit`} className="form-label">
-              Unit
-            </label>
-            <input
-              id={`${selectId}-unit`}
-              className="form-input"
-              maxLength={100}
-              value={unitName}
-              onChange={(e) => setUnitName(e.target.value)}
-            />
-          </div>
-          <button type="submit" className="btn-primary" disabled={busy || !agencyName.trim() || !unitName.trim()}>
-            Use this unit
-          </button>
-        </form>
+        <>
+          <form
+            className="bg-theme-surface-secondary flex flex-col gap-3 rounded-lg p-3 sm:flex-row sm:items-end"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!canAdd) return;
+              send(
+                pickedAgency
+                  ? {
+                      action: 'create_external',
+                      agency_id: pickedAgency.id,
+                      agency_name: pickedAgency.name,
+                      unit_name: unitName.trim(),
+                    }
+                  : { action: 'create_external', agency_name: newAgencyName, unit_name: unitName.trim() }
+              );
+            }}
+          >
+            <div className="flex-1 space-y-2">
+              <div>
+                <label htmlFor={`${selectId}-agency`} className="form-label">
+                  Agency
+                </label>
+                <select
+                  id={`${selectId}-agency`}
+                  className="form-input"
+                  value={agencyChoice}
+                  disabled={busy}
+                  onChange={(e) => setAgencyChoice(e.target.value)}
+                >
+                  <option value={NEW_AGENCY}>New agency…</option>
+                  {agencies.map((agency) => (
+                    <option key={agency.id} value={agency.id}>
+                      {agency.name}
+                      {agency.is_active ? '' : ' — hidden from members'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {agencyChoice === NEW_AGENCY && (
+                <div>
+                  <label htmlFor={`${selectId}-agency-name`} className="form-label">
+                    New agency name
+                  </label>
+                  <input
+                    id={`${selectId}-agency-name`}
+                    className="form-input"
+                    maxLength={255}
+                    value={agencyName}
+                    onChange={(e) => setAgencyName(e.target.value)}
+                    placeholder="e.g. County EMS"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex-1">
+              <label htmlFor={`${selectId}-unit`} className="form-label">
+                Unit
+              </label>
+              <input
+                id={`${selectId}-unit`}
+                className="form-input"
+                maxLength={100}
+                value={unitName}
+                onChange={(e) => setUnitName(e.target.value)}
+              />
+            </div>
+            <button type="submit" className="btn-primary" disabled={busy || !canAdd}>
+              Use this unit
+            </button>
+          </form>
+          <p className="text-theme-text-secondary text-sm">
+            A unit added here starts hidden from members. Offer it in Outside Apparatus settings if it is still in
+            service.
+          </p>
+        </>
       )}
     </li>
   );
