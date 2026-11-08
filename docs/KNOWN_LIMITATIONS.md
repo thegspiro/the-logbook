@@ -706,6 +706,29 @@ entry stays only while code, tests or `CLAUDE.md` still cite it by name.
 > not just the date they were written. When you fix something listed here,
 > update its row in the same change.
 
+## Credentials Sent by Email — Two Decisions Left Open (ADV-10, 2026-11-08)
+
+Found by the adversarial exfiltration pass
+(`docs/security-review/ADV-01-adversarial-exfiltration.md`). Its fixes stop an
+officer rewriting the credential emails and stop an officer repointing a
+colleague's email without the reset ceiling and step-up. Two things remain for
+the owner, because closing them changes how members get into their accounts:
+
+- **The welcome email carries a temporary password.** Anyone who can read the
+  new member's inbox — a forwarding rule, a shared family account, a mail
+  provider's logs — holds a working password until the member's first sign-in
+  forces a change. A one-time setup link that expires and works once would
+  carry nothing reusable. It changes the welcome email, the first-login flow
+  and the IT-password notice, so it was deferred rather than folded into the
+  security fixes (owner decision, 2026-11-08).
+- **A reset link goes to an address nobody has verified.** Forgot-password
+  finds the account by email and does not check `email_verified`, and an
+  email change clears that flag. Refusing resets to unverified addresses would
+  close the path ADV-1 exploited for good, but many existing members have never
+  verified theirs, and they would lose self-service reset on upgrade. Left as
+  is; the email change itself is now ceiling-bound, step-up gated, audited and
+  reported to the previous address.
+
 ## Authentication & Security
 
 | Item                                                                                                                                                                                                                                                                                                  | Status                                                                                                                                   | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
