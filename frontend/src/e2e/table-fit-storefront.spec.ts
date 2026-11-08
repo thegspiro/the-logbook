@@ -63,9 +63,13 @@ test.describe('Store window tally line detail fits its card', () => {
     test(`/inventory/admin/store?tab=windows Tally — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: [...TEST_USER.permissions, 'storefront.view', 'storefront.manage'] });
+      // The tab reads only the window list and one window's summary; any
+      // other call answers 404 so a new dependency fails loudly here.
       await page.route('**/api/v1/store/windows**', (route) => {
         const path = new URL(route.request().url()).pathname;
-        return route.fulfill(json(path.endsWith('/summary') ? summary : [storeWindow]));
+        if (path.endsWith('/store/windows')) return route.fulfill(json([storeWindow]));
+        if (path.endsWith(`/store/windows/${storeWindow.id}/summary`)) return route.fulfill(json(summary));
+        return route.fulfill({ status: 404, body: 'not mocked' });
       });
       await page.route('**/api/v1/store/products**', (route) => route.fulfill(json([])));
       await page.goto('/inventory/admin/store?tab=windows');
