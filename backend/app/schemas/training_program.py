@@ -511,12 +511,69 @@ class ProgramRequirementResponse(ProgramRequirementBase, UTCResponseBase):
 # Program Milestone Schemas
 
 
+MILESTONE_ITEM_TYPES = ("course", "skill_test", "knowledge_test")
+MilestoneItemTypeLiteral = Literal["course", "skill_test", "knowledge_test"]
+MilestoneMatchModeLiteral = Literal["all", "any"]
+# Generous, and still small enough that a milestone stays a goal rather than a
+# second copy of the program's requirement list.
+MAX_MILESTONE_ITEMS = 25
+MAX_MILESTONE_RECIPIENTS = 50
+
+
+class ProgramMilestoneItemInput(BaseModel):
+    """A course, skills test (skill template) or knowledge test to complete."""
+
+    item_type: MilestoneItemTypeLiteral
+    item_id: UUID
+
+
+class ProgramMilestoneItemResponse(BaseModel):
+    """A completion item with the name it is shown under."""
+
+    id: UUID
+    item_type: MilestoneItemTypeLiteral
+    item_id: UUID
+    # None when the course or test is no longer readable (archived and
+    # filtered, or otherwise gone); the editor shows the id then.
+    name: Optional[str] = None
+
+
+class MilestoneRecipientLabel(BaseModel):
+    """A chosen position or member, with the name the editor shows."""
+
+    id: UUID
+    name: Optional[str] = None
+
+
+def _unique_items(
+    items: Optional[List[ProgramMilestoneItemInput]],
+) -> Optional[List[ProgramMilestoneItemInput]]:
+    if items is None:
+        return None
+    seen: set = set()
+    unique: List[ProgramMilestoneItemInput] = []
+    for item in items:
+        key = (item.item_type, str(item.item_id))
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    return unique
+
+
+def _unique_ids(ids: Optional[List[UUID]]) -> Optional[List[UUID]]:
+    if ids is None:
+        return None
+    return list(dict.fromkeys(ids))
+
+
 class ProgramMilestoneBase(BaseModel):
     """Base program milestone schema"""
 
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    completion_percentage_threshold: float = Field(..., ge=0, le=100)
+    # Optional since milestones can wait on completion items instead; the two
+    # are joined by AND when both are set.
+    completion_percentage_threshold: Optional[float] = Field(None, ge=0, le=100)
     notification_message: Optional[str] = None
 
 
@@ -525,28 +582,143 @@ class ProgramMilestoneCreate(ProgramMilestoneBase):
 
     program_id: UUID
     phase_id: Optional[UUID] = None
+    items: List[ProgramMilestoneItemInput] = Field(
+        default_factory=list, max_length=MAX_MILESTONE_ITEMS
+    )
+    item_match_mode: MilestoneMatchModeLiteral = "all"
+    counts_prior_completions: bool = False
+    notify_member: bool = True
+    notify_position_ids: List[UUID] = Field(
+        default_factory=list, max_length=MAX_MILESTONE_RECIPIENTS
+    )
+    notify_user_ids: List[UUID] = Field(
+        default_factory=list, max_length=MAX_MILESTONE_RECIPIENTS
+    )
+    officer_message: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _needs_a_trigger(self) -> "ProgramMilestoneCreate":
+        self.items = _unique_items(self.items) or []
+        self.notify_position_ids = _unique_ids(self.notify_position_ids) or []
+        self.notify_user_ids = _unique_ids(self.notify_user_ids) or []
+        if self.completion_percentage_threshold is None and not self.items:
+            raise ValueError(
+                "A milestone needs a percentage, at least one course or test, "
+                "or both"
+            )
+        return self
 
 
 class ProgramMilestoneUpdate(RefusesNull):
-    """Schema for updating a program milestone"""
+    """Schema for updating a program milestone.
+
+    ``items``, when sent, replaces the whole set; omitted, it is untouched.
+    Whether the result still has a trigger is checked against the merged row
+    in the service, since either half may be the one left out.
+    """
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     completion_percentage_threshold: Optional[float] = Field(None, ge=0, le=100)
     notification_message: Optional[str] = None
+    items: Optional[List[ProgramMilestoneItemInput]] = Field(
+        None, max_length=MAX_MILESTONE_ITEMS
+    )
+    item_match_mode: Optional[MilestoneMatchModeLiteral] = None
+    counts_prior_completions: Optional[bool] = None
+    notify_member: Optional[bool] = None
+    notify_position_ids: Optional[List[UUID]] = Field(
+        None, max_length=MAX_MILESTONE_RECIPIENTS
+    )
+    notify_user_ids: Optional[List[UUID]] = Field(
+        None, max_length=MAX_MILESTONE_RECIPIENTS
+    )
+    officer_message: Optional[str] = None
 
-    null_refused = frozenset({"completion_percentage_threshold", "name"})
+    # A null recipient list clears it, like an empty one.
+    null_refused = frozenset(
+        {
+            "name",
+            "items",
+            "item_match_mode",
+            "counts_prior_completions",
+            "notify_member",
+        }
+    )
+
+    @model_validator(mode="after")
+    def _dedupe(self) -> "ProgramMilestoneUpdate":
+        if self.items is not None:
+            self.items = _unique_items(self.items)
+        if self.notify_position_ids is not None:
+            self.notify_position_ids = _unique_ids(self.notify_position_ids)
+        if self.notify_user_ids is not None:
+            self.notify_user_ids = _unique_ids(self.notify_user_ids)
+        return self
 
 
 class ProgramMilestoneResponse(ProgramMilestoneBase, UTCResponseBase):
-    """Schema for program milestone response"""
+    """Schema for program milestone response.
+
+    Recipients and the officer message are officer data: the endpoints blank
+    them for a member viewing a program (see ``member_milestone_view``).
+    """
 
     id: UUID
     program_id: UUID
     phase_id: Optional[UUID] = None
     created_at: datetime
+    items: List[ProgramMilestoneItemResponse] = []
+    item_match_mode: MilestoneMatchModeLiteral = "all"
+    counts_prior_completions: bool = False
+    notify_member: bool = True
+    notify_positions: List[MilestoneRecipientLabel] = []
+    notify_users: List[MilestoneRecipientLabel] = []
+    officer_message: Optional[str] = None
 
     model_config = _response_config
+
+
+class MilestoneItemStatus(BaseModel):
+    """One completion item on a member's progress page."""
+
+    item_type: MilestoneItemTypeLiteral
+    item_id: UUID
+    name: Optional[str] = None
+    completed: bool = False
+
+
+class MemberMilestoneStatus(BaseModel):
+    """Where a member stands on one milestone of their enrollment."""
+
+    id: UUID
+    name: str
+    description: Optional[str] = None
+    phase_id: Optional[UUID] = None
+    completion_percentage_threshold: Optional[float] = None
+    percentage_met: bool = True
+    item_match_mode: MilestoneMatchModeLiteral = "all"
+    items: List[MilestoneItemStatus] = []
+    # Reached in this cycle, whether or not anyone was told: a milestone the
+    # member had already met when it was created is still theirs.
+    reached: bool = False
+    reached_at: Optional[datetime] = None
+
+
+class MilestoneOption(BaseModel):
+    id: UUID
+    name: str
+    detail: Optional[str] = None
+
+
+class MilestoneOptionsResponse(BaseModel):
+    """Everything the milestone editor offers to pick from."""
+
+    courses: List[MilestoneOption] = []
+    skill_tests: List[MilestoneOption] = []
+    knowledge_tests: List[MilestoneOption] = []
+    positions: List[MilestoneOption] = []
+    members: List[MilestoneOption] = []
 
 
 # Program Enrollment Schemas
@@ -989,6 +1161,9 @@ class MemberProgramProgress(BaseModel):
     completed_requirements: int = 0
     total_requirements: int = 0
     next_milestones: List[ProgramMilestoneResponse] = []
+    # Every milestone of the program with the member's standing on it, in the
+    # order the program lists them.
+    milestones: List[MemberMilestoneStatus] = []
     time_remaining_days: Optional[int] = None
     is_behind_schedule: bool = False
     # Requirement id -> names of the prerequisites still blocking it. Present so

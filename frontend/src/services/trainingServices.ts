@@ -73,6 +73,7 @@ import type {
   ProgramEnrollment,
   ProgramEnrollmentCreate,
   ProgramEnrollmentWithUser,
+  MilestoneOptions,
   ProgramMilestone,
   ProgramMilestoneCreate,
   ProgramMilestoneUpdate,
@@ -989,6 +990,12 @@ export const trainingProgramService = {
       `/training/programs/programs/${programId}/milestones/${milestoneId}`,
       updates
     );
+    return response.data;
+  },
+
+  /** Courses, tests, positions and members the milestone editor offers. */
+  async getMilestoneOptions(): Promise<MilestoneOptions> {
+    const response = await api.get<MilestoneOptions>('/training/programs/milestone-options');
     return response.data;
   },
 
