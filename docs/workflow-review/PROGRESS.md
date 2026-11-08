@@ -176,11 +176,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   of the W77 container and passed with `--max-old-space-size=8192`. CI's
   `ubuntu-latest` default is larger, but the margin is thin (W77).
 
-- **Platform analytics, a later pass** — the other "last 30 days" figures
-  (events, forms, documents, new users) are still a rolling `now - 30 days`,
-  while the two charts and their totals are now whole local days; read from
-  code (W78).
-
 ## Log
 
 ### Lead — A public event at a facility publishes its name — 2026-11-08
@@ -193,6 +188,15 @@ department calendar feed already did. Public events are still only
 `public_education` events; that filter is unchanged.
 `test_public_portal_event_location.py` failed before the fix. Gate: flake8,
 black, isort and mypy clean; the 135 public-portal tests pass.
+
+### Lead — Platform analytics counts one 30-day window — 2026-11-08
+
+Read from code and tested, not re-driven. Fixed (W78-4): new users, events,
+training hours, forms and documents counted "last 30 days" from a rolling
+`now - 30 days`, while the charts beside them were whole local days ending
+today. Every 30-day figure now uses the same local window as the login chart.
+`TestThirtyDayFigures` failed before the fix. Gate: flake8, black, isort and
+mypy clean; the platform-analytics tests pass.
 
 ### Lead — Member administration audit rows record the caller — 2026-11-08
 

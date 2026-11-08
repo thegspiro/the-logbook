@@ -126,7 +126,18 @@ The **My Training** tab shows:
 - **Upcoming Expirations & Due Dates** — the next six months, soonest first,
   with anything overdue at the top. See below.
 - **Training Requirements** — your progress toward each requirement. An hours
-  requirement has a **Show monthly hours** control.
+  requirement has a **Show monthly hours** control. _(2026-11-08)_ A
+  **Courses** requirement counts in courses, not hours ("1/4 courses"), and has
+  a **Show required courses (n)** control: it opens a checklist of every course
+  the requirement names, in order, with a tick and **Completed** and the date
+  for each one you have finished and **Not yet completed** for the rest. The
+  ticks use the same test as the count, so they always add up to the figure on
+  the card. A course an administrator has since deleted reads **Course no
+  longer in the library**. Certification and other done-or-not requirements show
+  no unit ("0/1"), so CPR/BLS no longer reads "0/1 hrs". The control appears
+  only when your department shows the requirement breakdown. Officers see the
+  same checklist on a member's requirement card, and the **Upcoming
+  Expirations & Due Dates** line uses the same unit ("1/4 courses complete").
 - **Recent Training** — your five newest records, with a **View full
   history** link to the History tab.
 - **Certifications** — collapsed, because its expiring entries already appear
@@ -3186,6 +3197,14 @@ one member, as CSV or PDF files.
 3. Select **Export CSV** or **Export PDF** to download that member's records
    for the period.
 
+_(2026-11-08)_ The record list is now a compact list rather than a table: each
+record is two or three lines, with the course name and code, then the type, date
+and hours ("Continuing education · 3/14/2026 · 2 hrs"), then **Expires** or
+**Expired** with the date, the status badge and any notes. Before, the table
+reflowed into eight label-and-value rows per course on a phone and a tablet, and
+a long list ran to many screens. Filters, the period and the exports are
+unchanged.
+
 ![Member training history with the export period selector and download buttons](./images/02-40-member-training-history.png)
 
 ### Bulk and Reporting Exports (Reports Tab)
@@ -3265,6 +3284,18 @@ recorded for a past date. Its setup form asks for an **API Key** and an **API
 Secret** (both required). Members are matched by the email on the completions
 report. See
 [Integrations › Setting up Target Solutions](./16-integrations.md#setting-up-target-solutions).
+
+**Zero-hour completions take the course's hours** _(2026-11-08)_. A provider
+reports a policy acknowledgment (Code of Conduct, Whistleblower) as 0 hours, so
+it used to land on the member's record as 0 whatever the course said. When a
+completion is mapped to a Course Library course and the provider reported no
+hours, the import now credits the course's **Credit Hours**, or its duration when
+Credit Hours is blank. Hours the provider did report still win. Mapping,
+re-mapping or unmapping a course applies the same rule to the records already
+imported from it, except a record whose hours an officer changed or that is
+linked to another course by hand. An upgrade backfills records imported before
+this change. The Course Library's **Credit Hours** help text now says imports
+read the field as well as sessions.
 
 The icon beside Active / Inactive is a **separate** fact: it shows whether the
 sign-in details have been proved to work. A newly saved provider has an amber
