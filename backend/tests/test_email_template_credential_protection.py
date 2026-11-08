@@ -80,6 +80,32 @@ class TestLinkPolicy:
         assert "@import" in problems
         assert "https://evil.example/b" in problems
 
+    def test_a_link_inside_an_outlook_conditional_comment_is_caught(self):
+        html = '<!--[if mso]><img src="https://evil.example/c"><![endif]-->'
+
+        assert protected_template_link_problems(html) == ["https://evil.example/c"]
+
+    def test_the_shipped_outlook_wrappers_still_pass(self):
+        html = (
+            '<!--[if mso]><table role="presentation" width="600"><tr><td>'
+            "<![endif]--><p>Body</p><!--[if mso]></td></tr></table><![endif]-->"
+        )
+
+        assert protected_template_link_problems(html) == []
+
+    def test_an_escaped_css_function_is_refused(self):
+        html = '<div style="background-image:u\\72l(//evil.example/d)"></div>'
+
+        assert "CSS escape (\\)" in protected_template_link_problems(html)
+
+    def test_a_bare_url_in_css_is_caught(self):
+        html = (
+            '<div style="background-image:image-set('
+            "'https://evil.example/e' 1x)\"></div>"
+        )
+
+        assert "https://evil.example/e" in protected_template_link_problems(html)
+
 
 async def _officer(db_session, org, permissions):
     # A persisted row so `updated_by` satisfies its foreign key; the caller

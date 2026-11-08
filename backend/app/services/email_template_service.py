@@ -3980,6 +3980,9 @@ _URL_ATTRIBUTES = frozenset(
 _LONE_PLACEHOLDER = re.compile(r"^\s*\{\{\s*\w+\s*\}\}\s*$")
 _CSS_URL = re.compile(r"url\s*\(\s*['\"]?([^'\")]*)", re.IGNORECASE)
 _CSS_IMPORT = re.compile(r"@import", re.IGNORECASE)
+# Any absolute or protocol-relative URL anywhere in CSS, not only inside
+# url(): image-set() and some @font-face forms take a bare quoted string.
+_CSS_ABSOLUTE_URL = re.compile(r"(?:[a-z][a-z0-9+.-]*:)?//[^\s'\")]+", re.IGNORECASE)
 
 
 def _own_hosts() -> frozenset:
@@ -4035,6 +4038,17 @@ class _LinkCollector(HTMLParser):
         if tag == "style":
             self._in_style = False
 
+    def handle_comment(self, data: str) -> None:
+        # Outlook renders the body of an `<!--[if mso]>...<![endif]-->`
+        # conditional comment as markup, so it is held to the same policy.
+        # The shipped templates' own conditionals are bare table wrappers and
+        # carry no link.
+        nested = _LinkCollector()
+        nested.feed(data)
+        nested.close()
+        self.links.extend(nested.links)
+        self.css.extend(nested.css)
+
     def handle_data(self, data: str) -> None:
         if self._in_style:
             self.css.append(data)
@@ -4062,8 +4076,18 @@ def protected_template_link_problems(html_body: Optional[str]) -> List[str]:
         link for link in collector.links if not _link_is_allowed(link, own_hosts)
     ]
     for css in collector.css:
+        # A CSS escape spells a word without its letters (`u\72l(` is
+        # `url(`), which no pattern match can follow; the shipped templates
+        # use none, so a credential template may not either.
+        if "\\" in css:
+            problems.append("CSS escape (\\)")
         if _CSS_IMPORT.search(css):
             problems.append("@import")
+        problems.extend(
+            url
+            for url in _CSS_ABSOLUTE_URL.findall(css)
+            if not _link_is_allowed(url, own_hosts)
+        )
         problems.extend(
             url for url in _CSS_URL.findall(css) if not _link_is_allowed(url, own_hosts)
         )
