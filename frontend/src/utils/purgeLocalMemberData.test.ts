@@ -113,6 +113,17 @@ describe('purgeLocalMemberData', () => {
     expect(result.drafts).toBe(3);
   });
 
+  it('removes every form draft held in this tab, and counts it', async () => {
+    sessionStorage.setItem('logbook:draft:u1:training-submission', JSON.stringify({ savedAt: 1, value: {} }));
+    sessionStorage.setItem('logbook:draft:u2:add-member', JSON.stringify({ savedAt: 1, value: {} }));
+
+    const result = await purgeLocalMemberData();
+
+    expect(sessionStorage.getItem('logbook:draft:u1:training-submission')).toBeNull();
+    expect(sessionStorage.getItem('logbook:draft:u2:add-member')).toBeNull();
+    expect(result.drafts).toBe(2);
+  });
+
   it('removes every saved department-store cart', async () => {
     localStorage.setItem('store-cart-m1-w1', JSON.stringify({ lines: [{ productId: 'p1', quantity: 1 }] }));
     localStorage.setItem('store-cart-m2-w1', JSON.stringify({ lines: [{ productId: 'p1', quantity: 1 }] }));

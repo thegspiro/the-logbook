@@ -19,6 +19,8 @@
  *     Sign Out, after the warning in AppLayout, deletes the examiner's own;
  *     every automatic path — idle timeout, expired session, someone else
  *     signing in — keeps them, for HELD_EVALUATION_RETENTION_MS.
+ *   - long-form drafts (sessionStorage, useSessionDraft): a training
+ *     submission, an expense report, a new member's details, a shift report
  *   - saved department-store carts (localStorage): what a member meant to
  *     order, including any name they asked to have embroidered
  *
@@ -32,6 +34,7 @@
  */
 
 import { clearAllDrafts } from './shiftReportDrafts';
+import { clearAllSessionDrafts } from './sessionDrafts';
 import { clearAllQueuedChecks } from './offlineQueue';
 import { clearAllQueuedReports } from './shiftReportOfflineQueue';
 import { clearAllGenericQueued } from './genericOfflineQueue';
@@ -113,6 +116,9 @@ export async function purgeLocalMemberData(options: PurgeOptions = {}): Promise<
   } catch {
     // localStorage can throw in private-browsing modes; keep going.
   }
+  // Form drafts (useSessionDraft) live only as long as the tab, but a shared
+  // station computer's tab can outlast the member who typed them.
+  result.drafts += clearAllSessionDrafts();
 
   try {
     result.drafts += await bounded(clearAllEquipmentCheckDrafts(), 0);

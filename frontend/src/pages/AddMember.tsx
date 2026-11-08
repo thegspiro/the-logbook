@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { Save, X, User, MapPin, Phone, Calendar, AlertCircle, Lock, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -18,6 +18,10 @@ import { ADMINISTRATIVE_RANK_HINT } from '../utils/membership';
 import { MemberClass, MemberStatus } from '../constants/enums';
 import { MemberClassificationFields } from '../components/members/MemberClassificationFields';
 import { useMembershipTierOptions } from '../hooks/useMembershipTierOptions';
+import { FormField } from '../components/ux/FormField';
+import { DraftRestoredNotice } from '../components/ux/DraftRestoredNotice';
+import { useSessionDraft } from '../hooks/useSessionDraft';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
 
 /** The directories a new member's account can be created in, by integration type. */
 const DIRECTORY_PRODUCTS: ReadonlyArray<readonly [string, string]> = [
@@ -50,6 +54,175 @@ const directoryOutcome = (member: CreatedMember): { ok: boolean; message: string
 const USERNAME_TAKEN = 'Username already exists';
 const MAX_USERNAME_ATTEMPTS = 20;
 
+type TextField =
+  | 'firstName'
+  | 'middleName'
+  | 'lastName'
+  | 'preferredName'
+  | 'membershipNumber'
+  | 'dateOfBirth'
+  | 'street'
+  | 'city'
+  | 'state'
+  | 'zipCode'
+  | 'primaryPhone'
+  | 'secondaryPhone'
+  | 'email'
+  | 'emergencyName1'
+  | 'emergencyRelationship1'
+  | 'emergencyPhone1'
+  | 'emergencyEmail1'
+  | 'emergencyName2'
+  | 'emergencyRelationship2'
+  | 'emergencyPhone2'
+  | 'emergencyEmail2';
+
+interface MemberFieldSpec extends ServerFieldSpec {
+  type?: 'text' | 'tel' | 'email' | 'date';
+  placeholder?: string;
+}
+
+/**
+ * Each field's label, input type and `max_length` (AdminUserCreate and
+ * EmergencyContact in backend/app/schemas/user.py), and the API name a 422
+ * reports it under, so a server refusal lands on the field (forms review F-2).
+ * State keeps its two-letter box, tighter than the schema's 50.
+ */
+const MEMBER_FIELDS: Record<TextField, MemberFieldSpec> = {
+  firstName: { label: 'First Name', maxLength: 100, placeholder: 'John' },
+  middleName: { label: 'Middle Name', maxLength: 100, placeholder: 'Michael' },
+  lastName: { label: 'Last Name', maxLength: 100, placeholder: 'Doe' },
+  preferredName: { label: 'Preferred Name', maxLength: 100, placeholder: 'Terry' },
+  membershipNumber: { label: 'Membership Number', maxLength: 50 },
+  dateOfBirth: { label: 'Date of Birth', type: 'date' },
+  street: { label: 'Street Address', maxLength: 255, api: 'address_street', placeholder: '123 Main Street' },
+  city: { label: 'City', maxLength: 100, api: 'address_city', placeholder: 'Springfield' },
+  state: { label: 'State', maxLength: 2, api: 'address_state', placeholder: 'IL' },
+  zipCode: { label: 'ZIP Code', maxLength: 20, api: 'address_zip', placeholder: '62701' },
+  primaryPhone: { label: 'Primary Phone', maxLength: 20, api: 'phone', type: 'tel', placeholder: '(555) 123-4567' },
+  secondaryPhone: {
+    label: 'Secondary Phone',
+    maxLength: 20,
+    api: 'mobile',
+    type: 'tel',
+    placeholder: '(555) 987-6543',
+  },
+  email: { label: 'Email', type: 'email', placeholder: 'john.doe@example.com' },
+  emergencyName1: { label: 'Name', maxLength: 100, api: 'emergency_contacts.0.name', placeholder: 'Jane Doe' },
+  emergencyRelationship1: {
+    label: 'Relationship',
+    maxLength: 50,
+    api: 'emergency_contacts.0.relationship',
+    placeholder: 'Spouse',
+  },
+  emergencyPhone1: {
+    label: 'Phone',
+    maxLength: 20,
+    api: 'emergency_contacts.0.phone',
+    type: 'tel',
+    placeholder: '(555) 123-4567',
+  },
+  emergencyEmail1: {
+    label: 'Email',
+    api: 'emergency_contacts.0.email',
+    type: 'email',
+    placeholder: 'jane.doe@example.com',
+  },
+  emergencyName2: { label: 'Name', maxLength: 100, api: 'emergency_contacts.1.name', placeholder: 'Bob Doe' },
+  emergencyRelationship2: {
+    label: 'Relationship',
+    maxLength: 50,
+    api: 'emergency_contacts.1.relationship',
+    placeholder: 'Parent',
+  },
+  emergencyPhone2: {
+    label: 'Phone',
+    maxLength: 20,
+    api: 'emergency_contacts.1.phone',
+    type: 'tel',
+    placeholder: '(555) 987-6543',
+  },
+  emergencyEmail2: {
+    label: 'Email',
+    api: 'emergency_contacts.1.email',
+    type: 'email',
+    placeholder: 'bob.doe@example.com',
+  },
+};
+
+/** Fields in reading order, for focusing the first one in error. */
+const FIELD_ORDER: string[] = [
+  'firstName',
+  'middleName',
+  'lastName',
+  'preferredName',
+  'membershipNumber',
+  'dateOfBirth',
+  'street',
+  'city',
+  'state',
+  'zipCode',
+  'primaryPhone',
+  'secondaryPhone',
+  'email',
+  'password',
+  'confirmPassword',
+  'emergencyName1',
+  'emergencyRelationship1',
+  'emergencyPhone1',
+  'emergencyEmail1',
+  'emergencyName2',
+  'emergencyRelationship2',
+  'emergencyPhone2',
+  'emergencyEmail2',
+];
+
+const SERVER_FIELDS: Record<string, ServerFieldSpec> = {
+  ...MEMBER_FIELDS,
+  emergencyName1: { ...MEMBER_FIELDS.emergencyName1, label: 'Emergency contact name' },
+  emergencyPhone1: { ...MEMBER_FIELDS.emergencyPhone1, label: 'Emergency contact phone' },
+  joinDate: { label: 'Join date', api: 'hire_date' },
+  platoon: { label: 'Platoon', maxLength: 20 },
+  password: { label: 'Password' },
+};
+
+const fieldDomId = (field: string) => (field === 'confirmPassword' ? 'add-confirm-password' : `add-${field}`);
+
+/**
+ * The local draft (useSessionDraft) leaves out the emergency contacts and the
+ * date of birth: client-side storage is outside the controls the server puts
+ * on PHI, so those are never drafted (owner decision 2026-11-06, forms review
+ * F-6). Passwords are not part of formData and are never drafted either.
+ */
+type MemberDraft = Omit<
+  MemberFormData,
+  | 'dateOfBirth'
+  | 'emergencyName1'
+  | 'emergencyRelationship1'
+  | 'emergencyPhone1'
+  | 'emergencyEmail1'
+  | 'emergencyName2'
+  | 'emergencyRelationship2'
+  | 'emergencyPhone2'
+  | 'emergencyEmail2'
+>;
+
+const toDraft = (data: MemberFormData): MemberDraft => {
+  const {
+    dateOfBirth: _dob,
+    emergencyName1: _n1,
+    emergencyRelationship1: _r1,
+    emergencyPhone1: _p1,
+    emergencyEmail1: _e1,
+    emergencyName2: _n2,
+    emergencyRelationship2: _r2,
+    emergencyPhone2: _p2,
+    emergencyEmail2: _e2,
+    ...kept
+  } = data;
+  return kept;
+};
+
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
@@ -67,7 +240,7 @@ const AddMember: React.FC = () => {
   // field is required: requiring it while auto-assignment is on meant the typed
   // value always won and the counter never issued a number from this screen.
   const [membershipIdPreview, setMembershipIdPreview] = useState<string | null>(null);
-  const [formData, setFormData] = useState<MemberFormData>({
+  const initialFormData = (): MemberFormData => ({
     firstName: '',
     lastName: '',
     middleName: '',
@@ -99,8 +272,25 @@ const AddMember: React.FC = () => {
     emergencyPhone2: '',
     emergencyEmail2: '',
   });
+  const [formData, setFormData] = useState<MemberFormData>(initialFormData);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Set when errors are shown; the effect moves focus once they have rendered,
+  // so a keyboard or screen-reader user lands on the first one rather than on
+  // the button at the foot of a thirty-field form (forms review F-4).
+  const focusFirstError = useRef(false);
+  useEffect(() => {
+    if (!focusFirstError.current) return;
+    focusFirstError.current = false;
+    const first = FIELD_ORDER.find((field) => errors[field]);
+    if (first) document.getElementById(fieldDomId(first))?.focus();
+  }, [errors]);
+
+  const draft = useSessionDraft<MemberDraft>({
+    form: 'add-member',
+    value: toDraft(formData),
+    onRestore: (saved) => setFormData((prev) => ({ ...prev, ...saved })),
+  });
 
   // Password fields
   const [useCustomPassword, setUseCustomPassword] = useState(false);
@@ -164,6 +354,14 @@ const AddMember: React.FC = () => {
   // An administrative member holds no operational rank — the server refuses the
   // pair outright, since a rank carries its own default permissions.
   const isAdministrative = formData.memberClass === MemberClass.ADMINISTRATIVE;
+  // The second contact is optional as a whole, but once begun its name,
+  // relationship and phone are required (see validateForm), and the asterisks say so.
+  const secondaryContactStarted = [
+    formData.emergencyName2,
+    formData.emergencyRelationship2,
+    formData.emergencyPhone2,
+    formData.emergencyEmail2,
+  ].some((value) => value.trim());
   const { tiers } = useMembershipTierOptions();
 
   const handleInputChange = (field: keyof MemberFormData, value: string) => {
@@ -249,6 +447,7 @@ const AddMember: React.FC = () => {
     }
 
     setErrors(newErrors);
+    focusFirstError.current = true;
     return Object.keys(newErrors).length === 0;
   };
 
@@ -348,17 +547,33 @@ const AddMember: React.FC = () => {
         }
       }
 
+      draft.clear();
       const outcome = created ? directoryOutcome(created) : null;
       if (outcome && !outcome.ok) toast.error(outcome.message);
       else toast.success(outcome?.message ?? 'Member added');
       void navigate('/members');
     } catch (error: unknown) {
+      // A refused field goes under that field, in its own words, rather than
+      // as the API's field name in a toast (forms review F-2).
+      const mapped = mapServerFieldErrors(error, SERVER_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        setErrors((prev) => ({ ...prev, ...(mapped.fieldErrors as Record<string, string>) }));
+        focusFirstError.current = true;
+        toast.error(
+          mapped.unmatched.length
+            ? `Fix the fields marked below. ${mapped.unmatched.join(' ')}`
+            : 'Fix the fields marked below, then save again.'
+        );
+        setIsSaving(false);
+        return;
+      }
       const errorMessage = getErrorMessage(error, 'Unable to add member. Try again.');
       toast.error(errorMessage);
 
       // Highlight the specific field if it's a duplicate membership number error
       if (errorMessage.toLowerCase().includes('membership number')) {
         setErrors((prev) => ({ ...prev, membershipNumber: errorMessage }));
+        focusFirstError.current = true;
       }
 
       setIsSaving(false);
@@ -375,11 +590,55 @@ const AddMember: React.FC = () => {
           cancelLabel: 'Keep editing',
         })
       ) {
+        draft.discard();
         void navigate('/members');
       }
     } else {
       void navigate('/members');
     }
+  };
+
+  /**
+   * One text field through the shared FormField. These are details about
+   * somebody else, so the browser's autofill (which offers the officer's own
+   * name and address) is turned off (forms review F-9).
+   */
+  const memberInput = (
+    field: TextField,
+    options: {
+      required?: boolean;
+      hint?: React.ReactNode;
+      label?: string;
+      className?: string;
+      placeholder?: string;
+    } = {}
+  ) => {
+    const spec = MEMBER_FIELDS[field];
+    const value = formData[field];
+    return (
+      <FormField
+        id={`add-${field}`}
+        label={options.label ?? spec.label}
+        required={options.required}
+        hint={options.hint}
+        error={errors[field]}
+        maxLength={spec.maxLength}
+        count={value.length}
+        className={options.className}
+      >
+        {(control) => (
+          <input
+            {...control}
+            type={spec.type ?? 'text'}
+            autoComplete="off"
+            value={value}
+            onChange={(e) => handleInputChange(field, e.target.value)}
+            className={`form-input placeholder-theme-text-muted ${errors[field] ? 'border-red-500' : ''}`}
+            placeholder={options.placeholder ?? spec.placeholder}
+          />
+        )}
+      </FormField>
+    );
   };
 
   return (
@@ -392,11 +651,21 @@ const AddMember: React.FC = () => {
 
       <div data-page-main className="mx-auto max-w-4xl py-6 sm:py-8">
         <form
+          noValidate
           onSubmit={(e) => {
             void handleSubmit(e);
           }}
           className="space-y-6"
         >
+          {draft.restored && (
+            <DraftRestoredNotice
+              onDiscard={() => {
+                draft.discard();
+                setFormData(initialFormData());
+                setErrors({});
+              }}
+            />
+          )}
           {/* Personal Information */}
           <div className="card p-6">
             <div className="mb-4 flex items-center space-x-2">
@@ -405,111 +674,29 @@ const AddMember: React.FC = () => {
             </div>
 
             <div className="field-grid gap-4">
-              <div>
-                <label htmlFor="add-firstName" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  First Name <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="add-firstName"
-                  value={formData.firstName}
-                  onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  className={`form-input ${errors.firstName ? 'border-red-500' : 'border-theme-input-border'}`}
-                  placeholder="John"
-                />
-                {errors.firstName && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.firstName}</p>}
-              </div>
+              {memberInput('firstName', { required: true })}
 
-              <div>
-                <label htmlFor="add-middleName" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Middle Name
-                </label>
-                <input
-                  type="text"
-                  id="add-middleName"
-                  value={formData.middleName}
-                  onChange={(e) => handleInputChange('middleName', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
-                  placeholder="Michael"
-                />
-              </div>
+              {memberInput('middleName')}
 
-              <div>
-                <label htmlFor="add-lastName" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Last Name <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="add-lastName"
-                  value={formData.lastName}
-                  onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  className={`form-input ${errors.lastName ? 'border-red-500' : 'border-theme-input-border'}`}
-                  placeholder="Doe"
-                />
-                {errors.lastName && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.lastName}</p>}
-              </div>
+              {memberInput('lastName', { required: true })}
             </div>
 
             <div className="mt-4 md:max-w-sm">
-              <label htmlFor="add-preferredName" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                Preferred Name
-              </label>
-              <input
-                type="text"
-                id="add-preferredName"
-                maxLength={100}
-                value={formData.preferredName}
-                onChange={(e) => handleInputChange('preferredName', e.target.value)}
-                className="form-input placeholder-theme-text-muted"
-                placeholder="Terry"
-                aria-describedby="add-preferredName-help"
-              />
-              <p id="add-preferredName-help" className="text-theme-text-muted mt-1 text-xs">
-                Optional. The name they go by, shown in place of the first name on shifts, events and rosters. Reports
-                and official records keep the legal first name.
-              </p>
+              {memberInput('preferredName', {
+                hint: 'Optional. The name they go by, shown in place of the first name on shifts, events and rosters. Reports and official records keep the legal first name.',
+              })}
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="add-membershipNumber"
-                  className="text-theme-text-primary mb-2 block text-sm font-medium"
-                >
-                  Membership Number {!membershipIdPreview && <span className="text-red-700 dark:text-red-400">*</span>}
-                </label>
-                <input
-                  type="text"
-                  id="add-membershipNumber"
-                  value={formData.membershipNumber}
-                  onChange={(e) => handleInputChange('membershipNumber', e.target.value)}
-                  className={`form-input ${errors.membershipNumber ? 'border-red-500' : 'border-theme-input-border'}`}
-                  placeholder={membershipIdPreview ?? 'FF-001'}
-                  aria-describedby={membershipIdPreview ? 'add-membershipNumber-hint' : undefined}
-                />
-                {membershipIdPreview && (
-                  <p id="add-membershipNumber-hint" className="text-theme-text-muted mt-1 text-xs">
-                    Leave blank to assign {membershipIdPreview} automatically, or enter one yourself (for example, a
-                    returning member&apos;s number).
-                  </p>
-                )}
-                {errors.membershipNumber && (
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.membershipNumber}</p>
-                )}
-              </div>
+              {memberInput('membershipNumber', {
+                required: !membershipIdPreview,
+                placeholder: membershipIdPreview ?? 'FF-001',
+                hint: membershipIdPreview
+                  ? `Leave blank to assign ${membershipIdPreview} automatically, or enter one yourself (for example, a returning member's number).`
+                  : undefined,
+              })}
 
-              <div>
-                <label htmlFor="add-dateOfBirth" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Date of Birth
-                </label>
-                <input
-                  type="date"
-                  id="add-dateOfBirth"
-                  value={formData.dateOfBirth}
-                  onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                  className="form-input"
-                />
-              </div>
+              {memberInput('dateOfBirth')}
             </div>
           </div>
 
@@ -521,67 +708,14 @@ const AddMember: React.FC = () => {
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label htmlFor="add-street" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Street Address <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="add-street"
-                  value={formData.street}
-                  onChange={(e) => handleInputChange('street', e.target.value)}
-                  className={`form-input ${errors.street ? 'border-red-500' : 'border-theme-input-border'}`}
-                  placeholder="123 Main Street"
-                />
-                {errors.street && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.street}</p>}
-              </div>
+              {memberInput('street', { required: true })}
 
               <div className="field-grid gap-4">
-                <div>
-                  <label htmlFor="add-city" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                    City <span className="text-red-700 dark:text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="add-city"
-                    value={formData.city}
-                    onChange={(e) => handleInputChange('city', e.target.value)}
-                    className={`form-input ${errors.city ? 'border-red-500' : 'border-theme-input-border'}`}
-                    placeholder="Springfield"
-                  />
-                  {errors.city && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.city}</p>}
-                </div>
+                {memberInput('city', { required: true })}
 
-                <div>
-                  <label htmlFor="add-state" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                    State <span className="text-red-700 dark:text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="add-state"
-                    value={formData.state}
-                    onChange={(e) => handleInputChange('state', e.target.value)}
-                    className={`form-input ${errors.state ? 'border-red-500' : 'border-theme-input-border'}`}
-                    placeholder="IL"
-                    maxLength={2}
-                  />
-                  {errors.state && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.state}</p>}
-                </div>
+                {memberInput('state', { required: true })}
 
-                <div>
-                  <label htmlFor="add-zipCode" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                    ZIP Code <span className="text-red-700 dark:text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="add-zipCode"
-                    value={formData.zipCode}
-                    onChange={(e) => handleInputChange('zipCode', e.target.value)}
-                    className={`form-input ${errors.zipCode ? 'border-red-500' : 'border-theme-input-border'}`}
-                    placeholder="62701"
-                  />
-                  {errors.zipCode && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.zipCode}</p>}
-                </div>
+                {memberInput('zipCode', { required: true })}
               </div>
             </div>
           </div>
@@ -594,51 +728,12 @@ const AddMember: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label htmlFor="add-primaryPhone" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Primary Phone <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <input
-                  type="tel"
-                  id="add-primaryPhone"
-                  value={formData.primaryPhone}
-                  onChange={(e) => handleInputChange('primaryPhone', e.target.value)}
-                  className={`form-input ${errors.primaryPhone ? 'border-red-500' : 'border-theme-input-border'}`}
-                  placeholder="(555) 123-4567"
-                />
-                {errors.primaryPhone && (
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.primaryPhone}</p>
-                )}
-              </div>
+              {memberInput('primaryPhone', { required: true })}
+
+              {memberInput('secondaryPhone')}
 
               <div>
-                <label htmlFor="add-secondaryPhone" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Secondary Phone
-                </label>
-                <input
-                  type="tel"
-                  id="add-secondaryPhone"
-                  value={formData.secondaryPhone}
-                  onChange={(e) => handleInputChange('secondaryPhone', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
-                  placeholder="(555) 987-6543"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="add-email" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  {creatingAccount ? 'Personal email' : 'Email'}{' '}
-                  <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <input
-                  type="email"
-                  id="add-email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  className={`form-input ${errors.email ? 'border-red-500' : 'border-theme-input-border'}`}
-                  placeholder="john.doe@example.com"
-                />
-                {errors.email && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email}</p>}
+                {memberInput('email', { required: true, label: creatingAccount ? 'Personal email' : 'Email' })}
                 {directoryProduct && (
                   <label className="mt-3 flex cursor-pointer items-start gap-3">
                     <input
@@ -709,6 +804,9 @@ const AddMember: React.FC = () => {
                     <div className="relative">
                       <input
                         id="add-password"
+                        aria-required="true"
+                        aria-invalid={errors.password ? true : undefined}
+                        aria-describedby={errors.password ? 'add-password-error' : undefined}
                         type={showPassword ? 'text' : 'password'}
                         value={initialPassword}
                         onChange={(e) => {
@@ -735,7 +833,9 @@ const AddMember: React.FC = () => {
                       </button>
                     </div>
                     {errors.password && (
-                      <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.password}</p>
+                      <p id="add-password-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                        {errors.password}
+                      </p>
                     )}
                   </div>
 
@@ -748,6 +848,9 @@ const AddMember: React.FC = () => {
                     </label>
                     <input
                       id="add-confirm-password"
+                      aria-required="true"
+                      aria-invalid={errors.confirmPassword ? true : undefined}
+                      aria-describedby={errors.confirmPassword ? 'add-confirm-password-error' : undefined}
                       type={showPassword ? 'text' : 'password'}
                       value={confirmPassword}
                       onChange={(e) => {
@@ -765,7 +868,9 @@ const AddMember: React.FC = () => {
                       autoComplete="new-password"
                     />
                     {errors.confirmPassword && (
-                      <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.confirmPassword}</p>
+                      <p id="add-confirm-password-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                        {errors.confirmPassword}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -944,73 +1049,13 @@ const AddMember: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label htmlFor="add-emergencyName1" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Name <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="add-emergencyName1"
-                  value={formData.emergencyName1}
-                  onChange={(e) => handleInputChange('emergencyName1', e.target.value)}
-                  className={`form-input ${errors.emergencyName1 ? 'border-red-500' : 'border-theme-input-border'}`}
-                  placeholder="Jane Doe"
-                />
-                {errors.emergencyName1 && (
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyName1}</p>
-                )}
-              </div>
+              {memberInput('emergencyName1', { required: true })}
 
-              <div>
-                <label
-                  htmlFor="add-emergencyRelationship1"
-                  className="text-theme-text-primary mb-2 block text-sm font-medium"
-                >
-                  Relationship <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="add-emergencyRelationship1"
-                  value={formData.emergencyRelationship1}
-                  onChange={(e) => handleInputChange('emergencyRelationship1', e.target.value)}
-                  className={`form-input ${errors.emergencyRelationship1 ? 'border-red-500' : 'border-theme-input-border'}`}
-                  placeholder="Spouse"
-                />
-                {errors.emergencyRelationship1 && (
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyRelationship1}</p>
-                )}
-              </div>
+              {memberInput('emergencyRelationship1', { required: true })}
 
-              <div>
-                <label htmlFor="add-emergencyPhone1" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Phone <span className="text-red-700 dark:text-red-400">*</span>
-                </label>
-                <input
-                  type="tel"
-                  id="add-emergencyPhone1"
-                  value={formData.emergencyPhone1}
-                  onChange={(e) => handleInputChange('emergencyPhone1', e.target.value)}
-                  className={`form-input ${errors.emergencyPhone1 ? 'border-red-500' : 'border-theme-input-border'}`}
-                  placeholder="(555) 123-4567"
-                />
-                {errors.emergencyPhone1 && (
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyPhone1}</p>
-                )}
-              </div>
+              {memberInput('emergencyPhone1', { required: true })}
 
-              <div>
-                <label htmlFor="add-emergencyEmail1" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  id="add-emergencyEmail1"
-                  value={formData.emergencyEmail1}
-                  onChange={(e) => handleInputChange('emergencyEmail1', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
-                  placeholder="jane.doe@example.com"
-                />
-              </div>
+              {memberInput('emergencyEmail1')}
             </div>
           </div>
 
@@ -1023,73 +1068,13 @@ const AddMember: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <label htmlFor="add-emergencyName2" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  id="add-emergencyName2"
-                  value={formData.emergencyName2}
-                  onChange={(e) => handleInputChange('emergencyName2', e.target.value)}
-                  className={`form-input placeholder-theme-text-muted ${errors.emergencyName2 ? 'border-red-500' : ''}`}
-                  placeholder="Bob Doe"
-                />
-                {errors.emergencyName2 && (
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyName2}</p>
-                )}
-              </div>
+              {memberInput('emergencyName2', { required: secondaryContactStarted })}
 
-              <div>
-                <label
-                  htmlFor="add-emergencyRelationship2"
-                  className="text-theme-text-primary mb-2 block text-sm font-medium"
-                >
-                  Relationship
-                </label>
-                <input
-                  type="text"
-                  id="add-emergencyRelationship2"
-                  value={formData.emergencyRelationship2}
-                  onChange={(e) => handleInputChange('emergencyRelationship2', e.target.value)}
-                  className={`form-input placeholder-theme-text-muted ${errors.emergencyRelationship2 ? 'border-red-500' : ''}`}
-                  placeholder="Parent"
-                />
-                {errors.emergencyRelationship2 && (
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyRelationship2}</p>
-                )}
-              </div>
+              {memberInput('emergencyRelationship2', { required: secondaryContactStarted })}
 
-              <div>
-                <label htmlFor="add-emergencyPhone2" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Phone
-                </label>
-                <input
-                  type="tel"
-                  id="add-emergencyPhone2"
-                  value={formData.emergencyPhone2}
-                  onChange={(e) => handleInputChange('emergencyPhone2', e.target.value)}
-                  className={`form-input placeholder-theme-text-muted ${errors.emergencyPhone2 ? 'border-red-500' : ''}`}
-                  placeholder="(555) 987-6543"
-                />
-                {errors.emergencyPhone2 && (
-                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyPhone2}</p>
-                )}
-              </div>
+              {memberInput('emergencyPhone2', { required: secondaryContactStarted })}
 
-              <div>
-                <label htmlFor="add-emergencyEmail2" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  id="add-emergencyEmail2"
-                  value={formData.emergencyEmail2}
-                  onChange={(e) => handleInputChange('emergencyEmail2', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
-                  placeholder="bob.doe@example.com"
-                />
-              </div>
+              {memberInput('emergencyEmail2')}
             </div>
           </div>
 

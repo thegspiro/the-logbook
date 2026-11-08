@@ -547,6 +547,64 @@ describe('SchedulingPage', () => {
       await waitFor(() => expect(window.location.search).toContain('date=2031-03-04'));
     });
 
+    it('refuses an empty Create Shift on each field, with the reason announced, and focuses the first', async () => {
+      const user = userEvent.setup();
+      vi.mocked(schedulingService.createShift).mockReset();
+      renderWithRouter(<SchedulingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+      const submit = within(dialog).getByRole('button', { name: 'Create Shift' });
+      // Enabled while empty: a greyed-out button told the officer nothing (forms review F-3).
+      expect(submit).toBeEnabled();
+      await user.click(submit);
+
+      const start = within(dialog).getByLabelText(/Start Date/);
+      expect(start).toHaveAttribute('aria-invalid', 'true');
+      expect(start).toHaveAccessibleDescription('Choose the date the shift starts.');
+      expect(start).toHaveAttribute('aria-required', 'true');
+      await waitFor(() => expect(start).toHaveFocus());
+      expect(within(dialog).getByLabelText(/Apparatus/)).toHaveAccessibleDescription(
+        'Select the apparatus for this shift.'
+      );
+      expect(schedulingService.createShift).not.toHaveBeenCalled();
+    });
+
+    it('puts a server refusal on the field it names, not the API key in a banner', async () => {
+      const user = userEvent.setup();
+      useSchedulingStore.setState({ shiftApparatus: [] });
+      vi.mocked(schedulingService.createShift).mockReset();
+      vi.mocked(schedulingService.createShift).mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'shift_date', message: 'Invalid date format.' }] } },
+      });
+      renderWithRouter(<SchedulingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+      fireEvent.change(within(dialog).getByLabelText(/Start Date/), { target: { value: '2031-03-04' } });
+      // Enter in a field submits: the dialog is a real form (forms review F-7).
+      await user.type(within(dialog).getByLabelText('End Date'), '{Enter}');
+
+      const start = within(dialog).getByLabelText(/Start Date/);
+      await waitFor(() => expect(start).toHaveAccessibleDescription('Start date needs a valid date.'));
+      expect(start).toHaveAttribute('aria-invalid', 'true');
+      expect(within(dialog).queryByText(/shift_date/)).not.toBeInTheDocument();
+    });
+
+    it('asks before Escape discards a half-filled Create Shift', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SchedulingPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Create Shift/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Create Shift' });
+      fireEvent.change(within(dialog).getByLabelText(/Start Date/), { target: { value: '2031-03-04' } });
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+      expect(screen.getByRole('heading', { name: 'Create Shift' })).toBeInTheDocument();
+      expect(within(dialog).getByLabelText(/Start Date/)).toHaveValue('2031-03-04');
+    });
+
     it('offers "Create a shift" rather than "the first" once the department has shifts', async () => {
       renderWithRouter(<SchedulingPage />);
       expect(await screen.findByRole('button', { name: 'Create a shift' })).toBeInTheDocument();

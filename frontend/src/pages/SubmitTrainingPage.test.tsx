@@ -93,6 +93,9 @@ async function fillRequiredFields(user: ReturnType<typeof userEvent.setup>) {
 
 describe('SubmitTrainingPage', () => {
   beforeEach(() => {
+    // The form keeps a local draft in sessionStorage (forms review F-6); one
+    // test's typing must not come back as the next test's restored draft.
+    sessionStorage.clear();
     vi.clearAllMocks();
     mockGetCrewContext.mockReset();
     mockGetCrewContext.mockResolvedValue({ can_record: false, members: [] });
@@ -365,12 +368,64 @@ describe('SubmitTrainingPage', () => {
     renderWithRouter(<SubmitTrainingPage />);
 
     const courseName = await screen.findByLabelText(/Course or class name/);
-    expect(courseName).toHaveAttribute('aria-invalid', 'false');
+    expect(courseName).not.toHaveAttribute('aria-invalid', 'true');
     await user.click(screen.getByRole('button', { name: /Submit Training/ }));
 
     expect(courseName).toHaveAttribute('aria-invalid', 'true');
+    // Not colour alone (forms review F-4): the reason is written under the field and read with it.
+    expect(courseName).toHaveAccessibleDescription('Enter the course or class name.');
     await user.type(courseName, 'Wildland refresher');
-    expect(courseName).toHaveAttribute('aria-invalid', 'false');
+    expect(courseName).not.toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('puts a server refusal on its field, in the field’s own words', async () => {
+    const user = userEvent.setup();
+    mockCreateSubmission.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'course_name', message: 'Value is too long.' }] } },
+    });
+    renderWithRouter(<SubmitTrainingPage />);
+
+    const courseName = await screen.findByLabelText(/Course or class name/);
+    expect(courseName).toHaveAttribute('maxlength', '255');
+    await user.type(courseName, 'Pump operations');
+    await user.type(screen.getByLabelText(/^Date/), '2026-03-12');
+    await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+    await waitFor(() =>
+      expect(courseName).toHaveAccessibleDescription('Course name is too long — keep it to 255 characters.')
+    );
+    expect(courseName).toHaveAttribute('aria-invalid', 'true');
+    expect(courseName).toHaveFocus();
+    expect(screen.queryByText(/course_name/)).not.toBeInTheDocument();
+  });
+
+  it('restores an unsent submission from its local draft, says so, and can discard it', async () => {
+    const user = userEvent.setup();
+    const view = renderWithRouter(<SubmitTrainingPage />);
+    await user.type(await screen.findByLabelText(/Course or class name/), 'Ladder drills');
+    await user.type(screen.getByLabelText(/What it covered/), 'Ground ladders, two-person raise.');
+    view.unmount();
+
+    renderWithRouter(<SubmitTrainingPage />);
+    expect(await screen.findByText('Restored your unsaved draft.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Course or class name/)).toHaveValue('Ladder drills');
+    expect(screen.getByLabelText(/What it covered/)).toHaveValue('Ground ladders, two-person raise.');
+
+    await user.click(screen.getByRole('button', { name: 'Discard draft' }));
+    expect(screen.getByLabelText(/Course or class name/)).toHaveValue('');
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it('keeps no local draft once the draft is saved to the server', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<SubmitTrainingPage />);
+    await user.type(await screen.findByLabelText(/Course or class name/), 'Half-written entry');
+    await user.type(screen.getByLabelText(/^Date/), '2026-03-12');
+    expect(sessionStorage.length).toBe(1);
+    await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+    await waitFor(() => expect(mockCreateSubmission).toHaveBeenCalled());
+    await waitFor(() => expect(sessionStorage.length).toBe(0));
   });
 
   it('saves a draft without requiring the whole form', async () => {

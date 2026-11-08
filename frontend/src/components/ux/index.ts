@@ -45,6 +45,9 @@ export { FloatingActionButton } from './FloatingActionButton';
 
 // Form Controls
 export { default as DateTimeQuarterHour } from './DateTimeQuarterHour';
+export { FormField } from './FormField';
+export type { FieldControlProps } from './FormField';
+export { DraftRestoredNotice } from './DraftRestoredNotice';
 
 // Information
 export { WhatsNew } from './WhatsNew';

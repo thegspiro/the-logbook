@@ -4,7 +4,9 @@ A sweep of every form in the application, driven in a real browser with
 Playwright against a freshly onboarded department (the
 `scripts/workflow-review/` harness, database `logbook_workflow_review`). This is
 a findings report: **the review itself changed nothing in the application.** F-1
-was fixed afterwards, in the same pull request (see its status line).
+was fixed afterwards, in the same pull request; F-6 was decided by the owner on
+2026-11-06 and built, and F-2 to F-5 and F-7 to F-9 are fixed on the first five
+forms (see each status line).
 Each finding says what was driven, as whom, and what happened, so the owner can
 decide what to fix and in what order.
 
@@ -97,6 +99,14 @@ needed for the rule; any rows already blanked would need a data check.
 
 ### F-2 — MED — Over-long input is caught only by the server, and the error names the API field
 
+**Status: fixed on the first five forms** (Submit Training, `/account`, Add Member, Scheduling › Create Shift and Events › Create Event), 2026-11-06. Each
+text input carries `maxLength` from its schema's `max_length` (`UserUpdate`,
+`AdminUserCreate`, `EmergencyContact`, `TrainingSubmissionCreate`, `EventBase`;
+`ShiftCreate` has none), with a counter once the value nears the limit, and a
+422 is mapped onto the field it names in that field's own words — "First Name is
+too long — keep it to 100 characters." — instead of `first_name: Value is too
+long.` in a toast. The shared field is `components/ux/FormField.tsx` and the 422 mapper is `utils/serverFieldErrors.ts`; the rest of the app's forms adopt them module by module. **Pending** on the other forms.
+
 **Driven:** a 300-character First Name on `/account` (as `member`) and a
 400-character Station Name in Locations › Add Station (as `chief`). Neither
 field stopped the typing. The server answered 422, shown as
@@ -116,6 +126,13 @@ backend's snake_case key, no limit stated, and no field highlighted.
    The error envelope already carries `field`; nothing reads it.
 
 ### F-3 — MED — Seventy create dialogs refuse an empty submit four different ways
+
+**Status: fixed on the first five forms**, 2026-11-06. They follow the pattern
+recommended below: submit always enabled (Create Shift's button no longer waits
+for a date), validated on submit, a message under each failing field with
+`aria-invalid` and `aria-describedby`, focus on the first. Create Event and Add
+Member are `noValidate` now, so the browser bubble no longer stands in for the
+message. **Pending** on the other dialogs listed in the table.
 
 Pressing the primary button of an empty create dialog was probed 70 times
 (about 40 distinct dialogs). The outcomes:
@@ -141,6 +158,10 @@ template.
 
 ### F-4 — MED — Error messages are visible but not connected to their fields
 
+**Status: fixed on the first five forms**, 2026-11-06. Add Member's errors are
+tied to their fields and focus moves to the first; Submit Training writes the
+reason under each field instead of a red outline alone. **Pending** elsewhere.
+
 **Add Member** (`/members/admin?tab=add`, as `membership_coordinator`): an empty
 Save Member shows a toast and a red message under every required field — good —
 but **no field gets `aria-invalid` or `aria-describedby`**, and **focus stays on
@@ -164,6 +185,13 @@ markup, and only the three Finance request forms use react-hook-form + zod
 
 ### F-5 — MED — The asterisk and the `required` state disagree
 
+**Status: fixed on the first five forms**, 2026-11-06: in `FormField` the
+asterisk and `aria-required` are one prop, so they cannot disagree (Add Member's
+sixteen; the second emergency contact's three are marked once it is begun, as
+its validation already required). Native `required` is deliberately not used,
+because under the owner's rule of 2026-11-05 a draft must always save. **Pending**
+on the other surfaces listed.
+
 - **79 controls on 26 surfaces show `*` but carry neither `required` nor
   `aria-required`**, so assistive technology announces them as optional. Largest:
   Add Member (16 fields), Finance expense items (6), Skills-test template builder
@@ -175,6 +203,23 @@ markup, and only the three Finance request forms use react-hook-form + zod
   Street Address, but only Street Address is `required`.
 
 ### F-6 — MED (owner decision) — Leaving a half-filled form discards it without a word
+
+**Status: decided and built.** The owner chose options 2 and 3 on 2026-11-06
+and rejected option 1 (the data router). See `docs/KNOWN_LIMITATIONS.md`.
+
+- **Escape asks first.** `Modal` and `DialogPanel` take `isDirty`; a dialog
+  that passes it asks "Keep editing" / "Discard changes" before Escape or the
+  header X closes it with changes in it, and a clean dialog still closes at once
+  (`hooks/useDiscardGuard.ts`, whose result a dialog also gives its Cancel
+  button). Adopted on Inventory › Add / Edit Item and Scheduling › Create Shift.
+- **Local drafts** (`hooks/useSessionDraft.ts`, `components/ux/DraftRestoredNotice.tsx`):
+  sessionStorage, keyed by the signed-in member and the form, restored on return
+  with "Restored your unsaved draft — Discard draft", cleared on a successful
+  save or a discard, and purged at sign-out with the other device-local drafts.
+  Adopted on Training › Submit Training (new submissions), Log Shift Report
+  (the manual one; Scheduling's shift reports already kept a draft), Finance ›
+  New Expense Report and Add Member — whose draft leaves out the emergency
+  contacts and the date of birth, which are never stored client-side.
 
 **Driven:** as `member`, typed a course name and a paragraph of notes into
 Training › Submit Training, then tapped Dashboard in the navigation. The app
@@ -202,6 +247,9 @@ This needs a decision rather than a patch, because the options differ in cost:
 
 ### F-7 — LOW — 69 form surfaces are not `<form>` elements, so Enter does nothing
 
+**Status: fixed on `/account` and Create Shift**, 2026-11-06 (the other three
+of the first five were already forms). **Pending** on the rest.
+
 **385 controls on 69 surfaces** sit outside any `<form>`: pressing Enter in a
 field neither submits nor validates. Verified on `/account` (typed a Middle
 Name, pressed Enter, reloaded — not saved). Largest surfaces: History settings
@@ -216,6 +264,10 @@ native `required` checks somewhere to run.
 
 ### F-8 — LOW — Unlabelled and placeholder-labelled controls
 
+**Status: the first five forms checked, 2026-11-06** — every control on them is
+labelled through `FormField` or its own label. None of the nine controls listed
+below is on those forms; they are **pending**.
+
 - **No accessible name (5):** the CSV file inputs on Members › Import CSV,
   Scheduling › History import and Integrations › Historical import, and both
   file inputs on the inventory checklist template builder. Each has visible
@@ -226,6 +278,12 @@ native `required` checks somewhere to run.
   label vanishes as soon as the member types.
 
 ### F-9 — LOW — Input types and autofill hints
+
+**Status: fixed on the first five forms**, 2026-11-06: `/account` carries
+`given-name`, `additional-name`, `family-name`, `nickname`, `tel`, `mobile tel`,
+`street-address`, `address-level2`, `address-level1` and `postal-code`; Add
+Member's fields about the new member carry `autocomplete="off"`. The three
+plain-text phone fields below are on other forms and are **pending**.
 
 - **`/account` has no `autocomplete` tokens** on the member's own name, phone
   and address. `given-name`, `family-name`, `tel`, `street-address`,
@@ -268,7 +326,8 @@ landing from the login response's `must_change_password` would remove both.
 3. **`maxLength` from the schema** (F-2 part 1) — mechanical, can ride along
    with step 2 per form.
 4. **`<form>` wrappers** (F-7) and the F-8 / F-9 attributes — mechanical.
-5. **F-6** once the owner picks an option.
+5. **F-6** once the owner picks an option. _(Decided 2026-11-06 and built; steps
+   2 to 4 are done on the first five forms and continue module by module.)_
 
 ## Reproducing
 

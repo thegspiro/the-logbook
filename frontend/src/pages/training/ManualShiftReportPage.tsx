@@ -36,6 +36,8 @@ import { labelCallTypeChoices } from '../../modules/scheduling/components/callTy
 import { useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import { StarRating } from '../../modules/scheduling/components/StarRating';
 import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
+import { DraftRestoredNotice } from '../../components/ux/DraftRestoredNotice';
+import { useSessionDraft } from '../../hooks/useSessionDraft';
 import type { BatchShiftReportCreate, CrewMemberEvaluation, TrainingModuleConfig } from '../../types/training';
 import type { User } from '../../types/user';
 
@@ -56,6 +58,25 @@ const toggleCallType = (setter: React.Dispatch<React.SetStateAction<string[]>>, 
 interface CrewEntry {
   user_id: string;
   user_name: string;
+}
+
+/**
+ * What the report keeps in its local draft (useSessionDraft): the shift, its
+ * calls and narrative, the crew and their evaluations. None of it is PHI —
+ * this form asks for no medical or emergency-contact details.
+ */
+interface ShiftReportDraft {
+  apparatusId: string;
+  shiftDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  callsResponded: number;
+  callTypes: string[];
+  narrative: string;
+  crew: CrewEntry[];
+  selectedIds: string[];
+  traineeEvals: Record<string, CrewMemberEvaluation>;
 }
 
 export const ManualShiftReportPage: React.FC = () => {
@@ -93,6 +114,43 @@ export const ManualShiftReportPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
 
+  // The department's default times arrive with the config; a draft is
+  // restored only after that, so the defaults do not land on top of it.
+  const [defaultsSettled, setDefaultsSettled] = useState(false);
+  const draft = useSessionDraft<ShiftReportDraft>({
+    form: 'manual-shift-report',
+    ready: defaultsSettled,
+    value: {
+      apparatusId,
+      shiftDate,
+      startTime,
+      endDate,
+      endTime,
+      callsResponded,
+      callTypes,
+      narrative,
+      crew,
+      selectedIds: Array.from(selectedIds),
+      traineeEvals,
+    },
+    // The dates and times start filled in, so only what the officer adds counts.
+    isEmpty: (v) =>
+      !v.apparatusId && !v.narrative.trim() && v.crew.length === 0 && v.callTypes.length === 0 && !v.callsResponded,
+    onRestore: (saved) => {
+      setApparatusId(saved.apparatusId);
+      setShiftDate(saved.shiftDate);
+      setStartTime(saved.startTime);
+      setEndDate(saved.endDate);
+      setEndTime(saved.endTime);
+      setCallsResponded(saved.callsResponded);
+      setCallTypes(saved.callTypes);
+      setNarrative(saved.narrative);
+      setCrew(saved.crew);
+      setSelectedIds(new Set(saved.selectedIds));
+      setTraineeEvals(saved.traineeEvals);
+    },
+  });
+
   // Auto-calculated hours
   const calculatedHours = useMemo(
     () => calculateHours(shiftDate, startTime, endDate, endTime),
@@ -129,7 +187,8 @@ export const ManualShiftReportPage: React.FC = () => {
           }
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setDefaultsSettled(true));
     setLoadingApparatus(true);
     schedulingService
       .getApparatusOptions()
@@ -258,6 +317,7 @@ export const ManualShiftReportPage: React.FC = () => {
       const msg = asDraft
         ? `Saved ${result.created} draft${result.created !== 1 ? 's' : ''}`
         : `Submitted ${result.created} report${result.created !== 1 ? 's' : ''}`;
+      draft.clear();
       toast.success(msg);
       void navigate('/training/admin?page=records&tab=shift-reports');
     } catch (err: unknown) {
@@ -293,6 +353,20 @@ export const ManualShiftReportPage: React.FC = () => {
       />
       {/* The form keeps its reading width under the full-width strip. */}
       <div className="mx-auto max-w-3xl space-y-6">
+        {draft.restored && (
+          <DraftRestoredNotice
+            onDiscard={() => {
+              draft.discard();
+              setApparatusId('');
+              setCallsResponded(0);
+              setCallTypes([]);
+              setNarrative('');
+              setCrew([]);
+              setSelectedIds(new Set());
+              setTraineeEvals({});
+            }}
+          />
+        )}
         <div className="card space-y-5 p-5">
           {/* Apparatus Selection */}
           <div>

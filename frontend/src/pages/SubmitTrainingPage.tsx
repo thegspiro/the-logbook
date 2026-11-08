@@ -9,7 +9,6 @@ import {
   DEFAULT_DURATION_MINUTES,
   DURATION_STEP_MINUTES,
   DurationStepper,
-  FieldLabel,
   MIN_DURATION_MINUTES,
   Overline,
   RevisionNotice,
@@ -25,6 +24,11 @@ import {
 } from '../components/training/submit';
 import type { ChecklistRow, Receipt } from '../components/training/submit';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { FormField } from '../components/ux/FormField';
+import { DraftRestoredNotice } from '../components/ux/DraftRestoredNotice';
+import { useSessionDraft } from '../hooks/useSessionDraft';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
+import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { trainingProgramService, trainingSubmissionService, trainingService } from '../services/api';
 import { blankToNull } from '../utils/formValues';
@@ -76,6 +80,64 @@ const REQUIRED_BY_DEFAULT: Record<string, boolean> = {
 };
 
 const EDITABLE_STATUSES: SubmissionStatus[] = ['draft', 'pending_review', 'revision_requested'];
+
+/** `max_length` of each text column, from TrainingSubmissionCreate (backend/app/schemas/training_submission.py). */
+const MAX_LENGTH = {
+  course_name: 255,
+  instructor: 255,
+  location: 255,
+  certification_number: 100,
+  issuing_agency: 255,
+} as const;
+
+/** What each required field says under itself when it is left empty. */
+const MISSING_MESSAGES: Record<string, string> = {
+  course_name: 'Enter the course or class name.',
+  category_id: 'Choose a category.',
+  completion_date: 'Enter the date of the training.',
+  start_time: 'Enter the start time.',
+  instructor: 'Enter the instructor or agency.',
+  location: 'Enter where it was held.',
+  description: 'Say in a sentence or two what it covered.',
+  certification_number: 'Enter the certificate number.',
+  issuing_agency: 'Enter the agency that issued it.',
+  expiration_date: 'Enter the expiry date, or tick "Does not expire".',
+  attachments: 'Attach the certificate or sign-in sheet.',
+};
+
+/** The submission endpoints' field names, as this form labels them, for a 422. */
+const SERVER_FIELDS: Record<string, ServerFieldSpec> = {
+  course_name: { label: 'Course name', maxLength: MAX_LENGTH.course_name },
+  training_type: { label: 'Training type' },
+  category_id: { label: 'Category' },
+  completion_date: { label: 'Date' },
+  start_time: { label: 'Start time' },
+  hours_completed: { label: 'Length' },
+  instructor: { label: 'Instructor', maxLength: MAX_LENGTH.instructor },
+  location: { label: 'Location', maxLength: MAX_LENGTH.location },
+  description: { label: 'What it covered' },
+  certification_number: { label: 'Certificate number', maxLength: MAX_LENGTH.certification_number },
+  issuing_agency: { label: 'Agency', maxLength: MAX_LENGTH.issuing_agency },
+  expiration_date: { label: 'Expiry date' },
+};
+
+/** The values a new submission keeps in its local draft (useSessionDraft). No PHI is asked for here. */
+interface TrainingDraft {
+  courseName: string;
+  trainingType: TrainingType;
+  categoryId: string;
+  completionDate: string;
+  startTime: string;
+  durationMinutes: number;
+  instructor: string;
+  location: string;
+  description: string;
+  hasCertification: boolean;
+  certificationNumber: string;
+  issuingAgency: string;
+  expirationDate: string;
+  certificationNeverExpires: boolean;
+}
 
 /** Placeholder id the API service returns for a submission queued while offline. */
 const OFFLINE_SUBMISSION_ID = 'pending-sync';
@@ -148,6 +210,16 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [error, setError] = useState('');
+  // Fields the server refused on the last save, keyed by field name (forms
+  // review F-2): shown under the field instead of as the API's key in a banner.
+  const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
+  const clearServerError = (name: string) =>
+    setServerErrors((prev) => {
+      if (!(name in prev)) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
   const [attemptedSave, setAttemptedSave] = useState(false);
   const [showAllSubmissions, setShowAllSubmissions] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -436,10 +508,54 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     setStoredAttachments([]);
     setAttemptedSave(false);
     setError('');
+    setServerErrors({});
   }, [defaultTrainingType, maxDurationMinutes]);
+
+  // A new submission is drafted in this tab so leaving the page does not lose
+  // it (forms review F-6). An edit is not: the submission is already stored on
+  // the server, and refilling it from a local copy could hide what the
+  // officer sent back.
+  const draft = useSessionDraft<TrainingDraft>({
+    form: 'training-submission',
+    enabled: !isEdit && !receipt,
+    value: {
+      courseName,
+      trainingType,
+      categoryId,
+      completionDate,
+      startTime,
+      durationMinutes,
+      instructor,
+      location,
+      description,
+      hasCertification,
+      certificationNumber,
+      issuingAgency,
+      expirationDate,
+      certificationNeverExpires,
+    },
+    onRestore: (saved) => {
+      setCourseName(saved.courseName);
+      setTrainingType(saved.trainingType);
+      setCategoryId(saved.categoryId);
+      setCompletionDate(saved.completionDate);
+      setStartTime(saved.startTime);
+      setDurationMinutes(Math.min(maxDurationMinutes, Math.max(MIN_DURATION_MINUTES, saved.durationMinutes)));
+      setInstructor(saved.instructor);
+      setLocation(saved.location);
+      setDescription(saved.description);
+      certificationTouched.current = true;
+      setHasCertification(saved.hasCertification);
+      setCertificationNumber(saved.certificationNumber);
+      setIssuingAgency(saved.issuingAgency);
+      setExpirationDate(saved.expirationDate);
+      setCertificationNeverExpires(saved.certificationNeverExpires);
+    },
+  });
 
   const save = async (options: { asDraft: boolean }) => {
     setError('');
+    setServerErrors({});
     // A draft is a half-finished note, so only the two columns the API cannot
     // store without are asked for; a real submission needs everything.
     const missing = options.asDraft
@@ -493,6 +609,8 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         const uploaded = attachOnCreate ? null : await uploadAttachmentIfAny(created.id);
         if (attachOnCreate) setAttachment(null);
 
+        // Stored on the server now, so the local copy has done its job.
+        draft.clear();
         if (options.asDraft) {
           toast.success('Draft saved. It stays in your list until you submit it.');
           // A queued offline create has no server id yet, so there is nothing
@@ -506,8 +624,15 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         }
       }
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : 'Failed to submit training');
+      const mapped = mapServerFieldErrors(err, SERVER_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        setServerErrors(mapped.fieldErrors as Record<string, string>);
+        setError(mapped.unmatched.join(' '));
+        const first = Object.keys(mapped.fieldErrors)[0];
+        if (first) fieldRefs.current[first]?.focus();
+      } else {
+        setError(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to submit training'));
+      }
     } finally {
       setBusy(false);
     }
@@ -516,8 +641,10 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   // Marks are recomputed from the current values, so a field stops being red
   // the moment the member fills it in rather than at the next submit attempt.
   const missingNow = attemptedSave ? findMissingFields() : [];
+  const fieldError = (name: string): string | undefined =>
+    serverErrors[name] ?? (missingNow.includes(name) ? MISSING_MESSAGES[name] : undefined);
   const invalidClass = (name: string) =>
-    missingNow.includes(name) ? 'border-red-600 focus:border-red-600 dark:border-red-500' : '';
+    fieldError(name) ? 'border-red-600 focus:border-red-600 dark:border-red-500' : '';
 
   if (receipt) {
     return (
@@ -583,6 +710,15 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           </div>
         )}
 
+        {draft.restored && (
+          <DraftRestoredNotice
+            onDiscard={() => {
+              draft.discard();
+              resetForm();
+            }}
+          />
+        )}
+
         {error && (
           <div className="alert-danger text-theme-alert-danger-text text-sm" role="alert">
             {error}
@@ -592,21 +728,31 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         {/* ---------- The class ---------- */}
         <SectionCard title="The Class">
           <div>
-            <FieldLabel htmlFor="course-name" required>
-              {fieldLabel('course_name', 'Course or class name')}
-            </FieldLabel>
-            <input
+            <FormField
               id="course-name"
-              ref={registerField('course_name')}
-              type="text"
-              list="dept-requirement-suggestions"
-              value={courseName}
-              onChange={(e) => setCourseName(e.target.value)}
-              placeholder="Start typing — suggestions appear"
-              className={`form-input ${invalidClass('course_name')}`}
-              aria-invalid={missingNow.includes('course_name')}
-              autoComplete="off"
-            />
+              label={fieldLabel('course_name', 'Course or class name')}
+              required
+              error={fieldError('course_name')}
+              maxLength={MAX_LENGTH.course_name}
+              count={courseName.length}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  ref={registerField('course_name')}
+                  type="text"
+                  list="dept-requirement-suggestions"
+                  value={courseName}
+                  onChange={(e) => {
+                    setCourseName(e.target.value);
+                    clearServerError('course_name');
+                  }}
+                  placeholder="Start typing — suggestions appear"
+                  className={`form-input ${invalidClass('course_name')}`}
+                  autoComplete="off"
+                />
+              )}
+            </FormField>
             <datalist id="dept-requirement-suggestions">
               {suggestions.map((requirement) => (
                 <option key={requirement.id} value={requirement.name} />
@@ -615,45 +761,58 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <FieldLabel htmlFor="training-type" required={isFieldRequired('training_type')}>
-                {fieldLabel('training_type', 'Training type')}
-              </FieldLabel>
-              <select
-                id="training-type"
-                value={trainingType}
-                onChange={(e) => setTrainingType(e.target.value as TrainingType)}
-                className="form-input"
-              >
-                {allowedTypes.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {showCategory && (
-              <div>
-                <FieldLabel htmlFor="training-category" required={isFieldRequired('category_id')}>
-                  {fieldLabel('category_id', 'Category')}
-                </FieldLabel>
+            <FormField
+              id="training-type"
+              label={fieldLabel('training_type', 'Training type')}
+              required={isFieldRequired('training_type')}
+              error={serverErrors.training_type}
+            >
+              {(field) => (
                 <select
-                  id="training-category"
-                  ref={registerField('category_id')}
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  className={`form-input ${invalidClass('category_id')}`}
-                  aria-invalid={missingNow.includes('category_id')}
+                  {...field}
+                  value={trainingType}
+                  onChange={(e) => {
+                    setTrainingType(e.target.value as TrainingType);
+                    clearServerError('training_type');
+                  }}
+                  className="form-input"
                 >
-                  <option value="">Select...</option>
-                  {parentCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
+                  {allowedTypes.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
                     </option>
                   ))}
                 </select>
-              </div>
+              )}
+            </FormField>
+
+            {showCategory && (
+              <FormField
+                id="training-category"
+                label={fieldLabel('category_id', 'Category')}
+                required={isFieldRequired('category_id')}
+                error={fieldError('category_id')}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    ref={registerField('category_id')}
+                    value={categoryId}
+                    onChange={(e) => {
+                      setCategoryId(e.target.value);
+                      clearServerError('category_id');
+                    }}
+                    className={`form-input ${invalidClass('category_id')}`}
+                  >
+                    <option value="">Select...</option>
+                    {parentCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
             )}
           </div>
         </SectionCard>
@@ -661,36 +820,43 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         {/* ---------- When ---------- */}
         <SectionCard title="When">
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <FieldLabel htmlFor="completion-date" required>
-                {fieldLabel('completion_date', 'Date')}
-              </FieldLabel>
-              <input
-                id="completion-date"
-                ref={registerField('completion_date')}
-                type="date"
-                value={completionDate}
-                max={getTodayLocalDate(timezone)}
-                onChange={(e) => setCompletionDate(e.target.value)}
-                className={`form-input font-mono ${invalidClass('completion_date')}`}
-                aria-invalid={missingNow.includes('completion_date')}
-              />
-            </div>
-            <div>
-              <FieldLabel htmlFor="start-time" required>
-                Start time
-              </FieldLabel>
-              <input
-                id="start-time"
-                ref={registerField('start_time')}
-                type="time"
-                step={DURATION_STEP_MINUTES * 60}
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className={`form-input font-mono ${invalidClass('start_time')}`}
-                aria-invalid={missingNow.includes('start_time')}
-              />
-            </div>
+            <FormField
+              id="completion-date"
+              label={fieldLabel('completion_date', 'Date')}
+              required
+              error={fieldError('completion_date')}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  ref={registerField('completion_date')}
+                  type="date"
+                  value={completionDate}
+                  max={getTodayLocalDate(timezone)}
+                  onChange={(e) => {
+                    setCompletionDate(e.target.value);
+                    clearServerError('completion_date');
+                  }}
+                  className={`form-input font-mono ${invalidClass('completion_date')}`}
+                />
+              )}
+            </FormField>
+            <FormField id="start-time" label="Start time" required error={fieldError('start_time')}>
+              {(field) => (
+                <input
+                  {...field}
+                  ref={registerField('start_time')}
+                  type="time"
+                  step={DURATION_STEP_MINUTES * 60}
+                  value={startTime}
+                  onChange={(e) => {
+                    setStartTime(e.target.value);
+                    clearServerError('start_time');
+                  }}
+                  className={`form-input font-mono ${invalidClass('start_time')}`}
+                />
+              )}
+            </FormField>
           </div>
 
           <div>
@@ -709,6 +875,11 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
               />
             </div>
             <p className="text-theme-text-muted mt-2 text-xs">{endNote}</p>
+            {serverErrors.hours_completed && (
+              <p className="mt-1 text-sm text-red-700 dark:text-red-400" role="alert">
+                {serverErrors.hours_completed}
+              </p>
+            )}
             {atMaxDuration && (
               <p className="text-theme-text-muted mt-1 text-xs">
                 {formatDuration(maxDurationMinutes)} is the longest one entry can run
@@ -722,66 +893,82 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         <SectionCard title="Details">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {isFieldVisible('instructor') && (
-              <div>
-                <FieldLabel
-                  htmlFor="instructor"
-                  required={isFieldRequired('instructor')}
-                  optional={!isFieldRequired('instructor')}
-                >
-                  {fieldLabel('instructor', 'Instructor')}
-                </FieldLabel>
-                <input
-                  id="instructor"
-                  ref={registerField('instructor')}
-                  type="text"
-                  value={instructor}
-                  onChange={(e) => setInstructor(e.target.value)}
-                  placeholder="Name or agency"
-                  className={`form-input ${invalidClass('instructor')}`}
-                  aria-invalid={missingNow.includes('instructor')}
-                />
-              </div>
+              <FormField
+                id="instructor"
+                label={fieldLabel('instructor', 'Instructor')}
+                required={isFieldRequired('instructor')}
+                optional={!isFieldRequired('instructor')}
+                error={fieldError('instructor')}
+                maxLength={MAX_LENGTH.instructor}
+                count={instructor.length}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    ref={registerField('instructor')}
+                    type="text"
+                    value={instructor}
+                    onChange={(e) => {
+                      setInstructor(e.target.value);
+                      clearServerError('instructor');
+                    }}
+                    placeholder="Name or agency"
+                    className={`form-input ${invalidClass('instructor')}`}
+                  />
+                )}
+              </FormField>
             )}
 
             {isFieldVisible('location') && (
-              <div>
-                <FieldLabel
-                  htmlFor="location"
-                  required={isFieldRequired('location')}
-                  optional={!isFieldRequired('location')}
-                >
-                  {fieldLabel('location', 'Location')}
-                </FieldLabel>
-                <input
-                  id="location"
-                  ref={registerField('location')}
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Facility or address"
-                  className={`form-input ${invalidClass('location')}`}
-                  aria-invalid={missingNow.includes('location')}
-                />
-              </div>
+              <FormField
+                id="location"
+                label={fieldLabel('location', 'Location')}
+                required={isFieldRequired('location')}
+                optional={!isFieldRequired('location')}
+                error={fieldError('location')}
+                maxLength={MAX_LENGTH.location}
+                count={location.length}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    ref={registerField('location')}
+                    type="text"
+                    value={location}
+                    onChange={(e) => {
+                      setLocation(e.target.value);
+                      clearServerError('location');
+                    }}
+                    placeholder="Facility or address"
+                    className={`form-input ${invalidClass('location')}`}
+                  />
+                )}
+              </FormField>
             )}
           </div>
 
           {isFieldVisible('description') && (
-            <div>
-              <FieldLabel htmlFor="description" required={isFieldRequired('description')}>
-                {fieldLabel('description', 'What it covered')}
-              </FieldLabel>
-              <textarea
-                id="description"
-                ref={registerField('description')}
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="A sentence or two is enough."
-                className={`form-input resize-y ${invalidClass('description')}`}
-                aria-invalid={missingNow.includes('description')}
-              />
-            </div>
+            <FormField
+              id="description"
+              label={fieldLabel('description', 'What it covered')}
+              required={isFieldRequired('description')}
+              error={fieldError('description')}
+            >
+              {(field) => (
+                <textarea
+                  {...field}
+                  ref={registerField('description')}
+                  rows={3}
+                  value={description}
+                  onChange={(e) => {
+                    setDescription(e.target.value);
+                    clearServerError('description');
+                  }}
+                  placeholder="A sentence or two is enough."
+                  className={`form-input resize-y ${invalidClass('description')}`}
+                />
+              )}
+            </FormField>
           )}
 
           <label className="mobile-touch-target flex cursor-pointer items-center gap-2.5">
@@ -800,61 +987,79 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           {hasCertification && (
             <div className="alert-info animate-scale-in grid grid-cols-1 gap-3 sm:grid-cols-3">
               {isFieldVisible('certification_number') && (
-                <div>
-                  <FieldLabel htmlFor="certification-number" required={isFieldRequired('certification_number')}>
-                    {fieldLabel('certification_number', 'Certificate no.')}
-                  </FieldLabel>
-                  <input
-                    id="certification-number"
-                    ref={registerField('certification_number')}
-                    type="text"
-                    value={certificationNumber}
-                    onChange={(e) => setCertificationNumber(e.target.value)}
-                    className={`form-input font-mono ${invalidClass('certification_number')}`}
-                    aria-invalid={missingNow.includes('certification_number')}
-                  />
-                </div>
+                <FormField
+                  id="certification-number"
+                  label={fieldLabel('certification_number', 'Certificate no.')}
+                  required={isFieldRequired('certification_number')}
+                  error={fieldError('certification_number')}
+                  maxLength={MAX_LENGTH.certification_number}
+                  count={certificationNumber.length}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      ref={registerField('certification_number')}
+                      type="text"
+                      value={certificationNumber}
+                      onChange={(e) => {
+                        setCertificationNumber(e.target.value);
+                        clearServerError('certification_number');
+                      }}
+                      className={`form-input font-mono ${invalidClass('certification_number')}`}
+                    />
+                  )}
+                </FormField>
               )}
               {isFieldVisible('issuing_agency') && (
-                <div>
-                  <FieldLabel
-                    htmlFor="issuing-agency"
-                    required={isFieldRequired('issuing_agency')}
-                    optional={!isFieldRequired('issuing_agency')}
-                  >
-                    {fieldLabel('issuing_agency', 'Agency')}
-                  </FieldLabel>
-                  <input
-                    id="issuing-agency"
-                    ref={registerField('issuing_agency')}
-                    type="text"
-                    value={issuingAgency}
-                    onChange={(e) => setIssuingAgency(e.target.value)}
-                    placeholder="VDFP, NREMT..."
-                    className={`form-input ${invalidClass('issuing_agency')}`}
-                    aria-invalid={missingNow.includes('issuing_agency')}
-                  />
-                </div>
+                <FormField
+                  id="issuing-agency"
+                  label={fieldLabel('issuing_agency', 'Agency')}
+                  required={isFieldRequired('issuing_agency')}
+                  optional={!isFieldRequired('issuing_agency')}
+                  error={fieldError('issuing_agency')}
+                  maxLength={MAX_LENGTH.issuing_agency}
+                  count={issuingAgency.length}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      ref={registerField('issuing_agency')}
+                      type="text"
+                      value={issuingAgency}
+                      onChange={(e) => {
+                        setIssuingAgency(e.target.value);
+                        clearServerError('issuing_agency');
+                      }}
+                      placeholder="VDFP, NREMT..."
+                      className={`form-input ${invalidClass('issuing_agency')}`}
+                    />
+                  )}
+                </FormField>
               )}
               {isFieldVisible('expiration_date') && (
                 <div>
-                  <FieldLabel
-                    htmlFor="expiration-date"
+                  <FormField
+                    id="expiration-date"
+                    label={fieldLabel('expiration_date', 'Expires')}
                     required={isFieldRequired('expiration_date') && !certificationNeverExpires}
                     optional={!isFieldRequired('expiration_date') && !certificationNeverExpires}
+                    error={fieldError('expiration_date')}
                   >
-                    {fieldLabel('expiration_date', 'Expires')}
-                  </FieldLabel>
-                  <input
-                    id="expiration-date"
-                    ref={registerField('expiration_date')}
-                    type="date"
-                    value={certificationNeverExpires ? '' : expirationDate}
-                    disabled={certificationNeverExpires}
-                    onChange={(e) => setExpirationDate(e.target.value)}
-                    className={`form-input font-mono disabled:opacity-50 ${invalidClass('expiration_date')}`}
-                    aria-invalid={missingNow.includes('expiration_date')}
-                  />
+                    {(field) => (
+                      <input
+                        {...field}
+                        ref={registerField('expiration_date')}
+                        type="date"
+                        value={certificationNeverExpires ? '' : expirationDate}
+                        disabled={certificationNeverExpires}
+                        onChange={(e) => {
+                          setExpirationDate(e.target.value);
+                          clearServerError('expiration_date');
+                        }}
+                        className={`form-input font-mono disabled:opacity-50 ${invalidClass('expiration_date')}`}
+                      />
+                    )}
+                  </FormField>
                   {/* Whether an expiry is required follows the certification,
                       not a blanket rule: a department can ask for the date and
                       still take a credential that never expires. */}

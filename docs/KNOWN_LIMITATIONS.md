@@ -272,10 +272,48 @@ finalizing is.
   flagged with a message until it is fixed.
 
 Built so far: the legal-name fields on `/account` and the officer's
-edit-member page (forms review F-1, `docs/FORMS_REVIEW_2026-11-05.md`). The
-rest of the app's forms still refuse a save on error in various ways (F-3 in
-that review); they come into line through the shared form-field work that
-review recommends.
+edit-member page (forms review F-1, `docs/FORMS_REVIEW_2026-11-05.md`), and —
+since 2026-11-06 — the shared field (`components/ux/FormField.tsx`) and 422
+mapping (`utils/serverFieldErrors.ts`) on Submit Training, `/account`, Add
+Member, Create Shift and Create Event. On `/account` any field the server
+refuses is now handled the way a blank name was: the request is resent without
+it, the rest of the profile saves, and the field keeps what was typed, flagged
+with the server's reason, until it is changed. Submit Training's Save Draft
+shows every open error and still saves, but needs a course name and a date,
+which the server cannot store a draft without.
+
+**Create forms do not partially save.** Add Member, Create Shift and Create
+Event put each refusal on its field and create nothing until it is fixed:
+creating a record without the refused value and then flagging it would leave
+the flag on a form that has already navigated away. An event saved as a draft
+is still refused for the rules the server enforces on every event (an end after
+the start, an RSVP deadline before it).
+
+The rest of the app's forms still refuse a save on error in various ways (F-3
+in that review); they come into line module by module as they adopt the shared
+field.
+
+**Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
+Two of the three options, and not the third:
+
+- **Escape asks first — built.** A dialog that tracks whether its fields have
+  changed asks "Keep editing" / "Discard changes" before Escape, its X or its
+  Cancel throws them away; a clean dialog closes at once, so Escape stays the
+  way out (Pitfall #31). It is opt-in per dialog (`isDirty` on `Modal` /
+  `DialogPanel`, or `useDiscardGuard`), and adopted so far on Inventory › Add /
+  Edit Item and Scheduling › Create Shift; other dialogs still close without
+  asking until they pass the flag.
+- **Local drafts — built** for training submission (new ones; an edit is
+  already stored on the server), the manual shift report (Scheduling's shift
+  reports already kept their own draft), the expense report and Add Member.
+  sessionStorage, keyed by member and form, so a draft lasts as long as the tab
+  and never reaches another member; purged at sign-out. **PHI is never
+  drafted:** Add Member's draft leaves out the emergency contacts and the date
+  of birth, and no medical-screening form drafts. Attached files are not
+  drafted. Finance's purchase request keeps its existing server-side draft.
+- **A data router — rejected.** Navigating away inside the app (a sidebar
+  link) still leaves a page without asking; the drafts are what bring the work
+  back. `hooks/useUnsavedChanges.ts` still covers closing the tab.
 
 ## Fundraising — The Donations List's Receipt Column Is Never Filled (2026-11-05)
 

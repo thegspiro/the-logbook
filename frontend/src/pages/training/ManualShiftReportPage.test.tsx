@@ -34,9 +34,13 @@ vi.mock('../../modules/scheduling/services/api', () => ({
   },
 }));
 
-vi.mock('../../stores/authStore', () => ({
-  useAuthStore: () => ({ user: { id: 'officer-1', organization_id: 'org-1' } }),
-}));
+vi.mock('../../stores/authStore', () => {
+  const state = { user: { id: 'officer-1', organization_id: 'org-1' } };
+  return {
+    // Selector-aware, as the real store is: the draft hook reads the user id through one.
+    useAuthStore: (selector?: (s: typeof state) => unknown) => (selector ? selector(state) : state),
+  };
+});
 
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/Chicago' }));
 
@@ -45,6 +49,21 @@ import ManualShiftReportPage from './ManualShiftReportPage';
 describe('ManualShiftReportPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
+  });
+
+  // Forms review F-6, owner decision 2026-11-06.
+  it('restores a half-written report from its local draft, and says so', async () => {
+    const user = userEvent.setup();
+    const view = renderWithRouter(<ManualShiftReportPage />);
+    await user.selectOptions(await screen.findByLabelText(/^Apparatus/), 'app-1');
+    await user.type(screen.getByLabelText('Overall Shift Narrative'), 'Quiet night, two EMS assists.');
+    view.unmount();
+
+    renderWithRouter(<ManualShiftReportPage />);
+    expect(await screen.findByText('Restored your unsaved draft.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Overall Shift Narrative')).toHaveValue('Quiet night, two EMS assists.');
+    expect(await screen.findByLabelText(/^Apparatus/)).toHaveValue('app-1');
   });
 
   it('names its fields by their labels and exposes the chosen call types', async () => {
