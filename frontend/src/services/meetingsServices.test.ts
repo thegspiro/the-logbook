@@ -37,6 +37,7 @@ describe('meetingsService.getMeetings', () => {
   });
 
   it.each([
+    ['a JSON null body', null],
     ['an empty object', {}],
     ['a non-array meetings field', { meetings: null, total: 0 }],
     ['an HTML page', '<!doctype html><title>Sign in to Station Wi-Fi</title>'],

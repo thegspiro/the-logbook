@@ -56,7 +56,7 @@ export const meetingsService = {
       '/meetings',
       { params }
     );
-    return { ...response.data, meetings: asArray(response.data.meetings) };
+    return { ...response.data, meetings: asArray(response.data?.meetings) };
   },
 
   async createMeeting(data: Record<string, unknown>): Promise<MeetingRecord> {
