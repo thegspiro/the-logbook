@@ -188,6 +188,33 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### W07 second pass — Dashboard for every role — 2026-11-08
+
+The owner asked to continue with W07. All ten roles were driven at 1280×900,
+with three at 390×844, on the redesigned dashboard (Personal, plus a My
+Department tab for leaders).
+
+Held:
+
+- every role's dashboard is clean on every tab: no failed request, console error or broken value;
+- every link opens a page the role can use;
+- department-wide data waits for the tab;
+- My Department and its sections are gated per role;
+- the phone layout is clean.
+
+The W01 lead is resolved: with Training off, no dashboard, Members Administration or My Account asks a Training endpoint.
+
+Fixed:
+
+- W07-2 (LOW): the two-factor grace notice said "Profile > Security" and linked to the profile tab. The step-up message and the `LB-AUTH-005` support entry also named screens that don't exist.
+
+Flagged:
+
+- W07-3 (LOW): the treasurer has no My Department tab, so the money and grant cards sit on Personal; the admin sees them under My Department.
+- W07-4 (NIT): two single-card My Department tabs.
+
+Gate: flake8, black and isort clean; 103 backend tests pass, and the new cases failed before the fix; docs links clean. Next: W08 when the owner asks.
+
 ### W06 second pass — Organization settings and department setup — 2026-11-08
 
 The owner asked to keep going. Driven as `admin`, with `member` for the

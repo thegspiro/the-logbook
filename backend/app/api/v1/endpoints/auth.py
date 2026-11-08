@@ -1670,7 +1670,7 @@ async def step_up(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "This account signs in through a provider and has no password. "
-                "Set up two-factor authentication under Profile > Security to "
+                "Set up two-factor authentication under My Account > Security to "
                 "confirm sensitive actions."
             ),
         )
