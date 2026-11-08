@@ -45,6 +45,8 @@ vi.mock('../../stores/authStore', () => {
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/Chicago' }));
 
 import ManualShiftReportPage from './ManualShiftReportPage';
+import { sessionDraftKey, writeSessionDraft } from '../../utils/sessionDrafts';
+import { getTodayLocalDate } from '../../utils/dateFormatting';
 
 describe('ManualShiftReportPage', () => {
   beforeEach(() => {
@@ -64,6 +66,35 @@ describe('ManualShiftReportPage', () => {
     expect(await screen.findByText('Restored your unsaved draft.')).toBeInTheDocument();
     expect(screen.getByLabelText('Overall Shift Narrative')).toHaveValue('Quiet night, two EMS assists.');
     expect(await screen.findByLabelText(/^Apparatus/)).toHaveValue('app-1');
+  });
+
+  it("puts a fresh report's dates and times back when the draft is discarded", async () => {
+    writeSessionDraft(sessionDraftKey('officer-1', 'manual-shift-report'), {
+      apparatusId: 'app-1',
+      shiftDate: '2026-01-03',
+      startTime: '19:00',
+      endDate: '2026-01-04',
+      endTime: '07:00',
+      callsResponded: 2,
+      callTypes: [],
+      narrative: 'Old report',
+      crew: [],
+      selectedIds: [],
+      traineeEvals: {},
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ManualShiftReportPage />);
+    expect(await screen.findByText('Restored your unsaved draft.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Start Date/)).toHaveValue('2026-01-03');
+
+    await user.click(await screen.findByRole('button', { name: /discard/i }));
+
+    const today = getTodayLocalDate('America/Chicago');
+    expect(screen.getByLabelText(/^Start Date/)).toHaveValue(today);
+    expect(screen.getByLabelText(/^Start Time/)).toHaveValue('');
+    expect(screen.getByLabelText(/^End Date/)).toHaveValue(today);
+    expect(screen.getByLabelText(/^End Time/)).toHaveValue('');
+    expect(screen.getByLabelText('Overall Shift Narrative')).toHaveValue('');
   });
 
   it('names its fields by their labels and exposes the chosen call types', async () => {

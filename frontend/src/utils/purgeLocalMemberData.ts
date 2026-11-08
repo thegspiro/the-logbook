@@ -156,14 +156,17 @@ export async function purgeLocalMemberData(options: PurgeOptions = {}): Promise<
   // be warned about losing, and the store says nothing of it at sign-in.
   clearAllSavedCarts();
 
-  // A mounted form can have an API request in flight when termination starts.
-  // Sweep again after the asynchronous IndexedDB work so a late state update
-  // cannot leave a localStorage draft behind for the next device user.
+  // A mounted form can have an API request in flight when termination starts,
+  // and the member stays signed in until this purge settles, so a keystroke
+  // during the asynchronous IndexedDB work can write a fresh draft. Sweep both
+  // draft stores again so neither is left behind for the next device user;
+  // nothing is awaited between here and the session being torn down.
   try {
     result.drafts += clearAllDrafts();
   } catch {
     // localStorage may have become unavailable; the initial sweep still ran.
   }
+  result.drafts += clearAllSessionDrafts();
 
   result.unsyncedDiscarded =
     result.queuedChecks + result.queuedReports + result.queuedGeneric + result.queuedSkillsTests;

@@ -90,7 +90,9 @@ export function useSessionDraft<T>({
     const empty = emptyTest ? emptyTest(current) : serialized === initial.current;
     if (empty) removeSessionDraft(key);
     else writeSessionDraft(key, current);
-  }, [key, enabled, serialized, restored]);
+    // `ready` too: a form edited while its defaults were loading must be
+    // drafted the moment it becomes ready, not only at the next keystroke.
+  }, [key, enabled, ready, serialized, restored]);
 
   const clear = useCallback(() => {
     if (key) removeSessionDraft(key);

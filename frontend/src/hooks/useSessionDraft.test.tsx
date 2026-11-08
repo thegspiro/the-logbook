@@ -53,6 +53,18 @@ describe('useSessionDraft', () => {
     expect(sessionStorage.length).toBe(0);
   });
 
+  it('drafts what was typed before the form was ready once it becomes ready', async () => {
+    const user = userEvent.setup();
+    const view = render(<Notes ready={false} />);
+    await user.type(screen.getByLabelText('Notes'), 'Typed while loading');
+    expect(sessionStorage.getItem(sessionDraftKey('u1', 'notes'))).toBeNull();
+
+    // Loading finishes without touching the value.
+    view.rerender(<Notes ready />);
+
+    expect(sessionStorage.getItem(sessionDraftKey('u1', 'notes'))).toContain('Typed while loading');
+  });
+
   it('restores what was typed when the form is opened again, and says so', async () => {
     const user = userEvent.setup();
     const view = render(<Notes />);

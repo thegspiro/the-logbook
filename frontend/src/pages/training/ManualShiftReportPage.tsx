@@ -42,6 +42,34 @@ import type { BatchShiftReportCreate, CrewMemberEvaluation, TrainingModuleConfig
 import type { User } from '../../types/user';
 
 /** Calculate hours between two datetime strings, handling midnight crossover. */
+/**
+ * The department's default start and end time for a fresh report, and how many
+ * calendar days past the shift date the end falls (a 24h default starting at
+ * 07:00 ends the next day). Count the days off the shift date, not off the
+ * clock, or an officer filing in the evening west of UTC gets an end date two
+ * days out and a 36-hour shift.
+ */
+function defaultShiftTimes(cfg: TrainingModuleConfig | null): {
+  startTime: string;
+  endTime: string;
+  daysOver: number;
+} {
+  const startTime = cfg?.manual_entry_default_start_time ?? '';
+  if (!startTime || !cfg?.manual_entry_default_duration_hours) {
+    return { startTime, endTime: '', daysOver: 0 };
+  }
+  const [h, m] = startTime.split(':').map(Number);
+  const startMinutes = (h ?? 0) * 60 + (m ?? 0);
+  const endMinutes = startMinutes + Math.round(cfg.manual_entry_default_duration_hours * 60);
+  const endH = Math.floor(endMinutes / 60) % 24;
+  const endM = endMinutes % 60;
+  return {
+    startTime,
+    endTime: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`,
+    daysOver: Math.floor(endMinutes / (24 * 60)),
+  };
+}
+
 function calculateHours(startDate: string, startTime: string, endDate: string, endTime: string): number {
   if (!startDate || !startTime || !endDate || !endTime) return 0;
   const start = new Date(`${startDate}T${startTime}`);
@@ -167,24 +195,11 @@ export const ManualShiftReportPage: React.FC = () => {
       .getConfig()
       .then((cfg) => {
         setConfig(cfg);
-        if (cfg.manual_entry_default_start_time) {
-          setStartTime(cfg.manual_entry_default_start_time);
-        }
-        if (cfg.manual_entry_default_duration_hours && cfg.manual_entry_default_start_time) {
-          const [h, m] = cfg.manual_entry_default_start_time.split(':').map(Number);
-          const startMinutes = (h ?? 0) * 60 + (m ?? 0);
-          const endMinutes = startMinutes + Math.round(cfg.manual_entry_default_duration_hours * 60);
-          const endH = Math.floor(endMinutes / 60) % 24;
-          const endM = endMinutes % 60;
-          setEndTime(`${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`);
-          // A 24h default starting at 07:00 ends on the following calendar day —
-          // count the days off the shift date, not off the clock, or an officer
-          // filing in the evening west of UTC gets an end date two days out and
-          // a 36-hour shift.
-          const daysOver = Math.floor(endMinutes / (24 * 60));
-          if (daysOver > 0) {
-            setEndDate((prev) => addCalendarDays(prev, daysOver));
-          }
+        const defaults = defaultShiftTimes(cfg);
+        if (defaults.startTime) setStartTime(defaults.startTime);
+        if (defaults.endTime) setEndTime(defaults.endTime);
+        if (defaults.daysOver > 0) {
+          setEndDate((prev) => addCalendarDays(prev, defaults.daysOver));
         }
       })
       .catch(() => {})
@@ -357,6 +372,14 @@ export const ManualShiftReportPage: React.FC = () => {
           <DraftRestoredNotice
             onDiscard={() => {
               draft.discard();
+              // Back to a fresh report's dates and times, or the discarded
+              // report's shift would be filed under the new one.
+              const today = getTodayLocalDate(tz);
+              const defaults = defaultShiftTimes(config);
+              setShiftDate(today);
+              setStartTime(defaults.startTime);
+              setEndDate(defaults.daysOver > 0 ? addCalendarDays(today, defaults.daysOver) : today);
+              setEndTime(defaults.endTime);
               setApparatusId('');
               setCallsResponded(0);
               setCallTypes([]);

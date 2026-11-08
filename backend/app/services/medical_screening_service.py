@@ -398,17 +398,18 @@ class MedicalScreeningService:
         return list(result.scalars().all())
 
     async def get_requirement(
-        self, requirement_id: str, organization_id: str
+        self, requirement_id: str, organization_id: str, for_update: bool = False
     ) -> Optional[ScreeningRequirement]:
         """Get a single screening requirement."""
-        result = await self.db.execute(
-            select(ScreeningRequirement).where(
-                and_(
-                    ScreeningRequirement.id == requirement_id,
-                    ScreeningRequirement.organization_id == organization_id,
-                )
+        query = select(ScreeningRequirement).where(
+            and_(
+                ScreeningRequirement.id == requirement_id,
+                ScreeningRequirement.organization_id == organization_id,
             )
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         screening_requirement: Optional[ScreeningRequirement] = (
             result.scalar_one_or_none()
         )
@@ -472,7 +473,11 @@ class MedicalScreeningService:
         NULL; this does it in code, over this organization's records only,
         matching the decrypted id.
         """
-        requirement = await self.get_requirement(requirement_id, organization_id)
+        # Locked so a save linking a record to this requirement cannot commit
+        # between the unlink below and the delete (see _lock_linked_requirement).
+        requirement = await self.get_requirement(
+            requirement_id, organization_id, for_update=True
+        )
         if not requirement:
             return False
         await self.unlink_records_from_requirement(str(requirement.id), organization_id)
@@ -488,11 +493,16 @@ class MedicalScreeningService:
         Returns how many records were unlinked. The records keep everything
         else: type, status, dates and results stay as compliance proof.
         """
+        # A locking read: under REPEATABLE READ a plain SELECT answers from the
+        # transaction's first snapshot, so a link committed by a save this
+        # delete waited on would be missed and left pointing at nothing.
         rows = await self.db.execute(
-            select(ScreeningRecord).where(
+            select(ScreeningRecord)
+            .where(
                 ScreeningRecord.organization_id == organization_id,
                 ScreeningRecord.requirement_id.isnot(None),
             )
+            .with_for_update()
         )
         unlinked = 0
         for record in rows.scalars().all():
@@ -607,6 +617,29 @@ class MedicalScreeningService:
             ],
         )
 
+    async def _lock_linked_requirement(
+        self, requirement_id: str, organization_id: str
+    ) -> None:
+        """Hold the requirement a record is being linked to until commit.
+
+        The link has had no foreign key since MS-18 (it is ciphertext), so the
+        database no longer stops a record linking to a requirement deleted in
+        the same moment. ``delete_requirement`` locks the same row, so the two
+        serialize: the delete waits for this save, then its locking scan sees
+        the new link and clears it; or this save waits for the delete and its
+        in-org check has already passed, so the lock finds no row and refuses.
+        """
+        locked = await self.db.execute(
+            select(ScreeningRequirement.id)
+            .where(
+                ScreeningRequirement.id == requirement_id,
+                ScreeningRequirement.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        if locked.scalar_one_or_none() is None:
+            raise ValueError("Screening requirement not found")
+
     async def create_record(
         self,
         organization_id: str,
@@ -648,6 +681,8 @@ class MedicalScreeningService:
             allow_none=True,
             label="screening requirement",
         )
+        if data.requirement_id:
+            await self._lock_linked_requirement(data.requirement_id, organization_id)
         record = ScreeningRecord(
             id=generate_uuid(),
             organization_id=organization_id,
@@ -700,6 +735,9 @@ class MedicalScreeningService:
                 changes["requirement_id"],
                 organization_id,
                 label="screening requirement",
+            )
+            await self._lock_linked_requirement(
+                changes["requirement_id"], organization_id
             )
         apply_updates(record, changes)
         if reviewed_by and data.status in ("passed", "failed", "waived"):
