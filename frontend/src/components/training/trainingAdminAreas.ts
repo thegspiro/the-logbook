@@ -74,6 +74,11 @@ export interface TrainingAdminDestination {
    * gate is enough.
    */
   anyPermission?: readonly string[];
+  /**
+   * Extra words the command palette matches this destination on, beyond its
+   * label and hint — a fuller name a short tab label leaves out.
+   */
+  keywords?: readonly string[];
 }
 
 export interface TrainingAdminArea {
@@ -191,9 +196,10 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
     destinations: [
       {
         id: 'manual-entry',
-        label: 'Manual Entry Rules',
+        label: 'Manual Entry',
         hint: 'What members may record themselves',
         icon: PencilRuler,
+        keywords: ['manual entry rules'],
       },
       {
         id: 'practical-skills',
@@ -219,17 +225,21 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
       },
       {
         id: 'compliance-settings',
-        label: 'Compliance Settings',
+        // Short so all of Settings & Data fits a 1280px screen; the palette
+        // still finds it by its full name.
+        label: 'Compliance',
         hint: 'Thresholds, profiles and scheduled compliance reports',
         icon: ShieldCheck,
+        keywords: ['compliance settings'],
         anyPermission: COMPLIANCE_CONFIG_PERMISSIONS,
       },
       { id: 'integrations', label: 'Integrations', hint: 'Connections to outside training systems', icon: Plug },
       {
         id: 'import',
-        label: 'Import Past Training',
+        label: 'Import History',
         hint: 'Upload training completed before The Logbook',
         icon: History,
+        keywords: ['import past training'],
       },
       { id: 'metrics', label: 'Headline Metrics', hint: 'The figures shown at the top of this page', icon: Activity },
     ],
