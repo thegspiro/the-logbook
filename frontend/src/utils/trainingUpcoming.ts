@@ -9,6 +9,7 @@
 
 import type { MyTrainingSummary, RequirementDetail } from '../types/training';
 import { countingWindowLabel } from './requirementMonths';
+import { requirementUnit } from './requirementUnits';
 
 /** How far ahead the list looks, in days. */
 export const UPCOMING_WINDOW_DAYS = 183;
@@ -97,7 +98,7 @@ const requirementItems = (details: RequirementDetail[], today: string): Upcoming
         key: `req-${req.id}`,
         kind: 'requirement',
         title: req.name,
-        detail: `${req.completed_hours}/${req.required_hours} hrs complete`,
+        detail: `${req.completed_hours}/${req.required_hours}${unitSuffix(req)} complete`,
         date,
         days,
         urgency: urgencyFor(days),
@@ -156,6 +157,12 @@ const skillItems = (tests: NonNullable<MyTrainingSummary['skill_test_expirations
  * department hides requirement details, and certification rows when it hides
  * certification status — the server omits the underlying lists in that case.
  */
+/** " hrs", " courses", or nothing for a requirement graded done or not done. */
+const unitSuffix = (req: RequirementDetail): string => {
+  const unit = requirementUnit(req.requirement_type, req.required_hours);
+  return unit ? ` ${unit}` : '';
+};
+
 export const buildUpcomingItems = (
   data: MyTrainingSummary,
   today: string,
