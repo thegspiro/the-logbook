@@ -497,7 +497,10 @@ async def get_meetings_summary(
 ):
     """Get meetings module summary statistics"""
     service = MeetingsService(db)
-    return await service.get_summary(current_user.organization_id)
+    return await service.get_summary(
+        current_user.organization_id,
+        member_visible_only=_member_view_only(current_user),
+    )
 
 
 # ============================================

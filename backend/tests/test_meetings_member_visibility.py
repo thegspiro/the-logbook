@@ -11,6 +11,7 @@ enough to read the department's closed-session deliberations.
 import uuid
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
@@ -151,3 +152,41 @@ class TestManagerView:
             uuid.UUID(meetings["executive"].id), db=db_session, current_user=manager
         )
         assert executive.notes == "executive notes"
+
+
+class TestSummaryCounts:
+    async def test_a_members_tiles_count_only_what_their_list_shows(
+        self, db_session, monkeypatch
+    ):
+        org, _, _ = await _department(db_session)
+        monkeypatch.setattr(
+            "app.services.meetings_service.resolve_org_today",
+            AsyncMock(return_value=date(2026, 10, 15)),
+        )
+        member = _caller(org, ["meetings.view", "minutes.view"])
+
+        summary = await ep.get_meetings_summary(db=db_session, current_user=member)
+
+        assert summary == {
+            "total_meetings": 1,
+            "meetings_this_month": 1,
+            "open_action_items": 1,
+            "pending_approval": 0,
+        }
+
+    async def test_a_managers_tiles_count_everything(self, db_session, monkeypatch):
+        org, _, _ = await _department(db_session)
+        monkeypatch.setattr(
+            "app.services.meetings_service.resolve_org_today",
+            AsyncMock(return_value=date(2026, 10, 15)),
+        )
+        manager = _caller(org, ["meetings.manage"])
+
+        summary = await ep.get_meetings_summary(db=db_session, current_user=manager)
+
+        assert summary == {
+            "total_meetings": 4,
+            "meetings_this_month": 4,
+            "open_action_items": 4,
+            "pending_approval": 1,
+        }

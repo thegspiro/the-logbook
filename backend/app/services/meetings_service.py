@@ -654,13 +654,28 @@ class MeetingsService:
     # Summary & Reporting
     # ============================================
 
-    async def get_summary(self, organization_id: UUID | str) -> Dict[str, Any]:
-        """Get meetings summary statistics"""
+    async def get_summary(
+        self, organization_id: UUID | str, member_visible_only: bool = False
+    ) -> Dict[str, Any]:
+        """Get meetings summary statistics
+
+        ``member_visible_only`` counts only what the caller's list shows, so
+        the tiles beside a member's list do not count draft and executive
+        meetings, or their action items, that the list withholds.
+        """
+        meeting_scope = [Meeting.organization_id == str(organization_id)]
+        item_scope = [MeetingActionItem.organization_id == str(organization_id)]
+        if member_visible_only:
+            meeting_scope.append(member_visible_meeting())
+            item_scope.append(
+                MeetingActionItem.meeting_id.in_(
+                    select(Meeting.id).where(*meeting_scope)
+                )
+            )
+
         # Total meetings
         total_result = await self.db.execute(
-            select(func.count(Meeting.id)).where(
-                Meeting.organization_id == str(organization_id)
-            )
+            select(func.count(Meeting.id)).where(*meeting_scope)
         )
         total_meetings = total_result.scalar() or 0
 
@@ -670,7 +685,7 @@ class MeetingsService:
         )
         month_result = await self.db.execute(
             select(func.count(Meeting.id))
-            .where(Meeting.organization_id == str(organization_id))
+            .where(*meeting_scope)
             .where(Meeting.meeting_date >= first_of_month)
         )
         meetings_this_month = month_result.scalar() or 0
@@ -678,7 +693,7 @@ class MeetingsService:
         # Open action items
         open_result = await self.db.execute(
             select(func.count(MeetingActionItem.id))
-            .where(MeetingActionItem.organization_id == str(organization_id))
+            .where(*item_scope)
             .where(
                 MeetingActionItem.status.in_(
                     [ActionItemStatus.OPEN, ActionItemStatus.IN_PROGRESS]
@@ -690,7 +705,7 @@ class MeetingsService:
         # Pending approval
         pending_result = await self.db.execute(
             select(func.count(Meeting.id))
-            .where(Meeting.organization_id == str(organization_id))
+            .where(*meeting_scope)
             .where(Meeting.status == MeetingStatus.PENDING_APPROVAL)
         )
         pending_approval = pending_result.scalar() or 0
