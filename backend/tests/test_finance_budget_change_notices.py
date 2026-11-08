@@ -504,16 +504,17 @@ class TestLeadershipChangeEmail:
         monkeypatch.setattr(
             "app.services.finance_budget_request_service.datetime", _Clock
         )
+        request_id = await _approved_request(db_session, dept)
+        mailer.sends.clear()
         assigned = []
 
         def _capture(target, value, oldvalue, initiator):
-            if value is not None:
+            # Only the request under review: the value its review assigns.
+            if value is not None and str(target.id) == str(request_id):
                 assigned.append(value)
 
         event.listen(BudgetRequest.reviewed_at, "set", _capture)
         try:
-            request_id = await _approved_request(db_session, dept)
-            mailer.sends.clear()
             await _review(db_session, dept, request_id)
         finally:
             event.remove(BudgetRequest.reviewed_at, "set", _capture)
