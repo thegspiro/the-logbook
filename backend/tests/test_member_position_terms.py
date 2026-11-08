@@ -274,6 +274,22 @@ class TestTheCorePaths:
         await sync_position_terms(db, pair)
         assert len(await _terms(db, dept["member"])) == 1
 
+    async def test_a_term_starts_when_the_position_was_assigned(self, dept):
+        """A path that records an earlier assignment (an import, a seed) gets
+        a term that starts then, not when the term happened to be opened."""
+        db = dept["db"]
+        assigned = datetime(2025, 3, 1, 9, 30, tzinfo=timezone.utc)
+        await db.execute(
+            user_positions.insert().values(
+                user_id=dept["member"],
+                position_id=dept["treasurer"].id,
+                assigned_at=assigned,
+            )
+        )
+        await sync_position_terms(db, [(dept["member"], dept["treasurer"].id)])
+        (term,) = await _terms(db, dept["member"])
+        assert term.started_at.replace(tzinfo=timezone.utc) == assigned
+
     async def test_the_database_admits_one_open_term_per_pair(self, dept):
         db = dept["db"]
         now = datetime.now(timezone.utc)

@@ -164,6 +164,7 @@ def _reconcile(
                 Position.name,
                 Position.kind,
                 user_positions.c.assigned_by,
+                user_positions.c.assigned_at,
             )
             .select_from(user_positions)
             .join(User, User.id == user_positions.c.user_id)
@@ -194,7 +195,10 @@ def _reconcile(
                     position_id=position_id,
                     position_name=held.name,
                     position_kind=held.kind,
-                    started_at=now,
+                    # When the assignment says it began, so the history agrees
+                    # with user_positions; an import or seed may record an
+                    # earlier time than the flush that opens the term.
+                    started_at=held.assigned_at or now,
                     assigned_by=actor_id or held.assigned_by,
                 )
             )
