@@ -94,7 +94,7 @@ export const IPExceptionTable: React.FC<IPExceptionTableProps> = ({
                 </td>
               )}
               <td data-label="IP Address" className="text-theme-text-primary px-4 py-3 font-mono">
-                {exc.ipAddress}
+                <span className="min-w-0 break-all">{exc.ipAddress}</span>
               </td>
               <td data-label="Use Case" className="text-theme-text-secondary px-4 py-3">
                 {IP_EXCEPTION_USE_CASE_LABELS[exc.useCase ?? ''] ?? exc.useCase ?? '—'}

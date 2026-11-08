@@ -55,7 +55,7 @@ export const BlockedAttemptsTable: React.FC<BlockedAttemptsTableProps> = ({ atte
               className="border-theme-surface-border/50 hover:bg-theme-surface-hover border-b transition-colors"
             >
               <td data-label="IP Address" className="text-theme-text-primary px-4 py-3 font-mono">
-                {a.ipAddress}
+                <span className="min-w-0 break-all">{a.ipAddress}</span>
               </td>
               <td data-label="Country" className="text-theme-text-secondary px-4 py-3">
                 {a.countryName ?? a.countryCode ?? '—'}
@@ -64,7 +64,7 @@ export const BlockedAttemptsTable: React.FC<BlockedAttemptsTableProps> = ({ atte
                 {a.blockReason}
               </td>
               <td data-label="Path" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
-                {a.requestPath ?? '—'}
+                <span className="min-w-0 break-all">{a.requestPath ?? '—'}</span>
               </td>
               <td data-label="Method" className="text-theme-text-muted px-4 py-3">
                 {a.requestMethod ?? '—'}

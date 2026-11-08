@@ -51,7 +51,7 @@ const BLOCKED_ATTEMPTS = {
 // justification, status, duration, a long country name, request time and the
 // approve/reject actions. Overflows its card on a tablet or laptop.
 test.describe('IP exceptions table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/ip-security — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
@@ -73,7 +73,7 @@ test.describe('IP exceptions table fits its card', () => {
 // Blocked access attempts: a full IPv6 address, country, reason, an unbroken
 // request path in monospace, method and time. Overflows on a tablet or laptop.
 test.describe('Blocked attempts table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/ip-security — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
