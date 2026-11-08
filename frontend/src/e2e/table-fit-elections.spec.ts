@@ -16,12 +16,12 @@ const election = {
   election_type: 'general',
   start_date: '2026-12-01T14:00:00Z',
   end_date: '2026-12-08T23:00:00Z',
-  status: 'draft',
+  status: 'open',
   anonymous_voting: true,
   allow_write_ins: false,
   max_votes_per_position: 1,
   results_visible_immediately: false,
-  email_sent: false,
+  email_sent: true,
   voting_method: 'simple_majority',
   victory_condition: 'most_votes',
   enable_runoffs: false,
@@ -36,7 +36,7 @@ const election = {
 const roster = {
   election_id: 'election-1',
   election_title: election.title,
-  election_status: 'draft',
+  election_status: 'open',
   total_members: 4,
   total_eligible: 3,
   total_ineligible: 1,
@@ -90,9 +90,7 @@ test.describe('Voter eligibility roster fits its card', () => {
       await page.route('**/api/v1/elections/election-1/eligibility-roster**', (route) => route.fulfill(json(roster)));
       await page.goto('/elections/election-1?tab=eligibility');
 
-      const table = page
-        .getByRole('table')
-        .filter({ has: page.getByRole('columnheader', { includeHidden: true, name: 'Ballot', exact: true }) });
+      const table = page.getByRole('table', { name: 'Voter eligibility roster' });
       await table.waitFor();
       await table.getByText(MEMBER_NAMES[0] ?? '').click();
       await table.getByText('Per-Item Eligibility').waitFor();
