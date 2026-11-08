@@ -83,6 +83,8 @@ from app.services.event_request_service import (
 )
 from app.services.event_request_service import (
     send_volunteer_call,
+    short_notice_request_ids,
+    staffing_counts_by_request,
     sync_calendar_event_cancelled,
     sync_calendar_event_date,
     sync_staffing_shift_cancelled,
@@ -638,8 +640,14 @@ async def list_event_requests(
     result = await db.execute(query)
     requests = result.scalars().all()
 
+    staffing = await staffing_counts_by_request(
+        db, current_user.organization_id, requests
+    )
+    short_notice = await short_notice_request_ids(db, [r.id for r in requests])
+
     items = []
     for req in requests:
+        filled, total = staffing.get(str(req.id), (None, None))
         assignee_name = None
         if req.assigned_to:
             assignee_name = await get_user_name(db, req.assigned_to)
@@ -661,6 +669,9 @@ async def list_event_requests(
                 task_completions=req.task_completions,
                 event_date=req.event_date,
                 staffing_shift_id=req.staffing_shift_id,
+                short_notice=str(req.id) in short_notice,
+                staffing_slots_filled=filled,
+                staffing_slots_total=total,
                 created_at=req.created_at,
             )
         )
