@@ -16,6 +16,60 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4119](https://github.com/thegspiro/the-logbook/pull/4119)** (branch
+`claude/security-review-events-requests`) —
+Feature 16 (Events & requests), pass 14, a watchdog pickup. No other
+Claude session is running on this machine (`ListAgents` → "No reachable
+agents"), consistent with the dedicated `/loop 30m /security-review`
+session remaining unreachable through every prior pass recorded in this
+file. PR #4115 (Feature 15, Scheduling, pass 14) had already merged
+(`df47203d`); a fresh `list_pull_requests` (state=open) found 0 PRs with
+a `claude/security-review-*` head; row 16 was the next pending feature.
+
+Baseline `cfce6ba2` (PR #3931's merge, pass 13) to head `df47203d`
+(current `main`). Real delta — several 2026-11-01 owner-decision batches
+touched this feature's declared files: `event_requests.status_token` is
+now hashed (SHA-256, lookup key) and AES-256-GCM encrypted at rest
+(mirroring the already-reviewed membership-pipeline pattern, PP-6), with
+a migration that converts existing rows in place and dedicated unit,
+integration and migration-against-rows tests already in place;
+`event_location_id`'s FK moved `SET NULL` → `RESTRICT` (owned by
+Locations & kiosk, checked for breakage here and found none); `events.py`
+list/detail routes gained a read-only, org-scoped
+`counts_toward_attendance` flag; a new `SessionAttendanceRequirements.tsx`
+component calls a Training-owned, `events.manage`-gated, org-scoped
+endpoint; a guest check-in double-confirm race (already fixed under
+Locations & kiosk pass 12) and two low-risk `event_service.py` logic
+fixes were re-verified rather than re-derived; and a new migration clears
+reminder/validation markers a recurring-series save had copied onto later
+occurrences, checking `notification_logs` first so a marker cannot be
+wrongly cleared while its log survives — though that log is
+department-configurable down to a 30-day retention floor, so the
+guarantee does not hold indefinitely (Copilot review finding, recorded
+rather than fixed here since it touches the migration itself, outside
+this docs-only PR's safe-fix bar). **0 fixed, 0 new findings** — see
+`docs/security-review/EV-16-events-requests.md`'s **Pass 14** section
+for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
+749 revisions, single head `78f196079c95`; `check_route_permissions.py
+--strict` — 305 routes, 0 errors/warnings; `generate_schema_docs.py
+--check` — up to date; scoped backend suite (`-k "event or guest or rsvp
+or attendance"`) — 2233 passed, 1 environment-only skip (`pywebpush`);
+standing guard suites (org-scoping ratchet, capacity locking, LIKE
+escaping, CSV sweep, `create_all`-table tolerance, migration chain,
+baseline member grants, logging escaping, log-call-shape sweep) — 195
+passed; `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run` (this feature's modules/pages/
+components) — 303 passed (19 files).
+
+Row 16 → ✅ (pending this PR's merge); next is Feature 17 (Training core)
+— re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 15, Scheduling, pass 14, PR #4115, merged), preserved for history</summary>
+
 **PR [#4115](https://github.com/thegspiro/the-logbook/pull/4115)** (branch
 `claude/security-review-scheduling-p14`) —
 Feature 15 (Scheduling), pass 14, a watchdog pickup. No other Claude
@@ -67,6 +121,8 @@ src/pages/scheduling` — 1132 passed (76 files, includes
 Row 15 → ✅ (pending this PR's merge); next is Feature 16 (Events &
 requests) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 14, Equipment check & shifts, pass 15, PR #4111, merged), preserved for history</summary>
@@ -25152,7 +25208,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                                               | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                                                 | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                                            | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                   | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                   | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13) | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`                             | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                      | ⬜     |
@@ -25189,6 +25245,46 @@ them to be re-discovered by SEC-00 every lap.
 ---
 
 ## Log
+
+### 2026-11-08 — Feature 15 (Scheduling, pass 14) merged; Feature 16 (Events & requests, pass 14) — watchdog pickup, real delta, 0 fixed, 0 new findings
+
+Watchdog pickup (this scheduled check-in session, not the dedicated
+`/loop 30m /security-review` session, which remains unreachable per
+every prior entry here). PR #4115 (Feature 15, Scheduling, pass 14) was
+open, clean (no conflicts, all Copilot review threads resolved) and
+waiting only on CI; this iteration watched CI to completion (all green)
+and merged it (`df47203d`) before starting the next feature, per the
+rotation's "one PR at a time" rule. Row 16 (Events & requests) was the
+next `⬜` on a freshly re-read table.
+
+Baseline `cfce6ba2` (PR #3931's merge, pass 13) to head `df47203d`.
+687 commits repo-wide; scoped to this feature's declared files, a
+handful of real changes from the 2026-11-01 owner-decision batches: the
+event-request public status token is now hashed and encrypted at rest
+(mirrors the already-reviewed membership-pipeline pattern, with its own
+migration-against-rows test); an unrelated Locations-owned FK tightening
+(`SET NULL` → `RESTRICT` on `event_location_id`) checked for breakage and
+found none; a read-only attendance-linkage flag added to `events.py`'s
+list/detail responses, resolved through an already org-scoped
+Training-service call; a new attendance-linkage UI entry point into a
+Training-owned, `events.manage`-gated, org-scoped endpoint; a guest
+check-in double-confirm race already fixed under Locations & kiosk pass
+12, re-verified rather than re-derived; two low-risk `event_service.py`
+correctness fixes; and a new migration clearing reminder/validation
+markers a recurring-series save had copied onto later occurrences,
+gated on `notification_logs` surviving — which Copilot review noted is
+not unconditional, since that table's retention is
+department-configurable down to 30 days (recorded, not fixed here; the
+migration itself is outside this docs-only PR's safe-fix bar). 0 fixed,
+0 new findings — see `docs/security-review/EV-16-events-requests.md`'s
+**Pass 14** section.
+
+Completion gate: all green (flake8/black/isort, `validate_migrations.py
+--strict` — 749 revisions single head, `check_route_permissions.py
+--strict` — 305 routes 0 errors/warnings, `generate_schema_docs.py
+--check`, scoped backend suite 2233 passed, standing guard suites 195
+passed, `npm run typecheck`/`npm run lint` clean, scoped `npx vitest run`
+303 passed).
 
 ### 2026-11-06 — Feature 10 (Documents & legal, pass 15) merged; Feature 11 (Inventory, pass 15) — watchdog pickup, real delta, 0 fixed, 0 new findings, INV-22 re-confirmed OPEN
 
