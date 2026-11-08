@@ -166,7 +166,7 @@ describe('StaffingSection', () => {
     );
     expect(status).toHaveTextContent('12,659 seats (7,124 filled) name 2,547 events the events file does not have');
     expect(status).toHaveTextContent('55582345 (65 seats)');
-    expect(status).toHaveTextContent('1 events fall outside 2000–2027');
+    expect(status).toHaveTextContent('1 event falls outside 2000–2027');
     expect(status).toHaveTextContent('Watch Night EMS Standby');
     expect(status).toHaveTextContent('98 upcoming events become scheduled events');
   });
