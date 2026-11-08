@@ -148,14 +148,19 @@ async def list_supervisor_candidates(
 ):
     """
     The current members of the department who may be named as this member's
-    supervisor: everyone active or probationary, except the member.
+    supervisor: everyone active or probationary, except the member and the
+    caller, whom ``set_supervisor`` refuses to accept as the supervisor.
 
     **Requires permission: members.manage**
     """
     member = await _load_member(db, user_id, current_user.organization_id)
-    users = await MemberSupervisorService(db).list_candidates(
-        member.organization_id, member.id
-    )
+    users = [
+        u
+        for u in await MemberSupervisorService(db).list_candidates(
+            member.organization_id, member.id
+        )
+        if str(u.id) != str(current_user.id)
+    ]
     return SupervisorCandidateListResponse(
         candidates=[
             SupervisorCandidateResponse(
