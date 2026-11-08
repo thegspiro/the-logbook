@@ -60,6 +60,10 @@ export interface Event {
   is_cancelled: boolean;
   cancellation_reason?: string;
   cancelled_at?: string;
+  /** Set when the event was postponed; postponed_from_start is its start before the first postponement. */
+  postponed_at?: string | null;
+  postponed_from_start?: string | null;
+  postponement_reason?: string | null;
   /**
    * Attendance lock. Set means the event is closed: check-in, attendee edits,
    * time corrections and deletion are all refused by the API until someone
@@ -428,6 +432,13 @@ export interface EventUpdate {
 
 export interface EventCancel {
   cancellation_reason: string;
+  send_notifications?: boolean;
+}
+
+export interface EventPostpone {
+  new_start_datetime: string;
+  new_end_datetime: string;
+  reason: string;
   send_notifications?: boolean;
 }
 

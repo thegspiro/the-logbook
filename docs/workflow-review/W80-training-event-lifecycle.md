@@ -206,30 +206,57 @@ they cannot clear by responding.
 **Why flagged:** whether a training waiver should excuse event attendance as
 well as requirement grading is a policy question.
 
-### W80-11 — MED — There is no Postpone — FLAGGED (design below, for a follow-up pull request)
+### W80-11 — MED — There is no Postpone — ✅ FIXED (follow-up pull request)
 
 **Saw:** the only way to move a drill is Edit, which (before W80-1) kept the
 check-ins, records nothing about the move, and notifies "has been updated (end
 datetime, start datetime). Please review the latest details." — without the new
 time, and without saying it was postponed.
 **Owner decision:** a real Postpone action, stored in new columns.
+**Where:** `EventService.postpone_event`, `POST /events/{id}/postpone`,
+migration `09f0171ccf5e`, `EventPostponeModal.tsx`, `EventDetailPage.tsx`.
+**Fix:**
 
-**Proposed design (not implemented here):**
+- Migration `09f0171ccf5e` adds `events.postponed_at`, `postponed_from_start`
+  and `postponement_reason`, nullable, no backfill, each added only when absent;
+  the downgrade drops them.
+- `POST /events/{id}/postpone` `{ new_start_datetime, new_end_datetime, reason,
+send_notifications }`, with the same authorization as Edit (events.manage, or
+  training.manage on a Training event). In one transaction it clears every
+  member check-in, check-out, duration and Edit Times correction and every guest
+  check-in, removes the admin hours and training credit they produced (as
+  Cancel does), keeps the RSVPs, moves the times, clears the `reminders_sent`
+  and `validation_notification_sent` markers so reminders go out for the new
+  time, and stamps the three columns. `postponed_from_start` is written once, so
+  a second move keeps the original date. Then it notifies Going/Maybe in-app
+  ("postponed from … to … Reason: …") and by email (the change email, now
+  saying "postponed" and the original time).
+- Refused for a cancelled or finalized event, a new start in the past, the time
+  the event already has, a room already booked at the new time, and while
+  "I was there" requests are pending (they concern the old time).
+- Sent twice with the same times, it changes nothing and notifies no one the
+  second time (pitfall #36).
+- The event page offers Postpone Event under More, with a dialog naming how
+  many members are checked in; a postponed event carries a "Postponed" badge
+  and "Postponed from <date> — <reason>" under its date. The W80-1 edit refusal
+  now points to Postpone. The events list does not yet mark a postponed event.
+- Tests: `test_event_postpone.py` (11, against the database; three mutations of
+  the service each caught), `test_event_postponement_migration.py` (rows
+  present, twice, downgrade, missing table), the route's lock mapping in
+  `test_attendance_lock_reaches_client.py`, `EventPostponeModal.test.tsx` and an
+  `EventDetailPage` case. Re-driven: a live drill with two check-ins postponed a
+  week through the dialog; RSVPs kept, check-ins cleared, the member's notice
+  and phone view correct; a repeated POST changed nothing.
 
-- Migration (idempotent, with downgrade): `events.postponed_at` (DATETIME, null),
-  `events.postponed_from_start` (DATETIME, null), `events.postponement_reason`
-  (TEXT, null). Nullable, no backfill — existing rows were never postponed.
-- `POST /events/{id}/postpone` `{ new_start, new_end, reason }`, behind the same
-  attendance-manager authorization as Edit; refused on a finalized or cancelled
-  event. In one transaction: clears every check-in and attendance duration (the
-  W80-1 hazard), voids in-progress training records the event started, keeps
-  RSVPs, moves the times, stamps the three columns; then notifies Going/Maybe
-  in-app and by email with the old and new time and the reason.
-- Event page and list show "Postponed from <old date>"; the edit form's refusal
-  (W80-1) points to Postpone.
-- Tests: the transaction (check-ins cleared, RSVPs kept, records voided), a
-  double submit (no second notification), the refusal cases, the migration with
-  rows present (pitfall #35).
+### W80-16 — LOW — Editing an event's time does not reset its reminders — OPEN
+
+Seen while building W80-11. `reminders_sent` in `custom_fields` records which
+reminder intervals went out, and an edit of the schedule keeps it
+(`_with_own_lifecycle_markers`). A drill moved later through Edit therefore
+never re-sends a reminder that already went out for its old time. Postpone
+clears the markers; Edit, for a correction that keeps the check-ins, does not.
+Whether a schedule edit should reset them is a judgement about small
+corrections versus real moves.
 
 ### W80-12 — NIT — The review step omits "Counts toward attendance" — OPEN
 
