@@ -33,9 +33,7 @@ class TestRollupCallTypes:
 
 class TestFormatCallTypeRollup:
     def test_each_type_carries_its_count(self):
-        assert (
-            _format_call_type_rollup([("EMS", 10), ("Fire", 2)]) == "EMS (10), Fire (2)"
-        )
+        assert _format_call_type_rollup([("EMS", 10), ("Fire", 2)]) == "10 EMS, 2 Fire"
 
     def test_empty_rollup_is_an_empty_string(self):
         assert _format_call_type_rollup([]) == ""

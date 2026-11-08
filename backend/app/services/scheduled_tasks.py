@@ -218,8 +218,8 @@ def _rollup_call_types(call_types: List[str]) -> List[tuple[str, int]]:
 
 
 def _format_call_type_rollup(rollup: List[tuple[str, int]]) -> str:
-    """Plain-text form of a call-type rollup, e.g. ``EMS (10), Fire (2)``."""
-    return ", ".join(f"{name} ({count})" for name, count in rollup)
+    """Plain-text form of a call-type rollup, e.g. ``10 EMS, 2 Fire``."""
+    return ", ".join(f"{count} {name}" for name, count in rollup)
 
 
 # Schedule definitions (for documentation and frontend display)
@@ -3594,12 +3594,16 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
 
                             call_types_html = ""
                             if call_type_rollup:
+                                # width:1% + nowrap keeps the count column
+                                # snug against the type name even where the
+                                # email stylesheet stretches tables full-width.
                                 type_rows = "".join(
-                                    "<tr><td style='padding:2px 8px'>"
-                                    f"{_html.escape(name)}</td>"
-                                    "<td style='padding:2px 8px;"
-                                    "text-align:right'><strong>"
-                                    f"{count}</strong></td></tr>"
+                                    "<tr><td style='padding:2px 8px;"
+                                    "text-align:right;width:1%;"
+                                    "white-space:nowrap'><strong>"
+                                    f"{count}</strong></td>"
+                                    "<td style='padding:2px 8px'>"
+                                    f"{_html.escape(name)}</td></tr>"
                                     for name, count in call_type_rollup
                                 )
                                 call_types_html = (

@@ -1467,7 +1467,7 @@ class TestEndOfShiftSummaryCallTypeLabels:
     async def test_repeated_types_are_rolled_up_with_a_count(
         self, db_session: AsyncSession, monkeypatch
     ):
-        """Ten EMS runs read as "EMS 10", not the word EMS ten times — in the
+        """Ten EMS runs read as "10 EMS", not the word EMS ten times — in the
         bell, the HTML email and the plain-text email alike. The metadata
         keeps one entry per call for anything that counts them."""
         from app.services.email_service import EmailService
@@ -1486,17 +1486,17 @@ class TestEndOfShiftSummaryCallTypeLabels:
         )
 
         assert out["metadata"].get("call_types") == ["EMS"] * 10 + ["Fire"] * 2
-        assert "Call types: EMS (10), Fire (2)" in out["message"]
+        assert "Call types: 10 EMS, 2 Fire" in out["message"]
 
         send.assert_awaited_once()
         html_body = send.await_args.kwargs["html_body"]
         text_body = send.await_args.kwargs["text_body"]
         assert html_body.count(">EMS<") == 1
         assert html_body.count(">Fire<") == 1
-        assert "<strong>10</strong>" in html_body
-        assert "<strong>2</strong>" in html_body
+        assert html_body.index("<strong>10</strong>") < html_body.index(">EMS<")
+        assert html_body.index("<strong>2</strong>") < html_body.index(">Fire<")
         assert "<li>" not in html_body
-        assert "Call types: EMS (10), Fire (2)\n" in text_body
+        assert "Call types: 10 EMS, 2 Fire\n" in text_body
 
 
 # ── run_post_shift_validation ─────────────────────────────────────────
