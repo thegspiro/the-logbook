@@ -161,9 +161,13 @@ recorded.
     is guarded on `event_requests` existing (it is one of the 65
     `create_all`-only tables, Pitfall #26). Downgrade decrypts back to
     plaintext and restores the old column/index, given the same
-    `ENCRYPTION_KEY`. `TestStoredForm` proves a pre-migration link still
-    opens the status page by its original token after the migration runs
-    against a row holding the legacy plaintext shape.
+    `ENCRYPTION_KEY`. Two distinct checks, not one end-to-end test:
+    `TestMigrationAgainstRows` runs `upgrade()`/`downgrade()` against rows
+    (legacy plaintext, already-encrypted, re-run); `TestStoredForm::
+test_a_link_sent_before_the_upgrade_still_opens` does not call the
+    migration at all — it writes the post-migration shape directly
+    (`encrypt_data(legacy)` + its hash) and then proves the status
+    endpoint opens by the original token against that shape.
   - **No other reader left comparing the plaintext column.** Grepped
     every `status_token` reference repo-wide
     (`grep -rn status_token backend/app`): the only two SQL comparisons
@@ -242,12 +246,25 @@ organization_id)` (Training's own file) — org-scoped on
   future **and** no `notification_logs` row proves it was actually sent —
   the second condition is what keeps a marker that is real (the event
   was rescheduled later after its reminder went out) from being wrongly
-  cleared and the notice re-sent. Non-numeric/malformed markers and rows
-  whose `custom_fields` is not a JSON object are left untouched rather
-  than raising. Downgrade is correctly irreversible (which markers were
-  copies is not recorded anywhere) and says so. Has its own 321-line
-  test file, `test_clear_copied_event_markers_migration.py`, which passed
-  in this pass's scoped run below.
+  cleared and the notice re-sent. **Caveat, not covered by the migration
+  (flagged by Copilot review, verified against `retention_service.py:
+78-86,225-251`): `notification_logs` is department-configurable down
+  to a 30-day floor (`min_days=30`), kept forever only by default. A
+  purged log is indistinguishable from "never sent" to this migration's
+  `_logged()` check, so an occurrence whose reminder log was already
+  purged and which is _then_ rescheduled further into the future could
+  have a genuine marker wrongly cleared, risking a duplicate reminder.**
+  Narrow in practice (needs both a non-default short retention and a
+  reschedule after purge, for a migration that runs once), but a real
+  gap in the guarantee as stated, not merely a documentation omission —
+  recorded here rather than treated as a new in-scope finding, since
+  fixing it means changing `f4583df5025b` itself, a migration outside
+  this docs-only PR's safe-fix bar. Non-numeric/malformed markers and
+  rows whose `custom_fields` is not a JSON object are left untouched
+  rather than raising. Downgrade is correctly irreversible (which
+  markers were copies is not recorded anywhere) and says so. Has its own
+  321-line test file, `test_clear_copied_event_markers_migration.py`,
+  which passed in this pass's scoped run below.
 
 ### Re-verified standing items
 
@@ -290,9 +307,11 @@ prior Scheduling pass), 0 errors/0 warnings
 - The new attendance-linkage UI and its backend call both stay inside
   already-established org-scoping and permission boundaries; no new
   authorization surface.
-- The reminder-marker migration is Pitfall #36-correct: it checks
-  `notification_logs` before clearing anything, so it cannot cause a
-  duplicate notice.
+- The reminder-marker migration checks `notification_logs` before
+  clearing anything — but see the caveat above: that guard only holds
+  while the matching log survives, and `notification_logs` retention is
+  department-configurable down to 30 days, so it is not an unconditional
+  Pitfall #36 guarantee.
 - No new route, no new unbounded query, no new CSV export, no new seeded
   grant change, no JSON-column shallow-copy mutation, no new
   client-supplied FK accepted without an in-org check.

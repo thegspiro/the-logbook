@@ -42,10 +42,14 @@ endpoint; a guest check-in double-confirm race (already fixed under
 Locations & kiosk pass 12) and two low-risk `event_service.py` logic
 fixes were re-verified rather than re-derived; and a new migration clears
 reminder/validation markers a recurring-series save had copied onto later
-occurrences, correctly checking `notification_logs` first so a real,
-already-sent notice cannot be cleared and resent. **0 fixed, 0 new
-findings** — see `docs/security-review/EV-16-events-requests.md`'s
-**Pass 14** section for the full trace.
+occurrences, checking `notification_logs` first so a marker cannot be
+wrongly cleared while its log survives — though that log is
+department-configurable down to a 30-day retention floor, so the
+guarantee does not hold indefinitely (Copilot review finding, recorded
+rather than fixed here since it touches the migration itself, outside
+this docs-only PR's safe-fix bar). **0 fixed, 0 new findings** — see
+`docs/security-review/EV-16-events-requests.md`'s **Pass 14** section
+for the full trace.
 
 Completion gate: `flake8`/`black --check`/`isort --check-only` on
 `app/ tests/ alembic/` all clean; `validate_migrations.py --strict` —
@@ -25268,9 +25272,12 @@ check-in double-confirm race already fixed under Locations & kiosk pass
 12, re-verified rather than re-derived; two low-risk `event_service.py`
 correctness fixes; and a new migration clearing reminder/validation
 markers a recurring-series save had copied onto later occurrences,
-correctly gated on `notification_logs` so a real notice is never cleared
-and resent (Pitfall #36). 0 fixed, 0 new findings — see
-`docs/security-review/EV-16-events-requests.md`'s **Pass 14** section.
+gated on `notification_logs` surviving — which Copilot review noted is
+not unconditional, since that table's retention is
+department-configurable down to 30 days (recorded, not fixed here; the
+migration itself is outside this docs-only PR's safe-fix bar). 0 fixed,
+0 new findings — see `docs/security-review/EV-16-events-requests.md`'s
+**Pass 14** section.
 
 Completion gate: all green (flake8/black/isort, `validate_migrations.py
 --strict` — 749 revisions single head, `check_route_permissions.py
