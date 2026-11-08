@@ -15,7 +15,7 @@ import { countingWindowLabel } from '../../utils/requirementMonths';
 import { formatCalendarDate, formatDate } from '../../utils/dateFormatting';
 import { getProgressBarColor } from '../../utils/trainingColors';
 import { excusedMonthsPhrase } from '../../utils/requirementMonths';
-import { requirementUnit } from '../../utils/requirementUnits';
+import { requirementUnitSuffix } from '../../utils/requirementUnits';
 import type { RequirementDetail } from '../../types/training';
 
 interface RequirementDetailCardProps {
@@ -33,10 +33,7 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
   const isOverdue = req.days_until_due != null && req.days_until_due < 0 && !req.is_met;
   const isDueSoon = req.days_until_due != null && req.days_until_due <= 30 && req.days_until_due >= 0 && !req.is_met;
   const self = audience === 'self';
-  const unitFor = (count: number) => {
-    const unit = requirementUnit(req.requirement_type, count);
-    return unit ? ` ${unit}` : '';
-  };
+  const unitFor = (count: number) => requirementUnitSuffix(req.requirement_type, count);
 
   return (
     <div

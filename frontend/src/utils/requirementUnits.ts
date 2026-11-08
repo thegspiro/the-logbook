@@ -29,3 +29,9 @@ export function requirementUnit(type: RequirementType | undefined, count: number
   if (!unit) return '';
   return count === 1 ? unit[0] : unit[1];
 }
+
+/** The unit as a suffix for "completed/required": " courses", or `''` for a done-or-not type. */
+export function requirementUnitSuffix(type: RequirementType | undefined, count: number): string {
+  const unit = requirementUnit(type, count);
+  return unit ? ` ${unit}` : '';
+}

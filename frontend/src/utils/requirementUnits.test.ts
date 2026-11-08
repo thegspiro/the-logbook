@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { requirementUnit } from './requirementUnits';
+import { requirementUnit, requirementUnitSuffix } from './requirementUnits';
 
 describe('requirementUnit', () => {
   it('names what each counted requirement type counts', () => {
@@ -22,5 +22,12 @@ describe('requirementUnit', () => {
 
   it('reads an absent type as hours, as every card was labelled before', () => {
     expect(requirementUnit(undefined, 6)).toBe('hrs');
+  });
+});
+
+describe('requirementUnitSuffix', () => {
+  it('prefixes a unit with a space and leaves a done-or-not type bare', () => {
+    expect(requirementUnitSuffix('courses', 6)).toBe(' courses');
+    expect(requirementUnitSuffix('certification', 1)).toBe('');
   });
 });

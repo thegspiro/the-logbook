@@ -240,3 +240,53 @@ class TestMyTrainingCourseChecklist:
         catalog = await load_required_course_catalog(db_session, org_id, [req])
 
         assert catalog == {mine.id: ("Hazmat Awareness", "HAZ")}
+
+
+@pytest.mark.integration
+class TestCourseCatalogFollowsVisibility:
+    async def test_no_catalog_query_when_requirement_details_are_hidden(
+        self, db_session, setup_org_and_admin, monkeypatch
+    ):
+        from tests.test_training_member_visibility import _configure, _member
+
+        org_id, _admin = setup_org_and_admin
+        user = await _member(db_session, setup_org_and_admin)
+        await _configure(db_session, org_id, show_requirement_details=False)
+        calls = []
+
+        async def spy(*args, **kwargs):
+            calls.append(args)
+            return {}
+
+        monkeypatch.setattr(
+            "app.api.v1.endpoints.training_module_config."
+            "load_required_course_catalog",
+            spy,
+        )
+
+        result = await get_my_training_summary(db=db_session, current_user=user)
+
+        assert "requirements_detail" not in result
+        assert calls == []
+
+    async def test_the_catalog_is_loaded_when_details_are_shown(
+        self, db_session, setup_org_and_admin, monkeypatch
+    ):
+        from tests.test_training_member_visibility import _member
+
+        user = await _member(db_session, setup_org_and_admin)
+        calls = []
+
+        async def spy(*args, **kwargs):
+            calls.append(args)
+            return {}
+
+        monkeypatch.setattr(
+            "app.api.v1.endpoints.training_module_config."
+            "load_required_course_catalog",
+            spy,
+        )
+
+        await get_my_training_summary(db=db_session, current_user=user)
+
+        assert len(calls) == 1
