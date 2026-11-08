@@ -39,7 +39,7 @@ const entries = MEMBER_NAMES.map((userName, i) => ({
 // The All Entries tab: member, category, date, duration, method with its
 // source event, status and reviewer.
 test.describe('Admin hours entries table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/admin-hours/manage All Entries — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: [...TEST_USER.permissions, 'admin_hours.view', 'admin_hours.manage'] });

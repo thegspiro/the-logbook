@@ -174,16 +174,18 @@ const AllEntriesTab: React.FC = () => {
                       {formatDuration(entry.durationMinutes)}
                     </td>
                     <td data-label="Method" className="text-theme-text-secondary px-4 py-3 text-sm">
-                      <span>{entryMethodLabel(entry.entryMethod)}</span>
-                      {entry.entryMethod === 'event_attendance' && entry.sourceEventId && (
-                        <Link
-                          to={`/events/${entry.sourceEventId}`}
-                          className="text-theme-accent-blue mt-0.5 block max-w-[160px] truncate text-xs hover:underline"
-                          title={entry.sourceEventName ?? 'View event'}
-                        >
-                          {entry.sourceEventName ?? 'View event'}
-                        </Link>
-                      )}
+                      <div className="min-w-0">
+                        <span>{entryMethodLabel(entry.entryMethod)}</span>
+                        {entry.entryMethod === 'event_attendance' && entry.sourceEventId && (
+                          <Link
+                            to={`/events/${entry.sourceEventId}`}
+                            className="text-theme-accent-blue mt-0.5 block max-w-[160px] truncate text-xs hover:underline"
+                            title={entry.sourceEventName ?? 'View event'}
+                          >
+                            {entry.sourceEventName ?? 'View event'}
+                          </Link>
+                        )}
+                      </div>
                     </td>
                     <td data-label="Status" className="px-4 py-3 text-sm">
                       <span
