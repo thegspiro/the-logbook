@@ -55,6 +55,29 @@ describe('MeetingActionItemDialog', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/Saved, except the field flagged below/);
   });
 
+  it('tells the page to refresh behind it after a partial save', async () => {
+    const user = userEvent.setup();
+    const onSavedExcept = vi.fn();
+    updateActionItem
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'due_date', message: 'Invalid date format.' }] } },
+      })
+      .mockResolvedValue({});
+    renderWithRouter(
+      <MeetingActionItemDialog
+        item={item}
+        assignees={[]}
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+        onSavedExcept={onSavedExcept}
+      />
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSavedExcept).toHaveBeenCalledTimes(1));
+  });
+
   it('asks before Cancel discards an edit', async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

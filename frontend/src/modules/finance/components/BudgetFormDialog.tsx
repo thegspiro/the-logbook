@@ -249,6 +249,7 @@ export const BudgetFormDialog: React.FC<BudgetFormDialogProps> = ({
       title={isEdit ? 'Edit budget line' : 'Add budget line'}
       titleId="budget-form-title"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">

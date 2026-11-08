@@ -235,6 +235,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
       title={editEquipment ? 'Edit Equipment' : 'Add Equipment'}
       size="md"
       onSubmit={(e) => void handleSubmit(e)}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary px-6 py-2">

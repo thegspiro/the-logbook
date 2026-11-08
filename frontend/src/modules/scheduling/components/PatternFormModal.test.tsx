@@ -24,7 +24,7 @@ const storedPattern: PatternFormData = {
 };
 
 describe('PatternFormModal payload', () => {
-  const onSubmit = vi.fn<(data: Record<string, unknown>) => Promise<void>>();
+  const onSubmit = vi.fn<(data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>>();
 
   // Reset before installing the default, so no override leaks between tests
   // (CLAUDE.md pitfall #28).
@@ -193,7 +193,7 @@ describe('PatternFormModal deactivated templates', () => {
 });
 
 describe('PatternFormModal errors and leaving', () => {
-  const onSubmit = vi.fn<(data: Record<string, unknown>) => Promise<void>>();
+  const onSubmit = vi.fn<(data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>>();
 
   beforeEach(() => {
     onSubmit.mockReset();
@@ -218,6 +218,37 @@ describe('PatternFormModal errors and leaving', () => {
     await waitFor(() => expect(start).toHaveAccessibleDescription('Start date needs a valid date.'));
     expect(start).toHaveAttribute('aria-invalid', 'true');
     expect(screen.queryByText(/start_date/)).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('on edit saves the rest without a refused field and stays open with it flagged', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    onSubmit
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'end_date', message: 'Invalid date format.' }] } },
+      })
+      .mockResolvedValue(undefined);
+    renderWithRouter(
+      <PatternFormModal
+        isOpen
+        onClose={onClose}
+        onSubmit={onSubmit}
+        initialData={storedPattern}
+        title="Edit Pattern"
+        templates={templates}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save Pattern' }));
+
+    const end = screen.getByLabelText(/^End Date/);
+    await waitFor(() => expect(end).toHaveAccessibleDescription('End date needs a valid date.'));
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+    const [rest, options] = onSubmit.mock.calls[1] ?? [];
+    expect(rest && 'end_date' in rest).toBe(false);
+    expect(rest?.name).toBe('24/48 Rotation');
+    expect(options).toEqual({ keepOpen: true });
     expect(onClose).not.toHaveBeenCalled();
   });
 

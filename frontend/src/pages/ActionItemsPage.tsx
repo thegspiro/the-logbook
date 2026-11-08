@@ -606,6 +606,7 @@ const ActionItemsPage: React.FC = () => {
           setEditingMeetingItem(null);
           void fetchItems();
         }}
+        onSavedExcept={() => void fetchItems()}
       />
 
       <Modal

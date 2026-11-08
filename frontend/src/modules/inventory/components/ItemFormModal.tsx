@@ -690,7 +690,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         </>
       }
     >
-      <form id="item-form" onSubmit={(e) => void submit(e)} className="space-y-5">
+      <form id="item-form" onSubmit={(e) => void submit(e)} noValidate className="space-y-5">
         {/* Basic */}
         <fieldset>
           <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Basic Info</legend>

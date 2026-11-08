@@ -41,16 +41,22 @@ interface FormFieldProps {
   label: React.ReactNode;
   children: (control: FieldControlProps) => React.ReactNode;
   required?: boolean | undefined;
-  /** Shows "optional" after the label, for forms that mark the optional fields instead. */
+  /** Shows "(optional)" after the label, for forms that mark the optional fields instead. */
   optional?: boolean | undefined;
   hint?: React.ReactNode;
-  error?: string | undefined;
+  /** The refusal to show and announce; empty, null or undefined shows none. */
+  error?: string | null | undefined;
   maxLength?: number | undefined;
   /** The value's current length, for the counter shown near `maxLength`. */
   count?: number | undefined;
   /** A fixed id, for a control other code already points at; generated otherwise. */
   id?: string | undefined;
   className?: string | undefined;
+  /**
+   * Replaces the standard `form-label` look, for a page with its own label
+   * style; the label stays tied to the control either way.
+   */
+  labelClassName?: string | undefined;
 }
 
 /** The counter appears once this share of the limit is used, not before. */
@@ -67,6 +73,7 @@ export const FormField: React.FC<FormFieldProps> = ({
   count,
   id: idProp,
   className,
+  labelClassName,
 }) => {
   const generated = useId();
   const id = idProp ?? generated;
@@ -77,7 +84,7 @@ export const FormField: React.FC<FormFieldProps> = ({
 
   return (
     <div className={className}>
-      <label htmlFor={id} className="form-label">
+      <label htmlFor={id} className={labelClassName ?? 'form-label'}>
         {label}
         {required && (
           <span className="text-red-800 dark:text-red-300" aria-hidden="true">
@@ -85,7 +92,7 @@ export const FormField: React.FC<FormFieldProps> = ({
             *
           </span>
         )}
-        {optional && !required && <span className="text-theme-text-muted font-normal"> optional</span>}
+        {optional && !required && <span className="text-theme-text-muted font-normal"> (optional)</span>}
       </label>
       {children({
         id,

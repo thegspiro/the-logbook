@@ -351,6 +351,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
       title={isEdit ? 'Edit medical supply' : 'Add medical supply'}
       size="lg"
       onSubmit={(e) => void handleSubmit(e)}
+      noValidate
       footer={
         <>
           <button type="submit" className="btn-primary" disabled={isSaving || categories.length === 0}>

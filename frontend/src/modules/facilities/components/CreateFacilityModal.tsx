@@ -150,6 +150,7 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
       titleId="create-facility-title"
       size="md"
       onSubmit={(e) => void handleCreate(e)}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={isCreating} className="btn-primary flex items-center gap-2 px-5">

@@ -331,6 +331,7 @@ export const DuesScheduleDialog: React.FC<DuesScheduleDialogProps> = ({ schedule
       titleId="dues-schedule-form-title"
       aria-describedby="dues-schedule-form-description"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">

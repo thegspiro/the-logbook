@@ -62,4 +62,34 @@ describe('FormField', () => {
     );
     expect(screen.getByLabelText('Course')).toHaveAttribute('id', 'course-name');
   });
+
+  it('writes "(optional)" in brackets, as the rest of the app does', () => {
+    render(
+      <FormField label="Notes" optional>
+        {(field) => <input {...field} />}
+      </FormField>
+    );
+    expect(screen.getByText('(optional)')).toBeInTheDocument();
+  });
+
+  it("takes a page's own label style and still ties the label to its control", () => {
+    render(
+      <FormField label="Badge number" labelClassName="page-label">
+        {(field) => <input {...field} />}
+      </FormField>
+    );
+    const input = screen.getByRole('textbox', { name: 'Badge number' });
+    expect(screen.getByText('Badge number')).toHaveClass('page-label');
+    expect(screen.getByText('Badge number')).not.toHaveClass('form-label');
+    expect(input).toBeInTheDocument();
+  });
+
+  it('shows no error for a null one', () => {
+    render(
+      <FormField label="Name" error={null}>
+        {(field) => <input {...field} />}
+      </FormField>
+    );
+    expect(screen.getByRole('textbox', { name: 'Name' })).not.toHaveAttribute('aria-invalid');
+  });
 });

@@ -1950,14 +1950,8 @@ export const ProspectiveMembersPage: React.FC = () => {
                     value={newApplicant.target_role_id}
                     onChange={(target_role_id) => setApplicantField('target_role_id', target_role_id)}
                     hint="Applied to the member record when this applicant is converted."
+                    error={applicantErrors.target_role_id}
                   />
-                  {/* TargetRolePicker takes no error prop, so a refusal is shown
-                    under it rather than announced on the control. */}
-                  {applicantErrors.target_role_id && (
-                    <p role="alert" className="text-sm text-red-800 dark:text-red-300">
-                      {applicantErrors.target_role_id}
-                    </p>
-                  )}
                 </div>
                 <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
                   <button

@@ -146,3 +146,21 @@ describe('DialogPanel and a Cancel button through useDiscardGuard', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe('Modal noValidate', () => {
+  it('turns off the browser bubbles on its form only when asked', () => {
+    const { rerender } = render(
+      <Modal isOpen onClose={vi.fn()} title="Add" onSubmit={vi.fn()} noValidate>
+        <input type="email" aria-label="Email" />
+      </Modal>
+    );
+    expect(screen.getByTestId('modal-panel')).toHaveAttribute('novalidate');
+
+    rerender(
+      <Modal isOpen onClose={vi.fn()} title="Add" onSubmit={vi.fn()}>
+        <input type="email" aria-label="Email" />
+      </Modal>
+    );
+    expect(screen.getByTestId('modal-panel')).not.toHaveAttribute('novalidate');
+  });
+});

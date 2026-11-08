@@ -241,6 +241,7 @@ export const PledgeDialog: React.FC<PledgeDialogProps> = ({ pledge, donors, camp
       title={isEdit ? 'Edit pledge' : 'Record pledge'}
       titleId="pledge-form-title"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">

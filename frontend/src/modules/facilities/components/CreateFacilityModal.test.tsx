@@ -42,6 +42,11 @@ describe('CreateFacilityModal email', () => {
     expect(mockCreateFacility).not.toHaveBeenCalled();
   });
 
+  it('leaves the email check to the dialog, not a browser bubble', () => {
+    renderModal();
+    expect(screen.getByTestId('modal-panel')).toHaveAttribute('novalidate');
+  });
+
   it('saves a valid address', async () => {
     const user = userEvent.setup();
     renderModal();

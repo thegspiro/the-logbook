@@ -296,6 +296,7 @@ export const MaintenanceRecordModal: React.FC<MaintenanceRecordModalProps> = ({
       title={editRecord ? 'Edit Maintenance Record' : 'Add Maintenance Record'}
       size="lg"
       onSubmit={(e) => void handleSubmit(e)}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary px-6 py-2">

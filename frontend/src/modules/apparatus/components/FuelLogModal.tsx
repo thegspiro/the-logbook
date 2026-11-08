@@ -208,6 +208,7 @@ export const FuelLogModal: React.FC<FuelLogModalProps> = ({ isOpen, onClose, onS
       title="Add Fuel Log"
       size="md"
       onSubmit={(e) => void handleSubmit(e)}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary px-6 py-2">

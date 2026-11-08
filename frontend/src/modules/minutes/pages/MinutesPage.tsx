@@ -934,12 +934,13 @@ const MinutesPage: React.FC = () => {
                             />
                           )}
                         </FormField>
-                        {/* TimeQuarterHour takes no aria-invalid / aria-describedby,
-                          so a refusal here is shown under it but not announced. */}
                         <FormField label="Meeting Time" error={meetingErrors.meetingTime} id="meeting-time">
                           {(field) => (
                             <TimeQuarterHour
                               id={field.id}
+                              aria-invalid={field['aria-invalid']}
+                              aria-describedby={field['aria-describedby']}
+                              aria-required={field['aria-required']}
                               value={minutesForm.meetingTime}
                               onChange={(e) => setMeetingField('meetingTime', e.target.value)}
                               className="form-input"

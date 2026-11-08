@@ -62,6 +62,8 @@ interface MeetingActionItemDialogProps {
   assignees: ActionItemAssignee[];
   onClose: () => void;
   onSaved: () => void;
+  /** After a save that kept a refused field back: the dialog stays open, so refresh behind it. */
+  onSavedExcept?: (() => void) | undefined;
 }
 
 export const MeetingActionItemDialog: React.FC<MeetingActionItemDialogProps> = ({
@@ -69,6 +71,7 @@ export const MeetingActionItemDialog: React.FC<MeetingActionItemDialogProps> = (
   assignees,
   onClose,
   onSaved,
+  onSavedExcept,
 }) => {
   const [description, setDescription] = useState('');
   const [assignee, setAssignee] = useState('');
@@ -166,6 +169,7 @@ export const MeetingActionItemDialog: React.FC<MeetingActionItemDialogProps> = (
       if (Object.keys(refused).length > 0) {
         showErrors(refused);
         setSavedExcept(true);
+        onSavedExcept?.();
         return;
       }
       toast.success('Action item updated');

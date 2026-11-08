@@ -333,6 +333,7 @@ export const ExternalShiftFormModal: React.FC<ExternalShiftFormModalProps> = ({ 
       onClose={requestClose}
       title={isEdit ? 'Edit outside shift' : 'Log a shift with another department'}
       onSubmit={(e) => void handleSubmit(e)}
+      noValidate
       footer={
         <>
           <button type="submit" className="btn-primary" disabled={saving}>

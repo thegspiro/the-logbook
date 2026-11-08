@@ -386,6 +386,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
       title={product ? 'Edit item' : 'New item'}
       size="xl"
       onSubmit={(e) => void handleSave(e)}
+      noValidate
       footer={
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary btn-md" onClick={requestClose}>

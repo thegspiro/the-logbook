@@ -58,7 +58,11 @@ const PATTERN_FIELD_IDS: Record<PatternField, string> = {
 interface PatternFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: Record<string, unknown>) => Promise<void>;
+  /**
+   * `keepOpen` marks a save that left a refused field out (edit only): the
+   * caller saves what it was given and leaves the dialog open.
+   */
+  onSubmit: (data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>;
   initialData?: PatternFormData | undefined;
   title: string;
   templates: ShiftTemplate[];
@@ -142,7 +146,21 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
         days_off: num(formData.days_off),
         end_date: pick(formData.end_date),
       };
-      await onSubmit(payload);
+      try {
+        await onSubmit(payload);
+      } catch (err) {
+        // On edit the rest still saves: resend without the refused fields,
+        // which keep their stored values and stay flagged (owner rule,
+        // 2026-11-05). A create creates nothing until every field is fixed.
+        const mapped = mapServerFieldErrors(err, PATTERN_FIELDS);
+        const refused = mapped ? (Object.keys(mapped.fieldErrors) as PatternField[]) : [];
+        if (initialData === undefined || !mapped || refused.length === 0 || mapped.unmatched.length > 0) throw err;
+        const rest = { ...payload };
+        for (const field of refused) delete rest[field];
+        await onSubmit(rest, { keepOpen: true });
+        showErrors(mapped.fieldErrors);
+        return;
+      }
       onClose();
     } catch (err) {
       // A refused field is shown on that field, in its own words (forms review F-2).

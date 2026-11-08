@@ -16,6 +16,10 @@ interface TimeQuarterHourProps {
   required?: boolean;
   placeholder?: string;
   'aria-label'?: string;
+  /** From FormField, so a refusal is announced on each select, not only shown under them. */
+  'aria-invalid'?: true | undefined;
+  'aria-describedby'?: string | undefined;
+  'aria-required'?: true | undefined;
   /**
    * Show a value's real minute when it is not on a quarter hour (09:07 reads
    * as 9:07, offered as an extra option) instead of flooring it for display.
@@ -67,6 +71,9 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
   required,
   placeholder,
   'aria-label': ariaLabel,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
+  'aria-required': ariaRequired,
   preserveOffQuarterMinute = false,
 }) => {
   const parsed = useMemo(
@@ -123,6 +130,9 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
         style={SELECT_FIT}
         required={required}
         aria-label={`${label} hour`}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+        aria-required={ariaRequired}
       >
         {hour12Index === null && <option value="">--</option>}
         {HOURS_12.map((h) => (
@@ -141,6 +151,9 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
         style={SELECT_FIT}
         required={required}
         aria-label={`${label} minute`}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+        aria-required={ariaRequired}
       >
         {minute === null && <option value="">--</option>}
         {minuteOptions.map((m) => (
@@ -156,6 +169,8 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
         className={className}
         style={SELECT_FIT}
         aria-label={`${label} AM/PM`}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
       >
         <option value="AM">AM</option>
         <option value="PM">PM</option>
