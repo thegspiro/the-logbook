@@ -10,6 +10,14 @@
  *
  * Paint cannot be read from the DOM, so this samples a full-page screenshot:
  * decoded on a canvas in the page, which needs no image library.
+ *
+ * Each block declares its device rather than resizing whichever project runs
+ * it. Under the Mobile Safari project (an iPhone 12 profile) a desktop-sized
+ * `setViewportSize` still laid the page out at phone width in WebKit, so the
+ * rail's toggle never rendered; and that profile's 3x device scale put a
+ * CSS-pixel sample on the wrong part of a device-scale screenshot. A mouse-
+ * driven desktop context, and a `scale: 'css'` screenshot, hold on every
+ * project and engine.
  */
 
 import { test, expect } from '@playwright/test';
@@ -17,11 +25,12 @@ import type { Page } from '@playwright/test';
 import { signIn } from './helpers';
 
 const VIEWPORT = { width: 1280, height: 600 };
+const PHONE = { width: 390, height: 844 };
 
 type Rgb = [number, number, number];
 
 const pixelsAt = async (page: Page, points: { x: number; y: number }[]): Promise<Rgb[]> => {
-  const png = (await page.screenshot({ fullPage: true })).toString('base64');
+  const png = (await page.screenshot({ fullPage: true, scale: 'css' })).toString('base64');
   return page.evaluate(
     async ({ data, pts }) => {
       const img = new Image();
@@ -64,9 +73,13 @@ const footerRow = async (page: Page) => {
 
 const close = (a: Rgb, b: Rgb) => a.every((v, i) => Math.abs(v - (b[i] ?? -999)) <= 2);
 
+const contentLeft = (page: Page) =>
+  page.evaluate(() => document.getElementById('main-content')?.getBoundingClientRect().left ?? -1);
+
 test.describe('Side navigation beside the footer', () => {
+  test.use({ viewport: VIEWPORT, isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
+
   test.beforeEach(async ({ page }) => {
-    await page.setViewportSize(VIEWPORT);
     await signIn(page);
     await page.goto('/scheduling');
     await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
@@ -106,8 +119,26 @@ test.describe('Side navigation beside the footer', () => {
   test('expanding the rail again gives the content back its 16rem offset', async ({ page }) => {
     await page.getByRole('button', { name: 'Collapse navigation' }).click();
     await page.getByRole('button', { name: 'Expand navigation' }).click();
-    await expect
-      .poll(() => page.evaluate(() => document.getElementById('main-content')?.getBoundingClientRect().left ?? -1))
-      .toBe(256);
+    await expect.poll(() => contentLeft(page)).toBe(256);
+  });
+});
+
+test.describe('Side navigation on a phone', () => {
+  // Below 768px the nav is an off-canvas drawer: the content runs edge to edge
+  // and no strip is painted, collapsed state or not.
+  test.use({ viewport: PHONE, hasTouch: true });
+
+  test('the content is not offset and no strip is reserved', async ({ page }) => {
+    await signIn(page);
+    await page.goto('/scheduling');
+    await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
+    await expect(page.locator('#main-content')).toBeVisible();
+    expect(await contentLeft(page)).toBe(0);
+    const inset = await page.evaluate(() =>
+      getComputedStyle(document.querySelector('.has-side-nav') ?? document.body)
+        .getPropertyValue('--side-nav-width')
+        .trim()
+    );
+    expect(inset).toBe('0px');
   });
 });
