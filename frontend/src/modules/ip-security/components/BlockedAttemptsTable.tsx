@@ -24,8 +24,8 @@ export const BlockedAttemptsTable: React.FC<BlockedAttemptsTableProps> = ({ atte
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div className="rwd-table-container overflow-x-auto">
+      <table className="rwd-table rwd-table-xwide w-full text-sm">
         <thead>
           <tr className="border-theme-surface-border text-theme-text-muted border-b text-left">
             <th scope="col" className="px-4 py-3 font-medium">
@@ -54,12 +54,24 @@ export const BlockedAttemptsTable: React.FC<BlockedAttemptsTableProps> = ({ atte
               key={a.id}
               className="border-theme-surface-border/50 hover:bg-theme-surface-hover border-b transition-colors"
             >
-              <td className="text-theme-text-primary px-4 py-3 font-mono">{a.ipAddress}</td>
-              <td className="text-theme-text-secondary px-4 py-3">{a.countryName ?? a.countryCode ?? '—'}</td>
-              <td className="text-theme-text-secondary px-4 py-3">{a.blockReason}</td>
-              <td className="text-theme-text-muted px-4 py-3 font-mono text-xs">{a.requestPath ?? '—'}</td>
-              <td className="text-theme-text-muted px-4 py-3">{a.requestMethod ?? '—'}</td>
-              <td className="text-theme-text-muted px-4 py-3">{a.blockedAt ? formatDateTime(a.blockedAt, tz) : '—'}</td>
+              <td data-label="IP Address" className="text-theme-text-primary px-4 py-3 font-mono">
+                {a.ipAddress}
+              </td>
+              <td data-label="Country" className="text-theme-text-secondary px-4 py-3">
+                {a.countryName ?? a.countryCode ?? '—'}
+              </td>
+              <td data-label="Reason" className="text-theme-text-secondary px-4 py-3">
+                {a.blockReason}
+              </td>
+              <td data-label="Path" className="text-theme-text-muted px-4 py-3 font-mono text-xs">
+                {a.requestPath ?? '—'}
+              </td>
+              <td data-label="Method" className="text-theme-text-muted px-4 py-3">
+                {a.requestMethod ?? '—'}
+              </td>
+              <td data-label="Blocked At" className="text-theme-text-muted px-4 py-3">
+                {a.blockedAt ? formatDateTime(a.blockedAt, tz) : '—'}
+              </td>
             </tr>
           ))}
         </tbody>
