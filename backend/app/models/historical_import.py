@@ -131,6 +131,13 @@ class HistoricalImport(Base):
     training_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON, nullable=True
     )
+    # How the staffing roster is read: what each activity is (shift, event or
+    # left out) and which of the department's seats or outreach roles each
+    # seat title means. See ``historical_staffing_mapping.Decisions``. Kept on
+    # the import, not the staffing file, so replacing a file keeps them.
+    staffing_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
     # What each step committed, by step: ``{"admin": {...counts...}}``.
     results: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 

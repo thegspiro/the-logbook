@@ -359,3 +359,48 @@ export interface StaffingPreview {
   problems: string[];
   summary?: StaffingSummary | null;
 }
+
+export const StaffingMappingList = {
+  ACTIVITIES: 'activities',
+  SEAT_TITLES: 'seat_titles',
+  EVENT_TITLES: 'event_titles',
+} as const;
+export type StaffingMappingList = (typeof StaffingMappingList)[keyof typeof StaffingMappingList];
+
+/** Choices that are not a seat or role value. */
+export const STAFFING_TITLE_SKIP = '__skip__';
+export const STAFFING_ATTENDANCE = '__attendance__';
+
+export interface StaffingMappingItem {
+  key: string;
+  label: string;
+  seats: number;
+  events: number;
+  suggestion?: string | null;
+  choice?: string | null;
+  /** A few spellings of a title that share this key. */
+  examples: string[];
+}
+
+export interface StaffingMappingProgress {
+  items: number;
+  decided: number;
+  suggested: number;
+  undecided: number;
+  seats: number;
+  seats_settled: number;
+}
+
+export interface StaffingChoice {
+  value: string;
+  label: string;
+}
+
+export interface StaffingMappingView {
+  list: StaffingMappingList;
+  items: StaffingMappingItem[];
+  total: number;
+  progress: Record<StaffingMappingList, StaffingMappingProgress>;
+  seat_choices: StaffingChoice[];
+  role_choices: StaffingChoice[];
+}

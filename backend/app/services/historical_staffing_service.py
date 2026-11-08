@@ -2,12 +2,13 @@
 Historical staffing: storing a roster export beside a historical import and
 reporting how its files join, before anything is decided or written.
 
-The rules live in ``historical_staffing_engine`` as pure functions. This
-service loads and stores what they need. It writes no shifts or events.
+The rules live in ``historical_staffing_engine`` and
+``historical_staffing_mapping`` as pure functions. This service loads and
+stores what they need. It writes no shifts or events.
 """
 
 from datetime import datetime
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import delete, select
@@ -20,11 +21,20 @@ from app.models.historical_import import (
     HistoricalStaffingFile,
     HistoricalStaffingRow,
 )
+from app.models.training import BasicApparatus
+from app.models.user import Organization
 from app.services import historical_staffing_engine as engine
+from app.services import historical_staffing_mapping as mapping_rules
+from app.services.event_request_service import get_outreach_roles
 from app.services.historical_import_service import (
+    HistoricalImportNotReady,
     HistoricalImportService,
     read_csv,
 )
+from app.services.scheduling_module_config_service import (
+    SchedulingModuleConfigService,
+)
+from app.utils.positions import custom_seat_labels, position_label
 
 # Rows are inserted in chunks, as the historical import's are: one INSERT of a
 # whole roster is a packet MySQL may refuse.
@@ -203,6 +213,175 @@ class HistoricalStaffingService:
             "problems": problems,
             "summary": summary,
         }
+
+    # ------------------------------------------------------------------
+    # Activities and seat titles
+    # ------------------------------------------------------------------
+
+    async def _joined(self, record: HistoricalImport) -> engine.Joined:
+        stored = await self.files(record)
+        seats = (
+            await self._input(stored[engine.SEATS]) if engine.SEATS in stored else None
+        )
+        events = (
+            await self._input(stored[engine.EVENTS])
+            if engine.EVENTS in stored
+            else None
+        )
+        if seats is None or engine.mapping_problems(seats, events):
+            raise HistoricalImportNotReady(
+                "Upload the staffing files and choose their columns first."
+            )
+        return engine.join(seats, events)
+
+    async def vocabulary(
+        self, organization_id: str
+    ) -> Tuple[List[mapping_rules.Choice], List[mapping_rules.Choice], List[str]]:
+        """The department's crew seats, outreach roles and unit names.
+
+        Seats are the ones Scheduling offers (the enabled built-ins and the
+        department's Position Names); roles are its outreach roles. These are
+        the only values a title may map to.
+        """
+        settings, _ = await SchedulingModuleConfigService(self.db).get_settings(
+            organization_id
+        )
+        custom = settings.get("custom_positions") or []
+        labels = custom_seat_labels(custom)
+        seat_values: List[str] = []
+        for value in list(settings.get("enabled_positions") or []) + [
+            str(entry.get("value") or "") for entry in custom if isinstance(entry, dict)
+        ]:
+            if value and value not in seat_values:
+                seat_values.append(value)
+        seats = [
+            mapping_rules.Choice(value, position_label(value, labels))
+            for value in seat_values
+        ]
+        org = await self.db.get(Organization, str(organization_id))
+        roles = [
+            mapping_rules.Choice(str(r["value"]), str(r.get("label") or r["value"]))
+            for r in get_outreach_roles(org)
+            if isinstance(r, dict) and r.get("value")
+        ]
+        units = (
+            await self.db.execute(
+                select(BasicApparatus.unit_number, BasicApparatus.name).where(
+                    BasicApparatus.organization_id == str(organization_id)
+                )
+            )
+        ).all()
+        unit_names = [n for row in units for n in row if n]
+        return seats, roles, unit_names
+
+    async def _lists(self, record: HistoricalImport) -> Tuple[
+        mapping_rules.Lists,
+        List[mapping_rules.Choice],
+        List[mapping_rules.Choice],
+    ]:
+        joined = await self._joined(record)
+        seats, roles, unit_names = await self.vocabulary(record.organization_id)
+        lists = mapping_rules.build_lists(
+            joined,
+            mapping_rules.Decisions.from_stored(record.staffing_settings),
+            unit_names,
+            seats,
+            roles,
+        )
+        return lists, seats, roles
+
+    async def mapping_view(
+        self,
+        organization_id: str,
+        import_id: str,
+        list_name: str,
+        *,
+        search: str = "",
+        offset: int = 0,
+        limit: int = 50,
+    ) -> Dict[str, Any]:
+        """One page of one list, the choices it may take, and progress."""
+        if list_name not in mapping_rules.LISTS:
+            raise ValueError("Choose activities, shift seat titles or event titles.")
+        record = await self.imports.get(organization_id, import_id)
+        lists, seats, roles = await self._lists(record)
+        items = lists.get(list_name)
+        found = mapping_rules.search(items, search)
+        return {
+            "list": list_name,
+            "items": [_item_view(i) for i in found[offset : offset + limit]],
+            "total": len(found),
+            "progress": {
+                name: mapping_rules.progress(lists.get(name))
+                for name in mapping_rules.LISTS
+            },
+            "seat_choices": [_choice_view(c) for c in seats],
+            "role_choices": [_choice_view(c) for c in roles],
+        }
+
+    async def update_decisions(
+        self,
+        organization_id: str,
+        import_id: str,
+        list_name: str,
+        updates: Mapping[str, Optional[str]],
+    ) -> None:
+        """Merge decisions into one list; a null clears a key."""
+        record = await self.imports.get(organization_id, import_id, for_update=True)
+        seats, roles, _ = await self.vocabulary(record.organization_id)
+        merged = mapping_rules.merge(
+            mapping_rules.Decisions.from_stored(record.staffing_settings),
+            list_name,
+            updates,
+            seats,
+            roles,
+        )
+        record.staffing_settings = merged.to_stored()
+        await self.db.commit()
+
+    async def accept_suggestions(
+        self, organization_id: str, import_id: str, list_name: str
+    ) -> int:
+        """Take every suggestion in one list that has no decision yet.
+
+        Items with no suggestion stay undecided. Returns how many were taken.
+        """
+        if list_name not in mapping_rules.LISTS:
+            raise ValueError("Choose activities, shift seat titles or event titles.")
+        record = await self.imports.get(organization_id, import_id, for_update=True)
+        lists, seats, roles = await self._lists(record)
+        additions = {
+            i.key: i.suggestion
+            for i in lists.get(list_name)
+            if not i.choice and i.suggestion
+        }
+        if additions:
+            merged = mapping_rules.merge(
+                mapping_rules.Decisions.from_stored(record.staffing_settings),
+                list_name,
+                additions,
+                seats,
+                roles,
+            )
+            record.staffing_settings = merged.to_stored()
+            await self.db.commit()
+        return len(additions)
+
+
+def _item_view(item: mapping_rules.Item) -> Dict[str, Any]:
+    return {
+        "key": item.key,
+        "label": item.label,
+        "seats": item.seats,
+        "events": item.events,
+        "suggestion": item.suggestion,
+        "choice": item.choice,
+        "examples": item.examples,
+    }
+
+
+def _choice_view(choice: mapping_rules.Choice) -> Dict[str, str]:
+    return {"value": choice.value, "label": choice.label}
 
 
 def _file_view(staffing_file: HistoricalStaffingFile) -> Dict[str, Any]:

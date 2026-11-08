@@ -460,3 +460,60 @@ class StaffingPreview(BaseModel):
     # What must be chosen before the files can be read together.
     problems: List[str]
     summary: Optional[StaffingSummary] = None
+
+
+StaffingMappingList = Literal["activities", "seat_titles", "event_titles"]
+
+
+class StaffingDecisionsUpdate(BaseModel):
+    """Decisions merged into one list, by key; a null clears that key."""
+
+    decisions: Dict[str, Optional[str]]
+
+    @field_validator("decisions")
+    @classmethod
+    def _check(cls, value: Dict[str, Any]) -> Dict[str, Any]:
+        if len(value) > 5_000:
+            raise ValueError("At most 5000 entries per request.")
+        if any(len(k) > 200 for k in value):
+            raise ValueError("A key is too long.")
+        if any(v is not None and len(str(v)) > 100 for v in value.values()):
+            raise ValueError("A value is too long.")
+        return value
+
+
+class StaffingMappingItem(BaseModel):
+    key: str
+    label: str
+    seats: int
+    events: int
+    suggestion: Optional[str] = None
+    choice: Optional[str] = None
+    # A few spellings of a title sharing this key.
+    examples: List[str] = Field(default_factory=list)
+
+
+class StaffingMappingProgress(BaseModel):
+    items: int
+    decided: int
+    suggested: int
+    undecided: int
+    seats: int
+    seats_settled: int
+
+
+class StaffingChoice(BaseModel):
+    value: str
+    label: str
+
+
+class StaffingMappingView(BaseModel):
+    list: StaffingMappingList
+    # One page of the list, most seats first, filtered by ``search``.
+    items: List[StaffingMappingItem]
+    total: int
+    progress: Dict[str, StaffingMappingProgress]
+    # The department's crew seats and outreach roles: the only values a title
+    # may take, besides attendance (events) and leaving it out.
+    seat_choices: List[StaffingChoice]
+    role_choices: List[StaffingChoice]

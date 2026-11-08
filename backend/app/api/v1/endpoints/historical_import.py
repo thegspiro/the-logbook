@@ -45,8 +45,11 @@ from app.schemas.historical_import import (
     MemberMappingsUpdate,
     OpenBatchesDiscarded,
     ShiftBatchesCreated,
+    StaffingDecisionsUpdate,
     StaffingFileKind,
+    StaffingMappingList,
     StaffingMappingUpdate,
+    StaffingMappingView,
     StaffingPreview,
     SuggestionsAccepted,
     TrainingPreview,
@@ -691,3 +694,78 @@ async def remove_staffing_file(
         return await service.preview(org, str(import_id))
     except Exception as exc:
         raise _http_error(exc)
+
+
+@router.get(
+    "/{import_id}/staffing/mapping/{list_name}", response_model=StaffingMappingView
+)
+async def staffing_mapping(
+    import_id: UUID,
+    list_name: StaffingMappingList,
+    search: str = Query("", max_length=100),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """One page of activities, shift seat titles or event titles, with what
+    each is suggested and decided to be."""
+    try:
+        return await HistoricalStaffingService(db).mapping_view(
+            str(current_user.organization_id),
+            str(import_id),
+            list_name,
+            search=search,
+            offset=offset,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.patch(
+    "/{import_id}/staffing/mapping/{list_name}", response_model=StaffingMappingView
+)
+async def update_staffing_decisions(
+    import_id: UUID,
+    list_name: StaffingMappingList,
+    payload: StaffingDecisionsUpdate,
+    search: str = Query("", max_length=100),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Decide what activities are or what seat titles mean. A title may only
+    take one of the department's own seats or outreach roles."""
+    org = str(current_user.organization_id)
+    service = HistoricalStaffingService(db)
+    try:
+        await service.update_decisions(
+            org, str(import_id), list_name, payload.decisions
+        )
+        return await service.mapping_view(
+            org, str(import_id), list_name, search=search, offset=offset, limit=limit
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.post(
+    "/{import_id}/staffing/mapping/{list_name}/accept-suggestions",
+    response_model=SuggestionsAccepted,
+)
+async def accept_staffing_suggestions(
+    import_id: UUID,
+    list_name: StaffingMappingList,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Take every suggestion in one list that has no decision yet."""
+    try:
+        accepted = await HistoricalStaffingService(db).accept_suggestions(
+            str(current_user.organization_id), str(import_id), list_name
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+    return {"mapped": accepted}

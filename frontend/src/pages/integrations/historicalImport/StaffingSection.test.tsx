@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ConfirmProvider } from '../../../contexts/ConfirmContext';
+import { renderWithRouter } from '../../../test/utils';
 import type {
   HistoricalImportDetail,
   StaffingFile,
@@ -12,6 +12,7 @@ const mockGet = vi.fn();
 const mockUpload = vi.fn();
 const mockMapping = vi.fn();
 const mockRemove = vi.fn();
+const mockMappingView = vi.fn();
 
 vi.mock('../../../modules/integrations/services/historicalImportApi', () => ({
   historicalImportService: {
@@ -19,6 +20,7 @@ vi.mock('../../../modules/integrations/services/historicalImportApi', () => ({
     uploadStaffingFile: (...a: unknown[]) => mockUpload(...a) as unknown,
     updateStaffingMapping: (...a: unknown[]) => mockMapping(...a) as unknown,
     removeStaffingFile: (...a: unknown[]) => mockRemove(...a) as unknown,
+    getStaffingMapping: (...a: unknown[]) => mockMappingView(...a) as unknown,
   },
 }));
 
@@ -120,18 +122,16 @@ const joined: StaffingPreview = {
 
 const openSection = async () => {
   const user = userEvent.setup();
-  render(
-    <ConfirmProvider>
-      <StaffingSection detail={detail} />
-    </ConfirmProvider>
-  );
+  renderWithRouter(<StaffingSection detail={detail} />);
   await user.click(screen.getByRole('button', { name: 'Set up staffing' }));
   return user;
 };
 
 describe('StaffingSection', () => {
   beforeEach(() => {
-    for (const mock of [mockGet, mockUpload, mockMapping, mockRemove]) mock.mockReset();
+    for (const mock of [mockGet, mockUpload, mockMapping, mockRemove, mockMappingView]) mock.mockReset();
+    // The decisions panel below the summary has its own tests.
+    mockMappingView.mockReturnValue(new Promise(() => {}));
     mockGet.mockResolvedValue(joined);
     mockUpload.mockResolvedValue(joined);
     mockMapping.mockResolvedValue(joined);

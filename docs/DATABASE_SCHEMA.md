@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**361 tables · 5878 columns · 1210 foreign keys**
+**361 tables · 5879 columns · 1210 foreign keys**
 
 ---
 
@@ -337,7 +337,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`historical_import_rows`](#historical_import_rows) | `HistoricalImportRow` | 4 | One data row of the file, exactly as read. |
-| [`historical_imports`](#historical_imports) | `HistoricalImport` | 21 | One uploaded export and the decisions about how to read it. |
+| [`historical_imports`](#historical_imports) | `HistoricalImport` | 22 | One uploaded export and the decisions about how to read it. |
 | [`historical_staffing_files`](#historical_staffing_files) | `HistoricalStaffingFile` | 11 | A staffing export attached to a historical import, while it is mapped. |
 | [`historical_staffing_rows`](#historical_staffing_rows) | `HistoricalStaffingRow` | 4 | One data row of a staffing file, exactly as read. |
 | [`imported_source_records`](#imported_source_records) | `ImportedSourceRecord` | 8 | A source row that an import has turned into a record. |
@@ -5506,6 +5506,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `admin_settings` | JSON | yes |  |  |  |
 | `member_mappings` | JSON | yes |  |  |  |
 | `training_settings` | JSON | yes |  |  |  |
+| `staffing_settings` | JSON | yes |  |  |  |
 | `results` | JSON | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `routed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
