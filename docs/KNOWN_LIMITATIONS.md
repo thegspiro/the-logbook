@@ -1588,27 +1588,25 @@ An officer can correct an individual record's date where it matters.
 
 ## Password Reset Requests Store the Typed Address in the Audit Log (W03-13, 2026-11-08)
 
-**Owner decision needed.** Every `POST /auth/forgot-password` writes an
-`auth.password_reset_requested` audit row with the address that was typed in
-`event_data.email`. That includes addresses that match nobody, and requests
-refused because email is off. The audit log is hash-chained and kept for
-good, and administrators read it, so these addresses stay there permanently.
+**Resolved (2026-11-08), owner decision: a keyed fingerprint for unknown
+addresses.** `POST /auth/forgot-password` wrote the typed address into its
+`auth.password_reset_requested` audit row, including addresses that match
+nobody. The audit log is hash-chained and kept for good.
 
-The 2026-10-26 change ("keep addresses out of new audit entries") removed the
-address from the OAuth and onboarding rows, on the grounds that each row
-already carries `user_id`. This row was not changed. Since W03-9 (2026-11-08)
-a request that matched a member carries `user_id`, and every request carries
-the department's `organization_id`.
+It no longer writes the address:
 
-The open question is what to keep for an address that matches nobody, the
-only record of what was tried, which is what spots a spray across addresses:
+- **A request that matched a member** is named by `user_id` alone.
+- **Any other request** stores `email_fingerprint`, the keyed HMAC the account lookup uses (`app.core.security.email_fingerprint`). Repeats of one address can be matched, but the address can't be read back.
+- **Requests with email off** always carry the fingerprint, because the server looks nothing up then.
 
-- **A keyed fingerprint** (`email_fingerprints`, as the account lookup uses). Repeats can be matched, but the address cannot be read back.
-- **Nothing**, relying on `user_id` when it matched and on the per-address rate limit otherwise.
-- **The address, as now.**
+Every row also carries the department's `organization_id` (W03-9).
+`tests/test_forgot_password_audit_scope.py` covers all three cases.
 
-Rows already written cannot be edited without breaking the hash chain, so any
-change applies from then on.
+**Still true:**
+
+- Rows written before this change keep the address, because editing them would break the hash chain.
+- A fingerprint is computed under the current `ENCRYPTION_KEY`, so after a key rotation the same address fingerprints differently from older rows.
+- No screen turns an address into its fingerprint, so an administrator who wants to ask "was this address tried?" has no tool for it yet.
 
 ## Sign-in From a Shared Station Address (2026-10-05)
 

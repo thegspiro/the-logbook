@@ -61,6 +61,7 @@ from app.core.permissions import (
 from app.core.security import (
     create_mfa_pending_token,
     decode_token,
+    email_fingerprint,
     verify_password,
 )
 from app.core.security_middleware import (
@@ -2608,7 +2609,11 @@ async def forgot_password(
             event_category="auth",
             severity="INFO",
             event_data={
-                "email": reset_request.email,
+                # Never the address: the audit log is hash-chained and kept for
+                # good. The keyed fingerprint matches repeats without being
+                # readable (W03-13, owner decision 2026-11-08). No lookup runs
+                # here, so whether it names a member is not known.
+                "email_fingerprint": email_fingerprint(reset_request.email),
                 "token_issued": False,
                 "reason": "email_disabled",
                 "organization_id": str(organization.id),
@@ -2633,19 +2638,26 @@ async def forgot_password(
         ip_address=ip_address,
     )
 
-    # Audit log: record every reset request regardless of outcome
+    # Audit log: record every reset request regardless of outcome. A request
+    # that matched a member is named by user_id; any other keeps only the
+    # keyed fingerprint of what was typed, never the address (W03-13).
+    issued = bool(user and raw_token)
     await log_audit_event(
         db=db,
         event_type="auth.password_reset_requested",
         event_category="auth",
         severity="INFO",
         event_data={
-            "email": reset_request.email,
-            "token_issued": bool(user and raw_token),
+            **(
+                {}
+                if issued
+                else {"email_fingerprint": email_fingerprint(reset_request.email)}
+            ),
+            "token_issued": issued,
             "organization_id": str(organization.id),
         },
         organization_id=str(organization.id),
-        user_id=str(user.id) if user and raw_token else None,
+        user_id=str(user.id) if issued else None,
         ip_address=ip_address,
         user_agent=request.headers.get("user-agent"),
     )

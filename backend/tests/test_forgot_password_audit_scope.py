@@ -6,6 +6,12 @@ department's id only inside ``event_data``. The audit log is read by its
 a reset request, whether a token was issued, refused because email is off, or
 asked for an address that matches nobody. Every request now stamps the
 column, and a request that matched a member names them.
+
+W03-13 (owner decision 2026-11-08: a keyed fingerprint): the row also copied
+the typed address into ``event_data``, and the audit log is hash-chained and
+kept for good. A request that matched a member is named by ``user_id`` alone;
+any other request keeps ``email_fingerprint``, the keyed HMAC the account
+lookup uses, so repeats can be matched but the address cannot be read back.
 """
 
 from types import SimpleNamespace
@@ -15,6 +21,7 @@ import pytest
 from fastapi import BackgroundTasks
 
 from app.api.v1.endpoints import auth as auth_ep
+from app.core.security import email_fingerprint
 from app.schemas.auth import PasswordResetRequest
 
 pytestmark = pytest.mark.unit
@@ -79,3 +86,38 @@ async def test_a_request_that_matched_a_member_names_them():
 
     assert kwargs["organization_id"] == "org-a"
     assert kwargs["user_id"] == "user-1"
+
+
+ADDRESS = "someone@example.org"
+
+
+async def test_an_unknown_address_is_kept_as_a_fingerprint_not_the_address():
+    kwargs = await _audit_kwargs()
+
+    assert "email" not in kwargs["event_data"]
+    assert ADDRESS not in str(kwargs["event_data"])
+    assert kwargs["event_data"]["email_fingerprint"] == email_fingerprint(ADDRESS)
+
+
+async def test_a_request_with_email_off_keeps_only_a_fingerprint():
+    kwargs = await _audit_kwargs(email_on=False)
+
+    assert ADDRESS not in str(kwargs["event_data"])
+    assert kwargs["event_data"]["email_fingerprint"] == email_fingerprint(ADDRESS)
+
+
+async def test_a_matched_request_keeps_the_member_and_no_address():
+    member = SimpleNamespace(
+        id="user-1",
+        email=ADDRESS,
+        preferred_name=None,
+        first_name="Sam",
+        username="sam",
+        display_name="Sam Smith",
+    )
+
+    kwargs = await _audit_kwargs(matched=member)
+
+    assert kwargs["user_id"] == "user-1"
+    assert ADDRESS not in str(kwargs["event_data"])
+    assert "email_fingerprint" not in kwargs["event_data"]

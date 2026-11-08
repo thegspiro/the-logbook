@@ -175,11 +175,20 @@ Not driven: delivery of a real reset email (email is off), and a CAPTCHA-enabled
 **Saw:** "Back to sign in" was 40px tall on the invalid-link screen, and the form and rate-limited screens used the same `px-3 py-2`. The forgot-password page already carries `touch:min-h-11`.
 **Fix:** `touch:min-h-11` on all three. Re-driven: nothing under 44px on the invalid-link and form screens. Tests: three cases in `ResetPasswordPage.test.tsx`, which failed before the fix.
 
-### W03-13 — MED — Reset requests write the typed email address into the audit log — FLAGGED
+### W03-13 — MED — Reset requests wrote the typed email address into the audit log — ✅ FIXED (owner decision 2026-11-08)
 
 **Saw:** the request row's `event_data` holds `"email": "review_member@example.org"`, and so does every row for an address that matches nobody. The administrator's audit log shows it.
 **Why it matters:** the audit log is hash-chained and kept for good, so the address can never be removed. The 2026-10-26 change ("keep addresses out of new audit entries") took addresses out of the OAuth and onboarding rows, on the grounds that each row already carries `user_id`. The reset request was left as it was.
-**Why not fixed:** what to keep is a call. A request that matched a member can rely on `user_id` alone, now that W03-9 stamps it. For an address that matches nobody, the typed value is the only record of what was tried, which is what spots a spray across addresses. The options are a keyed fingerprint (the `email_fingerprints` the lookup already uses), nothing, or the address as now. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+**Decision:** flagged on the first write-up. The owner chose a keyed fingerprint for unknown addresses (2026-11-08).
+**Fix:** `forgot_password` no longer writes the address.
+
+- A request that matched a member is named by `user_id` alone.
+- Any other request stores `email_fingerprint`. That is the keyed HMAC the account lookup already uses (`app.core.security.email_fingerprint`, current key), so repeats of one address can be matched but the address can't be read back.
+- With email off the server looks nothing up, so those requests always carry the fingerprint.
+
+Re-driven: a request for `nobody.here@example.org` with email off writes `email_fingerprint`, `token_issued: false`, `reason: email_disabled`, and no address. Tests: three cases in `tests/test_forgot_password_audit_scope.py`, which failed before the change.
+**Rows already written:** they keep the address. The log is hash-chained, so they can't be edited without breaking verification.
+**Limit:** an administrator reading the log sees a hex string. To ask "was this address tried?", the fingerprint has to be computed from the address. No screen does that yet.
 
 ### W03-14 — NIT — Two pieces of copy — FLAGGED
 
@@ -197,16 +206,16 @@ rate-limit keys, and `member2`'s failure count.
 
 ### Checklist
 
-| Section                 | Result                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------ |
-| 1. The job gets done    | ✅ link → new password → sign in; email off says so (W03-6 resolved)           |
-| 2. The right people     | ✅ same answer for every address; token hashed, in the fragment, single-use    |
-| 3. Wrong input, failure | ✅ run, mismatch, bad and used links refused; stale verdict fixed (W03-11)     |
-| 4. Browser signals      | ✅ only the expected 400s, and 429s from this pass's repeated loads            |
-| 5. Coming back to it    | ✅ a used link says so on a clean load                                         |
-| 6. On a phone           | ✅ no overflow; W03-12 fixed                                                   |
-| 7. Everyone can use it  | ✅ after W03-10: the checklist's state is in text                              |
-| 8. What happens around  | ✅ after W03-9: requests and completions in the department log; W03-13 flagged |
+| Section                 | Result                                                                                  |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| 1. The job gets done    | ✅ link → new password → sign in; email off says so (W03-6 resolved)                    |
+| 2. The right people     | ✅ same answer for every address; token hashed, in the fragment, single-use             |
+| 3. Wrong input, failure | ✅ run, mismatch, bad and used links refused; stale verdict fixed (W03-11)              |
+| 4. Browser signals      | ✅ only the expected 400s, and 429s from this pass's repeated loads                     |
+| 5. Coming back to it    | ✅ a used link says so on a clean load                                                  |
+| 6. On a phone           | ✅ no overflow; W03-12 fixed                                                            |
+| 7. Everyone can use it  | ✅ after W03-10: the checklist's state is in text                                       |
+| 8. What happens around  | ✅ after W03-9 and W03-13: requests and completions in the department log, no addresses |
 
 ### Completion gate
 

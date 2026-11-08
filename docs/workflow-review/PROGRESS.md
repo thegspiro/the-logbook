@@ -219,7 +219,7 @@ Fixed:
 
 Flagged:
 
-- W03-13 (MED): reset requests write the typed email address into the hash-chained audit log. Mirrored to KNOWN_LIMITATIONS.
+- W03-13 (MED): reset requests wrote the typed email address into the hash-chained audit log. Flagged, then fixed on the owner's decision of 2026-11-08: a matched request keeps `user_id` only, and any other keeps a keyed fingerprint.
 - W03-14 (NIT): two pieces of copy.
 
 Gate: typecheck and lint clean; flake8, black and isort clean on the backend files; 24 backend and 116 frontend tests pass, and every new case failed before its fix. Next: none pending; the owner may name the next second pass.
