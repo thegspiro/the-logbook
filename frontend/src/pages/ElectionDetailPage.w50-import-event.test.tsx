@@ -121,9 +121,10 @@ describe('ElectionDetailPage, importing attendees', () => {
 
   it('imports from a linked event', async () => {
     getElection.mockResolvedValue(draft({ event_id: 'ev-1', meeting_id: null }));
+    const user = userEvent.setup();
     await renderPage();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Import Attendees from Event' }));
+    await user.click(screen.getByRole('button', { name: 'Import Attendees from Event' }));
 
     expect(importMeetingAttendees).toHaveBeenCalledWith('e-1');
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Imported 3 attendees'));
@@ -131,9 +132,10 @@ describe('ElectionDetailPage, importing attendees', () => {
 
   it('still imports from a linked meeting', async () => {
     getElection.mockResolvedValue(draft({ meeting_id: 'm-1', event_id: null }));
+    const user = userEvent.setup();
     await renderPage();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Import Attendees from Meeting' }));
+    await user.click(screen.getByRole('button', { name: 'Import Attendees from Meeting' }));
 
     expect(importMeetingAttendees).toHaveBeenCalledWith('e-1');
   });
