@@ -34,6 +34,7 @@ from app.services.member_service_history_service import (
 )
 from app.services.membership_tier_service import MembershipTierService
 from app.utils.org_timezone import org_today
+from tests.fake_request import fake_request
 
 TODAY = date(2026, 9, 24)
 
@@ -1061,6 +1062,7 @@ class TestHireDateEdit:
             UserUpdate(hire_date=hire_date),
             db=db,
             current_user=officer,
+            request=fake_request(),
         )
 
     async def _setup(self, db):

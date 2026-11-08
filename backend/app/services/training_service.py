@@ -588,6 +588,7 @@ class TrainingService:
         join_date: Optional[date] = None,
         shift_dates: Optional[Sequence[date]] = None,
         held_sessions: Optional[Mapping[str, Sequence["HeldSession"]]] = None,
+        course_catalog: Optional[Mapping[str, Tuple[str, Optional[str]]]] = None,
     ) -> Dict:
         """Evaluate a member's progress on a single requirement (in-memory).
 
@@ -614,6 +615,13 @@ class TrainingService:
 
         *held_sessions* is ``training_compliance.load_held_sessions`` for the
         requirements being evaluated, required for a SESSION_ATTENDANCE one.
+
+        *course_catalog* maps a course id to its ``(name, code)``, for the
+        courses COURSES requirements name (``load_required_course_catalog``).
+        With it, a COURSES requirement also reports ``course_checklist``: each
+        required course and when the member last completed it in the window,
+        so a screen can say which courses the count is made of. Without it the
+        key is null, as it is for every other requirement type.
         """
         from app.models.training import RequirementType
         from app.services.training_compliance import (
@@ -631,6 +639,9 @@ class TrainingService:
             recency_cutoff,
             rolling_hours_has_no_deadline,
             tally_session_attendance,
+        )
+        from app.services.training_requirement_courses import (
+            course_checklist_entries,
         )
 
         # The real day, captured before it is replaced by the evaluation
@@ -684,6 +695,7 @@ class TrainingService:
         cert_expired = False
         blocks_activity = False
         month_breakdown: Optional[List[Dict]] = None
+        course_checklist: Optional[List[Dict]] = None
         attendance_met: Optional[bool] = None
         attendance_overridden = False
 
@@ -738,6 +750,10 @@ class TrainingService:
             completed_value = float(matched)
             base_required = float(len(course_ids))
             adjusted_required = base_required
+            if course_catalog is not None:
+                course_checklist = course_checklist_entries(
+                    course_ids, windowed, course_catalog
+                )
 
         # ---- CERTIFICATION ----
         elif req_type == RequirementType.CERTIFICATION.value:
@@ -1024,6 +1040,7 @@ class TrainingService:
                 else None
             ),
             "monthly_hours": month_breakdown,
+            "course_checklist": course_checklist,
         }
 
     async def check_requirement_progress(

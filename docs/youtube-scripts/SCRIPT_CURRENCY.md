@@ -41,6 +41,18 @@ it defaults to on. The "five emails that cannot be switched off" in the
   03 about +6); Short 8AS still says about 47 seconds and gained roughly 8.
 - The member script (06) leaves out the leader-only dashboard changes by design.
 
+## Flagged by the 2026-11-06 → 11-08 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-6--8-2026).
+Rows are **Open**; nothing was re-recorded or rewritten.
+
+| Script                                             | Beat                         | Now                                                                                                                            |
+| -------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Member (06)**, **Training Officer (05, 16)**     | My Training requirement card | Courses requirements count in courses and open a **Show required courses** checklist; certifications show no "hrs"             |
+| **Training Officer (05, 16, 09)**, **Member (06)** | Member Training History      | Records are a compact list, not a table                                                                                        |
+| **Training Officer (16)**, **IT (03)**             | Provider import hours        | Zero-hour completions take the mapped course's Credit Hours                                                                    |
+| **Fire Chief (04)**                                | Finance beats                | Pending Amendments queue, per-type dual approval, mileage trip log, My Dues and live QuickBooks Online replace file-only steps |
+
 ## Flagged by the 2026-11-05 → 11-06 changes
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-5--6-2026).

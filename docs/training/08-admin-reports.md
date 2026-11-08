@@ -2059,6 +2059,11 @@ The columns are **When** (in your timezone), **Severity** (Info, Warning or
 Critical), **Event** (the technical name of the event, such as
 "shift_report_reviewed"), **Category**, **User** and **IP**.
 
+_(2026-11-08)_ Connecting, changing or disconnecting an integration records
+the **IP** of the person who did it, and their browser in the expanded row, as
+other security events do. Before, those three rows showed who but not from
+where.
+
 ![Audit Log page with summary stat cards and the filter bar](./images/08-19-audit-log.png)
 
 ![The audit log with a row expanded to its JSON event metadata](./images/08-53-audit-log-expanded.png)

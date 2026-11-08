@@ -195,6 +195,44 @@ class TestMappingCorrectsPastRecords:
 
         assert await _hours(db_session, ctx, "T-1") == (0.5, 0.5)
 
+    async def test_credit_hours_an_officer_entered_are_left_alone(self, db_session):
+        # The record edit screen sets credit hours apart from hours completed,
+        # so a record whose hours still match the course can carry an
+        # officer's credit. Re-mapping must not replace that credit.
+        ctx = await _setup(db_session)
+        one = await _course(db_session, ctx, "Conduct", 1.0)
+        two = await _course(db_session, ctx, "Conduct (long)", 2.0)
+        await _upload_report(db_session, ctx, _row(*CONDUCT, "T-1"))
+        mapping = await _mapping(db_session, ctx, CONDUCT[1])
+        await _map(db_session, ctx, mapping, one.id)
+        record = await _record(db_session, ctx, "T-1")
+        record.credit_hours = 3.0
+        await db_session.flush()
+
+        await _map(db_session, ctx, mapping, two.id)
+
+        assert await _hours(db_session, ctx, "T-1") == (1.0, 3.0)
+
+    async def test_remapping_between_equal_courses_credits_records_left_at_zero(
+        self, db_session
+    ):
+        # Imported while its course credited nothing; the course was given an
+        # hour afterwards. Re-mapping to another one-hour course must still
+        # credit the record, though both courses credit the same.
+        ctx = await _setup(db_session)
+        first = await _course(db_session, ctx, "Conduct")
+        second = await _course(db_session, ctx, "Conduct 2027", 1.0)
+        await _upload_report(db_session, ctx, _row(*CONDUCT, "T-1"))
+        mapping = await _mapping(db_session, ctx, CONDUCT[1])
+        await _map(db_session, ctx, mapping, first.id)
+        assert (await _hours(db_session, ctx, "T-1"))[0] == 0.0
+        first.credit_hours = 1.0
+        await db_session.flush()
+
+        await _map(db_session, ctx, mapping, second.id)
+
+        assert await _hours(db_session, ctx, "T-1") == (1.0, 1.0)
+
 
 @pytest.mark.integration
 class TestMigrationCorrectsRecordsAlreadyImported:
@@ -259,3 +297,28 @@ class TestMigrationCorrectsRecordsAlreadyImported:
         await db_session.execute(text(migration.UPGRADE_SQL))
 
         assert (await _hours(db_session, ctx, "T-1"))[0] == 0.0
+
+    async def test_credit_hours_an_officer_entered_survive_both_directions(
+        self, db_session
+    ):
+        migration = _load_migration()
+        ctx = await _setup(db_session)
+        conduct = await _course(db_session, ctx, "Conduct", 1.0)
+        await _upload_report(db_session, ctx, _row(*CONDUCT, "T-0", email="x@y.test"))
+        await _map(
+            db_session, ctx, await _mapping(db_session, ctx, CONDUCT[1]), conduct.id
+        )
+        # Hours still zero, but an officer recorded three credit hours.
+        zero_hours = await self._imported_at_zero(db_session, ctx, "T-1")
+        zero_hours.credit_hours = 3.0
+        # Hours match the course, but an officer recorded three credit hours.
+        matching = await self._imported_at_zero(db_session, ctx, "T-2", day=5)
+        matching.hours_completed = 1.0
+        matching.credit_hours = 3.0
+        await db_session.flush()
+
+        await db_session.execute(text(migration.UPGRADE_SQL))
+        assert await _hours(db_session, ctx, "T-1") == (0.0, 3.0)
+
+        await db_session.execute(text(migration.DOWNGRADE_SQL))
+        assert await _hours(db_session, ctx, "T-2") == (1.0, 3.0)

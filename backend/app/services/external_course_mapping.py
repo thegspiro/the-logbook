@@ -310,15 +310,21 @@ async def apply_course_mapping(
     # reported with no hours (Target Solutions sends 0 for a policy
     # acknowledgment). Run before the course link moves, so it reaches the
     # same records the link does. A record keeps its hours when the provider
-    # reported some, or when they are neither zero nor what the previous
-    # mapping credited — those were set by an officer, not by a mapping.
-    # Unmapping, or mapping to a course with no hours, takes a credit the
-    # previous course gave back to zero, as a fresh import would have it.
+    # reported some, or when they are not a pair a mapping wrote: zero hours
+    # and no credit, or the previous course's hours in both fields. The
+    # record screen edits credit hours apart from hours completed, so both
+    # fields are checked; matching one alone would replace an officer's
+    # credit. Unmapping, or mapping to a course with no hours, takes a credit
+    # the previous course gave back to zero, as a fresh import would have it.
+    #
+    # It runs even when both courses credit the same: a record imported while
+    # its course credited nothing is still at zero, and the new course's
+    # hours are what it should now carry.
     previous_hours = await mapped_course_hours(db, previous, mapping.organization_id)
     new_hours = await mapped_course_hours(
         db, internal_course_id, mapping.organization_id
     )
-    if previous_hours != new_hours:
+    if previous_hours is not None or new_hours is not None:
         hourless_import = (
             select(ExternalTrainingImport.training_record_id)
             .where(ExternalTrainingImport.provider_id == mapping.provider_id)
@@ -332,11 +338,17 @@ async def apply_course_mapping(
                 func.coalesce(ExternalTrainingImport.duration_minutes, 0) <= 0,
             )
         )
-        credited_by_mapping: ColumnElement[bool] = TrainingRecord.hours_completed <= 0
+        record_credit = func.coalesce(TrainingRecord.credit_hours, 0)
+        credited_by_mapping: ColumnElement[bool] = (
+            TrainingRecord.hours_completed <= 0
+        ) & (record_credit <= 0)
         if previous_hours is not None:
             credited_by_mapping = credited_by_mapping | (
-                func.abs(TrainingRecord.hours_completed - previous_hours)
-                < _HOURS_TOLERANCE
+                (
+                    func.abs(TrainingRecord.hours_completed - previous_hours)
+                    < _HOURS_TOLERANCE
+                )
+                & (func.abs(record_credit - previous_hours) < _HOURS_TOLERANCE)
             )
         await db.execute(
             update(TrainingRecord)

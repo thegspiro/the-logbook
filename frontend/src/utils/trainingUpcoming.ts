@@ -9,6 +9,7 @@
 
 import type { MyTrainingSummary, RequirementDetail } from '../types/training';
 import { countingWindowLabel } from './requirementMonths';
+import { requirementUnitSuffix } from './requirementUnits';
 
 /** How far ahead the list looks, in days. */
 export const UPCOMING_WINDOW_DAYS = 183;
@@ -97,7 +98,7 @@ const requirementItems = (details: RequirementDetail[], today: string): Upcoming
         key: `req-${req.id}`,
         kind: 'requirement',
         title: req.name,
-        detail: `${req.completed_hours}/${req.required_hours} hrs complete`,
+        detail: `${req.completed_hours}/${req.required_hours}${requirementUnitSuffix(req.requirement_type, req.required_hours)} complete`,
         date,
         days,
         urgency: urgencyFor(days),

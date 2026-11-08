@@ -10,10 +10,12 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 import { RequirementMonthlyHours } from './RequirementMonthlyHours';
+import { RequirementCourseList } from './RequirementCourseList';
 import { countingWindowLabel } from '../../utils/requirementMonths';
 import { formatCalendarDate, formatDate } from '../../utils/dateFormatting';
 import { getProgressBarColor } from '../../utils/trainingColors';
 import { excusedMonthsPhrase } from '../../utils/requirementMonths';
+import { requirementUnitSuffix } from '../../utils/requirementUnits';
 import type { RequirementDetail } from '../../types/training';
 
 interface RequirementDetailCardProps {
@@ -31,6 +33,7 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
   const isOverdue = req.days_until_due != null && req.days_until_due < 0 && !req.is_met;
   const isDueSoon = req.days_until_due != null && req.days_until_due <= 30 && req.days_until_due >= 0 && !req.is_met;
   const self = audience === 'self';
+  const unitFor = (count: number) => requirementUnitSuffix(req.requirement_type, count);
 
   return (
     <div
@@ -60,7 +63,8 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
                   : 'text-theme-text-primary'
             }`}
           >
-            {req.completed_hours}/{req.required_hours} hrs
+            {req.completed_hours}/{req.required_hours}
+            {unitFor(req.required_hours)}
           </span>
         </div>
       </div>
@@ -74,6 +78,7 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
       </div>
 
       <RequirementMonthlyHours requirement={req} />
+      <RequirementCourseList requirement={req} timezone={timezone} />
 
       {/* Expired certification / blocks activity warning */}
       {req.blocks_activity && (
@@ -105,8 +110,9 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
             {req.original_required_hours != null && req.original_required_hours !== req.required_hours && (
               <>
                 {' '}
-                (originally {req.original_required_hours} hrs, adjusted to {req.required_hours} hrs for{' '}
-                {req.active_months} active month{req.active_months !== 1 ? 's' : ''})
+                (originally {req.original_required_hours}
+                {unitFor(req.original_required_hours)}, adjusted to {req.required_hours}
+                {unitFor(req.required_hours)} for {req.active_months} active month{req.active_months !== 1 ? 's' : ''})
               </>
             )}
           </p>

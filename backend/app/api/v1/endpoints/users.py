@@ -136,6 +136,19 @@ from app.utils.membership import (
 from app.utils.phone_numbers import validate_member_phone
 from app.utils.security_notifications import notify_security_event
 
+
+def _request_origin(request: Request) -> dict[str, Optional[str]]:
+    """Where an audited change came from: the caller's address and browser.
+
+    Spread into ``log_audit_event`` so a row on a member's record says from
+    where an administrator acted, not only who did (W02 second pass).
+    """
+    return {
+        "ip_address": get_client_ip(request),
+        "user_agent": request.headers.get("user-agent"),
+    }
+
+
 router = APIRouter()
 
 # Preference keys no sender reads any more; dropped on the member's next save.
@@ -683,6 +696,7 @@ async def create_member(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     # Built now: the directory work below commits, which expires new_user.
@@ -1537,6 +1551,7 @@ async def assign_user_roles(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return {
@@ -1648,6 +1663,7 @@ async def add_role_to_user(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return {
@@ -1673,6 +1689,8 @@ async def remove_role_from_user(
         )
     ),
     _stepup: User = Depends(require_stepup),
+    *,
+    request: Request,
 ):
     """
     Remove a role from a user
@@ -1762,6 +1780,7 @@ async def remove_role_from_user(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return {
@@ -1778,6 +1797,8 @@ async def get_user_with_roles(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    *,
+    request: Request,
 ):
     """
     Get a specific user with their assigned roles and notification preferences
@@ -1852,6 +1873,7 @@ async def get_user_with_roles(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     # SEC (ORU-8): redact on the same terms as the roster. Without this the
@@ -1894,6 +1916,8 @@ async def update_contact_info(
     contact_update: ContactInfoUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    *,
+    request: Request,
 ):
     """
     Update user contact information and notification preferences
@@ -2031,6 +2055,7 @@ async def update_contact_info(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return user
@@ -2044,6 +2069,8 @@ async def update_user_profile(
     current_user: User = Depends(get_current_user),
     authorization: str | None = Header(None),
     access_token: str | None = Cookie(None),
+    *,
+    request: Request,
 ):
     """
     Update user profile information (name, address, emergency contacts, etc.)
@@ -2427,6 +2454,7 @@ async def update_user_profile(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return user
@@ -2441,6 +2469,8 @@ async def delete_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
     _stepup: User = Depends(require_stepup),
+    *,
+    request: Request,
 ):
     """
     Delete a member. By default this is a soft-delete (sets deleted_at).
@@ -2575,6 +2605,7 @@ async def delete_user(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+            **_request_origin(request),
         )
     else:
         # Preserve membership number so it can be restored on reactivation,
@@ -2597,6 +2628,7 @@ async def delete_user(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+            **_request_origin(request),
         )
 
         # A deactivated member cannot work, so their seats on shifts that
@@ -2622,6 +2654,8 @@ async def admin_reset_password(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create", "members.manage")),
     _stepup: User = Depends(require_stepup),
+    *,
+    request: Request,
 ):
     """
     Reset a user's password (IT Lead / Admin only)
@@ -2713,6 +2747,7 @@ async def admin_reset_password(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     await db.commit()
@@ -2731,6 +2766,8 @@ async def admin_reset_mfa(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create", "members.manage")),
     _stepup: User = Depends(require_stepup),
+    *,
+    request: Request,
 ):
     """
     Reset (disable) a user's two-factor authentication (IT Lead / Admin only).
@@ -2806,6 +2843,7 @@ async def admin_reset_mfa(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     await notify_security_event(
@@ -2882,6 +2920,8 @@ async def admin_remove_passkey(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create", "members.manage")),
     _stepup: User = Depends(require_stepup),
+    *,
+    request: Request,
 ):
     """
     Remove one passkey from a member's account — for a lost or stolen device.
@@ -2939,6 +2979,7 @@ async def admin_remove_passkey(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
     await notify_security_event(
         db,
@@ -2965,6 +3006,8 @@ async def admin_unlock_account(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
+    *,
+    request: Request,
 ):
     """
     Lift a sign-in lockout before it expires (workflow review W02-4).
@@ -3018,6 +3061,7 @@ async def admin_unlock_account(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
     await db.commit()
 
@@ -3148,6 +3192,8 @@ async def upload_photo(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    *,
+    request: Request,
 ):
     """
     Upload a profile photo for a member.
@@ -3273,6 +3319,7 @@ async def upload_photo(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return {"message": "Photo uploaded successfully", "photo_url": photo_data_uri}
@@ -3283,6 +3330,8 @@ async def delete_photo(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    *,
+    request: Request,
 ):
     """
     Remove a member's profile photo.
@@ -3333,6 +3382,7 @@ async def delete_photo(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+        **_request_origin(request),
     )
 
     return {"message": "Photo removed successfully"}
@@ -3549,8 +3599,8 @@ async def export_my_data(
         severity="info",
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        ip_address=get_client_ip(request),
         event_data={"sections": len(export)},
+        **_request_origin(request),
     )
     await db.commit()
 
@@ -3610,8 +3660,8 @@ async def anonymize_member(
         severity="warning",
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        ip_address=get_client_ip(request),
         event_data={"anonymized_user_id": str(user_id)},
+        **_request_origin(request),
     )
     await db.commit()
     return summary
@@ -3730,8 +3780,8 @@ async def set_my_profile_visibility(
         severity="info",
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        ip_address=get_client_ip(request),
         event_data={"previous": previous, "current": current},
+        **_request_origin(request),
     )
     await db.commit()
 
@@ -3907,8 +3957,8 @@ async def set_my_consent(
         severity="info",
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),
-        ip_address=get_client_ip(request),
         event_data={"consent_type": parsed_type.value, "granted": granted},
+        **_request_origin(request),
     )
     await db.commit()
 
