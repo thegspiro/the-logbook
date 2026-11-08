@@ -577,7 +577,7 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged, sto
 
               <h4 className="text-theme-text-primary mb-1 text-sm font-semibold">Line detail</h4>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="rwd-table w-full text-sm">
                   <thead>
                     <tr className="text-theme-text-muted text-left">
                       <th className="py-1 pr-2 font-medium">Item</th>
@@ -595,13 +595,19 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged, sto
                         key={`${row.productId ?? 'x'}-${row.variantLabel ?? ''}-${row.personalizationText ?? ''}-${index}`}
                         className="border-theme-surface-border border-t"
                       >
-                        <td className="text-theme-text-primary py-1.5 pr-2">{row.productName}</td>
-                        <td className="text-theme-text-secondary px-2 py-1.5">{row.variantLabel ?? '—'}</td>
-                        <td className="text-theme-text-secondary px-2 py-1.5">{row.personalizationText ?? '—'}</td>
-                        <td className="text-theme-text-secondary px-2 py-1.5 whitespace-nowrap">
+                        <td data-label="Item" className="text-theme-text-primary py-1.5 pr-2">
+                          {row.productName}
+                        </td>
+                        <td data-label="Option" className="text-theme-text-secondary px-2 py-1.5">
+                          {row.variantLabel ?? '—'}
+                        </td>
+                        <td data-label="Personalization" className="text-theme-text-secondary px-2 py-1.5">
+                          {row.personalizationText ?? '—'}
+                        </td>
+                        <td data-label="Method" className="text-theme-text-secondary px-2 py-1.5 whitespace-nowrap">
                           {row.personalizationText ? methodLabel(row.personalizationMethod) : '—'}
                         </td>
-                        <td className="text-theme-text-secondary px-2 py-1.5">
+                        <td data-label="Thread" className="text-theme-text-secondary px-2 py-1.5">
                           {/* Engraved rows carry no colour — the backend drops
                               it, so an engraver is never sent a thread. */}
                           {row.personalizationThreadColor ? (
@@ -610,8 +616,10 @@ export const StoreWindowsTab: React.FC<StoreWindowsTabProps> = ({ onChanged, sto
                             '—'
                           )}
                         </td>
-                        <td className="text-theme-text-primary px-2 py-1.5 text-center font-medium">{row.quantity}</td>
-                        <td className="text-theme-text-secondary py-1.5 pl-2 text-right">
+                        <td data-label="Qty" className="text-theme-text-primary px-2 py-1.5 text-center font-medium">
+                          {row.quantity}
+                        </td>
+                        <td data-label="Total" className="text-theme-text-secondary py-1.5 pl-2 text-right">
                           {formatCurrency(Number(row.lineTotal))}
                         </td>
                       </tr>
