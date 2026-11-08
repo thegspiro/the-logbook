@@ -8,8 +8,51 @@ import { X, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { organizationEmailError } from '../../../utils/organizationProfile';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import type { FacilityCreate } from '../../../services/facilitiesServices';
 import type { Facility, FacilityType, FacilityStatus } from '../types';
+
+type FacilityField =
+  | 'name'
+  | 'facility_number'
+  | 'address_line1'
+  | 'city'
+  | 'state'
+  | 'zip_code'
+  | 'phone'
+  | 'email'
+  | 'facility_type_id'
+  | 'status_id'
+  | 'notes';
+
+const FACILITY_FIELDS: FieldSpecs<FacilityField> = {
+  name: { id: 'facility-name', label: 'Name' },
+  facility_number: { id: 'facility-facility-number', label: 'Facility Number' },
+  address_line1: { id: 'facility-address', label: 'Address' },
+  city: { id: 'facility-city', label: 'City' },
+  state: { id: 'facility-state', label: 'State' },
+  zip_code: { id: 'facility-zip', label: 'Zip Code' },
+  phone: { id: 'facility-phone', label: 'Phone' },
+  email: { id: 'facility-email', label: 'Email' },
+  facility_type_id: { id: 'facility-type', label: 'Type' },
+  status_id: { id: 'facility-status', label: 'Status' },
+  notes: { id: 'facility-notes', label: 'Notes' },
+};
+
+// Mirror FacilityCreate (forms review F-2).
+const FACILITY_LIMITS = {
+  name: 200,
+  facility_number: 50,
+  address_line1: 200,
+  city: 100,
+  state: 50,
+  zip_code: 20,
+  phone: 50,
+  email: 200,
+} as const;
+
+const LABEL_CLASS = 'text-theme-text-secondary mb-1 block text-sm font-medium';
 
 interface Props {
   facilityTypes: FacilityType[];
@@ -37,17 +80,32 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
     notes: '',
   });
 
-  const setField = (field: string, value: string) => setFormData((prev) => ({ ...prev, [field]: value }));
+  const fieldErrors = useFieldErrors(FACILITY_FIELDS);
+  const setField = (field: FacilityField, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    fieldErrors.setError(field, null);
+  };
   // The modal submits from a button rather than a form, so type="email" is
-  // never checked by the browser, and the server accepts any string.
+  // never checked by the browser, and the server accepts any string. Shown
+  // as it is typed; a server refusal of the address takes its place.
   const emailError = organizationEmailError(formData.email);
+  const errors: FieldErrors<FacilityField> = {
+    ...fieldErrors.errors,
+    ...(emailError ? { email: emailError } : {}),
+  };
 
   const handleCreate = async () => {
-    if (!formData.name.trim()) {
-      toast.error('Facility name is required');
+    // Checked here rather than by greying out Add Facility, which told an
+    // officer nothing about why it would not press (forms review F-3).
+    const problems: FieldErrors<FacilityField> = {};
+    if (!formData.name.trim()) problems.name = 'Enter a name for the facility.';
+    if (emailError) problems.email = emailError;
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
-    if (emailError) return;
     setIsCreating(true);
     try {
       // Use || to coerce empty strings to undefined (not ?? — see CLAUDE.md pitfall #1)
@@ -68,8 +126,8 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
       const facility = await createFacility(payload);
       toast.success('Facility created');
       onCreated(facility);
-    } catch {
-      toast.error('Failed to create facility');
+    } catch (err: unknown) {
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to create facility'));
     } finally {
       setIsCreating(false);
     }
@@ -104,183 +162,206 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
         </div>
 
         <div className="space-y-4 p-6">
-          <div>
-            <label htmlFor="facility-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Name *
-            </label>
-            <input
-              id="facility-name"
-              type="text"
-              value={formData.name}
-              onChange={(e) => setField('name', e.target.value)}
-              placeholder="e.g., Station 1"
-              className={inputCls}
-              autoFocus
-            />
-          </div>
+          <FormField
+            id={FACILITY_FIELDS.name.id}
+            label="Name"
+            required
+            labelClassName={LABEL_CLASS}
+            error={errors.name}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                value={formData.name}
+                maxLength={FACILITY_LIMITS.name}
+                onChange={(e) => setField('name', e.target.value)}
+                placeholder="e.g., Station 1"
+                className={inputCls}
+                autoFocus
+              />
+            )}
+          </FormField>
 
-          <div>
-            <label
-              htmlFor="facility-facility-number"
-              className="text-theme-text-secondary mb-1 block text-sm font-medium"
-            >
-              Facility Number
-            </label>
-            <input
-              id="facility-facility-number"
-              type="text"
-              value={formData.facility_number}
-              onChange={(e) => setField('facility_number', e.target.value)}
-              placeholder="e.g., STA-01"
-              className={inputCls}
-            />
-          </div>
+          <FormField
+            id={FACILITY_FIELDS.facility_number.id}
+            label="Facility Number"
+            labelClassName={LABEL_CLASS}
+            error={errors.facility_number}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                value={formData.facility_number}
+                maxLength={FACILITY_LIMITS.facility_number}
+                onChange={(e) => setField('facility_number', e.target.value)}
+                placeholder="e.g., STA-01"
+                className={inputCls}
+              />
+            )}
+          </FormField>
 
-          <div>
-            <label htmlFor="facility-address" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Address
-            </label>
-            <input
-              id="facility-address"
-              type="text"
-              value={formData.address_line1}
-              onChange={(e) => setField('address_line1', e.target.value)}
-              placeholder="123 Main St"
-              className={inputCls}
-            />
-          </div>
+          <FormField
+            id={FACILITY_FIELDS.address_line1.id}
+            label="Address"
+            labelClassName={LABEL_CLASS}
+            error={errors.address_line1}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                value={formData.address_line1}
+                maxLength={FACILITY_LIMITS.address_line1}
+                onChange={(e) => setField('address_line1', e.target.value)}
+                placeholder="123 Main St"
+                className={inputCls}
+              />
+            )}
+          </FormField>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div>
-              <label htmlFor="facility-city" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                City
-              </label>
-              <input
-                id="facility-city"
-                type="text"
-                value={formData.city}
-                onChange={(e) => setField('city', e.target.value)}
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label htmlFor="facility-state" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                State
-              </label>
-              <input
-                id="facility-state"
-                type="text"
-                value={formData.state}
-                onChange={(e) => setField('state', e.target.value)}
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label htmlFor="facility-zip" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Zip Code
-              </label>
-              <input
-                id="facility-zip"
-                type="text"
-                value={formData.zip_code}
-                onChange={(e) => setField('zip_code', e.target.value)}
-                className={inputCls}
-              />
-            </div>
+            <FormField id={FACILITY_FIELDS.city.id} label="City" labelClassName={LABEL_CLASS} error={errors.city}>
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  value={formData.city}
+                  maxLength={FACILITY_LIMITS.city}
+                  onChange={(e) => setField('city', e.target.value)}
+                  className={inputCls}
+                />
+              )}
+            </FormField>
+            <FormField id={FACILITY_FIELDS.state.id} label="State" labelClassName={LABEL_CLASS} error={errors.state}>
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  value={formData.state}
+                  maxLength={FACILITY_LIMITS.state}
+                  onChange={(e) => setField('state', e.target.value)}
+                  className={inputCls}
+                />
+              )}
+            </FormField>
+            <FormField
+              id={FACILITY_FIELDS.zip_code.id}
+              label="Zip Code"
+              labelClassName={LABEL_CLASS}
+              error={errors.zip_code}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  value={formData.zip_code}
+                  maxLength={FACILITY_LIMITS.zip_code}
+                  onChange={(e) => setField('zip_code', e.target.value)}
+                  className={inputCls}
+                />
+              )}
+            </FormField>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="facility-phone" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Phone
-              </label>
-              <input
-                id="facility-phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setField('phone', e.target.value)}
-                placeholder="(555) 123-4567"
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label htmlFor="facility-email" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                Email
-              </label>
-              <input
-                id="facility-email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setField('email', e.target.value)}
-                placeholder="station@example.com"
-                className={inputCls}
-                aria-invalid={Boolean(emailError)}
-                aria-describedby={emailError ? 'facility-email-error' : undefined}
-              />
-              {emailError && (
-                <p id="facility-email-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-                  {emailError}
-                </p>
+            <FormField id={FACILITY_FIELDS.phone.id} label="Phone" labelClassName={LABEL_CLASS} error={errors.phone}>
+              {(field) => (
+                <input
+                  {...field}
+                  type="tel"
+                  value={formData.phone}
+                  maxLength={FACILITY_LIMITS.phone}
+                  onChange={(e) => setField('phone', e.target.value)}
+                  placeholder="(555) 123-4567"
+                  className={inputCls}
+                />
               )}
-            </div>
+            </FormField>
+            <FormField id={FACILITY_FIELDS.email.id} label="Email" labelClassName={LABEL_CLASS} error={errors.email}>
+              {(field) => (
+                <input
+                  {...field}
+                  type="email"
+                  value={formData.email}
+                  maxLength={FACILITY_LIMITS.email}
+                  onChange={(e) => setField('email', e.target.value)}
+                  placeholder="station@example.com"
+                  className={inputCls}
+                />
+              )}
+            </FormField>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             {facilityTypes.length > 0 && (
-              <div>
-                <label htmlFor="facility-type" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                  Type
-                </label>
-                <select
-                  id="facility-type"
-                  value={formData.facility_type_id}
-                  onChange={(e) => setField('facility_type_id', e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="">Select type...</option>
-                  {facilityTypes.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FormField
+                id={FACILITY_FIELDS.facility_type_id.id}
+                label="Type"
+                labelClassName={LABEL_CLASS}
+                error={errors.facility_type_id}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={formData.facility_type_id}
+                    onChange={(e) => setField('facility_type_id', e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">Select type...</option>
+                    {facilityTypes.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
             )}
             {facilityStatuses.length > 0 && (
-              <div>
-                <label htmlFor="facility-status" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                  Status
-                </label>
-                <select
-                  id="facility-status"
-                  value={formData.status_id}
-                  onChange={(e) => setField('status_id', e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="">Select status...</option>
-                  {facilityStatuses.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FormField
+                id={FACILITY_FIELDS.status_id.id}
+                label="Status"
+                labelClassName={LABEL_CLASS}
+                error={errors.status_id}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={formData.status_id}
+                    onChange={(e) => setField('status_id', e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">Select status...</option>
+                    {facilityStatuses.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
             )}
           </div>
 
-          <div>
-            <label htmlFor="facility-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-              Notes
-            </label>
-            <textarea
-              id="facility-notes"
-              value={formData.notes}
-              onChange={(e) => setField('notes', e.target.value)}
-              rows={3}
-              placeholder="Optional notes..."
-              className={inputCls + ' resize-none'}
-            />
-          </div>
+          <FormField id={FACILITY_FIELDS.notes.id} label="Notes" labelClassName={LABEL_CLASS} error={errors.notes}>
+            {(field) => (
+              <textarea
+                {...field}
+                value={formData.notes}
+                onChange={(e) => setField('notes', e.target.value)}
+                rows={3}
+                placeholder="Optional notes..."
+                className={inputCls + ' resize-none'}
+              />
+            )}
+          </FormField>
+          {fieldErrors.formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {fieldErrors.formError}
+            </p>
+          )}
         </div>
 
         <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
@@ -294,7 +375,7 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
             onClick={() => {
               void handleCreate();
             }}
-            disabled={isCreating || !formData.name.trim() || Boolean(emailError)}
+            disabled={isCreating}
             className="btn-primary flex items-center gap-2 px-5"
           >
             {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
