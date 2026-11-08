@@ -80,7 +80,7 @@ export const FormField: React.FC<FormFieldProps> = ({
       <label htmlFor={id} className="form-label">
         {label}
         {required && (
-          <span className="text-red-700 dark:text-red-400" aria-hidden="true">
+          <span className="text-red-800 dark:text-red-300" aria-hidden="true">
             {' '}
             *
           </span>
@@ -95,7 +95,7 @@ export const FormField: React.FC<FormFieldProps> = ({
         ...(maxLength !== undefined ? { maxLength } : {}),
       })}
       {error && (
-        <p id={errorId} className="mt-1 text-sm text-red-700 dark:text-red-400">
+        <p id={errorId} className="mt-1 text-sm text-red-800 dark:text-red-300">
           {error}
         </p>
       )}
