@@ -278,6 +278,7 @@ const BudgetVsActual: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYe
       >
         {data && data.rows.length === 0 ? (
           <EmptyState
+            compact
             headingLevel={3}
             title="No budget lines"
             description="This fiscal year has no budget lines yet."
@@ -416,6 +417,7 @@ const AmendmentLog: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYear
       >
         {data && data.rows.length === 0 ? (
           <EmptyState
+            compact
             headingLevel={3}
             title="No amendments"
             description="The budget for this year has not been amended."
@@ -571,7 +573,7 @@ const PaymentsRegister: React.FC = () => {
         onDownload={() => financeReportService.paymentsRegisterCsv(start, end)}
       >
         {data && data.rows.length === 0 ? (
-          <EmptyState headingLevel={3} title="No payments" description="Nothing was paid in this period." />
+          <EmptyState compact headingLevel={3} title="No payments" description="Nothing was paid in this period." />
         ) : (
           data && (
             <div
@@ -766,6 +768,8 @@ const FundBalances: React.FC = () => {
       {data &&
         (data.funds.length === 0 ? (
           <EmptyState
+            compact
+            headingLevel={3}
             title="No restricted funds"
             description="Mark a fundraising campaign as a restricted fund, with what its donors gave for, and payments can be charged to it."
           />
@@ -849,6 +853,8 @@ const Advances: React.FC = () => {
       {data &&
         (data.advances.length === 0 ? (
           <EmptyState
+            compact
+            headingLevel={3}
             title="Nothing outstanding"
             description="Every cash advance has been accounted for with expense reports or returned."
           />
@@ -967,6 +973,7 @@ const LateSubstantiation: React.FC = () => {
       >
         {data && data.rows.length === 0 ? (
           <EmptyState
+            compact
             headingLevel={3}
             title="No late expenses"
             description="Nothing reimbursed in this period was claimed after the deadline."
@@ -1084,6 +1091,7 @@ const ExpensesByMember: React.FC = () => {
       >
         {data && data.rows.length === 0 ? (
           <EmptyState
+            compact
             headingLevel={3}
             title="No reimbursements"
             description="No member was reimbursed in this period."
@@ -1190,6 +1198,7 @@ const DuesDelinquency: React.FC = () => {
             </dl>
             {data.rows.length === 0 ? (
               <EmptyState
+                compact
                 headingLevel={3}
                 title="Nobody is overdue"
                 description="No member is overdue on dues that fell due in this period."
@@ -1286,6 +1295,7 @@ const PurchasesByVendor: React.FC<{ years: FiscalYear[]; fiscalYearId: string; o
       >
         {data && data.rows.length === 0 ? (
           <EmptyState
+            compact
             headingLevel={3}
             title="No purchases"
             description="No purchase request in this fiscal year has been approved yet."

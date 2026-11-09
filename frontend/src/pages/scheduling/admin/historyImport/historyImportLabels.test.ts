@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { HistoryImportAnalysis } from '../../../../modules/scheduling/types/historyImport';
-import { hoursLabel, isSettled, memberLabel, unitLabel } from './historyImportLabels';
+import { hoursLabel, isSettled, issueLabel, memberLabel, unitLabel } from './historyImportLabels';
 
 const analysis: HistoryImportAnalysis = {
   can_commit: false,
@@ -83,5 +83,21 @@ describe('history import labels', () => {
   it('counts matched, mapped and create as settled, and nothing else', () => {
     expect(['matched', 'mapped', 'create'].every(isSettled)).toBe(true);
     expect(['conflict', 'ambiguous', 'unmatched'].some(isSettled)).toBe(false);
+  });
+});
+
+describe('issueLabel', () => {
+  it('names the codes the Rows tab filters by', () => {
+    expect(issueLabel('probable_match')).toBe('Probable crew match');
+    expect(issueLabel('overlapping_entries')).toBe('Overlapping times');
+  });
+
+  it('groups member and unit resolutions whatever their status', () => {
+    expect(issueLabel('member_ambiguous')).toBe('Member not settled');
+    expect(issueLabel('unit_unmatched')).toBe('Unit not settled');
+  });
+
+  it('falls back to the code in words for one it does not know', () => {
+    expect(issueLabel('something_new')).toBe('Something new');
   });
 });

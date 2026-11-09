@@ -31,6 +31,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:15 AM — per-requirement due-date reminders and overdue notices
 15 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=program_requirement_deadlines
 
+# Every 30 minutes — announce training-program milestones met by courses and tests
+*/30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=program_milestones
+
 # Monthly on the 1st at 8:00 AM — membership tier auto-advancement
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
 
@@ -255,6 +258,17 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:15",
         "cron": "15 7 * * *",
+    },
+    "program_milestones": {
+        "description": (
+            "Announce training-program milestones that members have met — "
+            "chiefly ones waiting on a course, whose records arrive by paths "
+            "that do not check milestones themselves (once per milestone and "
+            "enrollment — safe to run at any frequency)"
+        ),
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
     },
     "enrollment_expiry": {
         "description": "Expire training-program enrollments whose completion deadline has passed",
@@ -1155,6 +1169,20 @@ async def run_program_requirement_deadlines(db: AsyncSession) -> Dict[str, Any]:
         return result.get("warnings_sent", 0) + result.get("overdue_sent", 0)
 
     return await _for_each_org(db, "program_requirement_deadlines", _process)
+
+
+async def run_program_milestones(db: AsyncSession) -> Dict[str, Any]:
+    """Record and announce milestones members now meet.
+
+    Idempotent per (milestone, enrollment): the achievement row is unique on
+    the pair and committed before anything is sent (program_milestones).
+    """
+    from app.services.program_milestones import sweep_organization
+
+    async def _process(db_session, org):
+        return await sweep_organization(db_session, org.id)
+
+    return await _for_each_org(db, "program_milestones", _process)
 
 
 async def run_enrollment_expiry(db: AsyncSession) -> Dict[str, Any]:
@@ -8423,6 +8451,7 @@ TASK_RUNNERS = {
     "enrollment_deadline_warnings": run_enrollment_deadline_warnings,
     "enrollment_expiry": run_enrollment_expiry,
     "program_requirement_deadlines": run_program_requirement_deadlines,
+    "program_milestones": run_program_milestones,
     "recert_resets": run_recert_resets,
     "membership_tier_advance": run_membership_tier_advance,
     "property_return_reminders": run_property_return_reminders,
@@ -8592,6 +8621,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "enrollment_expiry": 86400,
     # Daily; idempotent per (requirement row, due date, ramp step).
     "program_requirement_deadlines": 86400,
+    # Every 30 minutes, so a milestone waiting on a course is announced soon
+    # after the record arrives; idempotent per (milestone, enrollment).
+    "program_milestones": 1800,
     "shift_pattern_generation": 86400,
     "swap_offer_expiry": 86400,
     "officer_directory_sync": 86400,

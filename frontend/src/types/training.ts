@@ -743,6 +743,25 @@ export interface ChecklistItem {
   member_can_complete?: boolean;
 }
 
+/** One kind of record that names a requirement, as the delete dialog lists it. */
+export interface TrainingRequirementReference {
+  kind: string;
+  label: string;
+  count: number;
+  /** What a permanent delete does: deletes these rows, or keeps them without the link. */
+  on_delete: 'removed' | 'unlinked';
+}
+
+/** What uses a requirement — GET /training/requirements/{id}/deletion-impact. */
+export interface TrainingRequirementDeletionImpact {
+  requirement_id: string;
+  name: string;
+  active: boolean;
+  /** Zero means an ordinary delete removes it; otherwise an ordinary delete deactivates it. */
+  total: number;
+  references: TrainingRequirementReference[];
+}
+
 export interface TrainingRequirement {
   id: string;
   organization_id: string;
@@ -1193,11 +1212,77 @@ export interface ProgramPhaseUpdate {
   prerequisite_phase_ids?: string[] | undefined;
 }
 
+export type MilestoneItemType = 'course' | 'skill_test' | 'knowledge_test';
+export type MilestoneMatchMode = 'all' | 'any';
+
+/** A course, skills test (skill template) or knowledge test a milestone waits for. */
+export interface MilestoneItemInput {
+  item_type: MilestoneItemType;
+  item_id: string;
+}
+
+export interface MilestoneItem extends MilestoneItemInput {
+  id: string;
+  /** Null when the course or test can no longer be read. */
+  name?: string | null;
+}
+
+export interface MilestoneRecipientLabel {
+  id: string;
+  name?: string | null;
+}
+
 export interface ProgramMilestoneUpdate {
   name?: string | undefined;
   description?: string | null | undefined;
-  completion_percentage_threshold?: number | undefined;
+  /** null removes the percentage, leaving the milestone to its items. */
+  completion_percentage_threshold?: number | null | undefined;
   notification_message?: string | null | undefined;
+  /** Replaces the whole set when sent. */
+  items?: MilestoneItemInput[] | undefined;
+  item_match_mode?: MilestoneMatchMode | undefined;
+  counts_prior_completions?: boolean | undefined;
+  notify_member?: boolean | undefined;
+  notify_position_ids?: string[] | undefined;
+  notify_user_ids?: string[] | undefined;
+  officer_message?: string | null | undefined;
+}
+
+export interface MilestoneOption {
+  id: string;
+  name: string;
+  detail?: string | null;
+}
+
+/** Everything the milestone editor offers to pick from. */
+export interface MilestoneOptions {
+  courses: MilestoneOption[];
+  skill_tests: MilestoneOption[];
+  knowledge_tests: MilestoneOption[];
+  positions: MilestoneOption[];
+  members: MilestoneOption[];
+}
+
+export interface MilestoneItemStatus {
+  item_type: MilestoneItemType;
+  item_id: string;
+  name?: string | null;
+  completed: boolean;
+}
+
+/** Where a member stands on one milestone of their enrollment. */
+export interface MemberMilestoneStatus {
+  id: string;
+  name: string;
+  description?: string | null;
+  phase_id?: string | null;
+  completion_percentage_threshold?: number | null;
+  percentage_met: boolean;
+  item_match_mode: MilestoneMatchMode;
+  items: MilestoneItemStatus[];
+  /** Reached this cycle, whether or not anyone was told. */
+  reached: boolean;
+  reached_at?: string | null;
 }
 
 export type EligibilityStatus = 'eligible' | 'enrolled' | 'prerequisite' | 'concurrent';
@@ -1228,12 +1313,21 @@ export interface SampleTemplateSummary {
 export interface ProgramMilestone {
   id: string;
   program_id: string;
-  phase_id?: string;
+  phase_id?: string | null;
   name: string;
-  description?: string;
-  completion_percentage_threshold: number;
-  notification_message?: string;
+  description?: string | null;
+  /** Null for a milestone that waits only on its items. */
+  completion_percentage_threshold?: number | null;
+  notification_message?: string | null;
   created_at: string;
+  items?: MilestoneItem[];
+  item_match_mode?: MilestoneMatchMode;
+  counts_prior_completions?: boolean;
+  notify_member?: boolean;
+  /** Officer data: empty when a member views the program. */
+  notify_positions?: MilestoneRecipientLabel[];
+  notify_users?: MilestoneRecipientLabel[];
+  officer_message?: string | null;
 }
 
 export interface ProgramMilestoneCreate {
@@ -1241,8 +1335,15 @@ export interface ProgramMilestoneCreate {
   phase_id?: string | undefined;
   name: string;
   description?: string | undefined;
-  completion_percentage_threshold: number;
+  completion_percentage_threshold?: number | undefined;
   notification_message?: string | undefined;
+  items?: MilestoneItemInput[] | undefined;
+  item_match_mode?: MilestoneMatchMode | undefined;
+  counts_prior_completions?: boolean | undefined;
+  notify_member?: boolean | undefined;
+  notify_position_ids?: string[] | undefined;
+  notify_user_ids?: string[] | undefined;
+  officer_message?: string | undefined;
 }
 
 export interface ProgramEnrollment {
@@ -1363,6 +1464,8 @@ export interface MemberProgramProgress {
   completed_requirements: number;
   total_requirements: number;
   next_milestones: ProgramMilestone[];
+  /** Every milestone with the member's standing on it. */
+  milestones?: MemberMilestoneStatus[];
   time_remaining_days?: number;
   is_behind_schedule: boolean;
   /**
@@ -1408,6 +1511,8 @@ export interface ProgramImportSummary {
   requirements_created: string[];
   /** Existing department requirements the program will link to. */
   requirements_reused: string[];
+  /** Milestone items ("Milestone: item") with no match here; left off. */
+  unmatched_milestone_items?: string[];
 }
 
 export interface ProgramImportPreview {

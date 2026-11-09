@@ -123,7 +123,8 @@ GET    /api/v1/training/category-hours/{user_id}           # Per-category hour b
 GET    /api/v1/training/requirements                       # List requirements (filterable by source, type)
 POST   /api/v1/training/requirements                       # Create requirement
 PATCH  /api/v1/training/requirements/{id}                  # Update requirement
-DELETE /api/v1/training/requirements/{id}                  # Permanently delete requirement
+GET    /api/v1/training/requirements/{id}/deletion-impact  # What references a requirement, per kind
+DELETE /api/v1/training/requirements/{id}                  # Delete; deactivates if in use (?permanent=true deletes anyway)
 GET    /api/v1/training/categories                         # List training categories
 GET    /api/v1/training/categories/{id}                    # Get single category
 POST   /api/v1/training/categories                         # Create category

@@ -98,14 +98,14 @@ async def get_platform_analytics(
     """
     org_id = current_user.organization_id
     now = datetime.now(timezone.utc)
-    thirty_days_ago = now - timedelta(days=30)
-    # The two charted windows are whole local days ending today, and the
-    # totals shown above each chart count the same window, so a chart always
-    # adds up to the number printed over it.
+    # Every "last N days" figure is whole local days ending today: the two
+    # charts, the totals above them, and the other 30-day counts. Those last
+    # were a rolling ``now - 30 days``, which reached back into a 31st local
+    # day, so the same page counted two different months.
     tz = await resolve_reporting_timezone(db, org_id)
     today_local = now.astimezone(tz).date()
-    login_first_day = today_local - timedelta(days=29)
-    login_since = _local_midnight_utc(login_first_day, tz)
+    month_first_day = today_local - timedelta(days=29)
+    month_since = _local_midnight_utc(month_first_day, tz)
     error_first_day = today_local - timedelta(days=6)
     error_since = _local_midnight_utc(error_first_day, tz)
 
@@ -128,7 +128,7 @@ async def get_platform_analytics(
             select(func.count(User.id)).where(
                 User.organization_id == org_id,
                 User.deleted_at.is_(None),
-                User.last_login_at >= login_since,
+                User.last_login_at >= month_since,
             )
         )
         active_users = result.scalar() or 0
@@ -137,7 +137,7 @@ async def get_platform_analytics(
             select(func.count(User.id)).where(
                 User.organization_id == org_id,
                 User.deleted_at.is_(None),
-                User.created_at >= thirty_days_ago,
+                User.created_at >= month_since,
             )
         )
         new_users_last_30 = result.scalar() or 0
@@ -150,10 +150,10 @@ async def get_platform_analytics(
             [
                 User.organization_id == org_id,
                 User.deleted_at.is_(None),
-                User.last_login_at >= login_since,
+                User.last_login_at >= month_since,
             ],
             tz,
-            login_first_day,
+            month_first_day,
             30,
         )
 
@@ -276,7 +276,7 @@ async def get_platform_analytics(
             select(func.count(Event.id)).where(
                 Event.organization_id == org_id,
                 Event.is_cancelled.is_(False),
-                Event.created_at >= thirty_days_ago,
+                Event.created_at >= month_since,
             )
         )
         events_last_30 = result.scalar() or 0
@@ -299,7 +299,7 @@ async def get_platform_analytics(
             select(func.coalesce(func.sum(TrainingRecord.hours_completed), 0)).where(
                 TrainingRecord.organization_id == org_id,
                 TrainingRecord.status == TrainingStatus.COMPLETED,
-                TrainingRecord.completion_date >= thirty_days_ago.date(),
+                TrainingRecord.completion_date >= month_first_day,
             )
         )
         training_hours_last_30 = float(result.scalar() or 0)
@@ -310,7 +310,7 @@ async def get_platform_analytics(
         result = await db.execute(
             select(func.count(FormSubmission.id)).where(
                 FormSubmission.organization_id == org_id,
-                FormSubmission.created_at >= thirty_days_ago,
+                FormSubmission.created_at >= month_since,
             )
         )
         forms_submitted_last_30 = result.scalar() or 0
@@ -371,7 +371,7 @@ async def get_platform_analytics(
         result = await db.execute(
             select(func.count(Document.id)).where(
                 Document.organization_id == org_id,
-                Document.created_at >= thirty_days_ago,
+                Document.created_at >= month_since,
             )
         )
         documents_last_30 = result.scalar() or 0

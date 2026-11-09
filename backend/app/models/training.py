@@ -26,6 +26,7 @@ from sqlalchemy import (
     event,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import false as sa_false
 from sqlalchemy.sql import func
 from sqlalchemy.sql import true as sa_true
 
@@ -141,6 +142,32 @@ class RequirementProgressStatus(str, enum.Enum):
     COMPLETED = "completed"
     VERIFIED = "verified"  # Completed and verified by officer
     WAIVED = "waived"  # Requirement waived for this member
+
+
+class MilestoneItemType(str, enum.Enum):
+    """What a milestone completion item points at."""
+
+    COURSE = "course"
+    SKILL_TEST = "skill_test"
+    KNOWLEDGE_TEST = "knowledge_test"
+
+
+class MilestoneItemMatchMode(str, enum.Enum):
+    """How a milestone's completion items combine among themselves."""
+
+    ALL = "all"
+    ANY = "any"
+
+
+class MilestoneAchievementOutcome(str, enum.Enum):
+    """What happened when an enrollment was found to meet a milestone."""
+
+    # Reached while the milestone existed; the chosen recipients were told.
+    NOTIFIED = "notified"
+    # Already met when the milestone was created or its triggers edited, so
+    # nobody is told: announcing an old accomplishment as news confuses the
+    # member and the officers alike.
+    SKIPPED = "skipped"
 
 
 class TrainingCategory(Base):
@@ -2006,6 +2033,38 @@ class ProgramMilestone(Base):
     )  # Officer must verify
     verification_notes: Mapped[Optional[str]] = mapped_column(Text)
 
+    # Completion items (``items``) are joined to the percentage by AND, always.
+    # This only says how the items combine among themselves: every one of them
+    # ("all") or at least one ("any"). A department wanting "A or B" as two
+    # separate notices creates two milestones.
+    item_match_mode: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        default=MilestoneItemMatchMode.ALL.value,
+        server_default=MilestoneItemMatchMode.ALL.value,
+    )
+    # False: an item counts only when completed on or after the start of the
+    # member's current cycle (their enrollment, or the latest reset), so a
+    # re-enrolled or reset member earns the milestone again. True: a
+    # completion from any time counts.
+    counts_prior_completions: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=sa_false()
+    )
+
+    # Recipients. The member is notified by default, which is the behavior
+    # every milestone had before recipients could be chosen.
+    notify_member: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=sa_true()
+    )
+    # Position ids (Chief, Training Officer, Quartermaster, ...): everyone
+    # holding one is told. Resolved when the milestone is reached, so a new
+    # holder of the position is included and a former one is not.
+    notify_position_ids: Mapped[Optional[list[str]]] = mapped_column(JSON)
+    notify_user_ids: Mapped[Optional[list[str]]] = mapped_column(JSON)
+    # Added to the officers' notice, which names the member; the member's own
+    # notice uses notification_message instead.
+    officer_message: Mapped[Optional[str]] = mapped_column(Text)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -2015,11 +2074,116 @@ class ProgramMilestone(Base):
     phase: Mapped[Optional["ProgramPhase"]] = relationship(
         "ProgramPhase", back_populates="milestones"
     )
+    items: Mapped[list["ProgramMilestoneItem"]] = relationship(
+        "ProgramMilestoneItem",
+        back_populates="milestone",
+        cascade="all, delete-orphan",
+        order_by="ProgramMilestoneItem.sort_order",
+    )
 
     __table_args__ = (Index("idx_milestone_program", "program_id"),)
 
     def __repr__(self):
         return f"<ProgramMilestone(name={self.name}, threshold={self.completion_percentage_threshold})>"
+
+
+class ProgramMilestoneItem(Base):
+    """A course, skills test or knowledge test a milestone waits for.
+
+    Exactly one of the three target columns is set, matching ``item_type``;
+    the service enforces it on every write. CASCADE on each target: an item
+    whose course or test is deleted outright has nothing left to complete, and
+    keeping it would leave an "all" milestone that can never be reached.
+    """
+
+    __tablename__ = "program_milestone_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    milestone_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("program_milestones.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    item_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    course_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("training_courses.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    skill_template_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("skill_templates.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    knowledge_test_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("knowledge_tests.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    milestone: Mapped["ProgramMilestone"] = relationship(
+        "ProgramMilestone", back_populates="items"
+    )
+
+    @property
+    def target_id(self) -> Optional[str]:
+        return self.course_id or self.skill_template_id or self.knowledge_test_id
+
+    def __repr__(self):
+        return f"<ProgramMilestoneItem(type={self.item_type}, id={self.target_id})>"
+
+
+class ProgramMilestoneAchievement(Base):
+    """One enrollment's record of meeting one milestone.
+
+    The unique (milestone, enrollment) pair is what makes a milestone fire at
+    most once per enrollment: the progress write, the skills and knowledge test
+    hooks and the scheduled sweep can all evaluate the same member at once,
+    and only the one whose insert lands sends anything. A cycle reset deletes
+    the enrollment's rows so the new cycle earns its milestones again; a new
+    enrollment has none to begin with.
+    """
+
+    __tablename__ = "program_milestone_achievements"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    milestone_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("program_milestones.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    enrollment_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("program_enrollments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    outcome: Mapped[str] = mapped_column(String(20), nullable=False)
+    reached_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "milestone_id", "enrollment_id", name="uq_milestone_achievement"
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ProgramMilestoneAchievement(milestone={self.milestone_id}, "
+            f"enrollment={self.enrollment_id}, outcome={self.outcome})>"
+        )
 
 
 class ProgramEnrollment(Base):
