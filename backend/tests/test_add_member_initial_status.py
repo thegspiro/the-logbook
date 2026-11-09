@@ -9,7 +9,7 @@ mean (service history, property return), and a create would skip it.
 """
 
 import uuid
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import BackgroundTasks
@@ -107,7 +107,13 @@ class TestCreate:
     # row records, so the create's own audit row has to carry it. A member
     # added On Leave cannot sign in, and the audit log should say why.
     async def test_the_create_audit_records_the_starting_status(self, db_session):
-        user = await self._create(db_session, status="leave")
+        # The MagicMock request's repr is no IP address, and the audit
+        # write refuses it; give the row a real origin.
+        with patch(
+            "app.api.v1.endpoints.users._request_origin",
+            return_value={"ip_address": "203.0.113.5", "user_agent": "pytest"},
+        ):
+            user = await self._create(db_session, status="leave")
         rows = (
             (
                 await db_session.execute(
