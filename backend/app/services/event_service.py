@@ -237,6 +237,10 @@ class SeriesPhaseGateWarning(Exception):
 # until a department leader reopens the event. The endpoint layer turns this
 # into a 409 (conflicting state) rather than the 400 it gives a bad request —
 # nothing about the caller's payload is wrong, the event is closed.
+# The start every "check-in window closed" refusal shares, so a caller can
+# tell that refusal apart without matching the whole sentence.
+CHECK_IN_CLOSED_PREFIX = "Check-in has closed for this event."
+
 ATTENDANCE_LOCKED_PREFIX = "ATTENDANCE_LOCKED::"
 
 # Fields on an update payload that change what attendance means. Editing the
@@ -3430,6 +3434,16 @@ class EventService:
             event, now, tz_name
         )
         if not is_valid:
+            # The shared message tells a member to ask an event organizer,
+            # which said to the organizer sent them in a circle (workflow
+            # review W80-8). Here the caller is the organizer, so name the
+            # control that records a late arrival.
+            if error_msg and error_msg.startswith(CHECK_IN_CLOSED_PREFIX):
+                return None, (
+                    "Check-in has closed for this event. To record a member "
+                    "who was there, use Add a member and enter when they "
+                    "arrived and left."
+                )
             return None, error_msg
 
         # Verify user belongs to organization
@@ -4804,7 +4818,7 @@ class EventService:
         if now > check_in_end:
             return (
                 False,
-                "Check-in has closed for this event. Ask an event organizer to "
+                f"{CHECK_IN_CLOSED_PREFIX} Ask an event organizer to "
                 "record a late check-in.",
                 None,
             )
