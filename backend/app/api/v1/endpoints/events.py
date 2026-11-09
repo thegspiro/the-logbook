@@ -714,11 +714,12 @@ async def list_missed_mandatory_events(
 
     Narrower than `GET /events?mandatory_only=true&end_before=…` on purpose:
     that one would also return events held before the member was hired, events
-    held during an approved leave of absence, and events mandatory only for a
-    membership type the member does not hold. The events list shows these under
-    a heading promising they "clear as you respond", and none of those three can
-    be cleared by responding — so the exclusion belongs on the server, where a
-    forgetful client cannot skip it.
+    held during an approved leave of absence, events a training waiver excuses
+    (blanket, or naming a requirement the event's session counts toward), and
+    events mandatory only for a membership type the member does not hold. The
+    events list shows these under a heading promising they "clear as you
+    respond", and none of them can be cleared by responding — so the exclusion
+    belongs on the server, where a forgetful client cannot skip it.
 
     **Authentication required**
     """

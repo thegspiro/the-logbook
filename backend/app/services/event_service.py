@@ -40,7 +40,13 @@ from app.models.event import (
     default_reminder_target,
 )
 from app.models.notification import NotificationCategory, NotificationChannel
-from app.models.training import TrainingRecord, TrainingSession, TrainingStatus
+from app.models.training import (
+    TrainingRecord,
+    TrainingSession,
+    TrainingSessionRequirement,
+    TrainingStatus,
+    TrainingWaiver,
+)
 from app.models.user import MemberLeaveOfAbsence, Organization, User
 from app.schemas.event import (
     EventCreate,
@@ -859,11 +865,108 @@ class EventService:
         leaves = await self._active_leave_periods(organization_id, user_id)
         tz = await resolve_scheduling_timezone(self.db, organization_id)
 
-        return [
+        expected = [
             item
             for item in candidates
             if self._was_expected_at(item["event"], user, leaves, tz)
         ]
+        waivers = await self._active_training_waivers(organization_id, user_id)
+        if not expected or not waivers:
+            return expected
+        counts_toward = await self._event_requirement_ids(
+            organization_id, [str(item["event"].id) for item in expected]
+        )
+        return [
+            item
+            for item in expected
+            if not self._excused_by_training_waiver(
+                local_date(item["event"].start_datetime, tz),
+                counts_toward.get(str(item["event"].id), set()),
+                waivers,
+            )
+        ]
+
+    async def _active_training_waivers(
+        self, organization_id: UUID | str, user_id: UUID | str
+    ) -> List[Tuple[date, Optional[date], Set[str]]]:
+        """The member's active training waivers: start, end (None when
+        permanent) and the requirement ids named (empty for a blanket one)."""
+        result = await self.db.execute(
+            select(
+                TrainingWaiver.start_date,
+                TrainingWaiver.end_date,
+                TrainingWaiver.requirement_ids,
+            ).where(
+                TrainingWaiver.organization_id == str(organization_id),
+                TrainingWaiver.user_id == str(user_id),
+                TrainingWaiver.active.is_(True),
+            )
+        )
+        return [
+            (start, end, {str(r) for r in (ids or [])})
+            for start, end, ids in result.all()
+            if start is not None
+        ]
+
+    async def _event_requirement_ids(
+        self, organization_id: UUID | str, event_ids: List[str]
+    ) -> Dict[str, Set[str]]:
+        """For each event, the requirements its training session counts
+        toward: the session's own requirement and its attendance links."""
+        sessions = (
+            await self.db.execute(
+                select(
+                    TrainingSession.id,
+                    TrainingSession.event_id,
+                    TrainingSession.requirement_id,
+                ).where(
+                    TrainingSession.organization_id == str(organization_id),
+                    TrainingSession.event_id.in_(event_ids),
+                )
+            )
+        ).all()
+        by_event: Dict[str, Set[str]] = {}
+        event_of_session: Dict[str, str] = {}
+        for session_id, event_id, requirement_id in sessions:
+            event_of_session[str(session_id)] = str(event_id)
+            linked = by_event.setdefault(str(event_id), set())
+            if requirement_id:
+                linked.add(str(requirement_id))
+        if event_of_session:
+            links = await self.db.execute(
+                select(
+                    TrainingSessionRequirement.session_id,
+                    TrainingSessionRequirement.requirement_id,
+                ).where(
+                    TrainingSessionRequirement.organization_id == str(organization_id),
+                    TrainingSessionRequirement.session_id.in_(list(event_of_session)),
+                )
+            )
+            for session_id, requirement_id in links.all():
+                by_event[event_of_session[str(session_id)]].add(str(requirement_id))
+        return by_event
+
+    @staticmethod
+    def _excused_by_training_waiver(
+        event_date: date,
+        counts_toward: Set[str],
+        waivers: List[Tuple[date, Optional[date], Set[str]]],
+    ) -> bool:
+        """Whether a training waiver excuses the member from this event.
+
+        Workflow review W80-10 (owner decision 2026-11-08): the officer who
+        excuses a member from a drill with a training waiver should not leave
+        that drill under "missed", where responding cannot clear it. A waiver
+        excuses the event when its dates cover the event's day and it is
+        blanket, or names a requirement the event's session counts toward. A
+        waiver naming other requirements does not: it excused those, not this.
+        """
+        for start, end, named in waivers:
+            if event_date < start or (end is not None and event_date > end):
+                continue
+            if not named or named & counts_toward:
+                return True
+        return False
 
     async def _active_leave_periods(
         self, organization_id: UUID | str, user_id: UUID | str
