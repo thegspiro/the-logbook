@@ -207,3 +207,33 @@ async def test_inventory_impact_plan_pdf_export_is_audited(db_session: AsyncSess
     _assert_attachment(response, "impact-plan.pdf")
     rows = await _audit_rows(db_session, "inventory_impact_plan_exported", manager)
     assert [r.event_data for r in rows] == [{"format": "pdf"}]
+
+
+async def test_equipment_check_csv_export_is_audited(db_session: AsyncSession):
+    org_id = await _org(db_session, f"Audit-{uuid.uuid4().hex[:6]}")
+    viewer = await _user(db_session, org_id, "Viewer", ["inventory.check_view"])
+
+    async with _client(
+        db_session, viewer, equipment_endpoints.router, "/equipment-check"
+    ) as client:
+        response = await client.get(
+            "/equipment-check/reports/export/csv",
+            params={"report_type": "compliance"},
+        )
+
+    assert response.status_code == 200, response.text
+    assert (
+        response.headers["content-disposition"]
+        == 'attachment; filename="equipment_check_compliance.csv"'
+    )
+    rows = await _audit_rows(db_session, "equipment_check_report_exported", viewer)
+    assert [r.event_data for r in rows] == [
+        {
+            "report_type": "compliance",
+            "format": "csv",
+            "apparatus_id": None,
+            "template_item_id": None,
+            "date_from": None,
+            "date_to": None,
+        }
+    ]

@@ -1140,6 +1140,7 @@ async def export_my_training(
                 start_date=start_date,
                 end_date=end_date,
                 include_certifications=include_certifications,
+                generated_by=current_user.full_name,
             )
             return StreamingResponse(
                 pdf_buf,

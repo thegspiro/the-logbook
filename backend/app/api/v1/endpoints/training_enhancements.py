@@ -651,18 +651,21 @@ async def export_report(
                     current_user.organization_id,
                     start_date=data.start_date,
                     end_date=data.end_date,
+                    generated_by=current_user.full_name,
                 )
             elif data.report_type == "member_records":
                 pdf_buf = await service.generate_bulk_pdf(
                     current_user.organization_id,
                     start_date=data.start_date,
                     end_date=data.end_date,
+                    generated_by=current_user.full_name,
                 )
             elif data.report_type == "compliance":
                 pdf_buf = await service.generate_compliance_pdf(
                     current_user.organization_id,
                     start_date=data.start_date,
                     end_date=data.end_date,
+                    generated_by=current_user.full_name,
                 )
             else:
                 raise ValueError(

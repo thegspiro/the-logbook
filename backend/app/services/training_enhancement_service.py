@@ -6,10 +6,20 @@ instructor qualifications, training effectiveness, multi-agency training,
 report exports, and xAPI ingestion.
 """
 
+import asyncio
 import io
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, AsyncIterator, Dict, List, Mapping, Optional, Sequence
+from typing import (
+    Any,
+    AsyncIterator,
+    Dict,
+    List,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+)
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,6 +60,7 @@ from app.utils.csv_export import SafeCsvChunks, collect_csv
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
 from app.utils.org_timezone import (
+    format_in_org_timezone,
     local_date,
     resolve_org_today,
     resolve_scheduling_timezone,
@@ -92,6 +103,25 @@ def _forecast_pct(met: int, total: int, expiring_count: int) -> Optional[float]:
         return None
     current = met / total * 100
     return round(max(0, current - (expiring_count / total * 100)), 1)
+
+
+class _ComplianceRow(NamedTuple):
+    """One member's line in the compliance PDF, as plain values."""
+
+    name: str
+    email: str
+    hours: float
+    records: int
+    cells: List[str]
+
+
+class _MemberRecords(NamedTuple):
+    """One member's section in the bulk records PDF, as plain values."""
+
+    id: str
+    name: str
+    rows: List[Dict[str, str]]
+    hours: float
 
 
 def _requirement_cells(
@@ -1459,16 +1489,47 @@ class ReportExportService:
 
         return forecasts
 
+    async def _report_header(self, organization_id: str) -> Dict[str, Any]:
+        """The department's name, logo and the generated-at stamp, in its own
+        time zone, for a report's letterhead and footer. Plain values, so
+        the layout can run off the event loop without touching the session."""
+        from app.models.user import Organization
+
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+        ).scalar_one_or_none()
+        return {
+            "org_name": org.name if org else None,
+            "logo": org.logo if org else None,
+            "generated_at": format_in_org_timezone(
+                datetime.now(timezone.utc), org, "%Y-%m-%d %H:%M %Z"
+            ),
+        }
+
     async def generate_compliance_pdf(
         self,
         organization_id: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        generated_by: Optional[str] = None,
     ) -> io.BytesIO:
-        """Generate a compliance report as a PDF document."""
-        from reportlab.lib.pagesizes import letter
+        """Generate a compliance report as a PDF document.
+
+        A member-by-requirement matrix. Requirements that do not fit across
+        the page are printed in further column bands, each repeating the
+        member columns, rather than being dropped off the right edge.
+        """
         from reportlab.lib.units import inch
-        from reportlab.pdfgen import canvas
+
+        from app.utils.pdf_report_kit import (
+            ReportMeta,
+        )
+        from app.utils.pdf_report_kit import cell as pdf_cell
+        from app.utils.pdf_report_kit import column_bands, data_table, kpi_strip
+        from app.utils.pdf_report_kit import num as pdf_num
+        from app.utils.pdf_report_kit import render_report, section_heading
 
         if not end_date:
             end_date = await resolve_org_today(self.db, organization_id)
@@ -1482,6 +1543,7 @@ class ReportExportService:
             .where(User.status.in_(ACTIVE_ACCOUNT_STATUSES))
             .where(User.compliance_exempt.is_(False))
             .where(User.deleted_at.is_(None))
+            .order_by(User.last_name, User.first_name)
         )
         users = users_result.scalars().all()
 
@@ -1489,6 +1551,7 @@ class ReportExportService:
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == organization_id)
             .where(TrainingRequirement.active.is_(True))
+            .order_by(TrainingRequirement.name)
         )
         requirements = req_result.scalars().all()
 
@@ -1508,86 +1571,208 @@ class ReportExportService:
             self.db, str(organization_id), requirements
         )
 
-        buf = io.BytesIO()
-        c = canvas.Canvas(buf, pagesize=letter)
-        page_w, page_h = letter
-        margin = 0.75 * inch
+        # One query for the whole window, grouped here, instead of one query
+        # per member inside the layout loop.
+        records_by_user: Dict[str, List[TrainingRecord]] = {}
+        records_result = await self.db.execute(
+            select(TrainingRecord)
+            .where(TrainingRecord.organization_id == organization_id)
+            .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+            .where(TrainingRecord.completion_date >= start_date)
+            .where(TrainingRecord.completion_date <= end_date)
+        )
+        for record in records_result.scalars().all():
+            records_by_user.setdefault(str(record.user_id), []).append(record)
 
-        # Title
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(margin, page_h - margin, "Training Compliance Report")
-        c.setFont("Helvetica", 10)
-        c.drawString(
-            margin,
-            page_h - margin - 18,
-            f"Period: {start_date} to {end_date}  |  Generated: {generated_on}",
+        member_rows: List[_ComplianceRow] = []
+        for user in users:
+            records = records_by_user.get(str(user.id), [])
+            member_rows.append(
+                _ComplianceRow(
+                    name=f"{user.first_name} {user.last_name}",
+                    email=user.email or "",
+                    hours=float(sum(r.hours_completed or 0 for r in records)),
+                    records=len(records),
+                    cells=_requirement_cells(
+                        requirements,
+                        user,
+                        records,
+                        generated_on,
+                        shifts_by_user.get(str(user.id), []),
+                        held_sessions,
+                    ),
+                )
+            )
+        requirement_names = [req.name for req in requirements]
+        # A count of the cells printed below, not a second definition of
+        # compliance (Pitfall #29): "Not Met" is _requirement_cells' verdict.
+        unmet = sum(row.cells.count("Not Met") for row in member_rows)
+
+        header = await self._report_header(organization_id)
+        meta = ReportMeta(
+            "Training Compliance Report",
+            header["org_name"],
+            header["generated_at"],
+            logo=header["logo"],
+            generated_by=generated_by,
+            parameters=[
+                ("Period", f"{start_date} to {end_date}"),
+                ("Graded as of", generated_on.isoformat()),
+            ],
+            subject="Training compliance",
+            wide=True,
+        )
+        width = meta.width
+        name_w, hours_w, count_w, req_w = (
+            2.1 * inch,
+            0.7 * inch,
+            0.75 * inch,
+            0.95 * inch,
+        )
+        bands = column_bands(
+            len(requirement_names), width, name_w + hours_w + count_w, req_w
         )
 
-        # Table header
-        y = page_h - margin - 50
-        col_x = [margin, margin + 160, margin + 280, margin + 370]
-        headers = ["Member Name", "Email", "Total Hours", "Completed"]
-        req_col_start = margin + 450
-        c.setFont("Helvetica-Bold", 8)
-        for i, h in enumerate(headers):
-            c.drawString(col_x[i], y, h)
-        for i, req in enumerate(requirements):
-            x = req_col_start + i * 70
-            if x + 60 > page_w - margin:
-                break
-            name = req.name[:10] + ("..." if len(req.name) > 10 else "")
-            c.drawString(x, y, name)
+        def body(styles: Dict[str, Any]) -> List[Any]:
+            from reportlab.platypus import Paragraph, Spacer
 
-        y -= 4
-        c.setLineWidth(0.5)
-        c.line(margin, y, page_w - margin, y)
-        y -= 12
+            story: List[Any] = [
+                kpi_strip(
+                    [
+                        ("Members", len(member_rows)),
+                        ("Active requirements", len(requirement_names)),
+                        (
+                            "Training hours",
+                            f"{sum(r.hours for r in member_rows):.1f}",
+                        ),
+                        ("Unmet requirement cells", unmet),
+                    ],
+                    width,
+                ),
+                Spacer(1, 12),
+            ]
+            if not member_rows:
+                story.append(
+                    Paragraph("No members are graded for compliance.", styles["body"])
+                )
+                return story
+            for start, stop in bands:
+                names = requirement_names[start:stop]
+                if len(bands) > 1:
+                    story.append(
+                        section_heading(
+                            f"Requirements {start + 1}–{stop} of "
+                            f"{len(requirement_names)}",
+                            styles,
+                        )
+                    )
+                rows = []
+                emphasis = []
+                for index, row in enumerate(member_rows):
+                    cells = row.cells[start:stop]
+                    if "Not Met" in cells:
+                        emphasis.append(index)
+                    rows.append(
+                        [
+                            [
+                                pdf_cell(row.name, styles["cell_bold"]),
+                                pdf_cell(row.email, styles["cell_muted"]),
+                            ],
+                            pdf_num(f"{row.hours:.1f}"),
+                            pdf_num(row.records),
+                            *[
+                                pdf_cell(
+                                    text,
+                                    styles["cell_bold"] if text == "Not Met" else None,
+                                )
+                                for text in cells
+                            ],
+                        ]
+                    )
+                # One band stretches the member column to the page; several
+                # keep it the same width in each, so the bands line up.
+                member_w = (
+                    width - hours_w - count_w - req_w * len(names)
+                    if len(bands) == 1
+                    else name_w
+                )
+                story.append(
+                    data_table(
+                        ["Member", "Hours", "Records", *names],
+                        rows,
+                        [member_w, hours_w, count_w, *([req_w] * len(names))],
+                        numeric_cols=(1, 2),
+                        emphasis_rows=emphasis,
+                    )
+                )
+                story.append(Spacer(1, 12))
+            return story
 
-        c.setFont("Helvetica", 8)
-        for user in users:
-            if y < margin + 20:
-                c.showPage()
-                y = page_h - margin
-                c.setFont("Helvetica", 8)
+        pdf = await asyncio.to_thread(render_report, meta, body)
+        return io.BytesIO(pdf)
 
-            records_result = await self.db.execute(
-                select(TrainingRecord)
-                .where(TrainingRecord.user_id == str(user.id))
-                .where(TrainingRecord.organization_id == organization_id)
-                .where(TrainingRecord.status == TrainingStatus.COMPLETED)
-                .where(TrainingRecord.completion_date >= start_date)
-                .where(TrainingRecord.completion_date <= end_date)
+    @staticmethod
+    def _individual_rows(records: Sequence[TrainingRecord]) -> List[Dict[str, str]]:
+        """A member's records as plain strings, ready for layout."""
+        rows = []
+        for r in records:
+            rows.append(
+                {
+                    "course": r.course_name or "",
+                    "type": (
+                        r.training_type.value
+                        if hasattr(r.training_type, "value")
+                        else str(r.training_type or "")
+                    ),
+                    "completed": str(r.completion_date) if r.completion_date else "",
+                    "hours": f"{r.hours_completed:.1f}" if r.hours_completed else "0",
+                    "cert": r.certification_number or "",
+                    "expires": str(r.expiration_date) if r.expiration_date else "",
+                }
             )
-            records = records_result.scalars().all()
-            total_hours = sum(r.hours_completed or 0 for r in records)
+        return rows
 
-            c.drawString(col_x[0], y, f"{user.first_name} {user.last_name}"[:25])
-            c.drawString(col_x[1], y, (user.email or "")[:20])
-            c.drawString(col_x[2], y, f"{total_hours:.1f}")
-            c.drawString(col_x[3], y, str(len(records)))
+    @staticmethod
+    def _individual_table(
+        rows: List[Dict[str, str]],
+        width: float,
+        include_certifications: bool,
+        styles: Dict[str, Any],
+    ) -> List[Any]:
+        from reportlab.lib.units import inch
+        from reportlab.platypus import Paragraph
 
-            cells = _requirement_cells(
-                requirements,
-                user,
-                records,
-                generated_on,
-                shifts_by_user.get(str(user.id), []),
-                held_sessions,
+        from app.utils.pdf_report_kit import cell as pdf_cell
+        from app.utils.pdf_report_kit import data_table
+        from app.utils.pdf_report_kit import num as pdf_num
+
+        if not rows:
+            return [Paragraph("No completed training in this period.", styles["body"])]
+        headers = ["Course", "Type", "Completed", "Hours"]
+        widths = [1.25 * inch, 0.8 * inch, 0.55 * inch]
+        if include_certifications:
+            headers += ["Cert #", "Expires"]
+            widths += [1.85 * inch, 0.8 * inch]
+        table_rows = []
+        for row in rows:
+            cells = [
+                pdf_cell(row["course"]),
+                pdf_cell(row["type"]),
+                pdf_cell(row["completed"]),
+                pdf_num(row["hours"]),
+            ]
+            if include_certifications:
+                cells += [pdf_cell(row["cert"]), pdf_cell(row["expires"])]
+            table_rows.append(cells)
+        return [
+            data_table(
+                headers,
+                table_rows,
+                [width - sum(widths), *widths],
+                numeric_cols=(3,),
+                zebra=True,
             )
-            for i, status_text in enumerate(cells):
-                x = req_col_start + i * 70
-                if x + 60 > page_w - margin:
-                    break
-                if status_text == "Not Met":
-                    c.setFillColorRGB(0.8, 0, 0)
-                c.drawString(x, y, status_text)
-                c.setFillColorRGB(0, 0, 0)
-
-            y -= 14
-
-        c.save()
-        buf.seek(0)
-        return buf
+        ]
 
     async def generate_individual_pdf(
         self,
@@ -1596,6 +1781,7 @@ class ReportExportService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         include_certifications: bool = True,
+        generated_by: Optional[str] = None,
     ) -> io.BytesIO:
         """Generate an individual training history PDF.
 
@@ -1605,9 +1791,9 @@ class ReportExportService:
         for the member-facing export of a department that has switched
         ``show_certification_status`` off.
         """
-        from reportlab.lib.pagesizes import letter
-        from reportlab.lib.units import inch
-        from reportlab.pdfgen import canvas
+        from reportlab.platypus import Spacer
+
+        from app.utils.pdf_report_kit import ReportMeta, kpi_strip, render_report
 
         if not end_date:
             end_date = await resolve_org_today(self.db, organization_id)
@@ -1635,93 +1821,42 @@ class ReportExportService:
         if start_date:
             query = query.where(TrainingRecord.completion_date >= start_date)
 
-        records_result = await self.db.execute(query)
-        records = records_result.scalars().all()
-
-        buf = io.BytesIO()
-        c = canvas.Canvas(buf, pagesize=letter)
-        page_w, page_h = letter
-        margin = 0.75 * inch
-
-        # Title
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(margin, page_h - margin, "Individual Training Report")
-        c.setFont("Helvetica", 10)
-        c.drawString(margin, page_h - margin - 18, f"Member: {user_name}")
+        records = (await self.db.execute(query)).scalars().all()
+        rows = self._individual_rows(records)
+        total_hours = sum(r.hours_completed or 0 for r in records)
         period_label = (
             f"{start_date} to {end_date}"
             if start_date
             else f"All time through {end_date}"
         )
-        c.drawString(
-            margin,
-            page_h - margin - 32,
-            f"Period: {period_label}  |  Total Records: {len(records)}",
+
+        header = await self._report_header(organization_id)
+        meta = ReportMeta(
+            "Individual Training Report",
+            header["org_name"],
+            header["generated_at"],
+            logo=header["logo"],
+            generated_by=generated_by,
+            parameters=[("Member", user_name), ("Period", period_label)],
+            subject=f"Training record: {user_name}",
         )
+        width = meta.width
 
-        # Table header
-        y = page_h - margin - 60
-        col_x = [
-            margin,
-            margin + 150,
-            margin + 230,
-            margin + 300,
-            margin + 360,
-            margin + 420,
-        ]
-        headers = [
-            "Course Name",
-            "Type",
-            "Completed",
-            "Hours",
-        ]
-        if include_certifications:
-            headers += ["Cert #", "Expires"]
-        c.setFont("Helvetica-Bold", 8)
-        for i, h in enumerate(headers):
-            c.drawString(col_x[i], y, h)
+        def body(styles: Dict[str, Any]) -> List[Any]:
+            return [
+                kpi_strip(
+                    [
+                        ("Completed records", len(rows)),
+                        ("Training hours", f"{total_hours:.1f}"),
+                    ],
+                    width,
+                ),
+                Spacer(1, 12),
+                *self._individual_table(rows, width, include_certifications, styles),
+            ]
 
-        y -= 4
-        c.setLineWidth(0.5)
-        c.line(margin, y, page_w - margin, y)
-        y -= 12
-
-        c.setFont("Helvetica", 8)
-        for r in records:
-            if y < margin + 20:
-                c.showPage()
-                y = page_h - margin
-                c.setFont("Helvetica", 8)
-
-            training_type = (
-                r.training_type.value
-                if hasattr(r.training_type, "value")
-                else str(r.training_type)
-            )
-            c.drawString(col_x[0], y, (r.course_name or "")[:25])
-            c.drawString(col_x[1], y, training_type[:12])
-            c.drawString(
-                col_x[2],
-                y,
-                str(r.completion_date) if r.completion_date else "",
-            )
-            c.drawString(
-                col_x[3],
-                y,
-                f"{r.hours_completed:.1f}" if r.hours_completed else "0",
-            )
-            if include_certifications:
-                c.drawString(col_x[4], y, (r.certification_number or "")[:15])
-                c.drawString(
-                    col_x[5],
-                    y,
-                    str(r.expiration_date) if r.expiration_date else "",
-                )
-            y -= 14
-
-        c.save()
-        buf.seek(0)
-        return buf
+        pdf = await asyncio.to_thread(render_report, meta, body)
+        return io.BytesIO(pdf)
 
     async def generate_bulk_csv(
         self,
@@ -1828,78 +1963,107 @@ class ReportExportService:
         organization_id: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        generated_by: Optional[str] = None,
     ) -> io.BytesIO:
         """Generate a combined PDF with one report section per member.
 
         Only members with at least one completed record in the window are
         included (to avoid blank pages). A missing ``start_date`` means no
         lower bound (lifetime export).
+
+        Laid out as one document, not separate PDFs stitched together, so
+        the page numbers run across the whole bundle and each member has an
+        entry in the reader's sidebar.
         """
-        from pypdf import PdfReader, PdfWriter
+        from reportlab.platypus import CondPageBreak, PageBreak, Paragraph
+
+        from app.utils.pdf_report_kit import (
+            ReportMeta,
+            bookmark,
+            render_report,
+            section_heading,
+        )
 
         if not end_date:
             end_date = await resolve_org_today(self.db, organization_id)
 
-        # Members who actually have records in the window.
-        member_query = (
-            select(TrainingRecord.user_id)
+        query = (
+            select(TrainingRecord)
             .where(TrainingRecord.organization_id == organization_id)
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
             .where(TrainingRecord.completion_date <= end_date)
-            .distinct()
+            .order_by(TrainingRecord.completion_date.desc())
         )
         if start_date:
-            member_query = member_query.where(
-                TrainingRecord.completion_date >= start_date
-            )
-        user_ids = {row[0] for row in (await self.db.execute(member_query)).all()}
+            query = query.where(TrainingRecord.completion_date >= start_date)
+        records_by_user: Dict[str, List[TrainingRecord]] = {}
+        for record in (await self.db.execute(query)).scalars().all():
+            records_by_user.setdefault(str(record.user_id), []).append(record)
 
         ordered_users = []
-        if user_ids:
+        if records_by_user:
             users_result = await self.db.execute(
                 select(User)
-                .where(User.id.in_(user_ids))
+                .where(User.id.in_(list(records_by_user)))
                 .where(User.organization_id == organization_id)
                 .order_by(User.last_name, User.first_name)
             )
             ordered_users = list(users_result.scalars().all())
 
-        writer = PdfWriter()
-        for user in ordered_users:
-            member_pdf = await self.generate_individual_pdf(
-                str(user.id),
-                organization_id,
-                start_date=start_date,
-                end_date=end_date,
+        members = [
+            _MemberRecords(
+                id=str(user.id),
+                name=f"{user.first_name} {user.last_name}",
+                rows=self._individual_rows(records_by_user[str(user.id)]),
+                hours=float(
+                    sum(r.hours_completed or 0 for r in records_by_user[str(user.id)])
+                ),
             )
-            reader = PdfReader(member_pdf)
-            for page in reader.pages:
-                writer.add_page(page)
+            for user in ordered_users
+        ]
+        period_label = (
+            f"{start_date} to {end_date}"
+            if start_date
+            else f"All time through {end_date}"
+        )
 
-        if len(writer.pages) == 0:
-            # No records anywhere — emit a single informational page so the
-            # response is still a valid PDF.
-            from reportlab.lib.pagesizes import letter
-            from reportlab.lib.units import inch
-            from reportlab.pdfgen import canvas
+        header = await self._report_header(organization_id)
+        meta = ReportMeta(
+            "Member Training Records",
+            header["org_name"],
+            header["generated_at"],
+            logo=header["logo"],
+            generated_by=generated_by,
+            parameters=[("Period", period_label), ("Members", len(members))],
+            subject="Training records, all members",
+        )
+        width = meta.width
 
-            placeholder = io.BytesIO()
-            c = canvas.Canvas(placeholder, pagesize=letter)
-            _, page_h = letter
-            c.setFont("Helvetica-Bold", 14)
-            c.drawString(
-                inch, page_h - inch, "No training records found for this period."
-            )
-            c.save()
-            placeholder.seek(0)
-            reader = PdfReader(placeholder)
-            for page in reader.pages:
-                writer.add_page(page)
+        def body(styles: Dict[str, Any]) -> List[Any]:
+            if not members:
+                return [
+                    Paragraph(
+                        "No training records found for this period.", styles["body"]
+                    )
+                ]
+            story: List[Any] = []
+            for index, member in enumerate(members):
+                if index:
+                    story.append(PageBreak())
+                story += [
+                    bookmark(member.name, f"member-{member.id}"),
+                    CondPageBreak(120),
+                    section_heading(
+                        f"{member.name} · {len(member.rows)} records · "
+                        f"{member.hours:.1f} hours",
+                        styles,
+                    ),
+                    *self._individual_table(member.rows, width, True, styles),
+                ]
+            return story
 
-        out = io.BytesIO()
-        writer.write(out)
-        out.seek(0)
-        return out
+        pdf = await asyncio.to_thread(render_report, meta, body)
+        return io.BytesIO(pdf)
 
     async def generate_hours_summary_csv(
         self,
