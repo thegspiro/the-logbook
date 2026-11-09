@@ -434,6 +434,12 @@ class EventRequestListItem(UTCResponseBase):
     task_completions: Optional[Dict[str, Any]] = None
     event_date: Optional[datetime] = None
     staffing_shift_id: Optional[str] = None
+    # Intake flagged the request as arriving inside the department's lead time
+    # (a `lead_time_warning` activity row); see `short_notice_request_ids`.
+    short_notice: bool = False
+    # Seats on the request's live signup sheet; both null when it has none.
+    staffing_slots_filled: Optional[int] = None
+    staffing_slots_total: Optional[int] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
