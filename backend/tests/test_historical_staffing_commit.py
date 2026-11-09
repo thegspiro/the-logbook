@@ -427,3 +427,39 @@ def test_an_unfilled_seat_with_a_date_passes_the_response_schema():
         }
     )
     assert view.items[0].date == date(2016, 5, 2)
+
+
+@pytest.mark.unit
+def test_a_member_to_create_is_shown_by_the_name_they_will_get():
+    from app.services import shift_history_import_engine as shift_engine
+    from app.services.historical_import_service import _member_views
+
+    named = shift_engine.resolve_member(
+        shift_engine.identity_from_values(
+            {"membership_number": "1005", "member_name": "James Fortner"}
+        ),
+        [],
+        {"action": "create"},
+    )
+    number_only = shift_engine.resolve_member(
+        shift_engine.identity_from_values({"membership_number": "2013"}),
+        [],
+        {"action": "create"},
+    )
+
+    views = {v["key"]: v for v in _member_views({"a": named, "b": number_only})}
+
+    assert (
+        views["number:1005"]["new_first_name"],
+        views["number:1005"]["new_last_name"],
+    ) == (
+        "James",
+        "Fortner",
+    )
+    assert (
+        views["number:2013"]["new_first_name"],
+        views["number:2013"]["new_last_name"],
+    ) == (
+        shift_engine.FORMER_MEMBER_FIRST_NAME,
+        "2013",
+    )

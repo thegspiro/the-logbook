@@ -1812,6 +1812,12 @@ class _MemberResolver:
         return " ".join(p for p in (named or ("", "")) if p)
 
 
+def _created_name(resolution: shift_engine.MemberResolution) -> Tuple[str, str]:
+    if resolution.status != shift_engine.MEMBER_CREATE:
+        return resolution.new_first, resolution.new_last
+    return shift_engine.new_member_name(resolution) or ("", "")
+
+
 def _member_views(
     resolutions: Mapping[str, shift_engine.MemberResolution],
 ) -> List[Dict[str, Any]]:
@@ -1829,8 +1835,11 @@ def _member_views(
             "status": r.status,
             "reason": r.reason,
             "candidate_ids": r.candidate_ids,
-            "new_first_name": r.new_first,
-            "new_last_name": r.new_last,
+            # The name the commit will give the record, not only one the
+            # reviewer typed: the screens read "will be created as" from these,
+            # and a named member left blank here read as "Former member <n>".
+            "new_first_name": _created_name(r)[0],
+            "new_last_name": _created_name(r)[1],
             "row_count": len(r.row_ids),
         }
         for r in sorted(shown, key=lambda r: r.key)
