@@ -3112,6 +3112,14 @@ class EventService:
             )
             self.db.add(rsvp)
 
+        if rsvp.checked_in:
+            # As check_in_attendee: the placeholder a self check-in starts
+            # (W80-14). It skips a member who already holds the record.
+            await self.db.flush()
+            await self._auto_create_training_record(
+                event, rsvp, user_id, organization_id
+            )
+
         await self.db.commit()
         await self.db.refresh(rsvp)
 
@@ -3460,6 +3468,12 @@ class EventService:
 
         rsvp.checked_in = True
         rsvp.checked_in_at = datetime.now(dt_timezone.utc)
+
+        # The same placeholder a self check-in starts, under the same lock: an
+        # officer checking a member in left them with no in-progress record
+        # until finalize (workflow review W80-14).
+        await self.db.flush()
+        await self._auto_create_training_record(event, rsvp, user_id, organization_id)
 
         await self.db.commit()
         await self.db.refresh(rsvp)

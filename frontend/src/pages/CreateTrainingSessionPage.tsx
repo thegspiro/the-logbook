@@ -317,7 +317,8 @@ const CreateTrainingSessionPage: React.FC = () => {
         className="form-input placeholder-theme-text-muted py-3"
       />
       <p id="session-credit-hours-help" className="text-theme-text-muted mt-1 text-xs">
-        The training hours each attendee is credited with.
+        The session&apos;s planned length. Each attendee is credited with the time they actually attended — from
+        check-in to check-out, or as corrected — not this figure.
       </p>
     </div>
   );
@@ -1279,7 +1280,10 @@ const CreateTrainingSessionPage: React.FC = () => {
                   )}
                 </ReviewSection>
 
-                {(formData.category_id || formData.program_id || formData.requirement_id) && (
+                {(formData.category_id ||
+                  formData.program_id ||
+                  formData.requirement_id ||
+                  (formData.attendance_requirement_ids ?? []).length > 0) && (
                   <ReviewSection title="Requirement & Program Links">
                     {formData.category_id && (
                       <ReviewItem label="Category" value={categoryName ?? 'Selected category'} />
@@ -1289,6 +1293,16 @@ const CreateTrainingSessionPage: React.FC = () => {
                     )}
                     {formData.program_id && <ReviewItem label="Program" value={programName ?? 'Selected program'} />}
                     {formData.phase_id && <ReviewItem label="Phase" value={phaseName ?? 'Selected phase'} />}
+                    {/* Ticked on step 2 and saved, but the review left them out
+                        (workflow review W80-12). */}
+                    {(formData.attendance_requirement_ids ?? []).length > 0 && (
+                      <ReviewItem
+                        label="Counts toward attendance"
+                        value={(formData.attendance_requirement_ids ?? [])
+                          .map((id) => requirements.find((r) => r.id === id)?.name ?? 'Selected requirement')
+                          .join(', ')}
+                      />
+                    )}
                   </ReviewSection>
                 )}
 
