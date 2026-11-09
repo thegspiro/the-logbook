@@ -32,6 +32,9 @@ interface EventCheckInModalProps {
   onCheckIn: (userId: string) => void;
   onClose: () => void;
   timezone: string;
+  /** Shown once check-in has closed: the form that records one member with
+   * the times they were there (workflow review W80-8). */
+  lateEntry?: React.ReactNode;
 }
 
 const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
@@ -45,6 +48,7 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
   onCheckIn,
   onClose,
   timezone,
+  lateEntry,
 }) => {
   const filteredMembers = eligibleMembers.filter(
     (member) =>
@@ -82,6 +86,8 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
             screen where attendance is actually changed. */}
         {organizerName && <p className="text-theme-text-muted mt-1 text-sm">Event organized by {organizerName}</p>}
       </div>
+
+      {lateEntry}
 
       <div className="mb-4">
         <button

@@ -277,10 +277,10 @@ const BudgetRequestReviewPage: React.FC = () => {
                     </td>
                     <td data-label="Submitted" className={`${CELL} text-theme-text-secondary`}>
                       {r.submittedAt ? (
-                        <>
+                        <div className="min-w-0">
                           {r.submittedByName ?? 'Unknown'}
                           <span className="block text-xs">{formatDate(r.submittedAt, tz)}</span>
-                        </>
+                        </div>
                       ) : (
                         'Not submitted'
                       )}
@@ -299,14 +299,14 @@ const BudgetRequestReviewPage: React.FC = () => {
                     </td>
                     <td data-label="Leadership" className={MONEY_CELL}>
                       {r.reviewAmount != null ? (
-                        <>
+                        <div className="min-w-0">
                           {formatCurrency(r.reviewAmount)}
                           {r.reviewedByName && (
                             <span className="text-theme-text-secondary block text-xs font-normal">
                               {r.reviewedByName}
                             </span>
                           )}
-                        </>
+                        </div>
                       ) : (
                         <span className="text-theme-text-secondary">No change</span>
                       )}
