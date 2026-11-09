@@ -206,17 +206,25 @@ describe('CommandPalette hub destinations', () => {
   // the hub's training.manage, and the palette must not offer it without one.
   it('offers Compliance Settings only with the permission it needs', async () => {
     await search('compliance settings');
-    expect(screen.queryByRole('option', { name: /Compliance Settings/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /^Compliance.*Thresholds, profiles/ })).not.toBeInTheDocument();
   });
 
   it('opens Compliance Settings under Settings & Data for a compliance officer', async () => {
     permissions.current.add('compliance.manage');
     const user = await search('compliance settings');
 
-    await user.click(screen.getByRole('option', { name: /Compliance Settings/ }));
+    await user.click(screen.getByRole('option', { name: /^Compliance.*Thresholds, profiles/ }));
 
     expect(window.location.pathname).toBe('/training/admin');
     expect(window.location.search).toBe('?page=settings&tab=compliance-settings');
+  });
+
+  // The Settings & Data tabs were shortened to fit one row; a search for the
+  // name they used to show must still find them.
+  it('finds a shortened Settings & Data tab by its full name', async () => {
+    await search('import past training');
+
+    expect(screen.getByRole('option', { name: /^Import History/ })).toBeInTheDocument();
   });
 
   it('opens the store console at the chosen tab', async () => {

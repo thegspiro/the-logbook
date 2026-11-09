@@ -376,7 +376,10 @@ export const ElectionDetailPage: React.FC = () => {
   };
 
   const handleImportMeetingAttendees = async () => {
-    if (!electionId || !election?.meeting_id) return;
+    // Same condition that shows the button: the backend imports from a linked
+    // meeting or a linked event, and an event-only guard made the event
+    // button a silent no-op.
+    if (!electionId || !(election?.meeting_id || election?.event_id)) return;
 
     try {
       setIsImportingAttendees(true);

@@ -73,6 +73,7 @@ import type {
   ProgramEnrollment,
   ProgramEnrollmentCreate,
   ProgramEnrollmentWithUser,
+  MilestoneOptions,
   ProgramMilestone,
   ProgramMilestoneCreate,
   ProgramMilestoneUpdate,
@@ -112,6 +113,7 @@ import type {
   TrainingReport,
   TrainingRequirement,
   TrainingRequirementCreate,
+  TrainingRequirementDeletionImpact,
   TrainingRequirementEnhanced,
   TrainingRequirementEnhancedCreate,
   TrainingRequirementUpdate,
@@ -338,9 +340,26 @@ export const trainingService = {
   },
 
   /**
-   * Permanently delete a training requirement
+   * What uses a training requirement, so the delete dialog can say what a
+   * delete would do to it
    */
-  async deleteRequirement(requirementId: string): Promise<void> {
+  async getRequirementDeletionImpact(requirementId: string): Promise<TrainingRequirementDeletionImpact> {
+    const response = await api.get<TrainingRequirementDeletionImpact>(
+      `/training/requirements/${requirementId}/deletion-impact`
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete a training requirement. The backend deactivates one that is still
+   * in use, unless `permanent` is set, which deletes it regardless and removes
+   * or unlinks every record that references it.
+   */
+  async deleteRequirement(requirementId: string, options?: { permanent?: boolean }): Promise<void> {
+    if (options?.permanent) {
+      await api.delete(`/training/requirements/${requirementId}`, { params: { permanent: true } });
+      return;
+    }
     await api.delete(`/training/requirements/${requirementId}`);
   },
 
@@ -989,6 +1008,12 @@ export const trainingProgramService = {
       `/training/programs/programs/${programId}/milestones/${milestoneId}`,
       updates
     );
+    return response.data;
+  },
+
+  /** Courses, tests, positions and members the milestone editor offers. */
+  async getMilestoneOptions(): Promise<MilestoneOptions> {
+    const response = await api.get<MilestoneOptions>('/training/programs/milestone-options');
     return response.data;
   },
 

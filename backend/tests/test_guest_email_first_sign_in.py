@@ -478,33 +478,38 @@ class TestLookup:
 
         assert r.json()["status"] == "not_found"
 
-    async def test_member_account_is_pointed_at_the_member_code(
+    async def test_member_account_answers_as_an_unknown_address(
         self, bench, client, db_session
     ):
+        # The guest link is public; a distinct answer for members told anyone
+        # holding it which addresses belong to the department's members.
         email = _email()
         await _member(db_session, bench.org_id, email)
 
         async with client as c:
-            r = await c.post(
+            member = await c.post(
                 _url(bench, bench.event, "guest-lookup"), json={"email": email}
             )
+            unknown = await c.post(
+                _url(bench, bench.event, "guest-lookup"), json={"email": _email()}
+            )
 
-        body = r.json()
-        assert body["status"] == "member"
-        assert body["display_name"] is None
-        assert body["confirm_token"] is None
-        assert "member QR code" in body["message"]
+        assert member.json() == unknown.json()
+        assert member.json()["status"] == "not_found"
 
-    async def test_probationary_member_is_a_member(self, bench, client, db_session):
+    async def test_probationary_member_is_still_classed_a_member(
+        self, bench, db_session
+    ):
+        # The public answer no longer says so, but staff entry still relies on
+        # the classification to leave a member account out of the pipeline.
         email = _email()
         await _member(db_session, bench.org_id, email, status="probationary")
 
-        async with client as c:
-            r = await c.post(
-                _url(bench, bench.event, "guest-lookup"), json={"email": email}
-            )
+        outcome, prospect = await GuestCheckInService(db_session).lookup_guest(
+            bench.org_id, email
+        )
 
-        assert r.json()["status"] == "member"
+        assert (outcome, prospect) == (GuestCheckInService.LOOKUP_MEMBER, None)
 
     async def test_former_member_is_not_found(self, bench, client, db_session):
         email = _email()

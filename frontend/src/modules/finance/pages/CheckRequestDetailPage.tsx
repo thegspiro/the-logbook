@@ -288,7 +288,7 @@ const CheckRequestDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleSubmit()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit for Approval
@@ -300,7 +300,7 @@ const CheckRequestDetailPage: React.FC = () => {
                 disabled={awaitingReceipt}
                 onClick={() => setShowIssueDialog(true)}
                 aria-describedby={awaitingReceipt ? 'cr-receipt-needed' : undefined}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-success inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <CheckCircle className="h-3.5 w-3.5" />
                 Issue Check
@@ -310,7 +310,7 @@ const CheckRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleVoid()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 <XCircle className="h-3.5 w-3.5" />
                 Void Request
@@ -320,7 +320,7 @@ const CheckRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleCancel()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 <XCircle className="h-3.5 w-3.5" />
                 {cr.status === CheckRequestStatus.DRAFT ? 'Withdraw Request' : 'Cancel Request'}

@@ -526,3 +526,74 @@ describe('TemplateFormModal — a new template starts from the department defaul
     );
   });
 });
+
+// Forms review F-3: the dialog leaned on the browser's `required` bubble, and
+// a shift with no length or a server refusal was a toast that marked nothing.
+describe('TemplateFormModal validation', () => {
+  const onSubmit = vi.fn<(data: Record<string, unknown>) => Promise<void>>();
+
+  beforeEach(() => {
+    onSubmit.mockReset();
+    onSubmit.mockResolvedValue(undefined);
+  });
+
+  const renderCreate = (onClose = vi.fn()) =>
+    renderWithRouter(
+      <TemplateFormModal
+        isOpen
+        onClose={onClose}
+        onSubmit={onSubmit}
+        title="Create Template"
+        apparatusOptions={[]}
+        apparatusSource="default"
+      />
+    );
+
+  it('names a missing name on the field and focuses it', async () => {
+    const user = userEvent.setup();
+    renderCreate();
+
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    const name = screen.getByLabelText(/^Name/);
+    expect(name).toHaveAccessibleDescription('Enter a name for the template.');
+    expect(name).toHaveFocus();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('refuses a crew size below one, on the field', async () => {
+    const user = userEvent.setup();
+    renderCreate();
+
+    await user.type(screen.getByLabelText(/^Name/), 'Night Shift');
+    const crew = screen.getByLabelText(/^Smallest crew/);
+    await user.clear(crew);
+    await user.type(crew, '0');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    expect(crew).toHaveAccessibleDescription(
+      'Enter a crew size of 1 or more. Below this, the shift is flagged as running short.'
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('puts a server refusal of the start time on the start picker, and stays open', async () => {
+    onSubmit.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'start_time_of_day', message: 'Use a quarter hour.' }], code: 'LB-VAL-001' },
+      },
+    });
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderCreate(onClose);
+
+    await user.type(screen.getByLabelText(/^Name/), 'Night Shift');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    const startHour = screen.getByRole('combobox', { name: 'Starts at hour' });
+    await waitFor(() => expect(startHour).toHaveAccessibleDescription('Use a quarter hour.'));
+    expect(startHour).toHaveAttribute('aria-invalid', 'true');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});

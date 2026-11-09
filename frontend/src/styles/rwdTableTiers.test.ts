@@ -6,7 +6,7 @@ const stylesheet = readFileSync(join(__dirname, 'index.css'), 'utf8').replace(/\
 
 const TIERS = [
   { cls: 'rwd-table-wide', width: '64rem' },
-  { cls: 'rwd-table-xwide', width: '80rem' },
+  { cls: 'rwd-table-xwide', width: '78rem' },
   { cls: 'rwd-table-2xwide', width: '96rem' },
 ];
 

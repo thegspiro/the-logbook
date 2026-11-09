@@ -511,6 +511,16 @@ class MemberSupervisorService:
         actor_id: Optional[str],
     ) -> SupervisorChange:
         """Make ``supervisor_id`` the member's supervisor from ``starts_on``."""
+        # Being someone's supervisor opens their released evaluations, their
+        # training records and their time-off decisions, none of which
+        # members.manage grants. Naming yourself would turn the members.manage
+        # an assigner holds into those reads across the whole roster, so
+        # another members manager has to make that assignment.
+        if actor_id is not None and str(supervisor_id) == str(actor_id):
+            raise ValueError(
+                "You cannot name yourself as a member's supervisor; ask another "
+                "members manager to make this assignment"
+            )
         # Organization first, then member: every writer that takes both takes
         # them in this order, so two cannot deadlock on each other.
         await self._lock_organization(organization_id)
