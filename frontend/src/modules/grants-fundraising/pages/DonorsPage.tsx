@@ -522,8 +522,8 @@ export const DonorsPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-xwide w-full">
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface border-b">
                   <th
@@ -574,7 +574,7 @@ export const DonorsPage: React.FC = () => {
                 {filteredDonors.map((donor) => (
                   <tr key={donor.id} className="hover:bg-theme-surface-hover transition-colors">
                     {/* Name */}
-                    <td className="px-4 py-3 text-sm">
+                    <td data-label="Name" className="px-4 py-3 text-sm">
                       {/* An organization recorded without a contact leads with
                           its own name (W69-6). */}
                       <span className="text-theme-text-primary font-medium">
@@ -586,11 +586,11 @@ export const DonorsPage: React.FC = () => {
                     </td>
 
                     {/* Email */}
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                    <td data-label="Email" className="text-theme-text-secondary px-4 py-3 text-sm">
                       {donor.email ? (
-                        <span className="inline-flex items-center gap-1">
+                        <span className="inline-flex min-w-0 items-center gap-1">
                           <Mail className="h-3.5 w-3.5 shrink-0" />
-                          {donor.email}
+                          <span className="min-w-0 break-all">{donor.email}</span>
                         </span>
                       ) : donor.contactHidden ? (
                         <span className="text-theme-text-muted text-xs">Managers only</span>
@@ -600,7 +600,7 @@ export const DonorsPage: React.FC = () => {
                     </td>
 
                     {/* Type Badge */}
-                    <td className="px-4 py-3">
+                    <td data-label="Type" className="px-4 py-3">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${DONOR_TYPE_COLORS[donor.donorType] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                       >
@@ -609,20 +609,25 @@ export const DonorsPage: React.FC = () => {
                     </td>
 
                     {/* Total Donated */}
-                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold">
+                    <td
+                      data-label="Total Donated"
+                      className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold"
+                    >
                       {formatCurrency(donor.totalDonated)}
                     </td>
 
                     {/* # Donations */}
-                    <td className="text-theme-text-secondary px-4 py-3 text-right text-sm">{donor.donationCount}</td>
+                    <td data-label="# Donations" className="text-theme-text-secondary px-4 py-3 text-right text-sm">
+                      {donor.donationCount}
+                    </td>
 
                     {/* Last Donation */}
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                    <td data-label="Last Donation" className="text-theme-text-secondary px-4 py-3 text-sm">
                       {donor.lastDonationDate ? formatDate(donor.lastDonationDate, tz) : '--'}
                     </td>
 
                     {/* Actions */}
-                    <td className="px-4 py-3">
+                    <td data-label="Actions" className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {donor.email && (
                           <a
