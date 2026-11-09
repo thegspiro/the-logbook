@@ -1257,6 +1257,16 @@
  * <td> must carry a `data-label` providing the field name shown on mobile;
  * cells with no data-label (e.g. selection checkboxes, row chevrons) are
  * hidden in the stacked view.
+ *
+ * Screen readers: in card mode each cell's `::before` label is part of its
+ * accessible name ("Amount $248,750.00"), and the table, row and cell roles
+ * stay, so the column context the hidden <thead> carried is still announced.
+ * The <thead> is `display: none` rather than visually hidden on purpose:
+ * headers hold sort buttons and select-all checkboxes, and a visually hidden
+ * header row would leave those focusable but invisible. Do not give the label
+ * empty alt text (`content: attr(data-label) / ""`) — with the header row
+ * gone it is the only thing naming the column. `table-card-a11y.spec.ts`
+ * holds this in Chromium and, in CI, Mobile Safari.
  */
 @media (max-width: 767px) {
   .rwd-table thead {
