@@ -745,8 +745,35 @@
   }
 }
 
+/* On a phone the header's text buttons and links share each row equally: two
+   that fit split it in half, and one that would not fit wraps to a row of its
+   own and fills it. Left at their own widths they stacked ragged — "New
+   review period" shorter than "New template" under it.
+
+   Every button starts at half the row (less half the widest gap a call site
+   uses, 1rem, so two still fit) and `min-width: fit-content` keeps it at least
+   as wide as its label, never wider than the row. Two whose labels fit in half
+   share a row, start equal and grow equally, so they end equal — a basis of 0
+   would not: border-box sizes it up to its padding and border first, and the
+   bordered secondary button came out 2px wider than the primary beside it.
+   A label longer than half pushes its button past half, the pair no longer
+   fits, and each wraps to a row it fills. So two buttons on one row are always
+   the same width, and a row never holds more than two.
+
+   Only text buttons and links grow. An icon-only button keeps its square, and
+   anything else a page puts here — a status line, a menu's wrapper, a select,
+   a scrolling strip — keeps its own size. A hand-styled icon-only button
+   without btn-icon / btn-icon-sm would stretch; give it one of those. */
 @utility page-header-actions {
   min-width: 0;
+  @media (width < 640px) {
+    & > :is(button, a):not(.btn-icon, .btn-icon-sm) {
+      flex: 1 1 calc(50% - 0.5rem);
+      min-width: fit-content;
+      justify-content: center;
+      text-align: center;
+    }
+  }
   @media (min-width: 640px) {
     margin-left: auto;
   }
@@ -1230,6 +1257,16 @@
  * <td> must carry a `data-label` providing the field name shown on mobile;
  * cells with no data-label (e.g. selection checkboxes, row chevrons) are
  * hidden in the stacked view.
+ *
+ * Screen readers: in card mode each cell's `::before` label is part of its
+ * accessible name ("Amount $248,750.00"), and the table, row and cell roles
+ * stay, so the column context the hidden <thead> carried is still announced.
+ * The <thead> is `display: none` rather than visually hidden on purpose:
+ * headers hold sort buttons and select-all checkboxes, and a visually hidden
+ * header row would leave those focusable but invisible. Do not give the label
+ * empty alt text (`content: attr(data-label) / ""`) — with the header row
+ * gone it is the only thing naming the column. `table-card-a11y.spec.ts`
+ * holds this in Chromium and, in CI, Mobile Safari.
  */
 @media (max-width: 767px) {
   .rwd-table thead {
@@ -1307,8 +1344,12 @@
  * wrapper is narrower than that tier, whatever the screen or sidebar state:
  *
  *   rwd-table-wide    under 64rem
- *   rwd-table-xwide   under 80rem
+ *   rwd-table-xwide   under 78rem
  *   rwd-table-2xwide  under 96rem
+ *
+ * xwide stops at 78rem, not 80rem, because the app's page column caps a card
+ * at about 1278px on any screen. At 80rem (1280px) the tier never let go,
+ * and an xwide table showed as cards even on a 1920px desktop.
  *
  * Pick the tier from a measurement, not from the column count: render the
  * table with long data, read its min-content width, add ~4% for WebKit (whose
@@ -1378,7 +1419,7 @@
     }
   }
 
-  @container rwd-table (width < 80rem) {
+  @container rwd-table (width < 78rem) {
     .rwd-table.rwd-table-xwide thead {
       display: none;
     }

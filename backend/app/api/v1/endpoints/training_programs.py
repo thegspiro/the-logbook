@@ -23,11 +23,13 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.permissions import permission_matches
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.training_program import (  # Requirements; Programs; Phases; Program Requirements; Milestones; Enrollments; Progress; Registry
     ApplyTrainingRecordRequest,
     MemberEligibilityResponse,
     MemberProgramProgress,
+    MilestoneOptionsResponse,
     PhaseReorderRequest,
     ProgramBuildRequest,
     ProgramEnrollmentComplete,
@@ -61,6 +63,7 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     TrainingRequirementEnhancedResponse,
     TrainingRequirementEnhancedUpdate,
 )
+from app.services import program_milestones
 from app.services.program_requirement_deadlines import annotate_progress_rows
 from app.services.sample_program_templates import (
     SAMPLE_TEMPLATES,
@@ -764,15 +767,11 @@ async def get_training_program(
         else [_member_requirement(requirement) for requirement in requirements]
     )
 
-    # Get milestones
-    from sqlalchemy import select
-
-    from app.models.training import ProgramMilestone
-
-    milestones_result = await db.execute(
-        select(ProgramMilestone).where(ProgramMilestone.program_id == str(program_id))
+    milestones = await _milestone_payloads(
+        db,
+        current_user,
+        await program_milestones.load_milestones(db, str(program_id)),
     )
-    milestones = milestones_result.scalars().all()
 
     await service.attach_prerequisite_summaries([program], current_user.organization_id)
 
@@ -1341,6 +1340,43 @@ async def get_program_requirements(
 # ==================== Program Milestone Endpoints ====================
 
 
+async def _milestone_payloads(db: AsyncSession, current_user: User, milestones: list):
+    """Milestones as responses; who else is told, and what, only for officers."""
+    payloads = await program_milestones.serialize_milestones(
+        db, str(current_user.organization_id), milestones
+    )
+    if can_view_officer_training_data(current_user):
+        return payloads
+    return [program_milestones.member_milestone_view(p) for p in payloads]
+
+
+async def _milestone_payload(db: AsyncSession, current_user: User, milestone_id: str):
+    milestones = await program_milestones.load_milestones_by_id(db, [milestone_id])
+    if not milestones:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Program milestone not found",
+        )
+    return (await _milestone_payloads(db, current_user, milestones))[0]
+
+
+@router.get("/milestone-options", response_model=MilestoneOptionsResponse)
+async def get_milestone_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    What the milestone editor offers: active courses, skills tests and
+    knowledge tests to wait on, and the positions and current members that
+    can be notified.
+
+    **Requires permission: training.manage**
+    """
+    return await program_milestones.milestone_options(
+        db, str(current_user.organization_id)
+    )
+
+
 @router.post(
     "/programs/{program_id}/milestones",
     response_model=ProgramMilestoneResponse,
@@ -1372,10 +1408,13 @@ async def create_program_milestone(
         organization_id=current_user.organization_id,
     )
 
-    if error:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    if error or milestone is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "Milestone not created",
+        )
 
-    return milestone
+    return await _milestone_payload(db, current_user, str(milestone.id))
 
 
 @router.patch(
@@ -1390,19 +1429,31 @@ async def update_program_milestone(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Update a milestone's name, description, threshold, or message.
+    Update a milestone: name, description, percentage, completion items,
+    recipients or messages. ``items`` and each recipient list replace the
+    stored set when sent. Changing a trigger records members who already meet
+    the milestone as reached without notifying them.
 
     **Requires permission: training.manage**
     """
     service = TrainingProgramService(db)
-    milestone, error = await service.update_program_milestone(
-        milestone_id=milestone_id,
-        program_id=program_id,
-        organization_id=current_user.organization_id,
-        updates=updates,
-    )
-    if error:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    try:
+        milestone, error = await service.update_program_milestone(
+            milestone_id=milestone_id,
+            program_id=program_id,
+            organization_id=current_user.organization_id,
+            updates=updates,
+        )
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    if error or milestone is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error or "Program milestone not found",
+        )
     await log_audit_event(
         db=db,
         event_type="training_program_updated",
@@ -1416,7 +1467,7 @@ async def update_program_milestone(
         user_id=str(current_user.id),
         username=current_user.username,
     )
-    return milestone
+    return await _milestone_payload(db, current_user, str(milestone.id))
 
 
 @router.delete(
@@ -1655,22 +1706,23 @@ async def get_enrollment_progress(
             progress_percentage=enrollment.progress_percentage,
         )
 
-    # Get next milestones
-    from sqlalchemy import select
-
-    from app.models.training import ProgramMilestone
-
-    milestones_result = await db.execute(
-        select(ProgramMilestone)
-        .where(ProgramMilestone.program_id == enrollment.program_id)
-        .where(
-            ProgramMilestone.completion_percentage_threshold
-            > enrollment.progress_percentage
-        )
-        .order_by(ProgramMilestone.completion_percentage_threshold)
-        .limit(3)
+    # The next three percentage milestones still ahead, as before items
+    # existed; the full picture, items included, is ``milestones`` below.
+    all_milestones = await program_milestones.load_milestones(
+        db, str(enrollment.program_id)
     )
-    next_milestones = milestones_result.scalars().all()
+    next_milestones = await _milestone_payloads(
+        db,
+        current_user,
+        [
+            m
+            for m in all_milestones
+            if m.completion_percentage_threshold is not None
+            and m.completion_percentage_threshold
+            > (enrollment.progress_percentage or 0.0)
+        ][:3],
+    )
+    milestone_standings = await program_milestones.member_standings(db, enrollment)
 
     # Count requirements the same way the percentage does, so the two never
     # disagree in the UI ("3/5 complete · 100%"): only *required* items count
@@ -1710,6 +1762,7 @@ async def get_enrollment_progress(
         completed_requirements=completed_requirements,
         total_requirements=len(tracked),
         next_milestones=next_milestones,
+        milestones=milestone_standings,
         time_remaining_days=time_remaining_days,
         is_behind_schedule=is_behind_schedule,
         locked_requirements=await service.prerequisite_locks(

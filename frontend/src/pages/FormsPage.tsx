@@ -535,7 +535,7 @@ const FormsPage: React.FC = () => {
                 onClick={() => {
                   void loadData();
                 }}
-                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover min-h-11 min-w-11 rounded-lg p-2 transition-colors"
+                className="btn-secondary btn-icon-sm"
                 aria-label="Refresh forms"
               >
                 <RefreshCw className="h-5 w-5" aria-hidden="true" />

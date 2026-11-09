@@ -435,7 +435,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               <button
                 onClick={() => void handleExport('csv')}
                 disabled={exporting}
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 <Download className="h-4 w-4" />
                 Export CSV
@@ -443,7 +443,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
               <button
                 onClick={() => void handleExport('pdf')}
                 disabled={exporting}
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 <Download className="h-4 w-4" />
                 Export PDF
@@ -455,7 +455,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                     '_blank'
                   )
                 }
-                className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border hover:bg-theme-surface-hover inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 Print Record
               </button>

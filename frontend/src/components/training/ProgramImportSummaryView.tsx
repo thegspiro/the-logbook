@@ -59,6 +59,22 @@ export const ProgramImportSummaryView: React.FC<ProgramImportSummaryViewProps> =
         </ul>
       </div>
     )}
+    {(summary.unmatched_milestone_items?.length ?? 0) > 0 && (
+      <div>
+        <p className="text-theme-text-primary font-medium">
+          Milestone courses and tests not found here: {summary.unmatched_milestone_items?.length ?? 0}
+        </p>
+        <p className="text-theme-text-muted">
+          These are left off their milestones. Add them to the milestone after the import if the department has them
+          under another name.
+        </p>
+        <ul className="list-disc pl-5">
+          {(summary.unmatched_milestone_items ?? []).map((entry, index) => (
+            <li key={`${index}-${entry}`}>{entry}</li>
+          ))}
+        </ul>
+      </div>
+    )}
   </div>
 );
 

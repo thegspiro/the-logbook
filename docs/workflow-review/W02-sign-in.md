@@ -207,9 +207,15 @@ Tests: `authStore.test.ts` ("does not hold another account for one account's fai
 
 The header, the More menu and the confirmation dialog say "Logout" (title "Confirm Logout", button "Logout"). The idle warning says "stay logged in". The sign-in screen, its inactivity notice and the password-change notice in My Updates say "Sign in" and "signed out". Settling on one pair, and "Log out" as a verb rather than the noun "Logout", is a wording call. The label is also a selector in `e2e/auth.spec.ts`, `e2e/mobile-landscape.spec.ts` and this harness, so the rename would go with those. Left as it is.
 
+### W02-12 — LOW — Administrator actions on a member were audited without an IP or browser — ✅ FIXED (2026-11-08)
+
+Read from code after the pass. Of the 19 audit rows `app/api/v1/endpoints/users.py` writes, 15 left `ip_address` and `user_agent` empty: member creation, role assignment and removal, viewing a member, contact and profile edits, deletes, the password, MFA and passkey resets, unlocks, and photo changes. The other four (data export, anonymize, visibility, consent) passed the IP but not the browser.
+
+**Fix:** a `_request_origin(request)` helper returns both, and every audit call in the file spreads it. Eleven handlers that had no `request` parameter gained a keyword-only one, which FastAPI supplies; the HTTP API is unchanged. `test_member_admin_audit_origin.py` sweeps the file so the next audit call carries the origin too, and checks the unlock row's columns against the database. Tests that call these handlers directly pass `tests/fake_request.py`'s request.
+
 ### Seen in passing
 
-- **Administrator actions on a member** (`users.py`): `account_unlocked`, like the password, MFA and passkey resets beside it, is audited with no IP address or user agent. Only the data-export, anonymize, visibility and consent rows pass `get_client_ip`. Added to the leads.
+- **Administrator actions on a member** (`users.py`): `account_unlocked`, like the password, MFA and passkey resets beside it, is audited with no IP address or user agent. Only the data-export, anonymize, visibility and consent rows pass `get_client_ip`. Added to the leads; fixed 2026-11-08 as W02-12 below.
 - After an Unlock, the member's own attempts still count in the per-account rate window. A member who tried several times just before calling may wait up to a minute more. Expected, but the Unlock gives no hint of it.
 
 ### Harness
@@ -230,7 +236,7 @@ password alone.
 | 5. Coming back to it    | ✅ Back after sign-out stays out; lock state survives a reload                           |
 | 6. On a phone           | ✅ `/login` clean; W02-9 fixed                                                           |
 | 7. Everyone can use it  | ✅ labels, autocomplete, numeric keypad for the code, errors in `role=alert`             |
-| 8. What happens around  | ✅ every step audited (W02-3 resolved); IP missing on admin rows (lead)                  |
+| 8. What happens around  | ✅ every step audited (W02-3 resolved); IP on admin rows fixed later (W02-12)            |
 
 ### Completion gate
 

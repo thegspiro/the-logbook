@@ -920,6 +920,7 @@ const ImpactPlannerPage: React.FC = () => {
 
                   {sortedMembers.length === 0 ? (
                     <EmptyState
+                      compact
                       headingLevel={4}
                       icon={Users}
                       title="No members match"

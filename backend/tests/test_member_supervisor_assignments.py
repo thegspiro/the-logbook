@@ -109,10 +109,11 @@ class TestSetAndChange:
     async def test_first_assignment_is_open_from_the_given_date(self, db_session):
         org = await _org(db_session)
         member, chief = await _user(db_session, org), await _user(db_session, org)
+        secretary = await _user(db_session, org)
         start = org_today(org) - timedelta(days=30)
 
         change = await MemberSupervisorService(db_session).set_supervisor(
-            org.id, member.id, chief.id, starts_on=start, actor_id=chief.id
+            org.id, member.id, chief.id, starts_on=start, actor_id=secretary.id
         )
 
         assert change.previous_supervisor_id is None
@@ -121,7 +122,7 @@ class TestSetAndChange:
         assert [(r.supervisor_id, r.starts_on, r.ends_on) for r in rows] == [
             (chief.id, start, None)
         ]
-        assert rows[0].created_by == chief.id
+        assert rows[0].created_by == secretary.id
 
     async def test_start_defaults_to_the_departments_today(self, db_session):
         org = await _org(db_session)
@@ -262,6 +263,17 @@ class TestRefusals:
         with pytest.raises(ValueError, match="own supervisor"):
             await MemberSupervisorService(db_session).set_supervisor(
                 org.id, member.id, member.id, starts_on=None, actor_id=None
+            )
+        assert await _rows(db_session, member) == []
+
+    async def test_an_assigner_cannot_name_themselves(self, db_session):
+        org = await _org(db_session)
+        member = await _user(db_session, org)
+        secretary = await _user(db_session, org)
+
+        with pytest.raises(ValueError, match="cannot name yourself"):
+            await MemberSupervisorService(db_session).set_supervisor(
+                org.id, member.id, secretary.id, starts_on=None, actor_id=secretary.id
             )
         assert await _rows(db_session, member) == []
 
@@ -755,6 +767,20 @@ class TestEndpoints:
         )
 
         assert [c.id for c in result.candidates] == [active.id, probie.id]
+
+    async def test_the_caller_is_not_offered_as_a_candidate(self, db_session):
+        from app.api.v1.endpoints import member_supervisors as ep
+
+        org = await _org(db_session)
+        member = await _user(db_session, org, last="Member")
+        secretary = await _user(db_session, org, last="Secretary")
+        other = await _user(db_session, org, last="Other")
+
+        result = await ep.list_supervisor_candidates(
+            member.id, db=db_session, current_user=secretary
+        )
+
+        assert [c.id for c in result.candidates] == [other.id]
 
 
 # ----------------------------------------------------------------------

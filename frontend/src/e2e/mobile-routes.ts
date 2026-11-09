@@ -154,7 +154,11 @@ export const signInForRoute = async (
 
 export const ALL_ROUTES: RouteCheck[] = [
   { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/events', maxSmallTargets: 0, maxTinyText: 0 },
+  // Granted the manage permission its header buttons are gated on, so the
+  // header check in mobile-presentation.spec.ts has buttons to measure here:
+  // without it this route's header renders none, and a lopsided row or a
+  // stretched icon button in it would never be seen.
+  { path: '/events', maxSmallTargets: 0, maxTinyText: 0, permissions: ['events.manage'] },
   { path: '/members', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0, permissions: ['members.manage'] },
   // The hub's other three tabs. Add and Import stand on `users.create` as well,
@@ -533,8 +537,10 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/training/programs', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 0 },
+  // manage: so its header buttons render — see the note on /events.
+  { path: '/training/programs', maxSmallTargets: 0, maxTinyText: 0, permissions: ['training.manage'] },
+  // manage: so its header buttons render — see the note on /events.
+  { path: '/scheduling', maxSmallTargets: 0, maxTinyText: 0, permissions: SCHEDULING_ADMIN },
   // Every route under /scheduling/admin is gated on `scheduling.manage`, which
   // is not in BASE_PERMISSIONS — so without these the loop measured
   // ProtectedRoute's Access Denied screen on all four. That passes every budget
@@ -736,7 +742,8 @@ export const ALL_ROUTES: RouteCheck[] = [
   // — a ninth route in the same state as the eight corrected above. What
   // surfaced it was the `page-has-heading-one` rule: the refusal screen's
   // heading is an h2, so a route stuck on it has no h1 at all.
-  { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 0, permissions: ['apparatus.view'] },
+  // manage: so its header buttons render — see the note on /events.
+  { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 0, permissions: ['apparatus.view', 'apparatus.manage'] },
   { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations/qr-codes', maxSmallTargets: 0, maxTinyText: 0 },
@@ -752,8 +759,10 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/facilities', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/facilities/settings', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/governance/org-chart', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/elections', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/minutes', maxSmallTargets: 0, maxTinyText: 0 },
+  // manage: so its header buttons render — see the note on /events.
+  { path: '/elections', maxSmallTargets: 0, maxTinyText: 0, permissions: ['elections.manage'] },
+  // manage: so its header buttons render — see the note on /events.
+  { path: '/minutes', maxSmallTargets: 0, maxTinyText: 0, permissions: ['minutes.manage'] },
   { path: '/action-items', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/forms', maxSmallTargets: 0, maxTinyText: 0, permissions: ['forms.manage'] },
   { path: '/store', maxSmallTargets: 0, maxTinyText: 0, permissions: ['storefront.view'] },

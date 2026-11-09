@@ -598,7 +598,9 @@ export interface GuestCheckInResult {
  * event. A prospect is named by first name and last initial only.
  */
 export interface GuestLookupResult {
-  status: 'prospect' | 'member' | 'not_found';
+  // A member account answers 'not_found': the page is public, and a distinct
+  // answer told anyone holding the link which addresses belong to members.
+  status: 'prospect' | 'not_found';
   display_name?: string | null | undefined;
   confirm_token?: string | null | undefined;
   message: string;

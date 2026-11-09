@@ -147,6 +147,7 @@ export const CoverageTab: React.FC<CoverageTabProps> = ({ refreshToken, onChange
             </h2>
             {data.membersWithoutCard.length === 0 ? (
               <EmptyState
+                compact
                 headingLevel={3}
                 icon={CreditCard}
                 title="Every current member has a working card"
@@ -209,7 +210,13 @@ export const CoverageTab: React.FC<CoverageTabProps> = ({ refreshToken, onChange
               These cards already fail at every reader. Revoking them closes the record for good.
             </p>
             {data.formerMemberCards.length === 0 ? (
-              <EmptyState headingLevel={3} icon={CreditCard} title="None" description="No leaver still holds a card." />
+              <EmptyState
+                compact
+                headingLevel={3}
+                icon={CreditCard}
+                title="None"
+                description="No leaver still holds a card."
+              />
             ) : (
               <ul className="divide-theme-surface-border mt-3 divide-y">
                 {data.formerMemberCards.map((card) => (
@@ -250,6 +257,7 @@ export const CoverageTab: React.FC<CoverageTabProps> = ({ refreshToken, onChange
             </h2>
             {data.unusedCards.length === 0 ? (
               <EmptyState
+                compact
                 headingLevel={3}
                 icon={CreditCard}
                 title="Every active card is in use"

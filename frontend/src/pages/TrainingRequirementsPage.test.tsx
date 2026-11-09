@@ -9,6 +9,8 @@ const mockGetRequirements = vi.fn();
 const mockGetCategories = vi.fn();
 const mockCreateRequirement = vi.fn();
 const mockDeleteRequirement = vi.fn();
+const mockUpdateRequirement = vi.fn();
+const mockGetDeletionImpact = vi.fn();
 const mockPreviewRegistry = vi.fn();
 
 vi.mock('../services/api', () => ({
@@ -16,8 +18,9 @@ vi.mock('../services/api', () => ({
     getRequirements: (...args: unknown[]) => mockGetRequirements(...args) as unknown,
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
     createRequirement: (...args: unknown[]) => mockCreateRequirement(...args) as unknown,
-    updateRequirement: vi.fn(),
+    updateRequirement: (...args: unknown[]) => mockUpdateRequirement(...args) as unknown,
     deleteRequirement: (...args: unknown[]) => mockDeleteRequirement(...args) as unknown,
+    getRequirementDeletionImpact: (...args: unknown[]) => mockGetDeletionImpact(...args) as unknown,
     getCourses: vi.fn().mockResolvedValue([]),
   },
   trainingProgramService: {
@@ -367,9 +370,9 @@ describe('TrainingRequirementsPage duplicate', () => {
 });
 
 describe('TrainingRequirementsPage delete', () => {
-  // An in-use requirement is deactivated rather than deleted (the backend
-  // decides, and answers 204 either way), so the dialog names both outcomes
-  // and the toast reports the one that happened.
+  // The dialog asks the backend what uses the requirement first. Nothing:
+  // a plain delete. Something: deactivate (recommended) or, for a department
+  // clearing out what it set up, a permanent delete behind a typed name.
   const requirement = {
     id: 'req-del',
     name: 'Annual SCBA',
@@ -384,6 +387,17 @@ describe('TrainingRequirementsPage delete', () => {
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   };
+  const inUse = {
+    requirement_id: 'req-del',
+    name: 'Annual SCBA',
+    active: true,
+    total: 4,
+    references: [
+      { kind: 'requirement_progress', label: 'Member pipeline progress records', count: 3, on_delete: 'removed' },
+      { kind: 'compliance_profiles', label: 'Compliance profiles', count: 1, on_delete: 'unlinked' },
+    ],
+  };
+  const unused = { requirement_id: 'req-del', name: 'Annual SCBA', active: true, total: 0, references: [] };
 
   beforeEach(() => {
     mockGetRequirements.mockReset();
@@ -392,50 +406,180 @@ describe('TrainingRequirementsPage delete', () => {
     mockGetCategories.mockResolvedValue([]);
     mockDeleteRequirement.mockReset();
     mockDeleteRequirement.mockResolvedValue(undefined);
+    mockUpdateRequirement.mockReset();
+    mockUpdateRequirement.mockResolvedValue({ ...requirement, active: false });
+    mockGetDeletionImpact.mockReset();
+    mockGetDeletionImpact.mockResolvedValue(inUse);
     vi.mocked(toast.success).mockReset();
+    vi.mocked(toast.error).mockReset();
   });
 
-  it('says an in-use requirement is deactivated instead, and Keep it deletes nothing', async () => {
-    const user = userEvent.setup();
+  const openDialog = async (user: ReturnType<typeof userEvent.setup>) => {
     renderWithRouter(<TrainingRequirementsPage />);
-
     await user.click(await screen.findByRole('button', { name: 'Delete Annual SCBA' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Delete requirement' });
-    expect(dialog).toHaveTextContent('it is deactivated instead of deleted, so those records keep it');
+    return screen.findByRole('dialog', { name: 'Delete requirement' });
+  };
 
-    await user.click(within(dialog).getByRole('button', { name: 'Keep it' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(mockDeleteRequirement).not.toHaveBeenCalled();
-  });
-
-  it('reports a deactivation when the requirement survives the delete', async () => {
+  it('deletes an unused requirement after one confirmation', async () => {
+    mockGetDeletionImpact.mockResolvedValue(unused);
     const user = userEvent.setup();
-    renderWithRouter(<TrainingRequirementsPage />);
+    const dialog = await openDialog(user);
 
-    await user.click(await screen.findByRole('button', { name: 'Delete Annual SCBA' }));
-    mockGetRequirements.mockResolvedValue([{ ...requirement, active: false }]);
-    const dialog = await screen.findByRole('dialog', { name: 'Delete requirement' });
+    expect(await within(dialog).findByText(/Nothing uses .Annual SCBA., so it will be deleted/)).toBeInTheDocument();
+    mockGetRequirements.mockResolvedValue([]);
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Requirement deleted'));
+    expect(mockGetDeletionImpact).toHaveBeenCalledWith('req-del');
+    expect(mockDeleteRequirement).toHaveBeenCalledWith('req-del', undefined);
+  });
+
+  it('reports a deactivation when something started using it after the check', async () => {
+    mockGetDeletionImpact.mockResolvedValue(unused);
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+
+    mockGetRequirements.mockResolvedValue([{ ...requirement, active: false }]);
+    await user.click(await within(dialog).findByRole('button', { name: 'Delete' }));
 
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith(
         '"Annual SCBA" is still in use, so it was deactivated instead of deleted'
       )
     );
-    expect(mockDeleteRequirement).toHaveBeenCalledWith('req-del');
-    expect(await screen.findByText('Inactive')).toBeInTheDocument();
   });
 
-  it('reports a delete when the requirement is gone', async () => {
+  it('lists what uses an in-use requirement, and Keep it changes nothing', async () => {
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+
+    const uses = await within(dialog).findByRole('list', { name: 'Records that use this requirement' });
+    expect(uses).toHaveTextContent('Member pipeline progress records3');
+    expect(uses).toHaveTextContent('Compliance profiles1');
+    expect(within(dialog).getByRole('tab', { name: 'Deactivate (recommended)' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+
+    await user.click(within(dialog).getByRole('button', { name: 'Keep it' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockDeleteRequirement).not.toHaveBeenCalled();
+    expect(mockUpdateRequirement).not.toHaveBeenCalled();
+  });
+
+  it('deactivates an in-use requirement and hides it from the list', async () => {
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+
+    await user.click(await within(dialog).findByRole('button', { name: 'Deactivate' }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('"Annual SCBA" was deactivated'));
+    expect(mockUpdateRequirement).toHaveBeenCalledWith('req-del', { active: false });
+    expect(mockDeleteRequirement).not.toHaveBeenCalled();
+    expect(screen.queryByText('Annual SCBA')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Show inactive (1)' })).not.toBeChecked();
+  });
+
+  it('permanently deletes only once the name is typed, after saying what goes', async () => {
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+
+    await user.click(await within(dialog).findByRole('tab', { name: 'Permanently delete' }));
+    expect(dialog).toHaveTextContent('This is permanent and cannot be undone.');
+    expect(dialog).toHaveTextContent('If members have been graded against it, deactivate it instead');
+    expect(within(dialog).getByRole('list', { name: 'Deleted with it' })).toHaveTextContent(
+      'Member pipeline progress records3'
+    );
+    expect(within(dialog).getByRole('list', { name: 'Kept, without this requirement' })).toHaveTextContent(
+      'Compliance profiles1'
+    );
+
+    const confirmButton = within(dialog).getByRole('button', { name: 'Permanently delete' });
+    expect(confirmButton).toBeDisabled();
+    await user.type(within(dialog).getByLabelText(/to confirm/), 'Annual SCB');
+    expect(confirmButton).toBeDisabled();
+    await user.type(within(dialog).getByLabelText(/to confirm/), 'A');
+    expect(confirmButton).toBeEnabled();
+
+    mockGetRequirements.mockResolvedValue([]);
+    await user.click(confirmButton);
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('"Annual SCBA" was permanently deleted'));
+    expect(mockDeleteRequirement).toHaveBeenCalledWith('req-del', { permanent: true });
+  });
+
+  it('keeps the dialog open and reports a failed permanent delete', async () => {
+    mockDeleteRequirement.mockRejectedValue(new Error('Server unavailable'));
+    const user = userEvent.setup();
+    const dialog = await openDialog(user);
+
+    await user.click(await within(dialog).findByRole('tab', { name: 'Permanently delete' }));
+    await user.type(within(dialog).getByLabelText(/to confirm/), 'Annual SCBA');
+    await user.click(within(dialog).getByRole('button', { name: 'Permanently delete' }));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Server unavailable'));
+    expect(screen.getByRole('dialog', { name: 'Delete requirement' })).toBeInTheDocument();
+  });
+
+  it('opens an already-inactive requirement on the permanent delete', async () => {
+    mockGetRequirements.mockResolvedValue([{ ...requirement, active: false }]);
+    mockGetDeletionImpact.mockResolvedValue({ ...inUse, active: false });
     const user = userEvent.setup();
     renderWithRouter(<TrainingRequirementsPage />);
 
+    await user.click(await screen.findByRole('checkbox', { name: 'Show inactive (1)' }));
     await user.click(await screen.findByRole('button', { name: 'Delete Annual SCBA' }));
-    mockGetRequirements.mockResolvedValue([]);
     const dialog = await screen.findByRole('dialog', { name: 'Delete requirement' });
-    await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
-    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Requirement deleted'));
-    expect(screen.queryByRole('button', { name: 'Delete Annual SCBA' })).not.toBeInTheDocument();
+    expect(await within(dialog).findByRole('tab', { name: 'Permanently delete' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+  });
+});
+
+describe('TrainingRequirementsPage inactive filter', () => {
+  const base = {
+    requirement_type: 'hours',
+    source: 'department',
+    required_hours: 4,
+    frequency: 'annual',
+    applies_to_all: true,
+    due_date_type: 'calendar_period',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+
+  beforeEach(() => {
+    mockGetRequirements.mockReset();
+    mockGetCategories.mockReset();
+    mockGetCategories.mockResolvedValue([]);
+  });
+
+  it('hides inactive requirements until Show inactive is checked', async () => {
+    mockGetRequirements.mockResolvedValue([
+      { ...base, id: 'a', name: 'Live Requirement', active: true },
+      { ...base, id: 'b', name: 'Retired Requirement', active: false },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    expect(await screen.findByText('Live Requirement')).toBeInTheDocument();
+    expect(screen.queryByText('Retired Requirement')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Show inactive (1)' }));
+    expect(screen.getByText('Retired Requirement')).toBeInTheDocument();
+  });
+
+  it('says requirements are hidden rather than that there are none', async () => {
+    mockGetRequirements.mockResolvedValue([{ ...base, id: 'b', name: 'Retired Requirement', active: false }]);
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    expect(
+      await screen.findByText('1 inactive requirement is hidden. Select Show inactive to see it.')
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Show inactive' }));
+    expect(screen.getByText('Retired Requirement')).toBeInTheDocument();
   });
 });

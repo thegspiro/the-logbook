@@ -28,6 +28,9 @@ Recommended crontab (add to host or container cron):
 # Daily at 7:15 AM — per-requirement due-date reminders and overdue notices
 15 7 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=program_requirement_deadlines
 
+# Every 30 minutes — announce training-program milestones met by courses and tests
+*/30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=program_milestones
+
 # Monthly on the 1st at 8:00 AM — membership tier auto-advancement
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
 
@@ -204,6 +207,24 @@ def _resolve_event_reminder_target(event: Any) -> str:
     )
 
 
+def _rollup_call_types(call_types: List[str]) -> List[tuple[str, int]]:
+    """Group a member's per-call incident types into (type, count) pairs.
+
+    The end-of-shift summary receives one entry per call, so a shift of ten
+    EMS runs listed "EMS" ten times. Most frequent first; ties keep the order
+    the types were first seen, so the result is stable for a given shift.
+    """
+    counts: Dict[str, int] = {}
+    for call_type in call_types:
+        counts[call_type] = counts.get(call_type, 0) + 1
+    return sorted(counts.items(), key=lambda item: -item[1])
+
+
+def _format_call_type_rollup(rollup: List[tuple[str, int]]) -> str:
+    """Plain-text form of a call-type rollup, e.g. ``10 EMS, 2 Fire``."""
+    return ", ".join(f"{count} {name}" for name, count in rollup)
+
+
 # Schedule definitions (for documentation and frontend display)
 SCHEDULE = {
     "election_lifecycle": {
@@ -243,6 +264,17 @@ SCHEDULE = {
         "frequency": "daily",
         "recommended_time": "07:15",
         "cron": "15 7 * * *",
+    },
+    "program_milestones": {
+        "description": (
+            "Announce training-program milestones that members have met — "
+            "chiefly ones waiting on a course, whose records arrive by paths "
+            "that do not check milestones themselves (once per milestone and "
+            "enrollment — safe to run at any frequency)"
+        ),
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
     },
     "enrollment_expiry": {
         "description": "Expire training-program enrollments whose completion deadline has passed",
@@ -1127,6 +1159,20 @@ async def run_program_requirement_deadlines(db: AsyncSession) -> Dict[str, Any]:
         return result.get("warnings_sent", 0) + result.get("overdue_sent", 0)
 
     return await _for_each_org(db, "program_requirement_deadlines", _process)
+
+
+async def run_program_milestones(db: AsyncSession) -> Dict[str, Any]:
+    """Record and announce milestones members now meet.
+
+    Idempotent per (milestone, enrollment): the achievement row is unique on
+    the pair and committed before anything is sent (program_milestones).
+    """
+    from app.services.program_milestones import sweep_organization
+
+    async def _process(db_session, org):
+        return await sweep_organization(db_session, org.id)
+
+    return await _for_each_org(db, "program_milestones", _process)
 
 
 async def run_enrollment_expiry(db: AsyncSession) -> Dict[str, Any]:
@@ -3432,6 +3478,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     call_info = per_member_calls.get(uid, {"count": 0, "types": []})
                     call_count = call_info["count"]
                     call_types = call_info["types"]
+                    call_type_rollup = _rollup_call_types(call_types)
                     report_id = report_by_trainee.get(uid)
 
                     is_preliminary = not bool(shift.is_finalized)
@@ -3449,7 +3496,9 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     if apparatus_name:
                         summary_lines.insert(1, f"Apparatus: {apparatus_name}")
                     if call_types:
-                        summary_lines.append("Call types: " + ", ".join(call_types[:5]))
+                        summary_lines.append(
+                            "Call types: " + _format_call_type_rollup(call_type_rollup)
+                        )
                     if is_preliminary:
                         summary_lines.append(
                             "These figures are preliminary — your hours "
@@ -3572,14 +3621,24 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                             )
 
                             call_types_html = ""
-                            if call_types:
-                                items = "".join(
-                                    f"<li>{_html.escape(t)}</li>"
-                                    for t in call_types[:10]
+                            if call_type_rollup:
+                                # width:1% + nowrap keeps the count column
+                                # snug against the type name even where the
+                                # email stylesheet stretches tables full-width.
+                                type_rows = "".join(
+                                    "<tr><td style='padding:2px 8px;"
+                                    "text-align:right;width:1%;"
+                                    "white-space:nowrap'><strong>"
+                                    f"{count}</strong></td>"
+                                    "<td style='padding:2px 8px'>"
+                                    f"{_html.escape(name)}</td></tr>"
+                                    for name, count in call_type_rollup
                                 )
                                 call_types_html = (
                                     "<p><strong>Call types:</strong></p>"
-                                    f"<ul>{items}</ul>"
+                                    "<table style='border-collapse:collapse;"
+                                    "margin:0 0 12px 0' role='presentation'>"
+                                    f"{type_rows}</table>"
                                 )
 
                             report_html = ""
@@ -3641,8 +3700,10 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                     + f"Hours recorded: {hours}\n"
                                     f"Calls responded: {call_count}\n"
                                     + (
-                                        "Call types: " + ", ".join(call_types) + "\n"
-                                        if call_types
+                                        "Call types: "
+                                        + _format_call_type_rollup(call_type_rollup)
+                                        + "\n"
+                                        if call_type_rollup
                                         else ""
                                     )
                                     + (
@@ -8394,6 +8455,7 @@ TASK_RUNNERS = {
     "enrollment_deadline_warnings": run_enrollment_deadline_warnings,
     "enrollment_expiry": run_enrollment_expiry,
     "program_requirement_deadlines": run_program_requirement_deadlines,
+    "program_milestones": run_program_milestones,
     "recert_resets": run_recert_resets,
     "membership_tier_advance": run_membership_tier_advance,
     "property_return_reminders": run_property_return_reminders,
@@ -8562,6 +8624,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "enrollment_expiry": 86400,
     # Daily; idempotent per (requirement row, due date, ramp step).
     "program_requirement_deadlines": 86400,
+    # Every 30 minutes, so a milestone waiting on a course is announced soon
+    # after the record arrives; idempotent per (milestone, enrollment).
+    "program_milestones": 1800,
     "shift_pattern_generation": 86400,
     "swap_offer_expiry": 86400,
     "officer_directory_sync": 86400,

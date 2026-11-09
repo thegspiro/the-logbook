@@ -523,7 +523,7 @@ export const ProspectiveMembersPage: React.FC = () => {
           <>
             <button
               onClick={() => void navigate('/prospective-members/settings')}
-              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors sm:px-4"
+              className="btn-secondary flex items-center gap-2 text-sm"
             >
               <Settings className="h-4 w-4" />
               <span className="hidden sm:inline">Pipeline Settings</span>
