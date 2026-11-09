@@ -568,8 +568,9 @@ const Members: React.FC = () => {
           <SkeletonPage rows={8} showStats={false} />
         ) : filteredMembers.length === 0 ? (
           showEmptyState && (
-            <div className="card p-12">
+            <div className="card p-6">
               <EmptyState
+                compact
                 icon={Users}
                 title="No Members Found"
                 description={

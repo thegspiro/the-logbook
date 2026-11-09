@@ -1024,6 +1024,7 @@ const FiscalYearSettingsPage: React.FC = () => {
 
         {fiscalYears.length === 0 ? (
           <EmptyState
+            compact
             headingLevel={3}
             icon={Calendar}
             title="No fiscal years"
@@ -1100,6 +1101,7 @@ const FiscalYearSettingsPage: React.FC = () => {
 
         {budgetCategories.length === 0 ? (
           <EmptyState
+            compact
             headingLevel={3}
             icon={Tag}
             title="No budget categories"
