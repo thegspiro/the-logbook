@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PLACEHOLDER](https://github.com/thegspiro/the-logbook/pull/PLACEHOLDER)**
+**PR [#4180](https://github.com/thegspiro/the-logbook/pull/4180)**
 (branch `claude/security-review-training-extended`): Feature 18 (Training
 extended), pass 14, a watchdog pickup. PR #4151 (Feature 17, Training core,
 pass 14) had already merged (`8b41db96`). The dedicated
