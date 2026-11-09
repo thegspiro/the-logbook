@@ -1428,17 +1428,14 @@ export default function LocationsPage() {
         </div>
         <div className="page-header-actions flex flex-wrap items-center gap-2">
           {canExportQRCodes && (
-            <Link
-              to="/locations/qr-codes"
-              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors"
-            >
+            <Link to="/locations/qr-codes" className="btn-secondary flex items-center gap-2 text-sm whitespace-nowrap">
               <QrCode className="h-4 w-4" aria-hidden="true" /> Check-In QR Codes
             </Link>
           )}
           {canViewReaders && (
             <Link
               to="/locations/card-readers"
-              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-hover hover:text-theme-text-primary touch:min-h-11 flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors"
+              className="btn-secondary flex items-center gap-2 text-sm whitespace-nowrap"
             >
               <Nfc className="h-4 w-4" aria-hidden="true" /> Card Readers
             </Link>

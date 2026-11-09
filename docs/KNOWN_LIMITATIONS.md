@@ -272,15 +272,24 @@ finalizing is.
   flagged with a message until it is fixed.
 
 Built so far: the legal-name fields on `/account` and the officer's
-edit-member page (forms review F-1, `docs/FORMS_REVIEW_2026-11-05.md`), and —
-since 2026-11-06 — the shared field (`components/ux/FormField.tsx`) and 422
-mapping (`utils/serverFieldErrors.ts`) on Submit Training, `/account`, Add
-Member, Create Shift and Create Event. On `/account` any field the server
-refuses is now handled the way a blank name was: the request is resent without
+edit-member page (forms review F-1, `docs/FORMS_REVIEW_2026-11-05.md`), and
+the shared pieces the rest move onto — `FormField` and `ErrorSummary` in
+`components/ux/`, `useFieldErrors` in `hooks/` and the 422 mapping in
+`utils/serverFieldErrors.ts` — on Submit Training, `/account`, Add Member,
+Create Shift and Create Event, then extended to the shift template and
+pattern dialogs and the scheduling notification CC lists. Two sessions built
+these in parallel; their two `FormField` components were combined into one on
+2026-11-09, keeping both feature sets. On `/account` any field the server
+refuses is handled the way a blank name was: the request is resent without
 it, the rest of the profile saves, and the field keeps what was typed, flagged
-with the server's reason, until it is changed. Submit Training's Save Draft
-shows every open error and still saves, but needs a course name and a date,
-which the server cannot store a draft without.
+with the server's reason, until it is changed. The rest of the app's forms
+still refuse a save on error in various ways (F-3 in that review) and come
+into line module by module.
+
+Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
+needs a course name and a completion date, because both are NOT NULL
+columns, and making them nullable was declined. Every other field follows
+the rule above.
 
 **Create forms do not partially save.** Add Member, Create Shift and Create
 Event put each refusal on its field and create nothing until it is fixed:
@@ -288,10 +297,6 @@ creating a record without the refused value and then flagging it would leave
 the flag on a form that has already navigated away. An event saved as a draft
 is still refused for the rules the server enforces on every event (an end after
 the start, an RSVP deadline before it).
-
-The rest of the app's forms still refuse a save on error in various ways (F-3
-in that review); they come into line module by module as they adopt the shared
-field.
 
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
@@ -798,6 +803,29 @@ entry stays only while code, tests or `CLAUDE.md` still cite it by name.
 > Rows are annotated with the date they were last _verified against the code_,
 > not just the date they were written. When you fix something listed here,
 > update its row in the same change.
+
+## Credentials Sent by Email — Two Decisions Left Open (ADV-10, 2026-11-08)
+
+Found by the adversarial exfiltration pass
+(`docs/security-review/ADV-01-adversarial-exfiltration.md`). Its fixes stop an
+officer rewriting the credential emails and stop an officer repointing a
+colleague's email without the reset ceiling and step-up. Two things remain for
+the owner, because closing them changes how members get into their accounts:
+
+- **The welcome email carries a temporary password.** Anyone who can read the
+  new member's inbox — a forwarding rule, a shared family account, a mail
+  provider's logs — holds a working password until the member's first sign-in
+  forces a change. A one-time setup link that expires and works once would
+  carry nothing reusable. It changes the welcome email, the first-login flow
+  and the IT-password notice, so it was deferred rather than folded into the
+  security fixes (owner decision, 2026-11-08).
+- **A reset link goes to an address nobody has verified.** Forgot-password
+  finds the account by email and does not check `email_verified`, and an
+  email change clears that flag. Refusing resets to unverified addresses would
+  close the path ADV-1 exploited for good, but many existing members have never
+  verified theirs, and they would lose self-service reset on upgrade. Left as
+  is; the email change itself is now ceiling-bound, step-up gated, audited and
+  reported to the previous address.
 
 ## Authentication & Security
 

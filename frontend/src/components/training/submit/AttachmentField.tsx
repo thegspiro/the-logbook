@@ -1,6 +1,7 @@
 import React from 'react';
 import { Upload, X } from 'lucide-react';
 import { ATTACHMENT_ACCEPT } from './submitFormatting';
+import { FIELD_ERROR_CLASS } from '../../ux/FormField';
 
 export const AttachmentField: React.FC<{
   id: string;
@@ -22,7 +23,10 @@ export const AttachmentField: React.FC<{
         {file ? file.name : 'Attach certificate'}
         {!file &&
           (required ? (
-            <span className="text-red-700 dark:text-red-400"> *</span>
+            <span className={FIELD_ERROR_CLASS} aria-hidden="true">
+              {' '}
+              *
+            </span>
           ) : (
             <span className="text-theme-text-muted font-normal"> optional</span>
           ))}
@@ -33,6 +37,11 @@ export const AttachmentField: React.FC<{
       type="file"
       accept={ATTACHMENT_ACCEPT}
       className="sr-only"
+      // Announced like the FormField controls beside it: an error summary
+      // link lands here, and must not land on a control that says nothing.
+      {...(required ? { 'aria-required': true as const } : {})}
+      {...(invalid || error ? { 'aria-invalid': true as const } : {})}
+      {...(error ? { 'aria-describedby': `${id}-error` } : {})}
       onChange={(e) => {
         const selected = e.target.files?.[0] ?? null;
         onSelect(selected);
@@ -49,6 +58,10 @@ export const AttachmentField: React.FC<{
         <X className="h-3 w-3" /> Remove attachment
       </button>
     )}
-    {error && <p className="mt-1 text-xs text-red-700 dark:text-red-400">{error}</p>}
+    {error && (
+      <p id={`${id}-error`} className={`mt-1 text-xs ${FIELD_ERROR_CLASS}`}>
+        {error}
+      </p>
+    )}
   </div>
 );

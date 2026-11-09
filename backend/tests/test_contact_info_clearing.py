@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from fastapi import BackgroundTasks
 
 from app.api.v1.endpoints.users import update_contact_info
 from app.schemas.user import ContactInfoUpdate
@@ -44,8 +45,9 @@ async def _save(payload):
         await update_contact_info(
             uid,
             ContactInfoUpdate.model_validate(payload),
-            db,
-            member,
+            BackgroundTasks(),
+            db=db,
+            current_user=member,
             request=fake_request(),
         )
     return member

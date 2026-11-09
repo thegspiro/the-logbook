@@ -181,8 +181,8 @@ const ExpenseReportsPage: React.FC = () => {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Expense reports">
-            <table className="w-full">
+          <div className="rwd-table-container overflow-x-auto" tabIndex={0} role="region" aria-label="Expense reports">
+            <table className="rwd-table rwd-table-wide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th
@@ -230,22 +230,32 @@ const ExpenseReportsPage: React.FC = () => {
                     onClick={() => void navigate(`/finance/expenses/${er.id}`)}
                     className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
                   >
-                    <td className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-600">{er.reportNumber}</td>
-                    <td className="text-theme-text-primary px-4 py-3 text-sm">{er.title}</td>
-                    <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+                    <td data-label="Report #" className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-600">
+                      {er.reportNumber}
+                    </td>
+                    <td data-label="Title" className="text-theme-text-primary px-4 py-3 text-sm">
+                      {er.title}
+                    </td>
+                    <td
+                      data-label="Amount"
+                      className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap"
+                    >
                       {formatCurrency(er.totalAmount)}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-center text-sm whitespace-nowrap">
+                    <td
+                      data-label="Items"
+                      className="text-theme-text-secondary px-4 py-3 text-center text-sm whitespace-nowrap"
+                    >
                       {er.lineItems.length}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td data-label="Status" className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${EXPENSE_REPORT_STATUS_COLORS[er.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'}`}
                       >
                         {STATUS_LABEL_MAP[er.status] ?? er.status}
                       </span>
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                    <td data-label="Date" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                       {formatDate(er.createdAt, tz)}
                     </td>
                   </tr>
