@@ -16,7 +16,7 @@ import { Modal } from '../../../components/Modal';
 import { FormField } from '../../../components/ux/FormField';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
-import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { budgetRequestService } from '../services/api';
@@ -50,7 +50,7 @@ export const BudgetRequestLeadershipDialog: React.FC<BudgetRequestLeadershipDial
   const current = request.reviewAmount ?? request.approvedAmount ?? request.requestedAmount;
   const [amount, setAmount] = useState(String(current));
   const [note, setNote] = useState(request.reviewNote ?? '');
-  const { errors, setErrors, clearError } = useFieldErrors<ReviewField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<ReviewField>();
   const [saving, setSaving] = useState(false);
   const isDirty = amount !== String(current) || note !== (request.reviewNote ?? '');
   // Escape, the X and Cancel all ask before throwing away a typed change.

@@ -23,7 +23,7 @@ import { Modal } from '../../../components/Modal';
 import { FormField } from '../../../components/ux/FormField';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
-import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formatCurrency } from '../../../utils/currencyFormatting';
@@ -78,7 +78,7 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
   const [reason, setReason] = useState('');
   const [approvedBy, setApprovedBy] = useState('');
   const [approvedOn, setApprovedOn] = useState(today);
-  const { errors, setErrors, clearError } = useFieldErrors<AmendField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<AmendField>();
   const [saving, setSaving] = useState(false);
   const wholeAmount = Number(amendment.amount).toFixed(2);
   const [amountText, setAmountText] = useState(wholeAmount);

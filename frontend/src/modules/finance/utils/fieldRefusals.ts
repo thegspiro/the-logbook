@@ -15,7 +15,7 @@ import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serve
 export type FieldErrors<K extends string> = Partial<Record<K, string>>;
 
 /** The form's field errors and a setter that clears one as it is edited. */
-export function useFieldErrors<K extends string>() {
+export function useDialogFieldErrors<K extends string>() {
   const [errors, setErrors] = useState<FieldErrors<K>>({});
   const clearError = useCallback(
     (field: K) =>

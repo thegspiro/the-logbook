@@ -19,7 +19,7 @@ import { Modal } from '../../../components/Modal';
 import { FormField } from '../../../components/ux/FormField';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
-import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -64,7 +64,7 @@ export const AmendmentDialog: React.FC<AmendmentDialogProps> = ({ budgetId, line
   const [reason, setReason] = useState('');
   const [approvedBy, setApprovedBy] = useState('');
   const [approvedOn, setApprovedOn] = useState(today);
-  const { errors, setErrors, clearError } = useFieldErrors<AmendField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<AmendField>();
   const [saving, setSaving] = useState(false);
   const isDirty = amount !== '' || reason !== '' || approvedBy !== '' || approvedOn !== today;
   // Escape, the X and Cancel all ask before throwing away a typed amendment.

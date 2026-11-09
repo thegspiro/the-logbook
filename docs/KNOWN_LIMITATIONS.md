@@ -318,15 +318,41 @@ sense; it saves nothing until every refusal is fixed. Dialogs that check their
 own fields turn off the browser's validation bubbles (`noValidate`), so the
 reason appears on the field instead of a native popup.
 
-Still to come, module by module: Create Election, the member admin edit page
-(its uppercase label style needs a `FormField` option first), the training
-builders and pipeline pages, the rest of Inventory (vendors, receiving, kits,
-storage areas, settings), the full apparatus form, the facility detail
-sections, medical supply deliveries and imports, store checkout, the remaining
-finance dialogs and settings cards, the minutes editor and its dialogs, report
-and evaluation dialogs, communications templates, scheduling templates and
-settings, applicant conversion and stage settings, and onboarding, history,
-membership and the public portal. Each is listed in
+**Rolled out further on 2026-11-09** (batch 17): Create Election, the member
+admin edit page (its uppercase labels kept through `FormField`'s
+`labelClassName`), the Create Training Session wizard, Inventory's Receive
+Stock, Request Equipment, vendors and contacts, Add several items, Unassign and
+Assign terms, Apparatus › Archive and NFPA items, the facility emergency
+contacts, medical supply deliveries, sixteen Finance dialogs (expense line,
+dues payment, advance return, reimbursement, pay by check, mark paid, budget
+request, amendment and reversal, adoption, fiscal-year lock, leadership and
+decision, the approvals-admin override, approval chain, export mapping), and
+the minutes sign, adopt, carry-forward, agenda, outline and suggestion forms,
+minutes reminder and signer settings, evaluation sign / amend / delete, saved
+reports, suggestion boxes and Schedule Email. The same rules apply: a create
+form creates nothing until fixed, an edit saves the rest, and a step that
+approves (adopt, sign, adopt a budget) refuses.
+
+**Budget request drafts still need an amount and a justification.** The owner
+rule says Save Draft always succeeds, but `BudgetRequestCreate` requires
+`requested_amount` and a non-blank `justification` on every request, draft or
+not, and the request has no separate draft endpoint. A blank one is therefore
+flagged on its field and nothing is saved, as with any create form. Letting a
+draft save blank would mean making both columns nullable and moving the check
+to Submit, which is a schema change and is not made here.
+
+**The approve / deny prompt in Approvals is not converted.** It is a
+`PromptDialog`, which has no discard question and no place for a server field
+error yet; the approvals-admin override form beside it is converted.
+
+Still to come, module by module: the locations setup wizard, the other training
+builders and pipeline pages, the rest of Inventory (kits, storage areas,
+categories, settings, stock lots and seals), the full apparatus form, the
+facility detail sections other than emergency contacts, medical supply lots and
+imports, store checkout, the finance cards and settings, the minutes editor,
+the remaining report dialogs, communications templates, scheduling templates
+and settings, applicant conversion and stage settings, and onboarding,
+history, membership and the public portal. Each is listed in
 `docs/FORMS_REVIEW_2026-11-05.md`.
 
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**

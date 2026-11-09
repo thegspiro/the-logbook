@@ -20,7 +20,7 @@ import { getTodayLocalDate, localToUTC } from '../../../utils/dateFormatting';
 import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { purchaseRequestService } from '../services/api';
 import type { ExpenseReport, PurchaseRequest } from '../types';
-import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { MAX_MONEY_AMOUNT } from '../utils/moneyLimits';
 
 type ClaimField = 'amount' | 'paidOn' | 'merchant';
@@ -52,7 +52,7 @@ export const ReimbursementClaimDialog: React.FC<ReimbursementClaimDialogProps> =
   const [amount, setAmount] = useState(initialAmount);
   const [paidOn, setPaidOn] = useState(today);
   const [merchant, setMerchant] = useState(initialMerchant);
-  const { errors, setErrors, clearError } = useFieldErrors<ClaimField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<ClaimField>();
   const [saving, setSaving] = useState(false);
   const isDirty = amount !== initialAmount || paidOn !== today || merchant !== initialMerchant;
   // Escape, the X and Cancel all ask before throwing away what was typed.

@@ -32,7 +32,7 @@ import { useFundOptions } from '../hooks/useFundOptions';
 import { useLateLineWarning } from '../hooks/useLateLineWarning';
 import { budgetOptionLabel, selectableBudgetOptions, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { EXPENSE_TYPE_OPTIONS, expenseLineSchema } from '../utils/expenseLines';
-import { firstErrorField, refusalsOnFields, updateExceptRefused, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, updateExceptRefused, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { MAX_MONEY_AMOUNT, MIN_MONEY_AMOUNT } from '../utils/moneyLimits';
 import { FundSelect } from './FundSelect';
 import { MileageTripLog } from './MileageTripLog';
@@ -113,7 +113,7 @@ export const ExpenseLineDialog: React.FC<ExpenseLineDialogProps> = ({
   const [fundCampaignId, setFundCampaignId] = useState(line?.fundCampaignId ?? '');
   const [budgetId, setBudgetId] = useState(line?.budgetId ?? '');
   const [trips, setTrips] = useState<TripEntry[]>(fromStoredTrips(line?.mileageTrips));
-  const { errors, setErrors, clearError } = useFieldErrors<LineField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<LineField>();
   const [saving, setSaving] = useState(false);
   const { rate: mileageRate } = useMileageRate();
   // An edit that saved all but a refused field stays open on that field;

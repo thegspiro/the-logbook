@@ -18,7 +18,7 @@ import { Modal } from '../../../components/Modal';
 import { FormField } from '../../../components/ux/FormField';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
-import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -61,7 +61,7 @@ export const BudgetAdoptionDialog: React.FC<BudgetAdoptionDialogProps> = ({ fisc
   const [adoptedOn, setAdoptedOn] = useState(today);
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const { errors, setErrors, clearError } = useFieldErrors<AdoptionField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<AdoptionField>();
   const [saving, setSaving] = useState(false);
   const isDirty = adoptedOn !== today || reference !== '' || notes !== '';
   // Escape, the X and Cancel all ask before throwing away a typed adoption.

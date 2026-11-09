@@ -22,7 +22,7 @@ import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { exportMappingService } from '../services/api';
 import { ExportMappingType } from '../types';
 import type { ExportMapping, ExportMappingCreatePayload, ExportMappingUpdatePayload } from '../types';
-import { firstErrorField, refusalsOnFields, updateExceptRefused, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, updateExceptRefused, useDialogFieldErrors } from '../utils/fieldRefusals';
 
 /** The width of every account column on `finance_export_mappings`. */
 const MAX_ACCOUNT = 200;
@@ -101,7 +101,7 @@ export const ExportMappingDialog: React.FC<ExportMappingDialogProps> = ({
   const [mappingType, setMappingType] = useState<ExportMappingType>(
     mapping && isMappingType(mapping.mappingType) ? mapping.mappingType : ExportMappingType.EXPENSE
   );
-  const { errors, setErrors, clearError } = useFieldErrors<MappingField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<MappingField>();
   const [saving, setSaving] = useState(false);
   // An edit that saved all but a refused field stays open on that field;
   // closing then still tells the page to reload.

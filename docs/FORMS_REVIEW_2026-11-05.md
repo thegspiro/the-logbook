@@ -337,38 +337,57 @@ checks its own fields; `TimeQuarterHour` and `TargetRolePicker` announce a
 refusal on their controls; Edit Pattern and the meeting action item save the
 rest of an edit and stay open, with their pages refreshing behind them.
 
+## Rollout status, 2026-11-09 (batch 17)
+
+The same steps, on these:
+
+| Area                                     | Converted                                                                                                                                                                                                                                             |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Top-level pages                          | Elections › Create Election; the member admin edit page; Create Training Session                                                                                                                                                                      |
+| Inventory and assets                     | Receive Stock; Request Equipment; Vendors › vendor and contact; Add several items; Unassign; Assign terms; Apparatus › Archive, NFPA item; Facilities › emergency contacts; Medical Supplies › Receive delivery                                       |
+| Finance and grants                       | expense line, dues payment, advance return, reimbursement, pay by check, mark paid, budget request, amendment, reversal, budget adoption, fiscal-year lock, leadership, decision, approvals-admin override, approval chain and export mapping dialogs |
+| Minutes, communications, smaller modules | minutes sign, adopt, carry-forward, agenda, outline and suggestion; minutes reminder and signer settings; evaluation sign / acknowledge / refuse, amend and delete; saved reports; suggestion boxes; Schedule Email                                   |
+
+Shared changes that came with it: `FormField`'s `labelClassName` keeps the
+member admin page's uppercase labels; the inventory and medical item pickers
+take a field's label and error wiring (`controlProps`); `PersonPicker`,
+`ReviewerChecklist` and the agenda editor take an `error`. The dues payment's
+method and reference and the export mapping's account number gained schema
+`max_length`s matching their columns, so an over-long value is a 422 on the
+field rather than a database error. The training wizard's toast names the step
+it went back to rather than repeating the refusal, which the focused field
+already reads out.
+
+Two departures are recorded in `docs/KNOWN_LIMITATIONS.md`: a budget request
+draft still needs its amount and justification, and the Approvals approve /
+deny prompt (a `PromptDialog`) is not converted.
+
 **Not yet converted** (F-2 to F-9 still apply to them):
 
-- **Top-level pages:** Elections › Create Election; the member admin edit page
-  (needs a `FormField` label-style option); the locations setup wizard;
-  training session, skill template, course library, external training,
-  training enhancements, knowledge tests and crew training pages; the pipeline
-  create and edit pages; integrations; forms; members admin; the manual shift
-  report and shift detail, reports and patterns tabs.
-- **Inventory and assets:** vendors, receive stock, request equipment, bulk
-  add, unassign, assign terms, size preferences, clone checklist, move NFC
-  tag, catalog quick add, the medical create panel, stock lots and seals, and
-  the category, storage area, kit, variant group, allowance, write-off,
-  reorder, checklist builder and settings pages; the full apparatus form, NFPA
-  items, archive and documents; the facility detail sections, settings and
-  list; medical supply deliveries, lots, import/export and categories; store
+- **Top-level pages:** the locations setup wizard; skill template, course
+  library, external training, training enhancements, knowledge tests and crew
+  training pages; the pipeline create and edit pages; integrations; forms;
+  members admin; the manual shift report and shift detail, reports and
+  patterns tabs.
+- **Inventory and assets:** bulk add, size preferences, clone checklist, move
+  NFC tag, catalog quick add, the medical create panel, stock lots and seals,
+  and the category, storage area, kit, variant group, allowance, write-off,
+  reorder, checklist builder and settings pages; the full apparatus form and
+  documents; the facility detail sections other than emergency contacts,
+  settings and list; medical supply lots, import/export and categories; store
   settings, order detail and checkout.
-- **Finance and grants:** the expense line, dues payment, advance return,
-  budget request and adoption, amendment and reversal, approval decision,
-  reimbursement, approval chain and step, export mapping, mark paid, leadership
-  and decision, pay by check and fiscal-year lock dialogs; the dual approval,
-  fund overspend, advance return, reminder, mileage and substantiation cards;
-  charge access, dues and advance exports; fiscal-year settings and the
-  QuickBooks page; the Zeffy link dialog, donors, campaigns and the grant
-  detail page's inline forms.
-- **Minutes, communications, smaller modules:** the minutes editor and its
-  sign, adopt, carry-forward, agenda, outline and suggestion dialogs and
-  settings; every report and evaluation dialog; communications suggestions,
-  templates, scheduled email, officers, footers, intake questions, photo
-  consent and email templates; scheduling template and settings; applicant
-  conversion, stage configuration, detail dialog, interviews and pipeline
-  settings; onboarding, the public portal, membership, history, the org chart
-  node and IP security admin.
+- **Finance and grants:** the approval step dialog and the Approvals approve /
+  deny prompt; the dual approval, fund overspend, advance return, reminder,
+  mileage and substantiation cards; charge access, dues and advance exports;
+  fiscal-year settings and the QuickBooks page; the Zeffy link dialog, donors,
+  campaigns and the grant detail page's inline forms.
+- **Minutes, communications, smaller modules:** the minutes editor and the
+  rest of its settings; the remaining report dialogs; communications
+  templates, officers, footers, intake questions, photo consent and email
+  templates; scheduling template and settings; applicant conversion, stage
+  configuration, detail dialog, interviews and pipeline settings; onboarding,
+  the public portal, membership, history, the org chart node and IP security
+  admin.
 
 ## Suggested order
 

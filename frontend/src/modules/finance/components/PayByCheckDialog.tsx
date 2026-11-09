@@ -16,7 +16,7 @@ import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '../../../utils/currencyFormatting';
 import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
-import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { expenseReportService } from '../services/api';
 import type { CheckRequest, ExpenseReport } from '../types';
 
@@ -43,7 +43,7 @@ export const PayByCheckDialog: React.FC<PayByCheckDialogProps> = ({ report, onCl
   const [payeeAddress, setPayeeAddress] = useState('');
   const [memo, setMemo] = useState('');
   const [saving, setSaving] = useState(false);
-  const { errors, setErrors, clearError } = useFieldErrors<CheckField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<CheckField>();
   // Escape, the X and Cancel all ask before throwing away what was typed.
   const requestClose = useDiscardGuard({ isDirty: payeeAddress !== '' || memo !== '', onClose });
 

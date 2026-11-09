@@ -100,7 +100,15 @@ type SessionField =
 // Labels and limits from TrainingSessionCreate / RecurringTrainingSessionCreate
 // (backend/app/schemas/training_session.py); `step` is the wizard step the
 // field is on, so a refusal can take the officer back to it.
-const SESSION_FIELDS: Record<SessionField, ServerFieldSpec & { id: string; step: number }> = {
+const STEP_TITLES = {
+  1: 'Event Details',
+  2: 'Training Info',
+  3: 'Settings',
+  4: 'Review',
+} as const;
+type WizardStep = keyof typeof STEP_TITLES;
+
+const SESSION_FIELDS: Record<SessionField, ServerFieldSpec & { id: string; step: WizardStep }> = {
   title: { label: 'Training title', maxLength: 200, id: 'session-title', step: 1 },
   description: { label: 'Description', id: 'session-description', step: 1 },
   start_datetime: { label: 'Start date & time', id: 'session-start', step: 1 },
@@ -122,6 +130,7 @@ const SESSION_FIELDS: Record<SessionField, ServerFieldSpec & { id: string; step:
   expiration_months: { label: 'Expiration (months)', id: 'session-expiration-months', step: 2 },
 };
 const SESSION_FIELD_ORDER = Object.keys(SESSION_FIELDS) as SessionField[];
+
 
 /**
  * Create Training Session Page
@@ -276,7 +285,10 @@ const CreateTrainingSessionPage: React.FC = () => {
   const handleSubmit = async () => {
     // A create form creates nothing until each refusal is fixed (owner,
     // 2026-11-05). Each is written under its field, the wizard goes back to
-    // the step holding the first one, and the toast says why it moved.
+    // the step holding the first one, and the toast says why it moved. The
+    // toast names the step rather than repeating the refusal: focus lands on
+    // the field, whose description already reads it, so a screen reader
+    // would otherwise hear the same sentence twice.
     const errors: Partial<Record<SessionField, string>> = {};
     if (!formData.title.trim()) errors.title = 'Enter a title';
     if (!formData.start_datetime) errors.start_datetime = 'Enter a start time';
@@ -294,7 +306,7 @@ const CreateTrainingSessionPage: React.FC = () => {
     const firstError = SESSION_FIELD_ORDER.find((key) => errors[key]);
     if (firstError) {
       showFieldErrors(errors);
-      toast.error(errors[firstError] ?? 'Fix the flagged field');
+      toast.error(`Back to ${STEP_TITLES[SESSION_FIELDS[firstError].step]}: fix the flagged field`);
       return;
     }
     setFieldErrors({});
@@ -378,10 +390,10 @@ const CreateTrainingSessionPage: React.FC = () => {
   };
 
   const steps = [
-    { number: 1, title: 'Event Details', icon: Calendar },
-    { number: 2, title: 'Training Info', icon: GraduationCap },
-    { number: 3, title: 'Settings', icon: FileText },
-    { number: 4, title: 'Review', icon: CheckCircle },
+    { number: 1, title: STEP_TITLES[1], icon: Calendar },
+    { number: 2, title: STEP_TITLES[2], icon: GraduationCap },
+    { number: 3, title: STEP_TITLES[3], icon: FileText },
+    { number: 4, title: STEP_TITLES[4], icon: CheckCircle },
   ];
 
   type TextKey = 'title' | 'course_name' | 'course_code' | 'issuing_agency' | 'certification_number_prefix';

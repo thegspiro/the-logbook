@@ -27,7 +27,7 @@ import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { duesService } from '../services/api';
 import type { DuesPaymentPayload, MemberDues } from '../types';
 import { DUES_PAYMENT_METHODS, outstandingOf } from '../utils/dues';
-import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { MAX_MONEY_AMOUNT } from '../utils/moneyLimits';
 
 type PaymentField = 'amount' | 'method' | 'reference' | 'notes';
@@ -64,7 +64,7 @@ export const DuesPaymentDialog: React.FC<DuesPaymentDialogProps> = ({ dues, memb
   const [method, setMethod] = useState('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const { errors, setErrors, clearError } = useFieldErrors<PaymentField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<PaymentField>();
   const [saving, setSaving] = useState(false);
   const { confirm } = useConfirm();
   const initialAmount = outstanding > 0 ? outstanding.toFixed(2) : '';

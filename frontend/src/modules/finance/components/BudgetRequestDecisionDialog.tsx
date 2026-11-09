@@ -15,7 +15,7 @@ import { Modal } from '../../../components/Modal';
 import { FormField } from '../../../components/ux/FormField';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
-import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { formatDate } from '@/utils/dateFormatting';
@@ -60,7 +60,7 @@ export const BudgetRequestDecisionDialog: React.FC<BudgetRequestDecisionDialogPr
   const [decision, setDecision] = useState<BudgetRequestDecisionKind>('approve');
   const [amount, setAmount] = useState(String(request.requestedAmount));
   const [note, setNote] = useState('');
-  const { errors, setErrors, clearError } = useFieldErrors<DecisionField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<DecisionField>();
   const [saving, setSaving] = useState(false);
   const isDirty = decision !== 'approve' || amount !== String(request.requestedAmount) || note !== '';
   // Escape, the X and Cancel all ask before throwing away a typed decision.

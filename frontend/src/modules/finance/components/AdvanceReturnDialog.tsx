@@ -19,7 +19,7 @@ import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { advanceService } from '../services/api';
 import type { AdvanceSummary } from '../types';
 import { DUES_PAYMENT_METHODS } from '../utils/dues';
-import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { MAX_MONEY_AMOUNT } from '../utils/moneyLimits';
 
 type ReturnField = 'amount' | 'returnedOn' | 'method' | 'reference' | 'notes';
@@ -57,7 +57,7 @@ export const AdvanceReturnDialog: React.FC<AdvanceReturnDialogProps> = ({ advanc
   const [method, setMethod] = useState('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const { errors, setErrors, clearError } = useFieldErrors<ReturnField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<ReturnField>();
   const [saving, setSaving] = useState(false);
   const isDirty = amount !== initialAmount || returnedOn !== today || method !== '' || reference !== '' || notes !== '';
   // Escape, the X and Cancel all ask before throwing away a typed return.

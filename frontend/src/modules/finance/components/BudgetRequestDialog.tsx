@@ -23,7 +23,7 @@ import { formatCurrency } from '@/utils/currencyFormatting';
 import { budgetRequestService } from '../services/api';
 import type { BudgetRequest, BudgetRequestProposalOptions, BudgetRequestUpdatePayload } from '../types';
 import { MAX_REQUEST_AMOUNT, MAX_REQUEST_TEXT } from '../utils/budgetRequests';
-import { firstErrorField, refusalsOnFields, updateExceptRefused, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, refusalsOnFields, updateExceptRefused, useDialogFieldErrors } from '../utils/fieldRefusals';
 
 export type BudgetRequestDialogTarget =
   | { kind: 'line'; budgetId: string; lineLabel: string; lastYearBudgeted?: string | null | undefined }
@@ -76,7 +76,7 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
   const [categoryId, setCategoryId] = useState('');
   const [stationId, setStationId] = useState('');
   const [positionId, setPositionId] = useState(options?.positions.length === 1 ? (options.positions[0]?.id ?? '') : '');
-  const { errors, setErrors, clearError } = useFieldErrors<RequestField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<RequestField>();
   const [saving, setSaving] = useState(false);
   // An edit that saved all but a refused field stays open on that field;
   // closing then still tells the page to reload.

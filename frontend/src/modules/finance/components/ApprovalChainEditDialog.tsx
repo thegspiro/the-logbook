@@ -15,7 +15,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
 import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import type { ApprovalChain, ApprovalChainUpdatePayload } from '../types';
-import { firstErrorField, updateExceptRefused, useFieldErrors } from '../utils/fieldRefusals';
+import { firstErrorField, updateExceptRefused, useDialogFieldErrors } from '../utils/fieldRefusals';
 
 type ChainField = 'name' | 'description' | 'isActive';
 
@@ -50,7 +50,7 @@ export const ApprovalChainEditDialog: React.FC<ApprovalChainEditDialogProps> = (
   const [name, setName] = useState(chain.name);
   const [description, setDescription] = useState(chain.description || '');
   const [isActive, setIsActive] = useState(chain.isActive);
-  const { errors, setErrors, clearError } = useFieldErrors<ChainField>();
+  const { errors, setErrors, clearError } = useDialogFieldErrors<ChainField>();
   const [saving, setSaving] = useState(false);
   const initial = useRef({ name, description, isActive });
   const isDirty =
