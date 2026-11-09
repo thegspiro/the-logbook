@@ -420,8 +420,8 @@ export const ApparatusListPage: React.FC = () => {
         ) : (
           <>
             <div className="card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="rwd-table-container overflow-x-auto">
+                <table className="rwd-table rwd-table-xwide w-full">
                   <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
                       <th
@@ -489,7 +489,7 @@ export const ApparatusListPage: React.FC = () => {
                             apparatus.isArchived ? 'opacity-60' : ''
                           }`}
                         >
-                          <td className="px-3 py-4 whitespace-nowrap sm:px-6">
+                          <td data-label="Unit" className="px-3 py-4 sm:px-6">
                             <div className="flex items-center">
                               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-800 font-bold text-white">
                                 {/* Unit numbers are hyphenated ("E-1", "B-5"), so a
@@ -503,15 +503,15 @@ export const ApparatusListPage: React.FC = () => {
                                   {apparatus.unitNumber}
                                 </div>
                                 {apparatus.name && (
-                                  <div className="text-theme-text-muted truncate text-sm">{apparatus.name}</div>
+                                  <div className="text-theme-text-muted text-sm">{apparatus.name}</div>
                                 )}
                               </div>
                             </div>
                           </td>
-                          <td className="table-col-secondary px-3 py-4 whitespace-nowrap sm:px-6">
+                          <td data-label="Type" className="table-col-secondary px-3 py-4 sm:px-6">
                             {apparatusType && <ApparatusTypeBadge type={apparatusType} />}
                           </td>
-                          <td className="table-col-secondary px-3 py-4 sm:px-6">
+                          <td data-label="Vehicle" className="table-col-secondary px-3 py-4 sm:px-6">
                             <div className="text-theme-text-primary text-sm">
                               {apparatus.year && apparatus.make && apparatus.model
                                 ? `${apparatus.year} ${apparatus.make} ${apparatus.model}`
@@ -520,8 +520,8 @@ export const ApparatusListPage: React.FC = () => {
                                   : '-'}
                             </div>
                           </td>
-                          <td className="px-3 py-4 whitespace-nowrap sm:px-6">
-                            <div className="flex items-center gap-2">
+                          <td data-label="Status" className="px-3 py-4 sm:px-6">
+                            <div className="flex flex-wrap items-center gap-2">
                               {status && <StatusBadge status={status} />}
                               {apparatus.hasDeficiency && (
                                 <span
@@ -534,20 +534,20 @@ export const ApparatusListPage: React.FC = () => {
                               )}
                             </div>
                           </td>
-                          <td className="table-col-secondary px-3 py-4 whitespace-nowrap sm:px-6">
+                          <td data-label="Min Crew" className="table-col-secondary px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="text-theme-text-secondary text-sm">{apparatus.minStaffing}</div>
                           </td>
-                          <td className="table-col-tertiary px-3 py-4 whitespace-nowrap sm:px-6">
+                          <td data-label="Mileage" className="table-col-tertiary px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="text-theme-text-secondary text-sm">
                               {apparatus.currentMileage ? formatNumber(apparatus.currentMileage) : '-'}
                             </div>
                           </td>
-                          <td className="table-col-tertiary px-3 py-4 whitespace-nowrap sm:px-6">
+                          <td data-label="Hours" className="table-col-tertiary px-3 py-4 whitespace-nowrap sm:px-6">
                             <div className="text-theme-text-secondary text-sm">
                               {apparatus.currentHours ? formatNumber(apparatus.currentHours) : '-'}
                             </div>
                           </td>
-                          <td className="px-3 py-4 text-right whitespace-nowrap sm:px-6">
+                          <td data-label="Actions" className="px-3 py-4 text-right whitespace-nowrap sm:px-6">
                             <div className="flex items-center justify-end space-x-1 sm:space-x-2">
                               <button
                                 onClick={() => void navigate(`/apparatus/print-labels?ids=${apparatus.id}`)}

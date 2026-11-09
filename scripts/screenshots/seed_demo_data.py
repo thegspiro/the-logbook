@@ -14209,10 +14209,142 @@ class Seeder:
                     "for about 45 students."
                 ),
                 "date_flexibility": "general_timeframe",
-                "timeframe_description": "Any weekday morning in the next month",
-                "expected_attendees": 45,
+                "preferred_timeframe": "Any weekday morning in the next month",
+                "audience_size": 45,
             },
         )
+
+    def seed_event_request_pipeline(self) -> None:
+        """A request at each stage, so every group on the Requests tab has a row.
+
+        The tab groups requests by what needs doing (needs a reply, in
+        progress, scheduled, postponed), and with only Dana Whitmore's new
+        request every group but the first rendered empty, so guide 04's
+        picture of the list showed one row and none of the progress, coverage
+        or next-step lines the guide describes.
+
+        Each request goes in through the public endpoint and is then moved the
+        way a coordinator moves it, through the same endpoints the tab calls:
+        assigned, checklist steps ticked, scheduled, signups opened,
+        postponed. Safe to re-run: a request is found by its contact name and
+        only advanced while it is still new, so a second run neither
+        duplicates it nor pushes it a step further.
+        """
+        org_id = pick(self.api.get("/auth/me"), "organization_id")
+        existing = {
+            pick(r, "contact_name"): r
+            for r in items(self.api.get("/event-requests"), "requests")
+        }
+        now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+
+        def submit(payload: dict) -> tuple[str, bool]:
+            """The request's id, and whether it is still new and unworked."""
+            row = existing.get(payload["contact_name"])
+            if row:
+                return str(pick(row, "id")), pick(row, "status") == "submitted"
+            created = self.api.post(
+                f"/event-requests/public?organization_id={org_id}", payload
+            )
+            return str(pick(created, "request_id")), True
+
+        def assign(request_id: str, username: str) -> None:
+            user_id = self._user_id(username)
+            if user_id:
+                self.api.patch(
+                    f"/event-requests/{request_id}/assign", {"assigned_to": user_id}
+                )
+
+        def tick(request_id: str, *task_ids: str) -> None:
+            for task_id in task_ids:
+                self.api.patch(
+                    f"/event-requests/{request_id}/tasks",
+                    {"task_id": task_id, "completed": True},
+                )
+
+        # In progress: a coordinator, one checklist step of three done, and a
+        # requested date far enough out to clear the default 21-day lead time.
+        block_party, fresh = submit(
+            {
+                "contact_name": "Tom Becker",
+                "contact_email": "tbecker@maplestreethoa.example.org",
+                "contact_phone": "555-0148",
+                "organization_name": "Maple Street HOA",
+                "outreach_type": "fire_safety_demo",
+                "description": (
+                    "Our fall block party would love an engine and a short "
+                    "talk on home fire escape plans for the families."
+                ),
+                "date_flexibility": "specific_dates",
+                "preferred_date_start": (now + timedelta(days=40)).isoformat(),
+                "audience_size": 200,
+            }
+        )
+        if fresh:
+            assign(block_party, "okittredge")
+            # Assigning is itself a checklist step, so a coordinator ticks it
+            # on assigning; leaving it open put "Next: Assign Coordinator" on
+            # a request that plainly had one.
+            tick(block_party, "review_request", "assign_coordinator")
+
+        # Scheduled, a few days out, with a signup sheet nobody has joined yet,
+        # so the row reads "0 of 3 signed up" and its next step asks for
+        # volunteers.
+        scouts, fresh = submit(
+            {
+                "contact_name": "Kevin Wu",
+                "contact_email": "kwu@troop12.example.org",
+                "organization_name": "Scout Troop 12",
+                "outreach_type": "station_tour",
+                "description": (
+                    "Fourteen scouts working on their fire safety badge would "
+                    "like a station tour."
+                ),
+                "date_flexibility": "flexible",
+                "audience_size": 14,
+            }
+        )
+        if fresh:
+            assign(scouts, "smarchetti")
+            tick(scouts, "review_request", "assign_coordinator", "confirm_date")
+            start = now + timedelta(days=5)
+            self.api.patch(
+                f"/event-requests/{scouts}/schedule",
+                {
+                    "event_date": start.isoformat(),
+                    "event_end_date": (start + timedelta(hours=1)).isoformat(),
+                    "create_calendar_event": True,
+                },
+            )
+            self.api.post(
+                f"/event-requests/{scouts}/staffing",
+                {
+                    "roles": [
+                        {"role": "tour_guide", "count": 2},
+                        {"role": "educator", "count": 1},
+                    ]
+                },
+            )
+
+        # Postponed, with no new date yet.
+        library, fresh = submit(
+            {
+                "contact_name": "Priya Natarajan",
+                "contact_email": "pnatarajan@oakvillelibrary.example.org",
+                "organization_name": "Oakville Public Library",
+                "outreach_type": "career_talk",
+                "description": "A career talk for our teen summer program.",
+                "date_flexibility": "general_timeframe",
+                "preferred_timeframe": "Spring, any Saturday",
+                "audience_size": 30,
+            }
+        )
+        if fresh:
+            assign(library, "okittredge")
+            tick(library, "review_request", "assign_coordinator")
+            self.api.patch(
+                f"/event-requests/{library}/postpone",
+                {"reason": "The library is closed for renovation until spring."},
+            )
 
     def seed_event_request_form(self) -> None:
         """The outreach request form itself, published.
@@ -21464,6 +21596,7 @@ class Seeder:
         self.step("meetings", lambda: self.seed_meetings(members))
         self.step("event request form", self.seed_event_request_form)
         self.step("event request", self.seed_event_request)
+        self.step("event request pipeline", self.seed_event_request_pipeline)
         self.step("elections", lambda: self.seed_elections(minutes))
         prospect_data = (
             self.step("prospective members", self.seed_prospective_members) or {}

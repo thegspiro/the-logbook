@@ -4771,6 +4771,23 @@ same old system. Once an import is committed, its member, unit and position
 decisions are remembered, and later drafts apply them (marked **Remembered**)
 beneath whatever you decide on that draft. A discarded draft teaches nothing.
 
+**Adding an outside unit** _(2026-11-08)_. On the **Units** tab, **Add as an
+outside agency's unit…** asks for the agency from a list of the agencies you
+already have, so a misspelling cannot create a second one. Choose **New
+agency…** in that list to type a name instead. A unit the import adds starts
+**hidden from members**: an old file names vehicles that have been retired as
+well as ones still in service. If members should still log hours on it, switch
+it on in **Outside Apparatus** settings after you commit. Units already hidden
+stay pickable in the import, marked **hidden from members**. Names that are not
+a vehicle at all (`POV`, `Other EMS`) can each be sent to **Catch-all: Other**.
+That puts all of them on a single outside unit named **Other**, under an agency
+named **Other**, created on the first commit and reused after that.
+
+**Retired units of your own.** To stop a unit of your own being scheduled,
+**archive** it in the Apparatus module, or **deactivate** it on the basic
+apparatus list. Either one removes it from the shift and template pickers. The
+import still offers it, marked **retired**, because years of history ran on it.
+
 Imported shifts are written already finalized: they count toward hours and shift
 compliance, but send no notifications and skip the equipment-check gate and
 completion-report drafts.

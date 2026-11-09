@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**363 tables · 5899 columns · 1218 foreign keys**
+**365 tables · 5915 columns · 1222 foreign keys**
 
 ---
 
@@ -337,7 +337,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`historical_import_rows`](#historical_import_rows) | `HistoricalImportRow` | 4 | One data row of the file, exactly as read. |
-| [`historical_imports`](#historical_imports) | `HistoricalImport` | 21 | One uploaded export and the decisions about how to read it. |
+| [`historical_imports`](#historical_imports) | `HistoricalImport` | 22 | One uploaded export and the decisions about how to read it. |
+| [`historical_staffing_files`](#historical_staffing_files) | `HistoricalStaffingFile` | 11 | A staffing export attached to a historical import, while it is mapped. |
+| [`historical_staffing_rows`](#historical_staffing_rows) | `HistoricalStaffingRow` | 4 | One data row of a staffing file, exactly as read. |
 | [`imported_source_records`](#imported_source_records) | `ImportedSourceRecord` | 8 | A source row that an import has turned into a record. |
 
 ### History
@@ -5515,6 +5517,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `admin_settings` | JSON | yes |  |  |  |
 | `member_mappings` | JSON | yes |  |  |  |
 | `training_settings` | JSON | yes |  |  |  |
+| `staffing_settings` | JSON | yes |  |  |  |
 | `results` | JSON | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `routed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -5529,6 +5532,52 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - CHECK `ck_historical_imports_ck_historical_imports_status`: `status IN ('draft', 'routed')`
+
+### `historical_staffing_files`
+
+**HistoricalStaffingFile** · `app/models/historical_import.py`
+
+> A staffing export attached to a historical import, while it is mapped. Staffing is the roster: who was scheduled into which seat. It credits no hours (the hours file did that), so it is kept beside the import rather than routed with its rows. It shares the import's source system, time zone and member decisions. One file of each kind per import; uploading another replaces it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `historical_import_id` | VARCHAR(36) | no | FK |  | → `historical_imports.id` ON DELETE CASCADE |
+| `kind` | VARCHAR(20) | no |  |  |  |
+| `source_filename` | VARCHAR(255) | no |  |  |  |
+| `headers` | JSON | no |  |  |  |
+| `column_mapping` | JSON | no |  |  |  |
+| `row_count` | INTEGER | no |  | `0` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_historical_staffing_files_org` (`organization_id`)
+
+**Constraints**
+
+- CHECK `ck_historical_staffing_files_ck_historical_staffing_files_kind`: `kind IN ('seats', 'events')`
+- UNIQUE `uq_historical_staffing_files_kind` (`historical_import_id`, `kind`)
+
+### `historical_staffing_rows`
+
+**HistoricalStaffingRow** · `app/models/historical_import.py`
+
+> One data row of a staffing file, exactly as read. Tenant-scoped only through its file, which is resolved through an import already in the caller's organization (pitfall #14, parent resolution).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `file_id` | VARCHAR(36) | no | FK, IDX |  | → `historical_staffing_files.id` ON DELETE CASCADE |
+| `line_number` | INTEGER | no |  |  |  |
+| `raw` | JSON | no |  |  |  |
+
+**Indexes**
+
+- `ix_historical_staffing_rows_file_line` (`file_id`, `line_number`)
 
 ### `imported_source_records`
 
@@ -12585,7 +12634,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (446 references)
+### → `users` (447 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12777,6 +12826,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `historical_members` | `published_by` | SET NULL | yes |
 | `historical_members` | `updated_by` | SET NULL | yes |
 | `historical_members` | `user_id` | SET NULL | yes |
+| `historical_staffing_files` | `created_by` | SET NULL | yes |
 | `history_clearance_decisions` | `decided_by` | SET NULL | yes |
 | `history_clearance_requests` | `submitted_by` | SET NULL | yes |
 | `history_revisions` | `actor_id` | SET NULL | yes |
@@ -13036,7 +13086,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (299 references)
+### → `organizations` (300 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13166,6 +13216,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `historical_imports` | `organization_id` | CASCADE | no |
 | `historical_member_relations` | `organization_id` | CASCADE | no |
 | `historical_members` | `organization_id` | CASCADE | no |
+| `historical_staffing_files` | `organization_id` | CASCADE | no |
 | `history_clearance_requests` | `organization_id` | CASCADE | no |
 | `history_clearance_steps` | `organization_id` | CASCADE | no |
 | `history_revisions` | `organization_id` | CASCADE | no |
@@ -13819,6 +13870,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `grant_expenditures` | `application_id` | CASCADE | no |
 | `grant_notes` | `application_id` | CASCADE | no |
 
+### → `historical_imports` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_import_rows` | `import_id` | CASCADE | no |
+| `historical_staffing_files` | `historical_import_id` | CASCADE | no |
+| `imported_source_records` | `historical_import_id` | SET NULL | yes |
+| `shift_history_imports` | `historical_import_id` | SET NULL | yes |
+
 ### → `meetings` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -13895,14 +13955,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_requests` | `form_submission_id` | SET NULL | yes |
 | `prospect_form_requests` | `submission_id` | SET NULL | yes |
 | `prospective_members` | `form_submission_id` | SET NULL | yes |
-
-### → `historical_imports` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `historical_import_rows` | `import_id` | CASCADE | no |
-| `imported_source_records` | `historical_import_id` | SET NULL | yes |
-| `shift_history_imports` | `historical_import_id` | SET NULL | yes |
 
 ### → `historical_members` (3 references)
 
@@ -14316,6 +14368,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `historical_member_period_titles` | `period_id` | CASCADE | no |
 
+### → `historical_staffing_files` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_staffing_rows` | `file_id` | CASCADE | no |
+
 ### → `history_clearance_requests` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -14542,6 +14600,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `historical_import_rows` | `historical_imports` |
 | `historical_member_period_titles` | `historical_member_service_periods`, `history_titles` |
 | `historical_member_service_periods` | `historical_members` |
+| `historical_staffing_rows` | `historical_staffing_files` |
 | `history_clearance_decisions` | `history_clearance_requests`, `users` |
 | `ip_exception_audit_log` | `ip_exceptions`, `users` |
 | `meeting_motions` | `elections`, `meeting_minutes` |

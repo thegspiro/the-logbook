@@ -424,8 +424,11 @@ export const APIKeysTab: React.FC = () => {
           </div>
 
           {/* Desktop table */}
-          <div className="card hidden overflow-x-auto sm:block">
-            <table className="divide-theme-surface-border min-w-full divide-y" aria-label="API keys list">
+          <div className="card rwd-table-container hidden overflow-x-auto sm:block">
+            <table
+              className="rwd-table rwd-table-2xwide divide-theme-surface-border min-w-full divide-y"
+              aria-label="API keys list"
+            >
               <thead className="bg-theme-surface-secondary">
                 <tr>
                   <th
@@ -475,25 +478,27 @@ export const APIKeysTab: React.FC = () => {
               <tbody className="bg-theme-surface divide-theme-surface-border divide-y">
                 {apiKeys.map((key) => (
                   <tr key={key.id} className="hover:bg-theme-surface-hover">
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td data-label="Name" className="px-6 py-4">
                       <div className="text-theme-text-primary text-sm font-medium">{key.name}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td data-label="Key Prefix" className="px-6 py-4 whitespace-nowrap">
                       <code className="bg-theme-surface-secondary rounded-sm px-2 py-1 font-mono text-xs">
                         {key.key_prefix}...
                       </code>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(key)}</td>
-                    <td className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
+                    <td data-label="Status" className="px-6 py-4 whitespace-nowrap">
+                      {getStatusBadge(key)}
+                    </td>
+                    <td data-label="Rate Limit" className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
                       {key.rate_limit_override ?? key.effective_rate_limit}/hour
                     </td>
-                    <td className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
+                    <td data-label="Last Used" className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
                       {formatDateTime(key.last_used_at, tz)}
                     </td>
-                    <td className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
+                    <td data-label="Created" className="text-theme-text-muted px-6 py-4 text-sm whitespace-nowrap">
                       {formatDateTime(key.created_at, tz)}
                     </td>
-                    <td className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
+                    <td data-label="Actions" className="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
                       {key.is_active && (
                         <button
                           type="button"

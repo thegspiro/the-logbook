@@ -98,7 +98,7 @@ const HISTORY_IMPORT_DETAIL = {
 // free text from a spreadsheet can overflow the review card on a tablet or a
 // laptop, hiding the Exclude button at the end of each row.
 test.describe('Shift history import — rows table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/scheduling/admin/history-import/:id — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
@@ -115,6 +115,115 @@ test.describe('Shift history import — rows table', () => {
         .filter({ has: page.getByRole('columnheader', { includeHidden: true, name: 'Line' }) });
       await table.waitFor();
       await expectTableFitsItsCard(table, 'Shift history import rows table');
+    });
+  }
+});
+
+const MEMBER_HOURS_REPORT = {
+  members: MEMBERS.map((member, i) => {
+    const [firstName = '', lastName = ''] = member.split(' ');
+    return {
+      user_id: `member-${i}`,
+      email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@northfield-oakville-fire.example.org`,
+      first_name: firstName,
+      last_name: lastName,
+      shifts_attended: 141 + i,
+      worked_minutes: 101_340 + i * 60,
+      worked_hours: 1689.25 + i,
+      shifts_scheduled: 144 + i,
+      scheduled_minutes: 103_680,
+      scheduled_hours: 1728.5 + i,
+      external_shifts: 13,
+      external_minutes: 9_360,
+      external_hours: 156.75,
+    };
+  }),
+  period_start: '2026-01-01',
+  period_end: '2026-10-31',
+  total_members: MEMBERS.length,
+};
+
+const SHIFT_COMPLIANCE_REPORT = {
+  reference_date: '2026-11-08',
+  total_requirements: 1,
+  requirements: [
+    {
+      requirement_id: 'requirement-1',
+      requirement_name: 'Minimum Monthly Duty Crew Shift Commitment for Volunteer Firefighters',
+      requirement_type: 'shifts',
+      required_value: 4,
+      frequency: 'monthly',
+      period_start: '2026-11-01',
+      period_end: '2026-11-30',
+      members: MEMBERS.map((member, i) => {
+        const [firstName = '', lastName = ''] = member.split(' ');
+        return {
+          user_id: `member-${i}`,
+          first_name: firstName,
+          last_name: lastName,
+          full_name: member,
+          rank: ['battalion_chief', 'captain', 'lieutenant', 'firefighter'][i] ?? 'firefighter',
+          completed_value: 3,
+          percentage: [100, 75, 50, 25][i] ?? 0,
+          compliant: i === 0,
+          shift_count: 112 + i,
+          total_hours: 1344.5,
+          external_shift_count: 12,
+          external_hours: 144.25,
+          catch_up_deadline: i === 3 ? '2026-12-15' : null,
+        };
+      }),
+      total_members: MEMBERS.length,
+      compliant_count: 1,
+      non_compliant_count: 3,
+      compliance_rate: 25,
+    },
+  ],
+};
+
+// The member hours report sets each member's name and email beside six figure
+// columns; on a tablet with the side navigation open that is wider than the
+// report card, which hid the difference and per-shift average off to the right.
+test.describe('Scheduling reports — member hours table', () => {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
+    test(`/scheduling/admin/reports — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await signIn(page, { permissions: PERMISSIONS });
+      await page.route('**/api/v1/scheduling/reports/member-hours**', (route) => {
+        void route.fulfill(json(MEMBER_HOURS_REPORT));
+      });
+      await page.goto('/scheduling/admin/reports');
+
+      const table = page
+        .getByRole('table')
+        .filter({ has: page.getByRole('columnheader', { includeHidden: true, name: 'Avg Per Shift', exact: true }) });
+      await table.waitFor();
+      await expectTableFitsItsCard(table, 'Member hours table');
+    });
+  }
+});
+
+// A shift compliance requirement expands into a table of its members with rank,
+// shifts, hours, a progress bar and a status badge — wider than the expanded
+// panel on a phone, where the status that answers the question was cut off.
+test.describe('Scheduling reports — shift compliance members table', () => {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
+    test(`/scheduling/admin/reports (Shift Compliance) — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await signIn(page, { permissions: PERMISSIONS });
+      await page.route('**/api/v1/scheduling/reports/compliance**', (route) => {
+        void route.fulfill(json(SHIFT_COMPLIANCE_REPORT));
+      });
+      await page.goto('/scheduling/admin/reports');
+
+      await page.getByRole('tab', { name: /Shift Compliance/ }).click();
+      await page.getByText('Minimum Monthly Duty Crew Shift Commitment').first().click();
+
+      const table = page
+        .getByRole('table')
+        .filter({ has: page.getByRole('columnheader', { includeHidden: true, name: 'Progress', exact: true }) });
+      await table.waitFor();
+      await expectTableFitsItsCard(table, 'Shift compliance members table');
     });
   }
 });

@@ -2283,25 +2283,78 @@ scheduling and communication.
 
 ### Managing Requests
 
-Requests arrive on the **Requests** tab of Events Administration.
+Requests arrive on the **Requests** tab of Events Administration. _(2026-11-08)_
+The tab is a triage list grouped by what needs doing next:
 
-1. **Open a request** to see the contact details, date preferences and
-   description.
-2. **Assign or reassign** the coordinator from the list.
-3. **Add comments** for internal notes. The requester never sees them.
-4. **Tick off pipeline tasks** as they are done. The first one ticked moves
+| Group             | Holds                                                          |
+| ----------------- | -------------------------------------------------------------- |
+| **Needs a reply** | New requests nobody has started on, oldest first               |
+| **In progress**   | Requests being worked through the checklist, soonest date first |
+| **Scheduled**     | Requests on the calendar, soonest event first                  |
+| **Postponed**     | Requests waiting on a new date                                 |
+| **Closed**        | Completed, declined and cancelled requests, folded away        |
+
+Each row shows:
+
+- **When it was received.** A new request left two days without anyone
+  starting on it shows its age in red.
+- **The requested date and how soon it is**, for example _"in 5 days"_, in red
+  within a week.
+- **Short notice**, when the request arrived through a public form inside your
+  **Minimum Lead Time**.
+- **The coordinator**, or a dashed **Unassigned** chip.
+- **Checklist progress**, on a request in progress.
+- **Volunteer signups**, for example _"4 of 6 signed up"_, on a scheduled
+  request with a signup sheet.
+- **Next:** the step that moves the request forward.
+
+Use the search box to find a request by requester, organization, type or
+coordinator, and **All / Mine / Unassigned** to narrow the list. The badge on
+**Unassigned** counts the open requests nobody has.
+
+**Take it** on a new, unassigned request makes you its coordinator in one
+click. It does not open the request or change its status.
+
+Select a request to open it in a panel on the right (full screen on a phone).
+The list stays where it was. The panel leads with the one action that moves
+the request forward:
+
+| Status                                  | Main button                                            |
+| --------------------------------------- | ------------------------------------------------------ |
+| New, nobody assigned                    | **Take it**                                            |
+| New, assigned                           | **Start working**                                      |
+| In progress or postponed                | **Schedule event**                                     |
+| Scheduled                               | **Mark completed**                                     |
+
+Beside it, **Email requester** sends one of your email templates or opens your
+own email app. **More** holds the rest:
+
+- **Postpone**, on a request in progress or scheduled. Give a new date or none.
+- **Resume Work**, on a postponed request.
+- **Decline…**, on a new request or one in progress. Your reason goes in the
+  email to the requester and on their status page.
+- **Cancel Request**, which asks you to confirm first.
+
+In the panel you can also:
+
+1. **Assign or reassign** the coordinator, beside **Coordinator** under the
+   title.
+2. **Tick off checklist steps** as they are done. The first one ticked moves
    the request from **Submitted** to **In Progress**.
-5. **Schedule Event** — enter the **Start Date & Time**, **End Date & Time**
+3. **Schedule Event**: enter the **Start Date & Time**, **End Date & Time**
    and **Location / Room** (or "Off-site or none"), then select **Confirm &
    Create Calendar Event**. This creates a **Public Education** event on the
    department calendar. A room that is already booked at that time is
    refused.
-6. **Postpone** — push it back, with a new date or none.
-7. **Send Email** — pick a template to send to the requester.
-8. **Mark as Completed** — once a scheduled event is done.
-9. **Copy the status link** with the link icon, to send to the requester.
+4. **Open volunteer signups** and **Email the Membership**, on a scheduled
+   request.
+5. **Add comments** for internal notes. The requester never sees them.
+6. **Copy status link**, under **Contact**, to send to the requester.
 
-A request can also be **declined** or **cancelled**.
+Close the panel with the **X** or **Escape**. A click outside it does nothing,
+so a half-written schedule or comment is never lost to a stray click.
+
+![A request in progress open in the drawer: the Schedule event, Email requester and More buttons under its title, the next step, and a part-done checklist](./images/04-99-event-request-drawer.png)
 
 > **Send the requester their status link yourself.** Neither the confirmation
 > screen nor the default acknowledgement email gives the requester the status
