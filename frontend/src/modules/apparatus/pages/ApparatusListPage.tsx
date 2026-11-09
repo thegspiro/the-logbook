@@ -30,6 +30,7 @@ import { useAuthStore } from '../../../stores/authStore';
 import { NfpaDepartmentSwitch } from '../components/NfpaDepartmentSwitch';
 import { useApparatusNfpaSettings } from '../hooks/useApparatusNfpaSettings';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
+import { StatGrid } from '../../../components/ux';
 import { APPARATUS_MAINTENANCE_DUE_DAYS, MaintenanceDueList } from '../components/MaintenanceDueList';
 
 // The dashboard's fleet-readiness tiles link here with one of these in the
@@ -190,9 +191,11 @@ export const ApparatusListPage: React.FC = () => {
           </div>
         )}
 
-        {/* Fleet Summary Cards */}
+        {/* Fleet Summary Cards. Columns follow the row's own width: at 1024px
+            the sidebar leaves six tiles ~110px each, and "In Maintenance" and
+            "Maintenance Due" ran out of their boxes. */}
         {canManage && (
-          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
+          <StatGrid columns={6} className="mb-8">
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Fleet</p>
               <p className="text-theme-text-primary mt-1 text-2xl font-bold">
@@ -226,9 +229,11 @@ export const ApparatusListPage: React.FC = () => {
             {/* The dashboard's "Maintenance due" tile shows this same figure.
                 maintenanceDueSoon already includes the overdue items, so
                 adding maintenanceOverdue to it counted those twice. */}
+            {/* Named by its visible text, with where it goes added for a
+                screen reader: an aria-label that replaced the visible words
+                broke voice control ("click Maintenance Due" matched nothing). */}
             <Link
               to="/apparatus?maintenance=due"
-              aria-label={`Maintenance due: ${isLoadingSummary ? '...' : (fleetSummary?.maintenanceDueSoon ?? 0)}. Show the maintenance due`}
               className="card hover:bg-theme-surface-hover block p-4 transition-colors"
             >
               <p className="text-theme-text-muted text-xs font-medium uppercase">Maintenance Due</p>
@@ -236,8 +241,9 @@ export const ApparatusListPage: React.FC = () => {
                 {isLoadingSummary ? '...' : (fleetSummary?.maintenanceDueSoon ?? 0)}
               </p>
               <p className="text-theme-text-muted mt-1 text-xs">{APPARATUS_MAINTENANCE_DUE_DAYS} days, incl. overdue</p>
+              <span className="sr-only">Show the maintenance due</span>
             </Link>
-          </div>
+          </StatGrid>
         )}
 
         {canManageSettings && nfpaSettings && (

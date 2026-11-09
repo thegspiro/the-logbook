@@ -690,9 +690,15 @@ const MinutesPage: React.FC = () => {
                     Structured templates for recording meeting minutes with attendees, motions, and votes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800">Roll Call</span>
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800">Motions</span>
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800">Votes</span>
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                      Roll Call
+                    </span>
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                      Motions
+                    </span>
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                      Votes
+                    </span>
                   </div>
                 </div>
                 <div className="card p-6">
@@ -702,9 +708,15 @@ const MinutesPage: React.FC = () => {
                     Track action items from meetings with assignees, due dates, and completion status.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800">Assignees</span>
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800">Due Dates</span>
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800">Follow-up</span>
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                      Assignees
+                    </span>
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                      Due Dates
+                    </span>
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                      Follow-up
+                    </span>
                   </div>
                 </div>
                 <div className="card p-6">
@@ -714,8 +726,10 @@ const MinutesPage: React.FC = () => {
                     Search past meetings by title, or by any words in their minutes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800">Search</span>
-                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800">
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-400">
+                      Search
+                    </span>
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-400">
                       Publish to Documents
                     </span>
                   </div>
@@ -732,7 +746,7 @@ const MinutesPage: React.FC = () => {
               {canManage && (
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="inline-flex items-center space-x-2 rounded-lg bg-cyan-700 px-6 py-3 text-white transition-colors hover:bg-cyan-800"
+                  className="btn-primary inline-flex items-center space-x-2 px-6 py-3"
                 >
                   <Plus className="h-5 w-5" />
                   <span>Record First Minutes</span>
