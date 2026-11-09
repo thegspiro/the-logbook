@@ -15,6 +15,7 @@ import pytest
 
 from app.api.v1.endpoints.users import update_contact_info
 from app.schemas.user import ContactInfoUpdate
+from tests.fake_request import fake_request
 
 ORG = str(uuid4())
 
@@ -48,7 +49,9 @@ async def _save(stored, payload):
     member = _member(uid, stored)
     update = ContactInfoUpdate.model_validate({"notification_preferences": payload})
     with patch("app.api.v1.endpoints.users.log_audit_event", new=AsyncMock()):
-        await update_contact_info(uid, update, _db(member), member)
+        await update_contact_info(
+            uid, update, _db(member), member, request=fake_request()
+        )
     return member.notification_preferences
 
 

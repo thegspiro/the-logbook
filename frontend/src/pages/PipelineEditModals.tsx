@@ -32,6 +32,11 @@ import {
 } from '../utils/programRequirementSettings';
 import type {
   ChecklistItem,
+  MilestoneItemInput,
+  MilestoneItemType,
+  MilestoneMatchMode,
+  MilestoneOptions,
+  MilestoneRecipientLabel,
   ProgramMilestone,
   ProgramPhase,
   ProgramRequirement,
@@ -1051,6 +1056,40 @@ export const RequirementFormModal: React.FC<{
 // Milestone (add / edit)
 // ---------------------------------------------------------------------------
 
+const MILESTONE_ITEM_LABELS: Record<MilestoneItemType, string> = {
+  course: 'Course',
+  skill_test: 'Skills test',
+  knowledge_test: 'Knowledge test',
+};
+
+const OPTION_KEYS: Record<MilestoneItemType, 'courses' | 'skill_tests' | 'knowledge_tests'> = {
+  course: 'courses',
+  skill_test: 'skill_tests',
+  knowledge_test: 'knowledge_tests',
+};
+
+interface ChosenItem extends MilestoneItemInput {
+  name?: string | null | undefined;
+}
+
+const itemKey = (item: MilestoneItemInput) => `${item.item_type}:${item.item_id}`;
+
+/** What decides when a milestone is reached; an edit that changes it re-baselines. */
+const triggerSignature = (
+  usePercentage: boolean,
+  threshold: string,
+  items: MilestoneItemInput[],
+  matchMode: MilestoneMatchMode,
+  countsPrior: boolean
+) =>
+  JSON.stringify([
+    usePercentage ? Number(threshold) : null,
+    items.map(itemKey).sort(),
+    // How the items combine only matters once there is more than one.
+    items.length > 1 ? matchMode : 'all',
+    items.length > 0 ? countsPrior : false,
+  ]);
+
 export const MilestoneFormModal: React.FC<{
   programId: string;
   phases: ProgramPhase[];
@@ -1058,16 +1097,91 @@ export const MilestoneFormModal: React.FC<{
   onClose: () => void;
   onSaved: () => void;
 }> = ({ programId, phases, milestone, onClose, onSaved }) => {
+  const initialItems: ChosenItem[] = (milestone?.items ?? []).map((item) => ({
+    item_type: item.item_type,
+    item_id: item.item_id,
+    name: item.name,
+  }));
+  const initialThreshold = milestone ? milestone.completion_percentage_threshold : 100;
   const [name, setName] = useState(milestone?.name ?? '');
   const [description, setDescription] = useState(milestone?.description ?? '');
-  const [threshold, setThreshold] = useState(milestone?.completion_percentage_threshold?.toString() ?? '100');
+  const [usePercentage, setUsePercentage] = useState(initialThreshold !== null && initialThreshold !== undefined);
+  const [threshold, setThreshold] = useState(initialThreshold?.toString() ?? '100');
+  const [items, setItems] = useState<ChosenItem[]>(initialItems);
+  const [matchMode, setMatchMode] = useState<MilestoneMatchMode>(milestone?.item_match_mode ?? 'all');
+  const [countsPrior, setCountsPrior] = useState(milestone?.counts_prior_completions ?? false);
+  const [notifyMember, setNotifyMember] = useState(milestone?.notify_member ?? true);
   const [message, setMessage] = useState(milestone?.notification_message ?? '');
+  const [positionIds, setPositionIds] = useState<string[]>((milestone?.notify_positions ?? []).map((p) => p.id));
+  const [users, setUsers] = useState<MilestoneRecipientLabel[]>(milestone?.notify_users ?? []);
+  const [officerMessage, setOfficerMessage] = useState(milestone?.officer_message ?? '');
   const [phaseId, setPhaseId] = useState(milestone?.phase_id ?? '');
   const [submitting, setSubmitting] = useState(false);
+
+  const [options, setOptions] = useState<MilestoneOptions | null>(null);
+  const [optionsError, setOptionsError] = useState('');
+  const [pickType, setPickType] = useState<MilestoneItemType>('course');
+  const [pickId, setPickId] = useState('');
+  const [pickUserId, setPickUserId] = useState('');
+
+  const [initialSignature] = useState(() =>
+    triggerSignature(
+      initialThreshold !== null && initialThreshold !== undefined,
+      initialThreshold?.toString() ?? '100',
+      initialItems,
+      milestone?.item_match_mode ?? 'all',
+      milestone?.counts_prior_completions ?? false
+    )
+  );
 
   useEffect(() => {
     if (milestone) setPhaseId(milestone.phase_id ?? '');
   }, [milestone]);
+
+  useEffect(() => {
+    let cancelled = false;
+    trainingProgramService
+      .getMilestoneOptions()
+      .then((data) => {
+        if (!cancelled) setOptions(data);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setOptionsError(getErrorMessage(err, 'Could not load courses, tests and recipients'));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const triggersChanged =
+    milestone !== undefined &&
+    triggerSignature(usePercentage, threshold, items, matchMode, countsPrior) !== initialSignature;
+
+  const chosenKeys = new Set(items.map(itemKey));
+  const pickable = (options?.[OPTION_KEYS[pickType]] ?? []).filter(
+    (option) => !chosenKeys.has(itemKey({ item_type: pickType, item_id: option.id }))
+  );
+  const chosenUserIds = new Set(users.map((u) => u.id));
+  const pickableMembers = (options?.members ?? []).filter((m) => !chosenUserIds.has(m.id));
+  const hasOfficerRecipients = positionIds.length > 0 || users.length > 0;
+
+  const addItem = () => {
+    const option = pickable.find((o) => o.id === pickId);
+    if (!option) return;
+    setItems((current) => [...current, { item_type: pickType, item_id: option.id, name: option.name }]);
+    setPickId('');
+  };
+
+  const addUser = () => {
+    const option = pickableMembers.find((m) => m.id === pickUserId);
+    if (!option) return;
+    setUsers((current) => [...current, { id: option.id, name: option.name }]);
+    setPickUserId('');
+  };
+
+  const togglePosition = (id: string) => {
+    setPositionIds((current) => (current.includes(id) ? current.filter((p) => p !== id) : [...current, id]));
+  };
 
   const submit = async () => {
     if (!name.trim()) {
@@ -1075,20 +1189,37 @@ export const MilestoneFormModal: React.FC<{
       return;
     }
     const pct = Number(threshold);
-    if (Number.isNaN(pct) || pct < 0 || pct > 100) {
-      toast.error('Threshold must be 0–100');
+    if (usePercentage && (threshold.trim() === '' || Number.isNaN(pct) || pct < 0 || pct > 100)) {
+      toast.error('Percentage must be 0–100');
       return;
     }
+    if (!usePercentage && items.length === 0) {
+      toast.error('Choose a percentage, at least one course or test, or both');
+      return;
+    }
+    const itemInputs: MilestoneItemInput[] = items.map((item) => ({
+      item_type: item.item_type,
+      item_id: item.item_id,
+    }));
+    const userIds = users.map((u) => u.id);
     setSubmitting(true);
     try {
       if (milestone) {
+        // Every field the form owns is sent, so a cleared one is cleared.
         await trainingProgramService.updateMilestone(programId, milestone.id, {
           name: name.trim(),
           description: blankToNull(description),
-          completion_percentage_threshold: pct,
+          completion_percentage_threshold: usePercentage ? pct : null,
           // null on a clear, so members get the default message again rather
           // than the old custom text an omitted key would keep.
           notification_message: blankToNull(message),
+          items: itemInputs,
+          item_match_mode: matchMode,
+          counts_prior_completions: countsPrior,
+          notify_member: notifyMember,
+          notify_position_ids: positionIds,
+          notify_user_ids: userIds,
+          officer_message: hasOfficerRecipients ? blankToNull(officerMessage) : null,
         });
         toast.success('Milestone updated');
       } else {
@@ -1097,8 +1228,15 @@ export const MilestoneFormModal: React.FC<{
           phase_id: phaseId || undefined,
           name: name.trim(),
           description: description.trim() || undefined,
-          completion_percentage_threshold: pct,
+          completion_percentage_threshold: usePercentage ? pct : undefined,
           notification_message: message.trim() || undefined,
+          items: itemInputs,
+          item_match_mode: matchMode,
+          counts_prior_completions: countsPrior,
+          notify_member: notifyMember,
+          notify_position_ids: positionIds,
+          notify_user_ids: userIds,
+          officer_message: (hasOfficerRecipients && officerMessage.trim()) || undefined,
         });
         toast.success('Milestone added');
       }
@@ -1135,43 +1273,272 @@ export const MilestoneFormModal: React.FC<{
           onChange={(e) => setDescription(e.target.value)}
         />
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      {!milestone && phases.length > 0 && (
         <div>
-          <label className="form-label" htmlFor="ms-thresh">
-            Triggers at (%)
+          <label className="form-label" htmlFor="ms-phase">
+            Phase (optional)
           </label>
-          <input
-            id="ms-thresh"
-            type="number"
-            min={0}
-            max={100}
-            className="form-input"
-            value={threshold}
-            onChange={(e) => setThreshold(e.target.value)}
-          />
+          <select id="ms-phase" className="form-input" value={phaseId} onChange={(e) => setPhaseId(e.target.value)}>
+            <option value="">Program-level</option>
+            {phases.map((p) => (
+              <option key={p.id} value={p.id}>
+                Phase {p.phase_number}: {p.name}
+              </option>
+            ))}
+          </select>
         </div>
-        {!milestone && phases.length > 0 && (
-          <div>
-            <label className="form-label" htmlFor="ms-phase">
-              Phase (optional)
-            </label>
-            <select id="ms-phase" className="form-input" value={phaseId} onChange={(e) => setPhaseId(e.target.value)}>
-              <option value="">Program-level</option>
-              {phases.map((p) => (
-                <option key={p.id} value={p.id}>
-                  Phase {p.phase_number}: {p.name}
+      )}
+
+      {optionsError && (
+        <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+          {optionsError}
+        </p>
+      )}
+
+      <fieldset className="space-y-3">
+        <legend className="form-label">Reached when</legend>
+        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="form-checkbox"
+            checked={usePercentage}
+            onChange={(e) => setUsePercentage(e.target.checked)}
+          />
+          <span>The member is this far through the program</span>
+        </label>
+        {usePercentage && (
+          <div className="flex items-center gap-2 pl-6">
+            <input
+              id="ms-thresh"
+              aria-label="Percentage complete"
+              type="number"
+              min={0}
+              max={100}
+              className="form-input w-28"
+              value={threshold}
+              onChange={(e) => setThreshold(e.target.value)}
+            />
+            <span className="text-theme-text-secondary text-sm">% complete</span>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <p className="text-theme-text-secondary text-sm">
+            {usePercentage ? 'And the member has completed' : 'The member has completed'}
+          </p>
+          {items.length > 0 && (
+            <ul className="space-y-1" aria-label="Courses and tests">
+              {items.map((item) => (
+                <li
+                  key={itemKey(item)}
+                  className="border-theme-surface-border flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+                >
+                  <span className="text-theme-text-primary">
+                    <span className="text-theme-text-muted">{MILESTONE_ITEM_LABELS[item.item_type]}: </span>
+                    {item.name || item.item_id}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-icon text-theme-text-muted hover:text-theme-text-primary"
+                    aria-label={`Remove ${item.name || item.item_id}`}
+                    onClick={() => setItems((current) => current.filter((c) => itemKey(c) !== itemKey(item)))}
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[10rem_1fr_auto]">
+            <select
+              aria-label="Kind of item"
+              className="form-input"
+              value={pickType}
+              onChange={(e) => {
+                setPickType(e.target.value as MilestoneItemType);
+                setPickId('');
+              }}
+            >
+              {(Object.keys(MILESTONE_ITEM_LABELS) as MilestoneItemType[]).map((type) => (
+                <option key={type} value={type}>
+                  {MILESTONE_ITEM_LABELS[type]}
                 </option>
               ))}
             </select>
+            <select
+              aria-label={`Choose a ${MILESTONE_ITEM_LABELS[pickType].toLowerCase()}`}
+              className="form-input"
+              value={pickId}
+              disabled={!options}
+              onChange={(e) => setPickId(e.target.value)}
+            >
+              <option value="">{options ? 'Choose…' : 'Loading…'}</option>
+              {pickable.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.detail ? `${option.name} (${option.detail})` : option.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn-secondary" onClick={addItem} disabled={!pickId}>
+              Add
+            </button>
+          </div>
+          {items.length > 1 && (
+            <div className="space-y-1">
+              <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="ms-match-mode"
+                  checked={matchMode === 'all'}
+                  onChange={() => setMatchMode('all')}
+                />
+                <span>All of these</span>
+              </label>
+              <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="ms-match-mode"
+                  checked={matchMode === 'any'}
+                  onChange={() => setMatchMode('any')}
+                />
+                <span>Any one of these</span>
+              </label>
+            </div>
+          )}
+          {items.length > 0 && (
+            <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="form-checkbox mt-0.5"
+                checked={countsPrior}
+                onChange={(e) => setCountsPrior(e.target.checked)}
+              />
+              <span>
+                Count courses and tests completed before the member&rsquo;s current enrollment or cycle. Otherwise only
+                ones completed since then count.
+              </span>
+            </label>
+          )}
+        </div>
+      </fieldset>
+
+      <fieldset className="space-y-3">
+        <legend className="form-label">Who is told</legend>
+        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="form-checkbox"
+            checked={notifyMember}
+            onChange={(e) => setNotifyMember(e.target.checked)}
+          />
+          <span>The member</span>
+        </label>
+        {notifyMember && (
+          <div className="pl-6">
+            <label className="form-label" htmlFor="ms-msg">
+              Message to the member
+            </label>
+            <input
+              id="ms-msg"
+              className="form-input"
+              placeholder="Congratulations! You've reached this milestone."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+            />
           </div>
         )}
-      </div>
-      <div>
-        <label className="form-label" htmlFor="ms-msg">
-          Notification message
-        </label>
-        <input id="ms-msg" className="form-input" value={message} onChange={(e) => setMessage(e.target.value)} />
-      </div>
+
+        {options && options.positions.length > 0 && (
+          <div>
+            <p className="text-theme-text-secondary text-sm">Everyone holding these positions</p>
+            <div className="border-theme-surface-border mt-1 max-h-40 space-y-1 overflow-y-auto rounded-md border p-2">
+              {options.positions.map((position) => (
+                <label key={position.id} className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="form-checkbox"
+                    checked={positionIds.includes(position.id)}
+                    onChange={() => togglePosition(position.id)}
+                  />
+                  <span>{position.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <p className="text-theme-text-secondary text-sm">Specific members</p>
+          {users.length > 0 && (
+            <ul className="space-y-1" aria-label="Members to notify">
+              {users.map((user) => (
+                <li
+                  key={user.id}
+                  className="border-theme-surface-border flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
+                >
+                  <span className="text-theme-text-primary">{user.name || 'Former member'}</span>
+                  <button
+                    type="button"
+                    className="btn-icon text-theme-text-muted hover:text-theme-text-primary"
+                    aria-label={`Remove ${user.name || 'member'}`}
+                    onClick={() => setUsers((current) => current.filter((u) => u.id !== user.id))}
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+            <select
+              aria-label="Choose a member to notify"
+              className="form-input"
+              value={pickUserId}
+              disabled={!options}
+              onChange={(e) => setPickUserId(e.target.value)}
+            >
+              <option value="">{options ? 'Choose a member…' : 'Loading…'}</option>
+              {pickableMembers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.detail ? `${member.name} (${member.detail})` : member.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn-secondary" onClick={addUser} disabled={!pickUserId}>
+              Add
+            </button>
+          </div>
+        </div>
+
+        {hasOfficerRecipients && (
+          <div>
+            <label className="form-label" htmlFor="ms-officer-msg">
+              Note for the officers (optional)
+            </label>
+            <textarea
+              id="ms-officer-msg"
+              className="form-input"
+              rows={2}
+              placeholder="Uniform issue may be due."
+              value={officerMessage}
+              onChange={(e) => setOfficerMessage(e.target.value)}
+            />
+            <p className="text-theme-text-muted mt-1 text-xs">
+              They are told &ldquo;[member] has reached [milestone]&rdquo;, followed by this note.
+            </p>
+          </div>
+        )}
+      </fieldset>
+
+      {triggersChanged && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3" role="status">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
+          <p className="text-theme-text-secondary text-sm">
+            Members who already meet the updated milestone won&rsquo;t be notified. Only members who reach it from now
+            on are.
+          </p>
+        </div>
+      )}
     </ModalShell>
   );
 };

@@ -7,7 +7,7 @@ Request and response schemas for training-related endpoints.
 import re
 from datetime import date, datetime
 from enum import Enum
-from typing import List, Optional, Sequence, Union
+from typing import List, Literal, Optional, Sequence, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -774,6 +774,32 @@ class RequirementOverrideResponse(UTCResponseBase):
     granted_at: datetime
     revoked_at: Optional[datetime] = None
     revoked_by_name: Optional[str] = None
+
+
+class TrainingRequirementReference(BaseModel):
+    """One kind of record naming a requirement, as a delete dialog lists it."""
+
+    kind: str
+    label: str
+    count: int
+    # What a permanent delete does to these rows: "removed" (deleted with the
+    # requirement) or "unlinked" (kept, without the reference).
+    on_delete: Literal["removed", "unlinked"]
+
+
+class TrainingRequirementDeletionImpact(BaseModel):
+    """What uses a requirement, so an officer can choose how to delete it.
+
+    ``total`` of zero means an ordinary delete removes it outright; anything
+    else means an ordinary delete deactivates it, and only a permanent delete
+    removes it.
+    """
+
+    requirement_id: UUID
+    name: str
+    active: bool
+    total: int
+    references: List[TrainingRequirementReference]
 
 
 class TrainingRequirementResponse(TrainingRequirementBase, UTCResponseBase):

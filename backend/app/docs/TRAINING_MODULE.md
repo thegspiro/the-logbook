@@ -1466,8 +1466,10 @@ authenticated by `key` and `secret` query parameters, returning a CSV.
   acknowledgment arrives as 0) is credited its mapped library course's Credit
   Hours, or the course's duration when Credit Hours is blank; hours the report
   does carry always win. Mapping or re-mapping a course applies the same rule
-  to records already imported from it, leaving alone any record whose hours an
-  officer changed. Members are matched on the `Email` column against the
+  to records already imported from it, leaving alone any record whose hours or
+  credit hours an officer changed — including when both courses credit the
+  same, so a record imported while its course credited nothing still catches
+  up. Members are matched on the `Email` column against the
   member's email, case- and whitespace-insensitive, skipping deleted members. An
   unmatched member stays in the user mappings and is auto-matched on a later
   sync unless an officer has set or cleared that mapping by hand.

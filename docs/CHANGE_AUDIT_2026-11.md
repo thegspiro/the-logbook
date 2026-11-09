@@ -5,6 +5,32 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 6 – 8, 2026
+
+Merged to `main` after `5607f5fc` (2026-11-06 14:19 UTC, the previous pass)
+through `51e6e1b5` (2026-11-08 08:59 UTC), 10 non-security merges. Security-review
+passes (scheduling pass 14, events-requests pass 14) are in
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                                                                                                        | Guide  | Disposition                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Show required courses (n)** checklist on a Courses requirement card; counts labelled by type ("1/4 courses", no unit for certifications); same unit on Upcoming Due Dates (#4117)                                                                                                           | 02     | Added to the My Training section                                                                                              |
+| Member Training History records as a compact list instead of a stacked table (#4114)                                                                                                                                                                                                          | 02     | Added beside the period text; image `02-40` queued                                                                            |
+| Zero-hour provider completions take the mapped course's Credit Hours; re-mapping adjusts imported records; migration backfills (#4112)                                                                                                                                                        | 02     | Added to the Integrations tab. `TRAINING_MODULE` and `UPGRADING` written with the change                                      |
+| Finance batches 9–11 (owner decisions 2026-11-01): partial amendment reversal and **Pending Amendments** queue, amount paid and receipt before payment, per-type dual approval, **My Dues**, late fees, mileage trip log, shared receipts, board reports, optional live **QuickBooks Online** | 11, 12 | Already in guides 11 and 12, `FINANCE_MODULE`, `Module-Finance` and `UPGRADING`, written with the changes. Screenshots queued |
+| Documents, Communications and Integrations batch 8: legal pages render headings and lists, reverts in history, calendar publishing on the integration card                                                                                                                                    | 16, 17 | Already in 16 and 17 and `Module-Governance-Legal`, written with the change                                                   |
+| Integration connect, update and disconnect audit rows now record the caller's IP and browser (#4113)                                                                                                                                                                                          | 08     | Audit Log section names the IP column for these events                                                                        |
+| Leadership-review time stored in whole seconds so the change notice is not repeated on MySQL 8 (#4116)                                                                                                                                                                                        | none   | Internal; no screen or wording changes                                                                                        |
+| Alembic head merges (course hours, QuickBooks), formatting, CI                                                                                                                                                                                                                                | none   | Operator or CI only                                                                                                           |
+
+**Screenshots to create:** a Courses requirement card with **Show required
+courses** open; **My Dues**; **Pending Amendments**; the expense line's mileage
+trip log; **Mark Paid**; Settings → Connecting QuickBooks Online. **Replace:**
+`02-40` (compact record list). Queued in `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Not covered:** YouTube scripts. They are flagged in
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`, not edited.
+
 ## Change audit: November 5 – 6, 2026
 
 Merged to `main` after `a02bdd96` (2026-11-05 06:53 UTC) through `880f939b`

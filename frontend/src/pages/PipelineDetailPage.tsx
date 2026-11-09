@@ -62,6 +62,7 @@ import {
   phaseHasNoActiveRequirements,
 } from '../utils/pipelineProgress';
 import { checklistClaimedIds, checklistDoneIds } from '../utils/checklistItems';
+import { compareMilestones, describeRecipients, describeTrigger } from '../utils/milestoneSummary';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ENROLLMENT_STATUSES } from '../types/training';
 import type {
@@ -2165,7 +2166,7 @@ const PipelineDetailPage: React.FC = () => {
                 <div className="space-y-2">
                   {milestones
                     .slice()
-                    .sort((a, b) => a.completion_percentage_threshold - b.completion_percentage_threshold)
+                    .sort(compareMilestones)
                     .map((m) => (
                       <div
                         key={m.id}
@@ -2174,8 +2175,12 @@ const PipelineDetailPage: React.FC = () => {
                         <div className="min-w-0">
                           <p className="text-theme-text-primary truncate text-sm">{m.name}</p>
                           <p className="text-theme-text-muted text-xs">
-                            Triggers at {Math.round(m.completion_percentage_threshold)}%
+                            {describeTrigger(
+                              m,
+                              (m.items ?? []).map((item) => item.name || 'a removed course or test')
+                            )}
                           </p>
+                          {canManage && <p className="text-theme-text-muted text-xs">{describeRecipients(m)}</p>}
                         </div>
                         {canManage && (
                           <div className="flex shrink-0 items-center gap-0.5">
