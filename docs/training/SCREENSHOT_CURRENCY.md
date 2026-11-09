@@ -1,5 +1,20 @@
 # Screenshot currency
 
+## Captured 2026-11-08 — Requests tab triage list and drawer (#4141)
+
+Taken on the demo department seeded from this branch, with malware scanning on.
+Nothing mocked. The seeder gained `seed_event_request_pipeline` so every group
+on the tab has a row: a new request (Dana Whitmore), one in progress with a
+coordinator and two checklist steps done, one scheduled with a signup sheet,
+and one postponed. It also corrects two field names the request seed had wrong
+(`timeframe_description`, `expected_attendees`), which the public endpoint had
+been silently dropping, so the audience and the timeframe were missing.
+
+| Image | Disposition | Notes |
+| --- | --- | --- |
+| `04-20-event-requests` | Re-shot | The grouped triage list. Now asserts it landed on the list (`expect: "Needs a reply"`) and has left the landing-assertion baseline |
+| `04-99-event-request-drawer` | New | Maple Street HOA open in the drawer: Schedule event / Email requester / More, "Next: Confirm Date", the checklist at 2/6 |
+
 ## Queued by the November 4 – 5 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).
@@ -24,6 +39,21 @@ Nothing was captured by this pass.
 | 01, 10 | Wide tables at tablet width (roster, inventory items, dues, finance approvals) as cards | Replace |
 | 15 | Applicant board with selection on, card content inset | Replace (`15-46` was re-shot) |
 | 02 | `02-135` Operational members: the button now ticks Active, Probationary and Life, not Retired (2026-11-06) | Replace |
+
+## Queued by the November 6 – 8 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-6--8-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 02 | My Training with a Courses requirement and **Show required courses (n)** open | Create |
+| 02 | `02-40` member Training History as the compact record list | Replace |
+| 11 | **My Dues** page | Create |
+| 11 | **Pending Amendments** queue | Create |
+| 11 | Expense line with the mileage **Trips** list; **Mark Paid** dialog | Create |
+| 11 | Settings → Connecting QuickBooks Online | Create |
+| 08 | Audit Log row for an integration event showing the IP column | Create |
 
 ## Queued by the November 5 – 6 documentation pass
 

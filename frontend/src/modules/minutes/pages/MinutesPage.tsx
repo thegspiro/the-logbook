@@ -140,6 +140,11 @@ const MinutesPage: React.FC = () => {
   // Minutes by the meeting they were written from, newest first. Without
   // these the page could create minutes but never lead back to them (W51-2).
   const [minutesByMeeting, setMinutesByMeeting] = useState<Map<string, MinutesListItem[]>>(new Map());
+  // Minutes circulated for review whose meeting the list does not show. A
+  // member sees only approved meetings, but may read submitted minutes, which
+  // are written while their meeting is still a draft; without this list the
+  // link to minutes they are meant to review would have nowhere to render.
+  const [circulatedWithoutMeeting, setCirculatedWithoutMeeting] = useState<MinutesListItem[]>([]);
   const [minutesStats, setMinutesStats] = useState<MinutesStats | null>(null);
   const [openingMeetingId, setOpeningMeetingId] = useState<string | null>(null);
   const [pickingFor, setPickingFor] = useState<{ id: string; type: string } | null>(null);
@@ -205,6 +210,16 @@ const MinutesPage: React.FC = () => {
         byMeeting.set(item.meeting_id, [...(byMeeting.get(item.meeting_id) ?? []), item]);
       }
       setMinutesByMeeting(byMeeting);
+      const shownMeetings = new Set(asArray(meetingsRes.meetings).map((m) => m.id));
+      // Only with no filter applied: a meeting a filter hid is not missing.
+      const unfiltered = typeFilter === 'all' && !searchQuery.trim();
+      setCirculatedWithoutMeeting(
+        unfiltered
+          ? minutesList.filter(
+              (item) => item.status === 'submitted' && !!item.meeting_id && !shownMeetings.has(item.meeting_id)
+            )
+          : []
+      );
       setMinutesStats(stats);
     } catch {
       setError('Unable to load meetings. Check your connection and try again.');
@@ -524,6 +539,27 @@ const MinutesPage: React.FC = () => {
           </div>
         )}
 
+        {!loading && circulatedWithoutMeeting.length > 0 && (
+          <section className="card mb-4 p-4" aria-labelledby="circulated-minutes-heading">
+            <h2 id="circulated-minutes-heading" className="text-theme-text-primary text-sm font-semibold">
+              Minutes circulated for review
+            </h2>
+            {circulatedWithoutMeeting.map((m) => (
+              <Link
+                key={m.id}
+                to={`/minutes/${m.id}`}
+                className="mt-2 flex items-center gap-1.5 text-sm font-medium text-cyan-800 hover:underline dark:text-cyan-400"
+              >
+                <BookOpen className="h-4 w-4" aria-hidden="true" />
+                <span>{m.title}</span>
+                <span className="text-theme-text-muted font-normal">
+                  · {MINUTES_STATUS_LABELS[m.status] ?? m.status}
+                </span>
+              </Link>
+            ))}
+          </section>
+        )}
+
         {/* Content Area */}
         {!loading && meetings.length > 0 && (
           <div className="space-y-4">
@@ -750,9 +786,15 @@ const MinutesPage: React.FC = () => {
                     Structured templates for recording meeting minutes with attendees, motions, and votes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800">Roll Call</span>
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800">Motions</span>
-                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800">Votes</span>
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                      Roll Call
+                    </span>
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                      Motions
+                    </span>
+                    <span className="rounded-sm bg-cyan-500/10 px-2 py-0.5 text-xs text-cyan-800 dark:text-cyan-400">
+                      Votes
+                    </span>
                   </div>
                 </div>
                 <div className="card p-6">
@@ -762,9 +804,15 @@ const MinutesPage: React.FC = () => {
                     Track action items from meetings with assignees, due dates, and completion status.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800">Assignees</span>
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800">Due Dates</span>
-                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800">Follow-up</span>
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                      Assignees
+                    </span>
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                      Due Dates
+                    </span>
+                    <span className="rounded-sm bg-green-500/10 px-2 py-0.5 text-xs text-green-800 dark:text-green-400">
+                      Follow-up
+                    </span>
                   </div>
                 </div>
                 <div className="card p-6">
@@ -774,8 +822,10 @@ const MinutesPage: React.FC = () => {
                     Search past meetings by title, or by any words in their minutes.
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800">Search</span>
-                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800">
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-400">
+                      Search
+                    </span>
+                    <span className="rounded-sm bg-amber-500/10 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-400">
                       Publish to Documents
                     </span>
                   </div>
@@ -792,7 +842,7 @@ const MinutesPage: React.FC = () => {
               {canManage && (
                 <button
                   onClick={() => setShowCreateModal(true)}
-                  className="inline-flex items-center space-x-2 rounded-lg bg-cyan-700 px-6 py-3 text-white transition-colors hover:bg-cyan-800"
+                  className="btn-primary inline-flex items-center space-x-2 px-6 py-3"
                 >
                   <Plus className="h-5 w-5" />
                   <span>Record First Minutes</span>

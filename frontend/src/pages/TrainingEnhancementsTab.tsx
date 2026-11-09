@@ -1019,8 +1019,8 @@ const InstructorsSection: React.FC = () => {
           description="Add qualifications to track who can instruct which courses and evaluate which skills."
         />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="rwd-table-container overflow-x-auto">
+          <table className="rwd-table rwd-table-wide w-full text-sm">
             <thead>
               <tr className="text-theme-text-muted border-theme-surface-border border-b text-left text-xs">
                 <th scope="col" className="pr-4 pb-2">
@@ -1049,15 +1049,27 @@ const InstructorsSection: React.FC = () => {
             <tbody>
               {qualifications.map((qual) => (
                 <tr key={qual.id} className="border-theme-surface-border/50 border-b">
-                  <td className="text-theme-text-primary py-2 pr-4">{qual.user_name || qual.user_id}</td>
+                  <td data-label="Instructor" className="text-theme-text-primary py-2 pr-4">
+                    {qual.user_name || qual.user_id}
+                  </td>
                   {/* The stored values are snake_case (`lead_instructor`), so
                       `capitalize` alone leaves the underscore on screen. */}
-                  <td className="py-2 pr-4 capitalize">{qual.qualification_type.replace(/_/g, ' ')}</td>
-                  <td className="py-2 pr-4">{qual.course_name || qual.skill_name || '-'}</td>
-                  <td className="py-2 pr-4">{qual.certification_level || '-'}</td>
-                  <td className="py-2 pr-4">{qual.certification_number || '-'}</td>
-                  <td className="py-2 pr-4">{qual.expiration_date ? formatDate(qual.expiration_date, tz) : '-'}</td>
-                  <td className="py-2">
+                  <td data-label="Type" className="py-2 pr-4 capitalize">
+                    {qual.qualification_type.replace(/_/g, ' ')}
+                  </td>
+                  <td data-label="Qualifies for" className="py-2 pr-4">
+                    {qual.course_name || qual.skill_name || '-'}
+                  </td>
+                  <td data-label="Level" className="py-2 pr-4">
+                    {qual.certification_level || '-'}
+                  </td>
+                  <td data-label="Cert #" className="py-2 pr-4">
+                    {qual.certification_number || '-'}
+                  </td>
+                  <td data-label="Expires" className="py-2 pr-4">
+                    {qual.expiration_date ? formatDate(qual.expiration_date, tz) : '-'}
+                  </td>
+                  <td data-label="Status" className="py-2">
                     <span
                       className={`rounded-sm px-2 py-0.5 text-xs ${QUALIFICATION_STANDING[qualificationStanding(qual, today)].className}`}
                     >
@@ -1521,7 +1533,7 @@ const ReportsSection: React.FC = () => {
 
         {forecasts.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="rwd-table w-full text-sm">
               <thead>
                 <tr className="text-theme-text-muted border-theme-surface-border border-b text-left text-xs">
                   <th scope="col" className="pr-4 pb-2">
@@ -1547,8 +1559,10 @@ const ReportsSection: React.FC = () => {
               <tbody>
                 {forecasts.map((f) => (
                   <tr key={f.user_id} className="border-theme-surface-border/50 border-b">
-                    <td className="text-theme-text-primary py-2 pr-4">{f.user_name || f.user_id}</td>
-                    <td className="py-2 pr-4">
+                    <td data-label="Member" className="text-theme-text-primary py-2 pr-4">
+                      {f.user_name || f.user_id}
+                    </td>
+                    <td data-label="Current" className="py-2 pr-4">
                       {f.current_compliance_percentage === null ? (
                         // No requirement grades this member.
                         <span className="text-theme-text-muted">N/A</span>
@@ -1566,10 +1580,16 @@ const ReportsSection: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="py-2 pr-4">{f.forecast_30_days === null ? 'N/A' : `${f.forecast_30_days}%`}</td>
-                    <td className="py-2 pr-4">{f.forecast_60_days === null ? 'N/A' : `${f.forecast_60_days}%`}</td>
-                    <td className="py-2 pr-4">{f.forecast_90_days === null ? 'N/A' : `${f.forecast_90_days}%`}</td>
-                    <td className="py-2">
+                    <td data-label="30 Days" className="py-2 pr-4">
+                      {f.forecast_30_days === null ? 'N/A' : `${f.forecast_30_days}%`}
+                    </td>
+                    <td data-label="60 Days" className="py-2 pr-4">
+                      {f.forecast_60_days === null ? 'N/A' : `${f.forecast_60_days}%`}
+                    </td>
+                    <td data-label="90 Days" className="py-2 pr-4">
+                      {f.forecast_90_days === null ? 'N/A' : `${f.forecast_90_days}%`}
+                    </td>
+                    <td data-label="At Risk" className="py-2">
                       {f.at_risk_requirements.length > 0 && (
                         <span className="text-xs text-red-500">
                           {f.at_risk_requirements.length} requirement{f.at_risk_requirements.length !== 1 ? 's' : ''}

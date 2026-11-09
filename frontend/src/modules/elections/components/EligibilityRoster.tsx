@@ -83,7 +83,7 @@ const MemberRow: React.FC<{
         }
       >
         {/* Expand/collapse */}
-        <td className="w-8 py-3 pr-1 pl-3">
+        <td data-label="Expand" className="w-8 py-3 pr-1 pl-3">
           {hasItems ? (
             expanded ? (
               <ChevronDown className="text-theme-text-muted h-4 w-4" />
@@ -96,7 +96,7 @@ const MemberRow: React.FC<{
         </td>
 
         {/* Name + membership type */}
-        <td className="py-3 pr-3">
+        <td data-label="Member" className="py-3 pr-3">
           <div className="flex items-center gap-2">
             <span className="text-theme-text-primary text-sm font-medium">{member.full_name}</span>
             <span className="bg-theme-surface-secondary text-theme-text-muted rounded px-1.5 py-0.5 text-xs capitalize">
@@ -106,7 +106,7 @@ const MemberRow: React.FC<{
         </td>
 
         {/* Status badges */}
-        <td className="py-3 pr-3">
+        <td data-label="Status" className="py-3 pr-3">
           <div className="flex flex-wrap items-center gap-1.5">
             {member.has_override && (
               <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-400">
@@ -129,7 +129,7 @@ const MemberRow: React.FC<{
         </td>
 
         {/* Eligible items count */}
-        <td className="py-3 pr-3 text-center">
+        <td data-label="Items" className="py-3 pr-3 text-center">
           {member.will_receive_ballot ? (
             <span className="text-sm font-semibold text-green-700 dark:text-green-400">
               {member.eligible_item_count}/{member.total_item_count}
@@ -142,7 +142,7 @@ const MemberRow: React.FC<{
         {/* Ballot: sent, will be sent, or withheld. A sent row says so with the
             send time, because after the send a bare check mark read as "still
             to come" and contradicted the election's own email_sent status. */}
-        <td className="py-3 pr-3 text-center">
+        <td data-label="Ballot" className="py-3 pr-3 text-center">
           {member.ballot_sent ? (
             <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -164,7 +164,7 @@ const MemberRow: React.FC<{
         </td>
 
         {/* Reason (if ineligible) */}
-        <td className="py-3 pr-4">
+        <td data-label="Reason" className="py-3 pr-4">
           {member.ineligibility_reason && (
             <span className="text-xs text-red-600 dark:text-red-400">{member.ineligibility_reason}</span>
           )}
@@ -174,7 +174,7 @@ const MemberRow: React.FC<{
       {/* Expanded per-item detail */}
       {expanded && hasItems && (
         <tr>
-          <td colSpan={6} className="px-4 pt-0 pb-3">
+          <td colSpan={6} data-label="Per-item eligibility" className="rwd-table-lead px-4 pt-0 pb-3">
             <div className="card ml-6 p-3">
               <div className="text-theme-text-muted mb-2 text-xs font-semibold tracking-wider uppercase">
                 Per-Item Eligibility
@@ -182,8 +182,8 @@ const MemberRow: React.FC<{
               <div className="space-y-1.5">
                 {member.item_eligibility.map((item) => (
                   <div key={item.ballot_item_id} className="flex items-center justify-between text-sm">
-                    <span className="text-theme-text-secondary mr-3 truncate">{item.ballot_item_title}</span>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-theme-text-secondary mr-3 w-0 flex-1 truncate">{item.ballot_item_title}</span>
+                    <div className="flex min-w-0 items-center gap-2 text-right">
                       {item.eligible ? (
                         <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
                           <CheckCircle2 className="h-3.5 w-3.5" />
@@ -411,8 +411,8 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
               </div>
 
               {/* Roster table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm" aria-label="Voter eligibility roster">
+              <div className="rwd-table-container overflow-x-auto">
+                <table className="rwd-table rwd-table-wide w-full text-sm" aria-label="Voter eligibility roster">
                   <thead>
                     <tr className="bg-theme-surface-secondary border-theme-surface-border border-y">
                       <th className="w-8 py-2 pr-1 pl-3" />
@@ -436,7 +436,11 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
                   <tbody className="divide-theme-surface-border divide-y">
                     {filteredRoster.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="text-theme-text-muted py-8 text-center text-sm">
+                        <td
+                          colSpan={6}
+                          data-label="Members"
+                          className="rwd-table-lead text-theme-text-muted py-8 text-center text-sm"
+                        >
                           {search || filter !== 'all'
                             ? 'No members match your search/filter.'
                             : 'No active members found.'}

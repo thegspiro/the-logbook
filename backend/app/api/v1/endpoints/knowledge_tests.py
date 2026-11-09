@@ -58,6 +58,7 @@ from app.schemas.knowledge_test import (
     QuestionReviewed,
     QuestionWrite,
 )
+from app.services.program_milestones import process_user as process_milestones_for_user
 from app.utils.model_updates import apply_updates
 
 router = APIRouter()
@@ -527,6 +528,10 @@ async def _finalize(
         await db.rollback()
         attempt.credit_note = "Could not record the score on the requirement"
         await db.commit()
+    if attempt.passed:
+        # A milestone can name this test whether or not a requirement is
+        # linked. Never raises: the graded attempt is already saved.
+        await process_milestones_for_user(db, org_id, attempt.user_id)
 
 
 def _expired(attempt: KnowledgeTestAttempt, grace: int = 0) -> bool:

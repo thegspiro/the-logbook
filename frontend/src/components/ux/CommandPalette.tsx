@@ -323,7 +323,7 @@ const HUB_DESTINATIONS: CommandItem[] = [
       path: `/training/admin?page=${area.id}&tab=${destination.id}`,
       icon: destination.icon,
       section: 'Training Admin',
-      keywords: [area.label.toLowerCase()],
+      keywords: [area.label.toLowerCase(), ...(destination.keywords ?? [])],
       permission: 'training.manage',
       ...(destination.anyPermission ? { anyPermission: [...destination.anyPermission] } : {}),
       requiresModule: 'training',

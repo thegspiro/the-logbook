@@ -6,6 +6,8 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { FormField } from '../components/ux/FormField';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import {
   User,
@@ -53,8 +55,6 @@ import { SaveStatusPill } from '../components/settings/SaveStatusPill';
 import { SettingsPanelHead } from '../components/settings/SettingsPanelHead';
 import { getErrorMessage } from '../utils/errorHandling';
 import { blankToNull } from '../utils/formValues';
-import { FormField } from '../components/ux/FormField';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
 import { useRanks } from '../hooks/useRanks';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { SettingsLayout, type SettingsSection } from '../components/settings/SettingsLayout';
@@ -94,7 +94,6 @@ type LegalNameField = 'first_name' | 'last_name';
 const LEGAL_NAME_FIELDS: readonly LegalNameField[] = ['first_name', 'last_name'];
 const LEGAL_NAME_LABELS: Record<LegalNameField, string> = { first_name: 'first name', last_name: 'last name' };
 
-/** The profile fields a member edits here. */
 type ProfileField =
   | 'first_name'
   | 'middle_name'
@@ -107,23 +106,33 @@ type ProfileField =
   | 'address_state'
   | 'address_zip';
 
-/**
- * Label, input id and `max_length` (UserUpdate, backend/app/schemas/user.py)
- * of each field, so a 422 lands on the field it names (forms review F-2).
- */
-const PROFILE_FIELDS: Record<ProfileField, ServerFieldSpec & { id: string }> = {
-  first_name: { label: 'First Name', maxLength: 100, id: 'firstName' },
-  middle_name: { label: 'Middle Name', maxLength: 100, id: 'middleName' },
-  last_name: { label: 'Last Name', maxLength: 100, id: 'lastName' },
-  preferred_name: { label: 'Preferred Name', maxLength: 100, id: 'preferredName' },
-  phone: { label: 'Phone', maxLength: 20, id: 'phone' },
-  mobile: { label: 'Mobile', maxLength: 20, id: 'mobile' },
-  address_street: { label: 'Street Address', maxLength: 255, id: 'addressStreet' },
-  address_city: { label: 'City', maxLength: 100, id: 'addressCity' },
-  address_state: { label: 'State', maxLength: 50, id: 'addressState' },
-  address_zip: { label: 'ZIP Code', maxLength: 20, id: 'addressZip' },
+// Every field the profile save can be refused on, in page order. The ids are
+// the inputs' own; a 422 entry names the request key, which is the field name.
+const PROFILE_FIELDS: FieldSpecs<ProfileField> = {
+  first_name: { id: 'firstName', label: 'First name' },
+  middle_name: { id: 'middleName', label: 'Middle name' },
+  last_name: { id: 'lastName', label: 'Last name' },
+  preferred_name: { id: 'preferredName', label: 'Preferred name' },
+  phone: { id: 'phone', label: 'Phone' },
+  mobile: { id: 'mobile', label: 'Mobile' },
+  address_street: { id: 'addressStreet', label: 'Street address' },
+  address_city: { id: 'addressCity', label: 'City' },
+  address_state: { id: 'addressState', label: 'State' },
+  address_zip: { id: 'addressZip', label: 'ZIP code' },
 };
-const PROFILE_FIELD_ORDER = Object.keys(PROFILE_FIELDS) as ProfileField[];
+
+const PROFILE_LABEL_CLASS = 'text-theme-text-secondary mb-1 block text-sm font-medium';
+
+const legalNameMissing = (field: LegalNameField) => `Enter your ${LEGAL_NAME_LABELS[field]}.`;
+
+/** An error on each legal name the record holds blank. */
+function blankLegalNameErrors(record: Partial<Record<LegalNameField, string | null | undefined>>) {
+  const errors: FieldErrors<ProfileField> = {};
+  for (const field of LEGAL_NAME_FIELDS) {
+    if (!record[field]?.trim()) errors[field] = legalNameMissing(field);
+  }
+  return errors;
+}
 
 export const UserSettingsPage: React.FC = () => {
   const { user, endSessionLocally } = useAuthStore();
@@ -189,27 +198,19 @@ export const UserSettingsPage: React.FC = () => {
   const [profile, setProfile] = useState<UserWithRoles | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
-  // Legal-name fields left blank. Owner rule (2026-11-05): a form saves even
-  // with an error, and the error stays flagged until it is resolved.
-  const [blankNames, setBlankNames] = useState<LegalNameField[]>([]);
-  // Values the server refused on the last save. Under the same rule they were
-  // left out of the save, the rest was written, and each stays flagged on its
-  // field until it is changed.
-  const [refusedFields, setRefusedFields] = useState<Partial<Record<ProfileField, string>>>({});
+  // Open errors on the profile's fields. Owner rule (2026-11-05): a form saves
+  // even with an error, and the error stays flagged until it is resolved.
+  const profileErrors = useFieldErrors(PROFILE_FIELDS);
+  const setProfileErrors = profileErrors.setErrors;
   // The inputs are disabled while a save is in flight and a disabled input
   // cannot take focus, so the field to point at waits for the save to end.
-  const focusAfterSave = useRef<ProfileField | null>(null);
+  const focusAfterSave = useRef<FieldErrors<ProfileField> | null>(null);
+  const focusFirstProfileError = profileErrors.focusFirst;
   useEffect(() => {
     if (savingProfile || !focusAfterSave.current) return;
-    document.getElementById(PROFILE_FIELDS[focusAfterSave.current].id)?.focus();
+    focusFirstProfileError(focusAfterSave.current);
     focusAfterSave.current = null;
-  }, [savingProfile]);
-  const profileFieldError = (field: ProfileField): string | undefined =>
-    field === 'first_name' || field === 'last_name'
-      ? blankNames.includes(field)
-        ? `Enter your ${LEGAL_NAME_LABELS[field]}.`
-        : refusedFields[field]
-      : refusedFields[field];
+  }, [savingProfile, focusFirstProfileError]);
   const [downloadingData, setDownloadingData] = useState(false);
   const [consents, setConsents] = useState<ConsentItem[]>([]);
   const [savingConsent, setSavingConsent] = useState<string | null>(null);
@@ -257,7 +258,7 @@ export const UserSettingsPage: React.FC = () => {
       try {
         const data = await userService.getUserWithRoles(user.id);
         setProfile(data);
-        setBlankNames(LEGAL_NAME_FIELDS.filter((f) => !data[f]?.trim()));
+        setProfileErrors(blankLegalNameErrors(data));
         setProfileForm({
           first_name: data.first_name || '',
           middle_name: data.middle_name || '',
@@ -285,7 +286,7 @@ export const UserSettingsPage: React.FC = () => {
       }
     };
     void loadProfile();
-  }, [user?.id, profileReloadToken]);
+  }, [user?.id, profileReloadToken, setProfileErrors]);
 
   // Load notification preferences from backend
   useEffect(() => {
@@ -318,6 +319,7 @@ export const UserSettingsPage: React.FC = () => {
     const firstName = profileForm.first_name?.trim() ?? '';
     const lastName = profileForm.last_name?.trim() ?? '';
     setSavingProfile(true);
+    profileErrors.setFormError(null);
     try {
       // Strip fields that are only editable by Membership Coordinators via Members admin
       const {
@@ -338,50 +340,51 @@ export const UserSettingsPage: React.FC = () => {
         // An emptied box must clear the stored name, not be omitted (CLAUDE.md #1).
         preferred_name: blankToNull(profileForm.preferred_name),
       };
-      let refused: Partial<Record<ProfileField, string>> = {};
+      let refused: FieldErrors<ProfileField> = {};
       let updated: UserWithRoles;
       try {
         updated = await userService.updateUserProfile(user.id, payload);
       } catch (err: unknown) {
         // Owner rule (2026-11-05), the same one that keeps a blank name out:
         // a value the record cannot hold is not written, the rest of the
-        // profile saves, and the field stays flagged. Anything the form has no
-        // field for is a real failure and is reported as one.
-        const mapped = mapServerFieldErrors(err, PROFILE_FIELDS);
-        const keys = mapped ? (Object.keys(mapped.fieldErrors) as ProfileField[]) : [];
-        if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
-        refused = mapped.fieldErrors;
+        // profile saves, and the field stays flagged. A refusal the form has
+        // no field for is a real failure and goes to the handler below, as
+        // does a resend that fails too.
+        const placed = placeApiError(PROFILE_FIELDS, err);
+        const keys = placed ? (Object.keys(placed.fieldErrors) as ProfileField[]) : [];
+        if (!placed || keys.length === 0 || placed.unmatched.length > 0) throw err;
+        refused = placed.fieldErrors;
         const rest: Record<string, unknown> = { ...payload };
         for (const key of keys) delete rest[key];
         updated = await userService.updateUserProfile(user.id, rest);
       }
       setProfile(updated);
-      setRefusedFields(refused);
       // A name blanked by mistake comes back from the server unchanged; one
       // that was never recorded stays blank and flagged until it is entered.
       // A refused name keeps what was typed, so it can be corrected.
       setProfileForm((prev) => ({
         ...prev,
-        first_name: refused.first_name ? prev.first_name : updated.first_name || '',
-        last_name: refused.last_name ? prev.last_name : updated.last_name || '',
+        first_name: refused.first_name ? prev.first_name || '' : updated.first_name || '',
+        last_name: refused.last_name ? prev.last_name || '' : updated.last_name || '',
       }));
       const stillBlank = LEGAL_NAME_FIELDS.filter((f) => !updated[f]?.trim());
       const kept = LEGAL_NAME_FIELDS.filter(
         (f) => !(f === 'first_name' ? firstName : lastName) && !stillBlank.includes(f)
       );
-      setBlankNames(stillBlank);
+      const nameErrors = blankLegalNameErrors(updated);
+      profileErrors.setErrors({ ...nameErrors, ...refused });
       const firstBlank = stillBlank[0];
-      const firstRefused = PROFILE_FIELD_ORDER.find((f) => refused[f]);
+      const firstRefused = (Object.keys(PROFILE_FIELDS) as ProfileField[]).find((f) => refused[f]);
       if (firstRefused) {
         toast.error(
           `Profile saved, except ${PROFILE_FIELDS[firstRefused].label.toLowerCase()}: ${refused[firstRefused]} Fix it and save again.`
         );
-        focusAfterSave.current = firstRefused;
+        focusAfterSave.current = refused;
       } else if (firstBlank) {
         toast.success(
           `Profile saved. Your ${LEGAL_NAME_LABELS[firstBlank]} is still missing; enter it to complete your profile.`
         );
-        focusAfterSave.current = firstBlank;
+        focusAfterSave.current = nameErrors;
       } else if (kept[0]) {
         toast.success(`Profile saved. A name can't be blank, so your saved ${LEGAL_NAME_LABELS[kept[0]]} was kept.`);
       } else {
@@ -392,7 +395,23 @@ export const UserSettingsPage: React.FC = () => {
         void useAuthStore.getState().loadUser();
       }
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not save your profile. Try again.'));
+      // A refusal lands on the field it names; the toast only says to look.
+      const flagged = profileErrors.setFromApiError(err, 'Could not save your profile. Try again.');
+      // A legal name left blank is still blank whatever else failed, so its
+      // flag is kept beside the server's (F-1).
+      profileErrors.setErrors({
+        ...blankLegalNameErrors({ first_name: firstName, last_name: lastName }),
+        ...flagged,
+      });
+      if (Object.keys(flagged).length > 0) {
+        // A message the server could not pin on a field stays on the page,
+        // under the button, rather than being lost behind the generic toast.
+        toast.error('Check the highlighted fields and save again.');
+        focusAfterSave.current = flagged;
+      } else {
+        profileErrors.setFormError(null);
+        toast.error(getErrorMessage(err, 'Could not save your profile. Try again.'));
+      }
     } finally {
       setSavingProfile(false);
     }
@@ -400,60 +419,12 @@ export const UserSettingsPage: React.FC = () => {
 
   const handleProfileChange = (field: keyof UserProfileUpdate, value: string) => {
     setProfileForm((prev) => ({ ...prev, [field]: value }));
-    setRefusedFields((prev) => {
-      if (!(field in prev)) return prev;
-      const next = { ...prev };
-      delete next[field as ProfileField];
-      return next;
-    });
-    if (field === 'first_name' || field === 'last_name') {
-      setBlankNames((prev) => (value.trim() ? prev.filter((f) => f !== field) : prev));
+    if (field in PROFILE_FIELDS) {
+      const key = field as ProfileField;
+      // A legal name stays flagged until something is typed into it; any
+      // other field's error is answered by editing it at all.
+      if (!((key === 'first_name' || key === 'last_name') && !value.trim())) profileErrors.setError(key, null);
     }
-  };
-
-  /**
-   * One editable profile field through the shared FormField: label, required
-   * marker, the schema's maxLength, and the field's own error (a blank legal
-   * name, or a value the server refused), all wired to the input.
-   */
-  const profileInput = (
-    field: ProfileField,
-    options: {
-      required?: boolean;
-      autoComplete: string;
-      type?: 'text' | 'tel';
-      hint?: string;
-      className?: string;
-      inputMode?: 'numeric';
-    }
-  ) => {
-    const spec = PROFILE_FIELDS[field];
-    const value = profileForm[field] || '';
-    return (
-      <FormField
-        id={spec.id}
-        label={spec.label}
-        required={options.required}
-        hint={options.hint}
-        error={profileFieldError(field)}
-        maxLength={spec.maxLength}
-        count={value.length}
-        className={options.className}
-      >
-        {(control) => (
-          <input
-            {...control}
-            type={options.type ?? 'text'}
-            autoComplete={options.autoComplete}
-            {...(options.inputMode ? { inputMode: options.inputMode } : {})}
-            value={value}
-            onChange={(e) => handleProfileChange(field, e.target.value)}
-            className="form-input sm:text-sm"
-            disabled={savingProfile}
-          />
-        )}
-      </FormField>
-    );
   };
 
   const passwordValidation = validatePasswordStrength(newPassword);
@@ -829,15 +800,93 @@ export const UserSettingsPage: React.FC = () => {
                       Personal Information
                     </h3>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      {profileInput('first_name', { required: true, autoComplete: 'given-name' })}
-                      {profileInput('middle_name', { autoComplete: 'additional-name' })}
-                      {profileInput('last_name', { required: true, autoComplete: 'family-name' })}
+                      <div>
+                        <FormField
+                          id={PROFILE_FIELDS.first_name.id}
+                          label="First Name"
+                          required
+                          error={profileErrors.errors.first_name}
+                          labelClassName={PROFILE_LABEL_CLASS}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              maxLength={100}
+                              type="text"
+                              value={profileForm.first_name || ''}
+                              autoComplete="given-name"
+                              onChange={(e) => handleProfileChange('first_name', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
+                      </div>
+                      <div>
+                        <FormField
+                          id={PROFILE_FIELDS.middle_name.id}
+                          label="Middle Name"
+                          error={profileErrors.errors.middle_name}
+                          labelClassName={PROFILE_LABEL_CLASS}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              maxLength={100}
+                              type="text"
+                              value={profileForm.middle_name || ''}
+                              autoComplete="additional-name"
+                              onChange={(e) => handleProfileChange('middle_name', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
+                      </div>
+                      <div>
+                        <FormField
+                          id={PROFILE_FIELDS.last_name.id}
+                          label="Last Name"
+                          required
+                          error={profileErrors.errors.last_name}
+                          labelClassName={PROFILE_LABEL_CLASS}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              maxLength={100}
+                              type="text"
+                              value={profileForm.last_name || ''}
+                              autoComplete="family-name"
+                              onChange={(e) => handleProfileChange('last_name', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
+                      </div>
                     </div>
                     <div className="mt-4 sm:max-w-sm">
-                      {profileInput('preferred_name', {
-                        autoComplete: 'nickname',
-                        hint: 'The name you go by. Shown in place of your first name on shifts, events and rosters. Reports, training records and other official documents keep your legal first name.',
-                      })}
+                      <FormField
+                        id={PROFILE_FIELDS.preferred_name.id}
+                        label="Preferred Name"
+                        error={profileErrors.errors.preferred_name}
+                        labelClassName={PROFILE_LABEL_CLASS}
+                        hint="The name you go by. Shown in place of your first name on shifts, events and rosters. Reports, training records and other official documents keep your legal first name."
+                      >
+                        {(field) => (
+                          <input
+                            {...field}
+                            maxLength={100}
+                            type="text"
+                            value={profileForm.preferred_name || ''}
+                            autoComplete="nickname"
+                            onChange={(e) => handleProfileChange('preferred_name', e.target.value)}
+                            className="form-input sm:text-sm"
+                            disabled={savingProfile}
+                          />
+                        )}
+                      </FormField>
                     </div>
                   </div>
 
@@ -847,8 +896,48 @@ export const UserSettingsPage: React.FC = () => {
                       Contact Information
                     </h3>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      {profileInput('phone', { type: 'tel', autoComplete: 'tel' })}
-                      {profileInput('mobile', { type: 'tel', autoComplete: 'mobile tel' })}
+                      <div>
+                        <FormField
+                          id={PROFILE_FIELDS.phone.id}
+                          label="Phone"
+                          error={profileErrors.errors.phone}
+                          labelClassName={PROFILE_LABEL_CLASS}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              maxLength={20}
+                              type="tel"
+                              value={profileForm.phone || ''}
+                              autoComplete="tel"
+                              onChange={(e) => handleProfileChange('phone', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
+                      </div>
+                      <div>
+                        <FormField
+                          id={PROFILE_FIELDS.mobile.id}
+                          label="Mobile"
+                          error={profileErrors.errors.mobile}
+                          labelClassName={PROFILE_LABEL_CLASS}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              maxLength={20}
+                              type="tel"
+                              value={profileForm.mobile || ''}
+                              autoComplete="mobile tel"
+                              onChange={(e) => handleProfileChange('mobile', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
+                      </div>
                     </div>
                   </div>
 
@@ -917,14 +1006,92 @@ export const UserSettingsPage: React.FC = () => {
                       Address
                     </h3>
                     <div className="space-y-4">
-                      {profileInput('address_street', { autoComplete: 'street-address' })}
+                      <div>
+                        <FormField
+                          id={PROFILE_FIELDS.address_street.id}
+                          label="Street Address"
+                          error={profileErrors.errors.address_street}
+                          labelClassName={PROFILE_LABEL_CLASS}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              maxLength={255}
+                              type="text"
+                              value={profileForm.address_street || ''}
+                              autoComplete="street-address"
+                              onChange={(e) => handleProfileChange('address_street', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
+                      </div>
                       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                        {profileInput('address_city', {
-                          autoComplete: 'address-level2',
-                          className: 'col-span-2 sm:col-span-1',
-                        })}
-                        {profileInput('address_state', { autoComplete: 'address-level1' })}
-                        {profileInput('address_zip', { autoComplete: 'postal-code', inputMode: 'numeric' })}
+                        <div className="col-span-2 sm:col-span-1">
+                          <FormField
+                            id={PROFILE_FIELDS.address_city.id}
+                            label="City"
+                            error={profileErrors.errors.address_city}
+                            labelClassName={PROFILE_LABEL_CLASS}
+                          >
+                            {(field) => (
+                              <input
+                                {...field}
+                                maxLength={100}
+                                type="text"
+                                value={profileForm.address_city || ''}
+                                autoComplete="address-level2"
+                                onChange={(e) => handleProfileChange('address_city', e.target.value)}
+                                className="form-input sm:text-sm"
+                                disabled={savingProfile}
+                              />
+                            )}
+                          </FormField>
+                        </div>
+                        <div>
+                          <FormField
+                            id={PROFILE_FIELDS.address_state.id}
+                            label="State"
+                            error={profileErrors.errors.address_state}
+                            labelClassName={PROFILE_LABEL_CLASS}
+                          >
+                            {(field) => (
+                              <input
+                                {...field}
+                                maxLength={50}
+                                type="text"
+                                value={profileForm.address_state || ''}
+                                autoComplete="address-level1"
+                                onChange={(e) => handleProfileChange('address_state', e.target.value)}
+                                className="form-input sm:text-sm"
+                                disabled={savingProfile}
+                              />
+                            )}
+                          </FormField>
+                        </div>
+                        <div>
+                          <FormField
+                            id={PROFILE_FIELDS.address_zip.id}
+                            label="ZIP Code"
+                            error={profileErrors.errors.address_zip}
+                            labelClassName={PROFILE_LABEL_CLASS}
+                          >
+                            {(field) => (
+                              <input
+                                {...field}
+                                maxLength={20}
+                                type="text"
+                                value={profileForm.address_zip || ''}
+                                autoComplete="postal-code"
+                                inputMode="numeric"
+                                onChange={(e) => handleProfileChange('address_zip', e.target.value)}
+                                className="form-input sm:text-sm"
+                                disabled={savingProfile}
+                              />
+                            )}
+                          </FormField>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -938,6 +1105,11 @@ export const UserSettingsPage: React.FC = () => {
                     >
                       {savingProfile ? 'Saving...' : 'Save Profile'}
                     </button>
+                    {profileErrors.formError && (
+                      <p role="alert" className="mt-2 text-sm text-red-800 dark:text-red-300">
+                        {profileErrors.formError}
+                      </p>
+                    )}
                   </div>
                 </form>
               )}

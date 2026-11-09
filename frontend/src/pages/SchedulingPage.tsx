@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
 import { useDialog } from '../hooks/useDialog';
 import { useDiscardGuard } from '../hooks/useDiscardGuard';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import { FormField } from '../components/ux/FormField';
-import { getErrorMessage } from '../utils/errorHandling';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
 import {
   Clock,
   CalendarDays,
@@ -132,24 +131,22 @@ const TabLoadingFallback = () => (
   </div>
 );
 
-type ShiftFormField = 'startDate' | 'endDate' | 'apparatus_id' | 'shift_officer_id' | 'notes';
+type CreateShiftField = 'start_date' | 'end_date' | 'apparatus' | 'shift_officer' | 'notes';
 
-/** How the shift create endpoint's field names land on this dialog's fields. */
-const SHIFT_FIELDS: Record<ShiftFormField, ServerFieldSpec> = {
-  startDate: { label: 'Start date', api: ['shift_date', 'start_time'] },
-  endDate: { label: 'End date', api: 'end_time' },
-  apparatus_id: { label: 'Apparatus' },
-  shift_officer_id: { label: 'Shift officer' },
-  notes: { label: 'Notes' },
+// The Create Shift fields a check or the server can report against. `start_time`
+// and `end_time` are built from the dates, so a refusal of either is the
+// date's to show.
+const CREATE_SHIFT_FIELDS: FieldSpecs<CreateShiftField> = {
+  start_date: { id: 'create-shift-start-date', label: 'Start date', apiKeys: ['shift_date', 'start_time'] },
+  end_date: { id: 'create-shift-end-date', label: 'End date', apiKeys: ['end_time'] },
+  apparatus: { id: 'create-shift-apparatus', label: 'Apparatus', apiKeys: ['apparatus_id'] },
+  shift_officer: { id: 'create-shift-officer', label: 'Shift officer', apiKeys: ['shift_officer_id'] },
+  notes: { id: 'create-shift-notes', label: 'Notes' },
 };
 
-const SHIFT_FIELD_IDS: Record<ShiftFormField, string> = {
-  startDate: 'create-shift-start-date',
-  endDate: 'create-shift-end-date',
-  apparatus_id: 'create-shift-apparatus',
-  shift_officer_id: 'create-shift-officer',
-  notes: 'create-shift-notes',
-};
+// Collapsed by default under "Advanced options"; a flagged one must be opened
+// before it can take focus.
+const ADVANCED_SHIFT_FIELDS: readonly CreateShiftField[] = ['shift_officer', 'notes'];
 
 const SchedulingPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -285,15 +282,14 @@ const SchedulingPage: React.FC = () => {
   // shift panel must reach whichever tab the panel was opened from.
   const [boardRefreshKey, setBoardRefreshKey] = useState(0);
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [shiftErrors, setShiftErrors] = useState<Partial<Record<ShiftFormField, string>>>({});
-  const clearShiftError = (field: ShiftFormField) =>
-    setShiftErrors((prev) => {
-      if (!prev[field]) return prev;
-      const next = { ...prev };
-      delete next[field];
-      return next;
-    });
+  const createErrors = useFieldErrors(CREATE_SHIFT_FIELDS);
+  // Dismissing the dialog (X, Escape, Cancel) discards its errors, so the next
+  // Create Shift opens clean. Keyed on the request to show it, not on whether
+  // it is drawn: withdrawn behind the shift-detail dialog, it keeps them.
+  const clearCreateErrors = createErrors.clear;
+  useEffect(() => {
+    if (!showCreateShift) clearCreateErrors();
+  }, [showCreateShift, clearCreateErrors]);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [templateSearch, setTemplateSearch] = useState('');
 
@@ -396,35 +392,42 @@ const SchedulingPage: React.FC = () => {
     void loadSummary();
   }, [loadSummary]);
 
-  const showShiftErrors = (errors: Partial<Record<ShiftFormField, string>>) => {
-    setShiftErrors(errors);
-    const first = (Object.keys(SHIFT_FIELD_IDS) as ShiftFormField[]).find((field) => errors[field]);
-    // The advanced fields are collapsed by default; a failing one must be on screen to take focus.
-    if (first === 'shift_officer_id' || first === 'notes') setShowAdvancedOptions(true);
-    if (first) window.setTimeout(() => document.getElementById(SHIFT_FIELD_IDS[first])?.focus(), 0);
+  const focusCreateError = (errors: FieldErrors<CreateShiftField>) => {
+    const first = (Object.keys(CREATE_SHIFT_FIELDS) as CreateShiftField[]).find((name) => errors[name]);
+    if (first && ADVANCED_SHIFT_FIELDS.includes(first)) {
+      setShowAdvancedOptions(true);
+      // The section renders on the next commit; focus once it is there.
+      window.setTimeout(() => document.getElementById(CREATE_SHIFT_FIELDS[first].id)?.focus(), 0);
+      return;
+    }
+    createErrors.focusFirst(errors);
   };
 
   const handleCreateShift = async () => {
-    // Validated on submit, with the reason under each field (forms review F-3):
-    // the button used to stay disabled until the date was set, which told an
-    // officer nothing and dropped the button out of keyboard focus.
-    const missing: Partial<Record<ShiftFormField, string>> = {};
-    if (!shiftForm.startDate) missing.startDate = 'Choose the date the shift starts.';
-    if (apparatusList.length > 0 && !shiftForm.apparatus_id)
-      missing.apparatus_id = 'Select the apparatus for this shift.';
+    // The button is never disabled for a missing value (forms review F-3);
+    // pressing it says what is missing, on the field, and moves focus there.
+    const missing: FieldErrors<CreateShiftField> = {};
+    if (!shiftForm.startDate) missing.start_date = 'Choose the date the shift starts.';
+    if (apparatusList.length > 0 && !shiftForm.apparatus_id) {
+      missing.apparatus = 'Choose the apparatus for this shift.';
+    }
+    createErrors.setFormError(null);
     if (Object.keys(missing).length > 0) {
-      showShiftErrors(missing);
+      // Merged, not replaced: a refusal the server gave another field still
+      // stands, since nothing was sent to settle it. Editing a field clears
+      // its own error.
+      const merged = { ...createErrors.errors, ...missing };
+      createErrors.setErrors(merged);
+      focusCreateError(merged);
       return;
     }
 
     setCreating(true);
-    setCreateError(null);
-    setShiftErrors({});
 
     try {
       const template = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
       if (!template) {
-        setCreateError('No shift template is available. Create a template first.');
+        createErrors.setFormError('No shift template is available. Create a template first.');
         setCreating(false);
         return;
       }
@@ -492,15 +495,10 @@ const SchedulingPage: React.FC = () => {
       });
       setShowCreateShift(false);
     } catch (err: unknown) {
-      // A refused field is shown on that field, in its own words, rather than
-      // as the API's field name in a banner (forms review F-2).
-      const mapped = mapServerFieldErrors(err, SHIFT_FIELDS);
-      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
-        showShiftErrors(mapped.fieldErrors);
-        setCreateError(mapped.unmatched.length ? mapped.unmatched.join(' ') : null);
-      } else {
-        setCreateError(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to create shift'));
-      }
+      // A refusal lands on the field it names; anything else becomes the
+      // dialog's message, through getErrorMessage rather than err.message,
+      // which for an API error is axios's "Request failed with status code".
+      focusCreateError(createErrors.setFromApiError(err, 'Could not create the shift. Try again.'));
     } finally {
       setCreating(false);
     }
@@ -536,13 +534,9 @@ const SchedulingPage: React.FC = () => {
    */
   const createShiftOpen = canManage && showCreateShift && !selectedShift;
 
-  const closeCreateShift = () => {
-    setShowCreateShift(false);
-    setCreateError(null);
-    setShiftErrors({});
-  };
   // Anything typed beyond the template the dialog opens on is unsaved work:
   // Escape, the X and Cancel ask before discarding it (forms review F-6).
+  // Closing clears the errors through the effect keyed on showCreateShift.
   const createShiftDirty = Boolean(
     shiftForm.startDate ||
     shiftForm.endDate ||
@@ -552,7 +546,10 @@ const SchedulingPage: React.FC = () => {
     shiftForm.customStartTime ||
     shiftForm.customEndTime
   );
-  const requestCloseCreateShift = useDiscardGuard({ isDirty: createShiftDirty, onClose: closeCreateShift });
+  const requestCloseCreateShift = useDiscardGuard({
+    isDirty: createShiftDirty,
+    onClose: () => setShowCreateShift(false),
+  });
   const dialogRef = useDialog<HTMLDivElement>({ isOpen: createShiftOpen, onClose: requestCloseCreateShift });
 
   return (
@@ -593,7 +590,7 @@ const SchedulingPage: React.FC = () => {
             canManage && activeTab === 'schedule' ? (
               <button
                 onClick={() => setShowCreateShift(true)}
-                className="flex min-h-11 w-full items-center justify-center space-x-2 rounded-lg bg-violet-700 px-4 py-2 text-white transition-colors hover:bg-violet-800 sm:w-auto"
+                className="btn-primary flex w-full items-center justify-center space-x-2 sm:w-auto"
               >
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 <span>Create Shift</span>
@@ -913,10 +910,10 @@ const SchedulingPage: React.FC = () => {
                       {/* Start / End Date — always visible */}
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <FormField
+                          id={CREATE_SHIFT_FIELDS.start_date.id}
                           label="Start Date"
                           required
-                          error={shiftErrors.startDate}
-                          id="create-shift-start-date"
+                          error={createErrors.errors.start_date}
                         >
                           {(field) => (
                             <input
@@ -925,6 +922,7 @@ const SchedulingPage: React.FC = () => {
                               value={shiftForm.startDate}
                               onChange={(e) => {
                                 const newStart = e.target.value;
+                                if (newStart) createErrors.setError('start_date', null);
                                 const tmpl =
                                   effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
                                 setShiftForm((prev) => ({
@@ -932,25 +930,28 @@ const SchedulingPage: React.FC = () => {
                                   startDate: newStart,
                                   endDate: computeEndDate(newStart, tmpl),
                                 }));
-                                if (newStart) clearShiftError('startDate');
                               }}
                               className="form-input focus:ring-violet-500"
                             />
                           )}
                         </FormField>
                         <div>
-                          <FormField label="End Date" error={shiftErrors.endDate} id="create-shift-end-date">
+                          <FormField
+                            id={CREATE_SHIFT_FIELDS.end_date.id}
+                            label="End Date"
+                            error={createErrors.errors.end_date}
+                          >
                             {(field) => (
                               <input
                                 {...field}
                                 type="date"
                                 value={shiftForm.endDate}
                                 onChange={(e) => {
+                                  createErrors.setError('end_date', null);
                                   setShiftForm({
                                     ...shiftForm,
                                     endDate: e.target.value,
                                   });
-                                  clearShiftError('endDate');
                                 }}
                                 className="form-input focus:ring-violet-500"
                               />
@@ -977,25 +978,25 @@ const SchedulingPage: React.FC = () => {
                       {apparatusList.length > 0 && (
                         <div>
                           <FormField
+                            id={CREATE_SHIFT_FIELDS.apparatus.id}
                             label={
                               <span className="inline-flex items-center gap-1.5">
                                 <Truck className="h-4 w-4" aria-hidden="true" /> Apparatus
                               </span>
                             }
                             required
-                            error={shiftErrors.apparatus_id}
-                            id="create-shift-apparatus"
+                            error={createErrors.errors.apparatus}
                           >
                             {(field) => (
                               <select
                                 {...field}
                                 value={shiftForm.apparatus_id}
                                 onChange={(e) => {
+                                  if (e.target.value) createErrors.setError('apparatus', null);
                                   setShiftForm({
                                     ...shiftForm,
                                     apparatus_id: e.target.value,
                                   });
-                                  if (e.target.value) clearShiftError('apparatus_id');
                                 }}
                                 className="form-input focus:ring-violet-500"
                               >
@@ -1145,42 +1146,52 @@ const SchedulingPage: React.FC = () => {
 
                             {/* Shift Officer Selection */}
                             {membersList.length > 0 && (
-                              <div>
-                                <label htmlFor="create-shift-officer" className="form-label">
-                                  <span className="flex items-center gap-1.5">
-                                    <Users className="h-4 w-4" /> Shift Officer
+                              <FormField
+                                id={CREATE_SHIFT_FIELDS.shift_officer.id}
+                                label={
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <Users className="h-4 w-4" aria-hidden="true" /> Shift Officer
                                   </span>
-                                </label>
-                                <select
-                                  id="create-shift-officer"
-                                  value={shiftForm.shift_officer_id}
-                                  onChange={(e) =>
-                                    setShiftForm({
-                                      ...shiftForm,
-                                      shift_officer_id: e.target.value,
-                                    })
-                                  }
-                                  className="form-input focus:ring-violet-500"
-                                >
-                                  <option value="">No shift officer</option>
-                                  {membersList.map((m) => (
-                                    <option key={m.id} value={m.id}>
-                                      {m.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
+                                }
+                                error={createErrors.errors.shift_officer}
+                              >
+                                {(field) => (
+                                  <select
+                                    {...field}
+                                    value={shiftForm.shift_officer_id}
+                                    onChange={(e) => {
+                                      createErrors.setError('shift_officer', null);
+                                      setShiftForm({
+                                        ...shiftForm,
+                                        shift_officer_id: e.target.value,
+                                      });
+                                    }}
+                                    className="form-input focus:ring-violet-500"
+                                  >
+                                    <option value="">No shift officer</option>
+                                    {membersList.map((m) => (
+                                      <option key={m.id} value={m.id}>
+                                        {m.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                )}
+                              </FormField>
                             )}
 
                             {/* Notes */}
-                            <FormField label="Notes" error={shiftErrors.notes} id="create-shift-notes">
+                            <FormField
+                              id={CREATE_SHIFT_FIELDS.notes.id}
+                              label="Notes"
+                              error={createErrors.errors.notes}
+                            >
                               {(field) => (
                                 <textarea
                                   {...field}
                                   value={shiftForm.notes}
                                   onChange={(e) => {
+                                    createErrors.setError('notes', null);
                                     setShiftForm({ ...shiftForm, notes: e.target.value });
-                                    clearShiftError('notes');
                                   }}
                                   rows={2}
                                   className="form-input resize-none focus:ring-violet-500"
@@ -1191,11 +1202,14 @@ const SchedulingPage: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      {createError && (
-                        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                      {createErrors.formError && (
+                        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
                           <div className="flex items-start space-x-2">
-                            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
-                            <p className="text-sm text-red-700 dark:text-red-300">{createError}</p>
+                            <AlertCircle
+                              className="mt-0.5 h-4 w-4 shrink-0 text-red-800 dark:text-red-300"
+                              aria-hidden="true"
+                            />
+                            <p className="text-sm text-red-800 dark:text-red-300">{createErrors.formError}</p>
                           </div>
                         </div>
                       )}

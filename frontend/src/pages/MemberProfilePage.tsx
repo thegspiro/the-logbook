@@ -963,7 +963,7 @@ export const MemberProfilePage: React.FC = () => {
                 {canViewIdCard && (
                   <Link
                     to={`/members/${userId}/id-card`}
-                    className="touch-target-phone inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                    className="btn-secondary inline-flex items-center gap-1.5 text-sm"
                   >
                     <CreditCard className="h-4 w-4" />
                     ID Card

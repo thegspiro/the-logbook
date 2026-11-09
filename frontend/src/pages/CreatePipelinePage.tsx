@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CallTypeRequirementPicker } from '../components/training/CallTypeRequirementPicker';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
@@ -18,8 +18,14 @@ import {
   GripVertical,
   ChevronDown,
   ChevronUp,
+  Save,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { useTimezone } from '../hooks/useTimezone';
+import { useAuthStore } from '../stores/authStore';
+import { formatDateTime } from '../utils/dateFormatting';
+import { clearProgramWizardDraft, loadProgramWizardDraft, saveProgramWizardDraft } from '../utils/programWizardDraft';
 import { CourseLibraryPicker } from '../components/training/CourseLibraryPicker';
 import { RecencyWindowField } from '../components/training/RecencyWindowField';
 import { RequirementLibraryPicker } from '../components/training/RequirementLibraryPicker';
@@ -193,6 +199,123 @@ const emptyMilestone = (): MilestoneFormData => ({
   completion_percentage_threshold: '',
   notification_message: '',
 });
+
+const emptyInfo = () => ({
+  name: '',
+  description: '',
+  code: '',
+  target_position: '',
+  structure_type: 'phases' as ProgramStructureType,
+  time_limit_days: '',
+  warning_days_before: '30',
+  is_template: false,
+  prerequisite_program_ids: [] as string[],
+  allows_concurrent_enrollment: true,
+  shift_evaluation_template_id: '',
+});
+
+type ProgramInfoForm = ReturnType<typeof emptyInfo>;
+
+// ==================== Draft ====================
+
+/** Everything the wizard keeps in the browser between visits. */
+interface WizardDraft {
+  currentStep: WizardStep;
+  info: ProgramInfoForm;
+  phases: PhaseFormData[];
+  programRequirements: RequirementFormData[];
+  programMilestones: MilestoneFormData[];
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
+ * `defaults` with each field replaced by the saved one where the saved one has
+ * the same type. A draft written by an older build can lack fields added since,
+ * and those keep their empty value instead of arriving as `undefined` in a
+ * controlled input.
+ */
+const mergeSaved = <T extends object>(defaults: T, saved: unknown): T => {
+  if (!isRecord(saved)) return defaults;
+  const merged: Record<string, unknown> = {};
+  for (const [key, fallback] of Object.entries(defaults)) {
+    merged[key] = fallback;
+    const value = saved[key];
+    if (Array.isArray(fallback)) {
+      if (Array.isArray(value)) merged[key] = value;
+    } else if (fallback === undefined) {
+      // Only `recency_days` starts undefined; it holds a number when set.
+      if (typeof value === 'number') merged[key] = value;
+    } else if (typeof value === typeof fallback) {
+      merged[key] = value;
+    }
+  }
+  return merged as T;
+};
+
+const savedList = (value: unknown): unknown[] => (Array.isArray(value) ? value.filter(isRecord) : []);
+
+// Every restored item gets a fresh client id. The counter behind `nextId`
+// restarts at zero on each page load, so ids carried over from the saved draft
+// would collide with the next phase or requirement the officer adds.
+const restoreRequirement = (saved: unknown, index: number): RequirementFormData => {
+  const source = isRecord(saved) && saved.source === 'library' ? 'library' : 'new';
+  const merged = mergeSaved(emptyRequirement(index, source), saved);
+  const strings = (values: unknown[]) => values.filter((v): v is string => typeof v === 'string');
+  return {
+    ...merged,
+    id: nextId(),
+    source,
+    required_courses: strings(merged.required_courses),
+    required_call_types: strings(merged.required_call_types),
+    checklist_items: merged.checklist_items.filter((item) => isRecord(item)),
+  };
+};
+
+const restoreMilestone = (saved: unknown): MilestoneFormData => ({
+  ...mergeSaved(emptyMilestone(), saved),
+  id: nextId(),
+});
+
+const restorePhase = (saved: unknown, index: number): PhaseFormData => {
+  const record = isRecord(saved) ? saved : {};
+  return {
+    ...mergeSaved(emptyPhase(index + 1), saved),
+    id: nextId(),
+    phase_number: index + 1,
+    requirements: savedList(record.requirements).map(restoreRequirement),
+    milestones: savedList(record.milestones).map(restoreMilestone),
+  };
+};
+
+/** The wizard state a stored draft describes, or null if it is not one. */
+const restoreDraft = (data: unknown): WizardDraft | null => {
+  if (!isRecord(data) || !isRecord(data.info)) return null;
+  const info = mergeSaved(emptyInfo(), data.info);
+  info.prerequisite_program_ids = info.prerequisite_program_ids.filter((id): id is string => typeof id === 'string');
+  const usesPhases = info.structure_type === 'phases';
+  const knownStep = ALL_WIZARD_STEPS.find((s) => s.key === data.currentStep)?.key ?? 'info';
+  return {
+    currentStep: knownStep === 'phases' && !usesPhases ? 'requirements' : knownStep,
+    info,
+    phases: savedList(data.phases).map(restorePhase),
+    programRequirements: savedList(data.programRequirements).map(restoreRequirement),
+    programMilestones: savedList(data.programMilestones).map(restoreMilestone),
+  };
+};
+
+/** Whether the officer has entered anything worth keeping. */
+const draftHasContent = (draft: WizardDraft): boolean =>
+  draft.info.name.trim() !== '' ||
+  draft.info.description.trim() !== '' ||
+  draft.info.code.trim() !== '' ||
+  draft.phases.length > 0 ||
+  draft.programRequirements.length > 0 ||
+  draft.programMilestones.length > 0;
+
+/** How long after the last edit the draft is written. */
+const DRAFT_SAVE_DELAY_MS = 1000;
 
 // A linked entry sends only the id, the Required toggle and the link's own
 // settings. The build payload
@@ -1395,30 +1518,139 @@ const StepReview: React.FC<{
 
 const CreatePipelinePage: React.FC = () => {
   const navigate = useNavigate();
-  const [currentStep, setCurrentStep] = useState<WizardStep>('info');
+  const { confirm } = useConfirm();
+  const tz = useTimezone();
+  const memberId = useAuthStore((s) => s.user?.id);
+
+  // The draft this member left in this browser, read once on arrival. Without a
+  // signed-in member there is nobody to own a draft, so none is read or written.
+  const [restored] = useState(() => {
+    if (!memberId) return null;
+    const stored = loadProgramWizardDraft(memberId);
+    const draft = stored ? restoreDraft(stored.data) : null;
+    return draft && stored ? { draft, savedAt: stored.savedAt } : null;
+  });
+
+  const [currentStep, setCurrentStep] = useState<WizardStep>(restored?.draft.currentStep ?? 'info');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   // Program info state
-  const [info, setInfo] = useState({
-    name: '',
-    description: '',
-    code: '',
-    target_position: '',
-    structure_type: 'phases' as ProgramStructureType,
-    time_limit_days: '',
-    warning_days_before: '30',
-    is_template: false,
-    prerequisite_program_ids: [] as string[],
-    allows_concurrent_enrollment: true,
-    shift_evaluation_template_id: '',
-  });
+  const [info, setInfo] = useState<ProgramInfoForm>(restored?.draft.info ?? emptyInfo);
 
   // Phases state
-  const [phases, setPhases] = useState<PhaseFormData[]>([]);
+  const [phases, setPhases] = useState<PhaseFormData[]>(restored?.draft.phases ?? []);
   // Requirements/milestones for a program that isn't split into phases.
-  const [programRequirements, setProgramRequirements] = useState<RequirementFormData[]>([]);
-  const [programMilestones, setProgramMilestones] = useState<MilestoneFormData[]>([]);
+  const [programRequirements, setProgramRequirements] = useState<RequirementFormData[]>(
+    restored?.draft.programRequirements ?? []
+  );
+  const [programMilestones, setProgramMilestones] = useState<MilestoneFormData[]>(
+    restored?.draft.programMilestones ?? []
+  );
+
+  // ---- Draft ----
+  // When the draft was last written, and whether the last write failed. Shown
+  // beside the navigation: a save the browser refused has no other way to reach
+  // the officer, who would otherwise believe their work was being kept.
+  const [draftSavedAt, setDraftSavedAt] = useState<number | null>(restored?.savedAt ?? null);
+  const [draftSaveFailed, setDraftSaveFailed] = useState(false);
+  const [showRestoredNotice, setShowRestoredNotice] = useState(restored !== null);
+
+  const draft: WizardDraft = { currentStep, info, phases, programRequirements, programMilestones };
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const draftPendingRef = useRef(false);
+  // Set once the program is created, so a save still scheduled from the last
+  // edit cannot write the finished program back as a draft.
+  const draftClosedRef = useRef(false);
+
+  const writeDraft = useCallback((): boolean => {
+    draftPendingRef.current = false;
+    if (!memberId || draftClosedRef.current) return false;
+    const current = draftRef.current;
+    if (!draftHasContent(current)) {
+      clearProgramWizardDraft(memberId);
+      setDraftSavedAt(null);
+      setDraftSaveFailed(false);
+      return true;
+    }
+    const now = Date.now();
+    const ok = saveProgramWizardDraft(memberId, current, now);
+    setDraftSaveFailed(!ok);
+    if (ok) setDraftSavedAt(now);
+    return ok;
+  }, [memberId]);
+
+  // Written shortly after the officer stops typing rather than on every
+  // keystroke; a whole program's worth of JSON per character adds up.
+  const draftSignature = JSON.stringify(draft);
+  const lastWrittenSignature = useRef(draftSignature);
+  useEffect(() => {
+    if (!memberId || draftSignature === lastWrittenSignature.current) return;
+    draftPendingRef.current = true;
+    const timer = setTimeout(() => {
+      lastWrittenSignature.current = draftSignature;
+      writeDraft();
+    }, DRAFT_SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [draftSignature, memberId, writeDraft]);
+
+  // An edit made inside the delay is written on the way out, whether the
+  // officer switches tabs in the hub (unmount) or closes the browser tab.
+  useEffect(() => {
+    const flush = () => {
+      if (draftPendingRef.current) writeDraft();
+    };
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      flush();
+    };
+  }, [writeDraft]);
+
+  const saveDraftNow = () => {
+    lastWrittenSignature.current = draftSignature;
+    if (!draftHasContent(draft)) {
+      toast.error('Enter a program name first — there is nothing to save yet.');
+      return;
+    }
+    if (writeDraft()) {
+      toast.success('Draft saved in this browser');
+    } else {
+      toast.error('This browser would not save the draft. Keep this page open until the program is created.');
+    }
+  };
+
+  const startOver = async () => {
+    const confirmed = await confirm({
+      title: 'Start over?',
+      message:
+        'This deletes the draft saved in this browser — the program info, phases, requirements and milestones entered so far. It cannot be undone.',
+      confirmLabel: 'Delete draft',
+      cancelLabel: 'Keep it',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    if (memberId) clearProgramWizardDraft(memberId);
+    const fresh: WizardDraft = {
+      currentStep: 'info',
+      info: emptyInfo(),
+      phases: [],
+      programRequirements: [],
+      programMilestones: [],
+    };
+    lastWrittenSignature.current = JSON.stringify(fresh);
+    draftPendingRef.current = false;
+    setCurrentStep(fresh.currentStep);
+    setInfo(fresh.info);
+    setPhases(fresh.phases);
+    setProgramRequirements(fresh.programRequirements);
+    setProgramMilestones(fresh.programMilestones);
+    setError('');
+    setDraftSavedAt(null);
+    setDraftSaveFailed(false);
+    setShowRestoredNotice(false);
+  };
 
   // Course catalog backing the course/certification requirement pickers.
   const { courses, loading: coursesLoading, error: coursesError } = useCourseLibrary();
@@ -1667,6 +1899,8 @@ const CreatePipelinePage: React.FC = () => {
 
       const program = await trainingProgramService.buildProgram(payload);
 
+      draftClosedRef.current = true;
+      if (memberId) clearProgramWizardDraft(memberId);
       toast.success('Training pipeline created');
       void navigate(`/training/programs/${program.id}`);
     } catch (err: unknown) {
@@ -1690,6 +1924,33 @@ const CreatePipelinePage: React.FC = () => {
             which the nav's Programs tab already returns to in one tap. */}
         <h2 className="sr-only">Create Training Pipeline</h2>
         <p className="text-theme-text-muted mb-6 text-sm">Step-by-step wizard to build your training program</p>
+
+        {showRestoredNotice && restored && (
+          <div role="status" className="alert-info mb-6 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm">
+              Picked up where you left off — this draft was saved in this browser{' '}
+              {formatDateTime(new Date(restored.savedAt), tz)}.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowRestoredNotice(false)}
+                className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover min-h-11 rounded-lg px-3 py-2 text-sm"
+              >
+                Dismiss
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void startOver();
+                }}
+                className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover min-h-11 rounded-lg px-3 py-2 text-sm"
+              >
+                Start over
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Step indicator */}
         {/* Five 44px steps and their connectors fit a 320px phone only with
@@ -1784,7 +2045,7 @@ const CreatePipelinePage: React.FC = () => {
         </div>
 
         {/* Navigation */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <button
             onClick={goBack}
             disabled={stepIndex === 0}
@@ -1793,6 +2054,29 @@ const CreatePipelinePage: React.FC = () => {
             <ArrowLeft className="h-4 w-4" />
             <span>Back</span>
           </button>
+
+          {memberId && (
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+              <p
+                aria-live="polite"
+                className={`text-xs ${draftSaveFailed ? 'text-red-700 dark:text-red-400' : 'text-theme-text-muted'}`}
+              >
+                {draftSaveFailed
+                  ? 'Draft not saved — this browser refused it'
+                  : draftSavedAt !== null
+                    ? `Draft saved ${formatDateTime(new Date(draftSavedAt), tz)}`
+                    : 'Drafts save in this browser as you go'}
+              </p>
+              <button
+                type="button"
+                onClick={saveDraftNow}
+                className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex min-h-11 items-center space-x-2 rounded-lg px-4 py-2 text-sm"
+              >
+                <Save className="h-4 w-4" />
+                <span>Save draft</span>
+              </button>
+            </div>
+          )}
 
           {currentStep === 'review' ? (
             <button

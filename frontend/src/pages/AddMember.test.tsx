@@ -138,7 +138,7 @@ describe('AddMember', { timeout: 20_000 }, () => {
     mockConnected.clear();
   });
 
-  it('ties each refusal to its field, announces it, and moves focus to the first', async () => {
+  it('ties each refusal to its field, announces it, and moves focus to the summary of them', async () => {
     const user = userEvent.setup();
     renderWithRouter(<AddMember />);
     await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
@@ -152,7 +152,7 @@ describe('AddMember', { timeout: 20_000 }, () => {
 
     expect(firstName).toHaveAttribute('aria-invalid', 'true');
     expect(firstName).toHaveAccessibleDescription('First name is required');
-    await waitFor(() => expect(firstName).toHaveFocus());
+    expect(screen.getByRole('alert', { name: 'Fix these before saving' })).toHaveFocus();
     expect(screen.getByLabelText(/^Street Address/)).toHaveAccessibleDescription('Street address is required');
     expect(mockCreateMember).not.toHaveBeenCalled();
   });
@@ -177,13 +177,13 @@ describe('AddMember', { timeout: 20_000 }, () => {
     await user.click(screen.getByRole('button', { name: /save member/i }));
 
     const zip = screen.getByLabelText(/^ZIP Code/);
-    await waitFor(() => expect(zip).toHaveAccessibleDescription('ZIP Code is too long — keep it to 20 characters.'));
+    await waitFor(() => expect(zip).toHaveAccessibleDescription('Value is too long.'));
     expect(zip).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByLabelText(/^Phone/, { selector: '#add-emergencyPhone1' })).toHaveAccessibleDescription(
-      'Emergency contact phone is too long — keep it to 20 characters.'
+      'Value is too long.'
     );
-    await waitFor(() => expect(zip).toHaveFocus());
-    expect(toast.error).toHaveBeenCalledWith('Fix the fields marked below, then save again.');
+    expect(screen.getByRole('alert', { name: 'Fix these before saving' })).toHaveFocus();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('restores a draft of the member’s details, but never their emergency contacts or birth date', async () => {
@@ -480,6 +480,50 @@ describe('AddMember', { timeout: 20_000 }, () => {
 
       expect(await screen.findByText('Membership number is required')).toBeInTheDocument();
       expect(mockCreateMember).not.toHaveBeenCalled();
+    });
+  });
+
+  // Forms review F-4: an empty save showed a message under every field but
+  // tied none of them to its input, and left focus on the button at the
+  // bottom of a 30-field form with the first errors out of view.
+  describe('saying what is wrong', () => {
+    it('lists the missing fields at the top, takes focus there, and ties each message to its field', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      const summary = screen.getByRole('alert', { name: 'Fix these before saving' });
+      expect(summary).toHaveFocus();
+      expect(within(summary).getByRole('link', { name: 'First name: First name is required' })).toHaveAttribute(
+        'href',
+        '#add-firstName'
+      );
+      const first = screen.getByLabelText(/^first name/i);
+      expect(first).toHaveAttribute('aria-invalid', 'true');
+      expect(first).toHaveAttribute('aria-required', 'true');
+      expect(first).toHaveAccessibleDescription('First name is required');
+      expect(mockCreateMember).not.toHaveBeenCalled();
+    });
+
+    it('puts a server refusal on the field it names', async () => {
+      mockCreateMember.mockRejectedValue({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'email', message: 'Enter a valid email address.' }], code: 'LB-VAL-001' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      const email = screen.getByPlaceholderText('john.doe@example.com');
+      await waitFor(() => expect(email).toHaveAccessibleDescription('Enter a valid email address.'));
+      expect(screen.getByRole('alert', { name: 'Fix these before saving' })).toHaveFocus();
     });
   });
 

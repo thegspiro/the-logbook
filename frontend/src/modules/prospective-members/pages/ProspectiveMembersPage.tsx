@@ -577,7 +577,7 @@ export const ProspectiveMembersPage: React.FC = () => {
           <>
             <button
               onClick={() => void navigate('/prospective-members/settings')}
-              className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors sm:px-4"
+              className="btn-secondary flex items-center gap-2 text-sm"
             >
               <Settings className="h-4 w-4" />
               <span className="hidden sm:inline">Pipeline Settings</span>
@@ -1114,8 +1114,8 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-                <table className="w-full">
+              <div className="card bg-theme-input-bg rwd-table-container overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide w-full">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
                       <th scope="col" className="w-10 p-3">
@@ -1172,7 +1172,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         key={applicant.id}
                         className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
                       >
-                        <td className="p-3">
+                        <td data-label="Select" className="p-3">
                           <input
                             type="checkbox"
                             checked={selectedInactive.has(applicant.id)}
@@ -1189,7 +1189,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                             className="form-checkbox h-6 w-6 text-red-700 dark:text-red-500"
                           />
                         </td>
-                        <td className="p-3">
+                        <td data-label="Name" className="p-3">
                           <div className="flex items-center gap-2.5">
                             <div className="bg-theme-surface-hover text-theme-text-secondary flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold">
                               {getInitials(applicant.first_name, applicant.last_name)}
@@ -1199,15 +1199,22 @@ export const ProspectiveMembersPage: React.FC = () => {
                             </span>
                           </div>
                         </td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        <td data-label="Email" className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.email}
+                        </td>
+                        <td data-label="Last Stage" className="text-theme-text-muted table-col-secondary p-3 text-sm">
                           {applicant.current_stage_name ?? '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td
+                          data-label="Inactive Since"
+                          className="text-theme-text-muted table-col-tertiary p-3 text-sm"
+                        >
                           {applicant.deactivated_at ? formatDate(applicant.deactivated_at, tz) : '—'}
                         </td>
-                        <td className="text-theme-text-muted p-3 text-sm">{applicant.days_since_activity}d</td>
-                        <td className="p-3">
+                        <td data-label="Days Idle" className="text-theme-text-muted p-3 text-sm">
+                          {applicant.days_since_activity}d
+                        </td>
+                        <td data-label="Actions" className="p-3">
                           <button
                             onClick={() => {
                               void (async () => {
@@ -1289,8 +1296,8 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-                <table className="w-full">
+              <div className="card bg-theme-input-bg rwd-table-container overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide w-full">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
                       <th
@@ -1332,7 +1339,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         key={applicant.id}
                         className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
                       >
-                        <td className="p-3">
+                        <td data-label="Name" className="p-3">
                           <div
                             className="flex cursor-pointer items-center gap-2.5"
                             onClick={() => {
@@ -1347,17 +1354,25 @@ export const ProspectiveMembersPage: React.FC = () => {
                             </span>
                           </div>
                         </td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        <td data-label="Email" className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.email}
+                        </td>
+                        <td
+                          data-label="Stage Reached"
+                          className="text-theme-text-muted table-col-secondary p-3 text-sm"
+                        >
                           {applicant.current_stage_name ?? '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td data-label="Last Activity" className="text-theme-text-muted table-col-tertiary p-3 text-sm">
                           {applicant.last_activity_at ? formatDate(applicant.last_activity_at, tz) : '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td
+                          data-label="Days in Pipeline"
+                          className="text-theme-text-muted table-col-tertiary p-3 text-sm"
+                        >
                           {applicant.days_in_pipeline}d
                         </td>
-                        <td className="p-3">
+                        <td data-label="Actions" className="p-3">
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => {
@@ -1450,8 +1465,8 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-                <table className="w-full">
+              <div className="card bg-theme-input-bg rwd-table-container overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide w-full">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
                       <th
@@ -1493,7 +1508,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         key={applicant.id}
                         className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
                       >
-                        <td className="p-3">
+                        <td data-label="Name" className="p-3">
                           <div
                             className="flex cursor-pointer items-center gap-2.5"
                             onClick={() => {
@@ -1508,17 +1523,25 @@ export const ProspectiveMembersPage: React.FC = () => {
                             </span>
                           </div>
                         </td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        <td data-label="Email" className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.email}
+                        </td>
+                        <td data-label="Last Stage" className="text-theme-text-muted table-col-secondary p-3 text-sm">
                           {applicant.current_stage_name ?? '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td
+                          data-label="Withdrawn Date"
+                          className="text-theme-text-muted table-col-tertiary p-3 text-sm"
+                        >
                           {applicant.withdrawn_at ? formatDate(applicant.withdrawn_at, tz) : '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary max-w-[200px] truncate p-3 text-sm">
+                        <td
+                          data-label="Reason"
+                          className="text-theme-text-muted table-col-tertiary max-w-[200px] truncate p-3 text-sm"
+                        >
                           {applicant.withdrawal_reason ?? '—'}
                         </td>
-                        <td className="p-3">
+                        <td data-label="Actions" className="p-3">
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => {
@@ -1610,8 +1633,8 @@ export const ProspectiveMembersPage: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="card bg-theme-input-bg overflow-hidden overflow-x-auto">
-                <table className="w-full">
+              <div className="card bg-theme-input-bg rwd-table-container overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide w-full">
                   <thead>
                     <tr className="border-theme-surface-border border-b">
                       <th
@@ -1653,7 +1676,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                         key={applicant.id}
                         className="border-theme-surface-border hover:bg-theme-surface-secondary border-b transition-colors"
                       >
-                        <td className="p-3">
+                        <td data-label="Name" className="p-3">
                           <div
                             className="flex cursor-pointer items-center gap-2.5"
                             onClick={() => {
@@ -1668,17 +1691,22 @@ export const ProspectiveMembersPage: React.FC = () => {
                             </span>
                           </div>
                         </td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">{applicant.email}</td>
-                        <td className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                        <td data-label="Email" className="text-theme-text-muted table-col-secondary p-3 text-sm">
+                          {applicant.email}
+                        </td>
+                        <td data-label="Final Stage" className="text-theme-text-muted table-col-secondary p-3 text-sm">
                           {applicant.current_stage_name ?? '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td data-label="Last Activity" className="text-theme-text-muted table-col-tertiary p-3 text-sm">
                           {applicant.last_activity_at ? formatDate(applicant.last_activity_at, tz) : '—'}
                         </td>
-                        <td className="text-theme-text-muted table-col-tertiary p-3 text-sm">
+                        <td
+                          data-label="Days in Pipeline"
+                          className="text-theme-text-muted table-col-tertiary p-3 text-sm"
+                        >
                           {applicant.days_in_pipeline}d
                         </td>
-                        <td className="p-3">
+                        <td data-label="Actions" className="p-3">
                           {/* View only. These applicants are members now — there
                             is no reactivating them, and the backend refuses it. */}
                           <button

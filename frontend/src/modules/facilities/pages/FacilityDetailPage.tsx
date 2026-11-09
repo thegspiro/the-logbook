@@ -157,7 +157,7 @@ export default function FacilityDetailPage() {
               onClick={() => {
                 void handleRestore();
               }}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 px-3 py-1.5 text-sm text-emerald-700 transition-colors hover:bg-emerald-500/10 dark:text-emerald-400"
+              className="btn-success flex items-center gap-1.5 text-sm"
             >
               <RotateCcw className="h-3.5 w-3.5" /> Restore
             </button>
@@ -166,7 +166,7 @@ export default function FacilityDetailPage() {
               onClick={() => {
                 void handleArchive();
               }}
-              className="text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors"
+              className="btn-secondary flex items-center gap-1.5 text-sm"
             >
               <Archive className="h-3.5 w-3.5" /> Archive
             </button>

@@ -23,6 +23,7 @@ import { historyImportService } from '../../../../modules/scheduling/services/hi
 import type {
   HistoryImportAnalysis,
   HistoryImportDetail,
+  HistoryImportIssue,
   HistoryImportMappingsUpdate,
   HistoryImportRowUpdate,
   HistoryImportSettingsUpdate,
@@ -36,21 +37,19 @@ import { zoneLabel } from './historyImportTimezones';
 import ReviewColumns from './ReviewColumns';
 import ReviewMembers from './ReviewMembers';
 import ReviewPositions from './ReviewPositions';
-import ReviewRows from './ReviewRows';
+import ReviewRows, { type RowFocus } from './ReviewRows';
 import ReviewShifts from './ReviewShifts';
 import ReviewUnits from './ReviewUnits';
 import { useTablist } from '../../../../hooks/useTablist';
 
 type TabId = 'issues' | 'columns' | 'members' | 'units' | 'positions' | 'shifts' | 'rows';
 
-/** Which tab settles an issue, by the backend's issue code. */
+/**
+ * Which tab settles an issue, by the backend's issue code. Row-level issues
+ * open the Rows tab narrowed to the lines they name, where each carries the
+ * buttons that answer it.
+ */
 const ISSUE_TAB: Record<string, TabId> = {
-  row_error: 'rows',
-  overlapping_entries: 'rows',
-  attendance_too_long: 'rows',
-  probable_match: 'shifts',
-  probable_existing_match: 'shifts',
-  duplicate_member_in_shift: 'shifts',
   position_unmatched: 'positions',
   new_member_without_name: 'members',
   new_member_identifier_taken: 'members',
@@ -70,7 +69,10 @@ const Stat: React.FC<{ label: string; value: number }> = ({ label, value }) => (
   </div>
 );
 
-const IssuesPanel: React.FC<{ analysis: HistoryImportAnalysis; onGo: (tab: TabId) => void }> = ({ analysis, onGo }) => {
+const IssuesPanel: React.FC<{ analysis: HistoryImportAnalysis; onResolve: (issue: HistoryImportIssue) => void }> = ({
+  analysis,
+  onResolve,
+}) => {
   const blocking = analysis.issues.filter((i) => i.blocking);
   return (
     <section aria-labelledby="review-issues-heading" className="space-y-4">
@@ -87,11 +89,7 @@ const IssuesPanel: React.FC<{ analysis: HistoryImportAnalysis; onGo: (tab: TabId
           {blocking.slice(0, 300).map((issue, index) => (
             <li key={`${issue.code}-${issue.ref ?? ''}-${index}`} className="split-row gap-2 p-3 sm:items-center">
               <span className="split-row-main text-theme-text-primary text-sm">{issue.message}</span>
-              <button
-                type="button"
-                className="split-row-aside btn-secondary shrink-0"
-                onClick={() => onGo(issueTab(issue.code))}
-              >
+              <button type="button" className="split-row-aside btn-secondary shrink-0" onClick={() => onResolve(issue)}>
                 Resolve
               </button>
             </li>
@@ -119,6 +117,7 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<TabId>('issues');
+  const [rowFocus, setRowFocus] = useState<RowFocus | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,6 +159,13 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
     void onRowUpdate(rowId, { match_decision: decision });
   const onDecideAll = (decision: MatchDecision) =>
     void apply(() => historyImportService.decideProbableMatches(importId, decision));
+  const onExistingDecision = (shiftKey: string, decision: MatchDecision) =>
+    onMappings({ existing_shifts: { [shiftKey]: decision } });
+  const onResolve = (issue: HistoryImportIssue) => {
+    const target = issueTab(issue.code);
+    setRowFocus(target === 'rows' && issue.row_ids.length > 0 ? { label: issue.message, rowIds: issue.row_ids } : null);
+    setTab(target);
+  };
   /** One request per row; the last response is the draft with all of them applied. */
   const onSplit = (rowIds: string[]) =>
     void apply(async () => {
@@ -345,7 +351,10 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
             role="tab"
             aria-selected={tab === t.id}
             aria-controls="review-tabpanel"
-            onClick={() => setTab(t.id)}
+            onClick={() => {
+              setRowFocus(null);
+              setTab(t.id);
+            }}
             className={`mobile-touch-target px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               tab === t.id
                 ? 'border-b-2 border-violet-600 text-violet-700 dark:text-violet-400'
@@ -359,7 +368,7 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
       </div>
 
       <div id="review-tabpanel" role="tabpanel" aria-labelledby={`review-tab-${tab}`} aria-busy={busy}>
-        {tab === 'issues' && <IssuesPanel analysis={analysis} onGo={setTab} />}
+        {tab === 'issues' && <IssuesPanel analysis={analysis} onResolve={onResolve} />}
         {tab === 'columns' && <ReviewColumns detail={detail} busy={busy} onSettings={onSettings} />}
         {tab === 'members' && <ReviewMembers analysis={analysis} busy={busy} onMappings={onMappings} />}
         {tab === 'units' && <ReviewUnits analysis={analysis} busy={busy} onMappings={onMappings} />}
@@ -376,7 +385,17 @@ const ShiftHistoryImportReviewPage: React.FC = () => {
           />
         )}
         {tab === 'rows' && (
-          <ReviewRows analysis={analysis} fields={detail.fields} busy={busy} onRowUpdate={onRowUpdate} />
+          <ReviewRows
+            analysis={analysis}
+            fields={detail.fields}
+            columnMapping={detail.column_mapping}
+            busy={busy}
+            onRowUpdate={onRowUpdate}
+            onExistingDecision={onExistingDecision}
+            onDecideAll={onDecideAll}
+            focus={rowFocus}
+            onFocus={setRowFocus}
+          />
         )}
       </div>
     </div>

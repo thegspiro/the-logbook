@@ -413,7 +413,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void navigate(`/finance/purchase-requests/${pr.id}/edit`)}
-                className="touch:min-h-11 border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 <Edit className="h-3.5 w-3.5" />
                 Edit
@@ -424,7 +424,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleSubmit()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit for Approval
@@ -434,7 +434,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setClaiming(true)}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm"
               >
                 <Receipt className="h-3.5 w-3.5" />
                 Request Reimbursement
@@ -444,7 +444,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleMarkOrdered()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm"
               >
                 <Package className="h-3.5 w-3.5" />
                 Mark Ordered
@@ -454,7 +454,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleMarkReceived()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-teal-800"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm"
               >
                 <Truck className="h-3.5 w-3.5" />
                 Mark Received
@@ -466,7 +466,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
                 disabled={awaitingReceipt}
                 onClick={() => setPayingOpen(true)}
                 aria-describedby={awaitingReceipt ? 'pr-receipt-needed' : undefined}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-success inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <CreditCard className="h-3.5 w-3.5" />
                 Mark Paid
@@ -476,7 +476,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleCancel()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
               >
                 <XCircle className="h-3.5 w-3.5" />
                 Cancel Request

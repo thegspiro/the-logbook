@@ -11,9 +11,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from fastapi import BackgroundTasks
 
 from app.api.v1.endpoints.users import update_contact_info
 from app.schemas.user import ContactInfoUpdate
+from tests.fake_request import fake_request
 
 pytestmark = pytest.mark.unit
 
@@ -41,7 +43,12 @@ async def _save(payload):
     db.commit = AsyncMock()
     with patch("app.api.v1.endpoints.users.log_audit_event", new=AsyncMock()):
         await update_contact_info(
-            uid, ContactInfoUpdate.model_validate(payload), db, member
+            uid,
+            ContactInfoUpdate.model_validate(payload),
+            BackgroundTasks(),
+            db=db,
+            current_user=member,
+            request=fake_request(),
         )
     return member
 

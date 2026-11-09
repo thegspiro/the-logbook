@@ -862,9 +862,10 @@ Browser  ←  WebSocket  ←  FastAPI endpoint  ←  Redis pub/sub  ←  API mut
   `client_state` guard prevents a second `accept()` on a connection already
   accepted during early authentication
 - **Endpoint**: `WS /api/v1/inventory/ws` — authenticates via the httpOnly
-  `access_token` cookie (preferred for browsers) or a `?token=<jwt>` query
-  parameter (fallback for non-browser clients), subscribes to org-scoped
-  events. The global CSRF middleware returns early for WebSocket scope
+  `access_token` cookie only (a `?token=` query parameter is not accepted,
+  since a token in a URL is written to access logs), requires
+  `inventory.manage`, and subscribes to org-scoped events. The global CSRF
+  middleware returns early for WebSocket scope
 - **Publishing**: each mutation endpoint publishes an event after the audit
   log entry
 - **Frontend**: the `useInventoryWebSocket` hook auto-connects with

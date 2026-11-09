@@ -35,6 +35,7 @@ import { useSchedulingStore } from '../../modules/scheduling/store/schedulingSto
 import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { CalendarSubscribeCard } from './CalendarSubscribeCard';
 import { MyHoursSummary } from './MyHoursSummary';
+import { PastShiftsHistory } from './PastShiftsHistory';
 
 /** How many upcoming shifts the swap "Specific shift" picker reads. */
 const SWAP_TARGET_LIMIT = 50;
@@ -333,9 +334,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
     const shiftDate = a.shift?.shift_date || '';
     return shiftDate >= today && a.status !== AssignmentStatus.DECLINED && a.status !== AssignmentStatus.CANCELLED;
   });
+  // A declined or cancelled seat is a shift the member did not work, so it is
+  // not part of their history. If attendance shows they worked it anyway, the
+  // attendance-only path below still lists it, with its hours.
   const pastAssignments = assignments.filter((a) => {
     const shiftDate = a.shift?.shift_date || '';
-    return shiftDate < today;
+    return shiftDate < today && a.status !== AssignmentStatus.DECLINED && a.status !== AssignmentStatus.CANCELLED;
   });
 
   // Past shifts may exist as ShiftAttendance records without a corresponding
@@ -369,8 +373,6 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
     const dateB = b.shift?.shift_date || '';
     return dateB.localeCompare(dateA);
   });
-
-  const displayList = view === 'upcoming' ? upcoming : past;
 
   // Bulk selection helpers — must be after 'upcoming' is defined
   const pendingAssigned = upcoming.filter((a) => a.status === AssignmentStatus.ASSIGNED);
@@ -494,45 +496,6 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
         </div>
       </div>
 
-      {/* Hours summary for past shifts */}
-      {view === 'past' && attendanceMap.size > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="card p-3 text-center">
-            <p className="text-theme-text-primary text-xl font-bold">
-              {Math.round(
-                ([...attendanceMap.values()]
-                  .filter((a) => a.duration_minutes)
-                  .reduce((sum, a) => sum + (a.duration_minutes ?? 0), 0) /
-                  60) *
-                  10
-              ) / 10}
-            </p>
-            <p className="text-theme-text-muted text-xs">Total Hours</p>
-          </div>
-          <div className="card p-3 text-center">
-            <p className="text-theme-text-primary text-xl font-bold">
-              {[...attendanceMap.values()].filter((a) => a.checked_in_at).length}
-            </p>
-            <p className="text-theme-text-muted text-xs">Shifts Logged</p>
-          </div>
-          <div className="card p-3 text-center">
-            <p className="text-theme-text-primary text-xl font-bold">
-              {attendanceMap.size > 0
-                ? Math.round(
-                    ([...attendanceMap.values()]
-                      .filter((a) => a.duration_minutes)
-                      .reduce((sum, a) => sum + (a.duration_minutes ?? 0), 0) /
-                      [...attendanceMap.values()].filter((a) => a.duration_minutes).length /
-                      60) *
-                      10
-                  ) / 10 || 0
-                : 0}
-            </p>
-            <p className="text-theme-text-muted text-xs">Avg Hours/Shift</p>
-          </div>
-        </div>
-      )}
-
       {/* Bulk action bar */}
       {view === 'upcoming' && pendingAssigned.length > 1 && (
         <div className="bg-theme-surface-hover/50 border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border p-3">
@@ -577,23 +540,21 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
 
       {view === 'hours' && <MyHoursSummary />}
 
-      {/* Shift List */}
-      {view !== 'hours' &&
-        (displayList.length === 0 ? (
+      {view === 'past' && <PastShiftsHistory past={past} attendanceByShift={attendanceMap} onViewShift={onViewShift} />}
+
+      {/* Upcoming shift list */}
+      {view === 'upcoming' &&
+        (upcoming.length === 0 ? (
           <div className="border-theme-surface-border rounded-xl border border-dashed py-16 text-center">
             <Clock className="text-theme-text-muted mx-auto mb-3 h-12 w-12" />
-            <h3 className="text-theme-text-primary mb-1 text-lg font-medium">
-              {view === 'upcoming' ? 'No upcoming shifts' : 'No past shifts'}
-            </h3>
+            <h3 className="text-theme-text-primary mb-1 text-lg font-medium">No upcoming shifts</h3>
             <p className="text-theme-text-muted mx-auto max-w-sm text-sm">
-              {view === 'upcoming'
-                ? 'You have no shifts coming up. Find one to sign up for on the Open Shifts tab.'
-                : 'Shifts you have worked will appear here.'}
+              You have no shifts coming up. Find one to sign up for on the Open Shifts tab.
             </p>
           </div>
         ) : (
           <div className="space-y-3">
-            {displayList.map((assignment) => {
+            {upcoming.map((assignment) => {
               const shift = assignment.shift;
               const statusColor = ASSIGNMENT_STATUS_COLORS[assignment.status] || ASSIGNMENT_STATUS_COLORS.assigned;
               // A calendar date, not an instant: formatted as written, so a viewer
@@ -617,17 +578,15 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                     the truck. */}
                   <div className="split-row gap-3 sm:items-center">
                     <div className="split-row-main flex items-center gap-3 sm:gap-4">
-                      {view === 'upcoming' &&
-                        assignment.status === AssignmentStatus.ASSIGNED &&
-                        pendingAssigned.length > 1 && (
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(assignment.id)}
-                            onChange={() => toggleSelection(assignment.id)}
-                            className="border-theme-input-border h-4 w-4 shrink-0 rounded text-violet-600 focus:ring-violet-500"
-                            aria-label={`Select shift for ${shiftDay ?? 'unknown date'}`}
-                          />
-                        )}
+                      {assignment.status === AssignmentStatus.ASSIGNED && pendingAssigned.length > 1 && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(assignment.id)}
+                          onChange={() => toggleSelection(assignment.id)}
+                          className="border-theme-input-border h-4 w-4 shrink-0 rounded text-violet-600 focus:ring-violet-500"
+                          aria-label={`Select shift for ${shiftDay ?? 'unknown date'}`}
+                        />
+                      )}
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
                         <Clock className="h-5 w-5 text-violet-500 sm:h-6 sm:w-6" />
                       </div>
@@ -695,40 +654,38 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                       >
                         {assignment.status}
                       </span>
-                      {view === 'upcoming' &&
-                        assignment.status === AssignmentStatus.ASSIGNED &&
-                        confirmingDecline !== assignment.id && (
-                          <>
-                            <button
-                              onClick={() => {
-                                void handleConfirm(assignment.id);
-                              }}
-                              disabled={confirmingId === assignment.id}
-                              className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
-                              title="Confirm you are working this shift"
-                              aria-label={`Confirm shift on ${when}`}
-                            >
-                              {confirmingId === assignment.id ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
-                              ) : (
-                                <Check className="h-5 w-5" />
-                              )}
-                              {/* Same verb as the bulk bar and the status badge —
+                      {assignment.status === AssignmentStatus.ASSIGNED && confirmingDecline !== assignment.id && (
+                        <>
+                          <button
+                            onClick={() => {
+                              void handleConfirm(assignment.id);
+                            }}
+                            disabled={confirmingId === assignment.id}
+                            className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+                            title="Confirm you are working this shift"
+                            aria-label={`Confirm shift on ${when}`}
+                          >
+                            {confirmingId === assignment.id ? (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : (
+                              <Check className="h-5 w-5" />
+                            )}
+                            {/* Same verb as the bulk bar and the status badge —
                                 a third phrasing for one action is the drift
                                 this module already has too much of. */}
-                              <span>Confirm</span>
-                            </button>
-                            <button
-                              onClick={() => setConfirmingDecline(assignment.id)}
-                              className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                              title="Give this shift up so it can be re-filled"
-                              aria-label={`Decline shift on ${when}`}
-                            >
-                              <XCircle className="h-5 w-5" />
-                              <span>Decline</span>
-                            </button>
-                          </>
-                        )}
+                            <span>Confirm</span>
+                          </button>
+                          <button
+                            onClick={() => setConfirmingDecline(assignment.id)}
+                            className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                            title="Give this shift up so it can be re-filled"
+                            aria-label={`Decline shift on ${when}`}
+                          >
+                            <XCircle className="h-5 w-5" />
+                            <span>Decline</span>
+                          </button>
+                        </>
+                      )}
                       {confirmingDecline === assignment.id && (
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-red-500 dark:text-red-400">Decline?</span>
@@ -750,19 +707,17 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
                           </button>
                         </div>
                       )}
-                      {view === 'upcoming' && (
-                        <button
-                          onClick={() => {
-                            void openSwapRequest(assignment);
-                          }}
-                          className="text-theme-text-secondary mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-violet-500/10 hover:text-violet-600"
-                          title="Ask someone to swap shifts with you"
-                          aria-label={`Swap shift on ${when}`}
-                        >
-                          <ArrowLeftRight className="h-5 w-5" />
-                          <span>Swap</span>
-                        </button>
-                      )}
+                      <button
+                        onClick={() => {
+                          void openSwapRequest(assignment);
+                        }}
+                        className="text-theme-text-secondary mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-violet-500/10 hover:text-violet-600"
+                        title="Ask someone to swap shifts with you"
+                        aria-label={`Swap shift on ${when}`}
+                      >
+                        <ArrowLeftRight className="h-5 w-5" />
+                        <span>Swap</span>
+                      </button>
                       {shift && onViewShift && (
                         <button
                           onClick={() => onViewShift(shift)}

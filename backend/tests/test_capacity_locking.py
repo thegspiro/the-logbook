@@ -852,3 +852,85 @@ class TestLegalDraftCap:
 
         source = _source_of(LegalDocumentService.create_draft)
         assert source.index("_assert_under_draft_cap(") < source.index("self.db.add(")
+
+
+class TestChiefOverrideOverlapLocking:
+    """A Chief's override is refused when a live override for the same member
+    already covers part of its dates: a read-then-insert. Two grants sent
+    together (a double-tap, two tabs) both read "no overlap" and both insert,
+    leaving two live overrides over one day, so revoking either looks as though
+    it did nothing (TR-17 pass 14, TR14-1)."""
+
+    def test_the_requirement_row_is_locked_before_the_overlap_read(self):
+        from app.services.requirement_override_service import (
+            RequirementOverrideService,
+        )
+
+        source = _source_of(RequirementOverrideService.grant)
+        assert "with_for_update()" in source, (
+            "grant must lock the requirement row to serialize two grants "
+            "for the same requirement."
+        )
+        assert source.index("with_for_update()") < source.index(
+            "list_overrides("
+        ), "The lock must be taken before the overlap check reads."
+
+    def test_the_overlap_read_is_a_locking_read(self):
+        from app.services.requirement_override_service import (
+            RequirementOverrideService,
+        )
+
+        grant = _source_of(RequirementOverrideService.grant)
+        assert "for_update=True" in grant, (
+            "The overlap check must be a locking read: under REPEATABLE READ "
+            "a plain SELECT answers from the snapshot taken before the lock, "
+            "so the loser of the race still sees no overlap (pitfall #27)."
+        )
+        listing = _source_of(RequirementOverrideService.list_overrides)
+        assert "with_for_update()" in listing
+
+
+class TestTrainingModuleConfigRace:
+    """Two concurrent first-ever reads of a department's training visibility
+    config (e.g. two members opening a training page the moment the org has
+    never configured one) both read the row as missing and both attempt an
+    insert; ``organization_id`` is unique, so the loser's flush raises
+    ``IntegrityError``. Unlike the capacity checks above this isn't a
+    read-then-insert *count*, but the same read-then-insert race shape, and it
+    was unguarded: the loser's raw ``IntegrityError`` surfaced as an unhandled
+    500 on a plain page load (TRX-18 pass 14). The fix mirrors
+    ``SchedulingModuleConfigService._create_row``'s own guard against the
+    identical race on the sibling settings table (pitfall #27)."""
+
+    def test_the_insert_is_wrapped_in_a_savepoint_and_guarded(self):
+        from app.services.training_module_config_service import (
+            TrainingModuleConfigService,
+        )
+
+        source = _source_of(TrainingModuleConfigService.get_config)
+        assert "begin_nested()" in source, (
+            "the insert must run inside a savepoint so the loser's session "
+            "stays usable after the IntegrityError."
+        )
+        assert "except IntegrityError" in source, (
+            "the loser's flush must be caught, not left to surface as an "
+            "unhandled 500."
+        )
+        assert source.index("begin_nested()") < source.index(
+            "except IntegrityError"
+        ), "the savepoint must wrap the insert that can raise."
+
+    def test_the_loser_re_reads_with_a_locking_read(self):
+        from app.services.training_module_config_service import (
+            TrainingModuleConfigService,
+        )
+
+        source = _source_of(TrainingModuleConfigService.get_config)
+        assert "with_for_update()" in source, (
+            "under REPEATABLE READ a plain SELECT after the race would still "
+            "answer from the snapshot taken before it, which is the one that "
+            "found no row — the re-read must lock to see the winner's commit."
+        )
+        assert source.index("except IntegrityError") < source.index(
+            "with_for_update()"
+        ), "the locking re-read must happen in the exception handler, not before."

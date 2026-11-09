@@ -9,6 +9,7 @@ import {
   DEFAULT_DURATION_MINUTES,
   DURATION_STEP_MINUTES,
   DurationStepper,
+  FieldLabel,
   MIN_DURATION_MINUTES,
   Overline,
   RevisionNotice,
@@ -24,12 +25,12 @@ import {
 } from '../components/training/submit';
 import type { ChecklistRow, Receipt } from '../components/training/submit';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { FormField } from '../components/ux/FormField';
+import { useTimezone } from '../hooks/useTimezone';
+import { buildSummary, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { ErrorSummary } from '../components/ux/ErrorSummary';
 import { DraftRestoredNotice } from '../components/ux/DraftRestoredNotice';
 import { useSessionDraft } from '../hooks/useSessionDraft';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
-import { getErrorMessage } from '../utils/errorHandling';
-import { useTimezone } from '../hooks/useTimezone';
+import { FormField } from '../components/ux/FormField';
 import { trainingProgramService, trainingSubmissionService, trainingService } from '../services/api';
 import { blankToNull } from '../utils/formValues';
 import { formatCalendarDate, formatTimeOfDay, getTodayLocalDate } from '../utils/dateFormatting';
@@ -79,8 +80,21 @@ const REQUIRED_BY_DEFAULT: Record<string, boolean> = {
   attachments: false,
 };
 
-const EDITABLE_STATUSES: SubmissionStatus[] = ['draft', 'pending_review', 'revision_requested'];
+type TrainingField =
+  | 'course_name'
+  | 'category_id'
+  | 'completion_date'
+  | 'start_time'
+  | 'instructor'
+  | 'location'
+  | 'description'
+  | 'certification_number'
+  | 'issuing_agency'
+  | 'expiration_date'
+  | 'attachments';
 
+// In page order, so the summary reads top to bottom. The labels are the
+// defaults; a department's own field labels show on the fields themselves.
 /** `max_length` of each text column, from TrainingSubmissionCreate (backend/app/schemas/training_submission.py). */
 const MAX_LENGTH = {
   course_name: 255,
@@ -89,37 +103,6 @@ const MAX_LENGTH = {
   certification_number: 100,
   issuing_agency: 255,
 } as const;
-
-/** What each required field says under itself when it is left empty. */
-const MISSING_MESSAGES: Record<string, string> = {
-  course_name: 'Enter the course or class name.',
-  category_id: 'Choose a category.',
-  completion_date: 'Enter the date of the training.',
-  start_time: 'Enter the start time.',
-  instructor: 'Enter the instructor or agency.',
-  location: 'Enter where it was held.',
-  description: 'Say in a sentence or two what it covered.',
-  certification_number: 'Enter the certificate number.',
-  issuing_agency: 'Enter the agency that issued it.',
-  expiration_date: 'Enter the expiry date, or tick "Does not expire".',
-  attachments: 'Attach the certificate or sign-in sheet.',
-};
-
-/** The submission endpoints' field names, as this form labels them, for a 422. */
-const SERVER_FIELDS: Record<string, ServerFieldSpec> = {
-  course_name: { label: 'Course name', maxLength: MAX_LENGTH.course_name },
-  training_type: { label: 'Training type' },
-  category_id: { label: 'Category' },
-  completion_date: { label: 'Date' },
-  start_time: { label: 'Start time' },
-  hours_completed: { label: 'Length' },
-  instructor: { label: 'Instructor', maxLength: MAX_LENGTH.instructor },
-  location: { label: 'Location', maxLength: MAX_LENGTH.location },
-  description: { label: 'What it covered' },
-  certification_number: { label: 'Certificate number', maxLength: MAX_LENGTH.certification_number },
-  issuing_agency: { label: 'Agency', maxLength: MAX_LENGTH.issuing_agency },
-  expiration_date: { label: 'Expiry date' },
-};
 
 /** The values a new submission keeps in its local draft (useSessionDraft). No PHI is asked for here. */
 interface TrainingDraft {
@@ -138,6 +121,38 @@ interface TrainingDraft {
   expirationDate: string;
   certificationNeverExpires: boolean;
 }
+
+const TRAINING_FIELDS: FieldSpecs<TrainingField> = {
+  course_name: { id: 'course-name', label: 'Course or class name' },
+  category_id: { id: 'training-category', label: 'Category' },
+  completion_date: { id: 'completion-date', label: 'Date' },
+  start_time: { id: 'start-time', label: 'Start time' },
+  instructor: { id: 'instructor', label: 'Instructor' },
+  location: { id: 'location', label: 'Location' },
+  description: { id: 'description', label: 'What it covered' },
+  certification_number: { id: 'certification-number', label: 'Certificate no.' },
+  issuing_agency: { id: 'issuing-agency', label: 'Agency' },
+  expiration_date: { id: 'expiration-date', label: 'Expires' },
+  attachments: { id: 'training-attachment', label: 'Certificate', apiKeys: ['file', 'attachment'] },
+};
+
+const MISSING_MESSAGES: Record<TrainingField, string> = {
+  course_name: 'Enter the course or class name.',
+  category_id: 'Choose a category.',
+  completion_date: 'Enter the date it was completed.',
+  start_time: 'Enter the start time.',
+  instructor: 'Enter the instructor.',
+  location: 'Enter the location.',
+  description: 'Say what it covered.',
+  certification_number: 'Enter the certificate number.',
+  issuing_agency: 'Enter the issuing agency.',
+  expiration_date: 'Enter the expiry date, or tick "Does not expire".',
+  attachments: 'Attach the certificate.',
+};
+
+const DRAFT_MINIMUM_MESSAGE = 'A draft still needs a course name and a date.';
+
+const EDITABLE_STATUSES: SubmissionStatus[] = ['draft', 'pending_review', 'revision_requested'];
 
 /** Placeholder id the API service returns for a submission queued while offline. */
 const OFFLINE_SUBMISSION_ID = 'pending-sync';
@@ -210,16 +225,6 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [error, setError] = useState('');
-  // Fields the server refused on the last save, keyed by field name (forms
-  // review F-2): shown under the field instead of as the API's key in a banner.
-  const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
-  const clearServerError = (name: string) =>
-    setServerErrors((prev) => {
-      if (!(name in prev)) return prev;
-      const next = { ...prev };
-      delete next[name];
-      return next;
-    });
   const [attemptedSave, setAttemptedSave] = useState(false);
   const [showAllSubmissions, setShowAllSubmissions] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -229,6 +234,59 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   // which is the unpredictability this redesign set out to remove.
   const certificationTouched = useRef(false);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  // A server refusal and a message for the form as a whole; a missing value's
+  // message is derived from the live form below, so it clears as it is filled.
+  const trainingErrors = useFieldErrors(TRAINING_FIELDS);
+  const clearTrainingErrors = trainingErrors.clear;
+  const setTrainingError = trainingErrors.setError;
+  // Editing a field answers the server's refusal of it; the missing-value
+  // message is derived from the live value and clears on its own.
+  const edited = (name: TrainingField) => setTrainingError(name, null);
+  // A new submission is drafted in this tab so leaving the page does not lose
+  // it (forms review F-6). An edit is not: the submission is already stored on
+  // the server, and refilling it from a local copy could hide what the
+  // officer sent back.
+  const draft = useSessionDraft<TrainingDraft>({
+    form: 'training-submission',
+    enabled: !isEdit && !receipt,
+    value: {
+      courseName,
+      trainingType,
+      categoryId,
+      completionDate,
+      startTime,
+      durationMinutes,
+      instructor,
+      location,
+      description,
+      hasCertification,
+      certificationNumber,
+      issuingAgency,
+      expirationDate,
+      certificationNeverExpires,
+    },
+    onRestore: (saved) => {
+      setCourseName(saved.courseName);
+      setTrainingType(saved.trainingType);
+      setCategoryId(saved.categoryId);
+      setCompletionDate(saved.completionDate);
+      setStartTime(saved.startTime);
+      setDurationMinutes(Math.min(maxDurationMinutes, Math.max(MIN_DURATION_MINUTES, saved.durationMinutes)));
+      setInstructor(saved.instructor);
+      setLocation(saved.location);
+      setDescription(saved.description);
+      certificationTouched.current = true;
+      setHasCertification(saved.hasCertification);
+      setCertificationNumber(saved.certificationNumber);
+      setIssuingAgency(saved.issuingAgency);
+      setExpirationDate(saved.expirationDate);
+      setCertificationNeverExpires(saved.certificationNeverExpires);
+    },
+  });
+  // The id of a draft this form has just saved. Saving echoes it back in as
+  // `editSubmission`, and the open fields must stay flagged across that
+  // re-seed (owner rule, 2026-11-05), where any other submission opens clean.
+  const draftJustSaved = useRef<string | null>(null);
   const registerField = (name: string) => (el: HTMLElement | null) => {
     fieldRefs.current[name] = el;
   };
@@ -248,11 +306,17 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     setCertificationNumber(editSubmission.certification_number || '');
     setIssuingAgency(editSubmission.issuing_agency || '');
     setExpirationDate(editSubmission.expiration_date || '');
+    // The draft this form just saved comes straight back here. The two
+    // certification choices are the member's and are not stored, so they are
+    // kept as they were rather than re-derived; any other submission opens
+    // with them derived from what was filed.
+    const continuingDraft = draftJustSaved.current === editSubmission.id;
+    draftJustSaved.current = null;
     // Never inferred from an absent date. A submission an officer sent back
     // *because* the expiry was missing would otherwise reopen with "does not
     // expire" already ticked and the field disabled — answering for the member,
     // and letting them resubmit without the date they were asked for.
-    setCertificationNeverExpires(false);
+    if (!continuingDraft) setCertificationNeverExpires(false);
     setStoredAttachments(editSubmission.attachments ?? []);
     // Reported start times are kept now. 09:00 is the fallback only for rows
     // written before the column existed, which genuinely have none.
@@ -269,11 +333,12 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
       editSubmission.expiration_date
     );
     certificationTouched.current = true;
-    setHasCertification(hasCertData || editSubmission.training_type === 'certification');
+    if (!continuingDraft) setHasCertification(hasCertData || editSubmission.training_type === 'certification');
     setReceipt(null);
     setError('');
-    setAttemptedSave(false);
-  }, [editSubmission, maxDurationMinutes, defaultTrainingType]);
+    setAttemptedSave(continuingDraft);
+    clearTrainingErrors();
+  }, [editSubmission, maxDurationMinutes, defaultTrainingType, clearTrainingErrors]);
 
   // Seed the certification block from the training type, until the member says
   // otherwise. `certification` all but always earns one; nothing else does.
@@ -508,65 +573,37 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     setStoredAttachments([]);
     setAttemptedSave(false);
     setError('');
-    setServerErrors({});
-  }, [defaultTrainingType, maxDurationMinutes]);
-
-  // A new submission is drafted in this tab so leaving the page does not lose
-  // it (forms review F-6). An edit is not: the submission is already stored on
-  // the server, and refilling it from a local copy could hide what the
-  // officer sent back.
-  const draft = useSessionDraft<TrainingDraft>({
-    form: 'training-submission',
-    enabled: !isEdit && !receipt,
-    value: {
-      courseName,
-      trainingType,
-      categoryId,
-      completionDate,
-      startTime,
-      durationMinutes,
-      instructor,
-      location,
-      description,
-      hasCertification,
-      certificationNumber,
-      issuingAgency,
-      expirationDate,
-      certificationNeverExpires,
-    },
-    onRestore: (saved) => {
-      setCourseName(saved.courseName);
-      setTrainingType(saved.trainingType);
-      setCategoryId(saved.categoryId);
-      setCompletionDate(saved.completionDate);
-      setStartTime(saved.startTime);
-      setDurationMinutes(Math.min(maxDurationMinutes, Math.max(MIN_DURATION_MINUTES, saved.durationMinutes)));
-      setInstructor(saved.instructor);
-      setLocation(saved.location);
-      setDescription(saved.description);
-      certificationTouched.current = true;
-      setHasCertification(saved.hasCertification);
-      setCertificationNumber(saved.certificationNumber);
-      setIssuingAgency(saved.issuingAgency);
-      setExpirationDate(saved.expirationDate);
-      setCertificationNeverExpires(saved.certificationNeverExpires);
-    },
-  });
+    clearTrainingErrors();
+  }, [defaultTrainingType, maxDurationMinutes, clearTrainingErrors]);
 
   const save = async (options: { asDraft: boolean }) => {
     setError('');
-    setServerErrors({});
     // A draft is a half-finished note, so only the two columns the API cannot
     // store without are asked for; a real submission needs everything.
+    // Only the form-level message is cleared here. A field's server refusal
+    // stands until that field is edited or a request is actually sent: the
+    // draft-minimum return below sends nothing that could settle it.
+    trainingErrors.setFormError(null);
+    // Owner rule (2026-11-05): a draft saves with fields still open, which stay
+    // flagged; only submitting is held back by one. A draft does still need
+    // the two NOT NULL columns, by the owner's choice of the same day, not to
+    // make them nullable.
     const missing = options.asDraft
       ? [...(courseName.trim() ? [] : ['course_name']), ...(completionDate ? [] : ['completion_date'])]
       : findMissingFields();
     setAttemptedSave(true);
     if (missing.length > 0) {
-      if (options.asDraft) setError('A draft still needs a course name and a date.');
+      if (options.asDraft) trainingErrors.setFormError(DRAFT_MINIMUM_MESSAGE);
       fieldRefs.current[missing[0] ?? '']?.focus();
       return;
     }
+    trainingErrors.setErrors({});
+    // Counted before the save resets anything, for the draft's toast.
+    const stillOpen = options.asDraft ? findMissingFields().length : 0;
+    const draftRemainder =
+      stillOpen > 0
+        ? ` ${stillOpen} ${stillOpen === 1 ? 'field still needs' : 'fields still need'} filling in before you submit.`
+        : '';
 
     const setBusy = options.asDraft ? setIsSavingDraft : setIsSubmitting;
     setBusy(true);
@@ -583,10 +620,11 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         await trainingSubmissionService.updateSubmission(editSubmission.id, buildUpdatePayload());
         const uploaded = await uploadAttachmentIfAny(editSubmission.id);
         if (options.asDraft) {
-          toast.success('Draft saved');
+          toast.success(`Draft saved.${draftRemainder}`);
           // Stay on the draft: saving again has to update this one, not file
           // a second copy of the same class. Carry the upload's own metadata,
           // since the submission in hand predates it.
+          draftJustSaved.current = editSubmission.id;
           onSaved(uploaded ? { ...editSubmission, attachments: uploaded.attachments } : editSubmission);
         } else if (editSubmission.status === 'draft') {
           const submitted = await trainingSubmissionService.submitDraft(editSubmission.id);
@@ -612,10 +650,11 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         // Stored on the server now, so the local copy has done its job.
         draft.clear();
         if (options.asDraft) {
-          toast.success('Draft saved. It stays in your list until you submit it.');
+          toast.success(`Draft saved. It stays in your list until you submit it.${draftRemainder}`);
           // A queued offline create has no server id yet, so there is nothing
           // to keep editing — later saves would PATCH `/pending-sync`.
           const savedDraft = uploaded ? { ...created, attachments: uploaded.attachments } : created;
+          if (!queuedOffline) draftJustSaved.current = savedDraft.id;
           onSaved(queuedOffline ? undefined : savedDraft);
         } else {
           setReceipt(buildReceipt(attachedName ?? uploaded?.name ?? null, created.status === 'approved'));
@@ -624,15 +663,9 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         }
       }
     } catch (err: unknown) {
-      const mapped = mapServerFieldErrors(err, SERVER_FIELDS);
-      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
-        setServerErrors(mapped.fieldErrors as Record<string, string>);
-        setError(mapped.unmatched.join(' '));
-        const first = Object.keys(mapped.fieldErrors)[0];
-        if (first) fieldRefs.current[first]?.focus();
-      } else {
-        setError(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to submit training'));
-      }
+      // A refusal lands on the field it names. Reading `detail` as a string
+      // turned every 422, whose detail is a list, into "Failed to submit".
+      trainingErrors.focusFirst(trainingErrors.setFromApiError(err, 'Could not save your training. Try again.'));
     } finally {
       setBusy(false);
     }
@@ -641,10 +674,24 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   // Marks are recomputed from the current values, so a field stops being red
   // the moment the member fills it in rather than at the next submit attempt.
   const missingNow = attemptedSave ? findMissingFields() : [];
-  const fieldError = (name: string): string | undefined =>
-    serverErrors[name] ?? (missingNow.includes(name) ? MISSING_MESSAGES[name] : undefined);
-  const invalidClass = (name: string) =>
-    fieldError(name) ? 'border-red-600 focus:border-red-600 dark:border-red-500' : '';
+  const fieldErrors: FieldErrors<TrainingField> = {
+    ...trainingErrors.errors,
+    ...Object.fromEntries(missingNow.map((name) => [name, MISSING_MESSAGES[name as TrainingField]])),
+  };
+  // Switched off, the certification block is not drawn, so its fields must not
+  // report: a summary link would point at a control that is not there.
+  if (!hasCertification) {
+    delete fieldErrors.certification_number;
+    delete fieldErrors.issuing_agency;
+    delete fieldErrors.expiration_date;
+  }
+  // The summary names each field the way the field itself is labelled, which
+  // a department can change in its submission settings.
+  const errorSummary = buildSummary(TRAINING_FIELDS, fieldErrors, (name) =>
+    fieldLabel(name, TRAINING_FIELDS[name].label)
+  );
+  const invalidClass = (name: TrainingField) =>
+    fieldErrors[name] ? 'border-red-600 focus:border-red-600 dark:border-red-500' : '';
 
   if (receipt) {
     return (
@@ -710,6 +757,12 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           </div>
         )}
 
+        {error && (
+          <div className="alert-danger text-theme-alert-danger-text text-sm" role="alert">
+            {error}
+          </div>
+        )}
+
         {draft.restored && (
           <DraftRestoredNotice
             onDiscard={() => {
@@ -719,20 +772,16 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           />
         )}
 
-        {error && (
-          <div className="alert-danger text-theme-alert-danger-text text-sm" role="alert">
-            {error}
-          </div>
-        )}
+        <ErrorSummary items={errorSummary} formError={trainingErrors.formError} />
 
         {/* ---------- The class ---------- */}
         <SectionCard title="The Class">
           <div>
             <FormField
-              id="course-name"
+              id={TRAINING_FIELDS.course_name.id}
               label={fieldLabel('course_name', 'Course or class name')}
               required
-              error={fieldError('course_name')}
+              error={fieldErrors.course_name}
               maxLength={MAX_LENGTH.course_name}
               count={courseName.length}
             >
@@ -744,8 +793,8 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                   list="dept-requirement-suggestions"
                   value={courseName}
                   onChange={(e) => {
+                    edited('course_name');
                     setCourseName(e.target.value);
-                    clearServerError('course_name');
                   }}
                   placeholder="Start typing — suggestions appear"
                   className={`form-input ${invalidClass('course_name')}`}
@@ -761,58 +810,53 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField
-              id="training-type"
-              label={fieldLabel('training_type', 'Training type')}
-              required={isFieldRequired('training_type')}
-              error={serverErrors.training_type}
-            >
-              {(field) => (
-                <select
-                  {...field}
-                  value={trainingType}
-                  onChange={(e) => {
-                    setTrainingType(e.target.value as TrainingType);
-                    clearServerError('training_type');
-                  }}
-                  className="form-input"
-                >
-                  {allowedTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </FormField>
+            <div>
+              <FieldLabel htmlFor="training-type" required={isFieldRequired('training_type')}>
+                {fieldLabel('training_type', 'Training type')}
+              </FieldLabel>
+              <select
+                id="training-type"
+                value={trainingType}
+                onChange={(e) => setTrainingType(e.target.value as TrainingType)}
+                className="form-input"
+              >
+                {allowedTypes.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             {showCategory && (
-              <FormField
-                id="training-category"
-                label={fieldLabel('category_id', 'Category')}
-                required={isFieldRequired('category_id')}
-                error={fieldError('category_id')}
-              >
-                {(field) => (
-                  <select
-                    {...field}
-                    ref={registerField('category_id')}
-                    value={categoryId}
-                    onChange={(e) => {
-                      setCategoryId(e.target.value);
-                      clearServerError('category_id');
-                    }}
-                    className={`form-input ${invalidClass('category_id')}`}
-                  >
-                    <option value="">Select...</option>
-                    {parentCategories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </FormField>
+              <div>
+                <FormField
+                  id={TRAINING_FIELDS.category_id.id}
+                  label={fieldLabel('category_id', 'Category')}
+                  required={isFieldRequired('category_id')}
+                  error={fieldErrors.category_id}
+                >
+                  {(field) => (
+                    <select
+                      {...field}
+                      ref={registerField('category_id')}
+                      value={categoryId}
+                      onChange={(e) => {
+                        edited('category_id');
+                        setCategoryId(e.target.value);
+                      }}
+                      className={`form-input ${invalidClass('category_id')}`}
+                    >
+                      <option value="">Select...</option>
+                      {parentCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </FormField>
+              </div>
             )}
           </div>
         </SectionCard>
@@ -820,43 +864,47 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         {/* ---------- When ---------- */}
         <SectionCard title="When">
           <div className="grid grid-cols-2 gap-3">
-            <FormField
-              id="completion-date"
-              label={fieldLabel('completion_date', 'Date')}
-              required
-              error={fieldError('completion_date')}
-            >
-              {(field) => (
-                <input
-                  {...field}
-                  ref={registerField('completion_date')}
-                  type="date"
-                  value={completionDate}
-                  max={getTodayLocalDate(timezone)}
-                  onChange={(e) => {
-                    setCompletionDate(e.target.value);
-                    clearServerError('completion_date');
-                  }}
-                  className={`form-input font-mono ${invalidClass('completion_date')}`}
-                />
-              )}
-            </FormField>
-            <FormField id="start-time" label="Start time" required error={fieldError('start_time')}>
-              {(field) => (
-                <input
-                  {...field}
-                  ref={registerField('start_time')}
-                  type="time"
-                  step={DURATION_STEP_MINUTES * 60}
-                  value={startTime}
-                  onChange={(e) => {
-                    setStartTime(e.target.value);
-                    clearServerError('start_time');
-                  }}
-                  className={`form-input font-mono ${invalidClass('start_time')}`}
-                />
-              )}
-            </FormField>
+            <div>
+              <FormField
+                id={TRAINING_FIELDS.completion_date.id}
+                label={fieldLabel('completion_date', 'Date')}
+                required
+                error={fieldErrors.completion_date}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    ref={registerField('completion_date')}
+                    type="date"
+                    value={completionDate}
+                    max={getTodayLocalDate(timezone)}
+                    onChange={(e) => {
+                      edited('completion_date');
+                      setCompletionDate(e.target.value);
+                    }}
+                    className={`form-input font-mono ${invalidClass('completion_date')}`}
+                  />
+                )}
+              </FormField>
+            </div>
+            <div>
+              <FormField id={TRAINING_FIELDS.start_time.id} label="Start time" required error={fieldErrors.start_time}>
+                {(field) => (
+                  <input
+                    {...field}
+                    ref={registerField('start_time')}
+                    type="time"
+                    step={DURATION_STEP_MINUTES * 60}
+                    value={startTime}
+                    onChange={(e) => {
+                      edited('start_time');
+                      setStartTime(e.target.value);
+                    }}
+                    className={`form-input font-mono ${invalidClass('start_time')}`}
+                  />
+                )}
+              </FormField>
+            </div>
           </div>
 
           <div>
@@ -875,11 +923,6 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
               />
             </div>
             <p className="text-theme-text-muted mt-2 text-xs">{endNote}</p>
-            {serverErrors.hours_completed && (
-              <p className="mt-1 text-sm text-red-700 dark:text-red-400" role="alert">
-                {serverErrors.hours_completed}
-              </p>
-            )}
             {atMaxDuration && (
               <p className="text-theme-text-muted mt-1 text-xs">
                 {formatDuration(maxDurationMinutes)} is the longest one entry can run
@@ -893,82 +936,88 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         <SectionCard title="Details">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {isFieldVisible('instructor') && (
-              <FormField
-                id="instructor"
-                label={fieldLabel('instructor', 'Instructor')}
-                required={isFieldRequired('instructor')}
-                optional={!isFieldRequired('instructor')}
-                error={fieldError('instructor')}
-                maxLength={MAX_LENGTH.instructor}
-                count={instructor.length}
-              >
-                {(field) => (
-                  <input
-                    {...field}
-                    ref={registerField('instructor')}
-                    type="text"
-                    value={instructor}
-                    onChange={(e) => {
-                      setInstructor(e.target.value);
-                      clearServerError('instructor');
-                    }}
-                    placeholder="Name or agency"
-                    className={`form-input ${invalidClass('instructor')}`}
-                  />
-                )}
-              </FormField>
+              <div>
+                <FormField
+                  id={TRAINING_FIELDS.instructor.id}
+                  label={fieldLabel('instructor', 'Instructor')}
+                  required={isFieldRequired('instructor')}
+                  optional={!isFieldRequired('instructor')}
+                  error={fieldErrors.instructor}
+                  maxLength={MAX_LENGTH.instructor}
+                  count={instructor.length}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      ref={registerField('instructor')}
+                      type="text"
+                      value={instructor}
+                      onChange={(e) => {
+                        edited('instructor');
+                        setInstructor(e.target.value);
+                      }}
+                      placeholder="Name or agency"
+                      className={`form-input ${invalidClass('instructor')}`}
+                    />
+                  )}
+                </FormField>
+              </div>
             )}
 
             {isFieldVisible('location') && (
-              <FormField
-                id="location"
-                label={fieldLabel('location', 'Location')}
-                required={isFieldRequired('location')}
-                optional={!isFieldRequired('location')}
-                error={fieldError('location')}
-                maxLength={MAX_LENGTH.location}
-                count={location.length}
-              >
-                {(field) => (
-                  <input
-                    {...field}
-                    ref={registerField('location')}
-                    type="text"
-                    value={location}
-                    onChange={(e) => {
-                      setLocation(e.target.value);
-                      clearServerError('location');
-                    }}
-                    placeholder="Facility or address"
-                    className={`form-input ${invalidClass('location')}`}
-                  />
-                )}
-              </FormField>
+              <div>
+                <FormField
+                  id={TRAINING_FIELDS.location.id}
+                  label={fieldLabel('location', 'Location')}
+                  required={isFieldRequired('location')}
+                  optional={!isFieldRequired('location')}
+                  error={fieldErrors.location}
+                  maxLength={MAX_LENGTH.location}
+                  count={location.length}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      ref={registerField('location')}
+                      type="text"
+                      value={location}
+                      onChange={(e) => {
+                        edited('location');
+                        setLocation(e.target.value);
+                      }}
+                      placeholder="Facility or address"
+                      className={`form-input ${invalidClass('location')}`}
+                    />
+                  )}
+                </FormField>
+              </div>
             )}
           </div>
 
           {isFieldVisible('description') && (
-            <FormField
-              id="description"
-              label={fieldLabel('description', 'What it covered')}
-              required={isFieldRequired('description')}
-              error={fieldError('description')}
-            >
-              {(field) => (
-                <textarea
-                  {...field}
-                  ref={registerField('description')}
-                  rows={3}
-                  value={description}
-                  onChange={(e) => {
-                    setDescription(e.target.value);
-                    clearServerError('description');
-                  }}
-                  placeholder="A sentence or two is enough."
-                  className={`form-input resize-y ${invalidClass('description')}`}
-                />
-              )}
-            </FormField>
+            <div>
+              <FormField
+                id={TRAINING_FIELDS.description.id}
+                label={fieldLabel('description', 'What it covered')}
+                required={isFieldRequired('description')}
+                error={fieldErrors.description}
+              >
+                {(field) => (
+                  <textarea
+                    {...field}
+                    ref={registerField('description')}
+                    rows={3}
+                    value={description}
+                    onChange={(e) => {
+                      edited('description');
+                      setDescription(e.target.value);
+                    }}
+                    placeholder="A sentence or two is enough."
+                    className={`form-input resize-y ${invalidClass('description')}`}
+                  />
+                )}
+              </FormField>
+            </div>
           )}
 
           <label className="mobile-touch-target flex cursor-pointer items-center gap-2.5">
@@ -987,63 +1036,67 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           {hasCertification && (
             <div className="alert-info animate-scale-in grid grid-cols-1 gap-3 sm:grid-cols-3">
               {isFieldVisible('certification_number') && (
-                <FormField
-                  id="certification-number"
-                  label={fieldLabel('certification_number', 'Certificate no.')}
-                  required={isFieldRequired('certification_number')}
-                  error={fieldError('certification_number')}
-                  maxLength={MAX_LENGTH.certification_number}
-                  count={certificationNumber.length}
-                >
-                  {(field) => (
-                    <input
-                      {...field}
-                      ref={registerField('certification_number')}
-                      type="text"
-                      value={certificationNumber}
-                      onChange={(e) => {
-                        setCertificationNumber(e.target.value);
-                        clearServerError('certification_number');
-                      }}
-                      className={`form-input font-mono ${invalidClass('certification_number')}`}
-                    />
-                  )}
-                </FormField>
+                <div>
+                  <FormField
+                    id={TRAINING_FIELDS.certification_number.id}
+                    label={fieldLabel('certification_number', 'Certificate no.')}
+                    required={isFieldRequired('certification_number')}
+                    error={fieldErrors.certification_number}
+                    maxLength={MAX_LENGTH.certification_number}
+                    count={certificationNumber.length}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        ref={registerField('certification_number')}
+                        type="text"
+                        value={certificationNumber}
+                        onChange={(e) => {
+                          edited('certification_number');
+                          setCertificationNumber(e.target.value);
+                        }}
+                        className={`form-input font-mono ${invalidClass('certification_number')}`}
+                      />
+                    )}
+                  </FormField>
+                </div>
               )}
               {isFieldVisible('issuing_agency') && (
-                <FormField
-                  id="issuing-agency"
-                  label={fieldLabel('issuing_agency', 'Agency')}
-                  required={isFieldRequired('issuing_agency')}
-                  optional={!isFieldRequired('issuing_agency')}
-                  error={fieldError('issuing_agency')}
-                  maxLength={MAX_LENGTH.issuing_agency}
-                  count={issuingAgency.length}
-                >
-                  {(field) => (
-                    <input
-                      {...field}
-                      ref={registerField('issuing_agency')}
-                      type="text"
-                      value={issuingAgency}
-                      onChange={(e) => {
-                        setIssuingAgency(e.target.value);
-                        clearServerError('issuing_agency');
-                      }}
-                      placeholder="VDFP, NREMT..."
-                      className={`form-input ${invalidClass('issuing_agency')}`}
-                    />
-                  )}
-                </FormField>
+                <div>
+                  <FormField
+                    id={TRAINING_FIELDS.issuing_agency.id}
+                    label={fieldLabel('issuing_agency', 'Agency')}
+                    required={isFieldRequired('issuing_agency')}
+                    optional={!isFieldRequired('issuing_agency')}
+                    error={fieldErrors.issuing_agency}
+                    maxLength={MAX_LENGTH.issuing_agency}
+                    count={issuingAgency.length}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        ref={registerField('issuing_agency')}
+                        type="text"
+                        value={issuingAgency}
+                        onChange={(e) => {
+                          edited('issuing_agency');
+                          setIssuingAgency(e.target.value);
+                        }}
+                        placeholder="VDFP, NREMT..."
+                        className={`form-input ${invalidClass('issuing_agency')}`}
+                      />
+                    )}
+                  </FormField>
+                </div>
               )}
               {isFieldVisible('expiration_date') && (
                 <div>
                   <FormField
-                    id="expiration-date"
+                    id={TRAINING_FIELDS.expiration_date.id}
                     label={fieldLabel('expiration_date', 'Expires')}
                     required={isFieldRequired('expiration_date') && !certificationNeverExpires}
                     optional={!isFieldRequired('expiration_date') && !certificationNeverExpires}
-                    error={fieldError('expiration_date')}
+                    error={fieldErrors.expiration_date}
                   >
                     {(field) => (
                       <input
@@ -1053,8 +1106,8 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                         value={certificationNeverExpires ? '' : expirationDate}
                         disabled={certificationNeverExpires}
                         onChange={(e) => {
+                          edited('expiration_date');
                           setExpirationDate(e.target.value);
-                          clearServerError('expiration_date');
                         }}
                         className={`form-input font-mono disabled:opacity-50 ${invalidClass('expiration_date')}`}
                       />
@@ -1228,10 +1281,11 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           <AttachmentField
             id="training-attachment"
             file={attachment}
-            error={attachmentError}
+            error={attachmentError || fieldErrors.attachments || ''}
             required={attachmentRequired}
-            invalid={missingNow.includes('attachments')}
+            invalid={!!fieldErrors.attachments}
             onSelect={(file) => {
+              edited('attachments');
               const rejection = file ? attachmentRejection(file) : null;
               setAttachmentError(rejection ?? '');
               setAttachment(rejection ? null : file);

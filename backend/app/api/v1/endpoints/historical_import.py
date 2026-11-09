@@ -45,6 +45,12 @@ from app.schemas.historical_import import (
     MemberMappingsUpdate,
     OpenBatchesDiscarded,
     ShiftBatchesCreated,
+    StaffingDecisionsUpdate,
+    StaffingFileKind,
+    StaffingMappingList,
+    StaffingMappingUpdate,
+    StaffingMappingView,
+    StaffingPreview,
     SuggestionsAccepted,
     TrainingPreview,
     TrainingSettingsUpdate,
@@ -56,6 +62,10 @@ from app.services.historical_import_service import (
     HistoricalImportService,
     batch_view,
     summary_view,
+)
+from app.services.historical_staffing_service import (
+    HistoricalStaffingService,
+    file_audit_data,
 )
 from app.services.shift_history_import_service import decode_upload
 from app.services.upload_scanning import reject_if_malicious
@@ -558,3 +568,204 @@ async def commit_training(
         return await service.training_preview(await service.get(org, str(import_id)))
     except Exception as exc:
         raise _http_error(exc)
+
+
+# ---------------------------------------------------------------------------
+# Staffing roster
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{import_id}/staffing", response_model=StaffingPreview)
+async def staffing_preview(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """The staffing files, how their columns are read, and how they join."""
+    try:
+        return await HistoricalStaffingService(db).preview(
+            str(current_user.organization_id), str(import_id)
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.post("/{import_id}/staffing/{kind}", response_model=StaffingPreview)
+async def upload_staffing_file(
+    import_id: UUID,
+    kind: StaffingFileKind,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Store the seats or events file, replacing one of that kind. Nothing is
+    written anywhere else."""
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only CSV files are accepted")
+    try:
+        contents = await read_upload_limited(file, MAX_HISTORICAL_CSV_BYTES)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="CSV file exceeds the 40MB limit.",
+        )
+    await reject_if_malicious(
+        db,
+        contents,
+        upload_kind="historical_import",
+        detected_mime=None,
+        user=current_user,
+    )
+    org = str(current_user.organization_id)
+    service = HistoricalStaffingService(db)
+    try:
+        stored = await service.upload(
+            org,
+            str(import_id),
+            kind,
+            file.filename,
+            decode_upload(contents),
+            str(current_user.id),
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+    await log_audit_event(
+        db=db,
+        event_type="historical_import_staffing_uploaded",
+        event_category="integrations",
+        severity="INFO",
+        event_data=file_audit_data(stored),
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    try:
+        return await service.preview(org, str(import_id))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.patch("/{import_id}/staffing/{kind}", response_model=StaffingPreview)
+async def update_staffing_mapping(
+    import_id: UUID,
+    kind: StaffingFileKind,
+    payload: StaffingMappingUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Replace which column feeds which field of one staffing file."""
+    org = str(current_user.organization_id)
+    service = HistoricalStaffingService(db)
+    try:
+        await service.update_mapping(org, str(import_id), kind, payload.column_mapping)
+        return await service.preview(org, str(import_id))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.delete("/{import_id}/staffing/{kind}", response_model=StaffingPreview)
+async def remove_staffing_file(
+    import_id: UUID,
+    kind: StaffingFileKind,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Delete one staffing file and its rows."""
+    org = str(current_user.organization_id)
+    service = HistoricalStaffingService(db)
+    try:
+        removed = await service.remove(org, str(import_id), kind)
+    except Exception as exc:
+        raise _http_error(exc)
+    if removed:
+        await log_audit_event(
+            db=db,
+            event_type="historical_import_staffing_removed",
+            event_category="integrations",
+            severity="INFO",
+            event_data={
+                "organization_id": org,
+                "import_id": str(import_id),
+                "kind": kind,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+    try:
+        return await service.preview(org, str(import_id))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.get(
+    "/{import_id}/staffing/mapping/{list_name}", response_model=StaffingMappingView
+)
+async def staffing_mapping(
+    import_id: UUID,
+    list_name: StaffingMappingList,
+    search: str = Query("", max_length=100),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """One page of activities, shift seat titles or event titles, with what
+    each is suggested and decided to be."""
+    try:
+        return await HistoricalStaffingService(db).mapping_view(
+            str(current_user.organization_id),
+            str(import_id),
+            list_name,
+            search=search,
+            offset=offset,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.patch(
+    "/{import_id}/staffing/mapping/{list_name}", response_model=StaffingMappingView
+)
+async def update_staffing_decisions(
+    import_id: UUID,
+    list_name: StaffingMappingList,
+    payload: StaffingDecisionsUpdate,
+    search: str = Query("", max_length=100),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Decide what activities are or what seat titles mean. A title may only
+    take one of the department's own seats or outreach roles."""
+    org = str(current_user.organization_id)
+    service = HistoricalStaffingService(db)
+    try:
+        await service.update_decisions(
+            org, str(import_id), list_name, payload.decisions
+        )
+        return await service.mapping_view(
+            org, str(import_id), list_name, search=search, offset=offset, limit=limit
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.post(
+    "/{import_id}/staffing/mapping/{list_name}/accept-suggestions",
+    response_model=SuggestionsAccepted,
+)
+async def accept_staffing_suggestions(
+    import_id: UUID,
+    list_name: StaffingMappingList,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Take every suggestion in one list that has no decision yet."""
+    try:
+        accepted = await HistoricalStaffingService(db).accept_suggestions(
+            str(current_user.organization_id), str(import_id), list_name
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+    return {"mapped": accepted}

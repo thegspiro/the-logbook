@@ -2278,6 +2278,56 @@ describe('EventDetailPage', () => {
     });
   });
 
+  // Workflow review W80-8: once check-in has closed, the officer can record
+  // one named member with their times instead of adding the whole roster.
+  describe('Recording a member after check-in closes', () => {
+    beforeEach(() => {
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      vi.mocked(eventService.getEligibleMembers).mockReset();
+      vi.mocked(eventService.getEligibleMembers).mockResolvedValue([
+        { id: 'm-1', first_name: 'Blair', last_name: 'Carter', email: null },
+      ]);
+      vi.mocked(eventService.getEvent).mockReset();
+    });
+
+    const openCheckIn = async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: 'Check In' }));
+      await waitFor(() => expect(eventService.getEligibleMembers).toHaveBeenCalledWith('evt-1'));
+    };
+
+    it('offers Add a member once check-in has closed', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        check_in_closes_at: '2020-01-01T00:00:00Z',
+      });
+
+      await openCheckIn();
+
+      expect(await screen.findByRole('heading', { name: 'Add a member' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Blair Carter' })).toBeInTheDocument();
+    });
+
+    it('does not offer it while check-in is open', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        check_in_closes_at: '2999-01-01T00:00:00Z',
+      });
+
+      await openCheckIn();
+
+      expect(await screen.findByRole('button', { name: /Add All Eligible as Going/ })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Add a member' })).not.toBeInTheDocument();
+    });
+  });
+
   describe('Add all eligible attendees', () => {
     // BulkAddAttendees.user_ids is capped at 200; one request carrying every
     // eligible id 422'd for any roster above that.

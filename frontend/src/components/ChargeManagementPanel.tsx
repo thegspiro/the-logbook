@@ -186,8 +186,8 @@ const ChargeManagementPanel: React.FC = () => {
             ))}
           </div>
           {/* Desktop table */}
-          <div className="card hidden overflow-hidden overflow-x-auto sm:block">
-            <table className="w-full text-sm">
+          <div className="card rwd-table-container hidden overflow-hidden overflow-x-auto sm:block">
+            <table className="rwd-table rwd-table-wide w-full text-sm">
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface-secondary border-b">
                   <th scope="col" className="text-theme-text-muted p-3 text-left text-xs font-medium uppercase">
@@ -219,13 +219,19 @@ const ChargeManagementPanel: React.FC = () => {
               <tbody>
                 {items.map((item) => (
                   <tr key={item.issuance_id} className="border-theme-surface-border border-b">
-                    <td className="text-theme-text-primary p-3 font-medium">{item.item_name}</td>
-                    <td className="text-theme-text-secondary p-3">{item.user_name}</td>
-                    <td className="text-theme-text-secondary p-3 text-center">{item.quantity_issued}</td>
-                    <td className="text-theme-text-secondary p-3 capitalize">
-                      {item.return_condition?.replace('_', ' ') || '--'}
+                    <td data-label="Item" className="text-theme-text-primary p-3 font-medium">
+                      {item.item_name}
                     </td>
-                    <td className="text-theme-text-primary p-3 text-right font-medium">
+                    <td data-label="Member" className="text-theme-text-secondary p-3">
+                      {item.user_name}
+                    </td>
+                    <td data-label="Qty" className="text-theme-text-secondary p-3 text-center">
+                      {item.quantity_issued}
+                    </td>
+                    <td data-label="Condition" className="text-theme-text-secondary p-3 capitalize">
+                      {item.return_condition?.replace(/_/g, ' ') || '--'}
+                    </td>
+                    <td data-label="Amount" className="text-theme-text-primary p-3 text-right font-medium">
                       {formatCurrency(
                         item.charge_amount ??
                           (item.unit_cost_at_issuance
@@ -233,15 +239,17 @@ const ChargeManagementPanel: React.FC = () => {
                             : null)
                       )}
                     </td>
-                    <td className="p-3 text-center">
+                    <td data-label="Status" className="p-3 text-center">
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${CHARGE_STATUS_BADGES[item.charge_status] ?? ''}`}
                       >
                         {item.charge_status}
                       </span>
                     </td>
-                    <td className="text-theme-text-muted p-3 text-xs">{formatDate(item.issued_at, tz)}</td>
-                    <td className="p-3 text-center">
+                    <td data-label="Date" className="text-theme-text-muted p-3 text-xs">
+                      {formatDate(item.issued_at, tz)}
+                    </td>
+                    <td data-label="Actions" className="p-3 text-center">
                       {item.charge_status === 'pending' && (
                         <div className="flex items-center justify-center gap-1.5">
                           <button
@@ -305,7 +313,7 @@ const ChargeManagementPanel: React.FC = () => {
                     </p>
                     {actionModal.item.return_condition && (
                       <p className="text-theme-text-muted mt-1 text-xs capitalize">
-                        Returned in {actionModal.item.return_condition.replace('_', ' ')} condition
+                        Returned in {actionModal.item.return_condition.replace(/_/g, ' ')} condition
                       </p>
                     )}
                   </div>

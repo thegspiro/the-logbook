@@ -23,6 +23,8 @@
  *     submission, an expense report, a new member's details, a shift report
  *   - saved department-store carts (localStorage): what a member meant to
  *     order, including any name they asked to have embroidered
+ *   - an unfinished training-program wizard (localStorage): the program an
+ *     officer was building, so the next person cannot pick it up and create it
  *
  * Neither was cleared by logout, which cleared only the session flag, the
  * temporary access token, and the in-memory API cache.
@@ -41,6 +43,7 @@ import { clearAllGenericQueued } from './genericOfflineQueue';
 import { clearAllEquipmentCheckDrafts } from './equipmentCheckDrafts';
 import { purgeSkillsStores, releaseHeldSkillsEntries } from './skillsTestOfflineStore';
 import { clearAllSavedCarts } from '../modules/storefront/utils/savedCart';
+import { clearAllProgramWizardDrafts } from './programWizardDraft';
 
 export interface PurgeResult {
   /** Shift-report and equipment-check drafts removed from device storage. */
@@ -155,6 +158,9 @@ export async function purgeLocalMemberData(options: PurgeOptions = {}): Promise<
   // Not counted in the result: an unplaced cart is not work the member would
   // be warned about losing, and the store says nothing of it at sign-in.
   clearAllSavedCarts();
+  // Uncounted for the same reason: a half-built program definition is the
+  // signing-out officer's, and the sign-in screen says nothing of it.
+  clearAllProgramWizardDrafts();
 
   // A mounted form can have an API request in flight when termination starts,
   // and the member stays signed in until this purge settles, so a keystroke

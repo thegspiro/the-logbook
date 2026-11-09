@@ -52,6 +52,9 @@ vi.mock('../services/api', () => ({
         fundOverspendMode: 'warn',
       }),
   },
+  // A draft's route preview asks for its chain after a debounce; a test that
+  // outlives it would otherwise call an export this mock never defined.
+  approvalChainService: { routePreview: () => Promise.reject(new Error('not needed')) },
 }));
 
 import PurchaseRequestsPage from './PurchaseRequestsPage';

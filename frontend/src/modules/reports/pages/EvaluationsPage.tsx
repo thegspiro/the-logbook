@@ -249,7 +249,7 @@ const EvaluationsPage: React.FC = () => {
                 {canManage && (
                   <button
                     type="button"
-                    className="btn-secondary inline-flex w-full items-center justify-center gap-2 text-sm sm:w-auto"
+                    className="btn-secondary inline-flex items-center gap-2 text-sm"
                     onClick={() => setPeriodForm(EMPTY_PERIOD)}
                   >
                     <CalendarRange className="h-4 w-4" aria-hidden="true" />
@@ -259,7 +259,7 @@ const EvaluationsPage: React.FC = () => {
                 {canConfigure && (
                   <button
                     type="button"
-                    className="btn-primary inline-flex w-full items-center justify-center gap-2 text-sm sm:w-auto"
+                    className="btn-primary inline-flex items-center gap-2 text-sm"
                     onClick={() => setTemplateForm(EMPTY_TEMPLATE)}
                   >
                     <Plus className="h-4 w-4" aria-hidden="true" />
@@ -278,8 +278,6 @@ const EvaluationsPage: React.FC = () => {
             canConfigure={canConfigure}
             canManage={canManage}
             canOpenConductList={canOpenConductList}
-            onNewTemplate={() => setTemplateForm(EMPTY_TEMPLATE)}
-            onNewPeriod={() => setPeriodForm(EMPTY_PERIOD)}
           />
         )}
 

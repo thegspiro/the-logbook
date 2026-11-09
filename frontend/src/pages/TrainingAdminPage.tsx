@@ -49,6 +49,7 @@ const ManualEntrySettingsPanel = lazyWithRetry(() => import('./training/ManualEn
 const PracticalSkillsSettingsPanel = lazyWithRetry(() => import('./training/PracticalSkillsSettingsPanel'));
 const ShiftEvaluationSettingsPanel = lazyWithRetry(() => import('./training/ShiftEvaluationSettingsPanel'));
 const ComplianceSettingsPanel = lazyWithRetry(() => import('./training/ComplianceSettingsPanel'));
+const RequirementsLinkPanel = lazyWithRetry(() => import('./training/RequirementsLinkPanel'));
 const SkillEvaluationsTab = lazyWithRetry(() => import('./training/SkillEvaluationsTab'));
 const KnowledgeTestsTab = lazyWithRetry(() => import('./training/KnowledgeTestsTab'));
 
@@ -128,6 +129,8 @@ const TabContent: React.FC<{
       return <PracticalSkillsSettingsPanel />;
     case 'shift-evaluations':
       return <ShiftEvaluationSettingsPanel />;
+    case 'requirements-link':
+      return <RequirementsLinkPanel />;
     case 'compliance-settings':
       return <ComplianceSettingsPanel />;
     case 'integrations':
