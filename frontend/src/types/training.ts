@@ -743,6 +743,25 @@ export interface ChecklistItem {
   member_can_complete?: boolean;
 }
 
+/** One kind of record that names a requirement, as the delete dialog lists it. */
+export interface TrainingRequirementReference {
+  kind: string;
+  label: string;
+  count: number;
+  /** What a permanent delete does: deletes these rows, or keeps them without the link. */
+  on_delete: 'removed' | 'unlinked';
+}
+
+/** What uses a requirement — GET /training/requirements/{id}/deletion-impact. */
+export interface TrainingRequirementDeletionImpact {
+  requirement_id: string;
+  name: string;
+  active: boolean;
+  /** Zero means an ordinary delete removes it; otherwise an ordinary delete deactivates it. */
+  total: number;
+  references: TrainingRequirementReference[];
+}
+
 export interface TrainingRequirement {
   id: string;
   organization_id: string;

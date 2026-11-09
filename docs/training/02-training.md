@@ -1222,11 +1222,27 @@ training requirements. The **Import from Registry** panel is below the list
 _(2026-11-04)_ (see
 [NCCR Recertification Standards](#nccr-recertification-standards)).
 
-**Deleting a requirement.** A requirement that anything references (a
-pipeline, member progress, tests, sessions, waivers or compliance profiles) is
-**deactivated** instead of deleted, so members' progress is not erased. An
-unused requirement is deleted. The confirmation and the toast say which
-happened.
+**Inactive requirements are hidden** _(2026-11-08)_. The list shows active
+requirements only. Tick **Show inactive** beside the filters to see the
+inactive ones, for example to reactivate one or delete it.
+
+**Deleting a requirement** _(2026-11-08)_. Select the delete button and the
+dialog checks what uses the requirement first.
+
+- **Nothing uses it:** confirm, and it is deleted.
+- **Something uses it** (a pipeline, member progress, tests, sessions, Chief
+  overrides, waivers or compliance profiles): the dialog lists each with a
+  count and gives two choices.
+  - **Deactivate (recommended)** stops grading anyone against it and keeps
+    every record. Use this to retire a requirement members have been graded
+    against. You can reactivate it later.
+  - **Permanently delete** is for a requirement created by mistake or while
+    setting up. It shows what is **deleted with it** (pipeline links, member
+    progress toward it, recertification pathways, session attendance links,
+    Chief overrides) and what is **kept, without this requirement** (tests,
+    sessions, course classes, compliance profiles, waivers). A waiver that
+    excused only this requirement is deactivated. Type the requirement's name
+    to confirm. This cannot be undone.
 
 ### Requirement Types
 
