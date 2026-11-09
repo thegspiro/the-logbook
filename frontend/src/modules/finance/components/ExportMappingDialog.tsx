@@ -11,18 +11,59 @@
  * because the export matches it by name and a misspelling matches nothing.
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
+import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { exportMappingService } from '../services/api';
 import { ExportMappingType } from '../types';
-import type { ExportMapping, ExportMappingCreatePayload } from '../types';
+import type { ExportMapping, ExportMappingCreatePayload, ExportMappingUpdatePayload } from '../types';
+import { firstErrorField, refusalsOnFields, updateExceptRefused, useFieldErrors } from '../utils/fieldRefusals';
 
 /** The width of every account column on `finance_export_mappings`. */
 const MAX_ACCOUNT = 200;
 const MAX_ACCOUNT_NUMBER = 50;
+
+type MappingField = 'category' | 'account' | 'accountNumber' | 'offset' | 'mappingType';
+
+/**
+ * `ExportMappingCreate` / `ExportMappingUpdate` (schemas/finance.py). The
+ * account number's 50 is its column's width; the schema sets no limit.
+ */
+const SERVER_FIELDS: Record<MappingField, ServerFieldSpec> = {
+  category: { label: 'Budget category', maxLength: MAX_ACCOUNT, api: ['internal_category', 'internalCategory'] },
+  account: { label: 'QuickBooks account', maxLength: MAX_ACCOUNT, api: ['qb_account_name', 'qbAccountName'] },
+  accountNumber: {
+    label: 'Account number',
+    maxLength: MAX_ACCOUNT_NUMBER,
+    api: ['qb_account_number', 'qbAccountNumber'],
+  },
+  offset: {
+    label: 'Paid from account',
+    maxLength: MAX_ACCOUNT,
+    api: ['qb_offset_account_name', 'qbOffsetAccountName'],
+  },
+  mappingType: { label: 'Account type' },
+};
+const FIELD_ORDER = Object.keys(SERVER_FIELDS) as MappingField[];
+const UPDATE_KEYS: Partial<Record<MappingField, readonly (keyof ExportMappingUpdatePayload)[]>> = {
+  category: ['internalCategory'],
+  account: ['qbAccountName'],
+  accountNumber: ['qbAccountNumber'],
+  offset: ['qbOffsetAccountName'],
+  mappingType: ['mappingType'],
+};
+const FIELD_IDS: Record<MappingField, string> = {
+  category: 'mapping-category',
+  account: 'mapping-account',
+  accountNumber: 'mapping-account-number',
+  offset: 'mapping-offset',
+  mappingType: 'mapping-type',
+};
 
 const MAPPING_TYPE_LABELS: Record<ExportMappingType, string> = {
   [ExportMappingType.EXPENSE]: 'Expense',
@@ -60,20 +101,42 @@ export const ExportMappingDialog: React.FC<ExportMappingDialogProps> = ({
   const [mappingType, setMappingType] = useState<ExportMappingType>(
     mapping && isMappingType(mapping.mappingType) ? mapping.mappingType : ExportMappingType.EXPENSE
   );
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { errors, setErrors, clearError } = useFieldErrors<MappingField>();
   const [saving, setSaving] = useState(false);
+  // An edit that saved all but a refused field stays open on that field;
+  // closing then still tells the page to reload.
+  const partlySaved = useRef(false);
+  const initial = useRef({ category, account, accountNumber, offset, mappingType });
+  const isDirty =
+    category !== initial.current.category ||
+    account !== initial.current.account ||
+    accountNumber !== initial.current.accountNumber ||
+    offset !== initial.current.offset ||
+    mappingType !== initial.current.mappingType;
+  const close = () => {
+    if (partlySaved.current) onSaved();
+    onClose();
+  };
+  // Escape, the X and Cancel all ask before throwing away a changed mapping.
+  const requestClose = useDiscardGuard({ isDirty, onClose: close });
+
+  const flag = (next: Partial<Record<MappingField, string>>) => {
+    setErrors(next);
+    const first = firstErrorField(next, FIELD_ORDER);
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+    return first === undefined;
+  };
 
   // A mapping saved against a name no category carries any more stays
   // selectable, so editing it does not silently move it to another category.
   const options = category && !categoryNames.includes(category) ? [category, ...categoryNames] : categoryNames;
 
   const validate = (): boolean => {
-    const next: Record<string, string> = {};
+    const next: Partial<Record<MappingField, string>> = {};
     if (!category.trim()) next.category = 'Choose the budget category this mapping is for.';
     if (!account.trim()) next.account = 'Enter the QuickBooks account spending in this category posts to.';
     if (!offset.trim()) next.offset = 'Enter the QuickBooks account this category is paid from.';
-    setErrors(next);
-    return Object.keys(next).length === 0;
+    return flag(next);
   };
 
   const save = async () => {
@@ -82,13 +145,29 @@ export const ExportMappingDialog: React.FC<ExportMappingDialogProps> = ({
       if (mapping) {
         // Every field the form owns goes on every save, blanks as null, so a
         // cleared account number is cleared (CLAUDE.md pitfall #1).
-        await exportMappingService.update(mapping.id, {
-          internalCategory: category.trim(),
-          qbAccountName: account.trim(),
-          qbAccountNumber: blankToNull(accountNumber),
-          qbOffsetAccountName: offset.trim(),
-          mappingType,
-        });
+        // Owner rule (2026-11-05) for a single-save edit: a refused value is
+        // not written, the rest saves, and the field stays flagged.
+        const { refused } = await updateExceptRefused(
+          (body: ExportMappingUpdatePayload) => exportMappingService.update(mapping.id, body),
+          {
+            internalCategory: category.trim(),
+            qbAccountName: account.trim(),
+            qbAccountNumber: blankToNull(accountNumber),
+            qbOffsetAccountName: offset.trim(),
+            mappingType,
+          },
+          SERVER_FIELDS,
+          UPDATE_KEYS
+        );
+        const first = firstErrorField(refused, FIELD_ORDER);
+        if (first) {
+          partlySaved.current = true;
+          flag(refused);
+          toast.error(
+            `Mapping saved, except ${SERVER_FIELDS[first].label.toLowerCase()}: ${refused[first] ?? ''} Fix it and save again.`
+          );
+          return;
+        }
         toast.success('Mapping saved');
       } else {
         const payload: ExportMappingCreatePayload = {
@@ -104,6 +183,13 @@ export const ExportMappingDialog: React.FC<ExportMappingDialogProps> = ({
       onSaved();
       onClose();
     } catch (err: unknown) {
+      // A new mapping is added only once nothing is refused.
+      const mapped = mapping ? null : refusalsOnFields(err, SERVER_FIELDS);
+      if (mapped) {
+        flag(mapped.fieldErrors);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       toast.error(getErrorMessage(err, isEdit ? 'Could not save the mapping' : 'Could not add the mapping'));
     } finally {
       setSaving(false);
@@ -116,135 +202,134 @@ export const ExportMappingDialog: React.FC<ExportMappingDialogProps> = ({
     void save();
   };
 
-  const errorText = (field: string) =>
-    errors[field] ? (
-      <p id={`mapping-${field}-error`} className="mt-1 text-xs text-red-700 dark:text-red-400">
-        {errors[field]}
-      </p>
-    ) : null;
-
-  const describedBy = (field: string, hint?: string) =>
-    [hint, errors[field] ? `mapping-${field}-error` : undefined].filter(Boolean).join(' ') || undefined;
-
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={isEdit ? 'Edit QuickBooks mapping' : 'Add QuickBooks mapping'}
       titleId="mapping-form-title"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">
             {isEdit ? 'Save mapping' : 'Add mapping'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
       }
     >
       <div className="space-y-4">
-        <div>
-          <label htmlFor="mapping-category" className="form-label">
-            Budget category
-          </label>
-          <select
-            id="mapping-category"
-            className="form-input"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            aria-invalid={Boolean(errors.category)}
-            aria-describedby={describedBy('category')}
-          >
-            <option value="">Choose a category</option>
-            {options.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-          {errorText('category')}
-        </div>
+        <FormField id={FIELD_IDS.category} label="Budget category" error={errors.category}>
+          {(field) => (
+            <select
+              {...field}
+              className="form-input"
+              value={category}
+              onChange={(e) => {
+                setCategory(e.target.value);
+                clearError('category');
+              }}
+            >
+              <option value="">Choose a category</option>
+              {options.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="mapping-account" className="form-label">
-            QuickBooks account
-          </label>
-          <input
-            id="mapping-account"
-            type="text"
-            className="form-input"
-            maxLength={MAX_ACCOUNT}
-            placeholder="e.g. Vehicle Expense:Fuel"
-            value={account}
-            onChange={(e) => setAccount(e.target.value)}
-            aria-invalid={Boolean(errors.account)}
-            aria-describedby={describedBy('account', 'mapping-account-hint')}
-          />
-          <p id="mapping-account-hint" className="text-theme-text-secondary mt-1 text-xs">
-            Exactly as named in your QuickBooks chart of accounts; a subaccount as Parent:Child. A category that names
-            its own account uses that one instead.
-          </p>
-          {errorText('account')}
-        </div>
+        <FormField
+          id={FIELD_IDS.account}
+          label="QuickBooks account"
+          error={errors.account}
+          hint="Exactly as named in your QuickBooks chart of accounts; a subaccount as Parent:Child. A category that names its own account uses that one instead."
+          maxLength={MAX_ACCOUNT}
+          count={account.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              className="form-input"
+              placeholder="e.g. Vehicle Expense:Fuel"
+              value={account}
+              onChange={(e) => {
+                setAccount(e.target.value);
+                clearError('account');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="mapping-account-number" className="form-label">
-            Account number (optional)
-          </label>
-          <input
-            id="mapping-account-number"
-            type="text"
-            className="form-input"
-            maxLength={MAX_ACCOUNT_NUMBER}
-            value={accountNumber}
-            onChange={(e) => setAccountNumber(e.target.value)}
-          />
-        </div>
+        <FormField
+          id={FIELD_IDS.accountNumber}
+          label="Account number"
+          optional
+          error={errors.accountNumber}
+          maxLength={MAX_ACCOUNT_NUMBER}
+          count={accountNumber.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              className="form-input"
+              value={accountNumber}
+              onChange={(e) => {
+                setAccountNumber(e.target.value);
+                clearError('accountNumber');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="mapping-offset" className="form-label">
-            Paid from account
-          </label>
-          <input
-            id="mapping-offset"
-            type="text"
-            className="form-input"
-            maxLength={MAX_ACCOUNT}
-            placeholder="e.g. Operating Checking"
-            value={offset}
-            onChange={(e) => setOffset(e.target.value)}
-            aria-invalid={Boolean(errors.offset)}
-            aria-describedby={describedBy('offset', 'mapping-offset-hint')}
-          />
-          <p id="mapping-offset-hint" className="text-theme-text-secondary mt-1 text-xs">
-            The bank or credit card account payments in this category come out of. Each exported transaction is credited
-            here, which balances the entry QuickBooks requires. Accounts Payable and Receivable can&apos;t be used:
-            QuickBooks needs a vendor or customer on those lines.
-          </p>
-          {errorText('offset')}
-        </div>
+        <FormField
+          id={FIELD_IDS.offset}
+          label="Paid from account"
+          error={errors.offset}
+          hint="The bank or credit card account payments in this category come out of. Each exported transaction is credited here, which balances the entry QuickBooks requires. Accounts Payable and Receivable can't be used: QuickBooks needs a vendor or customer on those lines."
+          maxLength={MAX_ACCOUNT}
+          count={offset.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              className="form-input"
+              placeholder="e.g. Operating Checking"
+              value={offset}
+              onChange={(e) => {
+                setOffset(e.target.value);
+                clearError('offset');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="mapping-type" className="form-label">
-            Account type
-          </label>
-          <select
-            id="mapping-type"
-            className="form-input"
-            value={mappingType}
-            onChange={(e) => {
-              if (isMappingType(e.target.value)) setMappingType(e.target.value);
-            }}
-          >
-            {Object.values(ExportMappingType).map((value) => (
-              <option key={value} value={value}>
-                {MAPPING_TYPE_LABELS[value]}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FormField id={FIELD_IDS.mappingType} label="Account type" error={errors.mappingType}>
+          {(field) => (
+            <select
+              {...field}
+              className="form-input"
+              value={mappingType}
+              onChange={(e) => {
+                if (isMappingType(e.target.value)) setMappingType(e.target.value);
+                clearError('mappingType');
+              }}
+            >
+              {Object.values(ExportMappingType).map((value) => (
+                <option key={value} value={value}>
+                  {MAPPING_TYPE_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          )}
+        </FormField>
       </div>
     </Modal>
   );

@@ -18,13 +18,37 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '../../../utils/currencyFormatting';
+import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { duesService } from '../services/api';
 import type { DuesPaymentPayload, MemberDues } from '../types';
 import { DUES_PAYMENT_METHODS, outstandingOf } from '../utils/dues';
+import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
 import { MAX_MONEY_AMOUNT } from '../utils/moneyLimits';
+
+type PaymentField = 'amount' | 'method' | 'reference' | 'notes';
+
+/**
+ * `MemberDuesPayment` (schemas/finance.py) sets no max_length; the reference's
+ * 200 is its column's width (`dues_payments.transaction_reference`).
+ */
+const SERVER_FIELDS: Record<PaymentField, ServerFieldSpec> = {
+  amount: { label: 'Amount received', api: ['amount_paid', 'amountPaid'] },
+  method: { label: 'Method', api: ['payment_method', 'paymentMethod'] },
+  reference: { label: 'Reference', maxLength: 200, api: ['transaction_reference', 'transactionReference'] },
+  notes: { label: 'Notes' },
+};
+const FIELD_ORDER = Object.keys(SERVER_FIELDS) as PaymentField[];
+const FIELD_IDS: Record<PaymentField, string> = {
+  amount: 'dues-payment-amount',
+  method: 'dues-payment-method',
+  reference: 'dues-payment-reference',
+  notes: 'dues-payment-notes',
+};
 
 interface DuesPaymentDialogProps {
   dues: MemberDues;
@@ -40,22 +64,32 @@ export const DuesPaymentDialog: React.FC<DuesPaymentDialogProps> = ({ dues, memb
   const [method, setMethod] = useState('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const [error, setError] = useState('');
+  const { errors, setErrors, clearError } = useFieldErrors<PaymentField>();
   const [saving, setSaving] = useState(false);
   const { confirm } = useConfirm();
+  const initialAmount = outstanding > 0 ? outstanding.toFixed(2) : '';
+  const isDirty = amount !== initialAmount || method !== '' || reference !== '' || notes !== '';
+  // Escape, the X and Cancel all ask before throwing away a typed payment.
+  const requestClose = useDiscardGuard({ isDirty, onClose });
+
+  const flag = (next: Partial<Record<PaymentField, string>>) => {
+    setErrors(next);
+    const first = firstErrorField(next, FIELD_ORDER);
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsed = Number(amount);
     if (amount.trim() === '' || !Number.isFinite(parsed) || parsed <= 0) {
-      setError('Enter an amount greater than zero.');
+      flag({ amount: 'Enter an amount greater than zero.' });
       return;
     }
     if (parsed > MAX_MONEY_AMOUNT) {
-      setError('That amount is too large.');
+      flag({ amount: 'That amount is too large.' });
       return;
     }
-    setError('');
+    setErrors({});
     // In cents, so 70.10 - 70 is not 0.0999…
     const excessCents = Math.round(parsed * 100) - Math.round(Math.max(outstanding, 0) * 100);
     if (excessCents > 0) {
@@ -96,6 +130,14 @@ export const DuesPaymentDialog: React.FC<DuesPaymentDialogProps> = ({ dues, memb
       );
       onSaved();
     } catch (err: unknown) {
+      // Nothing is recorded until every field is accepted; each refusal goes
+      // on its field.
+      const mapped = refusalsOnFields(err, SERVER_FIELDS);
+      if (mapped) {
+        flag(mapped.fieldErrors);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       toast.error(getErrorMessage(err, 'Could not record the payment'));
     } finally {
       setSaving(false);
@@ -105,17 +147,18 @@ export const DuesPaymentDialog: React.FC<DuesPaymentDialogProps> = ({ dues, memb
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title="Record payment"
       titleId="dues-payment-form-title"
       aria-describedby="dues-payment-form-description"
       onSubmit={(e) => void handleSubmit(e)}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">
             Record payment
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -127,79 +170,84 @@ export const DuesPaymentDialog: React.FC<DuesPaymentDialogProps> = ({ dues, memb
           is added to their ledger and cannot be edited afterwards.
         </p>
 
-        <div>
-          <label htmlFor="dues-payment-amount" className="form-label">
-            Amount received
-          </label>
-          <input
-            id="dues-payment-amount"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            className="form-input"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            aria-invalid={Boolean(error)}
-            aria-describedby={error ? 'dues-payment-amount-error' : undefined}
-          />
-          {error && (
-            <p id="dues-payment-amount-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-              {error}
-            </p>
+        <FormField id={FIELD_IDS.amount} label="Amount received" error={errors.amount}>
+          {(field) => (
+            <input
+              {...field}
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max={MAX_MONEY_AMOUNT}
+              step="0.01"
+              className="form-input"
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                clearError('amount');
+              }}
+            />
           )}
-        </div>
+        </FormField>
 
-        <div>
-          <label htmlFor="dues-payment-method" className="form-label">
-            Method <span className="text-theme-text-secondary font-normal">(optional)</span>
-          </label>
-          <select
-            id="dues-payment-method"
-            className="form-input"
-            value={method}
-            onChange={(e) => setMethod(e.target.value)}
-          >
-            <option value="">Not recorded</option>
-            {DUES_PAYMENT_METHODS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FormField id={FIELD_IDS.method} label="Method" optional error={errors.method}>
+          {(field) => (
+            <select
+              {...field}
+              className="form-input"
+              value={method}
+              onChange={(e) => {
+                setMethod(e.target.value);
+                clearError('method');
+              }}
+            >
+              <option value="">Not recorded</option>
+              {DUES_PAYMENT_METHODS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="dues-payment-reference" className="form-label">
-            Reference <span className="text-theme-text-secondary font-normal">(optional)</span>
-          </label>
-          <input
-            id="dues-payment-reference"
-            type="text"
-            maxLength={200}
-            placeholder="Check number or transaction ID"
-            className="form-input"
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-            aria-describedby="dues-payment-reference-hint"
-          />
-          <p id="dues-payment-reference-hint" className="text-theme-text-secondary mt-1 text-xs">
-            A payment already recorded with this reference is not credited again.
-          </p>
-        </div>
+        <FormField
+          id={FIELD_IDS.reference}
+          label="Reference"
+          optional
+          error={errors.reference}
+          hint="A payment already recorded with this reference is not credited again."
+          maxLength={200}
+          count={reference.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              placeholder="Check number or transaction ID"
+              className="form-input"
+              value={reference}
+              onChange={(e) => {
+                setReference(e.target.value);
+                clearError('reference');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="dues-payment-notes" className="form-label">
-            Notes <span className="text-theme-text-secondary font-normal">(optional)</span>
-          </label>
-          <textarea
-            id="dues-payment-notes"
-            rows={2}
-            className="form-input"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
+        <FormField id={FIELD_IDS.notes} label="Notes" optional error={errors.notes}>
+          {(field) => (
+            <textarea
+              {...field}
+              rows={2}
+              className="form-input"
+              value={notes}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                clearError('notes');
+              }}
+            />
+          )}
+        </FormField>
       </div>
     </Modal>
   );

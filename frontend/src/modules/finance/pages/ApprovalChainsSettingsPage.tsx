@@ -486,19 +486,16 @@ const ApprovalChainsSettingsPage: React.FC = () => {
     });
   };
 
-  const handleSaveChain = (data: ApprovalChainUpdatePayload) =>
-    run(async () => {
-      if (!editingChain) return;
-      try {
-        await updateApprovalChain(editingChain.id, data);
-        toast.success('Chain saved');
-        setEditingChain(null);
-      } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Could not save the chain.'));
-      } finally {
-        void refreshCoverage();
-      }
-    });
+  // The dialog handles a refusal itself (a refused field stays flagged on it
+  // while the rest saves), so this only sends and refreshes.
+  const saveChain = async (data: ApprovalChainUpdatePayload) => {
+    if (!editingChain) return;
+    try {
+      await updateApprovalChain(editingChain.id, data);
+    } finally {
+      void refreshCoverage();
+    }
+  };
 
   const handleSaveStep = (values: StepFormValues) =>
     run(async () => {
@@ -822,9 +819,12 @@ const ApprovalChainsSettingsPage: React.FC = () => {
       {editingChain && (
         <ApprovalChainEditDialog
           chain={editingChain}
-          saving={busy}
           onClose={() => setEditingChain(null)}
-          onSubmit={handleSaveChain}
+          save={saveChain}
+          onSaved={() => {
+            toast.success('Chain saved');
+            setEditingChain(null);
+          }}
         />
       )}
     </div>

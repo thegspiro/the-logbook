@@ -20,14 +20,26 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '@/components/Modal';
+import { FormField } from '@/components/ux/FormField';
 import { PromptDialog } from '@/components/ux/PromptDialog';
 import { useConfirm } from '@/contexts/ConfirmContext';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { getErrorMessage } from '@/utils/errorHandling';
+import type { ServerFieldSpec } from '@/utils/serverFieldErrors';
+import { refusalsOnFields, type FieldErrors } from '../utils/fieldRefusals';
 import { useFinanceStore } from '../store/financeStore';
 import { lateLinesConfirmation } from './lateLinesConfirmation';
 
 /** The backend's limit on `overrideReason` (ApprovalActionRequest). */
 const OVERRIDE_REASON_MAX_LENGTH = 2000;
+
+type DecisionField = 'notes' | 'overrideReason';
+
+/** `ApprovalActionRequest` (schemas/finance.py); `notes` has no limit. */
+const SERVER_FIELDS: Record<DecisionField, ServerFieldSpec> = {
+  notes: { label: 'Notes' },
+  overrideReason: { label: 'Override reason', maxLength: OVERRIDE_REASON_MAX_LENGTH },
+};
 
 export interface ApprovalDecision {
   stepRecordId: string;
@@ -71,6 +83,10 @@ interface OverrideFormProps {
   decision: ApprovalDecision;
   assigneeLabel: string;
   busy: boolean;
+  /** What the server refused, on its field; the decision is not recorded. */
+  serverErrors: FieldErrors<DecisionField>;
+  /** Clears a server refusal once its field is edited. */
+  onEdited: (field: DecisionField) => void;
   onClose: () => void;
   onSubmit: (notes: string, overrideReason: string) => void;
 }
@@ -79,11 +95,27 @@ interface OverrideFormProps {
  * Mounted only while open, and keyed on the decision by the caller, so a
  * reason typed for one step is never prefilled into the next.
  */
-const OverrideForm: React.FC<OverrideFormProps> = ({ decision, assigneeLabel, busy, onClose, onSubmit }) => {
+const OverrideForm: React.FC<OverrideFormProps> = ({
+  decision,
+  assigneeLabel,
+  busy,
+  serverErrors,
+  onEdited,
+  onClose,
+  onSubmit,
+}) => {
   const isDeny = decision.action === 'deny';
   const [notes, setNotes] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
   const [touched, setTouched] = useState(false);
+  const isDirty = notes !== '' || overrideReason !== '';
+  // Escape, the X and Cancel all ask before throwing away a typed reason.
+  const requestClose = useDiscardGuard({
+    isDirty,
+    onClose: () => {
+      if (!busy) onClose();
+    },
+  });
 
   const trimmedNotes = notes.trim();
   const trimmedReason = overrideReason.trim();
@@ -102,18 +134,17 @@ const OverrideForm: React.FC<OverrideFormProps> = ({ decision, assigneeLabel, bu
   };
 
   const title = isDeny ? 'Deny as approvals admin' : 'Approve as approvals admin';
-  const showNotesError = touched && notesError !== null;
-  const showReasonError = touched && reasonError !== null;
+  const notesShown = (touched ? notesError : null) ?? serverErrors.notes;
+  const reasonShown = (touched ? reasonError : null) ?? serverErrors.overrideReason;
 
   return (
     <Modal
       isOpen
-      onClose={() => {
-        if (!busy) onClose();
-      }}
+      onClose={requestClose}
       title={title}
       size="sm"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button
@@ -128,7 +159,7 @@ const OverrideForm: React.FC<OverrideFormProps> = ({ decision, assigneeLabel, bu
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             {title}
           </button>
-          <button type="button" onClick={onClose} disabled={busy} className="btn-secondary">
+          <button type="button" onClick={requestClose} disabled={busy} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -143,58 +174,48 @@ const OverrideForm: React.FC<OverrideFormProps> = ({ decision, assigneeLabel, bu
           </p>
         </div>
 
-        <div>
-          <label htmlFor="approval-decision-notes" className="form-label">
-            {isDeny ? 'Reason' : 'Notes'}
-            {!isDeny && <span className="text-theme-text-muted font-normal"> (optional)</span>}
-          </label>
-          <textarea
-            id="approval-decision-notes"
-            className="form-input"
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            aria-invalid={showNotesError}
-            aria-describedby={showNotesError ? 'approval-decision-notes-error' : 'approval-decision-notes-help'}
-          />
-          {showNotesError ? (
-            <p id="approval-decision-notes-error" role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">
-              {notesError}
-            </p>
-          ) : (
-            <p id="approval-decision-notes-help" className="text-theme-text-muted mt-1 text-xs">
-              {isDeny ? 'Saved on the request.' : 'Shown on the request’s approval timeline.'}
-            </p>
+        <FormField
+          id="approval-decision-notes"
+          label={isDeny ? 'Reason' : 'Notes'}
+          optional={!isDeny}
+          error={notesShown}
+          hint={isDeny ? 'Saved on the request.' : 'Shown on the request’s approval timeline.'}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              className="form-input"
+              rows={3}
+              value={notes}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                onEdited('notes');
+              }}
+            />
           )}
-        </div>
+        </FormField>
 
-        <div>
-          <label htmlFor="approval-decision-override" className="form-label">
-            Override reason
-          </label>
-          <textarea
-            id="approval-decision-override"
-            className="form-input"
-            rows={3}
-            value={overrideReason}
-            onChange={(e) => setOverrideReason(e.target.value)}
-            aria-invalid={showReasonError}
-            aria-describedby={showReasonError ? 'approval-decision-override-error' : 'approval-decision-override-help'}
-          />
-          {showReasonError ? (
-            <p
-              id="approval-decision-override-error"
-              role="alert"
-              className="mt-1 text-xs text-red-600 dark:text-red-400"
-            >
-              {reasonError}
-            </p>
-          ) : (
-            <p id="approval-decision-override-help" className="text-theme-text-muted mt-1 text-xs">
-              Why you are acting on a step assigned to someone else. Recorded in the audit log.
-            </p>
+        <FormField
+          id="approval-decision-override"
+          label="Override reason"
+          error={reasonShown}
+          hint="Why you are acting on a step assigned to someone else. Recorded in the audit log."
+          maxLength={OVERRIDE_REASON_MAX_LENGTH}
+          count={overrideReason.length}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              className="form-input"
+              rows={3}
+              value={overrideReason}
+              onChange={(e) => {
+                setOverrideReason(e.target.value);
+                onEdited('overrideReason');
+              }}
+            />
           )}
-        </div>
+        </FormField>
       </div>
     </Modal>
   );
@@ -205,6 +226,7 @@ export const ApprovalDecisionDialog: React.FC<ApprovalDecisionDialogProps> = ({ 
   const denyStep = useFinanceStore((s) => s.denyStep);
   const { confirm } = useConfirm();
   const [busy, setBusy] = useState(false);
+  const [serverErrors, setServerErrors] = useState<FieldErrors<DecisionField>>({});
 
   const isDeny = decision?.action === 'deny';
 
@@ -213,6 +235,7 @@ export const ApprovalDecisionDialog: React.FC<ApprovalDecisionDialogProps> = ({ 
     const lateLines = decision.action === 'approve' ? (decision.lateLines ?? 0) : 0;
     if (lateLines > 0 && !(await confirm(lateLinesConfirmation(lateLines)))) return;
     setBusy(true);
+    setServerErrors({});
     try {
       if (decision.action === 'approve') {
         if (lateLines > 0) {
@@ -228,6 +251,15 @@ export const ApprovalDecisionDialog: React.FC<ApprovalDecisionDialogProps> = ({ 
       onDecided?.();
       onClose();
     } catch (err: unknown) {
+      // The override form shows a refusal on its field; nothing was recorded.
+      const mapped = decision.override ? refusalsOnFields(err, SERVER_FIELDS) : null;
+      if (mapped) {
+        setServerErrors(mapped.fieldErrors);
+        const first = mapped.fieldErrors.notes ? 'approval-decision-notes' : 'approval-decision-override';
+        document.getElementById(first)?.focus();
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       // Left open so a typed reason survives a failure worth retrying; the
       // message is the API's own (e.g. the separation-of-duties refusal, or
       // "This step is waiting on …" when the viewer is not its approver).
@@ -244,7 +276,19 @@ export const ApprovalDecisionDialog: React.FC<ApprovalDecisionDialogProps> = ({ 
         decision={decision}
         assigneeLabel={decision.override.assigneeLabel}
         busy={busy}
-        onClose={onClose}
+        serverErrors={serverErrors}
+        onEdited={(field) =>
+          setServerErrors((prev) => {
+            if (!prev[field]) return prev;
+            const next = { ...prev };
+            delete next[field];
+            return next;
+          })
+        }
+        onClose={() => {
+          setServerErrors({});
+          onClose();
+        }}
         onSubmit={(notes, overrideReason) => void handleSubmit(notes, overrideReason)}
       />
     );

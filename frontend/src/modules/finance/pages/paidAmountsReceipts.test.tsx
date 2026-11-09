@@ -247,7 +247,9 @@ describe('The member picks the budget line', () => {
 
   it('offers the year’s lines and sends the one chosen', async () => {
     const user = userEvent.setup();
-    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" onClose={vi.fn()} onSaved={vi.fn()} />);
+    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" onClose={vi.fn()} onSaved={vi.fn()} />, {
+      wrapper: ConfirmProvider,
+    });
 
     await user.type(screen.getByLabelText('Description *'), 'Registration');
     await user.type(screen.getByLabelText('Amount *'), '45');
@@ -264,7 +266,9 @@ describe('The member picks the budget line', () => {
 
   it('sends no line when none is chosen', async () => {
     const user = userEvent.setup();
-    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" onClose={vi.fn()} onSaved={vi.fn()} />);
+    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" onClose={vi.fn()} onSaved={vi.fn()} />, {
+      wrapper: ConfirmProvider,
+    });
 
     await user.type(screen.getByLabelText('Description *'), 'Coffee');
     await user.type(screen.getByLabelText('Amount *'), '4');

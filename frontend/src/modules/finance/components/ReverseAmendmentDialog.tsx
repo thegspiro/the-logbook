@@ -20,6 +20,10 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatDate, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formatCurrency } from '../../../utils/currencyFormatting';
@@ -29,6 +33,23 @@ import type { BudgetAmendment, BudgetAmendmentCreated, BudgetAmendmentReversePay
 
 const MAX_REASON = 2000;
 const MAX_APPROVED_BY = 200;
+
+type AmendField = 'amount' | 'reason' | 'approvedBy' | 'approvedOn';
+
+/** `BudgetAmendmentCreate` / `BudgetAmendmentReverse` (schemas/finance.py). */
+const SERVER_FIELDS: Record<AmendField, ServerFieldSpec> = {
+  amount: { label: 'Amount' },
+  reason: { label: 'Reason', maxLength: MAX_REASON },
+  approvedBy: { label: 'Approved by', maxLength: MAX_APPROVED_BY },
+  approvedOn: { label: 'Approval date' },
+};
+const FIELD_ORDER = Object.keys(SERVER_FIELDS) as AmendField[];
+const FIELD_IDS: Record<AmendField, string> = {
+  amount: 'reversal-amount',
+  reason: 'reversal-reason',
+  approvedBy: 'reversal-approved-by',
+  approvedOn: 'reversal-approved-on',
+};
 const MONEY = /^\d+(\.\d{1,2})?$/;
 
 /** A dollars-and-cents string as whole cents, so comparisons are exact. */
@@ -57,7 +78,7 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
   const [reason, setReason] = useState('');
   const [approvedBy, setApprovedBy] = useState('');
   const [approvedOn, setApprovedOn] = useState(today);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { errors, setErrors, clearError } = useFieldErrors<AmendField>();
   const [saving, setSaving] = useState(false);
   const wholeAmount = Number(amendment.amount).toFixed(2);
   const [amountText, setAmountText] = useState(wholeAmount);
@@ -68,9 +89,18 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
   // What the summary describes: the typed amount once it is a sensible one.
   const takesBack = typedCents !== null && typedCents > 0 && typedCents <= wholeCents ? typedCents : wholeCents;
   const remainder = wholeCents - takesBack;
+  const isDirty = amountText !== wholeAmount || reason !== '' || approvedBy !== '' || approvedOn !== today;
+  // Escape, the X and Cancel all ask before throwing away a typed reversal.
+  const requestClose = useDiscardGuard({ isDirty, onClose });
+  const flag = (next: Partial<Record<AmendField, string>>) => {
+    setErrors(next);
+    const first = firstErrorField(next, FIELD_ORDER);
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+    return first === undefined;
+  };
 
   const validate = (): BudgetAmendmentReversePayload | null => {
-    const next: Record<string, string> = {};
+    const next: Partial<Record<AmendField, string>> = {};
     if (!reason.trim()) next.reason = 'Give a reason for the reversal.';
     else if (reason.trim().length > MAX_REASON) next.reason = `Keep the reason under ${String(MAX_REASON)} characters.`;
     if (!approvedBy.trim()) next.approvedBy = 'Say who approved the reversal.';
@@ -85,8 +115,7 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
         : 'Enter an amount greater than zero.';
     } else if (typedCents === null || typedCents <= 0) next.amount = 'Enter an amount greater than zero.';
     else if (typedCents > wholeCents) next.amount = `A reversal can take back at most ${amount}.`;
-    setErrors(next);
-    if (Object.keys(next).length > 0 || typedCents === null) return null;
+    if (!flag(next) || typedCents === null) return null;
     const payload: BudgetAmendmentReversePayload = { reason: reason.trim(), approvedBy: approvedBy.trim(), approvedOn };
     // The whole amendment is left to the backend, which reads it off the row.
     if (typedCents !== wholeCents) payload.amount = (typedCents / 100).toFixed(2);
@@ -107,6 +136,13 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
       toast.success('Reversal recorded — awaiting confirmation by a second officer');
       onSaved(result);
     } catch (err: unknown) {
+      // Nothing is recorded until every field is accepted.
+      const mapped = refusalsOnFields(err, SERVER_FIELDS);
+      if (mapped) {
+        flag(mapped.fieldErrors);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       // The API's own words: already reversed, a locked year, money spent.
       toast.error(getErrorMessage(err, 'Could not reverse the amendment'));
     } finally {
@@ -114,27 +150,21 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
     }
   };
 
-  const errorText = (field: string) =>
-    errors[field] ? (
-      <p id={`reversal-${field}-error`} className="mt-1 text-xs text-red-700 dark:text-red-400">
-        {errors[field]}
-      </p>
-    ) : null;
-
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title="Reverse amendment"
       titleId="reversal-form-title"
       aria-describedby="reversal-form-description"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">
             Record reversal
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -153,76 +183,85 @@ export const ReverseAmendmentDialog: React.FC<ReverseAmendmentDialogProps> = ({
           <p>A reversal cannot be undone. If the money is needed again, record a new amendment.</p>
         </div>
 
-        <div>
-          <label htmlFor="reversal-amount" className="form-label">
-            Amount to reverse
-          </label>
-          <input
-            id="reversal-amount"
-            type="text"
-            inputMode="decimal"
-            className="form-input"
-            value={amountText}
-            onChange={(e) => setAmountText(e.target.value)}
-            aria-invalid={Boolean(errors.amount)}
-            aria-describedby={errors.amount ? 'reversal-amount-error' : 'reversal-amount-hint'}
-          />
-          <p id="reversal-amount-hint" className="text-theme-text-secondary mt-1 text-xs">
-            The whole amendment, or the part entered by mistake.
-          </p>
-          {errorText('amount')}
-        </div>
+        <FormField
+          id={FIELD_IDS.amount}
+          label="Amount to reverse"
+          error={errors.amount}
+          hint="The whole amendment, or the part entered by mistake."
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              inputMode="decimal"
+              className="form-input"
+              value={amountText}
+              onChange={(e) => {
+                setAmountText(e.target.value);
+                clearError('amount');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="reversal-reason" className="form-label">
-            Reason
-          </label>
-          <textarea
-            id="reversal-reason"
-            rows={3}
-            maxLength={MAX_REASON}
-            placeholder="e.g. Entered $2,500 instead of $250"
-            className="form-input"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            aria-invalid={Boolean(errors.reason)}
-            aria-describedby={errors.reason ? 'reversal-reason-error' : undefined}
-          />
-          {errorText('reason')}
-        </div>
+        <FormField
+          id={FIELD_IDS.reason}
+          label="Reason"
+          error={errors.reason}
+          maxLength={MAX_REASON}
+          count={reason.length}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              rows={3}
+              placeholder="e.g. Entered $2,500 instead of $250"
+              className="form-input"
+              value={reason}
+              onChange={(e) => {
+                setReason(e.target.value);
+                clearError('reason');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="reversal-approved-by" className="form-label">
-            Approved by
-          </label>
-          <input
-            id="reversal-approved-by"
-            type="text"
-            maxLength={MAX_APPROVED_BY}
-            className="form-input"
-            value={approvedBy}
-            onChange={(e) => setApprovedBy(e.target.value)}
-            aria-invalid={Boolean(errors.approvedBy)}
-            aria-describedby={errors.approvedBy ? 'reversal-approvedBy-error' : undefined}
-          />
-          {errorText('approvedBy')}
-        </div>
+        <FormField
+          id={FIELD_IDS.approvedBy}
+          label="Approved by"
+          error={errors.approvedBy}
+          maxLength={MAX_APPROVED_BY}
+          count={approvedBy.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              className="form-input"
+              value={approvedBy}
+              onChange={(e) => {
+                setApprovedBy(e.target.value);
+                clearError('approvedBy');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="reversal-approved-on" className="form-label">
-            Approval date
-          </label>
-          <input
-            id="reversal-approved-on"
-            type="date"
-            className="form-input"
-            value={approvedOn}
-            onChange={(e) => setApprovedOn(e.target.value)}
-            aria-invalid={Boolean(errors.approvedOn)}
-            aria-describedby={errors.approvedOn ? 'reversal-approvedOn-error' : undefined}
-          />
-          {errorText('approvedOn')}
-        </div>
+        <FormField id={FIELD_IDS.approvedOn} label="Approval date" error={errors.approvedOn}>
+          {(field) => (
+            <input
+              {...field}
+              type="date"
+              max={today}
+              className="form-input"
+              value={approvedOn}
+              onChange={(e) => {
+                setApprovedOn(e.target.value);
+                clearError('approvedOn');
+              }}
+            />
+          )}
+        </FormField>
       </div>
     </Modal>
   );

@@ -15,6 +15,10 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { firstErrorField, refusalsOnFields, useFieldErrors } from '../utils/fieldRefusals';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -24,6 +28,25 @@ import type { FiscalYear, FiscalYearAdoptionPayload } from '../types';
 /** The widths of `fiscal_years.adoption_reference` and the notes the API accepts. */
 const MAX_REFERENCE = 500;
 const MAX_NOTES = 4000;
+
+type AdoptionField = 'adoptedOn' | 'reference' | 'notes';
+
+/** `FiscalYearAdoption` (schemas/finance.py). */
+const SERVER_FIELDS: Record<AdoptionField, ServerFieldSpec> = {
+  adoptedOn: { label: 'Date the board adopted it', api: ['adopted_on', 'adoptedOn'] },
+  reference: {
+    label: 'Motion or minutes reference',
+    maxLength: MAX_REFERENCE,
+    api: ['adoption_reference', 'adoptionReference'],
+  },
+  notes: { label: 'Notes', maxLength: MAX_NOTES, api: ['adoption_notes', 'adoptionNotes'] },
+};
+const FIELD_ORDER = Object.keys(SERVER_FIELDS) as AdoptionField[];
+const FIELD_IDS: Record<AdoptionField, string> = {
+  adoptedOn: 'adoption-date',
+  reference: 'adoption-reference',
+  notes: 'adoption-notes',
+};
 
 interface BudgetAdoptionDialogProps {
   fiscalYear: Pick<FiscalYear, 'id' | 'name'>;
@@ -38,16 +61,25 @@ export const BudgetAdoptionDialog: React.FC<BudgetAdoptionDialogProps> = ({ fisc
   const [adoptedOn, setAdoptedOn] = useState(today);
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { errors, setErrors, clearError } = useFieldErrors<AdoptionField>();
   const [saving, setSaving] = useState(false);
+  const isDirty = adoptedOn !== today || reference !== '' || notes !== '';
+  // Escape, the X and Cancel all ask before throwing away a typed adoption.
+  const requestClose = useDiscardGuard({ isDirty, onClose });
+
+  const flag = (next: Partial<Record<AdoptionField, string>>) => {
+    setErrors(next);
+    const first = firstErrorField(next, FIELD_ORDER);
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+    return first === undefined;
+  };
 
   const validate = (): FiscalYearAdoptionPayload | null => {
-    const next: Record<string, string> = {};
+    const next: Partial<Record<AdoptionField, string>> = {};
     if (!adoptedOn) next.adoptedOn = 'Enter the date the board adopted the budget.';
     else if (adoptedOn > today) next.adoptedOn = 'The adoption date cannot be in the future.';
     if (!reference.trim()) next.reference = 'Enter the motion or minutes reference, for example "Motion 2026-14".';
-    setErrors(next);
-    if (Object.keys(next).length > 0) return null;
+    if (!flag(next)) return null;
     return {
       adoptedOn,
       adoptionReference: reference.trim(),
@@ -62,6 +94,13 @@ export const BudgetAdoptionDialog: React.FC<BudgetAdoptionDialogProps> = ({ fisc
       toast.success(`${fiscalYear.name} adopted`);
       onAdopted(year);
     } catch (err: unknown) {
+      // Nothing is adopted until every field is accepted.
+      const mapped = refusalsOnFields(err, SERVER_FIELDS);
+      if (mapped) {
+        flag(mapped.fieldErrors);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       // The API's own words: not in board review, a future date.
       toast.error(getErrorMessage(err, 'Could not record the adoption'));
     } finally {
@@ -76,27 +115,21 @@ export const BudgetAdoptionDialog: React.FC<BudgetAdoptionDialogProps> = ({ fisc
     void save(payload);
   };
 
-  const errorText = (field: string) =>
-    errors[field] ? (
-      <p id={`adoption-${field}-error`} className="mt-1 text-xs text-red-700 dark:text-red-400">
-        {errors[field]}
-      </p>
-    ) : null;
-
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={`Record adoption of ${fiscalYear.name}`}
       titleId="adoption-form-title"
       aria-describedby="adoption-form-description"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">
             Record adoption
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -109,55 +142,66 @@ export const BudgetAdoptionDialog: React.FC<BudgetAdoptionDialogProps> = ({ fisc
           are emailed their adopted amounts then.
         </p>
 
-        <div>
-          <label htmlFor="adoption-date" className="form-label">
-            Date the board adopted it
-          </label>
-          <input
-            id="adoption-date"
-            type="date"
-            max={today}
-            className="form-input"
-            value={adoptedOn}
-            onChange={(e) => setAdoptedOn(e.target.value)}
-            aria-invalid={Boolean(errors.adoptedOn)}
-            aria-describedby={errors.adoptedOn ? 'adoption-adoptedOn-error' : undefined}
-          />
-          {errorText('adoptedOn')}
-        </div>
+        <FormField id={FIELD_IDS.adoptedOn} label="Date the board adopted it" error={errors.adoptedOn}>
+          {(field) => (
+            <input
+              {...field}
+              type="date"
+              max={today}
+              className="form-input"
+              value={adoptedOn}
+              onChange={(e) => {
+                setAdoptedOn(e.target.value);
+                clearError('adoptedOn');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="adoption-reference" className="form-label">
-            Motion or minutes reference
-          </label>
-          <input
-            id="adoption-reference"
-            type="text"
-            maxLength={MAX_REFERENCE}
-            placeholder="e.g. Board minutes 12/10, motion 4"
-            className="form-input"
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-            aria-invalid={Boolean(errors.reference)}
-            aria-describedby={errors.reference ? 'adoption-reference-error' : undefined}
-          />
-          {errorText('reference')}
-        </div>
+        <FormField
+          id={FIELD_IDS.reference}
+          label="Motion or minutes reference"
+          error={errors.reference}
+          maxLength={MAX_REFERENCE}
+          count={reference.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              placeholder="e.g. Board minutes 12/10, motion 4"
+              className="form-input"
+              value={reference}
+              onChange={(e) => {
+                setReference(e.target.value);
+                clearError('reference');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="adoption-notes" className="form-label">
-            Notes (optional)
-          </label>
-          <textarea
-            id="adoption-notes"
-            rows={3}
-            maxLength={MAX_NOTES}
-            placeholder="e.g. Passed 5-0; the gear line was raised at the meeting"
-            className="form-input"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-        </div>
+        <FormField
+          id={FIELD_IDS.notes}
+          label="Notes"
+          optional
+          error={errors.notes}
+          maxLength={MAX_NOTES}
+          count={notes.length}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              rows={3}
+              placeholder="e.g. Passed 5-0; the gear line was raised at the meeting"
+              className="form-input"
+              value={notes}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                clearError('notes');
+              }}
+            />
+          )}
+        </FormField>
       </div>
     </Modal>
   );
