@@ -406,3 +406,23 @@ class TestNotice:
             )
 
         notify.assert_not_awaited()
+
+
+class TestTheList:
+    async def test_the_list_item_carries_the_original_start(self, db_session, dept):
+        """The events list marks a postponed event with where it was."""
+        from app.api.v1.endpoints.events import _list_items
+
+        org, _, _, _ = dept
+        event_id, start, end = await _live_drill_with_attendance(db_session, dept)
+        service = EventService(db_session)
+        with patch.object(EventService, "_notify_postponement", AsyncMock()):
+            await service.postpone_event(
+                event_id, org, *_next_week(start, end), "Ladder truck out of service"
+            )
+
+        rows = await service.list_events(organization_id=org, limit=50)
+        items = await _list_items(db_session, org, rows)
+
+        [item] = [i for i in items if str(i.id) == event_id]
+        assert _utc(item.postponed_from_start) == start

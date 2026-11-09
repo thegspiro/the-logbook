@@ -275,6 +275,8 @@ export interface EventListItem {
   counts_toward_attendance?: boolean;
   is_draft?: boolean;
   is_cancelled: boolean;
+  /** The start before the first postponement; absent for an event never postponed. */
+  postponed_from_start?: string | null;
   is_recurring?: boolean;
   recurrence_parent_id?: string;
   rsvp_count?: number;

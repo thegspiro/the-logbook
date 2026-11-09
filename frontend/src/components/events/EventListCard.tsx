@@ -306,6 +306,17 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
                 Cancelled
               </span>
             )}
+            {/* A postponed event, so a member scanning the list sees it moved
+                without opening it (W80-11 follow-up). */}
+            {!event.is_cancelled && event.postponed_from_start && (
+              <span
+                className="bg-theme-alert-warning-bg ml-2 inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300"
+                title={`Postponed from ${formatAbsoluteDate(event.postponed_from_start, timezone)}`}
+                aria-label={`Postponed from ${formatAbsoluteDate(event.postponed_from_start, timezone)}`}
+              >
+                Postponed
+              </span>
+            )}
           </div>
 
           <div className="flex flex-col gap-2">

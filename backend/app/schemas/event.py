@@ -681,6 +681,9 @@ class EventListItem(UTCResponseBase):
     mandatory_membership_types: Optional[List[str]] = None
     is_draft: bool = False
     is_cancelled: bool
+    # The start before the first postponement, for the list's "Postponed"
+    # badge; None for an event never postponed.
+    postponed_from_start: Optional[datetime] = None
     is_recurring: bool = False
     recurrence_parent_id: Optional[UUID] = None
     rsvp_count: Optional[int] = None
