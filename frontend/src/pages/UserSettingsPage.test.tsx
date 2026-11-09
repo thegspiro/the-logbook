@@ -185,10 +185,9 @@ describe('UserSettingsPage', () => {
 
       await user.type(screen.getByLabelText(/^new password/i), 'Abcdef123!xyz');
 
-      expect(screen.getByText('One number').closest('li')).toHaveTextContent('Met: One number');
-      expect(screen.getByText('No runs like 123 or abc').closest('li')).toHaveTextContent(
-        'Not met: No runs like 123 or abc'
-      );
+      const rule = (name: string) => screen.getAllByRole('listitem').find((li) => li.textContent?.endsWith(name));
+      expect(rule('One number')).toHaveTextContent('Met: One number');
+      expect(rule('No runs like 123 or abc')).toHaveTextContent('Not met: No runs like 123 or abc');
     });
 
     it('signs out and says why after a successful change', async () => {
@@ -363,21 +362,22 @@ describe('UserSettingsPage', () => {
   describe('Account Tab input purpose', () => {
     it("names the purpose of each of the member's own fields", async () => {
       renderWithRouter(<UserSettingsPage />);
-      const expected: Record<string, string> = {
-        firstName: 'given-name',
-        middleName: 'additional-name',
-        lastName: 'family-name',
-        preferredName: 'nickname',
-        phone: 'tel',
-        mobile: 'tel',
-        addressStreet: 'street-address',
-        addressCity: 'address-level2',
-        addressState: 'address-level1',
-        addressZip: 'postal-code',
-      };
+      // By label, as a user finds them; each label is the field's own.
+      const expected: [RegExp, string][] = [
+        [/^first name/i, 'given-name'],
+        [/^middle name/i, 'additional-name'],
+        [/^last name/i, 'family-name'],
+        [/^preferred name/i, 'nickname'],
+        [/^phone/i, 'tel'],
+        [/^mobile/i, 'tel'],
+        [/^street address/i, 'street-address'],
+        [/^city/i, 'address-level2'],
+        [/^state/i, 'address-level1'],
+        [/^zip code/i, 'postal-code'],
+      ];
       await screen.findByLabelText(/first name/i);
-      for (const [id, token] of Object.entries(expected)) {
-        expect(document.getElementById(id), id).toHaveAttribute('autocomplete', token);
+      for (const [label, token] of expected) {
+        expect(screen.getByLabelText(label), String(label)).toHaveAttribute('autocomplete', token);
       }
     });
   });

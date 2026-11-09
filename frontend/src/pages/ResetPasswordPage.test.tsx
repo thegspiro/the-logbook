@@ -95,10 +95,9 @@ describe('ResetPasswordPage', () => {
 
     await user.type(await screen.findByLabelText(/^new password/i), 'Abcdef123!xyz');
 
-    expect(screen.getByText('At least 12 characters').closest('li')).toHaveTextContent('Met: At least 12 characters');
-    expect(screen.getByText('No runs like 123 or abc').closest('li')).toHaveTextContent(
-      'Not met: No runs like 123 or abc'
-    );
+    const rule = (name: string) => screen.getAllByRole('listitem').find((li) => li.textContent?.endsWith(name));
+    expect(rule('At least 12 characters')).toHaveTextContent('Met: At least 12 characters');
+    expect(rule('No runs like 123 or abc')).toHaveTextContent('Not met: No runs like 123 or abc');
   });
 
   // W03-11: two checks of the link could overlap (React re-runs the effect, or
