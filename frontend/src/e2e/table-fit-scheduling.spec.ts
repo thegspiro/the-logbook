@@ -47,7 +47,7 @@ const HISTORY_IMPORT_DETAIL = {
   existing_shift_decisions: {},
   analysis: {
     can_commit: false,
-    blocking_issue_count: 2,
+    blocking_issue_count: 3,
     counts: {
       rows: HISTORY_IMPORT_ROWS.length,
       excluded: 1,
@@ -77,6 +77,16 @@ const HISTORY_IMPORT_DETAIL = {
         message: 'The unit "Engine 21 Advanced Life Support Tanker Unit" matches no apparatus',
         blocking: true,
         row_ids: ['row-0'],
+      },
+      // The Rows tab answers a probable match in the row's status cell, so
+      // the widest cell carries a pair of buttons as well as the message.
+      {
+        code: 'probable_match',
+        message:
+          'Line 1240 is a 75% match for the shift starting with line 1238. Confirm it is the same shift, or keep it separate.',
+        blocking: true,
+        row_ids: ['row-0'],
+        ref: 'row-x',
       },
     ],
     options: { members: [], units: [], seats: [] },

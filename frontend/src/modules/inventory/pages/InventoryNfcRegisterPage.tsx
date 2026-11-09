@@ -354,6 +354,7 @@ export const InventoryNfcRegisterPage: React.FC = () => {
           {!loading && !error && tags.length === 0 && (
             <div className="card p-4">
               <EmptyState
+                compact
                 headingLevel={2}
                 icon={Nfc}
                 title={filtered ? 'No tags match these filters' : 'No NFC tags linked yet'}

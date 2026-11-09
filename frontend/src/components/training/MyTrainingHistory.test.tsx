@@ -16,7 +16,10 @@ vi.mock('../../services/api', () => ({
 
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 
-vi.mock('../../utils/dateFormatting', () => ({
+// The real module, so month headings render through formatCalendarDate;
+// only the row dates are simplified to their raw value.
+vi.mock('../../utils/dateFormatting', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../utils/dateFormatting')>()),
   formatDate: (date: string | null) => date ?? 'N/A',
 }));
 
@@ -167,5 +170,102 @@ describe('MyTrainingHistory', () => {
     mockGetRecords.mockRejectedValue(new Error('boom'));
     render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
     expect(await screen.findByRole('alert')).toHaveTextContent(/boom|Failed to load/);
+  });
+
+  describe('month headers', () => {
+    const monthYears = [
+      {
+        year: '2026',
+        records: 3,
+        hours: 4.5,
+        months: [
+          { month: '2026-10', records: 2, hours: 3.5 },
+          { month: '2026-03', records: 1, hours: 1 },
+        ],
+      },
+    ];
+
+    beforeEach(() => {
+      mockGetRecords.mockReset();
+      mockGetRecords.mockImplementation(
+        (params: { year?: string }) =>
+          Promise.resolve(
+            params.year === '2026'
+              ? {
+                  // A page that ends part-way through October: the header
+                  // must still carry October's full total from the server.
+                  items: [record('x', 'Ladders', '2026-10-28'), record('y', 'Hazmat', '2026-03-02')],
+                  total: 3,
+                  page: 1,
+                  page_size: 25,
+                  years: monthYears,
+                }
+              : { items: [], total: 3, page: 1, page_size: 1, years: monthYears }
+          ) as unknown
+      );
+    });
+
+    it('heads each month with its full totals from the server, above its own rows', async () => {
+      render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
+
+      const october = await screen.findByRole('rowheader', { name: /October 2026/ });
+      expect(october).toHaveTextContent('October 2026· 2 records · 3.5 hrs');
+      expect(screen.getByRole('rowheader', { name: /March 2026/ })).toHaveTextContent('March 2026· 1 record · 1 hrs');
+
+      // Each month is its own row group, holding its header and its rows only.
+      const groups = within(screen.getByRole('table'))
+        .getAllByRole('rowgroup')
+        .slice(1) // the thead
+        .map((g) =>
+          within(g)
+            .getAllByRole('row')
+            .map((r) => r.textContent ?? '')
+        );
+      expect(groups).toHaveLength(2);
+      expect(groups[0]?.[0]).toContain('October 2026');
+      expect(groups[0]?.slice(1).join()).toContain('Ladders');
+      expect(groups[0]?.join()).not.toContain('Hazmat');
+      expect(groups[1]?.[0]).toContain('March 2026');
+      expect(groups[1]?.slice(1).join()).toContain('Hazmat');
+    });
+
+    it('leaves hours out of the month headers when the department hides hours', async () => {
+      render(
+        <MyTrainingHistory visibility={{ ...visibility, show_training_hours: false }} hoursSummary={hoursSummary} />
+      );
+
+      const october = await screen.findByRole('rowheader', { name: /October 2026/ });
+      expect(october).toHaveTextContent('October 2026· 2 records');
+      expect(october).not.toHaveTextContent('hrs');
+    });
+
+    it('keeps one header for a month that a "Show more" page continues', async () => {
+      const user = userEvent.setup();
+      mockGetRecords.mockImplementation(
+        (params: { year?: string; page?: number }) =>
+          Promise.resolve(
+            params.year === '2026'
+              ? {
+                  items:
+                    params.page === 2
+                      ? [record('y', 'Pumps', '2026-10-02'), record('z', 'Hazmat', '2026-03-02')]
+                      : [record('x', 'Ladders', '2026-10-28')],
+                  total: 3,
+                  page: params.page ?? 1,
+                  page_size: 1,
+                  years: monthYears,
+                }
+              : { items: [], total: 3, page: 1, page_size: 1, years: monthYears }
+          ) as unknown
+      );
+      render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
+
+      await screen.findByText('Ladders');
+      await user.click(screen.getByRole('button', { name: 'Show more' }));
+      await screen.findByText('Pumps');
+
+      expect(screen.getAllByRole('rowheader', { name: /October 2026/ })).toHaveLength(1);
+      expect(screen.getAllByRole('rowheader', { name: /March 2026/ })).toHaveLength(1);
+    });
   });
 });

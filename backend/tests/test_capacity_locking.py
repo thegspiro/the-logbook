@@ -852,3 +852,39 @@ class TestLegalDraftCap:
 
         source = _source_of(LegalDocumentService.create_draft)
         assert source.index("_assert_under_draft_cap(") < source.index("self.db.add(")
+
+
+class TestChiefOverrideOverlapLocking:
+    """A Chief's override is refused when a live override for the same member
+    already covers part of its dates: a read-then-insert. Two grants sent
+    together (a double-tap, two tabs) both read "no overlap" and both insert,
+    leaving two live overrides over one day, so revoking either looks as though
+    it did nothing (TR-17 pass 14, TR14-1)."""
+
+    def test_the_requirement_row_is_locked_before_the_overlap_read(self):
+        from app.services.requirement_override_service import (
+            RequirementOverrideService,
+        )
+
+        source = _source_of(RequirementOverrideService.grant)
+        assert "with_for_update()" in source, (
+            "grant must lock the requirement row to serialize two grants "
+            "for the same requirement."
+        )
+        assert source.index("with_for_update()") < source.index(
+            "list_overrides("
+        ), "The lock must be taken before the overlap check reads."
+
+    def test_the_overlap_read_is_a_locking_read(self):
+        from app.services.requirement_override_service import (
+            RequirementOverrideService,
+        )
+
+        grant = _source_of(RequirementOverrideService.grant)
+        assert "for_update=True" in grant, (
+            "The overlap check must be a locking read: under REPEATABLE READ "
+            "a plain SELECT answers from the snapshot taken before the lock, "
+            "so the loser of the race still sees no overlap (pitfall #27)."
+        )
+        listing = _source_of(RequirementOverrideService.list_overrides)
+        assert "with_for_update()" in listing

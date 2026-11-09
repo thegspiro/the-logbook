@@ -166,3 +166,47 @@ test.describe('Reorder requests table', () => {
     });
   }
 });
+
+const CHARGES = {
+  total: 4,
+  // Item 0 is pending and items 1–3 are charged, at 123,456.78 each.
+  total_pending: 123456.78,
+  total_charged: 370370.34,
+  total_waived: 0,
+  items: [0, 1, 2, 3].map((i) => ({
+    issuance_id: `issuance-${i}`,
+    item_id: `item-${i}`,
+    item_name: 'MSA G1 Self-Contained Breathing Apparatus Facepiece, Large',
+    user_id: `user-${i}`,
+    user_name: 'Alexandra Ayala-Montgomery',
+    quantity_issued: 12,
+    issued_at: '2026-10-14T15:30:00Z',
+    returned_at: '2026-10-28T15:30:00Z',
+    is_returned: true,
+    return_condition: 'damaged_beyond_repair',
+    unit_cost_at_issuance: 12345.67,
+    charge_status: i === 0 ? 'pending' : 'charged',
+    charge_amount: 123456.78,
+  })),
+};
+
+// Charges: item, member, quantity, return condition, a six-digit amount,
+// status, date and charge/waive buttons. Above sm it replaces the mobile card
+// list and can overflow its card on a tablet with the side navigation open.
+test.describe('Issuance charges table', () => {
+  for (const viewport of TABLE_FIT_VIEWPORTS) {
+    test(`/inventory/admin/charges — ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await signIn(page, { permissions: PERMISSIONS });
+      await page.route('**/api/v1/inventory/charges**', (route) => {
+        void route.fulfill(json(CHARGES));
+      });
+      await page.goto('/inventory/admin/charges');
+      const table = page
+        .getByRole('table')
+        .filter({ has: page.getByRole('columnheader', { includeHidden: true, name: 'Condition', exact: true }) });
+      await table.waitFor();
+      await expectTableFitsItsCard(table, 'Issuance charges table');
+    });
+  }
+});

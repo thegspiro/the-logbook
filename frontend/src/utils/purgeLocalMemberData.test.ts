@@ -123,6 +123,16 @@ describe('purgeLocalMemberData', () => {
     expect(localStorage.getItem('store-cart-m2-w1')).toBeNull();
   });
 
+  it('removes every unfinished training-program wizard draft', async () => {
+    localStorage.setItem('program-wizard-draft-m1', JSON.stringify({ version: 1, savedAt: 1, data: {} }));
+    localStorage.setItem('program-wizard-draft-m2', JSON.stringify({ version: 1, savedAt: 1, data: {} }));
+
+    await purgeLocalMemberData();
+
+    expect(localStorage.getItem('program-wizard-draft-m1')).toBeNull();
+    expect(localStorage.getItem('program-wizard-draft-m2')).toBeNull();
+  });
+
   it('still clears the other stores when one throws', async () => {
     mockClearAllDrafts.mockImplementation(() => {
       throw new Error('localStorage unavailable (private browsing)');

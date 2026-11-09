@@ -2,7 +2,7 @@
 
 **Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-10-19 (pass 9),
 2026-10-24 (pass 10), 2026-10-26 (pass 11), 2026-10-29 (pass 12), 2026-11-02
-(pass 13) · **PR:** see `PROGRESS.md`'s **Open PR** row
+(pass 13), 2026-11-08 (pass 14) · **PR:** see `PROGRESS.md`'s **Open PR** row
 
 **Backend:** `api/v1/endpoints/training.py`,
 `api/v1/endpoints/training_programs.py`,
@@ -19,6 +19,8 @@ of this surface and left it for whichever row claimed it),
 `services/training_requirement_removal.py`, `services/training_course_names.py`,
 `services/cert_alert_service.py`, `services/shift_evaluation_service.py`
 (pass 13), `services/shift_evaluation_template_service.py` (pass 13),
+`services/requirement_override_service.py` (pass 14 — new, serves only
+`training.py`'s three override routes),
 `mcp/tools/training.py`,
 `models/training.py`, `models/knowledge_test.py` (pass 12),
 `models/shift_evaluation.py` (pass 13),
@@ -39,7 +41,10 @@ shift-evaluation pages/components added in pass 13
 completion_reason`), `7c2e9a41b6d3` (2026-10-05, the three knowledge-tests
 tables — reviewed for the first time in pass 12), `3d0b6b6be048` (pass 13,
 shift evaluation templates), `5781476f2012` (pass 13, shift evaluations),
-`e059227da2c0` (pass 13, the three shift-evaluation requirement types)
+`e059227da2c0` (pass 13, the three shift-evaluation requirement types),
+`89cfef37cca8` (pass 14, session-attendance requirements), `9446e373c7a3`
+(pass 14, Chief requirement overrides), `400ce5009f5e` (pass 14, outside-shift
+evaluations), `bd8fc0c4a941` (pass 14, training-record match keys and backfill)
 
 ---
 
@@ -2644,6 +2649,244 @@ confirmed) and no change to `node_modules/typescript` vs.
 `node_modules/typescript-native`'s split. Both `npm run typecheck` and
 `npm run lint` then passed clean — **this sandbox's incomplete dependency
 install, not training-core's code, was what the first run hit.**
+
+---
+
+## Pass 14 (2026-11-08) — 1 fixed, 1 flagged (both LOW); TR7-1 closed by owner decision; real delta (14 commits, four new surfaces)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session was
+unreachable again. PR #4119 (Feature 16, Events & requests, pass 14) had
+already merged (`51e6e1b5`, current `main`). A fresh `list_pull_requests`
+(state=open, 23 PRs) found none with a `claude/security-review-*` head. Row 17
+was the next `⬜`. Branch `claude/security-review-training-core-p14`. The
+`-p13` name already exists on the remote, so this branch does not reuse it
+(Pitfall #24).
+
+### Window and method
+
+Baseline `740e7118` (pass 13's commit) to `51e6e1b5`. That is 378 non-merge
+commits repo-wide, and 14 of them touch this feature's declared files with a
+real diff (`git log --no-merges 740e7118..HEAD -- <declared files>`). All 129
+routes in the six endpoint files were listed again by AST (decorator `router.*`
+plus each handler's `Depends(...)` defaults), not taken from pass 13's count:
+`training.py` 39, `training_programs.py` 47, `training_sessions.py` 12,
+`knowledge_tests.py` 13, `shift_evaluation_templates.py` 8,
+`shift_evaluations.py` 10. Every route has an auth dependency. Of the 39
+routes that use `get_current_user` alone, 36 were traced in earlier passes
+(each re-authorizes in its body or returns only the caller's own rows) and are
+unchanged here apart from the supervisor addition in item 4. The other three are
+the new Chief-override routes below. `knowledge_tests.py` and `training_programs.py`
+have no diff in the window.
+
+**Coverage:** I read in full the diffs to `training.py`, `training_sessions.py`,
+`shift_evaluations.py`, the new `requirement_override_service.py` (152 lines),
+the `training_service.py` and `training_session_service.py` session-attendance
+hunks, `load_held_sessions` in `training_compliance.py`, the outside-shift paths
+in `shift_evaluation_service.py` (`get_entry`, `_requirements`' external branch,
+`save_for_entry`/`_save`, `_entry_states`, `outstanding_entries`, `_users`), the
+new `training_requirement_courses.py`, and migrations `89cfef37cca8`,
+`9446e373c7a3`, `bd8fc0c4a941` and the unique-key part of `400ce5009f5e`. I did
+**not** read line by line the rest of `training_compliance.py`'s ~490-line diff
+(the grading arithmetic for `tally_session_attendance`, leave-month proration).
+That is grading logic with no query, permission or tenancy surface beyond
+`load_held_sessions`, and its own suites cover it (`test_session_attendance_requirement.py`,
+`test_leave_month_rule.py`, `test_training_waiver_periods.py`).
+
+### New surfaces, against the seven dimensions
+
+**1. Chief requirement overrides (`ba4c5f7b`)**:
+`GET/POST /training/requirements/{id}/overrides` and
+`POST …/overrides/{override_id}/revoke`.
+
+- _AuthN/AuthZ:_ the three routes use `get_current_user` and gate on
+  `holds_chief_position(current_user)`, which checks the slugs of
+  `current_user.positions` against `CHIEF_POSITION_SLUGS`. This is deliberately
+  a position and not a permission string, so no wildcard reaches it. The routes
+  are recorded with that reason in `tests/permissionless_route_baseline.txt`
+  (lines 472–495). `current_user.positions` is already loaded for permission
+  resolution (`dependencies.py:73-75`), so the check cannot raise
+  MissingGreenlet. Reading the list also accepts `training.manage`, which is a
+  stated product choice.
+- _Tenancy:_ `get_requirement` and `revoke` filter on `organization_id`.
+  `revoke` also requires `requirement_id` to match, so an override cannot be
+  revoked through another requirement's path. `grant` refuses a `user_id` that
+  fails `is_in_org` (XC-1). `names()` runs an unscoped
+  `User.id.in_(...)`, but its ids come only from override rows that were
+  already fetched org-scoped.
+- _Exposure:_ `reason` is `EncryptedText`
+  (`models/training.py:5096`). The audit events carry ids and dates and never
+  the reason. `/overrides` is in `UNCACHEABLE_SUBSTRINGS`
+  (`frontend/src/utils/apiCache.ts`).
+- _Migration:_ `9446e373c7a3` adds `allows_chief_override` as NOT NULL with
+  `server_default="0"`, so existing rows read false (Pitfall #35, row 1 handled).
+  The new table starts empty. Both `SET NULL` FKs (`granted_by`, `revoked_by`)
+  are `nullable=True`. The migration is `create_all`-tolerant.
+- _Abuse resistance:_ the overlapping-dates refusal was a plain read followed by
+  an insert. This is **TR14-1**, below, and it is now fixed.
+
+**2. Session-attendance requirements (`b07e8e51`, `a81aaa88`)**:
+`PUT /training/sessions/{id}/attendance-requirements`, plus
+`attendance_requirement_ids` on create and recurring create.
+
+- `_attendance_requirements_valid` requires every id to be a
+  `SESSION_ATTENDANCE` requirement **in the caller's org**. It does this by
+  set-equality against an org-filtered select, so one foreign id refuses the
+  whole set (XC-1). `set_attendance_requirements` fetches the session
+  org-scoped. The link table carries `organization_id` and a unique
+  `(session_id, requirement_id)` key, and duplicate ids are de-duplicated before
+  insert. The schema caps the list at `max_length=50`.
+- `load_held_sessions` filters `organization_id` on both the link table and
+  `TrainingSession`, and counts only finalized, non-cancelled sessions.
+- Migration `89cfef37cca8`: the new column is nullable and the new table starts
+  empty. The ENUM widen reads the live nullability and default. The downgrade
+  maps the new type to `checklist` before it narrows the ENUM.
+- Role fit is flagged separately as **TR14-2**.
+
+**3. Outside-shift evaluations (`e810d2b7`, `3cb522ef`)**: four new
+`/training/shift-evaluations/external/*` routes, all
+`require_permission("training.manage")`.
+
+- Static `/external/outstanding` is declared before `/external/{entry_id}`, and
+  both come before `/{evaluation_id}`, so no route shadows another.
+- `get_entry` filters `organization_id`. An evaluation is offered only while the
+  entry is `COUNTED` and on an agency with `evaluate_shifts`, so a pending or
+  rejected self-logged shift cannot earn credit (`_requirements`' external
+  branch and `_entry_states` both apply this). `_save` still refuses
+  `member_id == evaluator.id`, so a `training.manage` holder cannot enter an
+  evaluation of their own outside shift. `400ce5009f5e` adds a unique key per
+  `(external_shift_id, member_id, scope_key)`, and `_save`'s `IntegrityError`
+  re-apply handles a double submit (Pitfall #36). `_users` is org-filtered.
+
+**4. Supervisor crew reads (`e5fda67e`)**: `_require_self_or_training_officer`
+and `GET /training/records` now also admit a _current_ supervisor, through
+`MemberSupervisorService.is_current_supervisor(org, caller, member)`. That
+service is org-scoped and date-bounded and was reviewed under SCH-15 pass 14.
+This was an owner decision on 2026-11-01. The records list still confines a
+non-officer to their own rows unless the supervisor check passes for that one
+`user_id`.
+
+**5. Match keys (`71a6fd75`, migration `bd8fc0c4a941`)**: keys are maintained by
+ORM `set` listeners (`models/training.py:562-569`). I searched for bulk writers
+that would bypass them (`update(TrainingRecord)`) and found three in
+`external_course_mapping.py`. None of the three writes `course_name` or
+`certification_number`. The backfill inlines a frozen copy of the normalizer
+(Pitfall #20), batches its writes in groups of 1,000, and is tested against rows
+(`test_training_match_key_migration.py`). `training_requirement_courses.py`
+scopes its course lookup to the org.
+
+### Findings
+
+#### TR14-1: LOW (abuse resistance / data integrity, Pitfall #27): two simultaneous Chief overrides could both pass the overlap check. **FIXED**
+
+**Where:** `backend/app/services/requirement_override_service.py`,
+`RequirementOverrideService.grant` (overlap loop, previously a plain
+`list_overrides` read followed by `db.add`).
+
+**Scenario:** the Chief double-taps "Grant", or grants from two tabs, for the
+same member with overlapping dates. Both transactions read "no live override
+covers these dates", both insert, and the member now has two live overrides
+over the same days. The service's own comment says why that is wrong: revoking
+either one "would make revoking … look as though it did nothing", because the
+other still makes the member read as met. No unique key can express "date
+ranges overlap", so only a lock can enforce the rule.
+
+**Fix:** `grant` now locks the requirement row (`SELECT … FOR UPDATE`, filtered
+on org) before the overlap check. The check reads through
+`list_overrides(…, for_update=True)`, which is a locking read, because under
+REPEATABLE READ a plain SELECT after the lock would still answer from the
+earlier snapshot. Non-grant callers of `list_overrides` behave as before, since
+`for_update` defaults to False.
+
+**Guard:** `tests/test_capacity_locking.py::TestChiefOverrideOverlapLocking`
+has two tests. The first asserts the requirement lock is taken before the
+overlap read. The second asserts the read is a locking one. Both **failed
+against the unfixed code** and pass now (Pitfall #37). The existing
+`tests/test_requirement_override.py` still passes, including its DB-backed
+`test_overlapping_dates_are_refused`.
+
+#### TR14-2: LOW (authorization / role fit): `events.manage` alone decides which sessions count toward a compliance requirement. **OPEN, FLAGGED**
+
+**Where:** `backend/app/api/v1/endpoints/training_sessions.py:385-429`
+(`set_session_attendance_requirements`, `require_permission("events.manage")`),
+and `attendance_requirement_ids` on `POST /training/sessions` and
+`/recurring`.
+
+**Scenario:** a session-attendance requirement is created by a
+`training.manage` holder ("attend 60% of drills"). An event organizer who holds
+only `events.manage` can then do two things. They can link past, finalized
+drills to it, which retroactively lowers every member's attended share. Or they
+can unlink drills a member missed, which raises that member's share. Either
+way, compliance standing moves on every screen without anyone who holds a
+training grant acting. Each change is audited (`training_session_updated`,
+`action: attendance_requirements_set`, with the id list).
+
+**Why flagged, not fixed:** this follows the gate every other training-session
+mutation uses (create, attach, finalize and linkage are all `events.manage`),
+and the commit says linking finalized sessions on purpose is intended. Moving it
+to `training.manage`, or requiring both grants, would change who can do what,
+and that is a product decision. Mirrored to `docs/KNOWN_LIMITATIONS.md`.
+
+### Re-verified standing items
+
+- **TR7-1: CLOSED (owner decision 2026-11-01, built in `71a6fd75`).** The
+  duplicate `POST /training/enrollments` handler is deleted. The AST route list
+  above has no `/enrollments` POST in `training.py`.
+  `training_programs.py:1468` (`enroll_member_in_program` →
+  `TrainingProgramService.enroll_member`, locked and complete) is the only
+  manual enrollment path. `tests/test_legacy_enrollment_route_removed.py` pins
+  this. `docs/KNOWN_LIMITATIONS.md` already records the resolution, and
+  `TestProgramEnrollmentLocking` still guards the remaining path.
+- TR-4's `year` default and the certification-name cutoff are owner decisions.
+  The cutoff is extended by `bd8fc0c4a941` to every fallback-graded type, which
+  was itself an owner decision of 2026-11-01. Both are consistent with what is
+  recorded.
+
+### Verified good ✅ (pass 14 additions)
+
+- **The override power cannot be reached through a role or a wildcard.** It is
+  checked against position slugs, not `user_has_permission`, and the
+  permissionless baseline records each route with its reason.
+- **Client-supplied FK ids on the new surfaces are validated in-org.** Override
+  `user_id` goes through `is_in_org`. Attendance `requirement_ids` must
+  set-equal an org-filtered select that also checks the type. Outside-shift
+  `entry_id` is resolved by `get_entry`, which filters org.
+- **An outside shift earns evaluation credit only once it counts.** Both readers
+  apply `status == COUNTED`, and self-evaluation is still refused.
+- **The medical-adjacent free text is encrypted at rest and kept out of audit
+  rows.** Override `reason` is `EncryptedText`. Audit `event_data` carries ids
+  and dates only.
+
+## Schema & migration notes (pass 14)
+
+Four in-scope migrations in this window: `89cfef37cca8`, `9446e373c7a3`,
+`400ce5009f5e` and `bd8fc0c4a941`. All are `create_all`-tolerant. Each one adds
+nullable columns, a column with a server default, empty tables, or a unique key
+over a column that is NULL on every existing row. The one backfill
+(`bd8fc0c4a941`) is tested with rows present. No fix was needed.
+`5438939506b9` (`compliance_configs.leave_month_rule`) belongs to Feature 20.
+
+## Guard tests added (pass 14)
+
+- `tests/test_capacity_locking.py::TestChiefOverrideOverlapLocking` (2 tests,
+  TR14-1). Both were seen red before the fix.
+
+## Completion gate (pass 14)
+
+| Check                                                                                                                                                                    | Result                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (7.4.1)                                                                                                                                    | ✅ 0 violations                                      |
+| `python -m black --check app/ tests/ alembic/` (26.10.1, the CI pin)                                                                                                     | ✅ clean                                             |
+| `isort --check-only app/ tests/ alembic/` (9.0.2)                                                                                                                        | ✅ clean                                             |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                        | ✅ 749 revisions, single head `78f196079c95`         |
+| `scripts/check_route_permissions.py --strict` (repo root)                                                                                                                | ✅ 305 routes, 0 errors, 0 warnings                  |
+| `scripts/generate_schema_docs.py --check`                                                                                                                                | ✅ up to date                                        |
+| `pytest tests/ -k "training or compliance or knowledge_test or shift_evaluation or requirement_override or session_attendance or capacity_locking or legacy_enrollment"` | ✅ 2798 passed, 1 environment-only skip (`py_vapid`) |
+| Standing guard suites (org-scoping ratchet, LIKE escaping, CSV sweep, `create_all` tolerance, log-call shape, logging, baseline grants, migration chain)                 | ✅ 136 passed                                        |
+| `npm run typecheck`                                                                                                                                                      | ✅ 0 errors                                          |
+| `npm run lint` (`--max-warnings 10`)                                                                                                                                     | ✅ 0 errors, 0 warnings                              |
+
+Rotation row 17 → ✅ (pending this PR's merge). Next: Feature 18 (Training
+extended).
 
 ---
 
