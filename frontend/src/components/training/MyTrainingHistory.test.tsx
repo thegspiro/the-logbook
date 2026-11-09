@@ -166,6 +166,37 @@ describe('MyTrainingHistory', () => {
     expect(within(row).getByText('Completed')).toBeInTheDocument();
   });
 
+  // Workflow review W80-15: credit withdrawn because its event was deleted
+  // read "Cancelled" with no explanation.
+  it('says why an event withdrew a record’s credit', async () => {
+    mockGetRecords.mockImplementation(
+      (params: { year?: string }) =>
+        Promise.resolve(
+          params.year === '2026'
+            ? {
+                items: [
+                  {
+                    ...record('w', 'Hose Advancement', '2026-11-07'),
+                    status: 'cancelled',
+                    hours_completed: 0,
+                    void_reason: "Credit withdrawn: removed from 'Past Hose Drill' attendance.",
+                  },
+                ],
+                total: 1,
+                page: 1,
+                page_size: 25,
+                years: YEARS,
+              }
+            : pageFor(params.year)
+        ) as unknown
+    );
+    render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
+
+    const row = await screen.findByRole('row', { name: /Hose Advancement/ });
+    expect(within(row).getByText("Credit withdrawn: removed from 'Past Hose Drill' attendance.")).toBeInTheDocument();
+    expect(within(row).queryByText('voided')).not.toBeInTheDocument();
+  });
+
   it('reports a failed load instead of an empty history', async () => {
     mockGetRecords.mockRejectedValue(new Error('boom'));
     render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);

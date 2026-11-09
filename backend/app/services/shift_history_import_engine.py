@@ -715,6 +715,10 @@ class OwnUnit:
     # The seats the unit is staffed by, as the apparatus record lists them.
     # Empty when the record lists none.
     seats: Tuple[str, ...] = ()
+    # False when the unit is archived (Apparatus module) or deactivated (basic
+    # list), which already keeps it out of the scheduling pickers. It still
+    # matches and can still be chosen here: years of history ran on it.
+    active: bool = True
 
 
 @dataclass(frozen=True)
@@ -723,6 +727,10 @@ class ExternalUnit:
     name: str
     agency_id: str
     agency_name: str
+    # False when the unit or its agency is hidden from members. A hidden unit
+    # still matches and can still be chosen: an old file names vehicles the
+    # department has since stopped offering.
+    active: bool = True
 
 
 @dataclass(frozen=True)
@@ -836,6 +844,9 @@ class UnitResolution:
     target_id: Optional[str] = None
     candidates: List[Tuple[str, str]] = field(default_factory=list)
     new_agency_name: str = ""
+    # Set when the reviewer picked an existing agency for the new unit, so a
+    # rename between review and commit cannot spawn a second agency.
+    new_agency_id: Optional[str] = None
     new_unit_name: str = ""
     # The seat a member takes on this unit when the file names no position.
     default_seat: Optional[str] = None
@@ -1051,6 +1062,8 @@ def resolve_unit(
             resolution.target_id = None
             resolution.new_agency_name = agency_name
             resolution.new_unit_name = unit_name
+            agency_id = str(mapping.get("agency_id") or "")
+            resolution.new_agency_id = agency_id or None
     return resolution
 
 

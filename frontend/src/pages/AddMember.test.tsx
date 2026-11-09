@@ -405,6 +405,50 @@ describe('AddMember', { timeout: 20_000 }, () => {
     });
   });
 
+  // Forms review F-4: an empty save showed a message under every field but
+  // tied none of them to its input, and left focus on the button at the
+  // bottom of a 30-field form with the first errors out of view.
+  describe('saying what is wrong', () => {
+    it('lists the missing fields at the top, takes focus there, and ties each message to its field', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      const summary = screen.getByRole('alert', { name: 'Fix these before saving' });
+      expect(summary).toHaveFocus();
+      expect(within(summary).getByRole('link', { name: 'First name: First name is required' })).toHaveAttribute(
+        'href',
+        '#add-firstName'
+      );
+      const first = screen.getByLabelText(/^first name/i);
+      expect(first).toHaveAttribute('aria-invalid', 'true');
+      expect(first).toHaveAttribute('aria-required', 'true');
+      expect(first).toHaveAccessibleDescription('First name is required');
+      expect(mockCreateMember).not.toHaveBeenCalled();
+    });
+
+    it('puts a server refusal on the field it names', async () => {
+      mockCreateMember.mockRejectedValue({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'email', message: 'Enter a valid email address.' }], code: 'LB-VAL-001' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      const email = screen.getByPlaceholderText('john.doe@example.com');
+      await waitFor(() => expect(email).toHaveAccessibleDescription('Enter a valid email address.'));
+      expect(screen.getByRole('alert', { name: 'Fix these before saving' })).toHaveFocus();
+    });
+  });
+
   describe('workflow review W08', () => {
     it('names every field by its label', async () => {
       renderWithRouter(<AddMember />);

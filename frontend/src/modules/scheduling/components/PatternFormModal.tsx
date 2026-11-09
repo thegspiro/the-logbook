@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
-import toast from 'react-hot-toast';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { FormField, FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
 import { formatTimeOfDay } from '../../../utils/dateFormatting';
 import { formCoercions } from '../../../utils/formValues';
 import { X } from 'lucide-react';
@@ -14,6 +14,49 @@ import PatternTemplateInactiveNotice from './PatternTemplateInactiveNotice';
 // a list of dates), which this form has no fields for: saved from here they
 // generate no shifts at all. The Patterns tab builds that config.
 const CONFIG_DRIVEN_TYPES = new Set(['weekly', 'custom']);
+
+type PatternField =
+  | 'name'
+  | 'description'
+  | 'pattern_type'
+  | 'template_id'
+  | 'rotation_days'
+  | 'days_on'
+  | 'days_off'
+  | 'start_date'
+  | 'end_date';
+
+const PATTERN_FIELDS: FieldSpecs<PatternField> = {
+  name: { id: 'pattern-name', label: 'Name' },
+  description: { id: 'pattern-description', label: 'Description' },
+  pattern_type: { id: 'pattern-type', label: 'Pattern type' },
+  template_id: { id: 'pattern-template', label: 'Shift template' },
+  rotation_days: { id: 'pattern-rotation', label: 'Rotation days' },
+  days_on: { id: 'pattern-days-on', label: 'Days on' },
+  days_off: { id: 'pattern-days-off', label: 'Days off' },
+  start_date: { id: 'pattern-start-date', label: 'Start date' },
+  end_date: { id: 'pattern-end-date', label: 'End date' },
+};
+
+const WHOLE_DAYS_MESSAGE = 'Enter a whole number of 1 or more.';
+
+/** What stops a save, checked before anything is sent (forms review F-3). */
+function checkPattern(form: PatternFormData, showsRotation: boolean): FieldErrors<PatternField> {
+  const errors: FieldErrors<PatternField> = {};
+  if (!form.name.trim()) errors.name = 'Enter a name for the pattern.';
+  if (!form.start_date) errors.start_date = 'Choose the date the pattern starts.';
+  // ISO dates compare correctly as strings.
+  if (form.start_date && form.end_date && form.end_date < form.start_date) {
+    errors.end_date = 'The end date must be on or after the start date.';
+  }
+  if (showsRotation) {
+    for (const key of ['rotation_days', 'days_on', 'days_off'] as const) {
+      const raw = form[key];
+      if (raw !== '' && !(Number.isInteger(Number(raw)) && Number(raw) >= 1)) errors[key] = WHOLE_DAYS_MESSAGE;
+    }
+  }
+  return errors;
+}
 
 interface PatternFormModalProps {
   isOpen: boolean;
@@ -36,10 +79,22 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
 
   const [formData, setFormData] = useState<PatternFormData>(initialData || emptyPatternForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const fieldErrors = useFieldErrors(PATTERN_FIELDS);
+  const clearErrors = fieldErrors.clear;
+  const setFieldError = fieldErrors.setError;
 
   useEffect(() => {
     setFormData(initialData || emptyPatternForm);
-  }, [initialData, isOpen]);
+    clearErrors();
+  }, [initialData, isOpen, clearErrors]);
+
+  /** Set one field, and drop the error it carried: editing it is the answer. */
+  const update = <K extends keyof PatternFormData & PatternField>(key: K, value: PatternFormData[K]) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    setFieldError(key, null);
+  };
+
+  const showsRotation = formData.pattern_type === 'platoon' || formData.pattern_type === 'custom';
 
   // A stored weekly/custom pattern keeps its own type on screen, so an edit
   // here cannot silently change it; it still cannot be switched to one.
@@ -51,6 +106,14 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const problems = checkPattern(formData, showsRotation);
+    fieldErrors.setFormError(null);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.setErrors(problems);
+      fieldErrors.focusFirst(problems);
+      return;
+    }
+    fieldErrors.setErrors({});
     setIsSubmitting(true);
     try {
       // The edit modal is the one handed a pattern to start from. On edit a
@@ -74,7 +137,9 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
       await onSubmit(payload);
       onClose();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to save pattern'));
+      // A refusal lands on the field it names; the dialog stays open with the
+      // member's values in it.
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Could not save the pattern. Try again.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -103,92 +168,92 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
         </div>
 
         <form
+          noValidate
           onSubmit={(e) => {
             void handleSubmit(e);
           }}
           className="space-y-4 p-6"
         >
-          <div>
-            <label htmlFor="pattern-name" className="form-label">
-              Name <span aria-hidden="true">*</span>
-            </label>
-            <input
-              id="pattern-name"
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-              className="form-input"
-              placeholder="e.g., 24/48 Rotation"
-              required
-              aria-required="true"
-            />
-          </div>
+          <FormField id={PATTERN_FIELDS.name.id} label="Name" required error={fieldErrors.errors.name}>
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                value={formData.name}
+                onChange={(e) => update('name', e.target.value)}
+                className="form-input"
+                placeholder="e.g., 24/48 Rotation"
+              />
+            )}
+          </FormField>
 
-          <div>
-            <label htmlFor="pattern-description" className="form-label">
-              Description
-            </label>
-            <textarea
-              id="pattern-description"
-              value={formData.description}
-              onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-              className="form-input"
-              rows={2}
-              placeholder="Optional description"
-            />
-          </div>
+          <FormField id={PATTERN_FIELDS.description.id} label="Description" error={fieldErrors.errors.description}>
+            {(field) => (
+              <textarea
+                {...field}
+                value={formData.description}
+                onChange={(e) => update('description', e.target.value)}
+                className="form-input"
+                rows={2}
+                placeholder="Optional description"
+              />
+            )}
+          </FormField>
 
-          <div>
-            <label htmlFor="pattern-type" className="form-label">
-              Pattern Type <span aria-hidden="true">*</span>
-            </label>
-            <select
-              id="pattern-type"
-              value={formData.pattern_type}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, pattern_type: e.target.value as PatternFormData['pattern_type'] }))
-              }
-              className="form-input"
-              aria-describedby="pattern-type-hint"
-              required
-            >
-              {patternTypeChoices.map((pt) => (
-                <option key={pt.value} value={pt.value}>
-                  {pt.label} - {pt.description}
-                </option>
-              ))}
-            </select>
-            <p id="pattern-type-hint" className="text-theme-text-muted mt-1 text-xs">
-              Weekly and custom patterns pick their days or dates, so create them from the{' '}
-              <Link to="/scheduling/admin/planning/patterns" className="underline">
-                Patterns tab
-              </Link>
-              .
-            </p>
-          </div>
-
-          <div>
-            <label htmlFor="pattern-template" className="form-label">
-              Shift Template
-            </label>
-            <select
-              id="pattern-template"
-              value={formData.template_id}
-              onChange={(e) => setFormData((prev) => ({ ...prev, template_id: e.target.value }))}
-              className="form-input"
-            >
-              <option value="">No template</option>
-              {/* A deactivated template is kept for the shifts and patterns that
-                  use it; it is offered only to a pattern that already names it. */}
-              {templates
-                .filter((t) => t.is_active !== false || t.id === formData.template_id)
-                .map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
-                    {t.is_active === false ? ' (inactive)' : ''}
+          <FormField
+            id={PATTERN_FIELDS.pattern_type.id}
+            label="Pattern Type"
+            required
+            error={fieldErrors.errors.pattern_type}
+            hint={
+              <>
+                Weekly and custom patterns pick their days or dates, so create them from the{' '}
+                <Link to="/scheduling/admin/planning/patterns" className="underline">
+                  Patterns tab
+                </Link>
+                .
+              </>
+            }
+          >
+            {(field) => (
+              <select
+                {...field}
+                value={formData.pattern_type}
+                onChange={(e) => update('pattern_type', e.target.value as PatternFormData['pattern_type'])}
+                className="form-input"
+              >
+                {patternTypeChoices.map((pt) => (
+                  <option key={pt.value} value={pt.value}>
+                    {pt.label} - {pt.description}
                   </option>
                 ))}
-            </select>
+              </select>
+            )}
+          </FormField>
+
+          <div>
+            <FormField id={PATTERN_FIELDS.template_id.id} label="Shift Template" error={fieldErrors.errors.template_id}>
+              {(field) => (
+                <select
+                  {...field}
+                  value={formData.template_id}
+                  onChange={(e) => update('template_id', e.target.value)}
+                  className="form-input"
+                >
+                  <option value="">No template</option>
+                  {/* A deactivated template is kept for the shifts and patterns that
+                      use it; it is offered only to a pattern that already names it. */}
+                  {templates
+                    .filter((t) => t.is_active !== false || t.id === formData.template_id)
+                    .map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
+                        {t.is_active === false ? ' (inactive)' : ''}
+                      </option>
+                    ))}
+                </select>
+              )}
+            </FormField>
             {/* The server holds a pattern whose template is inactive; saving
                 another template here is how it resumes. */}
             {selectedTemplate?.is_active === false && (
@@ -198,80 +263,67 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
             )}
           </div>
 
-          {(formData.pattern_type === 'platoon' || formData.pattern_type === 'custom') && (
+          {showsRotation && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <label htmlFor="pattern-rotation" className="form-label">
-                  Rotation Days
-                </label>
-                <input
-                  id="pattern-rotation"
-                  type="number"
-                  value={formData.rotation_days}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, rotation_days: e.target.value }))}
-                  className="form-input"
-                  min="1"
-                  placeholder="e.g., 3"
-                />
-              </div>
-              <div>
-                <label htmlFor="pattern-days-on" className="form-label">
-                  Days On
-                </label>
-                <input
-                  id="pattern-days-on"
-                  type="number"
-                  value={formData.days_on}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, days_on: e.target.value }))}
-                  className="form-input"
-                  min="1"
-                  placeholder="e.g., 1"
-                />
-              </div>
-              <div>
-                <label htmlFor="pattern-days-off" className="form-label">
-                  Days Off
-                </label>
-                <input
-                  id="pattern-days-off"
-                  type="number"
-                  value={formData.days_off}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, days_off: e.target.value }))}
-                  className="form-input"
-                  min="1"
-                  placeholder="e.g., 2"
-                />
-              </div>
+              {(
+                [
+                  ['rotation_days', 'Rotation Days', 'e.g., 3'],
+                  ['days_on', 'Days On', 'e.g., 1'],
+                  ['days_off', 'Days Off', 'e.g., 2'],
+                ] as const
+              ).map(([key, label, placeholder]) => (
+                <FormField key={key} id={PATTERN_FIELDS[key].id} label={label} error={fieldErrors.errors[key]}>
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="number"
+                      value={formData[key]}
+                      onChange={(e) => update(key, e.target.value)}
+                      className="form-input"
+                      min="1"
+                      placeholder={placeholder}
+                    />
+                  )}
+                </FormField>
+              ))}
             </div>
           )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="pattern-start-date" className="form-label">
-                Start Date <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="pattern-start-date"
-                type="date"
-                value={formData.start_date}
-                onChange={(e) => setFormData((prev) => ({ ...prev, start_date: e.target.value }))}
-                className="form-input"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="pattern-end-date" className="form-label">
-                End Date
-              </label>
-              <input
-                id="pattern-end-date"
-                type="date"
-                value={formData.end_date}
-                onChange={(e) => setFormData((prev) => ({ ...prev, end_date: e.target.value }))}
-                className="form-input"
-              />
-            </div>
+            <FormField
+              id={PATTERN_FIELDS.start_date.id}
+              label="Start Date"
+              required
+              error={fieldErrors.errors.start_date}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => update('start_date', e.target.value)}
+                  className="form-input"
+                />
+              )}
+            </FormField>
+            <FormField id={PATTERN_FIELDS.end_date.id} label="End Date" error={fieldErrors.errors.end_date}>
+              {(field) => (
+                <input
+                  {...field}
+                  type="date"
+                  value={formData.end_date}
+                  onChange={(e) => update('end_date', e.target.value)}
+                  className="form-input"
+                />
+              )}
+            </FormField>
           </div>
+
+          {fieldErrors.formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {fieldErrors.formError}
+            </p>
+          )}
 
           <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
             <button

@@ -338,7 +338,7 @@ const MyProgramProgressPage: React.FC = () => {
             data.enrollment.status === 'active' || data.enrollment.status === 'on_hold' ? (
               <button
                 onClick={() => setShowLeave(true)}
-                className="text-theme-text-muted border-theme-surface-border hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:text-red-600 dark:hover:text-red-400"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm"
                 title="Remove yourself from this program"
               >
                 <LogOut className="h-4 w-4" />

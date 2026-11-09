@@ -283,10 +283,7 @@ export const ManualShiftReportPage: React.FC = () => {
         underHub="/training/admin"
         parentCrumbs={[{ label: 'Shift Reports', path: '/training/admin?page=records&tab=shift-reports' }]}
         actions={
-          <button
-            onClick={() => void navigate(-1)}
-            className="text-theme-text-muted hover:text-theme-text-primary border-theme-surface-border rounded-lg border px-3 py-1.5 text-sm transition-colors"
-          >
+          <button onClick={() => void navigate(-1)} className="btn-secondary text-sm">
             Cancel
           </button>
         }

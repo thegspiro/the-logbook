@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 
 from app.api.v1.endpoints.users import update_contact_info, update_user_profile
 from app.schemas.user import ContactInfoUpdate, UserUpdate
@@ -108,8 +108,9 @@ class TestColleagueContactInfoWrite:
             await update_contact_info(
                 uuid4(),
                 ContactInfoUpdate(phone="555-0100"),
-                db,
-                caller,
+                BackgroundTasks(),
+                db=db,
+                current_user=caller,
                 request=fake_request(),
             )
 
@@ -126,8 +127,9 @@ class TestColleagueContactInfoWrite:
             await update_contact_info(
                 uuid4(),
                 ContactInfoUpdate(phone="555-0100"),
-                db,
-                caller,
+                BackgroundTasks(),
+                db=db,
+                current_user=caller,
                 request=fake_request(),
             )
 
@@ -142,8 +144,9 @@ class TestColleagueContactInfoWrite:
             await update_contact_info(
                 caller.id,
                 ContactInfoUpdate(phone="555-0100"),
-                db,
-                caller,
+                BackgroundTasks(),
+                db=db,
+                current_user=caller,
                 request=fake_request(),
             )
 

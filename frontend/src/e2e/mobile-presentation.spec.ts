@@ -59,6 +59,7 @@ interface Measurement {
   smallExamples: string[];
   tinyText: number;
   spilledText: string[];
+  headerButtons: string[];
 }
 
 /**
@@ -104,6 +105,7 @@ test.describe('mobile presentation', () => {
     const tapBudgetBusted: string[] = [];
     const textBudgetBusted: string[] = [];
     const spilled: string[] = [];
+    const headerRows: string[] = [];
     const tabletFailures: string[] = [];
     const blank: string[] = [];
     const table: string[] = [];
@@ -249,6 +251,39 @@ test.describe('mobile presentation', () => {
                 return failures.length ? [`${describe(el)}: ${failures.join(', ')}`] : [];
               });
 
+            // The header's buttons, as the page-header-actions rule in index.css
+            // lays them out on a phone: text buttons on one row share it at one
+            // width, and an icon-only button keeps its square. A row of
+            // lopsided buttons, or an icon button stretched across the row
+            // because it was styled by hand without btn-icon / btn-icon-sm, is
+            // reported here. Within 1px, so fractional layout cannot flag a row
+            // that is equal by construction.
+            const headerButtons = [...document.querySelectorAll('.page-header .page-header-actions')]
+              .filter(isVisible)
+              .flatMap((area) => {
+                const children = [...area.children].filter(
+                  (el) => (el.tagName === 'BUTTON' || el.tagName === 'A') && isVisible(el)
+                );
+                const icons = children.filter((el) => el.matches('.btn-icon, .btn-icon-sm'));
+                const text = children.filter((el) => !icons.includes(el));
+                const problems = icons
+                  .filter((el) => el.getBoundingClientRect().width > 48)
+                  .map((el) => `icon button stretched: ${describe(el)}`);
+                const rows = new Map<number, Element[]>();
+                for (const el of text) {
+                  const top = Math.round(el.getBoundingClientRect().top);
+                  const row = [...rows.keys()].find((key) => Math.abs(key - top) <= 2) ?? top;
+                  rows.set(row, [...(rows.get(row) ?? []), el]);
+                }
+                for (const row of rows.values()) {
+                  const widths = row.map((el) => el.getBoundingClientRect().width);
+                  if (Math.max(...widths) - Math.min(...widths) > 1) {
+                    problems.push(`unequal row: ${row.map(describe).join(' | ')}`);
+                  }
+                }
+                return problems;
+              });
+
             return {
               crashed: document.body.innerText.includes('Oops! Something went wrong'),
               scrollWidth: doc.scrollWidth,
@@ -265,6 +300,7 @@ test.describe('mobile presentation', () => {
                 return `${label} ${Math.round(b.width)}x${Math.round(b.height)}`;
               }),
               tinyText: tiny.length,
+              headerButtons,
             };
           },
           { minTap: MIN_TAP, minFont: MIN_FONT_PX }
@@ -281,6 +317,9 @@ test.describe('mobile presentation', () => {
         }
         if (m.spilledText.length) {
           spilled.push(`${label}:\n    ${m.spilledText.slice(0, 6).join('\n    ')}`);
+        }
+        if (m.headerButtons.length) {
+          headerRows.push(`${label}:\n    ${m.headerButtons.join('\n    ')}`);
         }
         if (m.invalidScrollRegions.length) {
           invalidScrollRegions.push(`${label}:\n    ${m.invalidScrollRegions.join('\n    ')}`);
@@ -462,6 +501,9 @@ test.describe('mobile presentation', () => {
     // cannot see while the element itself stays on screen: a label run across
     // its tile's chevron, a title spilling out of a squeezed header column.
     expect(spilled, 'routes with text drawn outside its own box at phone width').toEqual([]);
+    expect(headerRows, 'page headers whose phone buttons are unequal on a row, or an icon button stretched').toEqual(
+      []
+    );
     expect(tabletFailures, 'routes that spill or overflow at tablet width').toEqual([]);
     expect(invalidScrollRegions, 'intentional scroll regions that break the accessibility contract').toEqual([]);
     expect(tapBudgetBusted, `routes that grew tap targets under ${MIN_TAP}px`).toEqual([]);

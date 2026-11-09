@@ -446,38 +446,48 @@ const AmendmentLog: React.FC<{ years: FiscalYear[]; fiscalYearId: string; onYear
                     {data.rows.map((row) => (
                       <tr key={row.amendmentId}>
                         <td data-label="Entered" className={tdClass}>
-                          {formatDate(row.enteredAt, tz)}
-                          {row.enteredByName && (
-                            <span className="text-theme-text-secondary block text-xs">{row.enteredByName}</span>
-                          )}
+                          <div className="min-w-0">
+                            {formatDate(row.enteredAt, tz)}
+                            {row.enteredByName && (
+                              <span className="text-theme-text-secondary block text-xs">{row.enteredByName}</span>
+                            )}
+                          </div>
                         </td>
                         <td data-label="Budget line" className={tdClass}>
                           {lineName(row.categoryName, row.stationName)}
                         </td>
                         <td data-label="Amount" className={numClass}>
-                          {formatCurrency(row.amount)}
-                          {row.isReversal && <span className="text-theme-text-secondary block text-xs">Reversal</span>}
+                          <div className="min-w-0">
+                            {formatCurrency(row.amount)}
+                            {row.isReversal && (
+                              <span className="text-theme-text-secondary block text-xs">Reversal</span>
+                            )}
+                          </div>
                         </td>
                         <td data-label="Reason" className={tdClass}>
                           {row.reason}
                         </td>
                         <td data-label="Approved by" className={tdClass}>
-                          {row.approvedBy}
-                          <span className="text-theme-text-secondary block text-xs">
-                            {formatCalendarDate(row.approvedOn)}
-                          </span>
+                          <div className="min-w-0">
+                            {row.approvedBy}
+                            <span className="text-theme-text-secondary block text-xs">
+                              {formatCalendarDate(row.approvedOn)}
+                            </span>
+                          </div>
                         </td>
                         <td data-label="Status" className={tdClass}>
-                          {AMENDMENT_STATUS_LABELS[row.status] ?? row.status}
-                          {row.decidedByName && (
-                            <span className="text-theme-text-secondary block text-xs">
-                              {row.decidedByName}
-                              {row.decidedAt ? `, ${formatDate(row.decidedAt, tz)}` : ''}
-                            </span>
-                          )}
-                          {row.decisionNote && (
-                            <span className="text-theme-text-secondary block text-xs">{row.decisionNote}</span>
-                          )}
+                          <div className="min-w-0">
+                            {AMENDMENT_STATUS_LABELS[row.status] ?? row.status}
+                            {row.decidedByName && (
+                              <span className="text-theme-text-secondary block text-xs">
+                                {row.decidedByName}
+                                {row.decidedAt ? `, ${formatDate(row.decidedAt, tz)}` : ''}
+                              </span>
+                            )}
+                            {row.decisionNote && (
+                              <span className="text-theme-text-secondary block text-xs">{row.decisionNote}</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -775,8 +785,13 @@ const FundBalances: React.FC = () => {
           />
         ) : (
           <>
-            <div className="overflow-x-auto print:overflow-visible" tabIndex={0} role="region" aria-label="Funds">
-              <table className="w-full">
+            <div
+              className="rwd-table-container overflow-x-auto print:overflow-visible"
+              tabIndex={0}
+              role="region"
+              aria-label="Funds"
+            >
+              <table className="rwd-table rwd-table-wide w-full">
                 <thead className="border-theme-surface-border border-b text-left">
                   <tr>
                     <th className={thClass}>Fund</th>
@@ -790,32 +805,52 @@ const FundBalances: React.FC = () => {
                 <tbody className="divide-theme-surface-border divide-y">
                   {data.funds.map((fund) => (
                     <tr key={fund.campaignId}>
-                      <td className={tdClass}>
+                      <td data-label="Fund" className={tdClass}>
                         <span className="font-medium">{fund.name}</span>
                         {!fund.active && <span className="text-theme-text-secondary"> (closed)</span>}
                         {fund.purpose && <p className="text-theme-text-secondary text-xs">{fund.purpose}</p>}
                       </td>
-                      <td className={numClass}>{formatCurrency(fund.received)}</td>
-                      <td className={numClass}>{formatCurrency(fund.spent)}</td>
-                      <td className={numClass}>{formatCurrency(fund.committed)}</td>
-                      <td className={`${numClass} font-semibold`}>
+                      <td data-label="Received" className={numClass}>
+                        {formatCurrency(fund.received)}
+                      </td>
+                      <td data-label="Spent" className={numClass}>
+                        {formatCurrency(fund.spent)}
+                      </td>
+                      <td data-label="Committed" className={numClass}>
+                        {formatCurrency(fund.committed)}
+                      </td>
+                      <td data-label="Available" className={`${numClass} font-semibold`}>
                         {formatCurrency(fund.available)}
                         {Number(fund.available) < 0 && (
                           <span className="block text-xs font-normal text-red-700 dark:text-red-400">Overspent</span>
                         )}
                       </td>
-                      <td className={numClass}>{formatCurrency(fund.awaitingApproval)}</td>
+                      <td data-label="Awaiting approval" className={numClass}>
+                        {formatCurrency(fund.awaitingApproval)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="border-theme-surface-border border-t-2 font-semibold">
                   <tr>
-                    <td className={tdClass}>Total</td>
-                    <td className={numClass}>{formatCurrency(data.received)}</td>
-                    <td className={numClass}>{formatCurrency(data.spent)}</td>
-                    <td className={numClass}>{formatCurrency(data.committed)}</td>
-                    <td className={numClass}>{formatCurrency(data.available)}</td>
-                    <td className={numClass}>{formatCurrency(data.awaitingApproval)}</td>
+                    <td data-label="Total" className={`rwd-table-lead ${tdClass}`}>
+                      Total
+                    </td>
+                    <td data-label="Received" className={numClass}>
+                      {formatCurrency(data.received)}
+                    </td>
+                    <td data-label="Spent" className={numClass}>
+                      {formatCurrency(data.spent)}
+                    </td>
+                    <td data-label="Committed" className={numClass}>
+                      {formatCurrency(data.committed)}
+                    </td>
+                    <td data-label="Available" className={numClass}>
+                      {formatCurrency(data.available)}
+                    </td>
+                    <td data-label="Awaiting approval" className={numClass}>
+                      {formatCurrency(data.awaitingApproval)}
+                    </td>
                   </tr>
                 </tfoot>
               </table>

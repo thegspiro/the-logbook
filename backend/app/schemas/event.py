@@ -964,11 +964,11 @@ class GuestLookupResponse(BaseModel):
     """What the kiosk may say about an email typed into it.
 
     The page is public, so this carries as little as recognition needs: a
-    prospect is named by first name and last initial only, and nothing at all
-    is returned about a member account beyond the fact that it is one.
+    prospect is named by first name and last initial only, and a member
+    account answers 'not_found', exactly as an unknown address does.
     """
 
-    status: str = Field(description="'prospect', 'member' or 'not_found'")
+    status: str = Field(description="'prospect' or 'not_found'")
     display_name: Optional[str] = Field(
         default=None, description="First name and last initial, for 'prospect'"
     )

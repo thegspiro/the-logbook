@@ -120,7 +120,9 @@ backend's snake_case key, no limit stated, and no field highlighted.
 **Status: in progress.** The shared pattern is built (`FormField`,
 `ErrorSummary`, `useFieldErrors`) and Scheduling's Create Shift is on it: the
 button stays enabled, a missing value is named on its field, and a 422 lands on
-the field it names. The other dialogs move over module by module.
+the field it names. Since followed by the shift template and pattern dialogs,
+which had relied on the browser's `required` bubble. The other dialogs move
+over module by module.
 
 Pressing the primary button of an empty create dialog was probed 70 times
 (about 40 distinct dialogs). The outcomes:
@@ -148,8 +150,9 @@ template.
 
 **Status: in progress.** Submit Training now shows a message under each missing
 field, tied by `aria-describedby`, plus a summary at the top linking to each
-one; `/account` and Create Shift tie theirs the same way. Add Member is not yet
-moved.
+one; `/account` and Create Shift tie theirs the same way. Add Member now ties
+each message to its field and moves focus to a summary at the top on a refused
+save.
 
 **Add Member** (`/members/admin?tab=add`, as `membership_coordinator`): an empty
 Save Member shows a toast and a red message under every required field — good —

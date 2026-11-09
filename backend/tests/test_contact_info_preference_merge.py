@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+from fastapi import BackgroundTasks
 
 from app.api.v1.endpoints.users import update_contact_info
 from app.schemas.user import ContactInfoUpdate
@@ -50,7 +51,12 @@ async def _save(stored, payload):
     update = ContactInfoUpdate.model_validate({"notification_preferences": payload})
     with patch("app.api.v1.endpoints.users.log_audit_event", new=AsyncMock()):
         await update_contact_info(
-            uid, update, _db(member), member, request=fake_request()
+            uid,
+            update,
+            BackgroundTasks(),
+            db=_db(member),
+            current_user=member,
+            request=fake_request(),
         )
     return member.notification_preferences
 
