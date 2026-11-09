@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**359 tables · 5863 columns · 1206 foreign keys**
+**361 tables · 5882 columns · 1212 foreign keys**
 
 ---
 
@@ -756,7 +756,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`member_competencies`](#member_competencies) | `MemberCompetency` | 16 | Member Competency model |
 | [`multi_agency_trainings`](#multi_agency_trainings) | `MultiAgencyTraining` | 19 | Multi-Agency Training model |
 | [`program_enrollments`](#program_enrollments) | `ProgramEnrollment` | 23 | Program Enrollment model |
-| [`program_milestones`](#program_milestones) | `ProgramMilestone` | 10 | Program Milestone model |
+| [`program_milestone_achievements`](#program_milestone_achievements) | `ProgramMilestoneAchievement` | 5 | One enrollment's record of meeting one milestone. |
+| [`program_milestone_items`](#program_milestone_items) | `ProgramMilestoneItem` | 8 | A course, skills test or knowledge test a milestone waits for. |
+| [`program_milestones`](#program_milestones) | `ProgramMilestone` | 16 | Program Milestone model |
 | [`program_phases`](#program_phases) | `ProgramPhase` | 10 | Program Phase model |
 | [`program_requirements`](#program_requirements) | `ProgramRequirement` | 12 | Program Requirement model |
 | [`recertification_pathways`](#recertification_pathways) | `RecertificationPathway` | 21 | Recertification Pathway model |
@@ -10670,6 +10672,52 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_program_enrollments_organization_id` (`organization_id`)
 - `ix_program_enrollments_status` (`status`)
 
+### `program_milestone_achievements`
+
+**ProgramMilestoneAchievement** · `app/models/training.py`
+
+> One enrollment's record of meeting one milestone. The unique (milestone, enrollment) pair is what makes a milestone fire at most once per enrollment: the progress write, the skills and knowledge test hooks and the scheduled sweep can all evaluate the same member at once, and only the one whose insert lands sends anything. A cycle reset deletes the enrollment's rows so the new cycle earns its milestones again; a new enrollment has none to begin with.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `milestone_id` | VARCHAR(36) | no | FK |  | → `program_milestones.id` ON DELETE CASCADE |
+| `enrollment_id` | VARCHAR(36) | no | FK, IDX |  | → `program_enrollments.id` ON DELETE CASCADE |
+| `outcome` | VARCHAR(20) | no |  |  |  |
+| `reached_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_program_milestone_achievements_enrollment_id` (`enrollment_id`)
+
+**Constraints**
+
+- UNIQUE `uq_milestone_achievement` (`milestone_id`, `enrollment_id`)
+
+### `program_milestone_items`
+
+**ProgramMilestoneItem** · `app/models/training.py`
+
+> A course, skills test or knowledge test a milestone waits for. Exactly one of the three target columns is set, matching ``item_type``; the service enforces it on every write. CASCADE on each target: an item whose course or test is deleted outright has nothing left to complete, and keeping it would leave an "all" milestone that can never be reached.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `milestone_id` | VARCHAR(36) | no | FK, IDX |  | → `program_milestones.id` ON DELETE CASCADE |
+| `item_type` | VARCHAR(20) | no |  |  |  |
+| `course_id` | VARCHAR(36) | yes | FK, IDX |  | → `training_courses.id` ON DELETE CASCADE |
+| `skill_template_id` | VARCHAR(36) | yes | FK, IDX |  | → `skill_templates.id` ON DELETE CASCADE |
+| `knowledge_test_id` | VARCHAR(36) | yes | FK, IDX |  | → `knowledge_tests.id` ON DELETE CASCADE |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_program_milestone_items_course_id` (`course_id`)
+- `ix_program_milestone_items_knowledge_test_id` (`knowledge_test_id`)
+- `ix_program_milestone_items_milestone_id` (`milestone_id`)
+- `ix_program_milestone_items_skill_template_id` (`skill_template_id`)
+
 ### `program_milestones`
 
 **ProgramMilestone** · `app/models/training.py`
@@ -10687,6 +10735,12 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `notification_message` | TEXT | yes |  |  |  |
 | `requires_verification` | BOOL | yes |  | `False` |  |
 | `verification_notes` | TEXT | yes |  |  |  |
+| `item_match_mode` | VARCHAR(10) | no |  | `all` |  |
+| `counts_prior_completions` | BOOL | no |  | `false` |  |
+| `notify_member` | BOOL | no |  | `true` |  |
+| `notify_position_ids` | JSON | yes |  |  |  |
+| `notify_user_ids` | JSON | yes |  |  |  |
+| `officer_message` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
 
 **Indexes**
@@ -13398,6 +13452,22 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `minutes_signatures` | `minutes_id` | CASCADE | no |
 | `minutes_suggestions` | `minutes_id` | CASCADE | no |
 
+### → `training_courses` (11 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_classes` | `class_course_id` | CASCADE | no |
+| `course_classes` | `course_id` | CASCADE | no |
+| `course_cohort_classes` | `class_course_id` | SET NULL | yes |
+| `course_cohorts` | `course_id` | CASCADE | no |
+| `external_course_mappings` | `internal_course_id` | SET NULL | yes |
+| `instructor_qualifications` | `course_id` | CASCADE | yes |
+| `program_milestone_items` | `course_id` | CASCADE | yes |
+| `recertification_pathways` | `assessment_course_id` | SET NULL | yes |
+| `training_effectiveness_evaluations` | `course_id` | SET NULL | yes |
+| `training_records` | `course_id` | SET NULL | yes |
+| `training_sessions` | `course_id` | SET NULL | yes |
+
 ### → `prospective_members` (10 references)
 
 | From table | Column | On delete | Nullable |
@@ -13412,21 +13482,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_interviews` | `prospect_id` | CASCADE | no |
 | `prospect_step_progress` | `prospect_id` | CASCADE | no |
 | `screening_records` | `prospect_id` | CASCADE | yes |
-
-### → `training_courses` (10 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `course_classes` | `class_course_id` | CASCADE | no |
-| `course_classes` | `course_id` | CASCADE | no |
-| `course_cohort_classes` | `class_course_id` | SET NULL | yes |
-| `course_cohorts` | `course_id` | CASCADE | no |
-| `external_course_mappings` | `internal_course_id` | SET NULL | yes |
-| `instructor_qualifications` | `course_id` | CASCADE | yes |
-| `recertification_pathways` | `assessment_course_id` | SET NULL | yes |
-| `training_effectiveness_evaluations` | `course_id` | SET NULL | yes |
-| `training_records` | `course_id` | SET NULL | yes |
-| `training_sessions` | `course_id` | SET NULL | yes |
 
 ### → `elections` (9 references)
 
@@ -13712,6 +13767,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `prospect_interviews` | `pipeline_id` | SET NULL | yes |
 | `prospective_members` | `pipeline_id` | SET NULL | yes |
 
+### → `program_enrollments` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `course_cohort_members` | `enrollment_id` | SET NULL | yes |
+| `program_milestone_achievements` | `enrollment_id` | CASCADE | no |
+| `requirement_progress` | `enrollment_id` | CASCADE | no |
+| `shift_completion_reports` | `enrollment_id` | SET NULL | yes |
+
 ### → `store_products` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -13786,13 +13850,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_vendor_contacts` | `vendor_id` | CASCADE | no |
 | `reorder_requests` | `vendor_id` | SET NULL | yes |
 
-### → `program_enrollments` (3 references)
+### → `knowledge_tests` (3 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `course_cohort_members` | `enrollment_id` | SET NULL | yes |
-| `requirement_progress` | `enrollment_id` | CASCADE | no |
-| `shift_completion_reports` | `enrollment_id` | SET NULL | yes |
+| `knowledge_test_attempts` | `test_id` | CASCADE | no |
+| `knowledge_test_questions` | `test_id` | CASCADE | no |
+| `program_milestone_items` | `knowledge_test_id` | CASCADE | yes |
 
 ### → `public_portal_config` (3 references)
 
@@ -13953,13 +14017,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_item_deployed_lots` | `inventory_lot_id` | SET NULL | yes |
 | `reorder_receipts` | `inventory_lot_id` | RESTRICT | no |
 
-### → `knowledge_tests` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `knowledge_test_attempts` | `test_id` | CASCADE | no |
-| `knowledge_test_questions` | `test_id` | CASCADE | no |
-
 ### → `mcp_oauth_clients` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -13981,12 +14038,26 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `org_chart_node_holders` | `node_id` | CASCADE | no |
 | `org_chart_nodes` | `parent_id` | SET NULL | yes |
 
+### → `program_milestones` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `program_milestone_achievements` | `milestone_id` | CASCADE | no |
+| `program_milestone_items` | `milestone_id` | CASCADE | no |
+
 ### → `shift_equipment_checks` (2 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `shift_equipment_check_items` | `check_id` | CASCADE | no |
 | `shift_equipment_check_seals` | `check_id` | CASCADE | no |
+
+### → `skill_templates` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `program_milestone_items` | `skill_template_id` | CASCADE | yes |
+| `skill_tests` | `template_id` | CASCADE | no |
 
 ### → `store_order_windows` (2 references)
 
@@ -14349,12 +14420,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `open_swap_notices` | `swap_request_id` | SET NULL | yes |
 
-### → `skill_templates` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `skill_tests` | `template_id` | CASCADE | no |
-
 ### → `skill_tests` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -14417,6 +14482,8 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `org_chart_node_holders` | `org_chart_nodes`, `users` |
 | `organizations` | — _(root table)_ |
 | `password_history` | `users` |
+| `program_milestone_achievements` | `program_enrollments`, `program_milestones` |
+| `program_milestone_items` | `knowledge_tests`, `program_milestones`, `skill_templates`, `training_courses` |
 | `program_milestones` | `program_phases`, `training_programs` |
 | `program_phases` | `training_programs` |
 | `program_requirements` | `program_phases`, `training_programs`, `training_requirements` |

@@ -6,6 +6,8 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { FormField } from '../components/ux/FormField';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import {
   User,
@@ -92,6 +94,46 @@ type LegalNameField = 'first_name' | 'last_name';
 const LEGAL_NAME_FIELDS: readonly LegalNameField[] = ['first_name', 'last_name'];
 const LEGAL_NAME_LABELS: Record<LegalNameField, string> = { first_name: 'first name', last_name: 'last name' };
 
+type ProfileField =
+  | 'first_name'
+  | 'middle_name'
+  | 'last_name'
+  | 'preferred_name'
+  | 'phone'
+  | 'mobile'
+  | 'address_street'
+  | 'address_city'
+  | 'address_state'
+  | 'address_zip';
+
+// Every field the profile save can be refused on, in page order. The ids are
+// the inputs' own; a 422 entry names the request key, which is the field name.
+const PROFILE_FIELDS: FieldSpecs<ProfileField> = {
+  first_name: { id: 'firstName', label: 'First name' },
+  middle_name: { id: 'middleName', label: 'Middle name' },
+  last_name: { id: 'lastName', label: 'Last name' },
+  preferred_name: { id: 'preferredName', label: 'Preferred name' },
+  phone: { id: 'phone', label: 'Phone' },
+  mobile: { id: 'mobile', label: 'Mobile' },
+  address_street: { id: 'addressStreet', label: 'Street address' },
+  address_city: { id: 'addressCity', label: 'City' },
+  address_state: { id: 'addressState', label: 'State' },
+  address_zip: { id: 'addressZip', label: 'ZIP code' },
+};
+
+const PROFILE_LABEL_CLASS = 'text-theme-text-secondary mb-1 block text-sm font-medium';
+
+const legalNameMissing = (field: LegalNameField) => `Enter your ${LEGAL_NAME_LABELS[field]}.`;
+
+/** An error on each legal name the record holds blank. */
+function blankLegalNameErrors(record: Partial<Record<LegalNameField, string | null | undefined>>) {
+  const errors: FieldErrors<ProfileField> = {};
+  for (const field of LEGAL_NAME_FIELDS) {
+    if (!record[field]?.trim()) errors[field] = legalNameMissing(field);
+  }
+  return errors;
+}
+
 export const UserSettingsPage: React.FC = () => {
   const { user, endSessionLocally } = useAuthStore();
   const navigate = useNavigate();
@@ -156,19 +198,19 @@ export const UserSettingsPage: React.FC = () => {
   const [profile, setProfile] = useState<UserWithRoles | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
-  // Legal-name fields left blank. Owner rule (2026-11-05): a form saves even
-  // with an error, and the error stays flagged until it is resolved.
-  const [blankNames, setBlankNames] = useState<LegalNameField[]>([]);
-  const firstNameRef = useRef<HTMLInputElement>(null);
-  const lastNameRef = useRef<HTMLInputElement>(null);
+  // Open errors on the profile's fields. Owner rule (2026-11-05): a form saves
+  // even with an error, and the error stays flagged until it is resolved.
+  const profileErrors = useFieldErrors(PROFILE_FIELDS);
+  const setProfileErrors = profileErrors.setErrors;
   // The inputs are disabled while a save is in flight and a disabled input
   // cannot take focus, so the field to point at waits for the save to end.
-  const focusAfterSave = useRef<LegalNameField | null>(null);
+  const focusAfterSave = useRef<FieldErrors<ProfileField> | null>(null);
+  const focusFirstProfileError = profileErrors.focusFirst;
   useEffect(() => {
     if (savingProfile || !focusAfterSave.current) return;
-    (focusAfterSave.current === 'first_name' ? firstNameRef : lastNameRef).current?.focus();
+    focusFirstProfileError(focusAfterSave.current);
     focusAfterSave.current = null;
-  }, [savingProfile]);
+  }, [savingProfile, focusFirstProfileError]);
   const [downloadingData, setDownloadingData] = useState(false);
   const [consents, setConsents] = useState<ConsentItem[]>([]);
   const [savingConsent, setSavingConsent] = useState<string | null>(null);
@@ -216,7 +258,7 @@ export const UserSettingsPage: React.FC = () => {
       try {
         const data = await userService.getUserWithRoles(user.id);
         setProfile(data);
-        setBlankNames(LEGAL_NAME_FIELDS.filter((f) => !data[f]?.trim()));
+        setProfileErrors(blankLegalNameErrors(data));
         setProfileForm({
           first_name: data.first_name || '',
           middle_name: data.middle_name || '',
@@ -244,7 +286,7 @@ export const UserSettingsPage: React.FC = () => {
       }
     };
     void loadProfile();
-  }, [user?.id, profileReloadToken]);
+  }, [user?.id, profileReloadToken, setProfileErrors]);
 
   // Load notification preferences from backend
   useEffect(() => {
@@ -277,6 +319,7 @@ export const UserSettingsPage: React.FC = () => {
     const firstName = profileForm.first_name?.trim() ?? '';
     const lastName = profileForm.last_name?.trim() ?? '';
     setSavingProfile(true);
+    profileErrors.setFormError(null);
     try {
       // Strip fields that are only editable by Membership Coordinators via Members admin
       const {
@@ -309,13 +352,14 @@ export const UserSettingsPage: React.FC = () => {
       const kept = LEGAL_NAME_FIELDS.filter(
         (f) => !(f === 'first_name' ? firstName : lastName) && !stillBlank.includes(f)
       );
-      setBlankNames(stillBlank);
+      const nameErrors = blankLegalNameErrors(updated);
+      profileErrors.setErrors(nameErrors);
       const firstBlank = stillBlank[0];
       if (firstBlank) {
         toast.success(
           `Profile saved. Your ${LEGAL_NAME_LABELS[firstBlank]} is still missing; enter it to complete your profile.`
         );
-        focusAfterSave.current = firstBlank;
+        focusAfterSave.current = nameErrors;
       } else if (kept[0]) {
         toast.success(`Profile saved. A name can't be blank, so your saved ${LEGAL_NAME_LABELS[kept[0]]} was kept.`);
       } else {
@@ -326,7 +370,23 @@ export const UserSettingsPage: React.FC = () => {
         void useAuthStore.getState().loadUser();
       }
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not save your profile. Try again.'));
+      // A refusal lands on the field it names; the toast only says to look.
+      const flagged = profileErrors.setFromApiError(err, 'Could not save your profile. Try again.');
+      // A legal name left blank is still blank whatever else failed, so its
+      // flag is kept beside the server's (F-1).
+      profileErrors.setErrors({
+        ...blankLegalNameErrors({ first_name: firstName, last_name: lastName }),
+        ...flagged,
+      });
+      if (Object.keys(flagged).length > 0) {
+        // A message the server could not pin on a field stays on the page,
+        // under the button, rather than being lost behind the generic toast.
+        toast.error('Check the highlighted fields and save again.');
+        focusAfterSave.current = flagged;
+      } else {
+        profileErrors.setFormError(null);
+        toast.error(getErrorMessage(err, 'Could not save your profile. Try again.'));
+      }
     } finally {
       setSavingProfile(false);
     }
@@ -334,8 +394,11 @@ export const UserSettingsPage: React.FC = () => {
 
   const handleProfileChange = (field: keyof UserProfileUpdate, value: string) => {
     setProfileForm((prev) => ({ ...prev, [field]: value }));
-    if (field === 'first_name' || field === 'last_name') {
-      setBlankNames((prev) => (value.trim() ? prev.filter((f) => f !== field) : prev));
+    if (field in PROFILE_FIELDS) {
+      const key = field as ProfileField;
+      // A legal name stays flagged until something is typed into it; any
+      // other field's error is answered by editing it at all.
+      if (!((key === 'first_name' || key === 'last_name') && !value.trim())) profileErrors.setError(key, null);
     }
   };
 
@@ -705,97 +768,92 @@ export const UserSettingsPage: React.FC = () => {
                     </h3>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                       <div>
-                        <label htmlFor="firstName" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                          First Name{' '}
-                          <span aria-hidden="true" className="text-red-800 dark:text-red-300">
-                            *
-                          </span>
-                        </label>
-                        <input
-                          ref={firstNameRef}
-                          id="firstName"
-                          autoComplete="given-name"
-                          type="text"
+                        <FormField
+                          id={PROFILE_FIELDS.first_name.id}
+                          label="First Name"
                           required
-                          aria-invalid={blankNames.includes('first_name') || undefined}
-                          aria-describedby={blankNames.includes('first_name') ? 'firstName-error' : undefined}
-                          value={profileForm.first_name || ''}
-                          onChange={(e) => handleProfileChange('first_name', e.target.value)}
-                          className="form-input sm:text-sm"
-                          disabled={savingProfile}
-                        />
-                        {blankNames.includes('first_name') && (
-                          <p id="firstName-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
-                            Enter your {LEGAL_NAME_LABELS.first_name}.
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <label
-                          htmlFor="middleName"
-                          className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                          error={profileErrors.errors.first_name}
+                          labelClassName={PROFILE_LABEL_CLASS}
                         >
-                          Middle Name
-                        </label>
-                        <input
-                          id="middleName"
-                          autoComplete="additional-name"
-                          type="text"
-                          value={profileForm.middle_name || ''}
-                          onChange={(e) => handleProfileChange('middle_name', e.target.value)}
-                          className="form-input sm:text-sm"
-                          disabled={savingProfile}
-                        />
+                          {(field) => (
+                            <input
+                              {...field}
+                              autoComplete="given-name"
+                              maxLength={100}
+                              type="text"
+                              value={profileForm.first_name || ''}
+                              onChange={(e) => handleProfileChange('first_name', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
                       </div>
                       <div>
-                        <label htmlFor="lastName" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                          Last Name{' '}
-                          <span aria-hidden="true" className="text-red-800 dark:text-red-300">
-                            *
-                          </span>
-                        </label>
-                        <input
-                          ref={lastNameRef}
-                          id="lastName"
-                          autoComplete="family-name"
-                          type="text"
+                        <FormField
+                          id={PROFILE_FIELDS.middle_name.id}
+                          label="Middle Name"
+                          error={profileErrors.errors.middle_name}
+                          labelClassName={PROFILE_LABEL_CLASS}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              autoComplete="additional-name"
+                              maxLength={100}
+                              type="text"
+                              value={profileForm.middle_name || ''}
+                              onChange={(e) => handleProfileChange('middle_name', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
+                      </div>
+                      <div>
+                        <FormField
+                          id={PROFILE_FIELDS.last_name.id}
+                          label="Last Name"
                           required
-                          aria-invalid={blankNames.includes('last_name') || undefined}
-                          aria-describedby={blankNames.includes('last_name') ? 'lastName-error' : undefined}
-                          value={profileForm.last_name || ''}
-                          onChange={(e) => handleProfileChange('last_name', e.target.value)}
-                          className="form-input sm:text-sm"
-                          disabled={savingProfile}
-                        />
-                        {blankNames.includes('last_name') && (
-                          <p id="lastName-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
-                            Enter your {LEGAL_NAME_LABELS.last_name}.
-                          </p>
-                        )}
+                          error={profileErrors.errors.last_name}
+                          labelClassName={PROFILE_LABEL_CLASS}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              autoComplete="family-name"
+                              maxLength={100}
+                              type="text"
+                              value={profileForm.last_name || ''}
+                              onChange={(e) => handleProfileChange('last_name', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
                       </div>
                     </div>
                     <div className="mt-4 sm:max-w-sm">
-                      <label
-                        htmlFor="preferredName"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                      <FormField
+                        id={PROFILE_FIELDS.preferred_name.id}
+                        label="Preferred Name"
+                        error={profileErrors.errors.preferred_name}
+                        labelClassName={PROFILE_LABEL_CLASS}
+                        hint="The name you go by. Shown in place of your first name on shifts, events and rosters. Reports, training records and other official documents keep your legal first name."
                       >
-                        Preferred Name
-                      </label>
-                      <input
-                        id="preferredName"
-                        autoComplete="nickname"
-                        type="text"
-                        maxLength={100}
-                        value={profileForm.preferred_name || ''}
-                        onChange={(e) => handleProfileChange('preferred_name', e.target.value)}
-                        className="form-input sm:text-sm"
-                        disabled={savingProfile}
-                        aria-describedby="preferredNameHelp"
-                      />
-                      <p id="preferredNameHelp" className="text-theme-text-muted mt-1 text-xs">
-                        The name you go by. Shown in place of your first name on shifts, events and rosters. Reports,
-                        training records and other official documents keep your legal first name.
-                      </p>
+                        {(field) => (
+                          <input
+                            {...field}
+                            autoComplete="nickname"
+                            maxLength={100}
+                            type="text"
+                            value={profileForm.preferred_name || ''}
+                            onChange={(e) => handleProfileChange('preferred_name', e.target.value)}
+                            className="form-input sm:text-sm"
+                            disabled={savingProfile}
+                          />
+                        )}
+                      </FormField>
                     </div>
                   </div>
 
@@ -806,32 +864,46 @@ export const UserSettingsPage: React.FC = () => {
                     </h3>
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                       <div>
-                        <label htmlFor="phone" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                          Phone
-                        </label>
-                        <input
-                          id="phone"
-                          autoComplete="tel"
-                          type="tel"
-                          value={profileForm.phone || ''}
-                          onChange={(e) => handleProfileChange('phone', e.target.value)}
-                          className="form-input sm:text-sm"
-                          disabled={savingProfile}
-                        />
+                        <FormField
+                          id={PROFILE_FIELDS.phone.id}
+                          label="Phone"
+                          error={profileErrors.errors.phone}
+                          labelClassName={PROFILE_LABEL_CLASS}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              autoComplete="tel"
+                              maxLength={20}
+                              type="tel"
+                              value={profileForm.phone || ''}
+                              onChange={(e) => handleProfileChange('phone', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
                       </div>
                       <div>
-                        <label htmlFor="mobile" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                          Mobile
-                        </label>
-                        <input
-                          id="mobile"
-                          autoComplete="tel"
-                          type="tel"
-                          value={profileForm.mobile || ''}
-                          onChange={(e) => handleProfileChange('mobile', e.target.value)}
-                          className="form-input sm:text-sm"
-                          disabled={savingProfile}
-                        />
+                        <FormField
+                          id={PROFILE_FIELDS.mobile.id}
+                          label="Mobile"
+                          error={profileErrors.errors.mobile}
+                          labelClassName={PROFILE_LABEL_CLASS}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              autoComplete="tel"
+                              maxLength={20}
+                              type="tel"
+                              value={profileForm.mobile || ''}
+                              onChange={(e) => handleProfileChange('mobile', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
                       </div>
                     </div>
                   </div>
@@ -902,73 +974,89 @@ export const UserSettingsPage: React.FC = () => {
                     </h3>
                     <div className="space-y-4">
                       <div>
-                        <label
-                          htmlFor="addressStreet"
-                          className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                        <FormField
+                          id={PROFILE_FIELDS.address_street.id}
+                          label="Street Address"
+                          error={profileErrors.errors.address_street}
+                          labelClassName={PROFILE_LABEL_CLASS}
                         >
-                          Street Address
-                        </label>
-                        <input
-                          id="addressStreet"
-                          autoComplete="street-address"
-                          type="text"
-                          value={profileForm.address_street || ''}
-                          onChange={(e) => handleProfileChange('address_street', e.target.value)}
-                          className="form-input sm:text-sm"
-                          disabled={savingProfile}
-                        />
+                          {(field) => (
+                            <input
+                              {...field}
+                              autoComplete="street-address"
+                              maxLength={255}
+                              type="text"
+                              value={profileForm.address_street || ''}
+                              onChange={(e) => handleProfileChange('address_street', e.target.value)}
+                              className="form-input sm:text-sm"
+                              disabled={savingProfile}
+                            />
+                          )}
+                        </FormField>
                       </div>
                       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                         <div className="col-span-2 sm:col-span-1">
-                          <label
-                            htmlFor="addressCity"
-                            className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                          <FormField
+                            id={PROFILE_FIELDS.address_city.id}
+                            label="City"
+                            error={profileErrors.errors.address_city}
+                            labelClassName={PROFILE_LABEL_CLASS}
                           >
-                            City
-                          </label>
-                          <input
-                            id="addressCity"
-                            autoComplete="address-level2"
-                            type="text"
-                            value={profileForm.address_city || ''}
-                            onChange={(e) => handleProfileChange('address_city', e.target.value)}
-                            className="form-input sm:text-sm"
-                            disabled={savingProfile}
-                          />
+                            {(field) => (
+                              <input
+                                {...field}
+                                autoComplete="address-level2"
+                                maxLength={100}
+                                type="text"
+                                value={profileForm.address_city || ''}
+                                onChange={(e) => handleProfileChange('address_city', e.target.value)}
+                                className="form-input sm:text-sm"
+                                disabled={savingProfile}
+                              />
+                            )}
+                          </FormField>
                         </div>
                         <div>
-                          <label
-                            htmlFor="addressState"
-                            className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                          <FormField
+                            id={PROFILE_FIELDS.address_state.id}
+                            label="State"
+                            error={profileErrors.errors.address_state}
+                            labelClassName={PROFILE_LABEL_CLASS}
                           >
-                            State
-                          </label>
-                          <input
-                            id="addressState"
-                            autoComplete="address-level1"
-                            type="text"
-                            value={profileForm.address_state || ''}
-                            onChange={(e) => handleProfileChange('address_state', e.target.value)}
-                            className="form-input sm:text-sm"
-                            disabled={savingProfile}
-                          />
+                            {(field) => (
+                              <input
+                                {...field}
+                                autoComplete="address-level1"
+                                maxLength={50}
+                                type="text"
+                                value={profileForm.address_state || ''}
+                                onChange={(e) => handleProfileChange('address_state', e.target.value)}
+                                className="form-input sm:text-sm"
+                                disabled={savingProfile}
+                              />
+                            )}
+                          </FormField>
                         </div>
                         <div>
-                          <label
-                            htmlFor="addressZip"
-                            className="text-theme-text-secondary mb-1 block text-sm font-medium"
+                          <FormField
+                            id={PROFILE_FIELDS.address_zip.id}
+                            label="ZIP Code"
+                            error={profileErrors.errors.address_zip}
+                            labelClassName={PROFILE_LABEL_CLASS}
                           >
-                            ZIP Code
-                          </label>
-                          <input
-                            id="addressZip"
-                            autoComplete="postal-code"
-                            type="text"
-                            value={profileForm.address_zip || ''}
-                            onChange={(e) => handleProfileChange('address_zip', e.target.value)}
-                            className="form-input sm:text-sm"
-                            disabled={savingProfile}
-                          />
+                            {(field) => (
+                              <input
+                                {...field}
+                                autoComplete="postal-code"
+                                maxLength={20}
+                                type="text"
+                                value={profileForm.address_zip || ''}
+                                onChange={(e) => handleProfileChange('address_zip', e.target.value)}
+                                className="form-input sm:text-sm"
+                                disabled={savingProfile}
+                              />
+                            )}
+                          </FormField>
                         </div>
                       </div>
                     </div>
@@ -985,6 +1073,11 @@ export const UserSettingsPage: React.FC = () => {
                     >
                       {savingProfile ? 'Saving...' : 'Save Profile'}
                     </button>
+                    {profileErrors.formError && (
+                      <p role="alert" className="mt-2 text-sm text-red-800 dark:text-red-300">
+                        {profileErrors.formError}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

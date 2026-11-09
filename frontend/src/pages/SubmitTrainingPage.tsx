@@ -26,6 +26,9 @@ import {
 import type { ChecklistRow, Receipt } from '../components/training/submit';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
+import { buildSummary, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { ErrorSummary } from '../components/ux/ErrorSummary';
+import { FormField } from '../components/ux/FormField';
 import { trainingProgramService, trainingSubmissionService, trainingService } from '../services/api';
 import { blankToNull } from '../utils/formValues';
 import { formatCalendarDate, formatTimeOfDay, getTodayLocalDate } from '../utils/dateFormatting';
@@ -74,6 +77,51 @@ const REQUIRED_BY_DEFAULT: Record<string, boolean> = {
   location: false,
   attachments: false,
 };
+
+type TrainingField =
+  | 'course_name'
+  | 'category_id'
+  | 'completion_date'
+  | 'start_time'
+  | 'instructor'
+  | 'location'
+  | 'description'
+  | 'certification_number'
+  | 'issuing_agency'
+  | 'expiration_date'
+  | 'attachments';
+
+// In page order, so the summary reads top to bottom. The labels are the
+// defaults; a department's own field labels show on the fields themselves.
+const TRAINING_FIELDS: FieldSpecs<TrainingField> = {
+  course_name: { id: 'course-name', label: 'Course or class name' },
+  category_id: { id: 'training-category', label: 'Category' },
+  completion_date: { id: 'completion-date', label: 'Date' },
+  start_time: { id: 'start-time', label: 'Start time' },
+  instructor: { id: 'instructor', label: 'Instructor' },
+  location: { id: 'location', label: 'Location' },
+  description: { id: 'description', label: 'What it covered' },
+  certification_number: { id: 'certification-number', label: 'Certificate no.' },
+  issuing_agency: { id: 'issuing-agency', label: 'Agency' },
+  expiration_date: { id: 'expiration-date', label: 'Expires' },
+  attachments: { id: 'training-attachment', label: 'Certificate', apiKeys: ['file', 'attachment'] },
+};
+
+const MISSING_MESSAGES: Record<TrainingField, string> = {
+  course_name: 'Enter the course or class name.',
+  category_id: 'Choose a category.',
+  completion_date: 'Enter the date it was completed.',
+  start_time: 'Enter the start time.',
+  instructor: 'Enter the instructor.',
+  location: 'Enter the location.',
+  description: 'Say what it covered.',
+  certification_number: 'Enter the certificate number.',
+  issuing_agency: 'Enter the issuing agency.',
+  expiration_date: 'Enter the expiry date, or tick "Does not expire".',
+  attachments: 'Attach the certificate.',
+};
+
+const DRAFT_MINIMUM_MESSAGE = 'A draft still needs a course name and a date.';
 
 const EDITABLE_STATUSES: SubmissionStatus[] = ['draft', 'pending_review', 'revision_requested'];
 
@@ -157,6 +205,18 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   // which is the unpredictability this redesign set out to remove.
   const certificationTouched = useRef(false);
   const fieldRefs = useRef<Record<string, HTMLElement | null>>({});
+  // A server refusal and a message for the form as a whole; a missing value's
+  // message is derived from the live form below, so it clears as it is filled.
+  const trainingErrors = useFieldErrors(TRAINING_FIELDS);
+  const clearTrainingErrors = trainingErrors.clear;
+  const setTrainingError = trainingErrors.setError;
+  // Editing a field answers the server's refusal of it; the missing-value
+  // message is derived from the live value and clears on its own.
+  const edited = (name: TrainingField) => setTrainingError(name, null);
+  // The id of a draft this form has just saved. Saving echoes it back in as
+  // `editSubmission`, and the open fields must stay flagged across that
+  // re-seed (owner rule, 2026-11-05), where any other submission opens clean.
+  const draftJustSaved = useRef<string | null>(null);
   const registerField = (name: string) => (el: HTMLElement | null) => {
     fieldRefs.current[name] = el;
   };
@@ -176,11 +236,17 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     setCertificationNumber(editSubmission.certification_number || '');
     setIssuingAgency(editSubmission.issuing_agency || '');
     setExpirationDate(editSubmission.expiration_date || '');
+    // The draft this form just saved comes straight back here. The two
+    // certification choices are the member's and are not stored, so they are
+    // kept as they were rather than re-derived; any other submission opens
+    // with them derived from what was filed.
+    const continuingDraft = draftJustSaved.current === editSubmission.id;
+    draftJustSaved.current = null;
     // Never inferred from an absent date. A submission an officer sent back
     // *because* the expiry was missing would otherwise reopen with "does not
     // expire" already ticked and the field disabled — answering for the member,
     // and letting them resubmit without the date they were asked for.
-    setCertificationNeverExpires(false);
+    if (!continuingDraft) setCertificationNeverExpires(false);
     setStoredAttachments(editSubmission.attachments ?? []);
     // Reported start times are kept now. 09:00 is the fallback only for rows
     // written before the column existed, which genuinely have none.
@@ -197,11 +263,12 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
       editSubmission.expiration_date
     );
     certificationTouched.current = true;
-    setHasCertification(hasCertData || editSubmission.training_type === 'certification');
+    if (!continuingDraft) setHasCertification(hasCertData || editSubmission.training_type === 'certification');
     setReceipt(null);
     setError('');
-    setAttemptedSave(false);
-  }, [editSubmission, maxDurationMinutes, defaultTrainingType]);
+    setAttemptedSave(continuingDraft);
+    clearTrainingErrors();
+  }, [editSubmission, maxDurationMinutes, defaultTrainingType, clearTrainingErrors]);
 
   // Seed the certification block from the training type, until the member says
   // otherwise. `certification` all but always earns one; nothing else does.
@@ -436,21 +503,37 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
     setStoredAttachments([]);
     setAttemptedSave(false);
     setError('');
-  }, [defaultTrainingType, maxDurationMinutes]);
+    clearTrainingErrors();
+  }, [defaultTrainingType, maxDurationMinutes, clearTrainingErrors]);
 
   const save = async (options: { asDraft: boolean }) => {
     setError('');
     // A draft is a half-finished note, so only the two columns the API cannot
     // store without are asked for; a real submission needs everything.
+    // Only the form-level message is cleared here. A field's server refusal
+    // stands until that field is edited or a request is actually sent: the
+    // draft-minimum return below sends nothing that could settle it.
+    trainingErrors.setFormError(null);
+    // Owner rule (2026-11-05): a draft saves with fields still open, which stay
+    // flagged; only submitting is held back by one. A draft does still need
+    // the two NOT NULL columns, by the owner's choice of the same day, not to
+    // make them nullable.
     const missing = options.asDraft
       ? [...(courseName.trim() ? [] : ['course_name']), ...(completionDate ? [] : ['completion_date'])]
       : findMissingFields();
     setAttemptedSave(true);
     if (missing.length > 0) {
-      if (options.asDraft) setError('A draft still needs a course name and a date.');
+      if (options.asDraft) trainingErrors.setFormError(DRAFT_MINIMUM_MESSAGE);
       fieldRefs.current[missing[0] ?? '']?.focus();
       return;
     }
+    trainingErrors.setErrors({});
+    // Counted before the save resets anything, for the draft's toast.
+    const stillOpen = options.asDraft ? findMissingFields().length : 0;
+    const draftRemainder =
+      stillOpen > 0
+        ? ` ${stillOpen} ${stillOpen === 1 ? 'field still needs' : 'fields still need'} filling in before you submit.`
+        : '';
 
     const setBusy = options.asDraft ? setIsSavingDraft : setIsSubmitting;
     setBusy(true);
@@ -467,10 +550,11 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         await trainingSubmissionService.updateSubmission(editSubmission.id, buildUpdatePayload());
         const uploaded = await uploadAttachmentIfAny(editSubmission.id);
         if (options.asDraft) {
-          toast.success('Draft saved');
+          toast.success(`Draft saved.${draftRemainder}`);
           // Stay on the draft: saving again has to update this one, not file
           // a second copy of the same class. Carry the upload's own metadata,
           // since the submission in hand predates it.
+          draftJustSaved.current = editSubmission.id;
           onSaved(uploaded ? { ...editSubmission, attachments: uploaded.attachments } : editSubmission);
         } else if (editSubmission.status === 'draft') {
           const submitted = await trainingSubmissionService.submitDraft(editSubmission.id);
@@ -494,10 +578,11 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         if (attachOnCreate) setAttachment(null);
 
         if (options.asDraft) {
-          toast.success('Draft saved. It stays in your list until you submit it.');
+          toast.success(`Draft saved. It stays in your list until you submit it.${draftRemainder}`);
           // A queued offline create has no server id yet, so there is nothing
           // to keep editing — later saves would PATCH `/pending-sync`.
           const savedDraft = uploaded ? { ...created, attachments: uploaded.attachments } : created;
+          if (!queuedOffline) draftJustSaved.current = savedDraft.id;
           onSaved(queuedOffline ? undefined : savedDraft);
         } else {
           setReceipt(buildReceipt(attachedName ?? uploaded?.name ?? null, created.status === 'approved'));
@@ -506,8 +591,9 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         }
       }
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
-      setError(typeof detail === 'string' ? detail : 'Failed to submit training');
+      // A refusal lands on the field it names. Reading `detail` as a string
+      // turned every 422, whose detail is a list, into "Failed to submit".
+      trainingErrors.focusFirst(trainingErrors.setFromApiError(err, 'Could not save your training. Try again.'));
     } finally {
       setBusy(false);
     }
@@ -516,8 +602,24 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   // Marks are recomputed from the current values, so a field stops being red
   // the moment the member fills it in rather than at the next submit attempt.
   const missingNow = attemptedSave ? findMissingFields() : [];
-  const invalidClass = (name: string) =>
-    missingNow.includes(name) ? 'border-red-600 focus:border-red-600 dark:border-red-500' : '';
+  const fieldErrors: FieldErrors<TrainingField> = {
+    ...trainingErrors.errors,
+    ...Object.fromEntries(missingNow.map((name) => [name, MISSING_MESSAGES[name as TrainingField]])),
+  };
+  // Switched off, the certification block is not drawn, so its fields must not
+  // report: a summary link would point at a control that is not there.
+  if (!hasCertification) {
+    delete fieldErrors.certification_number;
+    delete fieldErrors.issuing_agency;
+    delete fieldErrors.expiration_date;
+  }
+  // The summary names each field the way the field itself is labelled, which
+  // a department can change in its submission settings.
+  const errorSummary = buildSummary(TRAINING_FIELDS, fieldErrors, (name) =>
+    fieldLabel(name, TRAINING_FIELDS[name].label)
+  );
+  const invalidClass = (name: TrainingField) =>
+    fieldErrors[name] ? 'border-red-600 focus:border-red-600 dark:border-red-500' : '';
 
   if (receipt) {
     return (
@@ -589,24 +691,34 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           </div>
         )}
 
+        <ErrorSummary items={errorSummary} formError={trainingErrors.formError} />
+
         {/* ---------- The class ---------- */}
         <SectionCard title="The Class">
           <div>
-            <FieldLabel htmlFor="course-name" required>
-              {fieldLabel('course_name', 'Course or class name')}
-            </FieldLabel>
-            <input
-              id="course-name"
-              ref={registerField('course_name')}
-              type="text"
-              list="dept-requirement-suggestions"
-              value={courseName}
-              onChange={(e) => setCourseName(e.target.value)}
-              placeholder="Start typing — suggestions appear"
-              className={`form-input ${invalidClass('course_name')}`}
-              aria-invalid={missingNow.includes('course_name')}
-              autoComplete="off"
-            />
+            <FormField
+              id={TRAINING_FIELDS.course_name.id}
+              label={fieldLabel('course_name', 'Course or class name')}
+              required
+              error={fieldErrors.course_name}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  ref={registerField('course_name')}
+                  type="text"
+                  list="dept-requirement-suggestions"
+                  value={courseName}
+                  onChange={(e) => {
+                    edited('course_name');
+                    setCourseName(e.target.value);
+                  }}
+                  placeholder="Start typing — suggestions appear"
+                  className={`form-input ${invalidClass('course_name')}`}
+                  autoComplete="off"
+                />
+              )}
+            </FormField>
             <datalist id="dept-requirement-suggestions">
               {suggestions.map((requirement) => (
                 <option key={requirement.id} value={requirement.name} />
@@ -635,24 +747,32 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
 
             {showCategory && (
               <div>
-                <FieldLabel htmlFor="training-category" required={isFieldRequired('category_id')}>
-                  {fieldLabel('category_id', 'Category')}
-                </FieldLabel>
-                <select
-                  id="training-category"
-                  ref={registerField('category_id')}
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  className={`form-input ${invalidClass('category_id')}`}
-                  aria-invalid={missingNow.includes('category_id')}
+                <FormField
+                  id={TRAINING_FIELDS.category_id.id}
+                  label={fieldLabel('category_id', 'Category')}
+                  required={isFieldRequired('category_id')}
+                  error={fieldErrors.category_id}
                 >
-                  <option value="">Select...</option>
-                  {parentCategories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
+                  {(field) => (
+                    <select
+                      {...field}
+                      ref={registerField('category_id')}
+                      value={categoryId}
+                      onChange={(e) => {
+                        edited('category_id');
+                        setCategoryId(e.target.value);
+                      }}
+                      className={`form-input ${invalidClass('category_id')}`}
+                    >
+                      <option value="">Select...</option>
+                      {parentCategories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </FormField>
               </div>
             )}
           </div>
@@ -662,34 +782,45 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         <SectionCard title="When">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <FieldLabel htmlFor="completion-date" required>
-                {fieldLabel('completion_date', 'Date')}
-              </FieldLabel>
-              <input
-                id="completion-date"
-                ref={registerField('completion_date')}
-                type="date"
-                value={completionDate}
-                max={getTodayLocalDate(timezone)}
-                onChange={(e) => setCompletionDate(e.target.value)}
-                className={`form-input font-mono ${invalidClass('completion_date')}`}
-                aria-invalid={missingNow.includes('completion_date')}
-              />
+              <FormField
+                id={TRAINING_FIELDS.completion_date.id}
+                label={fieldLabel('completion_date', 'Date')}
+                required
+                error={fieldErrors.completion_date}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    ref={registerField('completion_date')}
+                    type="date"
+                    value={completionDate}
+                    max={getTodayLocalDate(timezone)}
+                    onChange={(e) => {
+                      edited('completion_date');
+                      setCompletionDate(e.target.value);
+                    }}
+                    className={`form-input font-mono ${invalidClass('completion_date')}`}
+                  />
+                )}
+              </FormField>
             </div>
             <div>
-              <FieldLabel htmlFor="start-time" required>
-                Start time
-              </FieldLabel>
-              <input
-                id="start-time"
-                ref={registerField('start_time')}
-                type="time"
-                step={DURATION_STEP_MINUTES * 60}
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className={`form-input font-mono ${invalidClass('start_time')}`}
-                aria-invalid={missingNow.includes('start_time')}
-              />
+              <FormField id={TRAINING_FIELDS.start_time.id} label="Start time" required error={fieldErrors.start_time}>
+                {(field) => (
+                  <input
+                    {...field}
+                    ref={registerField('start_time')}
+                    type="time"
+                    step={DURATION_STEP_MINUTES * 60}
+                    value={startTime}
+                    onChange={(e) => {
+                      edited('start_time');
+                      setStartTime(e.target.value);
+                    }}
+                    className={`form-input font-mono ${invalidClass('start_time')}`}
+                  />
+                )}
+              </FormField>
             </div>
           </div>
 
@@ -723,64 +854,82 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {isFieldVisible('instructor') && (
               <div>
-                <FieldLabel
-                  htmlFor="instructor"
+                <FormField
+                  id={TRAINING_FIELDS.instructor.id}
+                  label={fieldLabel('instructor', 'Instructor')}
                   required={isFieldRequired('instructor')}
                   optional={!isFieldRequired('instructor')}
+                  error={fieldErrors.instructor}
                 >
-                  {fieldLabel('instructor', 'Instructor')}
-                </FieldLabel>
-                <input
-                  id="instructor"
-                  ref={registerField('instructor')}
-                  type="text"
-                  value={instructor}
-                  onChange={(e) => setInstructor(e.target.value)}
-                  placeholder="Name or agency"
-                  className={`form-input ${invalidClass('instructor')}`}
-                  aria-invalid={missingNow.includes('instructor')}
-                />
+                  {(field) => (
+                    <input
+                      {...field}
+                      ref={registerField('instructor')}
+                      type="text"
+                      value={instructor}
+                      onChange={(e) => {
+                        edited('instructor');
+                        setInstructor(e.target.value);
+                      }}
+                      placeholder="Name or agency"
+                      className={`form-input ${invalidClass('instructor')}`}
+                    />
+                  )}
+                </FormField>
               </div>
             )}
 
             {isFieldVisible('location') && (
               <div>
-                <FieldLabel
-                  htmlFor="location"
+                <FormField
+                  id={TRAINING_FIELDS.location.id}
+                  label={fieldLabel('location', 'Location')}
                   required={isFieldRequired('location')}
                   optional={!isFieldRequired('location')}
+                  error={fieldErrors.location}
                 >
-                  {fieldLabel('location', 'Location')}
-                </FieldLabel>
-                <input
-                  id="location"
-                  ref={registerField('location')}
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Facility or address"
-                  className={`form-input ${invalidClass('location')}`}
-                  aria-invalid={missingNow.includes('location')}
-                />
+                  {(field) => (
+                    <input
+                      {...field}
+                      ref={registerField('location')}
+                      type="text"
+                      value={location}
+                      onChange={(e) => {
+                        edited('location');
+                        setLocation(e.target.value);
+                      }}
+                      placeholder="Facility or address"
+                      className={`form-input ${invalidClass('location')}`}
+                    />
+                  )}
+                </FormField>
               </div>
             )}
           </div>
 
           {isFieldVisible('description') && (
             <div>
-              <FieldLabel htmlFor="description" required={isFieldRequired('description')}>
-                {fieldLabel('description', 'What it covered')}
-              </FieldLabel>
-              <textarea
-                id="description"
-                ref={registerField('description')}
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="A sentence or two is enough."
-                className={`form-input resize-y ${invalidClass('description')}`}
-                aria-invalid={missingNow.includes('description')}
-              />
+              <FormField
+                id={TRAINING_FIELDS.description.id}
+                label={fieldLabel('description', 'What it covered')}
+                required={isFieldRequired('description')}
+                error={fieldErrors.description}
+              >
+                {(field) => (
+                  <textarea
+                    {...field}
+                    ref={registerField('description')}
+                    rows={3}
+                    value={description}
+                    onChange={(e) => {
+                      edited('description');
+                      setDescription(e.target.value);
+                    }}
+                    placeholder="A sentence or two is enough."
+                    className={`form-input resize-y ${invalidClass('description')}`}
+                  />
+                )}
+              </FormField>
             </div>
           )}
 
@@ -801,60 +950,78 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
             <div className="alert-info animate-scale-in grid grid-cols-1 gap-3 sm:grid-cols-3">
               {isFieldVisible('certification_number') && (
                 <div>
-                  <FieldLabel htmlFor="certification-number" required={isFieldRequired('certification_number')}>
-                    {fieldLabel('certification_number', 'Certificate no.')}
-                  </FieldLabel>
-                  <input
-                    id="certification-number"
-                    ref={registerField('certification_number')}
-                    type="text"
-                    value={certificationNumber}
-                    onChange={(e) => setCertificationNumber(e.target.value)}
-                    className={`form-input font-mono ${invalidClass('certification_number')}`}
-                    aria-invalid={missingNow.includes('certification_number')}
-                  />
+                  <FormField
+                    id={TRAINING_FIELDS.certification_number.id}
+                    label={fieldLabel('certification_number', 'Certificate no.')}
+                    required={isFieldRequired('certification_number')}
+                    error={fieldErrors.certification_number}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        ref={registerField('certification_number')}
+                        type="text"
+                        value={certificationNumber}
+                        onChange={(e) => {
+                          edited('certification_number');
+                          setCertificationNumber(e.target.value);
+                        }}
+                        className={`form-input font-mono ${invalidClass('certification_number')}`}
+                      />
+                    )}
+                  </FormField>
                 </div>
               )}
               {isFieldVisible('issuing_agency') && (
                 <div>
-                  <FieldLabel
-                    htmlFor="issuing-agency"
+                  <FormField
+                    id={TRAINING_FIELDS.issuing_agency.id}
+                    label={fieldLabel('issuing_agency', 'Agency')}
                     required={isFieldRequired('issuing_agency')}
                     optional={!isFieldRequired('issuing_agency')}
+                    error={fieldErrors.issuing_agency}
                   >
-                    {fieldLabel('issuing_agency', 'Agency')}
-                  </FieldLabel>
-                  <input
-                    id="issuing-agency"
-                    ref={registerField('issuing_agency')}
-                    type="text"
-                    value={issuingAgency}
-                    onChange={(e) => setIssuingAgency(e.target.value)}
-                    placeholder="VDFP, NREMT..."
-                    className={`form-input ${invalidClass('issuing_agency')}`}
-                    aria-invalid={missingNow.includes('issuing_agency')}
-                  />
+                    {(field) => (
+                      <input
+                        {...field}
+                        ref={registerField('issuing_agency')}
+                        type="text"
+                        value={issuingAgency}
+                        onChange={(e) => {
+                          edited('issuing_agency');
+                          setIssuingAgency(e.target.value);
+                        }}
+                        placeholder="VDFP, NREMT..."
+                        className={`form-input ${invalidClass('issuing_agency')}`}
+                      />
+                    )}
+                  </FormField>
                 </div>
               )}
               {isFieldVisible('expiration_date') && (
                 <div>
-                  <FieldLabel
-                    htmlFor="expiration-date"
+                  <FormField
+                    id={TRAINING_FIELDS.expiration_date.id}
+                    label={fieldLabel('expiration_date', 'Expires')}
                     required={isFieldRequired('expiration_date') && !certificationNeverExpires}
                     optional={!isFieldRequired('expiration_date') && !certificationNeverExpires}
+                    error={fieldErrors.expiration_date}
                   >
-                    {fieldLabel('expiration_date', 'Expires')}
-                  </FieldLabel>
-                  <input
-                    id="expiration-date"
-                    ref={registerField('expiration_date')}
-                    type="date"
-                    value={certificationNeverExpires ? '' : expirationDate}
-                    disabled={certificationNeverExpires}
-                    onChange={(e) => setExpirationDate(e.target.value)}
-                    className={`form-input font-mono disabled:opacity-50 ${invalidClass('expiration_date')}`}
-                    aria-invalid={missingNow.includes('expiration_date')}
-                  />
+                    {(field) => (
+                      <input
+                        {...field}
+                        ref={registerField('expiration_date')}
+                        type="date"
+                        value={certificationNeverExpires ? '' : expirationDate}
+                        disabled={certificationNeverExpires}
+                        onChange={(e) => {
+                          edited('expiration_date');
+                          setExpirationDate(e.target.value);
+                        }}
+                        className={`form-input font-mono disabled:opacity-50 ${invalidClass('expiration_date')}`}
+                      />
+                    )}
+                  </FormField>
                   {/* Whether an expiry is required follows the certification,
                       not a blanket rule: a department can ask for the date and
                       still take a credential that never expires. */}
@@ -1023,10 +1190,11 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           <AttachmentField
             id="training-attachment"
             file={attachment}
-            error={attachmentError}
+            error={attachmentError || fieldErrors.attachments || ''}
             required={attachmentRequired}
-            invalid={missingNow.includes('attachments')}
+            invalid={!!fieldErrors.attachments}
             onSelect={(file) => {
+              edited('attachments');
               const rejection = file ? attachmentRejection(file) : null;
               setAttachmentError(rejection ?? '');
               setAttachment(rejection ? null : file);
