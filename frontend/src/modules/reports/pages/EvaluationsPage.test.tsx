@@ -356,7 +356,7 @@ describe('EvaluationsPage', () => {
   describe('the getting-started checklist', () => {
     const checklist = () => screen.findByRole('region', { name: 'Getting started' });
 
-    it('starts at none done, with the first two steps one click away', async () => {
+    it('starts at none done, pointing at the header buttons rather than repeating them', async () => {
       listTemplates.mockResolvedValue([]);
       listPeriods.mockResolvedValue([]);
       renderWithRouter(<EvaluationsPage />);
@@ -365,10 +365,31 @@ describe('EvaluationsPage', () => {
       expect(
         within(section).getByText('0 of 4 done. This goes away once evaluations are under way.')
       ).toBeInTheDocument();
-      expect(within(section).getByRole('button', { name: 'New template' })).toBeInTheDocument();
-      expect(within(section).getByRole('button', { name: 'New review period' })).toBeInTheDocument();
+      expect(within(section).queryByRole('button', { name: 'New template' })).not.toBeInTheDocument();
+      expect(within(section).queryByRole('button', { name: 'New review period' })).not.toBeInTheDocument();
+      expect(
+        within(section).getByText(/build your own with New template at the top of this page\./)
+      ).toBeInTheDocument();
+      expect(
+        within(section).getByText(/Open one with New review period at the top of this page\./)
+      ).toBeInTheDocument();
+      // The header still carries both.
+      expect(screen.getAllByRole('button', { name: 'New template' }).length).toBeGreaterThan(0);
+      expect(screen.getByRole('button', { name: 'New review period' })).toBeInTheDocument();
       // Nothing to check against yet, so no draft preview is asked for.
       expect(bulkPreview).not.toHaveBeenCalled();
+    });
+
+    it('names only the header buttons this viewer is shown', async () => {
+      granted = new Set(['evaluations.configure']);
+      listTemplates.mockResolvedValue([]);
+      listPeriods.mockResolvedValue([]);
+      renderWithRouter(<EvaluationsPage />);
+
+      const section = await checklist();
+      expect(within(section).getByText(/with New template at the top of this page/)).toBeInTheDocument();
+      expect(within(section).queryByText(/New review period at the top/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'New review period' })).not.toBeInTheDocument();
     });
 
     it('marks the published form and the open period done, and lists who drafting would leave out', async () => {

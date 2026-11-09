@@ -55,6 +55,7 @@ from app.models.user import User
 from app.services import file_storage_service
 from app.services.documents_service import DocumentsService
 from app.services.finance_service import FinanceService
+from tests.audit_cleanup import discard_committed_audit_rows
 
 pytestmark = pytest.mark.integration
 
@@ -184,14 +185,13 @@ async def _seed(*, pr_status=PurchaseRequestStatus.DRAFT, with_report=False):
 
 
 async def _cleanup(org_id: str) -> None:
+    # The receipt upload commits an audit event; left behind it shifts every
+    # audit-shipping and chain test that runs after this file in a random
+    # order (the onboarding race test cleans up the same way).
+    await discard_committed_audit_rows("organization_id = :o", {"o": org_id})
     async with database_manager.engine.connect() as conn:
         async with conn.begin():
             for statement in (
-                # The receipt upload commits an audit event; left behind it
-                # shifts every audit-shipping and chain test that runs after
-                # this file in a random order (the onboarding race test cleans
-                # up the same way).
-                "DELETE FROM audit_logs WHERE organization_id = :o",
                 "DELETE FROM meeting_minutes WHERE organization_id = :o",
                 "DELETE FROM check_requests WHERE organization_id = :o",
                 "DELETE li FROM expense_line_items li JOIN expense_reports er "

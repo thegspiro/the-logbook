@@ -154,8 +154,8 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     <div>
       {/* Table */}
       <div className="card bg-theme-input-bg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="rwd-table-container overflow-x-auto">
+          <table className="rwd-table rwd-table-wide w-full">
             <thead>
               <tr className="border-theme-surface-border border-b">
                 <th scope="col" className="w-14 p-3">
@@ -243,7 +243,11 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
             <tbody>
               {sortedApplicants.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-theme-text-muted py-12 text-center">
+                  <td
+                    colSpan={9}
+                    data-label="Applicants"
+                    className="rwd-table-lead text-theme-text-muted py-12 text-center"
+                  >
                     No applicants found
                   </td>
                 </tr>
@@ -265,7 +269,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         isSelected ? 'bg-red-500/5' : ''
                       }`}
                     >
-                      <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                      <td data-label="Select" className="p-3" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => toggleOne(applicant.id)}
                           aria-label={`Select ${applicant.first_name} ${applicant.last_name}`}
@@ -279,7 +283,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                           )}
                         </button>
                       </td>
-                      <td className="p-3" onClick={() => onApplicantClick(applicant)}>
+                      <td data-label="Name" className="p-3" onClick={() => onApplicantClick(applicant)}>
                         <div className="flex items-center gap-2.5">
                           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-red-600 to-red-700 text-xs font-bold text-white">
                             {getInitials(applicant.first_name, applicant.last_name)}
@@ -290,20 +294,26 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         </div>
                       </td>
                       <td
+                        data-label="Email"
                         className="text-theme-text-muted table-col-secondary p-3 text-sm"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {applicant.email}
                       </td>
-                      <td className="text-theme-text-secondary p-3 text-sm" onClick={() => onApplicantClick(applicant)}>
+                      <td
+                        data-label="Current Stage"
+                        className="text-theme-text-secondary p-3 text-sm"
+                        onClick={() => onApplicantClick(applicant)}
+                      >
                         {applicant.current_stage_name ?? '—'}
                       </td>
-                      <td className="p-3" onClick={() => onApplicantClick(applicant)}>
+                      <td data-label="Status" className="p-3" onClick={() => onApplicantClick(applicant)}>
                         <span className={`inline-block rounded-sm px-2 py-0.5 text-xs ${statusColor}`}>
                           {statusLabel}
                         </span>
                       </td>
                       <td
+                        data-label="Days in Stage"
                         className="text-theme-text-muted table-col-secondary p-3 text-sm"
                         onClick={() => onApplicantClick(applicant)}
                       >
@@ -324,18 +334,20 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         </span>
                       </td>
                       <td
+                        data-label="Target Type"
                         className="text-theme-text-muted table-col-tertiary p-3 text-sm capitalize"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {applicant.target_membership_type}
                       </td>
                       <td
+                        data-label="Applied"
                         className="text-theme-text-muted table-col-tertiary p-3 text-sm"
                         onClick={() => onApplicantClick(applicant)}
                       >
                         {formatDate(applicant.created_at, tz)}
                       </td>
-                      <td className="relative p-3" onClick={(e) => e.stopPropagation()}>
+                      <td data-label="Actions" className="relative p-3" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => setActionMenuId(actionMenuId === applicant.id ? null : applicant.id)}
                           className="text-theme-text-muted hover:text-theme-text-primary inline-flex min-h-[44px] min-w-[44px] items-center justify-center transition-colors"

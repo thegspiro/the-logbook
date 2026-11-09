@@ -63,3 +63,27 @@ export const RESOLUTION_LABELS: Record<string, string> = {
   ambiguous: 'More than one match',
   unmatched: 'No match',
 };
+
+/** Short names for the backend's issue codes, for the Rows tab's filter chips. */
+const ISSUE_LABELS: Record<string, string> = {
+  probable_match: 'Probable crew match',
+  probable_existing_match: 'Matches a scheduled shift',
+  duplicate_member_in_shift: 'Member listed twice',
+  overlapping_entries: 'Overlapping times',
+  attendance_too_long: 'Too long',
+  row_error: 'Unreadable row',
+  position_unmatched: 'Unknown position',
+  unit_default_seat: 'Unit needs a default position',
+  new_member_without_name: 'New member needs a name',
+  new_member_identifier_taken: 'Identifier already taken',
+  duplicate_source_id: 'Repeated source ID',
+};
+
+export const issueLabel = (code: string): string => {
+  const known = ISSUE_LABELS[code];
+  if (known) return known;
+  if (code.startsWith('member_')) return 'Member not settled';
+  if (code.startsWith('unit_')) return 'Unit not settled';
+  const words = code.replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};

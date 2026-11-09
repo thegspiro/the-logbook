@@ -545,17 +545,35 @@ class ShiftHistoryImportService:
                 raise ValueError("Invalid outside apparatus")
             return {"action": engine.EXTERNAL, "id": unit_id}
         if action == "create_external":
+            agency_id = str(mapping.get("agency_id") or "")
             agency_name = str(mapping.get("agency_name") or "").strip()
             unit_name = str(mapping.get("unit_name") or "").strip()
+            if agency_id:
+                # A picked agency is stored under its own name, so the review
+                # screen shows the department's spelling, not the file's.
+                agency = (
+                    await self.db.execute(
+                        select(ExternalAgency).where(
+                            ExternalAgency.id == agency_id,
+                            ExternalAgency.organization_id == org,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if agency is None:
+                    raise ValueError("Invalid outside agency")
+                agency_name = agency.name
             if not agency_name or not unit_name:
                 raise ValueError("A new outside unit needs an agency and a unit name.")
             if len(agency_name) > 255 or len(unit_name) > 100:
                 raise ValueError("The agency or unit name is too long.")
-            return {
+            validated_new: Dict[str, Any] = {
                 "action": "create_external",
                 "agency_name": agency_name,
                 "unit_name": unit_name,
             }
+            if agency_id:
+                validated_new["agency_id"] = agency_id
+            return validated_new
         raise ValueError(
             "Unit mapping action must be 'own', 'external' or 'create_external'."
         )
@@ -604,6 +622,7 @@ class ShiftHistoryImportService:
                 Apparatus.unit_number,
                 Apparatus.name,
                 Apparatus.crew_positions.label("positions"),
+                Apparatus.is_archived.label("retired"),
             ).where(Apparatus.organization_id == str(organization_id))
         )
         basic = await self.db.execute(
@@ -612,25 +631,43 @@ class ShiftHistoryImportService:
                 BasicApparatus.unit_number,
                 BasicApparatus.name,
                 BasicApparatus.positions,
+                BasicApparatus.is_active,
             ).where(BasicApparatus.organization_id == str(organization_id))
         )
-        return [
+        units = [
             engine.OwnUnit(
                 id=r.id,
                 unit_number=r.unit_number or "",
                 name=r.name or "",
                 seats=_seat_names(r.positions),
+                active=not r.retired,
             )
-            for r in list(full.all()) + list(basic.all())
+            for r in full.all()
         ]
+        # ``is_active`` is nullable on the basic list; a NULL row predates the
+        # default and has always been offered, so only an explicit False is
+        # retired.
+        units.extend(
+            engine.OwnUnit(
+                id=r.id,
+                unit_number=r.unit_number or "",
+                name=r.name or "",
+                seats=_seat_names(r.positions),
+                active=r.is_active is not False,
+            )
+            for r in basic.all()
+        )
+        return units
 
     async def _external_units(self, organization_id: str) -> List[engine.ExternalUnit]:
         result = await self.db.execute(
             select(
                 ExternalApparatus.id,
                 ExternalApparatus.name,
+                ExternalApparatus.is_active,
                 ExternalAgency.id.label("agency_id"),
                 ExternalAgency.name.label("agency_name"),
+                ExternalAgency.is_active.label("agency_is_active"),
             )
             .join(ExternalAgency, ExternalAgency.id == ExternalApparatus.agency_id)
             .where(
@@ -640,7 +677,11 @@ class ShiftHistoryImportService:
         )
         return [
             engine.ExternalUnit(
-                id=r.id, name=r.name, agency_id=r.agency_id, agency_name=r.agency_name
+                id=r.id,
+                name=r.name,
+                agency_id=r.agency_id,
+                agency_name=r.agency_name,
+                active=bool(r.is_active and r.agency_is_active),
             )
             for r in result.all()
         ]
@@ -823,6 +864,7 @@ class ShiftHistoryImportService:
                 "id": u.id,
                 "name": " - ".join(p for p in (u.unit_number, u.name) if p),
                 "seats": list(u.seats),
+                "is_active": u.active,
             }
             for u in await self._own_units(organization_id)
         ]
@@ -832,9 +874,22 @@ class ShiftHistoryImportService:
                 "id": u.id,
                 "name": u.name,
                 "agency_name": u.agency_name,
+                "is_active": u.active,
             }
             for u in await self._external_units(organization_id)
         )
+        agencies = [
+            {"id": a.id, "name": a.name, "is_active": bool(a.is_active)}
+            for a in (
+                await self.db.execute(
+                    select(ExternalAgency)
+                    .where(ExternalAgency.organization_id == str(organization_id))
+                    .order_by(ExternalAgency.name)
+                )
+            )
+            .scalars()
+            .all()
+        ]
         seats = sorted(
             set(CANONICAL_POSITIONS)
             | set(
@@ -855,6 +910,7 @@ class ShiftHistoryImportService:
                 key=lambda m: m["name"].casefold(),
             ),
             "units": units,
+            "agencies": agencies,
             "seats": seats,
         }
 
@@ -1270,15 +1326,26 @@ class ShiftHistoryImportService:
         for unit in analysis.units:
             if unit.target_kind != engine.NEW_EXTERNAL:
                 continue
-            agency = (
-                await self.db.execute(
-                    select(ExternalAgency).where(
-                        ExternalAgency.organization_id == org,
-                        func.lower(ExternalAgency.name)
-                        == unit.new_agency_name.casefold(),
+            agency = None
+            if unit.new_agency_id:
+                agency = (
+                    await self.db.execute(
+                        select(ExternalAgency).where(
+                            ExternalAgency.id == unit.new_agency_id,
+                            ExternalAgency.organization_id == org,
+                        )
                     )
-                )
-            ).scalar_one_or_none()
+                ).scalar_one_or_none()
+            if agency is None:
+                agency = (
+                    await self.db.execute(
+                        select(ExternalAgency).where(
+                            ExternalAgency.organization_id == org,
+                            func.lower(ExternalAgency.name)
+                            == unit.new_agency_name.casefold(),
+                        )
+                    )
+                ).scalar_one_or_none()
             if agency is None:
                 agency = ExternalAgency(
                     id=generate_uuid(), organization_id=org, name=unit.new_agency_name
@@ -1297,11 +1364,16 @@ class ShiftHistoryImportService:
                 )
             ).scalar_one_or_none()
             if apparatus is None:
+                # Hidden from members until an officer offers it: a unit named
+                # in an old file is as likely retired as in service, and a
+                # hidden one cannot be logged against by mistake. The agency is
+                # left as it is, so switching the unit on is the one step.
                 apparatus = ExternalApparatus(
                     id=generate_uuid(),
                     organization_id=org,
                     agency_id=agency.id,
                     name=unit.new_unit_name,
+                    is_active=False,
                 )
                 self.db.add(apparatus)
                 await self.db.flush()
@@ -1619,6 +1691,7 @@ def analysis_view(
                 "target_id": u.target_id,
                 "candidates": [{"kind": k, "id": i} for k, i in u.candidates],
                 "new_agency_name": u.new_agency_name,
+                "new_agency_id": u.new_agency_id,
                 "new_unit_name": u.new_unit_name,
                 "default_seat": u.default_seat,
                 "row_count": len(u.row_ids),

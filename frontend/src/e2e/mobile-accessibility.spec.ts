@@ -161,6 +161,15 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   '/notifications?tab=inbox': 3,
   '/inventory/admin/checklists': 6,
   '/elections': 3,
+  // The minutes landing as a manager sees it, measured the first time the pass
+  // granted minutes.manage. All eight nodes are its feature tags (Roll Call,
+  // Motions, Votes, Assignees, Due Dates, Follow-up, Search, Publish to
+  // Documents) in the light theme: `text-*-800` on a matching `/10` tint at
+  // 6.5:1, the same shortfall the scheduling settings badges carry below.
+  // AA-clean — this file asserts that at zero — and short of 7:1. The empty
+  // state's Record First Minutes button was a cyan-700 fill at 5.27:1 in every
+  // theme; it is btn-primary now, like the header button beside it.
+  '/minutes': 8,
   // One node: the `alert-warning` heading that tells an officer this ladder
   // decides who votes. `--alert-warning-title` is amber-800 on amber-50 and
   // measures 6.83:1 — AA-clean, AAA short by a hair, and the same shortfall the

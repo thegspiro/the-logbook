@@ -1,5 +1,20 @@
 # Screenshot currency
 
+## Captured 2026-11-08 — Requests tab triage list and drawer (#4141)
+
+Taken on the demo department seeded from this branch, with malware scanning on.
+Nothing mocked. The seeder gained `seed_event_request_pipeline` so every group
+on the tab has a row: a new request (Dana Whitmore), one in progress with a
+coordinator and two checklist steps done, one scheduled with a signup sheet,
+and one postponed. It also corrects two field names the request seed had wrong
+(`timeframe_description`, `expected_attendees`), which the public endpoint had
+been silently dropping, so the audience and the timeframe were missing.
+
+| Image | Disposition | Notes |
+| --- | --- | --- |
+| `04-20-event-requests` | Re-shot | The grouped triage list. Now asserts it landed on the list (`expect: "Needs a reply"`) and has left the landing-assertion baseline |
+| `04-99-event-request-drawer` | New | Maple Street HOA open in the drawer: Schedule event / Email requester / More, "Next: Confirm Date", the checklist at 2/6 |
+
 ## Queued by the November 4 – 5 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-4--5-2026).

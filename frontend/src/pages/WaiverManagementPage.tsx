@@ -409,8 +409,8 @@ export const WaiverManagementPage: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="card overflow-hidden overflow-x-auto">
-                <table className="divide-theme-surface-border min-w-full divide-y">
+              <div className="rwd-table-container card overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide divide-theme-surface-border min-w-full divide-y">
                   <thead className="bg-theme-surface-hover">
                     <tr>
                       <th
@@ -454,7 +454,7 @@ export const WaiverManagementPage: React.FC = () => {
                   <tbody className="divide-theme-surface-border divide-y">
                     {activeWaivers.map((waiver) => (
                       <tr key={`${waiver.source}-${waiver.id}`} className="hover:bg-theme-surface-hover">
-                        <td className="px-4 py-3">
+                        <td data-label="Member" className="px-4 py-3">
                           <Link
                             to={`/members/${waiver.user_id}`}
                             className="touch-target-phone text-sm font-medium text-blue-800 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
@@ -462,10 +462,10 @@ export const WaiverManagementPage: React.FC = () => {
                             {waiver.member_name}
                           </Link>
                         </td>
-                        <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                        <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {getWaiverTypeLabel(waiver.waiver_type)}
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-label="Applies To" className="px-4 py-3">
                           <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-2 py-1 text-xs">
                             {waiver.applies_to === 'all'
                               ? 'Training, Meetings, Shifts'
@@ -476,14 +476,14 @@ export const WaiverManagementPage: React.FC = () => {
                                   : waiver.applies_to}
                           </span>
                         </td>
-                        <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                        <td data-label="Period" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {formatDate(waiver.start_date, tz)} -{' '}
                           {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
                         </td>
-                        <td className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
+                        <td data-label="Reason" className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
                           {waiver.reason || '-'}
                         </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                        <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
                           {waiver.source === 'leave' && (
                             <button
                               onClick={() =>
@@ -734,8 +734,8 @@ export const WaiverManagementPage: React.FC = () => {
                 <p className="text-theme-text-muted">No waivers match the current filter.</p>
               </div>
             ) : (
-              <div className="card overflow-hidden overflow-x-auto">
-                <table className="divide-theme-surface-border min-w-full divide-y">
+              <div className="rwd-table-container card overflow-hidden overflow-x-auto">
+                <table className="rwd-table rwd-table-wide divide-theme-surface-border min-w-full divide-y">
                   <thead className="bg-theme-surface-hover">
                     <tr>
                       <th
@@ -787,7 +787,7 @@ export const WaiverManagementPage: React.FC = () => {
                       const badge = getWaiverStatusBadge(waiver, today);
                       return (
                         <tr key={`${waiver.source}-${waiver.id}`} className="hover:bg-theme-surface-hover">
-                          <td className="px-4 py-3">
+                          <td data-label="Member" className="px-4 py-3">
                             <Link
                               to={`/members/${waiver.user_id}`}
                               className="touch-target-phone text-sm font-medium text-blue-800 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
@@ -795,15 +795,15 @@ export const WaiverManagementPage: React.FC = () => {
                               {waiver.member_name}
                             </Link>
                           </td>
-                          <td className="px-4 py-3">
+                          <td data-label="Status" className="px-4 py-3">
                             <span className={`rounded-full px-2 py-1 text-xs font-medium ${badge.color}`}>
                               {badge.label}
                             </span>
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                          <td data-label="Type" className="text-theme-text-secondary px-4 py-3 text-sm">
                             {getWaiverTypeLabel(waiver.waiver_type)}
                           </td>
-                          <td className="px-4 py-3">
+                          <td data-label="Applies To" className="px-4 py-3">
                             <span className="bg-theme-surface-hover text-theme-text-secondary rounded-full px-2 py-1 text-xs">
                               {waiver.applies_to === 'all'
                                 ? 'All'
@@ -814,14 +814,14 @@ export const WaiverManagementPage: React.FC = () => {
                                     : waiver.applies_to}
                             </span>
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                          <td data-label="Period" className="text-theme-text-secondary px-4 py-3 text-sm">
                             {formatDate(waiver.start_date, tz)} -{' '}
                             {waiver.end_date ? formatDate(waiver.end_date, tz) : 'Permanent'}
                           </td>
-                          <td className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
+                          <td data-label="Reason" className="text-theme-text-muted max-w-xs truncate px-4 py-3 text-sm">
                             {waiver.reason || '-'}
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td data-label="Actions" className="px-4 py-3 text-right">
                             {waiver.active && (
                               <button
                                 onClick={() => {

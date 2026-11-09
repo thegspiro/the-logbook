@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
-import toast from 'react-hot-toast';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { FormField, FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
 import { enumLabel } from '../../../utils/displayValue';
-import { getErrorMessage } from '../../../utils/errorHandling';
 import { formCoercions } from '../../../utils/formValues';
 import { X, Truck, Users, Plus, Minus, Copy, PartyPopper, Check, ClipboardCheck } from 'lucide-react';
 import { schedulingService, type ApparatusOption } from '../services/api';
@@ -29,6 +29,19 @@ import { getCachedShiftSettings } from '../services/shiftSettingsApi';
  * calendar uses for a shift in trouble. Named swatches instead, and a default
  * that does not compete with the status colours.
  */
+type TemplateField = 'name' | 'apparatus' | 'start' | 'end' | 'duration' | 'min_staffing';
+
+// The fields a check or the server can refuse. The vehicle is one control
+// whichever list it draws from, so both request keys report to it.
+const TEMPLATE_FIELDS: FieldSpecs<TemplateField> = {
+  name: { id: 'template-name', label: 'Name' },
+  apparatus: { id: 'template-apparatus-type', label: 'Vehicle', apiKeys: ['apparatus_type', 'apparatus_id'] },
+  start: { id: 'template-start', label: 'Starts at', apiKeys: ['start_time_of_day'] },
+  end: { id: 'template-end', label: 'Ends at', apiKeys: ['end_time_of_day'] },
+  duration: { id: 'template-duration', label: 'Total hours on duty', apiKeys: ['duration_hours'] },
+  min_staffing: { id: 'template-min-staffing', label: 'Smallest crew', apiKeys: ['min_staffing'] },
+};
+
 const TEMPLATE_COLORS: { value: string; label: string }[] = [
   { value: '#2563eb', label: 'Blue' },
   { value: '#0d9488', label: 'Teal' },
@@ -66,6 +79,11 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const positionOptions = getPositionOptions();
+  const fieldErrors = useFieldErrors(TEMPLATE_FIELDS);
+  const clearErrors = fieldErrors.clear;
+  const setFieldError = fieldErrors.setError;
+  /** Editing a field answers the error it carried. */
+  const edited = (name: TemplateField) => setFieldError(name, null);
 
   /**
    * The shift's length is the distance between its start and its end — asking
@@ -86,7 +104,8 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
     const span = hoursBetweenTimesOfDay(next.start_time_of_day, next.end_time_of_day);
     const stated = parseFloat(next.duration_hours);
     setRunsMultipleDays(!isNaN(stated) && span !== null && stated - span > 0.01);
-  }, [initialData, isOpen]);
+    clearErrors();
+  }, [initialData, isOpen, clearErrors]);
 
   /**
    * A vehicle deactivated because templates or shifts still name it is missing
@@ -264,10 +283,30 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Checked before anything is sent, and named on the field (forms review
+    // F-3); the browser's own `required` bubble named nothing that stayed.
+    const problems: FieldErrors<TemplateField> = {};
+    if (!formData.name.trim()) problems.name = 'Enter a name for the template.';
+    const vehicle = apparatusSource === 'default' ? formData.apparatus_type : formData.apparatus_id;
+    if (formData.category === 'specialty' && !vehicle) problems.apparatus = 'Choose the vehicle for a specialty shift.';
+    if (!formData.start_time_of_day) problems.start = 'Choose the time the shift starts.';
+    if (!formData.end_time_of_day) problems.end = 'Choose the time the shift ends.';
     if (isNaN(effectiveDuration) || effectiveDuration <= 0) {
-      toast.error('Set a start and end time so the shift has a length.');
+      if (runsMultipleDays) problems.duration = 'Enter the total hours on duty.';
+      else if (!problems.start && !problems.end) problems.end = 'Set a start and end time so the shift has a length.';
+    }
+    const usesCrewSize = !(formData.category === 'event' && totalResourceStaffing > 0);
+    const crew = Number(formData.min_staffing);
+    if (usesCrewSize && !(Number.isInteger(crew) && crew >= 1)) {
+      problems.min_staffing = 'Enter a crew size of 1 or more.';
+    }
+    fieldErrors.setFormError(null);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.setErrors(problems);
+      fieldErrors.focusFirst(problems);
       return;
     }
+    fieldErrors.setErrors({});
     setIsSubmitting(true);
     try {
       const effectivePositions: PositionEntry[] =
@@ -325,7 +364,8 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
       await onSubmit(payload);
       onClose();
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Failed to save template'));
+      // A refusal lands on the field it names; the dialog stays open.
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Could not save the template. Try again.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -359,27 +399,28 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
         </div>
 
         <form
+          noValidate
           onSubmit={(e) => {
             void handleSubmit(e);
           }}
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
-            <div>
-              <label htmlFor="template-name" className="form-label">
-                Name <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="template-name"
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                className="form-input"
-                placeholder="e.g., Day Shift A"
-                required
-                aria-required="true"
-              />
-            </div>
+            <FormField id={TEMPLATE_FIELDS.name.id} label="Name" required error={fieldErrors.errors.name}>
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => {
+                    edited('name');
+                    setFormData((prev) => ({ ...prev, name: e.target.value }));
+                  }}
+                  className="form-input"
+                  placeholder="e.g., Day Shift A"
+                />
+              )}
+            </FormField>
 
             <div>
               <label htmlFor="template-description" className="form-label">
@@ -443,56 +484,63 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
             {/* Vehicle (for standard & specialty templates) */}
             {(formData.category === 'standard' || formData.category === 'specialty') && (
               <div>
-                <label htmlFor="template-apparatus-type" className="form-label">
-                  <span className="flex items-center gap-1.5">
-                    <Truck className="h-4 w-4" />
-                    {apparatusSource === 'default' ? 'Vehicle Type' : 'Vehicle'}
-                    {formData.category === 'specialty' && <span aria-hidden="true">*</span>}
-                  </span>
-                </label>
-                <select
-                  id="template-apparatus-type"
-                  value={apparatusSource === 'default' ? formData.apparatus_type : formData.apparatus_id || ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (apparatusSource === 'default') {
-                      setFormData((prev) => ({ ...prev, apparatus_type: val, apparatus_id: '' }));
-                      loadApparatusTypeDefaults(val);
-                    } else {
-                      const selected = apparatusOptions.find((o) => o.id === val);
-                      setFormData((prev) => ({
-                        ...prev,
-                        apparatus_id: val,
-                        apparatus_type: selected?.apparatus_type ?? '',
-                        positions: selected?.positions ?? prev.positions,
-                        min_staffing: selected?.min_staffing ? String(selected.min_staffing) : prev.min_staffing,
-                      }));
-                    }
-                  }}
-                  className="form-input"
+                <FormField
+                  id={TEMPLATE_FIELDS.apparatus.id}
+                  label={
+                    <span className="inline-flex items-center gap-1.5">
+                      <Truck className="h-4 w-4" aria-hidden="true" />
+                      {apparatusSource === 'default' ? 'Vehicle Type' : 'Vehicle'}
+                    </span>
+                  }
                   required={formData.category === 'specialty'}
+                  error={fieldErrors.errors.apparatus}
                 >
-                  <option value="">
-                    {formData.category === 'specialty' ? 'Select vehicle...' : 'No specific vehicle (optional)'}
-                  </option>
-                  {apparatusSource === 'default'
-                    ? FALLBACK_APPARATUS_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {t.charAt(0).toUpperCase() + t.slice(1)}
+                  {(field) => (
+                    <select
+                      {...field}
+                      value={apparatusSource === 'default' ? formData.apparatus_type : formData.apparatus_id || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        edited('apparatus');
+                        if (apparatusSource === 'default') {
+                          setFormData((prev) => ({ ...prev, apparatus_type: val, apparatus_id: '' }));
+                          loadApparatusTypeDefaults(val);
+                        } else {
+                          const selected = apparatusOptions.find((o) => o.id === val);
+                          setFormData((prev) => ({
+                            ...prev,
+                            apparatus_id: val,
+                            apparatus_type: selected?.apparatus_type ?? '',
+                            positions: selected?.positions ?? prev.positions,
+                            min_staffing: selected?.min_staffing ? String(selected.min_staffing) : prev.min_staffing,
+                          }));
+                        }
+                      }}
+                      className="form-input"
+                    >
+                      <option value="">
+                        {formData.category === 'specialty' ? 'Select vehicle...' : 'No specific vehicle (optional)'}
+                      </option>
+                      {apparatusSource === 'default'
+                        ? FALLBACK_APPARATUS_TYPES.map((t) => (
+                            <option key={t} value={t}>
+                              {t.charAt(0).toUpperCase() + t.slice(1)}
+                            </option>
+                          ))
+                        : apparatusOptions.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.unit_number ? `${o.unit_number} — ${o.name}` : o.name}
+                              {o.apparatus_type ? ` (${enumLabel(o.apparatus_type)})` : ''}
+                            </option>
+                          ))}
+                      {storedApparatusMissing && (
+                        <option value={storedApparatusId}>
+                          {retiredApparatusLabel ?? 'A vehicle no longer in service'} (inactive)
                         </option>
-                      ))
-                    : apparatusOptions.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.unit_number ? `${o.unit_number} — ${o.name}` : o.name}
-                          {o.apparatus_type ? ` (${enumLabel(o.apparatus_type)})` : ''}
-                        </option>
-                      ))}
-                  {storedApparatusMissing && (
-                    <option value={storedApparatusId}>
-                      {retiredApparatusLabel ?? 'A vehicle no longer in service'} (inactive)
-                    </option>
+                      )}
+                    </select>
                   )}
-                </select>
+                </FormField>
                 <p className="text-theme-text-muted mt-1 text-xs">
                   {apparatusSource === 'default'
                     ? formData.category === 'specialty'
@@ -795,32 +843,36 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
               {/* Stacked at every width: side by side, a 512px dialog leaves each
                   half 223px, under the ~244px a time picker needs on one line. */}
               <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label htmlFor="template-start" className="form-label">
-                    Starts at <span aria-hidden="true">*</span>
-                  </label>
-                  <TimeQuarterHour
-                    id="template-start"
-                    aria-label="Starts at"
-                    value={formData.start_time_of_day}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, start_time_of_day: e.target.value }))}
-                    className="form-input"
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="template-end" className="form-label">
-                    Ends at <span aria-hidden="true">*</span>
-                  </label>
-                  <TimeQuarterHour
-                    id="template-end"
-                    aria-label="Ends at"
-                    value={formData.end_time_of_day}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, end_time_of_day: e.target.value }))}
-                    className="form-input"
-                    required
-                  />
-                </div>
+                <FormField id={TEMPLATE_FIELDS.start.id} label="Starts at" required error={fieldErrors.errors.start}>
+                  {(field) => (
+                    <TimeQuarterHour
+                      {...field}
+                      aria-label="Starts at"
+                      value={formData.start_time_of_day}
+                      onChange={(e) => {
+                        edited('start');
+                        edited('end');
+                        setFormData((prev) => ({ ...prev, start_time_of_day: e.target.value }));
+                      }}
+                      className="form-input"
+                    />
+                  )}
+                </FormField>
+                <FormField id={TEMPLATE_FIELDS.end.id} label="Ends at" required error={fieldErrors.errors.end}>
+                  {(field) => (
+                    <TimeQuarterHour
+                      {...field}
+                      aria-label="Ends at"
+                      value={formData.end_time_of_day}
+                      onChange={(e) => {
+                        edited('end');
+                        edited('end');
+                        setFormData((prev) => ({ ...prev, end_time_of_day: e.target.value }));
+                      }}
+                      className="form-input"
+                    />
+                  )}
+                </FormField>
               </div>
               <p className="text-theme-text-secondary mt-1.5 text-xs">
                 {spanHours === null ? (
@@ -855,21 +907,28 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                 This shift runs longer than the times above (a 48-hour tour, say)
               </label>
               {runsMultipleDays && (
-                <div className="mt-2">
-                  <label htmlFor="template-duration" className="form-label">
-                    Total hours on duty <span aria-hidden="true">*</span>
-                  </label>
-                  <input
-                    id="template-duration"
-                    type="number"
-                    value={formData.duration_hours}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, duration_hours: e.target.value }))}
-                    className="form-input w-32"
-                    min="0.5"
-                    step="0.5"
-                    required
-                  />
-                </div>
+                <FormField
+                  id={TEMPLATE_FIELDS.duration.id}
+                  label="Total hours on duty"
+                  required
+                  error={fieldErrors.errors.duration}
+                  className="mt-2"
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="number"
+                      value={formData.duration_hours}
+                      onChange={(e) => {
+                        edited('duration');
+                        setFormData((prev) => ({ ...prev, duration_hours: e.target.value }));
+                      }}
+                      className="form-input w-32"
+                      min="0.5"
+                      step="0.5"
+                    />
+                  )}
+                </FormField>
               )}
             </div>
 
@@ -912,21 +971,27 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                   })}
                 </div>
               </div>
-              <div>
-                <label htmlFor="template-min-staffing" className="form-label">
-                  Smallest crew that can run <span aria-hidden="true">*</span>
-                </label>
-                <input
-                  id="template-min-staffing"
-                  type="number"
-                  value={formData.min_staffing}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, min_staffing: e.target.value }))}
-                  className="form-input w-28"
-                  min="1"
-                  required
-                />
-                <p className="text-theme-text-muted mt-1 text-xs">Below this, the shift is flagged as running short.</p>
-              </div>
+              <FormField
+                id={TEMPLATE_FIELDS.min_staffing.id}
+                label="Smallest crew that can run"
+                required
+                error={fieldErrors.errors.min_staffing}
+                hint="Below this, the shift is flagged as running short."
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    value={formData.min_staffing}
+                    onChange={(e) => {
+                      edited('min_staffing');
+                      setFormData((prev) => ({ ...prev, min_staffing: e.target.value }));
+                    }}
+                    className="form-input w-28"
+                    min="1"
+                  />
+                )}
+              </FormField>
             </div>
 
             {/* Crew Positions (not shown for event templates — they use resources editor) */}
@@ -1052,6 +1117,12 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
               Administrative members can only use positions individually marked Administrative access above.
             </p>
           </div>
+
+          {fieldErrors.formError && (
+            <p role="alert" className={`shrink-0 px-6 pt-3 text-sm ${FIELD_ERROR_CLASS}`}>
+              {fieldErrors.formError}
+            </p>
+          )}
 
           <div className="border-theme-surface-border flex shrink-0 justify-end gap-3 border-t p-6 pt-4">
             <button

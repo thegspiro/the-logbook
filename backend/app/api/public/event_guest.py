@@ -308,15 +308,13 @@ async def link_guest_lookup(
             ),
             message="Welcome back! Please confirm this is you.",
         )
-    if outcome == GuestCheckInService.LOOKUP_MEMBER:
-        return GuestLookupResponse(
-            status=outcome,
-            message=(
-                "This looks like a department member account. "
-                "Please scan the event's member check-in QR code instead."
-            ),
-        )
-    return GuestLookupResponse(status=outcome, message=not_found_message)
+    # A member account answers exactly as an unknown address does. Telling a
+    # member to use the member code also told anyone holding this public
+    # link which addresses belong to the department's members; the audit row
+    # above still records the true outcome.
+    return GuestLookupResponse(
+        status=GuestCheckInService.LOOKUP_NOT_FOUND, message=not_found_message
+    )
 
 
 @router.post(

@@ -694,7 +694,11 @@ async def list_events(
         end_after=end_after,
         end_before=end_before,
         include_cancelled=include_cancelled,
-        include_drafts=include_drafts,
+        # Drafts are unannounced and for organizers only. The flag is the
+        # client's request, not its authority: the page sends it as
+        # `canManage`, and a member who sends it anyway gets published events.
+        include_drafts=include_drafts
+        and user_has_permission(current_user, "events.manage"),
         mandatory_only=mandatory_only,
         skip=skip,
         limit=limit,
@@ -1349,7 +1353,11 @@ async def get_event(
         user_id=current_user.id,
     )
 
-    if not event:
+    # A draft answers 404 to a non-organizer, as the attachments route does, so
+    # a guessed id does not confirm an unannounced event exists.
+    if not event or (
+        event.is_draft and not user_has_permission(current_user, "events.manage")
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )
