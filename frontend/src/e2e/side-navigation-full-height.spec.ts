@@ -18,6 +18,12 @@
  * CSS-pixel sample on the wrong part of a device-scale screenshot. A mouse-
  * driven desktop context, and a `scale: 'css'` screenshot, hold on every
  * project and engine.
+ *
+ * Layout is measured settled, under reduced motion, which index.css turns into
+ * 0.01ms transitions — as mobile-presentation.spec.ts does for the same nav's
+ * slide. Under WebKit the rail's 300ms width transition was still reporting
+ * the expanded 256px edge five seconds after the collapse, and the Expand
+ * toggle inside it never counted as stable enough to click.
  */
 
 import { test, expect } from '@playwright/test';
@@ -80,6 +86,7 @@ test.describe('Side navigation beside the footer', () => {
   test.use({ viewport: VIEWPORT, isMobile: false, hasTouch: false, deviceScaleFactor: 1 });
 
   test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await signIn(page);
     await page.goto('/scheduling');
     await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
@@ -99,7 +106,7 @@ test.describe('Side navigation beside the footer', () => {
 
     // The content column starts where the 5rem rail ends — not at the 16rem
     // the expanded nav needs, which left an empty stripe beside the rail. Polled
-    // because the offset eases over the nav's 300ms transition.
+    // so a slow runner's style recalculation is not mistaken for a failure.
     const edges = () =>
       page.evaluate(() => ({
         rail: document.getElementById('side-navigation')?.getBoundingClientRect().right ?? -1,
