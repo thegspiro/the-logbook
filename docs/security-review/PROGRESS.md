@@ -16,6 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR TBD** (branch `claude/security-review-skills-testing`): Feature 19
+(Skills testing), pass 14, a watchdog pickup. `ListAgents` → "No reachable
+agents"; the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable. PR #4180
+(Feature 18, Training extended, pass 14) had already merged. A fresh check
+for any open PR with a `claude/security-review-*` head found none, and row
+19 was the next pending feature.
+
+Baseline `85c3b760` (pass 13's own merge). Real delta: one file changed
+(`skills_testing.py`, +14/-0) — a new cross-feature hook wiring an
+already-reviewed Training-core helper, `process_milestones_for_user`
+(`app/services/program_milestones.py`), into `complete_test` and
+`validate_test`'s existing post-commit hook pattern, immediately alongside
+the sibling `apply_test_pass_to_pipeline` call under the identical guard
+condition. Traced safe: org-scoped on both ends (caller passes the
+authenticated user's own `organization_id` and a candidate id pulled from an
+already org-scoped `test` row; the callee re-filters on both), fails closed
+into the already-committed test result rather than out of it (`process_user`
+never raises — it catches, rolls back its own work, and returns `0`), not
+reachable twice for one test's first validation, and idempotent by
+`ProgramMilestoneAchievement`'s own unique constraint regardless. **0 fixed,
+0 newly flagged.** See `docs/security-review/SKT-19-skills-testing.md`'s
+**Pass 14** section for the full trace.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`)/
+`isort --check-only` (CI's pinned `9.0.2`) on `app/ tests/ alembic/` all
+clean (installed CI's pinned `flake8==7.4.1` — the ambient install resolved
+`7.5.0`); `validate_migrations.py --strict` — 750 revisions, single head
+`55e20c02dea7`; `check_route_permissions.py --strict` — 305 routes, 0
+errors/warnings; scoped backend suite (`-k "skill or skt"`) — 642 passed, 1
+environment-only skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm
+run lint` — 0 errors/warnings.
+
+Row 19 → ✅ (pending this PR's merge). Next is Feature 20 (Compliance) — if
+every row reads ✅ by then, the rotation has completed a full pass; re-check
+the rotation table fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 14, PR #4180, merged), preserved for history</summary>
+
 **PR [#4180](https://github.com/thegspiro/the-logbook/pull/4180)**
 (branch `claude/security-review-training-extended`): Feature 18 (Training
 extended), pass 14, a watchdog pickup. PR #4151 (Feature 17, Training core,
@@ -62,8 +102,9 @@ external or enhancement or submission or xapi or crew or module_config"`) —
 2777 passed, 1 environment-only skip (`pywebpush`); `npm run typecheck` — 0
 errors; `npm run lint` — 0 errors/warnings.
 
-Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 18 → ✅ (merged). Next was Feature 19 (Skills testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 14, PR #4151, merged), preserved for history</summary>
@@ -25310,7 +25351,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                    | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13)                  | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14) | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                       | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                       | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                                              | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                             | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                             | ⬜     |
@@ -25344,6 +25385,35 @@ them to be re-discovered by SEC-00 every lap.
 ---
 
 ## Log
+
+### 2026-11-09 — Feature 18 (Training extended, pass 14) merged; Feature 19 (Skills testing, pass 14): watchdog pickup, real delta, 0 fixed, 0 new findings
+
+PR #4180 merged. A fresh check for any open PR with a `claude/security-review-*`
+head found none, and row 19 (Skills testing) was next. Baseline `85c3b760`
+(pass 13's own merge). One file changed in the declared backend scope
+(`skills_testing.py`, +14/-0): a new cross-feature hook wiring
+`process_milestones_for_user` (Feature 17's own `program_milestones.py`) into
+`complete_test` and `validate_test`'s existing post-commit hook pattern,
+alongside the sibling `apply_test_pass_to_pipeline` call under the identical
+guard. Traced safe — org-scoped on both ends, fails closed into the
+already-committed result rather than out of it, not reachable twice for one
+test's first validation, and idempotent by `ProgramMilestoneAchievement`'s own
+unique constraint regardless. Every standing SKT fix (SKT-1 through SKT5-1,
+Pitfall #32) re-verified present at its current citation; route surface
+29/29, route-permission registry 305 routes/0 errors. **0 fixed, 0 newly
+flagged.** See `docs/security-review/SKT-19-skills-testing.md`'s **Pass 14**
+section for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (CI's pinned `flake8==7.4.1` installed over
+an ambient `7.5.0`); `validate_migrations.py --strict` — 750 revisions,
+single head `55e20c02dea7`; `check_route_permissions.py --strict` — 305
+routes, 0 errors/warnings; scoped backend suite (`-k "skill or skt"`) — 642
+passed, 1 environment-only skip (`pywebpush`); `npm run typecheck` — 0
+errors; `npm run lint` — 0 errors/warnings.
+
+Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
+re-check the rotation table fresh rather than trusting this note.
 
 ### 2026-11-08 — Feature 15 (Scheduling, pass 14) merged; Feature 16 (Events & requests, pass 14) — watchdog pickup, real delta, 0 fixed, 0 new findings
 
