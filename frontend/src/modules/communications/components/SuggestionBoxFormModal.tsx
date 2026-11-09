@@ -9,9 +9,12 @@
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
 import { SUGGESTION_ANONYMITY_LABELS, SuggestionAnonymityMode } from '../../../constants/enums';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { suggestionsService } from '../services/suggestionsService';
 import type { ReviewerOptions, SuggestionBoxAdmin } from '../types/suggestions';
 import { type EditableQuestion, withEditorIds } from '../utils/suggestionRouting';
@@ -28,6 +31,46 @@ interface SuggestionBoxFormModalProps {
 }
 
 const ANONYMITY_MODES = Object.values(SuggestionAnonymityMode);
+
+type BoxField = 'name' | 'description' | 'anonymityMode' | 'reviewers';
+
+/** SuggestionBoxWrite in schemas/suggestion.py (camelCase on the wire). */
+const BOX_FIELDS: Record<BoxField, ServerFieldSpec> = {
+  name: { label: 'Name', maxLength: 100 },
+  description: { label: 'Description', maxLength: 2000 },
+  anonymityMode: { label: 'Anonymity' },
+  reviewers: { label: 'Reviewers', api: ['reviewerPositionIds', 'reviewerMemberIds', 'isActive'] },
+};
+
+/** In the order they appear, so the first failing one takes focus. */
+const BOX_FIELD_IDS: Record<BoxField, string> = {
+  name: 'box-name',
+  description: 'box-description',
+  anonymityMode: 'box-anonymity',
+  reviewers: 'box-reviewer-positions',
+};
+
+/**
+ * The stored values a refused field is saved with on an edit. The update
+ * replaces the whole box, so a refused field cannot simply be left out: it is
+ * sent as the box already has it, which keeps it unchanged.
+ */
+const storedValues = (box: SuggestionBoxAdmin, field: BoxField): Record<string, unknown> => {
+  switch (field) {
+    case 'name':
+      return { name: box.name };
+    case 'description':
+      return { description: box.description ?? null };
+    case 'anonymityMode':
+      return { anonymityMode: box.anonymityMode };
+    case 'reviewers':
+      return {
+        isActive: box.isActive,
+        reviewerPositionIds: box.reviewerPositions.map((p) => p.id),
+        reviewerMemberIds: box.reviewerMembers.map((m) => m.id),
+      };
+  }
+};
 
 const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
   box,
@@ -52,6 +95,29 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
   const [watcherFilter, setWatcherFilter] = useState('');
   const [questions, setQuestions] = useState<EditableQuestion[]>(() => withEditorIds(box?.intakeQuestions));
   const [isSaving, setIsSaving] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<BoxField, string | undefined>>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [savedExcept, setSavedExcept] = useState(false);
+  const clearError = (field: BoxField) => setErrors((prev) => ({ ...prev, [field]: undefined }));
+
+  // Everything the form would save, as text, so closing can tell whether it
+  // would lose anything. The filters are search boxes, not part of the box.
+  const values = JSON.stringify([
+    name,
+    description,
+    anonymityMode,
+    followUpEnabled,
+    isActive,
+    publicBoardEnabled,
+    positionIds,
+    memberIds,
+    watcherPositionIds,
+    watcherMemberIds,
+    questions,
+  ]);
+  const [initialValues] = useState(values);
+  // Called here rather than given to Modal so Cancel asks too.
+  const requestClose = useDiscardGuard({ isDirty: values !== initialValues, onClose });
   const routeTargets = useMemo(() => boxes.filter((b) => b.id !== box?.id), [boxes, box]);
 
   const hasReviewers = positionIds.length + memberIds.length > 0;
@@ -68,13 +134,26 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
     return [...options.members, ...missing];
   }, [options.members, box]);
 
+  const showErrors = (next: Partial<Record<BoxField, string>>) => {
+    setErrors(next);
+    const first = (Object.keys(BOX_FIELD_IDS) as BoxField[]).find((field) => next[field]);
+    if (first) window.setTimeout(() => document.getElementById(BOX_FIELD_IDS[first])?.focus(), 0);
+  };
+
+  /**
+   * A new box is created only once nothing is refused. An edit is a single save
+   * (owner rule of 2026-11-05): a refused field is sent as stored so the box keeps
+   * that value, the rest is saved, and the dialog stays open with it flagged.
+   */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isActive && !hasReviewers) {
-      toast.error('Choose at least one reviewer, or save the box as inactive.');
+    let refused: Partial<Record<BoxField, string>> = {};
+    if (!name.trim()) refused.name = 'Give the box a name.';
+    if (isActive && !hasReviewers) refused.reviewers = 'Choose at least one reviewer, or save the box as inactive.';
+    if (!box && Object.keys(refused).length > 0) {
+      showErrors(refused);
       return;
     }
-    setIsSaving(true);
     const payload = {
       name: name.trim(),
       description: blankToNull(description),
@@ -93,14 +172,45 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
         options: q.options.map((o) => ({ ...o, label: o.label.trim() })),
       })),
     };
+    const keepingStored = (stored: SuggestionBoxAdmin): typeof payload => {
+      let next: typeof payload = payload;
+      for (const field of Object.keys(refused) as BoxField[]) next = { ...next, ...storedValues(stored, field) };
+      return next;
+    };
+    setIsSaving(true);
+    setFormError(null);
+    setSavedExcept(false);
     try {
-      const saved = box
-        ? await suggestionsService.updateBox(box.id, payload)
-        : await suggestionsService.createBox(payload);
-      toast.success(box ? 'Suggestion box updated' : 'Suggestion box created');
-      onSaved(saved);
+      if (box) {
+        let saved: SuggestionBoxAdmin;
+        try {
+          saved = await suggestionsService.updateBox(box.id, keepingStored(box));
+        } catch (err: unknown) {
+          const mapped = mapServerFieldErrors(err, BOX_FIELDS);
+          if (!mapped || Object.keys(mapped.fieldErrors).length === 0 || mapped.unmatched.length > 0) throw err;
+          refused = { ...refused, ...mapped.fieldErrors };
+          saved = await suggestionsService.updateBox(box.id, keepingStored(box));
+        }
+        if (Object.keys(refused).length > 0) {
+          showErrors(refused);
+          setSavedExcept(true);
+          return;
+        }
+        toast.success('Suggestion box updated');
+        onSaved(saved);
+      } else {
+        const saved = await suggestionsService.createBox(payload);
+        toast.success('Suggestion box created');
+        onSaved(saved);
+      }
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Unable to save the suggestion box.'));
+      const mapped = mapServerFieldErrors(err, BOX_FIELDS);
+      if (mapped) {
+        showErrors({ ...refused, ...mapped.fieldErrors });
+        if (mapped.unmatched.length) setFormError(mapped.unmatched.join(' '));
+      } else {
+        toast.error(getErrorMessage(err, 'Unable to save the suggestion box.'));
+      }
     } finally {
       setIsSaving(false);
     }
@@ -109,18 +219,19 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={box ? 'Edit suggestion box' : 'New suggestion box'}
       size="lg"
+      noValidate
       onSubmit={(e) => void handleSubmit(e)}
       footer={
         <>
-          <button type="submit" className="btn-primary" disabled={isSaving || !name.trim()}>
+          <button type="submit" className="btn-primary" disabled={isSaving}>
             {isSaving ? 'Saving…' : 'Save box'}
           </button>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-md border px-4 py-2 text-sm font-medium"
           >
             Cancel
@@ -129,33 +240,62 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
       }
     >
       <div className="space-y-4">
-        <div>
-          <label htmlFor="box-name" className="form-label">
-            Name
-          </label>
-          <input
-            id="box-name"
-            className="form-input"
-            value={name}
-            maxLength={100}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Training ideas"
-            required
-          />
-        </div>
-        <div>
-          <label htmlFor="box-description" className="form-label">
-            Description <span className="text-theme-text-muted font-normal">(shown to members)</span>
-          </label>
-          <textarea
-            id="box-description"
-            className="form-input"
-            rows={2}
-            maxLength={2000}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
+        {savedExcept && (
+          <p role="status" className="alert-warning text-theme-text-primary text-sm">
+            Saved, except the field flagged below, which keeps its stored value. Fix it and save again.
+          </p>
+        )}
+        {formError && (
+          <p role="alert" className="alert-danger text-theme-text-primary text-sm">
+            {formError}
+          </p>
+        )}
+        <FormField
+          label="Name"
+          required
+          id={BOX_FIELD_IDS.name}
+          error={errors.name}
+          maxLength={100}
+          count={name.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              className="form-input"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                clearError('name');
+              }}
+              placeholder="e.g. Training ideas"
+            />
+          )}
+        </FormField>
+        <FormField
+          label={
+            <>
+              Description <span className="text-theme-text-muted font-normal">(shown to members)</span>
+            </>
+          }
+          id={BOX_FIELD_IDS.description}
+          error={errors.description}
+          maxLength={2000}
+          count={description.length}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              className="form-input"
+              rows={2}
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                clearError('description');
+              }}
+            />
+          )}
+        </FormField>
         {/* Right after the name: what a member is asked shapes everything
             below it, and at the foot of a long modal it went unfound. */}
         <IntakeQuestionsEditor
@@ -164,27 +304,30 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
           routeTargets={routeTargets}
           anonymityMode={anonymityMode}
         />
-        <div>
-          <label htmlFor="box-anonymity" className="form-label">
-            Anonymity
-          </label>
-          <select
-            id="box-anonymity"
-            className="form-input"
-            value={anonymityMode}
-            onChange={(e) => setAnonymityMode(e.target.value as SuggestionAnonymityMode)}
-          >
-            {ANONYMITY_MODES.map((mode) => (
-              <option key={mode} value={mode}>
-                {SUGGESTION_ANONYMITY_LABELS[mode] ?? mode}
-              </option>
-            ))}
-          </select>
-          <p className="text-theme-text-muted mt-1 text-xs">
-            Anonymous submissions store no record of who sent them — reviewers cannot find out, and neither can an
-            administrator.
-          </p>
-        </div>
+        <FormField
+          label="Anonymity"
+          id={BOX_FIELD_IDS.anonymityMode}
+          error={errors.anonymityMode}
+          hint="Anonymous submissions store no record of who sent them — reviewers cannot find out, and neither can an administrator."
+        >
+          {(field) => (
+            <select
+              {...field}
+              className="form-input"
+              value={anonymityMode}
+              onChange={(e) => {
+                setAnonymityMode(e.target.value as SuggestionAnonymityMode);
+                clearError('anonymityMode');
+              }}
+            >
+              {ANONYMITY_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {SUGGESTION_ANONYMITY_LABELS[mode] ?? mode}
+                </option>
+              ))}
+            </select>
+          )}
+        </FormField>
         <label className="text-theme-text-primary touch:min-h-[44px] flex items-start gap-2 text-sm">
           <input
             type="checkbox"
@@ -205,7 +348,10 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
             type="checkbox"
             className="form-checkbox"
             checked={isActive}
-            onChange={(e) => setIsActive(e.target.checked)}
+            onChange={(e) => {
+              setIsActive(e.target.checked);
+              clearError('reviewers');
+            }}
           />
           Accepting submissions
         </label>
@@ -232,10 +378,15 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
           </p>
         </div>
         <ReviewerChecklist
+          id={BOX_FIELD_IDS.reviewers}
           legend="Reviewer positions"
           items={options.positions}
           selected={positionIds}
-          onChange={setPositionIds}
+          onChange={(next) => {
+            setPositionIds(next);
+            clearError('reviewers');
+          }}
+          error={errors.reviewers}
         />
         <div>
           <label htmlFor="box-member-filter" className="form-label">
@@ -252,7 +403,10 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
             legend="Reviewer members"
             items={memberItems}
             selected={memberIds}
-            onChange={setMemberIds}
+            onChange={(next) => {
+              setMemberIds(next);
+              clearError('reviewers');
+            }}
             filter={memberFilter}
           />
         </div>

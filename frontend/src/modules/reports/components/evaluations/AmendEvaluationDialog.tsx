@@ -9,13 +9,20 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Modal } from '../../../../components/Modal';
+import { FormField } from '../../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../../hooks/useDiscardGuard';
+import { mapServerFieldErrors } from '../../../../utils/serverFieldErrors';
+
+/** EvaluationAmend / EvaluationDelete in schemas/evaluation.py: 1 to 2000 characters. */
+const MAX_REASON = 2000;
 
 interface AmendEvaluationDialogProps {
   isOpen: boolean;
   memberName: string;
   busy: boolean;
   onClose: () => void;
-  onAmend: (reason: string) => void;
+  /** A 422 the page rethrows is shown on the reason field here. */
+  onAmend: (reason: string) => Promise<void> | void;
 }
 
 export const AmendEvaluationDialog: React.FC<AmendEvaluationDialogProps> = ({
@@ -26,30 +33,49 @@ export const AmendEvaluationDialog: React.FC<AmendEvaluationDialogProps> = ({
   onAmend,
 }) => {
   const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   // A reason typed for one evaluation is never carried to the next.
   useEffect(() => {
-    if (isOpen) setReason('');
+    if (isOpen) {
+      setReason('');
+      setError(null);
+    }
   }, [isOpen]);
 
-  const submit = (event: React.FormEvent) => {
+  // Called here rather than given to Modal so the cancel button asks too.
+  const requestClose = useDiscardGuard({ isDirty: reason.trim() !== '', onClose });
+
+  const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     const trimmed = reason.trim();
-    if (trimmed) onAmend(trimmed);
+    if (!trimmed) {
+      setError(`Give a reason. ${memberName} will read it.`);
+      document.getElementById('amend-reason')?.focus();
+      return;
+    }
+    setError(null);
+    try {
+      await onAmend(trimmed);
+    } catch (err: unknown) {
+      const mapped = mapServerFieldErrors(err, { reason: { label: 'Reason', maxLength: MAX_REASON } });
+      if (mapped) setError(mapped.fieldErrors.reason ?? mapped.unmatched.join(' '));
+    }
   };
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title="Amend this evaluation?"
-      onSubmit={submit}
+      noValidate
+      onSubmit={(e) => void submit(e)}
       footer={
         <div className="flex justify-end gap-2">
-          <button type="button" className="btn-secondary" onClick={onClose}>
+          <button type="button" className="btn-secondary" onClick={requestClose}>
             Keep it final
           </button>
-          <button type="submit" className="btn-primary" disabled={busy || !reason.trim()}>
+          <button type="submit" className="btn-primary" disabled={busy}>
             Amend evaluation
           </button>
         </div>
@@ -64,19 +90,26 @@ export const AmendEvaluationDialog: React.FC<AmendEvaluationDialogProps> = ({
           The current text and PDF are not kept. {memberName} and everyone who signed are emailed, and the reason is
           shown with the evaluation and printed on its PDF.
         </p>
-        <div>
-          <label htmlFor="amend-reason" className="form-label">
-            Reason (shown to {memberName})
-          </label>
-          <textarea
-            id="amend-reason"
-            className="form-input"
-            required
-            maxLength={2000}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-        </div>
+        <FormField
+          label={`Reason (shown to ${memberName})`}
+          required
+          id="amend-reason"
+          error={error}
+          maxLength={MAX_REASON}
+          count={reason.length}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              className="form-input"
+              value={reason}
+              onChange={(e) => {
+                setReason(e.target.value);
+                setError(null);
+              }}
+            />
+          )}
+        </FormField>
       </div>
     </Modal>
   );

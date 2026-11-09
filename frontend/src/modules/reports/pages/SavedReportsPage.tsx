@@ -22,6 +22,9 @@ import { ArrowLeft, CalendarClock, Pencil, Play, Plus, Trash2 } from 'lucide-rea
 import toast from 'react-hot-toast';
 import { DialogPanel } from '../../../components/ux/DialogPanel';
 import { EmptyState } from '../../../components/ux/EmptyState';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -119,6 +122,48 @@ function formFrom(report: SavedReportConfig): FormState {
   };
 }
 
+type ReportField = 'name' | 'description' | 'reportType' | 'period' | 'frequency' | 'day' | 'recipients';
+
+/** At most 25 recipients (the form's own hint; the API refuses more). */
+const MAX_RECIPIENTS = 25;
+
+/** SavedReportCreate / SavedReportUpdate in schemas/reports.py (snake_case). */
+const REPORT_FIELDS: Record<ReportField, ServerFieldSpec> = {
+  name: { label: 'Name', maxLength: 255 },
+  description: { label: 'Description' },
+  reportType: { label: 'Report', api: 'report_type' },
+  period: { label: 'Reporting period', api: 'filters' },
+  frequency: { label: 'How often', api: 'schedule_frequency' },
+  day: { label: 'Day', api: 'schedule_day' },
+  // A bad address is reported against its place in the list.
+  recipients: {
+    label: 'Email to',
+    api: ['email_recipients', ...Array.from({ length: MAX_RECIPIENTS }, (_, i) => `email_recipients.${i}`)],
+  },
+};
+
+/** In the order they appear, so the first failing one takes focus. */
+const REPORT_FIELD_IDS: Record<ReportField, string> = {
+  name: 'saved-report-name',
+  description: 'saved-report-description',
+  reportType: 'saved-report-type',
+  period: 'saved-report-period',
+  frequency: 'saved-report-frequency',
+  day: 'saved-report-day',
+  recipients: 'saved-report-recipients',
+};
+
+/** The payload key each field is sent under, so a refused field can be left out of an edit. */
+const PAYLOAD_KEYS: Record<ReportField, string> = {
+  name: 'name',
+  description: 'description',
+  reportType: 'report_type',
+  period: 'filters',
+  frequency: 'schedule_frequency',
+  day: 'schedule_day',
+  recipients: 'email_recipients',
+};
+
 function parseRecipients(text: string): string[] {
   return text
     .split(/[\s,;]+/)
@@ -149,6 +194,9 @@ export const SavedReportsPage: React.FC = () => {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<ReportField, string | undefined>>>({});
+  const [savedExcept, setSavedExcept] = useState(false);
+  const [initialForm, setInitialForm] = useState<FormState>(EMPTY_FORM);
 
   useEffect(() => {
     void fetchAvailableReports();
@@ -160,27 +208,64 @@ export const SavedReportsPage: React.FC = () => {
   const titles = useMemo(() => new Map(availableReports.map((r) => [r.id, r.title])), [availableReports]);
 
   const openCreate = () => {
+    const seeded = { ...EMPTY_FORM, reportType: availableReports[0]?.id ?? '' };
     setEditing(null);
-    setForm({ ...EMPTY_FORM, reportType: availableReports[0]?.id ?? '' });
+    setForm(seeded);
+    setInitialForm(seeded);
     setFormError(null);
+    setErrors({});
+    setSavedExcept(false);
     setIsFormOpen(true);
   };
 
   const openEdit = (report: SavedReportConfig) => {
+    const seeded = formFrom(report);
     setEditing(report);
-    setForm(formFrom(report));
+    setForm(seeded);
+    setInitialForm(seeded);
     setFormError(null);
+    setErrors({});
+    setSavedExcept(false);
     setIsFormOpen(true);
   };
 
-  const closeForm = () => setIsFormOpen(false);
+  const isDirty = isFormOpen && JSON.stringify(form) !== JSON.stringify(initialForm);
+  // Called here rather than given to DialogPanel so Cancel asks too.
+  const closeForm = useDiscardGuard({ isDirty, onClose: () => setIsFormOpen(false) });
 
-  const update = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+  const FIELD_OF: Partial<Record<keyof FormState, ReportField>> = {
+    name: 'name',
+    description: 'description',
+    reportType: 'reportType',
+    period: 'period',
+    frequency: 'frequency',
+    day: 'day',
+    recipients: 'recipients',
+  };
+  const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    const field = FIELD_OF[key];
+    if (field) setErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
 
+  const showErrors = (next: Partial<Record<ReportField, string>>) => {
+    setErrors(next);
+    const first = (Object.keys(REPORT_FIELD_IDS) as ReportField[]).find((field) => next[field]);
+    if (first) window.setTimeout(() => document.getElementById(REPORT_FIELD_IDS[first])?.focus(), 0);
+  };
+
+  /**
+   * A new report is created only once nothing is refused. An edit is a single
+   * save (owner rule of 2026-11-05): a refused field is left out so the report
+   * keeps its stored value, the rest is saved, and the dialog stays open with
+   * the field flagged.
+   */
   const handleSave = async () => {
-    if (!form.name.trim() || !form.reportType) {
-      setFormError('Give the report a name and choose a report type.');
+    let refused: Partial<Record<ReportField, string>> = {};
+    if (!form.name.trim()) refused.name = 'Give the report a name.';
+    if (!form.reportType) refused.reportType = 'Choose a report type.';
+    if (!editing && Object.keys(refused).length > 0) {
+      showErrors(refused);
       return;
     }
     const filters: Record<string, unknown> = { ...(editing?.filters ?? {}) };
@@ -191,6 +276,7 @@ export const SavedReportsPage: React.FC = () => {
 
     setIsSaving(true);
     setFormError(null);
+    setSavedExcept(false);
     try {
       if (editing) {
         // Every field the form owns, with blanks as explicit nulls (Pitfall #1).
@@ -203,7 +289,24 @@ export const SavedReportsPage: React.FC = () => {
           schedule_day: form.isScheduled ? day : null,
           email_recipients: recipients,
         };
-        await updateSavedReport(editing.id, payload);
+        const without = (): SavedReportUpdate => {
+          const rest: Record<string, unknown> = { ...payload };
+          for (const field of Object.keys(refused) as ReportField[]) delete rest[PAYLOAD_KEYS[field]];
+          return rest;
+        };
+        try {
+          await updateSavedReport(editing.id, without());
+        } catch (err: unknown) {
+          const mapped = mapServerFieldErrors(err, REPORT_FIELDS);
+          if (!mapped || Object.keys(mapped.fieldErrors).length === 0 || mapped.unmatched.length > 0) throw err;
+          refused = { ...refused, ...mapped.fieldErrors };
+          await updateSavedReport(editing.id, without());
+        }
+        if (Object.keys(refused).length > 0) {
+          showErrors(refused);
+          setSavedExcept(true);
+          return;
+        }
         toast.success('Saved report updated');
       } else {
         const payload: SavedReportCreate = {
@@ -224,7 +327,13 @@ export const SavedReportsPage: React.FC = () => {
       }
       setIsFormOpen(false);
     } catch (err: unknown) {
-      setFormError(getErrorMessage(err, 'Could not save the report.'));
+      const mapped = mapServerFieldErrors(err, REPORT_FIELDS);
+      if (mapped) {
+        showErrors({ ...refused, ...mapped.fieldErrors });
+        if (mapped.unmatched.length) setFormError(mapped.unmatched.join(' '));
+      } else {
+        setFormError(getErrorMessage(err, 'Could not save the report.'));
+      }
     } finally {
       setIsSaving(false);
     }
@@ -384,72 +493,90 @@ export const SavedReportsPage: React.FC = () => {
             aria-labelledby="saved-report-form-title"
             className="modal-panel-scroll w-full max-w-lg"
           >
-            <div className="modal-body space-y-4">
+            <form
+              className="modal-body space-y-4"
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleSave();
+              }}
+            >
               <h2 id="saved-report-form-title" className="text-theme-text-primary text-lg font-semibold">
                 {editing ? 'Edit saved report' : 'New saved report'}
               </h2>
-              <div>
-                <label htmlFor="saved-report-name" className="form-label">
-                  Name
-                </label>
-                <input
-                  id="saved-report-name"
-                  className="form-input"
-                  value={form.name}
-                  onChange={(e) => update('name', e.target.value)}
-                  maxLength={255}
-                />
-              </div>
-              <div>
-                <label htmlFor="saved-report-description" className="form-label">
-                  Description (optional)
-                </label>
-                <input
-                  id="saved-report-description"
-                  className="form-input"
-                  value={form.description}
-                  onChange={(e) => update('description', e.target.value)}
-                />
-              </div>
-              <div>
-                <label htmlFor="saved-report-type" className="form-label">
-                  Report
-                </label>
-                <select
-                  id="saved-report-type"
-                  className="form-input"
-                  value={form.reportType}
-                  disabled={editing !== null}
-                  onChange={(e) => update('reportType', e.target.value)}
-                >
-                  {availableReports.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="saved-report-period" className="form-label">
-                  Reporting period
-                </label>
-                <select
-                  id="saved-report-period"
-                  className="form-input"
-                  value={form.period}
-                  onChange={(e) => update('period', e.target.value as SavedReportPeriod | '')}
-                >
-                  <option value="">The report&apos;s default</option>
-                  {Object.entries(PERIOD_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-theme-text-secondary mt-1 text-xs">
-                  Worked out on the day the report runs, so a monthly email covers the month just ended.
+              {savedExcept && (
+                <p role="status" className="alert-warning text-theme-text-primary text-sm">
+                  Saved, except the field flagged below, which keeps its stored value. Fix it and save again.
                 </p>
-              </div>
+              )}
+              <FormField
+                label="Name"
+                required
+                id={REPORT_FIELD_IDS.name}
+                error={errors.name}
+                maxLength={255}
+                count={form.name.length}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    className="form-input"
+                    value={form.name}
+                    onChange={(e) => update('name', e.target.value)}
+                  />
+                )}
+              </FormField>
+              <FormField label="Description" optional id={REPORT_FIELD_IDS.description} error={errors.description}>
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    className="form-input"
+                    value={form.description}
+                    onChange={(e) => update('description', e.target.value)}
+                  />
+                )}
+              </FormField>
+              <FormField label="Report" required id={REPORT_FIELD_IDS.reportType} error={errors.reportType}>
+                {(field) => (
+                  <select
+                    {...field}
+                    className="form-input"
+                    value={form.reportType}
+                    disabled={editing !== null}
+                    onChange={(e) => update('reportType', e.target.value)}
+                  >
+                    {availableReports.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.title}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              <FormField
+                label="Reporting period"
+                id={REPORT_FIELD_IDS.period}
+                error={errors.period}
+                hint="Worked out on the day the report runs, so a monthly email covers the month just ended."
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    className="form-input"
+                    value={form.period}
+                    onChange={(e) => update('period', e.target.value as SavedReportPeriod | '')}
+                  >
+                    <option value="">The report&apos;s default</option>
+                    {Object.entries(PERIOD_LABELS).map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
 
               <label className="flex items-center gap-2">
                 <input
@@ -464,69 +591,72 @@ export const SavedReportsPage: React.FC = () => {
               {form.isScheduled && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div>
-                      <label htmlFor="saved-report-frequency" className="form-label">
-                        How often
-                      </label>
-                      <select
-                        id="saved-report-frequency"
-                        className="form-input"
-                        value={form.frequency}
-                        onChange={(e) => {
-                          const frequency = e.target.value as SavedReportFrequency;
-                          setForm((prev) => ({ ...prev, frequency, day: dayValidFor(frequency, prev.day) }));
-                        }}
-                      >
-                        {Object.entries(FREQUENCY_LABELS).map(([value, label]) => (
-                          <option key={value} value={value}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {form.frequency !== SavedReportFrequency.DAILY && (
-                      <div>
-                        <label htmlFor="saved-report-day" className="form-label">
-                          {form.frequency === SavedReportFrequency.WEEKLY ? 'Day of the week' : 'Day of the month'}
-                        </label>
+                    <FormField label="How often" id={REPORT_FIELD_IDS.frequency} error={errors.frequency}>
+                      {(field) => (
                         <select
-                          id="saved-report-day"
+                          {...field}
                           className="form-input"
-                          value={form.day}
-                          onChange={(e) => update('day', e.target.value)}
+                          value={form.frequency}
+                          onChange={(e) => {
+                            const frequency = e.target.value as SavedReportFrequency;
+                            setForm((prev) => ({ ...prev, frequency, day: dayValidFor(frequency, prev.day) }));
+                            setErrors((prev) => ({ ...prev, frequency: undefined, day: undefined }));
+                          }}
                         >
-                          {form.frequency === SavedReportFrequency.WEEKLY
-                            ? WEEKDAYS.map((name, i) => (
-                                <option key={name} value={String(i + 1)}>
-                                  {name}
-                                </option>
-                              ))
-                            : Array.from({ length: 31 }, (_, i) => (
-                                <option key={i + 1} value={String(i + 1)}>
-                                  {i + 1}
-                                </option>
-                              ))}
+                          {Object.entries(FREQUENCY_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
                         </select>
-                      </div>
+                      )}
+                    </FormField>
+                    {form.frequency !== SavedReportFrequency.DAILY && (
+                      <FormField
+                        label={form.frequency === SavedReportFrequency.WEEKLY ? 'Day of the week' : 'Day of the month'}
+                        id={REPORT_FIELD_IDS.day}
+                        error={errors.day}
+                      >
+                        {(field) => (
+                          <select
+                            {...field}
+                            className="form-input"
+                            value={form.day}
+                            onChange={(e) => update('day', e.target.value)}
+                          >
+                            {form.frequency === SavedReportFrequency.WEEKLY
+                              ? WEEKDAYS.map((name, i) => (
+                                  <option key={name} value={String(i + 1)}>
+                                    {name}
+                                  </option>
+                                ))
+                              : Array.from({ length: 31 }, (_, i) => (
+                                  <option key={i + 1} value={String(i + 1)}>
+                                    {i + 1}
+                                  </option>
+                                ))}
+                          </select>
+                        )}
+                      </FormField>
                     )}
                   </div>
-                  <div>
-                    <label htmlFor="saved-report-recipients" className="form-label">
-                      Email to
-                    </label>
-                    <textarea
-                      id="saved-report-recipients"
-                      className="form-input"
-                      rows={3}
-                      value={form.recipients}
-                      onChange={(e) => update('recipients', e.target.value)}
-                      placeholder="chief@department.org, training@department.org"
-                    />
-                    <p className="text-theme-text-secondary mt-1 text-xs">
-                      Up to 25 addresses. A report that lists member data can only be emailed to members who are allowed
-                      to see that data; the email itself carries totals, never member details.
-                    </p>
-                  </div>
+                  <FormField
+                    label="Email to"
+                    id={REPORT_FIELD_IDS.recipients}
+                    error={errors.recipients}
+                    hint="Up to 25 addresses. A report that lists member data can only be emailed to members who are allowed to see that data; the email itself carries totals, never member details."
+                  >
+                    {(field) => (
+                      <textarea
+                        {...field}
+                        className="form-input"
+                        rows={3}
+                        value={form.recipients}
+                        onChange={(e) => update('recipients', e.target.value)}
+                        placeholder="chief@department.org, training@department.org"
+                      />
+                    )}
+                  </FormField>
                 </div>
               )}
 
@@ -540,11 +670,11 @@ export const SavedReportsPage: React.FC = () => {
                 <button type="button" onClick={closeForm} className="btn-secondary">
                   Cancel
                 </button>
-                <button type="button" onClick={() => void handleSave()} disabled={isSaving} className="btn-primary">
+                <button type="submit" disabled={isSaving} className="btn-primary">
                   {isSaving ? 'Saving…' : editing ? 'Save changes' : 'Save report'}
                 </button>
               </div>
-            </div>
+            </form>
           </DialogPanel>
         </div>
       )}
