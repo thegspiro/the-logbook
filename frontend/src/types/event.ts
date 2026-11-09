@@ -598,7 +598,9 @@ export interface GuestCheckInResult {
  * event. A prospect is named by first name and last initial only.
  */
 export interface GuestLookupResult {
-  status: 'prospect' | 'member' | 'not_found';
+  // A member account answers 'not_found': the page is public, and a distinct
+  // answer told anyone holding the link which addresses belong to members.
+  status: 'prospect' | 'not_found';
   display_name?: string | null | undefined;
   confirm_token?: string | null | undefined;
   message: string;
@@ -1033,6 +1035,11 @@ export interface EventRequestListItem {
   task_completions?: Record<string, TaskCompletion>;
   event_date?: string;
   staffing_shift_id?: string;
+  /** Intake flagged it as arriving inside the department's lead time. */
+  short_notice?: boolean;
+  /** Seats on the live signup sheet; both null when the request has none. */
+  staffing_slots_filled?: number | null;
+  staffing_slots_total?: number | null;
   created_at: string;
 }
 

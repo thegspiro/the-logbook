@@ -8,6 +8,9 @@ Workflow review W78:
   under it, and a Chicago evening landed on the next day.
 - Every module was badged "Enabled", including one the department had
   switched off.
+- The other "last 30 days" figures (new users, events, training hours, forms,
+  documents) were a rolling ``now - 30 days`` while the charts beside them
+  were whole local days, so the same page counted two different months.
 """
 
 import uuid
@@ -19,6 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.endpoints.platform_analytics import get_platform_analytics
 from app.models.error_log import ErrorLog
+from app.models.event import Event, EventType
+from app.models.training import TrainingRecord, TrainingStatus, TrainingType
 from app.models.user import Organization, User
 
 pytestmark = pytest.mark.integration
@@ -83,6 +88,75 @@ class TestTrends:
         assert result.login_trend[-1].date == today_local.isoformat()
         assert result.login_trend[-1].count == 1
         assert sum(day.count for day in result.login_trend) == result.active_users
+
+
+class TestThirtyDayFigures:
+    async def test_they_count_the_same_whole_local_days_as_the_charts(self, db_session):
+        org, user = await _setup(db_session)
+        now = datetime.now(timezone.utc)
+        today_local = now.astimezone(CHICAGO).date()
+        first_day = today_local - timedelta(days=29)
+        # In UTC: the driver writes an aware datetime's wall time unconverted.
+        window_start = datetime.combine(first_day, time.min, tzinfo=CHICAGO).astimezone(
+            timezone.utc
+        )
+        rolling_start = now - timedelta(days=30)
+        # Halfway between the rolling start and local midnight 29 days ago:
+        # after ``now - 30 days`` (the old window counted it) and before the
+        # first charted day (the new one does not). That gap does not always
+        # exist: when the window spans the autumn clock change, the 29 local
+        # days before today hold an extra hour, so from 23:00 local the first
+        # charted day starts before ``now - 30 days``. Then the point just
+        # before the first charted day is still outside the new window.
+        if window_start > rolling_start:
+            outside = rolling_start + (window_start - rolling_start) / 2
+        else:
+            outside = window_start - timedelta(minutes=1)
+        inside = window_start + timedelta(minutes=1)
+
+        for at, tag in ((outside, "outside"), (inside, "inside")):
+            name = f"{tag}-{uuid.uuid4().hex[:8]}"
+            db_session.add(
+                User(
+                    organization_id=org.id,
+                    username=name,
+                    first_name="New",
+                    last_name="Member",
+                    email=f"{name}@example.com",
+                    created_at=at,
+                )
+            )
+            db_session.add(
+                Event(
+                    organization_id=org.id,
+                    title=f"{tag} drill",
+                    event_type=EventType.TRAINING,
+                    start_datetime=at,
+                    end_datetime=at + timedelta(hours=1),
+                    created_at=at,
+                )
+            )
+        for day, hours in ((first_day - timedelta(days=1), 5.0), (first_day, 2.0)):
+            db_session.add(
+                TrainingRecord(
+                    organization_id=org.id,
+                    user_id=user.id,
+                    course_name="Pump ops",
+                    training_type=TrainingType.CONTINUING_EDUCATION,
+                    hours_completed=hours,
+                    status=TrainingStatus.COMPLETED,
+                    completion_date=day,
+                )
+            )
+        await db_session.flush()
+
+        result = await get_platform_analytics(db=db_session, current_user=user)
+
+        # The setup user was created just now; only "inside" joins it.
+        assert result.new_users_last_30_days == 2
+        assert result.events_last_30_days == 1
+        assert result.training_hours_last_30_days == 2.0
+        assert result.login_trend[0].date == first_day.isoformat()
 
 
 class TestModuleSwitches:

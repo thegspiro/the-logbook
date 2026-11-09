@@ -71,6 +71,7 @@ import toast from 'react-hot-toast';
 
 import { renderWithRouter } from '../test/utils';
 import AddMember from './AddMember';
+import { useAuthStore } from '../stores/authStore';
 
 const rankSelect = () => screen.getByRole('combobox', { name: /^rank$/i });
 const classSelect = () => screen.getByRole('combobox', { name: /member class/i });
@@ -122,6 +123,9 @@ const fillRequired = async (
 // takes longer than the default 5s even though nothing is wrong.
 describe('AddMember', { timeout: 20_000 }, () => {
   beforeEach(() => {
+    // The form keeps a local draft (forms review F-6); one test's entries
+    // must not come back as the next test's restored draft.
+    sessionStorage.clear();
     vi.clearAllMocks();
     mockPreviewNextMembershipId.mockResolvedValue({ enabled: false, next_id: null });
     mockGetRoles.mockResolvedValue([]);
@@ -132,6 +136,80 @@ describe('AddMember', { timeout: 20_000 }, () => {
     mockGetTierConfig.mockReset();
     mockGetTierConfig.mockResolvedValue({ auto_advance: true, tiers: [] });
     mockConnected.clear();
+  });
+
+  it('ties each refusal to its field, announces it, and moves focus to the summary of them', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<AddMember />);
+    await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+    const firstName = screen.getByLabelText(/^First Name/);
+    expect(firstName).toHaveAttribute('aria-required', 'true');
+    expect(firstName).toHaveAttribute('maxlength', '100');
+    // Details about somebody else: the officer's own autofill is not offered (F-9).
+    expect(firstName).toHaveAttribute('autocomplete', 'off');
+    await user.click(screen.getByRole('button', { name: /save member/i }));
+
+    expect(firstName).toHaveAttribute('aria-invalid', 'true');
+    expect(firstName).toHaveAccessibleDescription('First name is required');
+    expect(screen.getByRole('alert', { name: 'Fix these before saving' })).toHaveFocus();
+    expect(screen.getByLabelText(/^Street Address/)).toHaveAccessibleDescription('Street address is required');
+    expect(mockCreateMember).not.toHaveBeenCalled();
+  });
+
+  it('puts a server refusal on the field it names, including an emergency contact’s', async () => {
+    const user = userEvent.setup();
+    mockCreateMember.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: {
+          detail: [
+            { field: 'address_zip', message: 'Value is too long.' },
+            { field: 'emergency_contacts.0.phone', message: 'Value is too long.' },
+          ],
+        },
+      },
+    });
+    renderWithRouter(<AddMember />);
+    await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+    await fillRequired(user);
+    await user.click(screen.getByRole('button', { name: /save member/i }));
+
+    const zip = screen.getByLabelText(/^ZIP Code/);
+    await waitFor(() => expect(zip).toHaveAccessibleDescription('Value is too long.'));
+    expect(zip).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/^Phone/, { selector: '#add-emergencyPhone1' })).toHaveAccessibleDescription(
+      'Value is too long.'
+    );
+    expect(screen.getByRole('alert', { name: 'Fix these before saving' })).toHaveFocus();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('restores a draft of the member’s details, but never their emergency contacts or birth date', async () => {
+    const user = userEvent.setup();
+    // Drafts are keyed by the signed-in member, so there has to be one.
+    useAuthStore.setState({ user: { id: 'officer-1' } as never });
+    const view = renderWithRouter(<AddMember />);
+    await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+    await user.type(screen.getByLabelText(/^First Name/), 'Dana');
+    await user.type(screen.getByLabelText(/^City/), 'Falls Church');
+    await user.type(screen.getByPlaceholderText('Jane Doe'), 'Sam Reyes');
+    await user.type(screen.getByLabelText('Date of Birth'), '1990-04-01');
+    view.unmount();
+
+    const stored = Object.keys(sessionStorage)
+      .map((key) => sessionStorage.getItem(key) ?? '')
+      .join('');
+    expect(stored).toContain('Dana');
+    expect(stored).not.toContain('Sam Reyes');
+    expect(stored).not.toContain('1990-04-01');
+
+    renderWithRouter(<AddMember />);
+    expect(await screen.findByText('Restored your unsaved draft.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^First Name/)).toHaveValue('Dana');
+    expect(screen.getByLabelText(/^City/)).toHaveValue('Falls Church');
+    expect(screen.getByPlaceholderText('Jane Doe')).toHaveValue('');
   });
 
   it('offers a rank to an operational member', async () => {
@@ -402,6 +480,50 @@ describe('AddMember', { timeout: 20_000 }, () => {
 
       expect(await screen.findByText('Membership number is required')).toBeInTheDocument();
       expect(mockCreateMember).not.toHaveBeenCalled();
+    });
+  });
+
+  // Forms review F-4: an empty save showed a message under every field but
+  // tied none of them to its input, and left focus on the button at the
+  // bottom of a 30-field form with the first errors out of view.
+  describe('saying what is wrong', () => {
+    it('lists the missing fields at the top, takes focus there, and ties each message to its field', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      const summary = screen.getByRole('alert', { name: 'Fix these before saving' });
+      expect(summary).toHaveFocus();
+      expect(within(summary).getByRole('link', { name: 'First name: First name is required' })).toHaveAttribute(
+        'href',
+        '#add-firstName'
+      );
+      const first = screen.getByLabelText(/^first name/i);
+      expect(first).toHaveAttribute('aria-invalid', 'true');
+      expect(first).toHaveAttribute('aria-required', 'true');
+      expect(first).toHaveAccessibleDescription('First name is required');
+      expect(mockCreateMember).not.toHaveBeenCalled();
+    });
+
+    it('puts a server refusal on the field it names', async () => {
+      mockCreateMember.mockRejectedValue({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'email', message: 'Enter a valid email address.' }], code: 'LB-VAL-001' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      const email = screen.getByPlaceholderText('john.doe@example.com');
+      await waitFor(() => expect(email).toHaveAccessibleDescription('Enter a valid email address.'));
+      expect(screen.getByRole('alert', { name: 'Fix these before saving' })).toHaveFocus();
     });
   });
 

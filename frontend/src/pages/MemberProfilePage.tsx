@@ -76,6 +76,7 @@ import { RejoinServiceFields } from '../components/RejoinServiceFields';
 import { useRejoinServiceOptions } from '../hooks/useRejoinServiceOptions';
 import { ServiceHistorySection } from '../components/member-profile/ServiceHistorySection';
 import { SupervisorSection } from '../components/member-profile/SupervisorSection';
+import { PastPositions } from '../components/member-profile/PastPositions';
 import { StatusChangeReason } from '../components/member-profile/StatusChangeReason';
 import { QualificationsSection } from '../components/member-profile/QualificationsSection';
 import { VotingEligibilitySection } from '../components/member-profile/VotingEligibilitySection';
@@ -104,11 +105,16 @@ function statusLabel(status: string): string {
 
 /**
  * The profile's write endpoints answer with the plain profile, which does not
- * carry the computed `service_since` that GET /users/{id}/with-roles sends;
- * keep the value already on screen rather than blanking "Member since".
+ * carry the computed `service_since` or `past_positions` that
+ * GET /users/{id}/with-roles sends; keep the values already on screen rather
+ * than blanking "Member since" and the earlier positions.
  */
 function keepServiceSince(updated: UserWithRoles, previous: UserWithRoles | null): UserWithRoles {
-  return { ...updated, service_since: updated.service_since ?? previous?.service_since };
+  return {
+    ...updated,
+    service_since: updated.service_since ?? previous?.service_since,
+    past_positions: updated.past_positions ?? previous?.past_positions,
+  };
 }
 
 function isModuleEnabled(moduleId: string): boolean {
@@ -950,13 +956,14 @@ export const MemberProfilePage: React.FC = () => {
                       </div>
                     </>
                   )}
+                  <PastPositions positions={user.past_positions ?? []} tz={tz} />
                 </div>
               </div>
               <div className="page-header-actions flex flex-wrap items-center gap-2">
                 {canViewIdCard && (
                   <Link
                     to={`/members/${userId}/id-card`}
-                    className="touch-target-phone inline-flex items-center gap-1.5 rounded-lg border border-blue-300 px-3 py-1 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:border-blue-500/40 dark:text-blue-400 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
+                    className="btn-secondary inline-flex items-center gap-1.5 text-sm"
                   >
                     <CreditCard className="h-4 w-4" />
                     ID Card

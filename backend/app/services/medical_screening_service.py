@@ -398,17 +398,18 @@ class MedicalScreeningService:
         return list(result.scalars().all())
 
     async def get_requirement(
-        self, requirement_id: str, organization_id: str
+        self, requirement_id: str, organization_id: str, for_update: bool = False
     ) -> Optional[ScreeningRequirement]:
         """Get a single screening requirement."""
-        result = await self.db.execute(
-            select(ScreeningRequirement).where(
-                and_(
-                    ScreeningRequirement.id == requirement_id,
-                    ScreeningRequirement.organization_id == organization_id,
-                )
+        query = select(ScreeningRequirement).where(
+            and_(
+                ScreeningRequirement.id == requirement_id,
+                ScreeningRequirement.organization_id == organization_id,
             )
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         screening_requirement: Optional[ScreeningRequirement] = (
             result.scalar_one_or_none()
         )
@@ -464,13 +465,53 @@ class MedicalScreeningService:
     async def delete_requirement(
         self, requirement_id: str, organization_id: str
     ) -> bool:
-        """Delete a screening requirement."""
-        requirement = await self.get_requirement(requirement_id, organization_id)
+        """Delete a screening requirement, keeping the records filed under it.
+
+        A record is a member's medical history and outlives its requirement:
+        its link is cleared, never the record deleted. The link is ciphertext
+        since MS-18, so there is no foreign key to do that with ON DELETE SET
+        NULL; this does it in code, over this organization's records only,
+        matching the decrypted id.
+        """
+        # Locked so a save linking a record to this requirement cannot commit
+        # between the unlink below and the delete (see _lock_linked_requirement).
+        requirement = await self.get_requirement(
+            requirement_id, organization_id, for_update=True
+        )
         if not requirement:
             return False
+        await self.unlink_records_from_requirement(str(requirement.id), organization_id)
         await self.db.delete(requirement)
         await self.db.flush()
         return True
+
+    async def unlink_records_from_requirement(
+        self, requirement_id: str, organization_id: str
+    ) -> int:
+        """Clear ``requirement_id`` on this org's records linked to it.
+
+        Returns how many records were unlinked. The records keep everything
+        else: type, status, dates and results stay as compliance proof.
+        """
+        # A locking read: under REPEATABLE READ a plain SELECT answers from the
+        # transaction's first snapshot, so a link committed by a save this
+        # delete waited on would be missed and left pointing at nothing.
+        rows = await self.db.execute(
+            select(ScreeningRecord)
+            .where(
+                ScreeningRecord.organization_id == organization_id,
+                ScreeningRecord.requirement_id.isnot(None),
+            )
+            .with_for_update()
+        )
+        unlinked = 0
+        for record in rows.scalars().all():
+            if str(record.requirement_id) == requirement_id:
+                record.requirement_id = None
+                unlinked += 1
+        if unlinked:
+            await self.db.flush()
+        return unlinked
 
     # --- Screening Records ---
 
@@ -497,18 +538,22 @@ class MedicalScreeningService:
             query = query.where(ScreeningRecord.user_id == user_id)
         if prospect_id:
             query = query.where(ScreeningRecord.prospect_id == prospect_id)
-        if screening_type:
-            query = query.where(ScreeningRecord.screening_type == screening_type)
         # created_at has one-second resolution, so a batch entered together
         # ties on it; id keeps the order stable across page requests.
         query = query.order_by(ScreeningRecord.created_at.desc(), ScreeningRecord.id)
-        if not status:
+        if not status and not screening_type:
             result = await self.db.execute(_page(query, skip, limit))
             return list(result.scalars().all())
-        # The status is ciphertext (MS-18): filter the decrypted value, then
-        # page, so a page is never short while matches lie further on.
+        # The status and the type are ciphertext (MS-18): filter the decrypted
+        # values, then page, so a page is never short while matches lie
+        # further on.
         result = await self.db.execute(query)
-        matching = [r for r in result.scalars().all() if r.status == status]
+        matching = [
+            r
+            for r in result.scalars().all()
+            if (not status or r.status == status)
+            and (not screening_type or r.screening_type == screening_type)
+        ]
         end = None if limit is None else skip + limit
         return matching[skip:end]
 
@@ -572,6 +617,29 @@ class MedicalScreeningService:
             ],
         )
 
+    async def _lock_linked_requirement(
+        self, requirement_id: str, organization_id: str
+    ) -> None:
+        """Hold the requirement a record is being linked to until commit.
+
+        The link has had no foreign key since MS-18 (it is ciphertext), so the
+        database no longer stops a record linking to a requirement deleted in
+        the same moment. ``delete_requirement`` locks the same row, so the two
+        serialize: the delete waits for this save, then its locking scan sees
+        the new link and clears it; or this save waits for the delete and its
+        in-org check has already passed, so the lock finds no row and refuses.
+        """
+        locked = await self.db.execute(
+            select(ScreeningRequirement.id)
+            .where(
+                ScreeningRequirement.id == requirement_id,
+                ScreeningRequirement.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        if locked.scalar_one_or_none() is None:
+            raise ValueError("Screening requirement not found")
+
     async def create_record(
         self,
         organization_id: str,
@@ -613,6 +681,8 @@ class MedicalScreeningService:
             allow_none=True,
             label="screening requirement",
         )
+        if data.requirement_id:
+            await self._lock_linked_requirement(data.requirement_id, organization_id)
         record = ScreeningRecord(
             id=generate_uuid(),
             organization_id=organization_id,
@@ -665,6 +735,9 @@ class MedicalScreeningService:
                 changes["requirement_id"],
                 organization_id,
                 label="screening requirement",
+            )
+            await self._lock_linked_requirement(
+                changes["requirement_id"], organization_id
             )
         apply_updates(record, changes)
         if reviewed_by and data.status in ("passed", "failed", "waived"):
@@ -1024,6 +1097,45 @@ class MedicalScreeningService:
 
         return expiring
 
+    async def get_reminder_candidates(
+        self,
+        organization_id: str,
+        today: date,
+        horizon_days: int,
+    ) -> List[Tuple[ScreeningRecord, ScreeningRequirement, ScreeningDeadline]]:
+        """Members' current screenings falling due within ``horizon_days``.
+
+        Feeds the expiry reminders (W71b-4). The records are the expiring
+        list's own (``_due_in_window``, so the reminder and the Compliance tab
+        agree on which screening is due and when, pitfall #29), narrowed to
+        what a reminder is for:
+
+        * members only — applicants are screened through the pipeline;
+        * not yet due — a screening past its due date is the Compliance tab's
+          business, not a "due soon" email;
+        * a requirement the member is graded on — a position-scoped
+          requirement the member no longer holds is not theirs to renew.
+
+        Whether the member is a current one is the caller's check, alongside
+        the email address it needs from the same row.
+        """
+        cutoff = today + timedelta(days=horizon_days)
+        due = [
+            item
+            for item in await self._due_in_window(
+                organization_id, today, cutoff, members_only=True
+            )
+            if item[2].due is not None and item[2].due >= today
+        ]
+        if not any(_requirement_roles(req) for _, req, _ in due):
+            return due
+        held = await self._position_keys(organization_id)
+        return [
+            (record, req, deadline)
+            for record, req, deadline in due
+            if _applicable_requirements([req], held.get(str(record.user_id), set()))
+        ]
+
     async def _due_in_window(
         self,
         organization_id: str,
@@ -1047,16 +1159,23 @@ class MedicalScreeningService:
         }
         if not requirements:
             return []
+        # The link is ciphertext (MS-18), so the records linked to an active
+        # requirement are picked after decryption, not by an IN in SQL.
         criteria = [
             ScreeningRecord.organization_id == organization_id,
-            ScreeningRecord.requirement_id.in_(list(requirements)),
+            ScreeningRecord.requirement_id.isnot(None),
         ]
         if members_only:
             criteria.append(ScreeningRecord.user_id.isnot(None))
         rows = await self.db.execute(select(ScreeningRecord).where(*criteria))
+        linked = [
+            record
+            for record in rows.scalars().all()
+            if str(record.requirement_id) in requirements
+        ]
         current = [
             record
-            for record in deciding_records(rows.scalars().all()).values()
+            for record in deciding_records(linked).values()
             if record.status in _SATISFYING_STATUSES
         ]
 

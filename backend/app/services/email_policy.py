@@ -294,8 +294,10 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         audience=_M,
         includes=(
             "Certifications expiring or expired",
+            "A medical screening due within 90 days",
             "Training requirement due soon",
             "Training requirements not met",
+            "Training pipeline milestones you reach",
         ),
         rationale=(
             "Officers are still copied on escalations when the department "
@@ -480,6 +482,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "Training sessions awaiting approval",
             "New provider course versions to map",
             "A new member not enrolled automatically for a missing prerequisite",
+            "A member reaching a pipeline milestone you are notified of",
         ),
         rationale=(
             "Pending approvals are also listed in Training, and unmapped "

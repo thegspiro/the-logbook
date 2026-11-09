@@ -106,6 +106,13 @@ describe('QuickBooksOnlineSection', () => {
     expect(mockPostings).not.toHaveBeenCalled();
   });
 
+  it('tells the Treasurer checks post as checks and card payments as card expenses', async () => {
+    renderWithRouter(<QuickBooksOnlineSection />);
+
+    expect(await screen.findByText(/an issued check as a QuickBooks check with its check number/)).toBeInTheDocument();
+    expect(screen.getByText(/a payment from a credit card account as a credit card expense/)).toBeInTheDocument();
+  });
+
   it("sends the browser to Intuit's consent page to connect", async () => {
     mockConnection.mockResolvedValue(connection({ status: 'disconnected', realmId: null, connectedAt: null }));
     mockStartConnect.mockResolvedValue('https://appcenter.intuit.com/connect/oauth2?state=s');

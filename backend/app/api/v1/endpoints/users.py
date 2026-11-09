@@ -52,6 +52,7 @@ from app.models.audit import AuditLog
 from app.models.directory_account import DirectoryAccountStatus
 from app.models.document import Document
 from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
+from app.models.member_position_term import note_position_actor, sync_position_terms
 from app.models.passkey import UserPasskey
 from app.models.training import TrainingRecord as TrainingRecordModel
 from app.models.user import Organization, Role, User, UserStatus, user_roles
@@ -71,6 +72,7 @@ from app.schemas.user import (
     MemberEmailChoice,
     MemberEmailChoicesResponse,
     MemberProfileResponse,
+    PastPositionResponse,
     ProfileVisibility,
     UserListResponse,
     UserProfileResponse,
@@ -101,6 +103,7 @@ from app.services.email_policy import (
     member_choice,
 )
 from app.services.email_service import welcome_email_can_send
+from app.services.member_position_term_service import past_positions_for
 from app.services.member_service_history_service import MemberServiceHistoryService
 from app.services.member_shift_release_service import (
     release_future_shift_commitments,
@@ -619,6 +622,7 @@ async def create_member(
 
     # Ensure the default "member" role is always assigned for baseline permissions
     assigned_role_slugs = {r.slug for r in roles} if user_data.role_ids else set()
+    member_role: Optional[Role] = None
     if ROLE_MEMBER not in assigned_role_slugs:
         member_result = await db.execute(
             select(Role).where(
@@ -638,6 +642,17 @@ async def create_member(
 
     # Capture assigned role IDs before commit expires the relationship
     assigned_role_ids = [str(r.id) for r in roles] if user_data.role_ids else []
+
+    # The inserts above are Core statements the flush hook cannot see, so the
+    # new member's terms are opened here, in the same transaction.
+    initial_position_ids = [str(r.id) for r in roles] if user_data.role_ids else []
+    if member_role is not None:
+        initial_position_ids.append(str(member_role.id))
+    await sync_position_terms(
+        db,
+        [(new_user.id, pid) for pid in initial_position_ids],
+        actor_id=current_user.id,
+    )
 
     # Staged in this transaction, before the directory is called, so a crash
     # between the commit and the call leaves a record the profile can retry.
@@ -1503,6 +1518,7 @@ async def assign_user_roles(
     # first would both hide the retained positions from that diff (so their
     # rows would never be re-inserted) and leave the loaded collection stale,
     # making the delete of a dropped position raise StaleDataError.
+    note_position_actor(db, current_user.id)
     user.roles = roles
     await db.commit()
 
@@ -1613,6 +1629,7 @@ async def add_role_to_user(
     added_role_name = role.name
 
     # Add role
+    note_position_actor(db, current_user.id)
     user.roles.append(role)
     await db.commit()
 
@@ -1729,6 +1746,7 @@ async def remove_role_from_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     role_removed_name = role_to_remove.name
+    note_position_actor(db, current_user.id)
     user.roles.remove(role_to_remove)
     await db.commit()
 
@@ -1880,6 +1898,14 @@ async def get_user_with_roles(
         )
     else:
         payload.service_since = None
+    # Earlier offices and committee seats go to everyone who sees the current
+    # ones above: they are the same kind of fact, about the same member.
+    payload.past_positions = [
+        PastPositionResponse.model_validate(term)
+        for term in await past_positions_for(
+            db, str(user.id), str(current_user.organization_id)
+        )
+    ]
 
     return payload
 
@@ -1888,6 +1914,9 @@ async def get_user_with_roles(
 async def update_contact_info(
     user_id: UUID,
     contact_update: ContactInfoUpdate,
+    background_tasks: BackgroundTasks,
+    authorization: str | None = Header(None),
+    access_token: str | None = Cookie(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     *,
@@ -1933,6 +1962,31 @@ async def update_contact_info(
     new_phones = _validated_phone_changes(
         user, {k: getattr(contact_update, k) for k in contact_update.model_fields_set}
     )
+
+    is_self = current_user.id == str(user_id)
+    previous_email = user.email
+    email_changing = (
+        contact_update.email is not None and contact_update.email != previous_email
+    )
+
+    # Forgot-password resolves the account by its email address, so whoever
+    # sets a colleague's email can mail themselves that colleague's reset link
+    # and sign in as them. That makes the change a credential reset, and it
+    # takes the same ceiling and re-verification as the password, MFA and
+    # passkey resets below — without them a members.manage holder could take
+    # over the Chief's `*` account in two requests.
+    if email_changing and not is_self:
+        await _enforce_account_reset_ceiling(
+            current_user,
+            user,
+            db,
+            action="email-change",
+            detail=(
+                "You cannot change the email of a user with privileges beyond "
+                "your own."
+            ),
+        )
+        await ensure_stepup(db, access_token_from(authorization, access_token))
 
     # Update fields if provided
     if contact_update.email is not None:
@@ -2016,21 +2070,44 @@ async def update_contact_info(
             detail="User not found after contact update",
         )
 
+    event_data: dict = {
+        "updated_user_id": str(user_id),
+        "fields_updated": list(contact_update.model_dump(exclude_unset=True).keys()),
+    }
+    if email_changing:
+        # Both values, so "who pointed this account's mail somewhere else, and
+        # where" is answerable from the trail even after the address is put
+        # back.
+        event_data["email_changed"] = {"from": previous_email, "to": user.email}
     await log_audit_event(
         db=db,
         event_type="user_updated",
         event_category="user_management",
-        severity="info",
-        event_data={
-            "updated_user_id": str(user_id),
-            "fields_updated": list(
-                contact_update.model_dump(exclude_unset=True).keys()
-            ),
-        },
+        severity="warning" if email_changing and not is_self else "info",
+        event_data=event_data,
         user_id=str(current_user.id),
         username=current_user.username,
         **_request_origin(request),
     )
+
+    if email_changing and previous_email:
+        # Sent to the address being replaced: if the change was not the
+        # member's own doing, the old inbox is the one they still read.
+        await notify_security_event(
+            db,
+            user,
+            subject="The email address on your account was changed",
+            message=(
+                "The email address on your account was changed"
+                + (" by an administrator" if not is_self else "")
+                + ". Password-reset and account emails now go to the new "
+                "address. If you did not expect this, contact your "
+                "administrator right away."
+            ),
+            background_tasks=background_tasks,
+            to_email=previous_email,
+        )
+        await db.commit()
 
     return user
 

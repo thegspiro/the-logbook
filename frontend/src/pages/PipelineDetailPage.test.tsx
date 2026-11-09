@@ -894,6 +894,72 @@ describe('PipelineDetailPage — requirements outside any phase', () => {
   });
 });
 
+describe('PipelineDetailPage — milestones', () => {
+  const milestones = [
+    {
+      id: 'ms-items',
+      program_id: 'prog-1',
+      name: 'Engine ready',
+      completion_percentage_threshold: null,
+      created_at: '2026-01-02T00:00:00Z',
+      items: [
+        { id: 'i-1', item_type: 'course', item_id: 'c-1', name: 'Pump Operations' },
+        { id: 'i-2', item_type: 'skill_test', item_id: 's-1', name: 'Hose Deployment' },
+      ],
+      item_match_mode: 'any',
+      notify_member: false,
+      notify_positions: [{ id: 'pos-qm', name: 'Quartermaster' }],
+      notify_users: [],
+    },
+    {
+      id: 'ms-half',
+      program_id: 'prog-1',
+      name: 'Halfway',
+      completion_percentage_threshold: 50,
+      created_at: '2026-01-01T00:00:00Z',
+      items: [],
+      item_match_mode: 'all',
+      notify_member: true,
+      notify_positions: [],
+      notify_users: [],
+    },
+  ];
+
+  beforeEach(() => {
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
+    vi.clearAllMocks();
+    mockHasPermission = true;
+    mockPermissions = null;
+    mockGetProgram.mockResolvedValue({ ...program, structure_type: 'flexible', milestones });
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockResolvedValue([]);
+    mockGetProgramEnrollments.mockResolvedValue([]);
+  });
+
+  it('describes what reaches each milestone and who it tells, percentage ones first', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    const half = await screen.findByText('Halfway');
+    const engine = screen.getByText('Engine ready');
+    expect(half.compareDocumentPosition(engine) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
+    expect(screen.getByText('At 50% complete')).toBeInTheDocument();
+    expect(screen.getByText('Tells the member')).toBeInTheDocument();
+    expect(screen.getByText('After completing any of Pump Operations or Hose Deployment')).toBeInTheDocument();
+    expect(screen.getByText('Tells Quartermaster')).toBeInTheDocument();
+  });
+
+  it('keeps recipients to officers', async () => {
+    mockHasPermission = false;
+    renderWithRouter(<PipelineDetailPage />);
+
+    expect(await screen.findByText('Halfway')).toBeInTheDocument();
+    expect(screen.queryByText(/^Tells /)).not.toBeInTheDocument();
+  });
+});
+
 describe('PipelineDetailPage — an inactive requirement', () => {
   const link = (id: string, name: string, active: boolean) => ({
     id: `pr-${id}`,

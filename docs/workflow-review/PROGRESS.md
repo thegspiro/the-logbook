@@ -165,11 +165,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
   migrations.
-- **W50 follow-up** — the election meeting-link → Import Attendees → unlink
-  round trip could not be driven in W50. W51 left a business-meeting event for
-  it: "W51 October Business Meeting (event)", 1 Oct 7:00 PM, linked to the
-  second set of October minutes. The "link survives a clear" half of W50-60 is
-  still read from code only.
 
 - **Public portal, a later pass** — public events are only `public_education`
   events, and their location is the free-text `location` alone, so an event
@@ -181,12 +176,30 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   of the W77 container and passed with `--max-old-space-size=8192`. CI's
   `ubuntu-latest` default is larger, but the margin is thin (W77).
 
-- **Platform analytics, a later pass** — the other "last 30 days" figures
-  (events, forms, documents, new users) are still a rolling `now - 30 days`,
-  while the two charts and their totals are now whole local days; read from
-  code (W78).
-
 ## Log
+
+### W50 follow-up — Meeting link, Import Attendees, unlink — 2026-11-08
+
+Driven as `secretary` at 1280×900 on a fresh database, with `member` and
+`member2` RSVPing to a new business-meeting event (W51's was gone with the old
+database). Held: linking moved the voting window to the event's; the unlink
+sent explicit nulls and held after a reload, which closes the half of W50-60
+that was read from code only; imported attendees stayed after the unlink.
+Fixed (W50-93, MED): "Import Attendees from Event" sent no request, because
+the handler required a linked meeting; it now imports from the event
+("Imported 2 attendees from event"). `ElectionDetailPage.w50-import-event.test.tsx`
+failed before the fix. A no-op re-pick of "No linked meeting" is reachable
+only through Playwright's synthetic change event, so it is noted, not changed.
+Gate: typecheck, eslint and prettier clean; 73 election-detail tests pass.
+
+### Lead — Platform analytics counts one 30-day window — 2026-11-08
+
+Read from code and tested, not re-driven. Fixed (W78-4): new users, events,
+training hours, forms and documents counted "last 30 days" from a rolling
+`now - 30 days`, while the charts beside them were whole local days ending
+today. Every 30-day figure now uses the same local window as the login chart.
+`TestThirtyDayFigures` failed before the fix. Gate: flake8, black, isort and
+mypy clean; the platform-analytics tests pass.
 
 ### Lead — Member administration audit rows record the caller — 2026-11-08
 

@@ -47,6 +47,7 @@ from app.models.inventory import (
     TrackingType,
 )
 from app.services.inventory_service import InventoryService
+from tests.audit_cleanup import discard_committed_audit_rows
 
 pytestmark = [pytest.mark.integration, pytest.mark.asyncio]
 
@@ -86,28 +87,25 @@ async def _insert_org_and_user(session, org_id: str, user_id: str) -> None:
 
 
 async def _cleanup(org_id: str, item_id: str | None = None) -> None:
+    if item_id is not None:
+        # retire_item (and the transfer path) call log_audit_event and
+        # commit on success -- a real row in the shared audit_logs table
+        # that nothing else in this file's teardown touches. It doesn't
+        # even carry this test's organization_id (retire_item's call site
+        # stamps neither organization_id nor user_id), so org-scoped
+        # deletes can't reach it either. Left behind, one such row
+        # corrupts every other test that assumes archive_expired_logs's
+        # unscoped `MIN(id)` "head" query owns the whole table -- exactly
+        # what happened here: a single leaked row from an earlier
+        # fail-before run of this test broke 8 unrelated audit retention/
+        # shipping/org-scoping tests. event_data->>'$.item_id' is this
+        # test's own fresh uuid4(), so this can't touch another test's
+        # concurrently-written rows.
+        await discard_committed_audit_rows(
+            "JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.item_id')) = :item_id",
+            {"item_id": item_id},
+        )
     async with database_manager.session_factory() as session:
-        if item_id is not None:
-            # retire_item (and the transfer path) call log_audit_event and
-            # commit on success -- a real row in the shared audit_logs table
-            # that nothing else in this file's teardown touches. It doesn't
-            # even carry this test's organization_id (retire_item's call site
-            # stamps neither organization_id nor user_id), so org-scoped
-            # deletes above can't reach it either. Left behind, one such row
-            # corrupts every other test that assumes archive_expired_logs's
-            # unscoped `MIN(id)` "head" query owns the whole table -- exactly
-            # what happened here: a single leaked row from an earlier
-            # fail-before run of this test broke 8 unrelated audit retention/
-            # shipping/org-scoping tests. event_data->>'$.item_id' is this
-            # test's own fresh uuid4(), so this can't touch another test's
-            # concurrently-written rows.
-            await session.execute(
-                text(
-                    "DELETE FROM audit_logs "
-                    "WHERE JSON_UNQUOTE(JSON_EXTRACT(event_data, '$.item_id')) = :item_id"
-                ),
-                {"item_id": item_id},
-            )
         # inventory_notification_queue.performed_by/user_id FK the users this
         # test creates -- _queue_inventory_notification (best-effort, wrapped
         # in try/except in the service) queues a row on every successful

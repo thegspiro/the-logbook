@@ -391,6 +391,63 @@ describe('UserSettingsPage', () => {
     });
   });
 
+  // Forms review F-2/F-7/F-9: a value the server refuses lands on its field;
+  // under the owner's rule (2026-11-05) the rest of the profile still saves.
+  describe('server refusals and form behaviour', () => {
+    const phoneMessage = 'Enter a phone number using digits, spaces, dashes or parentheses.';
+
+    beforeEach(() => {
+      vi.mocked(userService.updateUserProfile).mockReset();
+    });
+
+    it('saves everything but the refused field, which stays flagged with the reason', async () => {
+      vi.mocked(userService.updateUserProfile)
+        .mockRejectedValueOnce({
+          response: { status: 422, data: { detail: [{ field: 'mobile', message: phoneMessage }] } },
+        })
+        .mockImplementation((_id, data) => Promise.resolve({ ...defaultProfile, ...data } as never));
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const mobile = await screen.findByLabelText('Mobile');
+      await user.clear(mobile);
+      await user.type(mobile, 'call me maybe');
+      await user.type(screen.getByLabelText('Middle Name'), 'Quinn');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(2));
+      const retried = vi.mocked(userService.updateUserProfile).mock.calls[1]?.[1] ?? {};
+      expect(retried).not.toHaveProperty('mobile');
+      expect(retried).toEqual(expect.objectContaining({ middle_name: 'Quinn' }));
+      await waitFor(() => expect(mobile).toHaveAccessibleDescription(phoneMessage));
+      expect(mobile).toHaveAttribute('aria-invalid', 'true');
+      expect(mobile).toHaveValue('call me maybe');
+      await waitFor(() => expect(mobile).toHaveFocus());
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Profile saved, except mobile'));
+
+      await user.type(mobile, '1');
+      expect(mobile).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('saves on Enter in a field, and offers autofill hints and the schema limits', async () => {
+      vi.mocked(userService.updateUserProfile).mockImplementation((_id, data) =>
+        Promise.resolve({ ...defaultProfile, ...data } as never)
+      );
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const middle = await screen.findByLabelText('Middle Name');
+      expect(screen.getByLabelText(/^First Name/)).toHaveAttribute('autocomplete', 'given-name');
+      expect(screen.getByLabelText(/^First Name/)).toHaveAttribute('maxlength', '100');
+      expect(screen.getByLabelText('Street Address')).toHaveAttribute('autocomplete', 'street-address');
+      expect(screen.getByLabelText('ZIP Code')).toHaveAttribute('autocomplete', 'postal-code');
+      expect(screen.getByLabelText('Mobile')).toHaveAttribute('maxlength', '20');
+
+      await user.type(middle, 'Quinn{Enter}');
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(1));
+    });
+  });
+
   // An emptied First Name was saved as "" behind "Profile saved", leaving the
   // member with no name on the roster or on legal records (forms review F-1).
   // Owner rule (2026-11-05): the form still saves with an error; the error is
@@ -473,6 +530,93 @@ describe('UserSettingsPage', () => {
         expect.objectContaining({ first_name: 'Johnny', last_name: 'Doe' })
       );
       expect(toast.success).toHaveBeenCalledWith('Profile saved');
+    });
+  });
+
+  // Forms review F-2 / F-4: a refused value came back as a toast reading
+  // "Mobile: Enter a phone number…", with nothing marked on the field.
+  describe('server refusals land on their field', () => {
+    beforeEach(() => {
+      vi.mocked(userService.updateUserProfile).mockReset();
+    });
+
+    it('shows a refused mobile number under Mobile and moves focus there', async () => {
+      vi.mocked(userService.updateUserProfile).mockRejectedValue({
+        response: {
+          status: 422,
+          data: {
+            detail: [{ field: 'mobile', message: 'Enter a phone number using digits, spaces or dashes.' }],
+            code: 'LB-VAL-001',
+          },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const mobile = await screen.findByLabelText('Mobile');
+      await user.type(mobile, 'call me maybe');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() =>
+        expect(mobile).toHaveAccessibleDescription('Enter a phone number using digits, spaces or dashes.')
+      );
+      expect(mobile).toHaveAttribute('aria-invalid', 'true');
+      await waitFor(() => expect(mobile).toHaveFocus());
+      expect(toast.error).toHaveBeenCalledWith('Check the highlighted fields and save again.');
+
+      await user.type(mobile, 'x');
+      expect(mobile).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('keeps a blank name flagged when the save fails for another reason', async () => {
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue({ ...defaultProfile, first_name: '' } as never);
+      vi.mocked(userService.updateUserProfile).mockRejectedValue({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'mobile', message: 'Enter a phone number.' }], code: 'LB-VAL-001' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const first = await screen.findByLabelText(/^First Name/);
+      await waitFor(() => expect(first).toHaveAttribute('aria-invalid', 'true'));
+      await user.type(screen.getByLabelText('Mobile'), 'call me');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(screen.getByLabelText('Mobile')).toHaveAttribute('aria-invalid', 'true'));
+      expect(first).toHaveAccessibleDescription('Enter your first name.');
+    });
+
+    it('shows a refusal the server could not pin on a field, beside the ones it could', async () => {
+      vi.mocked(userService.updateUserProfile).mockRejectedValue({
+        response: {
+          status: 422,
+          data: {
+            detail: [
+              { field: 'mobile', message: 'Enter a phone number.' },
+              { field: 'request', message: 'Your profile is locked while an officer edits it.' },
+            ],
+            code: 'LB-VAL-001',
+          },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      await user.type(await screen.findByLabelText('Mobile'), 'call me');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      expect(await screen.findByText('Your profile is locked while an officer edits it.')).toBeInTheDocument();
+    });
+
+    it('limits each field to the length the server stores', async () => {
+      renderWithRouter(<UserSettingsPage />);
+
+      expect(await screen.findByLabelText(/^First Name/)).toHaveAttribute('maxLength', '100');
+      expect(screen.getByLabelText('Mobile')).toHaveAttribute('maxLength', '20');
+      expect(screen.getByLabelText('Street Address')).toHaveAttribute('maxLength', '255');
+      expect(screen.getByLabelText('State')).toHaveAttribute('maxLength', '50');
     });
   });
 

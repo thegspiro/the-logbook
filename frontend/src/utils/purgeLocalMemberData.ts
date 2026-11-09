@@ -19,8 +19,12 @@
  *     Sign Out, after the warning in AppLayout, deletes the examiner's own;
  *     every automatic path — idle timeout, expired session, someone else
  *     signing in — keeps them, for HELD_EVALUATION_RETENTION_MS.
+ *   - long-form drafts (sessionStorage, useSessionDraft): a training
+ *     submission, an expense report, a new member's details, a shift report
  *   - saved department-store carts (localStorage): what a member meant to
  *     order, including any name they asked to have embroidered
+ *   - an unfinished training-program wizard (localStorage): the program an
+ *     officer was building, so the next person cannot pick it up and create it
  *
  * Neither was cleared by logout, which cleared only the session flag, the
  * temporary access token, and the in-memory API cache.
@@ -32,12 +36,14 @@
  */
 
 import { clearAllDrafts } from './shiftReportDrafts';
+import { clearAllSessionDrafts } from './sessionDrafts';
 import { clearAllQueuedChecks } from './offlineQueue';
 import { clearAllQueuedReports } from './shiftReportOfflineQueue';
 import { clearAllGenericQueued } from './genericOfflineQueue';
 import { clearAllEquipmentCheckDrafts } from './equipmentCheckDrafts';
 import { purgeSkillsStores, releaseHeldSkillsEntries } from './skillsTestOfflineStore';
 import { clearAllSavedCarts } from '../modules/storefront/utils/savedCart';
+import { clearAllProgramWizardDrafts } from './programWizardDraft';
 
 export interface PurgeResult {
   /** Shift-report and equipment-check drafts removed from device storage. */
@@ -113,6 +119,9 @@ export async function purgeLocalMemberData(options: PurgeOptions = {}): Promise<
   } catch {
     // localStorage can throw in private-browsing modes; keep going.
   }
+  // Form drafts (useSessionDraft) live only as long as the tab, but a shared
+  // station computer's tab can outlast the member who typed them.
+  result.drafts += clearAllSessionDrafts();
 
   try {
     result.drafts += await bounded(clearAllEquipmentCheckDrafts(), 0);
@@ -149,15 +158,21 @@ export async function purgeLocalMemberData(options: PurgeOptions = {}): Promise<
   // Not counted in the result: an unplaced cart is not work the member would
   // be warned about losing, and the store says nothing of it at sign-in.
   clearAllSavedCarts();
+  // Uncounted for the same reason: a half-built program definition is the
+  // signing-out officer's, and the sign-in screen says nothing of it.
+  clearAllProgramWizardDrafts();
 
-  // A mounted form can have an API request in flight when termination starts.
-  // Sweep again after the asynchronous IndexedDB work so a late state update
-  // cannot leave a localStorage draft behind for the next device user.
+  // A mounted form can have an API request in flight when termination starts,
+  // and the member stays signed in until this purge settles, so a keystroke
+  // during the asynchronous IndexedDB work can write a fresh draft. Sweep both
+  // draft stores again so neither is left behind for the next device user;
+  // nothing is awaited between here and the session being torn down.
   try {
     result.drafts += clearAllDrafts();
   } catch {
     // localStorage may have become unavailable; the initial sweep still ran.
   }
+  result.drafts += clearAllSessionDrafts();
 
   result.unsyncedDiscarded =
     result.queuedChecks + result.queuedReports + result.queuedGeneric + result.queuedSkillsTests;

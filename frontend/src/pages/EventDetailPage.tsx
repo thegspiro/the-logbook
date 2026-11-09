@@ -72,6 +72,7 @@ import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
 import { EventAttendeesCard } from '../components/event-detail/EventAttendeesCard';
 import EventRSVPModal from '../components/event-detail/EventRSVPModal';
 import EventCancelModal from '../components/event-detail/EventCancelModal';
+import EventLateAttendeeForm from '../components/event-detail/EventLateAttendeeForm';
 import EventCancelSeriesModal from '../components/event-detail/EventCancelSeriesModal';
 import EventCheckInModal from '../components/event-detail/EventCheckInModal';
 import EventRecordTimesModal from '../components/event-detail/EventRecordTimesModal';
@@ -1252,7 +1253,7 @@ export const EventDetailPage: React.FC = () => {
                 {!isEventOver && (
                   <button
                     onClick={() => downloadICSFile(event)}
-                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+                    className="btn-secondary inline-flex items-center gap-1.5 text-sm"
                   >
                     <CalendarPlus className="h-4 w-4" />
                     Add to Calendar
@@ -2129,6 +2130,24 @@ export const EventDetailPage: React.FC = () => {
             }}
             onClose={() => setShowCheckInModal(false)}
             timezone={tz}
+            {...(checkInClosed && !isAttendanceFinalized && !event.is_cancelled && eventId
+              ? {
+                  lateEntry: (
+                    <EventLateAttendeeForm
+                      eventId={eventId}
+                      members={eligibleMembers}
+                      eventStart={event.actual_start_time ?? event.start_datetime}
+                      eventEnd={event.actual_end_time ?? event.end_datetime}
+                      timezone={tz}
+                      onRecorded={() => {
+                        void fetchRSVPs();
+                        void fetchStats();
+                        void fetchEligibleMembers();
+                      }}
+                    />
+                  ),
+                }
+              : {})}
           />
         )}
 

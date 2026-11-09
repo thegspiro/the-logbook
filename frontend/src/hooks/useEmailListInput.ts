@@ -25,22 +25,46 @@ export function parseEmailList(raw: string): string[] {
 interface UseEmailListInputResult {
   inputValue: string;
   setInputValue: (value: string) => void;
-  add: () => void;
+  /** Adds the typed address; returns false, and sets `error`, when it refuses. */
+  add: () => boolean;
   remove: (email: string) => void;
   validationError: string | null;
+  /** Why the last add was refused, until the box is edited. */
+  error: string | null;
 }
+
+export const INVALID_EMAIL_MESSAGE = 'Enter a full email address, like name@example.com.';
+export const DUPLICATE_EMAIL_MESSAGE = 'That address is already on the list.';
 
 export function useEmailListInput(
   currentList: string[],
   onChange: (updated: string[]) => void
 ): UseEmailListInputResult {
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValueState] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
+  const setInputValue = useCallback((value: string) => {
+    setInputValueState(value);
+    setError(null);
+  }, []);
+
+  // Refused rather than stored: every caller saves the list as soon as it
+  // changes, so an address that is not one went straight into the settings.
   const add = useCallback(() => {
     const email = inputValue.trim();
-    if (!email || currentList.includes(email)) return;
+    if (!email) return false;
+    if (!EMAIL_REGEX.test(email)) {
+      setError(INVALID_EMAIL_MESSAGE);
+      return false;
+    }
+    if (currentList.includes(email)) {
+      setError(DUPLICATE_EMAIL_MESSAGE);
+      return false;
+    }
     onChange([...currentList, email]);
-    setInputValue('');
+    setInputValueState('');
+    setError(null);
+    return true;
   }, [inputValue, currentList, onChange]);
 
   const remove = useCallback(
@@ -52,5 +76,5 @@ export function useEmailListInput(
 
   const validationError = validateEmailList(inputValue);
 
-  return { inputValue, setInputValue, add, remove, validationError };
+  return { inputValue, setInputValue, add, remove, validationError, error };
 }

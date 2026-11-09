@@ -113,6 +113,35 @@ describe('purgeLocalMemberData', () => {
     expect(result.drafts).toBe(3);
   });
 
+  it('removes every form draft held in this tab, and counts it', async () => {
+    sessionStorage.setItem('logbook:draft:u1:training-submission', JSON.stringify({ savedAt: 1, value: {} }));
+    sessionStorage.setItem('logbook:draft:u2:add-member', JSON.stringify({ savedAt: 1, value: {} }));
+
+    const result = await purgeLocalMemberData();
+
+    expect(sessionStorage.getItem('logbook:draft:u1:training-submission')).toBeNull();
+    expect(sessionStorage.getItem('logbook:draft:u2:add-member')).toBeNull();
+    expect(result.drafts).toBe(2);
+  });
+
+  it('removes a form draft written while the asynchronous cleanup was running', async () => {
+    let finishQueue!: (count: number) => void;
+    mockClearAllQueuedChecks.mockReturnValue(
+      new Promise<number>((resolve) => {
+        finishQueue = resolve;
+      })
+    );
+
+    const pending = purgeLocalMemberData();
+    // The member is still signed in until the purge settles, so a keystroke
+    // in this window writes a fresh draft.
+    sessionStorage.setItem('logbook:draft:u1:add-member', JSON.stringify({ savedAt: 2, value: {} }));
+    finishQueue(0);
+    await pending;
+
+    expect(sessionStorage.getItem('logbook:draft:u1:add-member')).toBeNull();
+  });
+
   it('removes every saved department-store cart', async () => {
     localStorage.setItem('store-cart-m1-w1', JSON.stringify({ lines: [{ productId: 'p1', quantity: 1 }] }));
     localStorage.setItem('store-cart-m2-w1', JSON.stringify({ lines: [{ productId: 'p1', quantity: 1 }] }));
@@ -121,6 +150,16 @@ describe('purgeLocalMemberData', () => {
 
     expect(localStorage.getItem('store-cart-m1-w1')).toBeNull();
     expect(localStorage.getItem('store-cart-m2-w1')).toBeNull();
+  });
+
+  it('removes every unfinished training-program wizard draft', async () => {
+    localStorage.setItem('program-wizard-draft-m1', JSON.stringify({ version: 1, savedAt: 1, data: {} }));
+    localStorage.setItem('program-wizard-draft-m2', JSON.stringify({ version: 1, savedAt: 1, data: {} }));
+
+    await purgeLocalMemberData();
+
+    expect(localStorage.getItem('program-wizard-draft-m1')).toBeNull();
+    expect(localStorage.getItem('program-wizard-draft-m2')).toBeNull();
   });
 
   it('still clears the other stores when one throws', async () => {
