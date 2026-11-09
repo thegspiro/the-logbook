@@ -178,6 +178,35 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### W08 second pass — Add a member and their first sign-in — 2026-11-09
+
+The owner asked to continue with W08. Driven as `admin`, the new member and
+`member2` at 1280×900, with a second add at 390×844.
+
+Held:
+
+- empty submit flags 13 fields and focuses the summary;
+- a weak password is held at the field;
+- a create that grants a rank or position asks "Confirm it's you" and completes once confirmed;
+- every field sent is stored, including the On Leave status;
+- the first sign-in forces the password change with no refused request;
+- `member2` is refused on page and API;
+- every step is audited;
+- the phone layout is clean.
+
+Fixed:
+
+- W08-7 (LOW): eight optional fields showed their examples as full-strength text, so they read as values already entered.
+- W08-8 (LOW): the create's audit row did not record the starting status.
+- W08-9 (LOW): nothing said that a member added Inactive or On Leave cannot sign in.
+
+Flagged:
+
+- W08-10 (NIT): "On Leave" on the form, "Leave" on the profile.
+- Lead: 127 other uses of `placeholder-theme-text-muted` across the app.
+
+Gate: typecheck and lint clean (0 warnings from this PR); flake8, black, isort and mypy clean; 131 backend and 36 Add Member tests pass, and each new case failed before its fix; docs links clean. Next: W09 when the owner asks.
+
 ### W07 second pass — Dashboard for every role — 2026-11-08
 
 The owner asked to continue with W07. All ten roles were driven at 1280×900,
