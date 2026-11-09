@@ -923,8 +923,9 @@ const AddMember: React.FC = () => {
                   <option value="leave">On Leave</option>
                 </select>
                 <p id="add-status-help" className="text-theme-text-muted mt-1 text-xs">
-                  Retired or dropped is set from the member&rsquo;s profile once they are added, so their service
-                  history is recorded.
+                  A member added Inactive or On Leave cannot sign in until their status is set to Active. Retired or
+                  dropped is set from the member&rsquo;s profile once they are added, so their service history is
+                  recorded.
                 </p>
               </div>
 

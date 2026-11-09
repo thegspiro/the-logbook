@@ -494,6 +494,17 @@ describe('AddMember', { timeout: 20_000 }, () => {
       expect(screen.queryByText('Preferred Contact Method')).not.toBeInTheDocument();
     });
 
+    // W08-9: a member added Inactive or On Leave is refused at sign-in
+    // ("Account is inactive"), while the form still asks for their password.
+    it('says that an inactive or on-leave member cannot sign in', async () => {
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      expect(screen.getByRole('combobox', { name: /^status$/i })).toHaveAccessibleDescription(
+        /inactive or on leave cannot sign in until their status is set to active/i
+      );
+    });
+
     // W08-1: the status used to be shown and not sent, so "On Leave" created
     // an active member.
     it('sends the status the operator picked', async () => {
