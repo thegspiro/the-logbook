@@ -539,9 +539,10 @@ class TestSheetStartPosition:
             return next((x, y) for text, x, y in drawn if text == "Item 0")
 
         top_left = first_name_origin(1)
-        # Position 5 is row 2, column 2 of a 3-column sheet.
+        # Position 5 is row 2, column 2 of a 3-column sheet. Columns are
+        # Avery's 2.75" pitch apart (label plus gutter), not a label's width.
         x, y = first_name_origin(5)
-        assert x == pytest.approx(top_left[0] + 2.625 * inch)
+        assert x == pytest.approx(top_left[0] + 2.75 * inch)
         assert y == pytest.approx(top_left[1] - 1.0 * inch)
 
     @pytest.mark.parametrize("start_position", [0, 31])

@@ -57,24 +57,49 @@ from app.utils.election_pdf_style import (
     esc,
     logo_flowable,
 )
+from app.utils.print_geometry import BINDING_EDGE, SAFE_EDGE
 
 CONFIDENTIAL_MEMBER_RECORDS = (
     "Confidential: contains member records. Do not post or forward."
 )
 
-SIDE_MARGIN = 0.6 * inch
-TOP_MARGIN = 0.6 * inch
-# Room for the two footer lines under the frame.
-BOTTOM_MARGIN = 0.75 * inch
-# The frame's own padding, each side.
+# The frame's own padding, each side. Margins below are set so the frame's
+# inner edge — where the first rule or character can fall — sits exactly on
+# the print-safe edge from app.utils.print_geometry.
 _FRAME_PAD = 6
+# Portrait pages keep a little more than the safe edge at the top, so the
+# letterhead does not crowd the paper's edge.
+_PORTRAIT_TOP = 0.6 * inch
+# The footer's three lines (rule, identity, generated) sit between the
+# safe edge and the frame; the lowest descender clears SAFE_EDGE.
+_FOOTER_BASELINE = SAFE_EDGE + 3
+_FOOTER_LINE = 10.5
+_FOOTER_RULE = _FOOTER_BASELINE + 2 * _FOOTER_LINE - 1
+BOTTOM_MARGIN = _FOOTER_RULE + 4
 
 # A Table cell's default 6pt side padding, used when sizing column bands.
 _CELL_PAD = 6
 
 
-def content_width(pagesize: Tuple[float, float]) -> float:
-    return pagesize[0] - 2 * SIDE_MARGIN - 2 * _FRAME_PAD
+def page_margins(wide: bool) -> Tuple[float, float, float]:
+    """``(left, right, top)`` document margins for a portrait or a wide page.
+
+    Portrait pages bind on the left. A landscape page goes into a portrait
+    binder with its top edge at the rings, so it binds along the top and
+    keeps only the safe edge at its sides.
+    """
+    if wide:
+        return (
+            SAFE_EDGE - _FRAME_PAD,
+            SAFE_EDGE - _FRAME_PAD,
+            BINDING_EDGE - _FRAME_PAD,
+        )
+    return (BINDING_EDGE - _FRAME_PAD, SAFE_EDGE - _FRAME_PAD, _PORTRAIT_TOP)
+
+
+def content_width(pagesize: Tuple[float, float], wide: bool = False) -> float:
+    left, right, _ = page_margins(wide)
+    return pagesize[0] - left - right - 2 * _FRAME_PAD
 
 
 @lru_cache(maxsize=1)
@@ -288,11 +313,12 @@ class ReportMeta:
         self.confidentiality = confidentiality
         self.subject = subject or title
         self.lang = lang
+        self.wide = wide
         self.pagesize = landscape(letter) if wide else letter
 
     @property
     def width(self) -> float:
-        return content_width(self.pagesize)
+        return content_width(self.pagesize, self.wide)
 
 
 def _letterhead(meta: ReportMeta, styles: Dict[str, ParagraphStyle]) -> List[Any]:
@@ -359,8 +385,10 @@ def _clip(text: str, limit: int) -> str:
 
 def _footer(meta: ReportMeta, total_pages: int) -> Callable[[Any, Any], None]:
     page_w = meta.pagesize[0]
-    left = SIDE_MARGIN + _FRAME_PAD
-    right = page_w - SIDE_MARGIN - _FRAME_PAD
+    left_margin, right_margin, _ = page_margins(meta.wide)
+    left = left_margin + _FRAME_PAD
+    right = page_w - right_margin - _FRAME_PAD
+    ident_y = _FOOTER_BASELINE + _FOOTER_LINE
     # Footer text is drawn straight onto the canvas: no markup is parsed, so
     # it is not escaped. The org and title are clipped so a long name cannot
     # run under the page number.
@@ -374,18 +402,16 @@ def _footer(meta: ReportMeta, total_pages: int) -> Callable[[Any, Any], None]:
         canvas.saveState()
         canvas.setStrokeColor(GRID)
         canvas.setLineWidth(0.5)
-        canvas.line(left, BOTTOM_MARGIN - 14, right, BOTTOM_MARGIN - 14)
+        canvas.line(left, _FOOTER_RULE, right, _FOOTER_RULE)
         canvas.setFillColor(MUTED)
         canvas.setFont("Helvetica", 7.5)
-        canvas.drawString(left, BOTTOM_MARGIN - 25, ident)
-        canvas.drawRightString(
-            right, BOTTOM_MARGIN - 25, f"Page {document.page} of {total_pages}"
-        )
-        canvas.drawString(left, BOTTOM_MARGIN - 35, generated)
+        canvas.drawString(left, ident_y, ident)
+        canvas.drawRightString(right, ident_y, f"Page {document.page} of {total_pages}")
+        canvas.drawString(left, _FOOTER_BASELINE, generated)
         if meta.confidentiality:
             canvas.setFont("Helvetica-Bold", 7.5)
             canvas.setFillColor(INK)
-            canvas.drawRightString(right, BOTTOM_MARGIN - 35, meta.confidentiality)
+            canvas.drawRightString(right, _FOOTER_BASELINE, meta.confidentiality)
         canvas.restoreState()
 
     return draw
@@ -401,15 +427,17 @@ def render_report(
     first pass only counts pages so every footer can say "of Y".
     """
 
+    left_margin, right_margin, top_margin = page_margins(meta.wide)
+
     def build(on_page: Callable[[Any, Any], None]) -> bytes:
         styles = report_styles()
         buf = BytesIO()
         doc = SimpleDocTemplate(
             buf,
             pagesize=meta.pagesize,
-            leftMargin=SIDE_MARGIN,
-            rightMargin=SIDE_MARGIN,
-            topMargin=TOP_MARGIN,
+            leftMargin=left_margin,
+            rightMargin=right_margin,
+            topMargin=top_margin,
             bottomMargin=BOTTOM_MARGIN,
             title=meta.title,
             author=meta.org_name or "",

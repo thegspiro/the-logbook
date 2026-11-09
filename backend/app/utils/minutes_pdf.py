@@ -20,6 +20,7 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import (
     HRFlowable,
     Image,
@@ -38,6 +39,7 @@ from app.utils.minutes_pdf_attachments import (
     append_pdfs,
     prepare,
 )
+from app.utils.print_geometry import BINDING_EDGE, SAFE_EDGE
 from app.utils.rich_text import (
     FORMAT_HTML,
     html_to_pdf_blocks,
@@ -68,6 +70,15 @@ _STATUS_ORDER = [
     "absent",
     "guest",
 ]
+
+
+def _fit(text: str, max_width: float, font: str = "Helvetica", size: float = 7) -> str:
+    """*text* shortened with an ellipsis until it fits *max_width* points."""
+    if stringWidth(text, font, size) <= max_width:
+        return text
+    while text and stringWidth(text + "…", font, size) > max_width:
+        text = text[:-1]
+    return text + "…"
 
 
 def _esc(value: Any) -> str:
@@ -261,7 +272,7 @@ def render_minutes_pdf(
         buf,
         pagesize=letter,
         topMargin=0.6 * inch,
-        bottomMargin=0.75 * inch,
+        bottomMargin=0.8 * inch,
         leftMargin=0.7 * inch,
         rightMargin=0.7 * inch,
         title=str(data.get("title") or "Meeting Minutes"),
@@ -614,14 +625,24 @@ def render_minutes_pdf(
         canvas.setFont("Helvetica", 7)
         canvas.setFillColor(_MUTED)
         width = letter[0]
-        y = 0.5 * inch
+        # Up to three footer lines, the lowest just clear of the print-safe
+        # edge so its descenders are not lost to the printer's border.
+        y = SAFE_EDGE + 2
+        # Drawn on the canvas, outside the frame, so the binding edge is
+        # applied here; lines are clipped by measured width, not characters.
+        left = BINDING_EDGE
+        right = width - BINDING_EDGE
+        page_label = f"Page {document.page}" if show_pages else ""
+        page_room = stringWidth(page_label, "Helvetica", 7) + 12 if page_label else 0
         if notice:
-            canvas.drawString(0.7 * inch, y + 20, str(notice)[:160])
+            canvas.drawString(left, y + 20, _fit(str(notice), right - left))
         if fingerprint:
-            canvas.drawString(0.7 * inch, y + 10, fingerprint)
-        canvas.drawString(0.7 * inch, y, (footer_left or generated)[:110])
-        if show_pages:
-            canvas.drawRightString(width - 0.7 * inch, y, f"Page {document.page}")
+            canvas.drawString(left, y + 10, _fit(fingerprint, right - left))
+        canvas.drawString(
+            left, y, _fit(footer_left or generated, right - left - page_room)
+        )
+        if page_label:
+            canvas.drawRightString(right, y, page_label)
         canvas.restoreState()
 
     doc.build(story, onFirstPage=_decorate, onLaterPages=_decorate)

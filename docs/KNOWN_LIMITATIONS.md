@@ -23,6 +23,15 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   numbers, no repeated header, the browser's own time zone and no audit row.
   **Decided, to build (owner, 2026-11-09):** a server-side PDF on the kit,
   audited on the server.
+- **Print hints reach Acrobat, not browsers.** Label sheets and ID cards ask
+  to print at actual size (`/PrintScaling /None`), but most browser PDF
+  viewers ignore that and default to "Fit". The label pages tell the user to
+  set Scale to 100%; nothing can enforce it. The tray-by-page-size hint is not
+  set, because ReportLab rejects the key. The browser-printed label sheet
+  also depends on the print dialog's margins being left at "Default", where
+  the page's own `@page` margins apply. (Print-safe margins and the Avery
+  5160 alignment were fixed on 2026-11-09; see "Printing" in
+  `docs/PDF_REPORTS.md`.)
 - **Minutes, the inventory impact plan and the election documents keep their
   own layouts**, numbered "Page N" rather than "Page X of Y" (except the
   ballot). They escape correctly and are audited; moving them onto the kit is

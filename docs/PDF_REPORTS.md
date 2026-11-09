@@ -55,6 +55,60 @@ broke production documents.
 7. **Name the file with `Content-Disposition: attachment`.** Quote static
    names, and RFC 5987-encode (`filename*=utf-8''…`) any name built from
    record text, as the minutes endpoint does.
+8. **Keep ink inside the print-safe area.** See "Printing" below; a test
+   enforces it for every document.
+
+## Printing
+
+Departments print on whatever laser, copier or inkjet the station has,
+usually from a browser or Acrobat print dialog, and file the result in
+binders. `app/utils/print_geometry.py` holds the numbers. They were set on
+2026-11-09 (owner decisions: three-hole-punch margin on every document, US
+Letter only, no duplex hint).
+
+| Edge                              | Ink may start          | Why                                                                                           |
+| --------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------- |
+| Left (binding) of a portrait page | 0.75" (`BINDING_EDGE`) | three-hole-punch holes reach about 0.65" in from the edge                                     |
+| Top of a landscape page           | 0.75"                  | a landscape page goes into a portrait binder with its top at the rings                        |
+| Every other edge                  | 0.5" (`SAFE_EDGE`)     | lasers leave about 0.17–0.2" unprinted, many inkjets 0.25" or more, and A4 crops 0.12" a side |
+
+- **Margins are measured to the ink, not to the frame.** A platypus frame
+  adds 6pt of padding inside the document margin, so a margin is set 6pt
+  short of the edge it protects. Anything drawn straight onto the canvas —
+  every page footer — is placed against the edge itself.
+- **Footers sit just above the safe edge.** The lowest baseline is
+  `SAFE_EDGE` plus a few points, so descenders clear it, and the bottom
+  margin leaves room for the footer's lines above it. Until 2026-11-09 the
+  report kit's footer printed about 0.25" from the bottom and the election
+  documents' about 0.3", inside many printers' unprintable band.
+- **A footer line is clipped by measured width, never by character count.**
+  The minutes footer cut its notice at 160 characters, which at 7pt is about
+  8" and runs off the page.
+- **A table is never wider than its frame.** The impact plan's member table
+  was 7.5" wide with every column shown, in a 7.33" frame. Its columns now
+  shrink together to fit.
+- **Documents leave scaling to the viewer.** A page shrunk to 97% by "Fit"
+  is still readable.
+- **Label sheets and ID cards ask to print at actual size**
+  (`print_at_actual_size`, `/PrintScaling /None`). A sheet shrunk to 97% puts
+  every label off its die-cut position. Acrobat honours the hint, but browser
+  PDF viewers mostly do not, so the label pages also tell the user to set
+  Scale to 100%. `/PickTrayByPDFSize` is not set, because ReportLab's
+  checked viewer-preference dictionary rejects that key.
+- **Avery 5160 is laid out on Avery's published template**: 2.625" × 1"
+  labels, a 2.75" column pitch (0.125" gutter), 0.1875" side margins and
+  0.5" top margin. The server PDF (`SHEET_*` in `label_renderer.py`) and the
+  browser print pages (`AVERY_5160_*` in `components/labels/labelPresets.ts`)
+  share those numbers. Until 2026-11-09 the PDF laid the columns edge to edge
+  and the browser pages used equal flexible columns with a 2px gap, so the
+  outer columns printed up to 1/8" off their labels, and the browser's row gap
+  accumulated to about 0.19" by the last row.
+
+`tests/test_pdf_print_safety.py` renders every document generator and checks
+that each text run's measured extent stays inside these edges. It also checks
+that labels and cards carry the actual-size hint and that every 5160 label's
+text lands inside its own label. A new generator belongs in its `DOCUMENTS`
+table.
 
 ## The report layout
 

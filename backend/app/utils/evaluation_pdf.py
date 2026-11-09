@@ -20,6 +20,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from app.utils.election_pdf_style import (
+    BOTTOM_MARGIN,
     MUTED,
     SIDE_MARGIN,
     VERTICAL_MARGIN,
@@ -62,7 +63,7 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
         buf,
         pagesize=letter,
         topMargin=VERTICAL_MARGIN,
-        bottomMargin=VERTICAL_MARGIN,
+        bottomMargin=BOTTOM_MARGIN,
         leftMargin=SIDE_MARGIN,
         rightMargin=SIDE_MARGIN,
         title="Member Performance Evaluation",

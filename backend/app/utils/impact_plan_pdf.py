@@ -68,7 +68,10 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
         pagesize=letter,
         topMargin=0.6 * inch,
         bottomMargin=0.6 * inch,
-        leftMargin=0.5 * inch,
+        # Ink starts 0.78" from the left, clear of a three-hole punch, and
+        # 0.58" from the right, clear of the printer's border (frame padding
+        # adds 6pt to each margin; see app.utils.print_geometry).
+        leftMargin=0.7 * inch,
         rightMargin=0.5 * inch,
         title="Inventory Impact Plan",
     )
@@ -201,7 +204,12 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
         "Contact": 1.9 * inch,
     }
     widths = [base_widths[col] for col in header]
-    story.append(_styled_table(rows, widths))
+    # With every column shown the preferred widths total 7.5", wider than
+    # the frame: shrink them together rather than let the table run past
+    # the margins into the punch holes and the printer's border.
+    # doc.width is the frame's; its 6pt padding each side is not table room.
+    scale = min(1.0, (doc.width - 12) / sum(widths))
+    story.append(_styled_table(rows, [w * scale for w in widths]))
 
     doc.build(story)
     buf.seek(0)
