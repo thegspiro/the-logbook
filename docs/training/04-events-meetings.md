@@ -1672,6 +1672,11 @@ approval** and **Approved**; see
 [Circulating and adopting minutes](#circulating-and-adopting-minutes).)
 
 Who sees which minutes is decided for you: members see circulated and adopted minutes, never drafts or executive sessions.
+_(2026-11-09)_ The **Meetings** list and a meeting's detail follow the same
+rule: without Manage Meetings or Manage Minutes you see only approved,
+non-executive meetings. Opening a hidden meeting reads as not found, and open
+action items from hidden meetings are left out. Before, a member could read an
+executive session's notes and motions through the Meetings list.
 The **Pending Approval** tile counts minutes awaiting approval.
 
 **Search the minutes themselves.** _(2026-10-19)_ The search box above the list

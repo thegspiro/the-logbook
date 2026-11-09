@@ -132,6 +132,13 @@ details they are meant to look up, and not much else.
 hide email, phone and mobile for everyone. See
 [contact info visibility](./08-admin-reports.md#contact-info-visibility).
 
+**Changing another member's email, and supervisors** _(2026-11-09)_. Changing a
+colleague's email now needs the same approval and re-entered password as
+resetting their credentials, is audited with the old and new address, and the
+old address is emailed a notice. A reset link follows the email on file, so this
+closes a route to taking over another account. You also cannot name yourself as
+a member's supervisor; the picker leaves you out.
+
 **Each member then decides for themselves.** Under **My Account → Privacy**,
 you can choose, field by field, whether colleagues see your:
 

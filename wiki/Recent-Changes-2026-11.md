@@ -5,6 +5,28 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 8 – 9, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-8--9-2026).
+
+- **My Shifts**: Past shifts are grouped by year and month, with a Year
+  dropdown and an hours-by-month chart.
+- **End-of-shift summary** lists each call type once with a count.
+- **Training programs**: the creation wizard keeps a browser draft; milestones
+  can wait on courses and tests and notify chosen people; requirements show what
+  uses them and can be permanently deleted.
+- **Phones and narrow screens**: about twenty tables reflow to cards, and page
+  header buttons share each row.
+- **Meetings**: members see only approved, non-executive meetings.
+- **Accounts**: you cannot make yourself a member's supervisor, and changing
+  another member's email needs the same approval as a credential reset.
+- **Fixes**: a training waiver takes an excused drill off "missed", moving an
+  event's start lets its reminders go again, and platform analytics count whole
+  local days.
+- **Operators**: `/inventory/ws` accepts only the sign-in cookie, not a token in
+  the URL.
+
 ## Recent changes: November 6 – 8, 2026
 
 The engineering audit is
