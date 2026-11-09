@@ -16,6 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**None.** PR #4180 (Feature 18, Training extended, pass 14) merged
+(`fde02bac1`). A fresh check of open PRs (`gh api .../pulls?state=open`)
+found 0 PRs with a `claude/security-review-*` head branch. Row 19 (Skills
+testing) is the next pending feature — see the Rotation table.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 14, PR #4180, merged), preserved for history</summary>
+
 **PR [#4180](https://github.com/thegspiro/the-logbook/pull/4180)**
 (branch `claude/security-review-training-extended`): Feature 18 (Training
 extended), pass 14, a watchdog pickup. PR #4151 (Feature 17, Training core,
@@ -64,6 +72,8 @@ errors; `npm run lint` — 0 errors/warnings.
 
 Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 14, PR #4151, merged), preserved for history</summary>
@@ -25310,7 +25320,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                    | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13)                  | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14) | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                       | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                       | 🔄     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                                              | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                             | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                             | ⬜     |
