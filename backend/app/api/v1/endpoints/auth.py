@@ -2659,7 +2659,7 @@ async def forgot_password(
             "organization_id": org_id,
         },
         organization_id=org_id,
-        user_id=str(user.id) if issued else None,
+        user_id=str(user.id) if user and raw_token else None,
         ip_address=ip_address,
         user_agent=request.headers.get("user-agent"),
     )
