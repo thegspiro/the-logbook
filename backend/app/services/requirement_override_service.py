@@ -65,9 +65,9 @@ class RequirementOverrideService:
         return result.scalar_one_or_none()
 
     async def list_overrides(
-        self, organization_id: str, requirement_id: str
+        self, organization_id: str, requirement_id: str, for_update: bool = False
     ) -> List[TrainingRequirementOverride]:
-        result = await self.db.execute(
+        query = (
             select(TrainingRequirementOverride)
             .where(
                 TrainingRequirementOverride.organization_id == str(organization_id),
@@ -75,6 +75,9 @@ class RequirementOverrideService:
             )
             .order_by(TrainingRequirementOverride.granted_at.desc())
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def names(self, user_ids: Sequence[Optional[str]]) -> Dict[str, str]:
@@ -101,7 +104,22 @@ class RequirementOverrideService:
             raise ValueError("The end date must be on or after the start date")
         if not await is_in_org(self.db, User, user_id, organization_id):
             raise ValueError("Member not found")
-        for existing in await self.list_overrides(organization_id, requirement.id):
+        # The overlap check below is a read-then-insert, so two grants sent
+        # together would both see no overlap (CLAUDE.md pitfall #27). Lock the
+        # requirement row to serialize them, then read the overrides with a
+        # locking read: under REPEATABLE READ a plain SELECT answers from the
+        # snapshot taken before the lock and would miss the winner's insert.
+        await self.db.execute(
+            select(TrainingRequirement.id)
+            .where(
+                TrainingRequirement.id == str(requirement.id),
+                TrainingRequirement.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+        for existing in await self.list_overrides(
+            organization_id, requirement.id, for_update=True
+        ):
             if (
                 existing.revoked_at is None
                 and str(existing.user_id) == str(user_id)

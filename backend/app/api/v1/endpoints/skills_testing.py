@@ -61,6 +61,7 @@ from app.schemas.skills_testing import (
     SkillTestViewerResponse,
     SkillTestVoidRequest,
 )
+from app.services.program_milestones import process_user as process_milestones_for_user
 from app.services.separation_of_duties import (
     SeparationOfDutiesError,
     assert_different_person,
@@ -2170,6 +2171,15 @@ async def complete_test(
             organization_id=current_user.organization_id,
             verified_by=current_user.id,
         )
+    # A milestone can name this skill whether or not a requirement is linked.
+    if (
+        test.result == SkillTestResult.PASS.value
+        and not test.is_practice
+        and test.validated_at
+    ):
+        await process_milestones_for_user(
+            db, current_user.organization_id, test.candidate_id
+        )
 
     # Fetch participant info for response
     candidate_result = await db.execute(
@@ -2471,6 +2481,10 @@ async def validate_test(
             requirement_id=test.requirement_id,
             organization_id=current_user.organization_id,
             verified_by=current_user.id,
+        )
+    if test.result == SkillTestResult.PASS.value and not test.is_practice:
+        await process_milestones_for_user(
+            db, current_user.organization_id, test.candidate_id
         )
 
     await log_audit_event(

@@ -19,6 +19,7 @@ from fastapi import HTTPException
 
 from app.api.v1.endpoints import users as users_endpoint
 from app.models.user import UserStatus
+from tests.fake_request import fake_request
 
 
 def _result(scalar_one=None, scalars_all=None):
@@ -95,7 +96,11 @@ class TestDeleteUserHard:
         db = _db(_result(scalar_one=target))
 
         await users_endpoint.delete_user(
-            user_id=target.id, hard=True, db=db, current_user=_member(id="admin-1")
+            user_id=target.id,
+            hard=True,
+            db=db,
+            current_user=_member(id="admin-1"),
+            request=fake_request(),
         )
 
         assert db.execute.await_count == 1
@@ -109,7 +114,11 @@ class TestDeleteUserHard:
         db = _db(_result(scalar_one=target))
 
         await users_endpoint.delete_user(
-            user_id=target.id, hard=True, db=db, current_user=_member(id="admin-1")
+            user_id=target.id,
+            hard=True,
+            db=db,
+            current_user=_member(id="admin-1"),
+            request=fake_request(),
         )
 
         release.assert_awaited_once_with(db, str(target.id))
@@ -129,7 +138,11 @@ class TestDeleteUserHard:
         db.commit = AsyncMock(side_effect=lambda: order.append("commit"))
 
         await users_endpoint.delete_user(
-            user_id=target.id, hard=True, db=db, current_user=_member(id="admin-1")
+            user_id=target.id,
+            hard=True,
+            db=db,
+            current_user=_member(id="admin-1"),
+            request=fake_request(),
         )
 
         returned.assert_awaited_once_with(
@@ -144,7 +157,11 @@ class TestDeleteUserHard:
         db = _db(_result(scalar_one=target))
 
         await users_endpoint.delete_user(
-            user_id=target.id, hard=True, db=db, current_user=_member(id="admin-1")
+            user_id=target.id,
+            hard=True,
+            db=db,
+            current_user=_member(id="admin-1"),
+            request=fake_request(),
         )
 
         users_endpoint.release_future_shift_commitments.assert_not_awaited()
@@ -160,7 +177,11 @@ class TestDeleteUserHard:
 
         with pytest.raises(HTTPException) as exc:
             await users_endpoint.delete_user(
-                user_id=target.id, hard=True, db=db, current_user=_member(id="admin-1")
+                user_id=target.id,
+                hard=True,
+                db=db,
+                current_user=_member(id="admin-1"),
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 409
@@ -176,7 +197,11 @@ class TestDeleteUserHard:
 
         with pytest.raises(HTTPException) as exc:
             await users_endpoint.delete_user(
-                user_id=admin.id, hard=True, db=db, current_user=admin
+                user_id=admin.id,
+                hard=True,
+                db=db,
+                current_user=admin,
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 400
@@ -190,6 +215,7 @@ class TestDeleteUserHard:
                 hard=True,
                 db=db,
                 current_user=_member(id="admin-1"),
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 404
@@ -201,7 +227,11 @@ class TestDeleteUserSoft:
         db = _db(_result(scalar_one=target))
 
         await users_endpoint.delete_user(
-            user_id=target.id, hard=False, db=db, current_user=_member(id="admin-1")
+            user_id=target.id,
+            hard=False,
+            db=db,
+            current_user=_member(id="admin-1"),
+            request=fake_request(),
         )
 
         assert target.previous_membership_number == "42"
@@ -214,7 +244,11 @@ class TestDeleteUserSoft:
         db = _db(_result(scalar_one=target))
 
         await users_endpoint.delete_user(
-            user_id=target.id, hard=False, db=db, current_user=_member(id="admin-1")
+            user_id=target.id,
+            hard=False,
+            db=db,
+            current_user=_member(id="admin-1"),
+            request=fake_request(),
         )
 
         release = users_endpoint.release_future_shift_commitments
@@ -254,7 +288,11 @@ class TestDeleteUserPrivilegeCeiling:
 
         with pytest.raises(HTTPException) as exc:
             await users_endpoint.delete_user(
-                user_id=target.id, hard=hard, db=db, current_user=caller
+                user_id=target.id,
+                hard=hard,
+                db=db,
+                current_user=caller,
+                request=fake_request(),
             )
 
         assert exc.value.status_code == 403
@@ -273,7 +311,11 @@ class TestDeleteUserPrivilegeCeiling:
         db = _db(_result(scalar_one=target))
 
         await users_endpoint.delete_user(
-            user_id=target.id, hard=False, db=db, current_user=caller
+            user_id=target.id,
+            hard=False,
+            db=db,
+            current_user=caller,
+            request=fake_request(),
         )
 
         assert target.deleted_at is not None
@@ -284,7 +326,11 @@ class TestDeleteUserPrivilegeCeiling:
         db = _db(_result(scalar_one=target))
 
         await users_endpoint.delete_user(
-            user_id=target.id, hard=False, db=db, current_user=caller
+            user_id=target.id,
+            hard=False,
+            db=db,
+            current_user=caller,
+            request=fake_request(),
         )
 
         assert target.deleted_at is not None

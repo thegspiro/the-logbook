@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import toast from 'react-hot-toast';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import SubmitTrainingPage from './SubmitTrainingPage';
@@ -365,12 +366,14 @@ describe('SubmitTrainingPage', () => {
     renderWithRouter(<SubmitTrainingPage />);
 
     const courseName = await screen.findByLabelText(/Course or class name/);
-    expect(courseName).toHaveAttribute('aria-invalid', 'false');
+    // FormField omits aria-invalid on a valid field rather than writing "false";
+    // the two mean the same to assistive technology.
+    expect(courseName).not.toHaveAttribute('aria-invalid');
     await user.click(screen.getByRole('button', { name: /Submit Training/ }));
 
     expect(courseName).toHaveAttribute('aria-invalid', 'true');
     await user.type(courseName, 'Wildland refresher');
-    expect(courseName).toHaveAttribute('aria-invalid', 'false');
+    expect(courseName).not.toHaveAttribute('aria-invalid');
   });
 
   it('saves a draft without requiring the whole form', async () => {
@@ -383,6 +386,211 @@ describe('SubmitTrainingPage', () => {
 
     await waitFor(() => {
       expect(mockCreateSubmission).toHaveBeenCalledWith(expect.objectContaining({ save_as_draft: true }));
+    });
+  });
+
+  // Forms review F-4: a refused submit marked fields red with no words, and a
+  // server refusal came back as "Failed to submit training".
+  describe('saying what is wrong', () => {
+    it('lists every missing field at the top and says what each needs', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      const courseName = await screen.findByLabelText(/Course or class name/);
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+      const summary = screen.getByRole('alert', { name: 'Fix these before submitting' });
+      expect(
+        within(summary).getByRole('link', { name: /Course or class name: Enter the course or class name\./ })
+      ).toHaveAttribute('href', '#course-name');
+      expect(within(summary).getByRole('link', { name: /Instructor: / })).toBeInTheDocument();
+      expect(courseName).toHaveAccessibleDescription('Enter the course or class name.');
+      expect(mockCreateSubmission).not.toHaveBeenCalled();
+    });
+
+    it('names each field in the summary the way the department labels it', async () => {
+      mockGetConfig.mockResolvedValue({
+        ...mockConfig,
+        field_config: {
+          ...mockConfig.field_config,
+          course_name: { visible: true, required: true, label: 'Class title' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Class title/);
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+      expect(
+        within(screen.getByRole('alert', { name: /Fix these/ })).getByRole('link', { name: /^Class title: / })
+      ).toBeInTheDocument();
+    });
+
+    it('saves a draft with fields still open and keeps them flagged', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await user.type(await screen.findByLabelText(/Course or class name/), 'Half-written entry');
+      await user.type(screen.getByLabelText(/^Date/), '2026-03-12');
+      await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+      await waitFor(() =>
+        expect(mockCreateSubmission).toHaveBeenCalledWith(expect.objectContaining({ save_as_draft: true }))
+      );
+      expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/still need filling in before you submit/));
+      expect(screen.getByLabelText(/Instructor/)).toHaveAccessibleDescription('Enter the instructor.');
+    });
+
+    it('still asks a draft for a course name and a date', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Course or class name/);
+      await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+      expect(mockCreateSubmission).not.toHaveBeenCalled();
+      expect(screen.getByRole('alert', { name: /Fix these/ })).toHaveTextContent(
+        'A draft still needs a course name and a date.'
+      );
+      expect(screen.getByLabelText(/Course or class name/)).toHaveFocus();
+    });
+
+    const refuseInstructor = () =>
+      mockCreateSubmission.mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'instructor', message: 'Value is too long.' }], code: 'LB-VAL-001' },
+        },
+      });
+
+    it('keeps a server refusal when a draft is stopped before anything is sent', async () => {
+      refuseInstructor();
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Course or class name/);
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+      const instructor = screen.getByLabelText(/Instructor/);
+      await waitFor(() => expect(instructor).toHaveAccessibleDescription('Value is too long.'));
+
+      await user.clear(screen.getByLabelText(/Course or class name/));
+      await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+      expect(mockCreateSubmission).toHaveBeenCalledTimes(1);
+      expect(instructor).toHaveAccessibleDescription('Value is too long.');
+    });
+
+    it('drops a server refusal once its field is edited', async () => {
+      refuseInstructor();
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Course or class name/);
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+      const instructor = screen.getByLabelText(/Instructor/);
+      await waitFor(() => expect(instructor).toHaveAttribute('aria-invalid', 'true'));
+
+      await user.type(instructor, 'x');
+      expect(instructor).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('stops reporting certification fields once the section is switched off', async () => {
+      mockCreateSubmission.mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'certification_number', message: 'Value is too long.' }], code: 'LB-VAL-001' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Course or class name/);
+      await fillRequiredFields(user);
+      await user.click(screen.getByLabelText('This training earned a certification'));
+      await user.type(screen.getByLabelText(/Certificate no\./), 'NREMT-99120');
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+      await waitFor(() =>
+        expect(screen.getByRole('alert', { name: /Fix these/ })).toHaveTextContent(
+          'Certificate no.: Value is too long.'
+        )
+      );
+
+      await user.click(screen.getByLabelText('This training earned a certification'));
+      expect(screen.queryByRole('alert', { name: /Fix these/ })).not.toBeInTheDocument();
+    });
+
+    it('keeps "Does not expire" ticked on the draft it just saved', async () => {
+      mockGetConfig.mockResolvedValue({
+        ...mockConfig,
+        field_config: {
+          ...mockConfig.field_config,
+          expiration_date: { visible: true, required: true, label: 'Expires' },
+        },
+      });
+      mockCreateSubmission.mockResolvedValueOnce({
+        id: 'sub-draft',
+        status: 'draft',
+        course_name: 'Half-written entry',
+        training_type: 'continuing_education',
+        completion_date: '2026-03-12',
+        hours_completed: 4,
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await user.type(await screen.findByLabelText(/Course or class name/), 'Half-written entry');
+      await user.type(screen.getByLabelText(/^Date/), '2026-03-12');
+      await user.click(screen.getByLabelText('This training earned a certification'));
+      await user.click(screen.getByLabelText('Does not expire'));
+      await user.click(screen.getByRole('button', { name: 'Save Draft' }));
+
+      await waitFor(() => expect(mockCreateSubmission).toHaveBeenCalledTimes(1));
+      expect(await screen.findByLabelText('Does not expire')).toBeChecked();
+      expect(screen.getByLabelText(/Expires/)).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('announces the certificate field like the others when it is missing', async () => {
+      mockGetConfig.mockResolvedValue({
+        ...mockConfig,
+        field_config: {
+          ...mockConfig.field_config,
+          attachments: { visible: true, required: true, label: 'Certificate' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Course or class name/);
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+      const file = screen.getByLabelText(/Attach certificate/);
+      expect(file).toHaveAttribute('aria-required', 'true');
+      expect(file).toHaveAttribute('aria-invalid', 'true');
+      expect(file).toHaveAccessibleDescription('Attach the certificate.');
+    });
+
+    it('puts a server refusal on the field it names', async () => {
+      mockCreateSubmission.mockRejectedValue({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'instructor', message: 'Value is too long.' }], code: 'LB-VAL-001' },
+        },
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<SubmitTrainingPage />);
+
+      await screen.findByLabelText(/Course or class name/);
+      await fillRequiredFields(user);
+      await user.click(screen.getByRole('button', { name: /Submit Training/ }));
+
+      const instructor = screen.getByLabelText(/Instructor/);
+      await waitFor(() => expect(instructor).toHaveAccessibleDescription('Value is too long.'));
+      await waitFor(() => expect(instructor).toHaveFocus());
+      expect(screen.queryByText('Failed to submit training')).not.toBeInTheDocument();
     });
   });
 

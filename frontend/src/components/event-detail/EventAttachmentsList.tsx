@@ -94,6 +94,7 @@ export const EventAttachmentsList: React.FC<EventAttachmentsListProps> = ({
         </h2>
         {attachControl}
         <EmptyState
+          compact
           icon={Paperclip}
           title="No attachments"
           description="No files have been attached to this event."

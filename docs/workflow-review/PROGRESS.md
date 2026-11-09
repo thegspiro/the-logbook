@@ -171,12 +171,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   second set of October minutes. The "link survives a clear" half of W50-60 is
   still read from code only.
 
-- **Member administration, a later pass** — most audit rows `users.py`
-  writes for an administrator's action on a member carry no IP address or
-  user agent: `account_unlocked`, the password, MFA and passkey resets,
-  role changes and deletes. Only the data-export, anonymize, visibility and
-  consent rows pass `get_client_ip` (W02 second pass).
-
 - **Public portal, a later pass** — public events are only `public_education`
   events, and their location is the free-text `location` alone, so an event
   placed at a facility (`location_id`) would publish no location; read from
@@ -187,12 +181,28 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   of the W77 container and passed with `--max-old-space-size=8192`. CI's
   `ubuntu-latest` default is larger, but the margin is thin (W77).
 
-- **Platform analytics, a later pass** — the other "last 30 days" figures
-  (events, forms, documents, new users) are still a rolling `now - 30 days`,
-  while the two charts and their totals are now whole local days; read from
-  code (W78).
-
 ## Log
+
+### Lead — Platform analytics counts one 30-day window — 2026-11-08
+
+Read from code and tested, not re-driven. Fixed (W78-4): new users, events,
+training hours, forms and documents counted "last 30 days" from a rolling
+`now - 30 days`, while the charts beside them were whole local days ending
+today. Every 30-day figure now uses the same local window as the login chart.
+`TestThirtyDayFigures` failed before the fix. Gate: flake8, black, isort and
+mypy clean; the platform-analytics tests pass.
+
+### Lead — Member administration audit rows record the caller — 2026-11-08
+
+Read from code and tested, not re-driven. Fixed (W02-12): 15 of the 19 audit
+rows `users.py` writes had empty IP and browser columns — member creation,
+role changes, viewing a member, contact and profile edits, deletes, the
+password, MFA and passkey resets, unlocks and photo changes — and the other
+four recorded the IP without the browser. Every row now records both through
+`_request_origin(request)`; eleven handlers gained a keyword-only `request`
+parameter, with no change to the HTTP API. `test_member_admin_audit_origin.py`
+failed against the old file. Gate: flake8, black, isort and the mypy ratchet
+clean; 1,064 tests across the 50 files that reach the users endpoints pass.
 
 ### Lead — Integration audit rows record the caller — 2026-11-06
 

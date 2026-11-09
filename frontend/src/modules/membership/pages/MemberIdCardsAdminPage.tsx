@@ -81,6 +81,7 @@ const MemberIdCardsAdminPage: React.FC = () => {
         {header}
         <div className="card p-4 sm:p-6">
           <EmptyState
+            compact
             icon={Nfc}
             title="NFC ID cards are turned off"
             description="An administrator can turn them on under Settings → Integrations. Until then no card can be issued or read."

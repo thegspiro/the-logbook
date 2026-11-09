@@ -80,6 +80,8 @@ from app.schemas.training import (
     TrainingRecordUpdate,
     TrainingReport,
     TrainingRequirementCreate,
+    TrainingRequirementDeletionImpact,
+    TrainingRequirementReference,
     TrainingRequirementResponse,
     TrainingRequirementUpdate,
     UserTrainingStats,
@@ -124,7 +126,11 @@ from app.services.training_record_notices import (
     send_training_record_notice,
     snapshot,
 )
-from app.services.training_requirement_removal import remove_requirement
+from app.services.training_requirement_removal import (
+    purge_requirement,
+    remove_requirement,
+    requirement_references,
+)
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_org_waivers, fetch_user_waivers
 from app.services.upload_scanning import reject_if_malicious
@@ -1948,39 +1954,128 @@ async def _recalculate_pipelines_for_requirement(
     )
 
 
-@router.delete("/requirements/{requirement_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_requirement(
+async def _org_requirement(
+    db: AsyncSession, requirement_id: UUID, organization_id: Any
+) -> TrainingRequirement:
+    result = await db.execute(
+        select(TrainingRequirement)
+        .where(TrainingRequirement.id == str(requirement_id))
+        .where(TrainingRequirement.organization_id == organization_id)
+    )
+    requirement = result.scalar_one_or_none()
+    if not requirement:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
+        )
+    return requirement
+
+
+@router.get(
+    "/requirements/{requirement_id}/deletion-impact",
+    response_model=TrainingRequirementDeletionImpact,
+)
+async def get_requirement_deletion_impact(
     requirement_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
+    List what uses a training requirement, before it is deleted.
+
+    An ordinary delete deactivates a requirement anything here references;
+    a permanent delete removes or unlinks each of them as ``on_delete`` says.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    requirement = await _org_requirement(
+        db, requirement_id, current_user.organization_id
+    )
+    references = await requirement_references(db, requirement)
+    return TrainingRequirementDeletionImpact(
+        requirement_id=requirement.id,
+        name=requirement.name,
+        active=requirement.active is True,
+        total=sum(ref.count for ref in references),
+        references=[
+            TrainingRequirementReference(
+                kind=ref.kind,
+                label=ref.label,
+                count=ref.count,
+                on_delete=ref.on_delete,
+            )
+            for ref in references
+        ],
+    )
+
+
+@router.delete("/requirements/{requirement_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_requirement(
+    requirement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+    # A plain default rather than Query(False): the tests call this handler
+    # directly, where a Query object would arrive as a truthy FieldInfo and
+    # take the permanent path. FastAPI reads a scalar default as a query
+    # parameter either way.
+    permanent: bool = False,
+):
+    """
     Delete a training requirement.
 
     A requirement that a pipeline, member progress, a skills or knowledge
-    test, a recertification pathway, a course class, a compliance profile or
-    a waiver still references is deactivated rather than deleted, so those
-    records keep it. Only an unreferenced requirement is deleted.
+    test, a recertification pathway, a training session, a course class, a
+    Chief override, a compliance profile or a waiver still references is
+    deactivated rather than deleted, so those records keep it. Only an
+    unreferenced requirement is deleted.
+
+    With ``permanent=true`` it is deleted regardless: records that exist only
+    for this requirement (pipeline links, member progress, recertification
+    pathways, session attendance links, Chief overrides) are deleted with it,
+    and records that merely point at it are kept without the link. This is
+    for a department clearing out requirements it created while setting up;
+    retiring a requirement that members were graded against is what the
+    ordinary delete's deactivation is for.
 
     Requires training officer permissions.
 
     **Authentication required**
     **Requires permission: training.manage**
     """
-    result = await db.execute(
-        select(TrainingRequirement)
-        .where(TrainingRequirement.id == str(requirement_id))
-        .where(TrainingRequirement.organization_id == current_user.organization_id)
+    requirement = await _org_requirement(
+        db, requirement_id, current_user.organization_id
     )
-    requirement = result.scalar_one_or_none()
-
-    if not requirement:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found"
-        )
-
     requirement_name = requirement.name
     was_active = requirement.active is True
+
+    if permanent:
+        from app.services.training_program_service import TrainingProgramService
+
+        program_service = TrainingProgramService(db)
+        # Read before the purge: afterwards no link joins these enrollments to
+        # the requirement, and their progress percentages still count it.
+        enrollment_ids = await program_service.live_enrollment_ids_for_requirement(
+            requirement_id, current_user.organization_id
+        )
+        references = await purge_requirement(db, requirement)
+        await log_audit_event(
+            db=db,
+            event_type="training_requirement_permanently_deleted",
+            event_category="training",
+            severity="warning",
+            event_data={
+                "requirement_id": str(requirement_id),
+                "requirement_name": requirement_name,
+                "action": "permanently_deleted",
+                "references": {ref.kind: ref.count for ref in references},
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await db.commit()
+        await program_service.recalculate_enrollments(enrollment_ids)
+        return
+
     deleted = await remove_requirement(db, requirement)
     await log_audit_event(
         db=db,

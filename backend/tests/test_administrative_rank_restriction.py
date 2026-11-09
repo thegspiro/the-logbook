@@ -40,6 +40,7 @@ from app.utils.membership import (
     effective_member_class,
     is_administrative,
 )
+from tests.fake_request import fake_request
 
 
 class _Result:
@@ -185,7 +186,9 @@ class TestProfileUpdate:
                     "app.api.v1.endpoints.users._enforce_rank_grant_ceiling",
                     new=AsyncMock(),
                 ):
-                    result = await update_user_profile(uuid4(), payload, db, caller)
+                    result = await update_user_profile(
+                        uuid4(), payload, db, caller, request=fake_request()
+                    )
         return result, audit
 
     async def test_setting_a_rank_on_an_administrative_member_is_refused(self):
