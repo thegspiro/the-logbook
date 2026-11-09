@@ -1307,8 +1307,12 @@
  * wrapper is narrower than that tier, whatever the screen or sidebar state:
  *
  *   rwd-table-wide    under 64rem
- *   rwd-table-xwide   under 80rem
+ *   rwd-table-xwide   under 78rem
  *   rwd-table-2xwide  under 96rem
+ *
+ * xwide stops at 78rem, not 80rem, because the app's page column caps a card
+ * at about 1278px on any screen. At 80rem (1280px) the tier never let go,
+ * and an xwide table showed as cards even on a 1920px desktop.
  *
  * Pick the tier from a measurement, not from the column count: render the
  * table with long data, read its min-content width, add ~4% for WebKit (whose
@@ -1378,7 +1382,7 @@
     }
   }
 
-  @container rwd-table (width < 80rem) {
+  @container rwd-table (width < 78rem) {
     .rwd-table.rwd-table-xwide thead {
       display: none;
     }
