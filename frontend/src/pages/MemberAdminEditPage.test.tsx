@@ -237,11 +237,12 @@ describe('MemberAdminEditPage — clearing a date', () => {
     expect(payload.hire_date).toBeNull();
   });
 
-  it('renders a 422 as a sentence instead of crashing the page', async () => {
+  it('puts a 422 on its field instead of crashing the page', async () => {
     // FastAPI's validation handler answers with an array. Assigned straight to
     // state typed `string | null` it reached the JSX as an array, and React
     // threw "Objects are not valid as a React child" — the ErrorBoundary
-    // replaced the whole page rather than showing the message.
+    // replaced the whole page rather than showing the message. It is now
+    // written under the field it belongs to (forms review F-2).
     const user = userEvent.setup();
     mockUpdateUserProfile.mockRejectedValue({
       response: { status: 422, data: { detail: [{ field: 'date_of_birth', message: 'Invalid date format.' }] } },
@@ -251,7 +252,9 @@ describe('MemberAdminEditPage — clearing a date', () => {
     await user.clear(screen.getByDisplayValue('1980-01-01'));
     await user.click(screen.getByRole('button', { name: /save/i }));
 
-    expect(await screen.findByText(/date_of_birth: Invalid date format\./)).toBeInTheDocument();
+    const dob = screen.getByLabelText(/^Date of Birth/);
+    await waitFor(() => expect(dob).toHaveAccessibleDescription(/Date of birth needs a valid date\./));
+    expect(dob).toHaveAttribute('aria-invalid', 'true');
   });
 });
 
