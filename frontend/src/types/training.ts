@@ -983,6 +983,8 @@ export interface RequirementProgress {
   days_until_due?: number; // Negative if overdue
   /** Set while an existing member's catch-up period runs; due_date matches it. */
   catch_up_deadline?: string | null;
+  /** No session of a session-attendance requirement held yet: neither complete nor not. */
+  not_applicable?: boolean;
 }
 
 // ==================== Training Program Types ====================
@@ -2403,6 +2405,11 @@ export interface RequirementDetail {
    * the met/total summary until it passes.
    */
   catch_up_deadline?: string | null;
+  /**
+   * A session-attendance requirement no session of which has been held in the
+   * member's window yet: neither met nor unmet, and left out of met/total.
+   */
+  not_applicable?: boolean;
   /**
    * For a requirement whose completion window crosses the year (November to
    * January): the date the next window opens. Until then a class taken in the
