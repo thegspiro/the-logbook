@@ -14,8 +14,10 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import BackgroundTasks
 from pydantic import ValidationError
+from sqlalchemy import select
 
 from app.api.v1.endpoints.users import create_member
+from app.models.audit import AuditLog
 from app.models.user import Organization, User, UserStatus
 from app.schemas.user import AdminUserCreate
 
@@ -100,3 +102,20 @@ class TestCreate:
     async def test_created_active_by_default(self, db_session):
         user = await self._create(db_session)
         assert user.status == UserStatus.ACTIVE
+
+    # W08-8: the starting status is the one status no member_status_changed
+    # row records, so the create's own audit row has to carry it. A member
+    # added On Leave cannot sign in, and the audit log should say why.
+    async def test_the_create_audit_records_the_starting_status(self, db_session):
+        user = await self._create(db_session, status="leave")
+        rows = (
+            (
+                await db_session.execute(
+                    select(AuditLog).where(AuditLog.event_type == "user_created")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        row = next(r for r in rows if r.event_data["new_user_id"] == str(user.id))
+        assert row.event_data["status"] == "leave"

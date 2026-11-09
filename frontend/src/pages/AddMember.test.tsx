@@ -450,6 +450,20 @@ describe('AddMember', { timeout: 20_000 }, () => {
   });
 
   describe('workflow review W08', () => {
+    // W08-7: the optional fields overrode form-input's faded placeholder with
+    // full-strength muted text, so "Michael", "Terry" and the whole second
+    // emergency contact ("Bob Doe", "Parent") read as values already entered.
+    it('shows every example in the same faded placeholder style', async () => {
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      const boxes = screen.getAllByRole('textbox');
+      expect(boxes.length).toBeGreaterThan(20);
+      for (const box of boxes) {
+        expect(box).not.toHaveClass('placeholder-theme-text-muted');
+      }
+    });
+
     it('names every field by its label', async () => {
       renderWithRouter(<AddMember />);
       await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
