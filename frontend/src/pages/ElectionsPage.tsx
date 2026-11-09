@@ -416,7 +416,7 @@ export const ElectionsPage: React.FC = () => {
                 <>
                   <Link
                     to="/elections/settings"
-                    className="hover:bg-theme-surface-secondary text-theme-text-muted rounded-md p-2"
+                    className="btn-secondary btn-icon-sm"
                     aria-label="Election settings"
                     title="Election Settings"
                   >

@@ -1252,7 +1252,7 @@ export const EventDetailPage: React.FC = () => {
                 {!isEventOver && (
                   <button
                     onClick={() => downloadICSFile(event)}
-                    className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover touch:min-h-11 inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-colors"
+                    className="btn-secondary inline-flex items-center gap-1.5 text-sm"
                   >
                     <CalendarPlus className="h-4 w-4" />
                     Add to Calendar
