@@ -1364,6 +1364,8 @@ class TrainingSessionService:
             record.completion_date = event_date
             record.hours_completed = round(minutes / 60.0, 2)
             record.status = TrainingStatus.COMPLETED
+            # A record this event's credit was withdrawn from, credited again.
+            record.void_reason = None
             record.location_id = str(event.location_id) if event.location_id else None
             # The record's column is shorter than the event's.
             record.location = (event.location or "")[:255] or None
@@ -1611,6 +1613,15 @@ class TrainingSessionService:
                     f"was {float(record.hours_completed or 0):.2f} h]"
                 )
                 record.notes = f"{record.notes}\n{note}" if record.notes else note
+                # Shown to the member beside the cancelled record, which
+                # otherwise read "Cancelled" with no explanation (workflow
+                # review W80-15). voided_at stays empty on purpose: it marks
+                # an officer's void, which locks the record against edits, and
+                # re-adding the member and finalizing again must be able to
+                # restore this one (the two restore sites clear the reason).
+                record.void_reason = (
+                    f"Credit withdrawn: removed from {label} attendance."
+                )
                 record.status = TrainingStatus.CANCELLED
                 record.hours_completed = 0.0
                 record.updated_at = datetime.now(timezone.utc)
@@ -2521,6 +2532,9 @@ class TrainingSessionService:
                 existing_record.scheduled_date = event_date
                 existing_record.completion_date = event_date
                 existing_record.status = TrainingStatus.COMPLETED
+                # A record this event's credit was withdrawn from, credited
+                # again (void_event_records): its withdrawal note no longer holds.
+                existing_record.void_reason = None
                 # Carry the session's current details across too. Reopening is
                 # what makes this reachable: a leader corrects a session filed
                 # against the wrong category or course, re-finalizes, and the

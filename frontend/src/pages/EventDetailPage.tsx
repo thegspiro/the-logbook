@@ -73,6 +73,7 @@ import { EventAttendeesCard } from '../components/event-detail/EventAttendeesCar
 import EventRSVPModal from '../components/event-detail/EventRSVPModal';
 import EventCancelModal from '../components/event-detail/EventCancelModal';
 import EventPostponeModal, { type PostponeEventPayload } from '../components/event-detail/EventPostponeModal';
+import EventLateAttendeeForm from '../components/event-detail/EventLateAttendeeForm';
 import EventCancelSeriesModal from '../components/event-detail/EventCancelSeriesModal';
 import EventCheckInModal from '../components/event-detail/EventCheckInModal';
 import EventRecordTimesModal from '../components/event-detail/EventRecordTimesModal';
@@ -2196,6 +2197,24 @@ export const EventDetailPage: React.FC = () => {
             }}
             onClose={() => setShowCheckInModal(false)}
             timezone={tz}
+            {...(checkInClosed && !isAttendanceFinalized && !event.is_cancelled && eventId
+              ? {
+                  lateEntry: (
+                    <EventLateAttendeeForm
+                      eventId={eventId}
+                      members={eligibleMembers}
+                      eventStart={event.actual_start_time ?? event.start_datetime}
+                      eventEnd={event.actual_end_time ?? event.end_datetime}
+                      timezone={tz}
+                      onRecorded={() => {
+                        void fetchRSVPs();
+                        void fetchStats();
+                        void fetchEligibleMembers();
+                      }}
+                    />
+                  ),
+                }
+              : {})}
           />
         )}
 
