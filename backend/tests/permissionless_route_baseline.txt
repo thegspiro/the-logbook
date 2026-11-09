@@ -181,6 +181,10 @@ app/api/v1/endpoints/events.py::remove_attendee
 # occurrence it reaches is not Training.
 app/api/v1/endpoints/events.py::end_event
 app/api/v1/endpoints/events.py::finalize_attendance
+# Postpone (2026-11-09, W80-11): same gate as update_event, which it moves the
+# event like. _authorize_event_admin runs first with events.manage, so a
+# training officer can postpone a Training event and nothing else.
+app/api/v1/endpoints/events.py::postpone_event
 app/api/v1/endpoints/events.py::record_actual_times
 app/api/v1/endpoints/events.py::reopen_attendance
 app/api/v1/endpoints/events.py::update_event
