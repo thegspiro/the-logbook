@@ -36,12 +36,15 @@ from app.models.training import (
 )
 from app.models.user import Organization, User
 from app.services.training_compliance import (
+    NOT_YET_HELD_STATUS,
     HeldSession,
+    compute_org_compliance_tally,
     evaluate_member_requirement,
     evaluate_member_requirement_detail,
     load_graded_records,
     load_held_sessions,
     tally_session_attendance,
+    tally_standing,
 )
 from app.services.training_service import TrainingService
 from app.services.training_session_service import TrainingSessionService
@@ -227,14 +230,34 @@ class TestEveryGraderReadsIt:
         assert short["required_hours"] == 3
         assert met["due_date"] == "2026-12-31"
 
-    def test_nothing_held_is_met_on_both(self):
+    def test_nothing_held_is_not_applicable_on_both(self):
+        """W80-9 (owner decision 2026-11-08): with no session held there is
+        nothing to have attended. It read "0/0 sessions - Complete" and counted
+        as met; it is now graded neither way, on both graders."""
         held = {REQ_ID: []}
         ev = evaluate_member_requirement_detail(_req(), [], TODAY, held_sessions=held)
         detail = TrainingService.evaluate_requirement_detail(
             _req(), [], TODAY, held_sessions=held
         )
+        assert ev.status == NOT_YET_HELD_STATUS
+        assert detail["not_applicable"] is True
+        assert detail["is_met"] is False
+        assert tally_standing([ev.status, "completed"]) == (1, 1)
+
+    def test_held_but_every_one_excused_is_still_met_on_both(self):
+        """Distinct from nothing held: the member was excused and owes
+        nothing, as a target prorated to zero is met."""
+        held = {REQ_ID: _held(FIVE[0])}
+        waivers = [_waiver(FIVE[0], FIVE[0], requirement_ids=[REQ_ID])]
+        ev = evaluate_member_requirement_detail(
+            _req(), [], TODAY, waivers=waivers, held_sessions=held
+        )
+        detail = TrainingService.evaluate_requirement_detail(
+            _req(), [], TODAY, waivers=waivers, held_sessions=held
+        )
         assert ev.status == "completed"
-        assert detail["is_met"]
+        assert detail["is_met"] is True
+        assert detail["not_applicable"] is False
 
     def test_the_matrix_states_the_target_as_a_share(self):
         from app.api.v1.endpoints.training import (
@@ -546,3 +569,37 @@ class TestTheCountsTowardAttendanceFlag:
         ).events_counting_toward_attendance([foreign.event_id], org.id)
 
         assert flagged == set()
+
+
+@pytest.mark.integration
+class TestNothingHeldAtTheDepartmentLevel:
+    """W80-9: a member graded only by a session-attendance requirement no
+    session of which has been held is not counted compliant; they are out of
+    the department percentage until a session is held."""
+
+    async def test_the_member_is_not_applicable_rather_than_compliant(self, db_session):
+        org = await _org(db_session)
+        await _member(db_session, org)
+        await _requirement(db_session, org)
+
+        tally = await compute_org_compliance_tally(
+            db_session, org.id, today=date(2026, 6, 1)
+        )
+
+        assert (tally.graded, tally.not_applicable) == (0, 1)
+        assert tally.pct is None
+
+    async def test_one_held_session_grades_them_again(self, db_session):
+        org = await _org(db_session)
+        member = await _member(db_session, org)
+        # Without a hire date the join date is the account's creation, today,
+        # and a drill before it is not charged (member_join_date).
+        member.hire_date = date(2025, 1, 15)
+        req = await _requirement(db_session, org)
+        await _drill(db_session, org, _utc(2026, 2, 19, 23), link=[req])
+
+        tally = await compute_org_compliance_tally(
+            db_session, org.id, today=date(2026, 6, 1)
+        )
+
+        assert (tally.graded, tally.not_applicable) == (1, 0)

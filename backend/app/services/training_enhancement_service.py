@@ -39,6 +39,7 @@ from app.models.training import (
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, Position, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    NOT_YET_HELD_STATUS,
     HeldSession,
     load_credited_shift_dates,
     load_held_sessions,
@@ -79,6 +80,8 @@ def _detail_status(detail: Dict[str, Any]) -> str:
     ``tally_standing`` understands."""
     if detail.get("catch_up_deadline"):
         return CATCH_UP_STATUS
+    if detail.get("not_applicable"):
+        return NOT_YET_HELD_STATUS
     return TrainingStatus.COMPLETED.value if detail["is_met"] else "not_met"
 
 
@@ -127,6 +130,8 @@ def _requirement_cells(
         )
         if detail.get("catch_up_deadline"):
             cells.append(f"Due {detail['catch_up_deadline']}")
+        elif detail.get("not_applicable"):
+            cells.append("No sessions yet")
         else:
             cells.append("Met" if detail["is_met"] else "Not Met")
     return cells
