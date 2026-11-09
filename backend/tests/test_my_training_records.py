@@ -126,9 +126,95 @@ async def test_records_returns_history_the_summary_cap_drops(
     assert everything["total"] == 124
     by_year = {y["year"]: y for y in everything["years"]}
     assert by_year["2025"]["records"] == 120
-    assert by_year["2026"] == {"year": "2026", "records": 3, "hours": 6.0}
+    assert by_year["2026"] == {
+        "year": "2026",
+        "records": 3,
+        "hours": 6.0,
+        "months": [
+            {"month": "2026-04", "records": 1, "hours": 2.0},
+            {"month": "2026-03", "records": 1, "hours": 2.0},
+            {"month": "2026-02", "records": 1, "hours": 2.0},
+        ],
+    }
     assert by_year["undated"]["records"] == 1
     assert [y["year"] for y in everything["years"]] == ["undated", "2026", "2025"]
+
+
+@pytest.mark.integration
+async def test_each_year_carries_its_month_totals(db_session, setup_org_and_admin):
+    """Month totals follow the year's rules: every record counts, hours only
+    from completed, unvoided ones; empty months are absent; undated has none."""
+    org_id, admin_id = setup_org_and_admin
+    user = await _member(db_session, setup_org_and_admin)
+    db_session.add_all(
+        [
+            _record(org_id, admin_id, "Ladders", date(2026, 3, 2), hours=3),
+            _record(org_id, admin_id, "Pumps", date(2026, 3, 30), hours=1.5),
+            _record(
+                org_id,
+                admin_id,
+                "Voided drill",
+                date(2026, 3, 9),
+                hours=4,
+                voided_at=date(2026, 3, 10),
+                void_reason="Duplicate",
+            ),
+            _record(org_id, admin_id, "Hazmat", date(2026, 11, 1), hours=2),
+            _record(org_id, admin_id, "Old class", date(2024, 7, 4), hours=1),
+            _record(org_id, admin_id, "Pending", None, status=TrainingStatus.SCHEDULED),
+        ]
+    )
+    await db_session.flush()
+
+    result = await get_my_training_records(
+        year="2024",
+        search=None,
+        training_type=None,
+        page=1,
+        page_size=25,
+        db=db_session,
+        current_user=user,
+    )
+
+    by_year = {y["year"]: y for y in result["years"]}
+    # Every year's months come back whichever year's rows were asked for.
+    assert by_year["2026"]["months"] == [
+        {"month": "2026-11", "records": 1, "hours": 2.0},
+        {"month": "2026-03", "records": 3, "hours": 4.5},
+    ]
+    assert by_year["2024"]["months"] == [
+        {"month": "2024-07", "records": 1, "hours": 1.0},
+    ]
+    assert by_year["undated"]["months"] == []
+    # The month figures add up to the year's.
+    for entry in result["years"]:
+        assert sum(m["records"] for m in entry["months"]) == (
+            0 if entry["year"] == "undated" else entry["records"]
+        )
+
+
+@pytest.mark.integration
+async def test_month_totals_follow_the_search(db_session, setup_org_and_admin):
+    org_id, admin_id = setup_org_and_admin
+    user = await _member(db_session, setup_org_and_admin)
+    await _seed(db_session, org_id, admin_id, count=5)
+
+    result = await get_my_training_records(
+        year=None,
+        search="new drill",
+        training_type=None,
+        page=1,
+        page_size=25,
+        db=db_session,
+        current_user=user,
+    )
+
+    assert [y["year"] for y in result["years"]] == ["2026"]
+    assert [m["month"] for m in result["years"][0]["months"]] == [
+        "2026-04",
+        "2026-03",
+        "2026-02",
+    ]
 
 
 @pytest.mark.integration
@@ -205,6 +291,7 @@ async def test_records_withhold_hours_when_switched_off(
     assert result["items"]
     assert all("hours_completed" not in item for item in result["items"])
     assert all("hours" not in y for y in result["years"])
+    assert all("hours" not in m for y in result["years"] for m in y["months"])
 
 
 @pytest.mark.integration

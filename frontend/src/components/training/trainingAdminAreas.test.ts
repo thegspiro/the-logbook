@@ -6,6 +6,7 @@ import {
   attentionCountsByTab,
   isHiddenByPracticalSkills,
   isPermittedDestination,
+  REQUIREMENTS_HREF,
   resolveTrainingAdminLocation,
   trainingAdminAreasFor,
 } from './trainingAdminAreas';
@@ -193,6 +194,7 @@ describe('destinations needing more than training.manage', () => {
       'manual-entry',
       'practical-skills',
       'shift-evaluations',
+      'requirements-link',
       'integrations',
       'import',
       'metrics',
@@ -211,5 +213,31 @@ describe('destinations needing more than training.manage', () => {
     const ungated = TRAINING_ADMIN_AREAS.flatMap((area) => area.destinations).filter((d) => !d.anyPermission);
     expect(ungated.every((destination) => isPermittedDestination(destination, () => false))).toBe(true);
     expect(ungated).toHaveLength(TRAINING_ADMIN_AREAS.flatMap((area) => area.destinations).length - 1);
+  });
+});
+
+describe('the Requirements link under Settings & Data', () => {
+  // Officers look for setup under Settings & Data; the requirements are
+  // managed under Curriculum, so that is where the link must land.
+  it('is offered on the hub permission alone', () => {
+    const settings = trainingAdminAreasFor(null, grantsOnly('training.manage')).find((area) => area.id === 'settings');
+    expect(settings?.destinations.map((destination) => destination.id)).toContain('requirements-link');
+  });
+
+  it('links to Curriculum → Requirements', () => {
+    const params = new URLSearchParams(REQUIREMENTS_HREF.split('?')[1] ?? '');
+    expect(REQUIREMENTS_HREF.split('?')[0]).toBe('/training/admin');
+    expect(resolveTrainingAdminLocation(params.get('page'), params.get('tab'))).toEqual({
+      area: 'curriculum',
+      tab: 'requirements',
+    });
+  });
+
+  it('keeps Curriculum’s own Requirements destination where it was', () => {
+    expect(resolveTrainingAdminLocation(null, 'requirements')).toEqual({ area: 'curriculum', tab: 'requirements' });
+    expect(resolveTrainingAdminLocation(null, 'requirements-link')).toEqual({
+      area: 'settings',
+      tab: 'requirements-link',
+    });
   });
 });

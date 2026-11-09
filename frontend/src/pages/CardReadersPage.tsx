@@ -218,6 +218,7 @@ const CardReadersPage: React.FC = () => {
       {!loading && data && rooms.length === 0 && (
         <div className="card p-4">
           <EmptyState
+            compact
             headingLevel={2}
             icon={Nfc}
             title={data.items.length === 0 ? 'No rooms yet' : 'No room has a reader turned on'}

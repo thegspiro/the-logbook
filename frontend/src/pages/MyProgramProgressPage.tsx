@@ -32,6 +32,7 @@ import { NoActiveRequirementsNotice } from '../components/training/NoActiveRequi
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import { describeTrigger } from '../utils/milestoneSummary';
 import {
   STATUS_META,
   groupRecordsByPhase,
@@ -46,6 +47,7 @@ import {
   visibleChecklistItems,
 } from '../utils/checklistItems';
 import type {
+  MemberMilestoneStatus,
   MemberProgramProgress,
   ProgramPhase,
   ProgramRequirement,
@@ -296,6 +298,22 @@ const MyProgramProgressPage: React.FC = () => {
     data.no_active_requirements === true &&
     (data.enrollment.status === 'active' || data.enrollment.status === 'on_hold');
   const phasesWithoutActive = new Set(data.phases_without_active_requirements ?? []);
+  // ``milestones`` carries every milestone with the member's standing. A
+  // response without it (a backend from before it existed) still lists the
+  // upcoming percentage milestones, as this page always did.
+  const milestones: MemberMilestoneStatus[] =
+    data.milestones ??
+    data.next_milestones.map((m) => ({
+      id: m.id,
+      name: m.name,
+      description: m.description ?? null,
+      completion_percentage_threshold: m.completion_percentage_threshold ?? null,
+      percentage_met: false,
+      item_match_mode: m.item_match_mode ?? 'all',
+      items: [],
+      reached: false,
+      reached_at: null,
+    }));
 
   return (
     <div className="min-h-screen">
@@ -368,20 +386,60 @@ const MyProgramProgressPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Next milestones */}
-          {data.next_milestones.length > 0 && !noActiveRequirements && (
+          {/* Milestones */}
+          {milestones.length > 0 && !noActiveRequirements && (
             <div className="bg-theme-surface mb-4 rounded-lg p-4">
               <h2 className="text-theme-text-primary mb-2 flex items-center gap-2 text-sm font-semibold">
-                <Flag className="h-4 w-4 text-yellow-700 dark:text-yellow-400" /> Next milestones
+                <Flag className="h-4 w-4 text-yellow-700 dark:text-yellow-400" /> Milestones
               </h2>
-              <div className="space-y-1">
-                {data.next_milestones.map((m) => (
-                  <div key={m.id} className="text-theme-text-secondary flex items-center justify-between text-xs">
-                    <span>{m.name}</span>
-                    <span className="text-theme-text-muted">at {Math.round(m.completion_percentage_threshold)}%</span>
-                  </div>
+              <ul className="space-y-3">
+                {milestones.map((m) => (
+                  <li key={m.id} className="flex items-start gap-2">
+                    {m.reached ? (
+                      <CheckCircle2
+                        className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-400"
+                        aria-label="Reached"
+                      />
+                    ) : (
+                      <Circle className="text-theme-text-muted mt-0.5 h-4 w-4 shrink-0" aria-label="Not reached yet" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                        <span className="text-theme-text-primary text-sm">{m.name}</span>
+                        <span className="text-theme-text-muted text-xs">
+                          {m.reached && m.reached_at
+                            ? `Reached ${formatDate(m.reached_at, tz)}`
+                            : describeTrigger(
+                                m,
+                                m.items.map((item) => item.name || 'a removed course or test')
+                              )}
+                        </span>
+                      </div>
+                      {m.description && <p className="text-theme-text-muted text-xs">{m.description}</p>}
+                      {!m.reached && m.items.length > 0 && (
+                        <ul className="mt-1 space-y-0.5" aria-label={`Courses and tests for ${m.name}`}>
+                          {m.items.map((item) => (
+                            <li
+                              key={`${item.item_type}:${item.item_id}`}
+                              className="text-theme-text-secondary flex items-center gap-1.5 text-xs"
+                            >
+                              {item.completed ? (
+                                <CheckCircle2
+                                  className="h-3.5 w-3.5 text-green-700 dark:text-green-400"
+                                  aria-label="Completed"
+                                />
+                              ) : (
+                                <Circle className="text-theme-text-muted h-3.5 w-3.5" aria-label="Not completed" />
+                              )}
+                              {item.name || 'A removed course or test'}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
 

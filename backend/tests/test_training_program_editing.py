@@ -442,16 +442,78 @@ class TestReorderRequirements:
 
 
 class TestMilestones:
-    async def test_update(self):
-        ms = SimpleNamespace(name="Old", completion_percentage_threshold=50.0)
+    @staticmethod
+    def _milestone(**fields):
+        from app.models.training import ProgramMilestone
+
+        ms = ProgramMilestone(
+            id=str(uuid4()),
+            program_id=str(uuid4()),
+            name="Old",
+            completion_percentage_threshold=50.0,
+            item_match_mode="all",
+            counts_prior_completions=False,
+            notify_member=True,
+            **fields,
+        )
+        ms.items = []
+        return ms
+
+    def _service(self, ms, monkeypatch):
         db = RecordingSession([])
+        db.rollback = AsyncMock()
         svc = TrainingProgramService(db)
         svc._get_program_milestone = AsyncMock(return_value=ms)
+        monkeypatch.setattr(
+            "app.services.program_milestones.load_milestones_by_id",
+            AsyncMock(return_value=[ms]),
+        )
+        baseline = AsyncMock(return_value=0)
+        monkeypatch.setattr(
+            "app.services.program_milestones.baseline_milestone", baseline
+        )
+        return svc, baseline
+
+    async def test_update(self, monkeypatch):
+        # The rewrite of this test (from a SimpleNamespace stand-in) is because
+        # the update now loads the milestone's items and writes through
+        # apply_updates, which needs a mapped object.
+        ms = self._milestone()
+        svc, baseline = self._service(ms, monkeypatch)
         _, error = await svc.update_program_milestone(
             uuid4(), uuid4(), uuid4(), ProgramMilestoneUpdate(name="New")
         )
         assert error is None
         assert ms.name == "New"
+        # A rename changes no trigger, so nobody is re-baselined.
+        baseline.assert_not_awaited()
+
+    async def test_changing_the_percentage_rebaselines(self, monkeypatch):
+        ms = self._milestone()
+        svc, baseline = self._service(ms, monkeypatch)
+        _, error = await svc.update_program_milestone(
+            uuid4(),
+            uuid4(),
+            uuid4(),
+            ProgramMilestoneUpdate(completion_percentage_threshold=75.0),
+        )
+        assert error is None
+        baseline.assert_awaited_once_with(svc.db, ms.id)
+
+    async def test_clearing_the_only_trigger_is_refused(self, monkeypatch):
+        import pytest
+
+        ms = self._milestone()
+        svc, baseline = self._service(ms, monkeypatch)
+        with pytest.raises(ValueError, match="needs a percentage"):
+            await svc.update_program_milestone(
+                uuid4(),
+                uuid4(),
+                uuid4(),
+                ProgramMilestoneUpdate(completion_percentage_threshold=None),
+            )
+        svc.db.commit.assert_not_awaited()
+        baseline.assert_not_awaited()
 
     async def test_delete_missing(self):
         svc = TrainingProgramService(RecordingSession([]))
