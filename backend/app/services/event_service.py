@@ -1137,8 +1137,10 @@ class EventService:
 
         was_training = self.event_credits_training(event)
         old_title = event.title
+        old_start = event.start_datetime
         for field, value in update_data.items():
             setattr(event, field, value)
+        self._forget_sent_reminders_if_moved(event, old_start)
 
         training_follow_up = await self._follow_training_changes(
             event, was_training, old_title, organization_id
@@ -1367,6 +1369,7 @@ class EventService:
         for event in future_events:
             was_training = self.event_credits_training(event)
             old_title = event.title
+            old_start = event.start_datetime
             for field, value in update_data.items():
                 if field == "custom_fields":
                     value = self._with_own_lifecycle_markers(event, value)
@@ -1380,6 +1383,7 @@ class EventService:
                 start_wall = _wall_time(event.start_datetime, tz) + shift
                 event.start_datetime = _stored_time(start_wall, tz)
                 event.end_datetime = _stored_time(start_wall + length, tz)
+            self._forget_sent_reminders_if_moved(event, old_start)
             if "rsvp_deadline" in timing:
                 event.rsvp_deadline = (
                     None
@@ -4312,6 +4316,29 @@ class EventService:
         if value is None:
             return None
         return value if value.tzinfo else value.replace(tzinfo=dt_timezone.utc)
+
+    @classmethod
+    def _forget_sent_reminders_if_moved(
+        cls, event: Event, old_start: Optional[datetime]
+    ) -> None:
+        """Let reminders go out again for an event whose start moved.
+
+        ``reminders_sent`` lists the reminder intervals already sent, and the
+        reminder task skips those. They were sent for the old time, so after a
+        move members would get no reminder for the new one (workflow review
+        W80-16; owner decision 2026-11-08: reset whenever the start moves,
+        accepting that a small correction may send a reminder twice). Only
+        that marker: the others record things that happened, not a time.
+        Deep-copied before reassigning (CLAUDE.md pitfall #12).
+        """
+        if cls._as_utc(event.start_datetime) == cls._as_utc(old_start):
+            return
+        custom = event.custom_fields or {}
+        if "reminders_sent" not in custom:
+            return
+        updated = copy.deepcopy(custom)
+        updated.pop("reminders_sent")
+        event.custom_fields = updated
 
     @staticmethod
     def _with_own_lifecycle_markers(
