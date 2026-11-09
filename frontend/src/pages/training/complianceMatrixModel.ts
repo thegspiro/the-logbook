@@ -143,7 +143,7 @@ export const isMetTone = (tone: CellTone): boolean => tone === CellTone.MET || t
  * leaves it out of both met and total, and the tally here must equal the
  * backend's or the row contradicts the standing printed beside it.
  */
-export const isGradedTone = (tone: CellTone): boolean => tone !== CellTone.CATCH_UP;
+export const isGradedTone = (tone: CellTone): boolean => tone !== CellTone.CATCH_UP && tone !== CellTone.NOT_YET_HELD;
 
 /** A number the UI can print: 18, not 18.0; 7.5 stays 7.5. */
 const num = (value: number): string => (Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10));
@@ -181,6 +181,7 @@ export const daysUntilExpiry = (cell: ComplianceMatrixCell, asOf: string): numbe
 
 export const toneOf = (cell: ComplianceMatrixCell, asOf: string): CellTone => {
   if (cell.status === 'catch_up') return CellTone.CATCH_UP;
+  if (cell.status === 'not_applicable') return CellTone.NOT_YET_HELD;
   if (cell.status === 'expired') return CellTone.LAPSED;
   if (MET_STATUSES.has(cell.status)) {
     const days = daysUntilExpiry(cell, asOf);
@@ -207,6 +208,7 @@ const percentOf = (cell: ComplianceMatrixCell, tone: CellTone): number => {
 };
 
 const progressLabelOf = (cell: ComplianceMatrixCell, tone: CellTone, asOf: string): string => {
+  if (tone === CellTone.NOT_YET_HELD) return 'No sessions held yet';
   const required = cell.progress_required ?? 0;
   if (required > 0) {
     const current = cell.progress_current ?? 0;

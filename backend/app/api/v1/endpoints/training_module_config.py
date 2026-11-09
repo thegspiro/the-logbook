@@ -52,6 +52,7 @@ from app.services.shift_evaluation_service import ShiftEvaluationService
 from app.services.skills_testing_service import member_skill_expirations
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    NOT_YET_HELD_STATUS,
     get_org_include_current_month,
     load_credited_shift_dates,
     load_held_sessions,
@@ -344,6 +345,10 @@ async def _evaluate_member_requirements(
         # catch-up period ends — the same rule every compliance screen uses.
         if detail["catch_up_deadline"]:
             statuses.append(CATCH_UP_STATUS)
+            continue
+        # No linked session held yet: listed, graded neither way (W80-9).
+        if detail["not_applicable"]:
+            statuses.append(NOT_YET_HELD_STATUS)
             continue
         total_progress_pct += detail["progress_percentage"]
         statuses.append(
