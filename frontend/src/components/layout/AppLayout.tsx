@@ -52,6 +52,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     () => (localStorage.getItem('navigationLayout') as 'top' | 'left') || 'left'
   );
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(false);
 
   // Start each newly-opened page at the top. Called here rather than per-page
   // so every route gets it — react-router carries the previous page's scroll
@@ -191,6 +192,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     return (
       <div
         className="has-bottom-nav has-side-nav flex min-h-screen flex-col"
+        data-nav-collapsed={navCollapsed ? 'true' : 'false'}
         style={{
           // The first two layers repeat SideNavigation's background and right
           // border down the full height of the page, beneath the fixed nav, so
@@ -209,7 +211,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <TopProgressBar />
         <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} />
         <CommandPalette />
-        <SideNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
+        <SideNavigation
+          departmentName={departmentName}
+          logoPreview={logoPreview}
+          onLogout={handleLogoutClick}
+          onCollapsedChange={setNavCollapsed}
+        />
         {/* Offset by the width the nav occupies, which narrows with the
             collapsed rail; the transition matches the nav's own 300ms. */}
         <div className="mobile-header-offset flex min-h-screen flex-col transition-[margin-left] duration-300 motion-reduce:transition-none md:ml-(--side-nav-width)">

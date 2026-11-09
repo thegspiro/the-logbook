@@ -77,6 +77,9 @@ interface SideNavigationProps {
   departmentName: string;
   logoPreview: string | null;
   onLogout: () => void;
+  /** Reports the icon-rail state so the layout can size the content column to
+   *  the rail. Optional: the navigation keeps its own state either way. */
+  onCollapsedChange?: ((collapsed: boolean) => void) | undefined;
 }
 
 interface SubNavItem {
@@ -131,7 +134,12 @@ interface ActiveMatch {
  */
 const submenuId = (label: string) => `submenu-${label.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '')}`;
 
-export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, logoPreview, onLogout }) => {
+export const SideNavigation: React.FC<SideNavigationProps> = ({
+  departmentName,
+  logoPreview,
+  onLogout,
+  onCollapsedChange,
+}) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, setTheme } = useTheme();
@@ -705,6 +713,10 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     toggleFocusPending.current = true;
     setCollapsed(next);
   };
+
+  useEffect(() => {
+    onCollapsedChange?.(collapsed);
+  }, [collapsed, onCollapsedChange]);
 
   useEffect(() => {
     if (!toggleFocusPending.current) return;

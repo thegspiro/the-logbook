@@ -1994,11 +1994,14 @@
 
 /* The collapsed icon rail. The content column used to keep its 16rem offset
  * when the nav shrank to `w-20`, leaving an empty 11rem stripe between the
- * rail and the page. SideNavigation publishes `data-collapsed`; this lives in
- * its own 768px block because below it the nav is an off-canvas drawer and the
- * width must stay 0px. */
+ * rail and the page. AppLayout mirrors SideNavigation's state onto its root as
+ * `data-nav-collapsed` — an attribute on the element that owns the variable,
+ * not a `:has()` match on a descendant, so collapsing restyles the root once
+ * rather than asking the engine to watch the nav. This lives in its own 768px
+ * block because below it the nav is an off-canvas drawer and the width must
+ * stay 0px. */
 @media (min-width: 768px) {
-  .has-side-nav:has(#side-navigation[data-collapsed='true']) {
+  .has-side-nav[data-nav-collapsed='true'] {
     --side-nav-width: 5rem;
   }
 }

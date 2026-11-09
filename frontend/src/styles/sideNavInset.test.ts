@@ -47,8 +47,11 @@ describe('side navigation inset contract', () => {
     // 5rem is SideNavigation's collapsed `w-20`. Inside a 768px block, because
     // below it the nav is an off-canvas drawer and the inset must stay 0px.
     expect(stylesheet).toMatch(
-      /@media \(min-width: 768px\) \{\s*\.has-side-nav:has\(#side-navigation\[data-collapsed='true'\]\) \{\s*--side-nav-width:\s*5rem;\s*\}\s*\}/
+      /@media \(min-width: 768px\) \{\s*\.has-side-nav\[data-nav-collapsed='true'\] \{\s*--side-nav-width:\s*5rem;\s*\}\s*\}/
     );
+    // …keyed on the root AppLayout owns, not a `:has()` match on the nav.
+    expect(appLayout).toMatch(/data-nav-collapsed=\{navCollapsed \? 'true' : 'false'\}/);
+    expect(appLayout).toMatch(/onCollapsedChange=\{setNavCollapsed\}/);
   });
 
   it('opts in from the left-navigation layout only', () => {
