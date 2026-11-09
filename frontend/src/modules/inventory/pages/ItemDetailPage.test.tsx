@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router';
 import type { InventoryItem } from '../types';
@@ -88,13 +89,16 @@ const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   ...overrides,
 });
 
+// The app shell mounts ConfirmProvider; the assign and unassign dialogs need it to ask before discarding.
 const renderPage = (entry = '/inventory/items/it-1') =>
   render(
-    <MemoryRouter initialEntries={[entry]}>
-      <Routes>
-        <Route path="/inventory/items/:id" element={<ItemDetailPage />} />
-      </Routes>
-    </MemoryRouter>
+    <ConfirmProvider>
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/inventory/items/:id" element={<ItemDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </ConfirmProvider>
   );
 
 describe('ItemDetailPage', () => {
@@ -422,8 +426,13 @@ describe('ItemDetailPage unassign', () => {
     await user.click(await screen.findByRole('button', { name: 'Unassign' }));
     const dialog = await screen.findByRole('dialog');
 
+    // Nothing chosen: the condition is flagged on its question, and nothing is sent.
     const confirm = within(dialog).getByRole('button', { name: 'Unassign and record return' });
-    expect(confirm).toBeDisabled();
+    await user.click(confirm);
+    expect(within(dialog).getByRole('group', { name: /What condition/ })).toHaveAccessibleDescription(
+      'Choose the condition it came back in.'
+    );
+    expect(mockUnassignItem).not.toHaveBeenCalled();
 
     await user.click(within(dialog).getByRole('radio', { name: 'Damaged' }));
     await user.type(within(dialog).getByLabelText(/Return notes/), 'Torn sleeve');
@@ -450,5 +459,37 @@ describe('ItemDetailPage unassign', () => {
     await waitFor(() =>
       expect(mockUnassignItem).toHaveBeenCalledWith('it-1', { return_condition: 'good', return_notes: undefined })
     );
+  });
+
+  it('puts a refused return note on its field, announced, and stays open', async () => {
+    const user = userEvent.setup();
+    mockUnassignItem.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'return_notes', message: 'Value is too long.' }] } },
+    });
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Unassign' }));
+    const dialog = await screen.findByRole('dialog');
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Good' }));
+    await user.type(within(dialog).getByLabelText(/Return notes/), 'Scuffed');
+    await user.click(within(dialog).getByRole('button', { name: 'Unassign and record return' }));
+
+    const notes = within(dialog).getByLabelText(/Return notes/);
+    await waitFor(() =>
+      expect(notes).toHaveAccessibleDescription('Return notes is too long — keep it to 2000 characters.')
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('asks before discarding a condition already chosen', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Unassign' }));
+    const dialog = await screen.findByRole('dialog');
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Good' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Keep it assigned' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByRole('radio', { name: 'Good' })).toBeChecked();
   });
 });

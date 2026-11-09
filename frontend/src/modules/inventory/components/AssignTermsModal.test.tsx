@@ -1,7 +1,12 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import type React from 'react';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AssignTermsModal } from './AssignTermsModal';
+
+// The app shell mounts ConfirmProvider; the dialog needs it to ask before discarding.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/Chicago' }));
 
@@ -52,5 +57,35 @@ describe('AssignTermsModal', () => {
     expect(screen.getByRole('radio', { name: 'Temporary' })).toHaveAccessibleDescription(
       /Due back on a date you choose/
     );
+  });
+
+  it('shows a server refusal of the return date on that field, announced', async () => {
+    const user = userEvent.setup();
+    const view = render(
+      <AssignTermsModal isOpen memberName="Pat Lee" itemName="SCBA 14" onClose={onClose} onConfirm={onConfirm} />
+    );
+    await user.click(screen.getByRole('radio', { name: 'Temporary' }));
+    view.rerender(
+      <AssignTermsModal
+        isOpen
+        memberName="Pat Lee"
+        itemName="SCBA 14"
+        returnDateError="Return date must be in the future."
+        onClose={onClose}
+        onConfirm={onConfirm}
+      />
+    );
+    const date = screen.getByLabelText('Return date');
+    expect(date).toHaveAttribute('aria-invalid', 'true');
+    expect(date).toHaveAccessibleDescription(expect.stringContaining('Return date must be in the future.'));
+  });
+
+  it('asks before Escape discards terms already chosen', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await user.click(screen.getByRole('radio', { name: 'Temporary' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

@@ -5,7 +5,7 @@
  * out-of-stock size that still submits.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { RequestableProduct } from '../types';
@@ -243,7 +243,9 @@ describe('RequestEquipmentModal', () => {
     await user.click(await screen.findByRole('button', { name: /Long Sleeve/ }));
     await user.click(screen.getByRole('button', { name: /Submit Request/ }));
 
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Choose a size'));
+    await waitFor(() =>
+      expect(screen.getByRole('group', { name: 'Size' })).toHaveAccessibleDescription('Choose a size.')
+    );
     expect(mockCreateEquipmentRequest).not.toHaveBeenCalled();
   });
 
@@ -346,5 +348,50 @@ describe('RequestEquipmentModal', () => {
         expect.objectContaining({ requested_duration: 'ongoing', item_id: 'radio-1' })
       )
     );
+  });
+
+  it('puts a refused description on its field, announced', async () => {
+    mockCreateEquipmentRequest.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'item_name', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithRouter(<RequestEquipmentModal isOpen onClose={onClose} onSubmitted={vi.fn()} />);
+    await screen.findByRole('button', { name: /Long Sleeve/ });
+
+    await user.type(screen.getByLabelText(/Describe what you need/), 'Wildland gloves');
+    await user.click(screen.getByRole('button', { name: /Submit Request/ }));
+
+    const description = screen.getByLabelText(/Describe what you need/);
+    await waitFor(() => expect(description).toHaveAttribute('aria-invalid', 'true'));
+    expect(description).toHaveAccessibleDescription(
+      expect.stringContaining('Description is too long — keep it to 255 characters.')
+    );
+    expect(description).toHaveAttribute('maxLength', '255');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks before Escape or Cancel discards a request in progress', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithRouter(<RequestEquipmentModal isOpen onClose={onClose} onSubmitted={vi.fn()} />);
+    await screen.findByRole('button', { name: /Long Sleeve/ });
+
+    await user.type(screen.getByLabelText(/Describe what you need/), 'Wildland gloves');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes at once when nothing has been chosen or typed', async () => {
+    const onClose = vi.fn();
+    renderWithRouter(<RequestEquipmentModal isOpen onClose={onClose} onSubmitted={vi.fn()} />);
+    await screen.findByRole('button', { name: /Long Sleeve/ });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

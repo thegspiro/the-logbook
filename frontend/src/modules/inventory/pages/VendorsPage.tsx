@@ -35,6 +35,9 @@ import { formatCurrency } from '@/utils/currencyFormatting';
 import { blankToNull } from '../../../utils/formValues';
 import { isSafeExternalUrl } from '../../../utils/safeUrl';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { formatVendorAddress, primaryContact } from '../utils/vendorHelpers';
 import { EmptyState } from '../../../components/ux';
 import type {
@@ -93,60 +96,148 @@ const EMPTY_VENDOR: VendorFD = {
   contact_phone: '',
 };
 
+type VendorField = Exclude<keyof VendorFD, 'is_preferred'>;
+
+/**
+ * How the vendor endpoints' field names land on this dialog (forms review
+ * F-2), with each `max_length` from `InventoryVendorBase` and, for the
+ * primary contact, `InventoryVendorContactBase`. Ordered as on screen, so the
+ * first refusal takes focus.
+ */
+const VENDOR_FIELDS: Record<VendorField, ServerFieldSpec & { id: string }> = {
+  name: { label: 'Vendor name', maxLength: 255, id: 'vendor-name' },
+  account_number: { label: 'Account number', maxLength: 100, id: 'vendor-account' },
+  payment_terms: { label: 'Payment terms', maxLength: 100, id: 'vendor-terms' },
+  phone: { label: 'Phone', maxLength: 50, id: 'vendor-phone' },
+  email: { label: 'Email', maxLength: 255, id: 'vendor-email' },
+  fax: { label: 'Fax', maxLength: 50, id: 'vendor-fax' },
+  website: { label: 'Website', maxLength: 255, id: 'vendor-website' },
+  address_line1: { label: 'Street address', maxLength: 255, id: 'vendor-address1' },
+  address_line2: { label: 'Suite / unit', maxLength: 255, id: 'vendor-address2' },
+  city: { label: 'City', maxLength: 100, id: 'vendor-city' },
+  state: { label: 'State', maxLength: 100, id: 'vendor-state' },
+  postal_code: { label: 'Postal code', maxLength: 20, id: 'vendor-zip' },
+  country: { label: 'Country', maxLength: 100, id: 'vendor-country' },
+  contact_name: { label: 'Contact name', maxLength: 255, id: 'vendor-contact-name', api: 'contacts.0.name' },
+  contact_title: { label: 'Contact title', maxLength: 150, id: 'vendor-contact-title', api: 'contacts.0.title' },
+  contact_email: { label: 'Contact email', maxLength: 255, id: 'vendor-contact-email', api: 'contacts.0.email' },
+  contact_phone: { label: 'Contact phone', maxLength: 50, id: 'vendor-contact-phone', api: 'contacts.0.phone' },
+  // `FreeText` max_length.
+  notes: { label: 'Notes', maxLength: 2000, id: 'vendor-notes' },
+};
+
+/** A loose shape check, so a typo is flagged on its field before it is sent. */
+const looksLikeEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
+/**
+ * Sends an update without the keys in `skip` and, if the server refuses
+ * fields this form can name, sends it again without those too. A key left out
+ * is "leave alone" to the backend, so a refused field keeps its stored value
+ * while the rest saves (owner rule, 2026-11-05). Returns what was held back.
+ */
+async function saveExcept<K extends string>(
+  payload: Record<string, unknown>,
+  skip: Partial<Record<K, string>>,
+  fields: Record<K, ServerFieldSpec>,
+  send: (rest: Record<string, unknown>) => Promise<unknown>
+): Promise<Partial<Record<K, string>>> {
+  const without = (held: Partial<Record<K, string>>) => {
+    const rest = { ...payload };
+    for (const key of Object.keys(held)) delete rest[key];
+    return rest;
+  };
+  try {
+    await send(without(skip));
+    return skip;
+  } catch (err) {
+    const mapped = mapServerFieldErrors(err, fields);
+    if (!mapped || Object.keys(mapped.fieldErrors).length === 0 || mapped.unmatched.length > 0) throw err;
+    const refused = { ...skip, ...mapped.fieldErrors };
+    await send(without(refused));
+    return refused;
+  }
+}
+
 // -- Create/Edit Vendor Modal --
 const VendorFormModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   onSaved: () => void;
+  /** An edit saved all but a refused field: refresh behind the dialog, which stays open. */
+  onSavedExcept?: () => void;
   editVendor?: InventoryVendor | null;
-}> = ({ isOpen, onClose, onSaved, editVendor }) => {
+}> = ({ isOpen, onClose, onSaved, onSavedExcept, editVendor }) => {
   const [f, setF] = useState<VendorFD>(EMPTY_VENDOR);
   const [saving, setSaving] = useState(false);
-  const [contactNameError, setContactNameError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Partial<Record<VendorField, string>>>({});
+  // What the form held when it opened (or last saved), so Escape, the X and
+  // Cancel ask before discarding anything typed since (forms review F-6).
+  const [baseline, setBaseline] = useState('');
+  const isDirty = baseline !== '' && JSON.stringify(f) !== baseline;
+  const requestClose = useDiscardGuard({ isDirty, onClose });
 
   useEffect(() => {
     if (!isOpen) return;
-    setContactNameError(null);
-    if (editVendor) {
-      setF({
-        ...EMPTY_VENDOR,
-        name: editVendor.name,
-        account_number: editVendor.account_number ?? '',
-        website: editVendor.website ?? '',
-        phone: editVendor.phone ?? '',
-        email: editVendor.email ?? '',
-        fax: editVendor.fax ?? '',
-        address_line1: editVendor.address_line1 ?? '',
-        address_line2: editVendor.address_line2 ?? '',
-        city: editVendor.city ?? '',
-        state: editVendor.state ?? '',
-        postal_code: editVendor.postal_code ?? '',
-        country: editVendor.country ?? '',
-        payment_terms: editVendor.payment_terms ?? '',
-        notes: editVendor.notes ?? '',
-        is_preferred: editVendor.is_preferred,
-      });
-    } else {
-      setF(EMPTY_VENDOR);
-    }
+    setErrors({});
+    const seeded: VendorFD = editVendor
+      ? {
+          ...EMPTY_VENDOR,
+          name: editVendor.name,
+          account_number: editVendor.account_number ?? '',
+          website: editVendor.website ?? '',
+          phone: editVendor.phone ?? '',
+          email: editVendor.email ?? '',
+          fax: editVendor.fax ?? '',
+          address_line1: editVendor.address_line1 ?? '',
+          address_line2: editVendor.address_line2 ?? '',
+          city: editVendor.city ?? '',
+          state: editVendor.state ?? '',
+          postal_code: editVendor.postal_code ?? '',
+          country: editVendor.country ?? '',
+          payment_terms: editVendor.payment_terms ?? '',
+          notes: editVendor.notes ?? '',
+          is_preferred: editVendor.is_preferred,
+        }
+      : EMPTY_VENDOR;
+    setF(seeded);
+    setBaseline(JSON.stringify(seeded));
+    // Keyed on the vendor object the page holds, not on the refreshed list, so
+    // a refresh behind the dialog after a partial save does not re-seed it.
   }, [editVendor, isOpen]);
 
-  const up = (k: keyof VendorFD, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
+  const up = (k: keyof VendorFD, v: string | boolean) => {
+    setF((p) => ({ ...p, [k]: v }));
+    if (k in VENDOR_FIELDS) setErrors((p) => ({ ...p, [k]: undefined }));
+  };
+
+  const showErrors = (next: Partial<Record<VendorField, string>>) => {
+    setErrors(next);
+    const first = (Object.keys(VENDOR_FIELDS) as VendorField[]).find((k) => next[k]);
+    if (first) window.setTimeout(() => document.getElementById(VENDOR_FIELDS[first].id)?.focus(), 0);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!f.name.trim()) {
-      toast.error('Vendor name is required');
+    const found: Partial<Record<VendorField, string>> = {};
+    if (!f.name.trim()) found.name = 'Give the vendor a name.';
+    if (f.email.trim() && !looksLikeEmail(f.email)) found.email = 'Enter an email address like orders@vendor.com.';
+    if (!editVendor) {
+      // The primary contact is only created when it has a name, so a title,
+      // email or phone typed without one was dropped behind a success toast.
+      const contactDetailTyped = [f.contact_title, f.contact_email, f.contact_phone].some((v) => v.trim());
+      if (contactDetailTyped && !f.contact_name.trim()) {
+        found.contact_name = 'Contact name is required to save a contact';
+      }
+      if (f.contact_email.trim() && !looksLikeEmail(f.contact_email)) {
+        found.contact_email = 'Enter an email address like rep@vendor.com.';
+      }
+    }
+    // A new vendor is not created until every flagged field is fixed; an edit
+    // saves the rest and keeps the stored value of a refused one (below).
+    if (!editVendor && Object.keys(found).length > 0) {
+      showErrors(found);
       return;
     }
-    // The primary contact is only created when it has a name, so a title,
-    // email or phone typed without one was dropped behind a success toast.
-    const contactDetailTyped = [f.contact_title, f.contact_email, f.contact_phone].some((v) => v.trim());
-    if (!editVendor && contactDetailTyped && !f.contact_name.trim()) {
-      setContactNameError('Contact name is required to save a contact');
-      return;
-    }
-    setContactNameError(null);
     setSaving(true);
     try {
       if (editVendor) {
@@ -169,7 +260,25 @@ const VendorFormModal: React.FC<{
           notes: blankToNull(f.notes),
           is_preferred: f.is_preferred,
         };
-        await inventoryService.updateVendor(editVendor.id, payload);
+        const refused = await saveExcept({ ...payload }, found, VENDOR_FIELDS, (rest) =>
+          inventoryService.updateVendor(editVendor.id, rest)
+        );
+        if (Object.keys(refused).length > 0) {
+          // Saved but for the flagged fields: the list refreshes behind the
+          // dialog, which stays open, and only those fields count as unsaved.
+          onSavedExcept?.();
+          showErrors(refused);
+          const stored = JSON.parse(baseline) as VendorFD;
+          const keys = Object.keys(refused) as VendorField[];
+          setBaseline(JSON.stringify({ ...f, ...Object.fromEntries(keys.map((k) => [k, stored[k]])) }));
+          const first = (Object.keys(VENDOR_FIELDS) as VendorField[]).find((k) => refused[k]);
+          if (first) {
+            toast.error(
+              `Vendor saved, except ${VENDOR_FIELDS[first].label.toLowerCase()}: ${refused[first] ?? ''} Fix it and save again.`
+            );
+          }
+          return;
+        }
         toast.success('Vendor updated');
       } else {
         const payload: InventoryVendorCreate = {
@@ -208,27 +317,65 @@ const VendorFormModal: React.FC<{
       onSaved();
       onClose();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save vendor'));
+      // A refused field is flagged on that field rather than named in a toast
+      // (forms review F-2); a new vendor is not created until it is fixed.
+      const mapped = mapServerFieldErrors(err, VENDOR_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        showErrors(mapped.fieldErrors);
+        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then save again.');
+      } else {
+        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to save vendor'));
+      }
     } finally {
       setSaving(false);
     }
   };
 
+  /** One text box, labelled, limited and wired to its error. */
+  const text = (
+    key: VendorField,
+    label: string,
+    extra: { type?: string; placeholder?: string; required?: boolean; className?: string; autoComplete?: string } = {}
+  ) => (
+    <FormField
+      label={label}
+      required={extra.required}
+      id={VENDOR_FIELDS[key].id}
+      error={errors[key]}
+      maxLength={VENDOR_FIELDS[key].maxLength}
+      count={f[key].length}
+      className={extra.className}
+    >
+      {(field) => (
+        <input
+          {...field}
+          type={extra.type ?? 'text'}
+          className={inp}
+          value={f[key]}
+          onChange={(e) => up(key, e.target.value)}
+          placeholder={extra.placeholder}
+          autoComplete={extra.autoComplete ?? 'off'}
+        />
+      )}
+    </FormField>
+  );
+
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={editVendor ? 'Edit Vendor' : 'New Vendor'}
       size="lg"
       onSubmit={(e) => {
         void submit(e);
       }}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-info btn-md text-center disabled:opacity-50">
             {saving ? 'Saving...' : editVendor ? 'Save Changes' : 'Add Vendor'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+          <button type="button" onClick={requestClose} className="btn-secondary btn-md">
             Cancel
           </button>
         </>
@@ -236,153 +383,30 @@ const VendorFormModal: React.FC<{
     >
       <div className="space-y-4 p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className={lbl} htmlFor="vendor-name">
-              Vendor Name *
-            </label>
-            <input
-              id="vendor-name"
-              className={inp}
-              value={f.name}
-              onChange={(e) => up('name', e.target.value)}
-              placeholder="e.g. Galls"
-              required
-            />
-          </div>
-          <div>
-            <label className={lbl} htmlFor="vendor-account">
-              Account Number
-            </label>
-            <input
-              id="vendor-account"
-              className={inp}
-              value={f.account_number}
-              onChange={(e) => up('account_number', e.target.value)}
-              placeholder="Our account with them"
-            />
-          </div>
-          <div>
-            <label className={lbl} htmlFor="vendor-terms">
-              Payment Terms
-            </label>
-            <input
-              id="vendor-terms"
-              className={inp}
-              value={f.payment_terms}
-              onChange={(e) => up('payment_terms', e.target.value)}
-              placeholder="e.g. Net 30"
-            />
-          </div>
+          {text('name', 'Vendor Name', { placeholder: 'e.g. Galls', required: true, className: 'sm:col-span-2' })}
+          {text('account_number', 'Account Number', { placeholder: 'Our account with them' })}
+          {text('payment_terms', 'Payment Terms', { placeholder: 'e.g. Net 30' })}
         </div>
 
         <fieldset>
           <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Contact Details</legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className={lbl} htmlFor="vendor-phone">
-                Phone
-              </label>
-              <input
-                id="vendor-phone"
-                type="tel"
-                className={inp}
-                value={f.phone}
-                onChange={(e) => up('phone', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-email">
-                Email
-              </label>
-              <input
-                id="vendor-email"
-                type="email"
-                className={inp}
-                value={f.email}
-                onChange={(e) => up('email', e.target.value)}
-                placeholder="orders@vendor.com"
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-fax">
-                Fax
-              </label>
-              <input id="vendor-fax" className={inp} value={f.fax} onChange={(e) => up('fax', e.target.value)} />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-website">
-                Website
-              </label>
-              <input
-                id="vendor-website"
-                className={inp}
-                value={f.website}
-                onChange={(e) => up('website', e.target.value)}
-                placeholder="https://"
-              />
-            </div>
+            {text('phone', 'Phone', { type: 'tel' })}
+            {text('email', 'Email', { type: 'email', placeholder: 'orders@vendor.com' })}
+            {text('fax', 'Fax', { type: 'tel' })}
+            {text('website', 'Website', { type: 'url', placeholder: 'https://' })}
           </div>
         </fieldset>
 
         <fieldset>
           <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Address</legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className={lbl} htmlFor="vendor-address1">
-                Street Address
-              </label>
-              <input
-                id="vendor-address1"
-                className={inp}
-                value={f.address_line1}
-                onChange={(e) => up('address_line1', e.target.value)}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={lbl} htmlFor="vendor-address2">
-                Suite / Unit
-              </label>
-              <input
-                id="vendor-address2"
-                className={inp}
-                value={f.address_line2}
-                onChange={(e) => up('address_line2', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-city">
-                City
-              </label>
-              <input id="vendor-city" className={inp} value={f.city} onChange={(e) => up('city', e.target.value)} />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-state">
-                State
-              </label>
-              <input id="vendor-state" className={inp} value={f.state} onChange={(e) => up('state', e.target.value)} />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-zip">
-                Postal Code
-              </label>
-              <input
-                id="vendor-zip"
-                className={inp}
-                value={f.postal_code}
-                onChange={(e) => up('postal_code', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-country">
-                Country
-              </label>
-              <input
-                id="vendor-country"
-                className={inp}
-                value={f.country}
-                onChange={(e) => up('country', e.target.value)}
-              />
-            </div>
+            {text('address_line1', 'Street Address', { className: 'sm:col-span-2' })}
+            {text('address_line2', 'Suite / Unit', { className: 'sm:col-span-2' })}
+            {text('city', 'City')}
+            {text('state', 'State')}
+            {text('postal_code', 'Postal Code')}
+            {text('country', 'Country')}
           </div>
         </fieldset>
 
@@ -392,84 +416,32 @@ const VendorFormModal: React.FC<{
               Primary Contact <span className="text-theme-text-muted font-normal">(optional)</span>
             </legend>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className={lbl} htmlFor="vendor-contact-name">
-                  Name
-                </label>
-                <input
-                  id="vendor-contact-name"
-                  className={inp}
-                  value={f.contact_name}
-                  onChange={(e) => {
-                    up('contact_name', e.target.value);
-                    if (e.target.value.trim()) setContactNameError(null);
-                  }}
-                  placeholder="Sales rep or service desk"
-                  aria-invalid={contactNameError ? true : undefined}
-                  aria-describedby={contactNameError ? 'vendor-contact-name-error' : undefined}
-                />
-                {contactNameError && (
-                  <p
-                    id="vendor-contact-name-error"
-                    role="alert"
-                    className="mt-1 text-xs text-red-700 dark:text-red-300"
-                  >
-                    {contactNameError}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className={lbl} htmlFor="vendor-contact-title">
-                  Title
-                </label>
-                <input
-                  id="vendor-contact-title"
-                  className={inp}
-                  value={f.contact_title}
-                  onChange={(e) => up('contact_title', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={lbl} htmlFor="vendor-contact-email">
-                  Email
-                </label>
-                <input
-                  id="vendor-contact-email"
-                  type="email"
-                  className={inp}
-                  value={f.contact_email}
-                  onChange={(e) => up('contact_email', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={lbl} htmlFor="vendor-contact-phone">
-                  Phone
-                </label>
-                <input
-                  id="vendor-contact-phone"
-                  type="tel"
-                  className={inp}
-                  value={f.contact_phone}
-                  onChange={(e) => up('contact_phone', e.target.value)}
-                />
-              </div>
+              {text('contact_name', 'Name', { placeholder: 'Sales rep or service desk' })}
+              {text('contact_title', 'Title')}
+              {text('contact_email', 'Email', { type: 'email' })}
+              {text('contact_phone', 'Phone', { type: 'tel' })}
             </div>
           </fieldset>
         )}
 
-        <div>
-          <label className={lbl} htmlFor="vendor-notes">
-            Notes
-          </label>
-          <textarea
-            id="vendor-notes"
-            className={inp}
-            rows={2}
-            value={f.notes}
-            onChange={(e) => up('notes', e.target.value)}
-            placeholder="Ordering quirks, contract numbers, lead times..."
-          />
-        </div>
+        <FormField
+          label="Notes"
+          id={VENDOR_FIELDS.notes.id}
+          error={errors.notes}
+          maxLength={VENDOR_FIELDS.notes.maxLength}
+          count={f.notes.length}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              className={inp}
+              rows={2}
+              value={f.notes}
+              onChange={(e) => up('notes', e.target.value)}
+              placeholder="Ordering quirks, contract numbers, lead times..."
+            />
+          )}
+        </FormField>
 
         <label className="text-theme-text-primary flex items-center gap-3 text-sm">
           <input
@@ -505,6 +477,19 @@ const EMPTY_CONTACT: ContactFD = {
   is_primary: false,
 };
 
+type ContactField = Exclude<keyof ContactFD, 'is_primary'>;
+
+/** `InventoryVendorContactBase` max_lengths, ordered as on screen. */
+const CONTACT_FIELDS: Record<ContactField, ServerFieldSpec & { id: string }> = {
+  name: { label: 'Name', maxLength: 255, id: 'contact-name' },
+  title: { label: 'Title', maxLength: 150, id: 'contact-title' },
+  email: { label: 'Email', maxLength: 255, id: 'contact-email' },
+  phone: { label: 'Phone', maxLength: 50, id: 'contact-phone' },
+  phone_extension: { label: 'Extension', maxLength: 20, id: 'contact-ext' },
+  // `FreeText` max_length.
+  notes: { label: 'Notes', maxLength: 2000, id: 'contact-notes' },
+};
+
 // -- Contacts Modal --
 const VendorContactsModal: React.FC<{
   vendor: InventoryVendor | null;
@@ -515,33 +500,83 @@ const VendorContactsModal: React.FC<{
   const [f, setF] = useState<ContactFD>(EMPTY_CONTACT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Partial<Record<ContactField, string>>>({});
+  // The contact form's starting point — blank, or the contact being edited —
+  // so Escape and the X ask before discarding what was typed (forms review F-6).
+  const [baseline, setBaseline] = useState(JSON.stringify(EMPTY_CONTACT));
+  const isDirty = JSON.stringify(f) !== baseline;
+
+  const resetForm = () => {
+    setF(EMPTY_CONTACT);
+    setEditingId(null);
+    setErrors({});
+    setBaseline(JSON.stringify(EMPTY_CONTACT));
+  };
 
   useEffect(() => {
     setF(EMPTY_CONTACT);
     setEditingId(null);
+    setErrors({});
+    setBaseline(JSON.stringify(EMPTY_CONTACT));
   }, [vendor?.id]);
 
-  const up = (k: keyof ContactFD, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
+  const up = (k: keyof ContactFD, v: string | boolean) => {
+    setF((p) => ({ ...p, [k]: v }));
+    if (k in CONTACT_FIELDS) setErrors((p) => ({ ...p, [k]: undefined }));
+  };
+
+  const showErrors = (next: Partial<Record<ContactField, string>>) => {
+    setErrors(next);
+    const first = (Object.keys(CONTACT_FIELDS) as ContactField[]).find((k) => next[k]);
+    if (first) window.setTimeout(() => document.getElementById(CONTACT_FIELDS[first].id)?.focus(), 0);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vendor) return;
-    if (!f.name.trim()) {
-      toast.error('Contact name is required');
+    const found: Partial<Record<ContactField, string>> = {};
+    if (!f.name.trim()) found.name = 'Give the contact a name.';
+    if (f.email.trim() && !looksLikeEmail(f.email)) found.email = 'Enter an email address like rep@vendor.com.';
+    // A new contact is not added until every flagged field is fixed; an edit
+    // saves the rest and keeps the stored value of a refused one (below).
+    if (!editingId && Object.keys(found).length > 0) {
+      showErrors(found);
       return;
     }
     setSaving(true);
     try {
       if (editingId) {
-        await inventoryService.updateVendorContact(vendor.id, editingId, {
-          name: f.name.trim(),
-          title: blankToNull(f.title),
-          email: blankToNull(f.email),
-          phone: blankToNull(f.phone),
-          phone_extension: blankToNull(f.phone_extension),
-          notes: blankToNull(f.notes),
-          is_primary: f.is_primary,
-        });
+        const contactId = editingId;
+        const refused = await saveExcept(
+          {
+            name: f.name.trim(),
+            title: blankToNull(f.title),
+            email: blankToNull(f.email),
+            phone: blankToNull(f.phone),
+            phone_extension: blankToNull(f.phone_extension),
+            notes: blankToNull(f.notes),
+            is_primary: f.is_primary,
+          },
+          found,
+          CONTACT_FIELDS,
+          (rest) => inventoryService.updateVendorContact(vendor.id, contactId, rest)
+        );
+        if (Object.keys(refused).length > 0) {
+          // Saved but for the flagged fields, which keep their stored values:
+          // the list refreshes and the edit stays open with them marked.
+          onSaved();
+          showErrors(refused);
+          const stored = JSON.parse(baseline) as ContactFD;
+          const keys = Object.keys(refused) as ContactField[];
+          setBaseline(JSON.stringify({ ...f, ...Object.fromEntries(keys.map((k) => [k, stored[k]])) }));
+          const first = (Object.keys(CONTACT_FIELDS) as ContactField[]).find((k) => refused[k]);
+          if (first) {
+            toast.error(
+              `Contact saved, except ${CONTACT_FIELDS[first].label.toLowerCase()}: ${refused[first] ?? ''} Fix it and save again.`
+            );
+          }
+          return;
+        }
         toast.success('Contact updated');
       } else {
         await inventoryService.addVendorContact(vendor.id, {
@@ -555,11 +590,17 @@ const VendorContactsModal: React.FC<{
         });
         toast.success('Contact added');
       }
-      setF(EMPTY_CONTACT);
-      setEditingId(null);
+      resetForm();
       onSaved();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save contact'));
+      // A refused field is flagged on that field rather than named in a toast (forms review F-2).
+      const mapped = mapServerFieldErrors(err, CONTACT_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        showErrors(mapped.fieldErrors);
+        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then save again.');
+      } else {
+        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to save contact'));
+      }
     } finally {
       setSaving(false);
     }
@@ -577,10 +618,7 @@ const VendorContactsModal: React.FC<{
     try {
       await inventoryService.deleteVendorContact(vendor.id, contact.id);
       toast.success('Contact removed');
-      if (editingId === contact.id) {
-        setEditingId(null);
-        setF(EMPTY_CONTACT);
-      }
+      if (editingId === contact.id) resetForm();
       onSaved();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to remove contact'));
@@ -588,8 +626,7 @@ const VendorContactsModal: React.FC<{
   };
 
   const startEdit = (contact: InventoryVendorContact) => {
-    setEditingId(contact.id);
-    setF({
+    const seeded: ContactFD = {
       name: contact.name,
       title: contact.title ?? '',
       email: contact.email ?? '',
@@ -597,13 +634,47 @@ const VendorContactsModal: React.FC<{
       phone_extension: contact.phone_extension ?? '',
       notes: contact.notes ?? '',
       is_primary: contact.is_primary,
-    });
+    };
+    setEditingId(contact.id);
+    setErrors({});
+    setF(seeded);
+    setBaseline(JSON.stringify(seeded));
   };
+
+  /** One contact text box, labelled, limited and wired to its error. */
+  const text = (
+    key: ContactField,
+    label: string,
+    extra: { type?: string; placeholder?: string; required?: boolean } = {}
+  ) => (
+    <FormField
+      label={label}
+      required={extra.required}
+      id={CONTACT_FIELDS[key].id}
+      error={errors[key]}
+      maxLength={CONTACT_FIELDS[key].maxLength}
+      count={f[key].length}
+      className={key === 'phone' ? 'flex-1' : key === 'phone_extension' ? 'w-24' : undefined}
+    >
+      {(field) => (
+        <input
+          {...field}
+          type={extra.type ?? 'text'}
+          className={inp}
+          value={f[key]}
+          onChange={(e) => up(key, e.target.value)}
+          placeholder={extra.placeholder}
+          autoComplete="off"
+        />
+      )}
+    </FormField>
+  );
 
   return (
     <Modal
       isOpen={vendor !== null}
       onClose={onClose}
+      isDirty={isDirty}
       title={vendor ? `Contacts — ${vendor.name}` : 'Contacts'}
       size="lg"
     >
@@ -657,86 +728,38 @@ const VendorContactsModal: React.FC<{
           onSubmit={(e) => {
             void submit(e);
           }}
+          noValidate
           className="border-theme-surface-border space-y-3 border-t pt-4"
         >
           <p className="text-theme-text-primary text-sm font-semibold">
             {editingId ? 'Edit contact' : 'Add a contact'}
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className={lbl} htmlFor="contact-name">
-                Name *
-              </label>
-              <input
-                id="contact-name"
-                className={inp}
-                value={f.name}
-                onChange={(e) => up('name', e.target.value)}
-                required
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="contact-title">
-                Title
-              </label>
-              <input
-                id="contact-title"
-                className={inp}
-                value={f.title}
-                onChange={(e) => up('title', e.target.value)}
-                placeholder="e.g. Account Manager"
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="contact-email">
-                Email
-              </label>
-              <input
-                id="contact-email"
-                type="email"
-                className={inp}
-                value={f.email}
-                onChange={(e) => up('email', e.target.value)}
-              />
-            </div>
+            {text('name', 'Name', { required: true })}
+            {text('title', 'Title', { placeholder: 'e.g. Account Manager' })}
+            {text('email', 'Email', { type: 'email' })}
             <div className="flex gap-2">
-              <div className="flex-1">
-                <label className={lbl} htmlFor="contact-phone">
-                  Phone
-                </label>
-                <input
-                  id="contact-phone"
-                  type="tel"
-                  className={inp}
-                  value={f.phone}
-                  onChange={(e) => up('phone', e.target.value)}
-                />
-              </div>
-              <div className="w-24">
-                <label className={lbl} htmlFor="contact-ext">
-                  Ext.
-                </label>
-                <input
-                  id="contact-ext"
-                  className={inp}
-                  value={f.phone_extension}
-                  onChange={(e) => up('phone_extension', e.target.value)}
-                />
-              </div>
+              {text('phone', 'Phone', { type: 'tel' })}
+              {text('phone_extension', 'Ext.')}
             </div>
           </div>
-          <div>
-            <label className={lbl} htmlFor="contact-notes">
-              Notes
-            </label>
-            <textarea
-              id="contact-notes"
-              className={inp}
-              rows={2}
-              value={f.notes}
-              onChange={(e) => up('notes', e.target.value)}
-            />
-          </div>
+          <FormField
+            label="Notes"
+            id={CONTACT_FIELDS.notes.id}
+            error={errors.notes}
+            maxLength={CONTACT_FIELDS.notes.maxLength}
+            count={f.notes.length}
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                className={inp}
+                rows={2}
+                value={f.notes}
+                onChange={(e) => up('notes', e.target.value)}
+              />
+            )}
+          </FormField>
           <label className="text-theme-text-primary flex items-center gap-3 text-sm">
             <input
               type="checkbox"
@@ -748,14 +771,7 @@ const VendorContactsModal: React.FC<{
           </label>
           <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center">
             {editingId && (
-              <button
-                type="button"
-                className="btn-secondary btn-md"
-                onClick={() => {
-                  setEditingId(null);
-                  setF(EMPTY_CONTACT);
-                }}
-              >
+              <button type="button" className="btn-secondary btn-md" onClick={resetForm}>
                 Cancel Edit
               </button>
             )}
@@ -1372,6 +1388,9 @@ export const VendorsPage: React.FC = () => {
             setEditVendor(null);
           }}
           onSaved={() => {
+            void load();
+          }}
+          onSavedExcept={() => {
             void load();
           }}
           editVendor={editVendor}
