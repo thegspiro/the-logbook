@@ -58,10 +58,7 @@ const MyIPExceptionsPage: React.FC = () => {
             </div>
           </div>
           <div className="page-header-actions flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className="rounded-lg bg-red-800 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-            >
+            <button onClick={() => setShowForm(!showForm)} className="btn-primary text-sm">
               {showForm ? 'Cancel' : 'New Request'}
             </button>
             <button
@@ -69,7 +66,7 @@ const MyIPExceptionsPage: React.FC = () => {
                 void fetchMyExceptions(includeExpired);
               }}
               aria-label="Refresh my requests"
-              className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors"
+              className="btn-secondary btn-icon-sm"
             >
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </button>

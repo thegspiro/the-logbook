@@ -333,7 +333,7 @@ const ExpenseReportDetailPage: React.FC = () => {
                 disabled={busy || missingReceipts > 0}
                 aria-describedby={missingReceipts > 0 ? 'expense-receipts-needed' : undefined}
                 onClick={() => void handleSubmit()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <Send className="h-3.5 w-3.5" />
                 Submit for Approval
@@ -344,7 +344,7 @@ const ExpenseReportDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => setPayingByCheck(true)}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-primary inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                 Pay by Check
@@ -355,7 +355,7 @@ const ExpenseReportDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleMarkPaid()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-success inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <CreditCard className="h-3.5 w-3.5" aria-hidden="true" />
                 Mark Paid
@@ -366,7 +366,7 @@ const ExpenseReportDetailPage: React.FC = () => {
                 type="button"
                 disabled={busy}
                 onClick={() => void handleCancel()}
-                className="touch:min-h-11 inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                className="btn-secondary inline-flex items-center gap-1.5 text-sm disabled:cursor-not-allowed"
               >
                 <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
                 {er.status === ExpenseReportStatus.DRAFT ? 'Withdraw Report' : 'Cancel Report'}

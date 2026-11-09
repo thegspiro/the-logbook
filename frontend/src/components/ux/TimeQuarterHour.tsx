@@ -17,6 +17,14 @@ interface TimeQuarterHourProps {
   placeholder?: string;
   'aria-label'?: string;
   /**
+   * From FormField, which wraps this picker by its `id`. Put on the hour
+   * select, the one the id and the label name, so an error is announced where
+   * focus lands.
+   */
+  'aria-invalid'?: true;
+  'aria-describedby'?: string;
+  'aria-required'?: true;
+  /**
    * Show a value's real minute when it is not on a quarter hour (09:07 reads
    * as 9:07, offered as an extra option) instead of flooring it for display.
    * For a caller whose value can carry any minute — a recorded check-in — so
@@ -67,6 +75,9 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
   required,
   placeholder,
   'aria-label': ariaLabel,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
+  'aria-required': ariaRequired,
   preserveOffQuarterMinute = false,
 }) => {
   const parsed = useMemo(
@@ -123,6 +134,9 @@ const TimeQuarterHour: React.FC<TimeQuarterHourProps> = ({
         style={SELECT_FIT}
         required={required}
         aria-label={`${label} hour`}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
+        aria-required={ariaRequired}
       >
         {hour12Index === null && <option value="">--</option>}
         {HOURS_12.map((h) => (

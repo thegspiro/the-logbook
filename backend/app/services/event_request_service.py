@@ -429,6 +429,30 @@ async def get_user_name(db: AsyncSession, user_id: str) -> Optional[str]:
     return None
 
 
+async def user_names_by_id(
+    db: AsyncSession, organization_id: str, user_ids: Iterable[Optional[str]]
+) -> dict[str, str]:
+    """Display names for many members in one query, formatted as ``get_user_name`` does.
+
+    The requests list named each assignee with its own query, one per row.
+    Scoped to the organization: an assignee is validated as in-org when
+    assigned, so this changes no name, but a by-id read on client-reachable
+    ids belongs inside the tenant (CLAUDE.md pitfall #14).
+    """
+    ids = sorted({str(i) for i in user_ids if i})
+    if not ids:
+        return {}
+    rows = await db.execute(
+        select(User.id, User.first_name, User.last_name, User.preferred_name).where(
+            User.id.in_(ids), User.organization_id == str(organization_id)
+        )
+    )
+    return {
+        str(user_id): format_display_name(first, last, preferred)
+        for user_id, first, last, preferred in rows.all()
+    }
+
+
 async def apply_default_assignee(
     db: AsyncSession, event_request: EventRequest, pipeline: dict
 ) -> Optional[str]:
@@ -929,13 +953,25 @@ def describe_roles(org: Optional[Organization], roles: Any) -> str:
     )
 
 
+def _released_seat_statuses() -> list[Any]:
+    """Assignment statuses that no longer hold a seat on a signup sheet.
+
+    Shared by the sheet read (``get_staffing_state``), the seat claim and the
+    requests list's summary, so a filled count means the same thing on every
+    screen that shows one (CLAUDE.md pitfall #29).
+    """
+    from app.models.training import AssignmentStatus
+
+    return [AssignmentStatus.CANCELLED, AssignmentStatus.DECLINED]
+
+
 async def get_staffing_state(
     db: AsyncSession,
     event_request: EventRequest,
     org: Optional[Organization] = None,
 ) -> dict[str, Any]:
     """Who has signed up to cover this request, and which roles are still open."""
-    from app.models.training import AssignmentStatus, ShiftAssignment
+    from app.models.training import ShiftAssignment
 
     empty: dict[str, Any] = {
         "shift_id": None,
@@ -969,9 +1005,7 @@ async def get_staffing_state(
         .where(
             ShiftAssignment.shift_id == shift.id,
             ShiftAssignment.organization_id == str(event_request.organization_id),
-            ShiftAssignment.assignment_status.notin_(
-                [AssignmentStatus.CANCELLED, AssignmentStatus.DECLINED]
-            ),
+            ShiftAssignment.assignment_status.notin_(_released_seat_statuses()),
         )
         .order_by(ShiftAssignment.created_at)
     )
@@ -1035,6 +1069,84 @@ async def get_staffing_state(
         "volunteers": volunteers,
         "volunteer_call_sent_at": event_request.volunteer_call_sent_at,
     }
+
+
+async def staffing_counts_by_request(
+    db: AsyncSession,
+    organization_id: str,
+    requests: Iterable[EventRequest],
+) -> dict[str, tuple[int, int]]:
+    """``(filled, total)`` seats on each request's live signup sheet.
+
+    The requests list shows "4 of 6 signed up" on every scheduled row, and
+    calling ``get_staffing_state`` once per row would cost two queries a row.
+    This answers for the whole list in two, under the same rules: a cancelled
+    or missing sheet is no sheet (``get_live_staffing_shift``), the total is the
+    sheet's seat count, and filled counts the assignments still holding a seat.
+    A request with no live sheet is absent from the result.
+    """
+    from app.models.training import Shift, ShiftAssignment, ShiftStatus
+
+    shift_to_request = {
+        str(r.staffing_shift_id): str(r.id) for r in requests if r.staffing_shift_id
+    }
+    if not shift_to_request:
+        return {}
+
+    shifts = (
+        await db.execute(
+            select(Shift.id, Shift.positions).where(
+                Shift.id.in_(list(shift_to_request)),
+                Shift.organization_id == str(organization_id),
+                Shift.status != ShiftStatus.CANCELLED,
+            )
+        )
+    ).all()
+    if not shifts:
+        return {}
+
+    live_ids = [str(shift_id) for shift_id, _ in shifts]
+    filled_rows = await db.execute(
+        select(ShiftAssignment.shift_id, func.count())
+        .where(
+            ShiftAssignment.shift_id.in_(live_ids),
+            ShiftAssignment.organization_id == str(organization_id),
+            ShiftAssignment.assignment_status.notin_(_released_seat_statuses()),
+        )
+        .group_by(ShiftAssignment.shift_id)
+    )
+    filled = {str(shift_id): int(count) for shift_id, count in filled_rows.all()}
+
+    counts: dict[str, tuple[int, int]] = {}
+    for shift_id, positions in shifts:
+        total = len(positions) if isinstance(positions, list) else 0
+        counts[shift_to_request[str(shift_id)]] = (filled.get(str(shift_id), 0), total)
+    return counts
+
+
+async def short_notice_request_ids(
+    db: AsyncSession, request_ids: Iterable[str]
+) -> set[str]:
+    """The requests intake flagged as arriving inside the department's lead time.
+
+    A form submission naming a date sooner than ``min_lead_time_days`` is
+    accepted and flagged rather than refused, and the flag is the
+    ``lead_time_warning`` activity row intake writes. Reading that row reports
+    what intake decided; recomputing ``lead_time_error`` here would move the
+    badge on old requests every time the department changed its lead time.
+    """
+    ids = [str(i) for i in request_ids]
+    if not ids:
+        return set()
+    rows = await db.execute(
+        select(EventRequestActivity.request_id)
+        .where(
+            EventRequestActivity.request_id.in_(ids),
+            EventRequestActivity.action == "lead_time_warning",
+        )
+        .distinct()
+    )
+    return {str(request_id) for (request_id,) in rows.all()}
 
 
 async def _roles_still_needed(
@@ -1234,7 +1346,7 @@ async def resolve_outreach_signup_role(
     asked for two tour guides and an educator, and a member taking a fourth
     seat as something nobody asked for leaves a real role unfilled.
     """
-    from app.models.training import AssignmentStatus, ShiftAssignment
+    from app.models.training import ShiftAssignment
 
     # FOR UPDATE: the count below and the insert the caller makes afterwards
     # are a read-then-write. Two members claiming the last Educator seat at the
@@ -1287,9 +1399,7 @@ async def resolve_outreach_signup_role(
                 ShiftAssignment.shift_id == str(shift.id),
                 ShiftAssignment.organization_id == str(organization_id),
                 ShiftAssignment.outreach_role == requested_role,
-                ShiftAssignment.assignment_status.notin_(
-                    [AssignmentStatus.CANCELLED, AssignmentStatus.DECLINED]
-                ),
+                ShiftAssignment.assignment_status.notin_(_released_seat_statuses()),
             )
             # Locking read. The request row lock above serializes the decision
             # but leaves this transaction's REPEATABLE READ snapshot in place,
