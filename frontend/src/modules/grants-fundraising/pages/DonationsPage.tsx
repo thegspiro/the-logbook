@@ -164,8 +164,8 @@ const DonationsPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Donations">
-            <table className="w-full">
+          <div className="rwd-table-container overflow-x-auto" tabIndex={0} role="region" aria-label="Donations">
+            <table className="rwd-table rwd-table-xwide w-full">
               <thead>
                 <tr className="border-theme-surface-border bg-theme-surface border-b">
                   <th
@@ -220,32 +220,35 @@ const DonationsPage: React.FC = () => {
               <tbody className="divide-theme-surface-border divide-y">
                 {filtered.map((donation) => (
                   <tr key={donation.id} className="hover:bg-theme-surface-hover transition-colors">
-                    <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
+                    <td data-label="Date" className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
                       {formatDate(donation.donationDate, tz)}
                     </td>
-                    <td className="px-4 py-3 text-sm">
-                      <div>
+                    <td data-label="Donor" className="px-4 py-3 text-sm">
+                      <div className="min-w-0">
                         <span className="text-theme-text-primary font-medium">{nameOf(donation)}</span>
                         {donation.donorEmail && (
-                          <p className="text-theme-text-secondary text-xs">{donation.donorEmail}</p>
+                          <p className="text-theme-text-secondary text-xs break-all">{donation.donorEmail}</p>
                         )}
                       </div>
                     </td>
-                    <td className="text-theme-text-primary px-4 py-3 text-sm font-semibold whitespace-nowrap">
+                    <td
+                      data-label="Amount"
+                      className="text-theme-text-primary px-4 py-3 text-sm font-semibold whitespace-nowrap"
+                    >
                       {formatCurrency(Number(donation.amount))}
                       {donation.isRecurring && <span className="ml-1 text-xs text-blue-600">(Recurring)</span>}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                    <td data-label="Method" className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
                       {PAYMENT_METHOD_LABELS[donation.paymentMethod] ?? donation.paymentMethod}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td data-label="Status" className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PAYMENT_STATUS_COLORS[donation.paymentStatus] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                       >
                         {PAYMENT_STATUS_LABELS[donation.paymentStatus] ?? donation.paymentStatus}
                       </span>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                    <td data-label="Receipt" className="px-4 py-3 whitespace-nowrap">
                       {donation.receiptSent ? (
                         <span className="flex items-center gap-1 text-xs text-green-700 dark:text-green-600">
                           <Receipt className="h-3 w-3" /> Sent
@@ -254,13 +257,13 @@ const DonationsPage: React.FC = () => {
                         <span className="text-theme-text-secondary text-xs">—</span>
                       )}
                     </td>
-                    <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                    <td data-label="Dedication" className="text-theme-text-secondary px-4 py-3 text-sm">
                       {donation.dedicationType
                         ? `${donation.dedicationType === 'in_honor' ? 'In honor of' : 'In memory of'} ${donation.dedicationName ?? ''}`
                         : '—'}
                     </td>
                     {canManage && (
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <td data-label="Actions" className="px-4 py-3 text-right whitespace-nowrap">
                         <Link
                           to={`/grants/donations/${donation.id}/edit`}
                           className="text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary touch-target-phone inline-flex rounded p-1 transition-colors"

@@ -472,17 +472,11 @@ export const ReportsPage: React.FC = () => {
           description="Run department reports and export them to CSV or PDF"
           actions={
             <>
-              <Link
-                to="/reports/saved"
-                className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium"
-              >
+              <Link to="/reports/saved" className="btn-secondary inline-flex items-center text-sm">
                 Saved reports
               </Link>
               {canSetUpEvaluations && (
-                <Link
-                  to="/reports/evaluations"
-                  className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary touch:min-h-11 inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-medium"
-                >
+                <Link to="/reports/evaluations" className="btn-secondary inline-flex items-center text-sm">
                   Member evaluations
                 </Link>
               )}

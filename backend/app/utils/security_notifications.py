@@ -100,6 +100,7 @@ async def notify_security_event(
     background_tasks: Optional[BackgroundTasks] = None,
     send_email: bool = True,
     org: Optional[Any] = None,
+    to_email: Optional[str] = None,
 ) -> None:
     """Notify ``user`` of a security event: in-app now, email in the background.
 
@@ -108,6 +109,10 @@ async def notify_security_event(
     after the response on its own session; otherwise it is sent inline (a
     best-effort fallback for callers without a request context). Never raises —
     all failures are logged and swallowed.
+
+    ``to_email`` overrides the recipient address. An email change passes the
+    *previous* address: the account's current one is the address that was just
+    put there, which is the last place a hijacked account's owner would look.
     """
     try:
         _record_in_app(
@@ -120,7 +125,7 @@ async def notify_security_event(
     if not send_email:
         return
 
-    to_email = getattr(user, "email", None)
+    to_email = to_email or getattr(user, "email", None)
     if not to_email:
         return
     organization_id = str(user.organization_id)

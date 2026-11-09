@@ -1086,7 +1086,7 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 ### W50-60 — LOW — "Meeting link updated" toast for a no-op / a clear that never reaches the server — ✅ FIXED (S18, `d6f828c`)
 
 **Did:** as `secretary`, A4 step 9: "No linked meeting" with nothing linked.
-**Saw:** the toast; `PATCH {}`. The "link survives a clear" half is read from code (no event existed to link).
+**Saw:** the toast; `PATCH {}`. The "link survives a clear" half is read from code (no event existed to link). Driven on 2026-11-08 (follow-up below): the clear sends explicit nulls and holds after a reload.
 **Where:** `ElectionDetailPage.tsx:244-264`.
 **Fix:** S18 sends `null` (`blankToNull`) with `ElectionUpdate` widened, and no toast when nothing changed (`ElectionDetailPage.w50-s18.test.tsx`).
 
@@ -1484,3 +1484,42 @@ its old `textbox` role now find it as a combobox.
 | prettier / flake8 / black / isort                                                     | clean on changed files                                               |
 | backend: voting wait, eligibility rules, elections, voting flow, lifecycle, log shape | 262 passed                                                           |
 | frontend: election pages, module, member-profile, BallotBuilder                       | 52 files, 206 tests passed                                           |
+
+# W50 follow-up — 2026-11-08: meeting link, Import Attendees, unlink
+
+**Driven:** 2026-11-08 · **As:** `secretary`, with `member` and `member2` RSVPing · **Viewport:** 1280×900
+**Database:** fresh (`start.sh --reset`, then `seed.mjs`). The business-meeting event W51 had left for this was gone with the old database, so the run made its own: "W50 November Business Meeting" (an upcoming `business_meeting` event, RSVP required), a draft "W50 Bylaw Vote", and two "going" RSVPs.
+
+## What was driven
+
+1. Election detail → Link a meeting → the event.
+2. Import Attendees from Event, first against `main`'s page and then against the fix.
+3. (change) → No linked meeting; reload.
+4. Link a meeting → No linked meeting again, with nothing linked.
+
+## Held up ✅
+
+- **Linking:** the selector listed the event, and linking moved the voting window to the event's 5:00–7:00 PM with a toast that said so.
+- **Unlink (W50-60's unverified half):** the PATCH carried `{"meeting_id":null,"event_id":null,"meeting_date":null}`; after a reload the API and the card both read no link ("Linked Meeting: None"), and the Import button was gone.
+- **Imported attendees stay:** both imported members were still on the election's attendance list after the unlink.
+- No console errors, page errors or failed API calls in any step.
+
+## Findings
+
+### W50-93 — MED — "Import Attendees from Event" did nothing — ✅ FIXED
+
+**Did:** as `secretary`, linked the draft to the event (two members had RSVP'd "going") and pressed **Import Attendees from Event**.
+**Saw:** on `main`'s page, no request at all, no toast, and 0 attendees afterwards. The button is shown for a meeting **or** an event link and labelled for each, and `import-meeting-attendees` imports from either, but `handleImportMeetingAttendees` returned unless `meeting_id` was set.
+**Where:** `frontend/src/pages/ElectionDetailPage.tsx`, `handleImportMeetingAttendees`.
+**Fix:** the handler runs on the same condition that shows the button. Re-driven: `POST 200`, "Imported 2 attendees from event (0 already present)", Jordan Avery and Alex Brooks on the roster. Test: `ElectionDetailPage.w50-import-event.test.tsx`, which failed against the unfixed page.
+
+### Not a finding — re-choosing "No linked meeting" with nothing linked
+
+Playwright's `selectOption` fires `change` even when the value does not move, and step 4 then sent a PATCH and showed "Meeting link updated". A person cannot reach this: the select is controlled and always shows the current link, and a browser fires no `change` for re-picking the selected option. W50-60's original observation came through the same synthetic event. No change made.
+
+## Completion gate
+
+| Check                                         | Result                    |
+| --------------------------------------------- | ------------------------- |
+| typecheck; eslint / prettier on changed files | clean                     |
+| frontend: every `ElectionDetailPage*` test    | 23 files, 73 tests passed |

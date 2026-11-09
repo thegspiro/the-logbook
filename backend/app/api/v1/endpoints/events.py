@@ -699,7 +699,11 @@ async def list_events(
         end_after=end_after,
         end_before=end_before,
         include_cancelled=include_cancelled,
-        include_drafts=include_drafts,
+        # Drafts are unannounced and for organizers only. The flag is the
+        # client's request, not its authority: the page sends it as
+        # `canManage`, and a member who sends it anyway gets published events.
+        include_drafts=include_drafts
+        and user_has_permission(current_user, "events.manage"),
         mandatory_only=mandatory_only,
         skip=skip,
         limit=limit,
@@ -719,11 +723,12 @@ async def list_missed_mandatory_events(
 
     Narrower than `GET /events?mandatory_only=true&end_before=…` on purpose:
     that one would also return events held before the member was hired, events
-    held during an approved leave of absence, and events mandatory only for a
-    membership type the member does not hold. The events list shows these under
-    a heading promising they "clear as you respond", and none of those three can
-    be cleared by responding — so the exclusion belongs on the server, where a
-    forgetful client cannot skip it.
+    held during an approved leave of absence, events a training waiver excuses
+    (blanket, or naming a requirement the event's session counts toward), and
+    events mandatory only for a membership type the member does not hold. The
+    events list shows these under a heading promising they "clear as you
+    respond", and none of them can be cleared by responding — so the exclusion
+    belongs on the server, where a forgetful client cannot skip it.
 
     **Authentication required**
     """
@@ -1354,7 +1359,11 @@ async def get_event(
         user_id=current_user.id,
     )
 
-    if not event:
+    # A draft answers 404 to a non-organizer, as the attachments route does, so
+    # a guessed id does not confirm an unannounced event exists.
+    if not event or (
+        event.is_draft and not user_has_permission(current_user, "events.manage")
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
         )

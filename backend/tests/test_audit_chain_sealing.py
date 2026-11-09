@@ -22,6 +22,7 @@ from app.core import audit as audit_module
 from app.core.audit import audit_logger, seal_audit_chain
 from app.core.database import database_manager
 from app.models.audit import AuditChainHead, AuditLog
+from tests.audit_cleanup import discard_committed_audit_rows
 
 pytestmark = pytest.mark.integration
 
@@ -274,3 +275,29 @@ class TestRetentionBoundaryMustBeAChainPrefix:
         tag = uuid.uuid4().hex[:8]
         row = await _write(db_session, tag)
         assert not await audit_logger._is_chain_prefix(db_session, row.id)
+
+
+@pytest.mark.usefixtures("_initialize_database")
+class TestDiscardingCommittedRowsKeepsTheChainWhole:
+    """A test that commits audit rows and deletes them afterwards must not
+    leave the shared chain head pointing at a deleted row: every full-chain
+    verify that runs after it would fail on rows it never wrote."""
+
+    async def test_rows_sealed_after_the_discard_still_verify(self, db_session):
+        tag = uuid.uuid4().hex[:8]
+        async with database_manager.session_factory() as db:
+            await _write(db, tag)
+            await db.commit()
+        # The background sealer this commit starts may or may not get there
+        # first; sealing here makes the head advance on every run.
+        await seal_audit_chain()
+
+        await discard_committed_audit_rows(
+            "event_type = :e", {"e": f"seal_test_{tag}_0"}
+        )
+
+        await _write(db_session, tag, 1)
+        await audit_logger.seal_pending(db_session)
+        result = await audit_logger.verify_integrity(db_session)
+        assert result["verified"] is True, result
+        assert result["total_checked"] >= 1, result
