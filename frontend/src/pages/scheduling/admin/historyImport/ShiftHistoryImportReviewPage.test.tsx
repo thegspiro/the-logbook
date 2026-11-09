@@ -635,6 +635,61 @@ describe('ShiftHistoryImportReviewPage', () => {
       expect(screen.getAllByRole('row')).toHaveLength(3);
     });
 
+    describe('fixing an overlap inline', () => {
+      const timed = (rowList: HistoryImportRow[], issues: HistoryImportIssue[]): HistoryImportDetail => ({
+        ...rowsDraft(rowList, issues),
+        fields: ['member_name', 'unit', 'start_time', 'end_time'],
+      });
+      const timedRows = [
+        fileRow('r3', 3),
+        fileRow('r4', 4, { values: { member_name: 'Member 4', unit: 'A106E', start_time: '2330', end_time: '0115' } }),
+        fileRow('r5', 5, { values: { member_name: 'Member 4', unit: 'A106E', start_time: '2330', end_time: '0000' } }),
+      ];
+
+      it('saves only the time that changed', async () => {
+        mockGet.mockResolvedValue(timed(timedRows, [overlap, probable]));
+        const user = userEvent.setup();
+        renderPage();
+        await openRows(user);
+
+        const start = screen.getByRole('textbox', { name: 'Start time, line 5' });
+        await user.clear(start);
+        await user.type(start, '0115');
+        await user.click(within(screen.getByRole('form', { name: 'Times for line 5' })).getByRole('button'));
+
+        expect(mockRow).toHaveBeenCalledWith('imp-1', 'r5', { edits: { start_time: '0115' } });
+      });
+
+      it('offers nothing to save until a time changes', async () => {
+        mockGet.mockResolvedValue(timed(timedRows, [overlap, probable]));
+        const user = userEvent.setup();
+        renderPage();
+        await openRows(user);
+
+        const form = screen.getByRole('form', { name: 'Times for line 4' });
+        expect(within(form).getByRole('button', { name: 'Save times' })).toBeDisabled();
+      });
+
+      it('leaves times as text on a row that does not overlap', async () => {
+        mockGet.mockResolvedValue(timed(timedRows, [overlap, probable]));
+        const user = userEvent.setup();
+        renderPage();
+        await openRows(user);
+
+        expect(screen.queryByRole('form', { name: 'Times for line 3' })).not.toBeInTheDocument();
+        expect(screen.getAllByRole('form')).toHaveLength(2);
+      });
+
+      it('offers no inputs when the file maps no time columns', async () => {
+        mockGet.mockResolvedValue(rowsDraft(rows, [overlap]));
+        const user = userEvent.setup();
+        renderPage();
+        await openRows(user);
+
+        expect(screen.queryByRole('form', { name: /Times for line/ })).not.toBeInTheDocument();
+      });
+    });
+
     it('shows a row its issue, the other line involved and what the file said', async () => {
       const edited = fileRow('r4', 4, {
         values: { member_name: 'Member Four', unit: 'A106E' },
