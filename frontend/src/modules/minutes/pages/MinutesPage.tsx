@@ -103,6 +103,11 @@ const MinutesPage: React.FC = () => {
   // Minutes by the meeting they were written from, newest first. Without
   // these the page could create minutes but never lead back to them (W51-2).
   const [minutesByMeeting, setMinutesByMeeting] = useState<Map<string, MinutesListItem[]>>(new Map());
+  // Minutes circulated for review whose meeting the list does not show. A
+  // member sees only approved meetings, but may read submitted minutes, which
+  // are written while their meeting is still a draft; without this list the
+  // link to minutes they are meant to review would have nowhere to render.
+  const [circulatedWithoutMeeting, setCirculatedWithoutMeeting] = useState<MinutesListItem[]>([]);
   const [minutesStats, setMinutesStats] = useState<MinutesStats | null>(null);
   const [openingMeetingId, setOpeningMeetingId] = useState<string | null>(null);
   const [pickingFor, setPickingFor] = useState<{ id: string; type: string } | null>(null);
@@ -166,6 +171,16 @@ const MinutesPage: React.FC = () => {
         byMeeting.set(item.meeting_id, [...(byMeeting.get(item.meeting_id) ?? []), item]);
       }
       setMinutesByMeeting(byMeeting);
+      const shownMeetings = new Set(asArray(meetingsRes.meetings).map((m) => m.id));
+      // Only with no filter applied: a meeting a filter hid is not missing.
+      const unfiltered = typeFilter === 'all' && !searchQuery.trim();
+      setCirculatedWithoutMeeting(
+        unfiltered
+          ? minutesList.filter(
+              (item) => item.status === 'submitted' && !!item.meeting_id && !shownMeetings.has(item.meeting_id)
+            )
+          : []
+      );
       setMinutesStats(stats);
     } catch {
       setError('Unable to load meetings. Check your connection and try again.');
@@ -462,6 +477,27 @@ const MinutesPage: React.FC = () => {
             <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-cyan-700" />
             <p className="text-theme-text-secondary">Loading meetings...</p>
           </div>
+        )}
+
+        {!loading && circulatedWithoutMeeting.length > 0 && (
+          <section className="card mb-4 p-4" aria-labelledby="circulated-minutes-heading">
+            <h2 id="circulated-minutes-heading" className="text-theme-text-primary text-sm font-semibold">
+              Minutes circulated for review
+            </h2>
+            {circulatedWithoutMeeting.map((m) => (
+              <Link
+                key={m.id}
+                to={`/minutes/${m.id}`}
+                className="mt-2 flex items-center gap-1.5 text-sm font-medium text-cyan-800 hover:underline dark:text-cyan-400"
+              >
+                <BookOpen className="h-4 w-4" aria-hidden="true" />
+                <span>{m.title}</span>
+                <span className="text-theme-text-muted font-normal">
+                  · {MINUTES_STATUS_LABELS[m.status] ?? m.status}
+                </span>
+              </Link>
+            ))}
+          </section>
         )}
 
         {/* Content Area */}

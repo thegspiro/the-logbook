@@ -12,7 +12,7 @@ profile.
 import uuid
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from pydantic import ValidationError
 
 from app.api.v1.endpoints.users import update_contact_info, update_user_profile
@@ -117,6 +117,7 @@ class TestUpdatePaths:
             await update_contact_info(
                 user_id=uuid.UUID(member.id),
                 contact_update=ContactInfoUpdate(phone="call me maybe"),
+                background_tasks=BackgroundTasks(),
                 db=db_session,
                 current_user=member,
                 request=fake_request(),
@@ -134,6 +135,7 @@ class TestUpdatePaths:
             contact_update=ContactInfoUpdate(
                 phone="call me maybe", mobile="(703) 555-0199"
             ),
+            background_tasks=BackgroundTasks(),
             db=db_session,
             current_user=member,
             request=fake_request(),
@@ -148,6 +150,7 @@ class TestUpdatePaths:
         await update_contact_info(
             user_id=uuid.UUID(member.id),
             contact_update=ContactInfoUpdate(mobile=""),
+            background_tasks=BackgroundTasks(),
             db=db_session,
             current_user=member,
             request=fake_request(),
