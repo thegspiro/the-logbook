@@ -1859,6 +1859,7 @@ class ReportExportService:
             users_result = await self.db.execute(
                 select(User)
                 .where(User.id.in_(user_ids))
+                .where(User.organization_id == organization_id)
                 .order_by(User.last_name, User.first_name)
             )
             ordered_users = list(users_result.scalars().all())

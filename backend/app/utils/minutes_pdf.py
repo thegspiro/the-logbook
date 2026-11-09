@@ -80,6 +80,9 @@ def _text(value: Any) -> str:
 
 
 def _styled_table(data: List[List[Any]], col_widths: List[float]) -> Table:
+    """A bordered table. A ``str`` cell prints literally and must NOT be
+    escaped; anything that may hold markup-like user text goes in a
+    ``Paragraph`` built from ``_esc``/``_text`` instead."""
     style = TableStyle(
         [
             ("BACKGROUND", (0, 0), (-1, 0), _HEADER_BG),
@@ -361,7 +364,9 @@ def render_minutes_pdf(
                 [
                     Paragraph(_esc(entry.get("name")), styles["Normal"]),
                     Paragraph(_esc(entry.get("role") or ""), styles["Normal"]),
-                    _STATUS_LABELS.get(entry.get("status"), _esc(entry.get("status"))),
+                    _STATUS_LABELS.get(
+                        entry.get("status"), str(entry.get("status") or "")
+                    ),
                     Paragraph(_esc(entry.get("note") or ""), styles["Normal"]),
                 ]
             )
@@ -466,8 +471,8 @@ def render_minutes_pdf(
                     Paragraph(_esc(item.get("description")), styles["Normal"]),
                     Paragraph(_esc(item.get("assignee") or "—"), styles["Normal"]),
                     item.get("due") or "—",
-                    _esc(item.get("priority")),
-                    _esc(str(item.get("status") or "").replace("_", " ")),
+                    str(item.get("priority") or ""),
+                    str(item.get("status") or "").replace("_", " "),
                 ]
             )
         story.append(
@@ -491,9 +496,9 @@ def render_minutes_pdf(
             rows.append(
                 [
                     Paragraph(_esc(att.get("title")), styles["Normal"]),
-                    _esc(str(att.get("category") or "").replace("_", " ")),
+                    str(att.get("category") or "").replace("_", " "),
                     Paragraph(_esc(att.get("name")), styles["Normal"]),
-                    _esc(str(att.get("sha256") or "")[:16] + "…"),
+                    str(att.get("sha256") or "")[:16] + "…",
                     Paragraph(_esc(entry.note if entry else ""), styles["Normal"]),
                 ]
             )

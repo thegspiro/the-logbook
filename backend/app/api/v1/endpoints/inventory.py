@@ -3561,7 +3561,19 @@ async def export_impact_plan_pdf(
             detail=safe_error_detail(e),
         )
 
-    headers = {"Content-Disposition": "attachment; filename=impact-plan.pdf"}
+    # The plan lists members with their contact details, so the export is
+    # recorded like any other disclosure of member data.
+    await log_audit_event(
+        db=db,
+        event_type="inventory_impact_plan_exported",
+        event_category="inventory",
+        severity="info",
+        event_data={"format": "pdf"},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    headers = {"Content-Disposition": 'attachment; filename="impact-plan.pdf"'}
     return StreamingResponse(pdf_buf, media_type="application/pdf", headers=headers)
 
 

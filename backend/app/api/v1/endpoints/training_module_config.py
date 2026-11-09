@@ -23,6 +23,7 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
+from app.core.audit import log_audit_event
 from app.core.constants import TRAINING_OFFICER_ROLE_SLUGS
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -1117,6 +1118,20 @@ async def export_my_training(
     user_id = str(current_user.id)
     include_certifications = bool(config.show_certification_status)
 
+    await log_audit_event(
+        db=db,
+        event_type="my_training_record_exported",
+        event_category="training",
+        severity="info",
+        event_data={
+            "format": format,
+            "start_date": start_date.isoformat() if start_date else None,
+            "end_date": end_date.isoformat() if end_date else None,
+        },
+        user_id=user_id,
+        organization_id=str(current_user.organization_id),
+    )
+
     try:
         if format == "pdf":
             pdf_buf = await export_service.generate_individual_pdf(
@@ -1131,7 +1146,7 @@ async def export_my_training(
                 media_type="application/pdf",
                 headers={
                     "Content-Disposition": (
-                        "attachment; filename=my_training_record.pdf"
+                        'attachment; filename="my_training_record.pdf"'
                     )
                 },
             )
@@ -1147,7 +1162,7 @@ async def export_my_training(
             content=csv_content,
             media_type="text/csv",
             headers={
-                "Content-Disposition": ("attachment; filename=my_training_record.csv")
+                "Content-Disposition": ('attachment; filename="my_training_record.csv"')
             },
         )
     except ValueError as e:

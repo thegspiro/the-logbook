@@ -1820,7 +1820,10 @@ async def export_pdf(
             from app.models.user import User as UserModel
 
             u_result = await db.execute(
-                select(UserModel).where(UserModel.id == str(check.checked_by))
+                select(UserModel).where(
+                    UserModel.id == str(check.checked_by),
+                    UserModel.organization_id == current_user.organization_id,
+                )
             )
             u = u_result.scalar_one_or_none()
             if u:
@@ -1837,10 +1840,27 @@ async def export_pdf(
             detail="Invalid report_type",
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="equipment_check_report_exported",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "report_type": report_type,
+            "format": "pdf",
+            "check_id": check_id if report_type == "check-detail" else None,
+            "apparatus_id": apparatus_id,
+            "date_from": date_from_str,
+            "date_to": date_to_str,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": (f"attachment; filename={filename}")},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
