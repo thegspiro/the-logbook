@@ -67,7 +67,7 @@ const SUMMARY = {
 // expiry) stack a truck count and a storage path under the figure. It can
 // overflow its card on a tablet or laptop with the side navigation open.
 test.describe('Medical supplies — stock table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/medical-supplies?tab=stock — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
