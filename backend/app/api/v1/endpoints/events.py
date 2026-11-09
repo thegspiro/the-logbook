@@ -628,6 +628,7 @@ def _to_list_item(row: dict, counts_toward_attendance: bool = False) -> EventLis
         mandatory_membership_types=event.mandatory_membership_types,
         is_draft=event.is_draft or False,
         is_cancelled=event.is_cancelled,
+        postponed_from_start=event.postponed_from_start,
         is_recurring=event.is_recurring or False,
         recurrence_parent_id=event.recurrence_parent_id,
         rsvp_count=row["rsvp_count"],
