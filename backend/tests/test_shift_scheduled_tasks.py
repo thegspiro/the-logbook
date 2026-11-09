@@ -1374,9 +1374,13 @@ class TestEndOfShiftSummaryCallTypeLabels:
         db_session: AsyncSession,
         call_types: list[dict],
         types_after: list[dict] | None = None,
+        type_counts: dict[str, int] | None = None,
     ) -> dict:
-        """Record two mutual-aid calls, optionally rewrite the type list the
-        way an admin would afterwards, then send the summary."""
+        """Record two mutual-aid calls (or ``type_counts``), optionally rewrite
+        the type list the way an admin would afterwards, then send the
+        summary."""
+        type_counts = type_counts or {"mutual_aid": 2}
+        total_calls = sum(type_counts.values())
         org_id = await _insert_org(db_session, settings_json=self._settings(call_types))
         user_id = await _insert_user(db_session, org_id=org_id)
         shift_id, _, _ = await _insert_shift(
@@ -1390,7 +1394,7 @@ class TestEndOfShiftSummaryCallTypeLabels:
             shift_id=shift_id,
             user_id=user_id,
             duration_minutes=720,
-            call_count=2,
+            call_count=total_calls,
         )
         await db_session.flush()
 
@@ -1398,7 +1402,7 @@ class TestEndOfShiftSummaryCallTypeLabels:
             await db_session.execute(select(Shift).where(Shift.id == shift_id))
         ).scalar_one()
         _, err = await CallTrackingService(db_session).record_shift_calls(
-            shift, org_id, total_calls=2, type_counts={"mutual_aid": 2}
+            shift, org_id, total_calls=total_calls, type_counts=type_counts
         )
         assert err is None
         await db_session.flush()
@@ -1459,6 +1463,40 @@ class TestEndOfShiftSummaryCallTypeLabels:
             types_after=[{"slug": "fire", "label": "Fire"}],
         )
         assert out["metadata"].get("call_types") == ["mutual_aid", "mutual_aid"]
+
+    async def test_repeated_types_are_rolled_up_with_a_count(
+        self, db_session: AsyncSession, monkeypatch
+    ):
+        """Ten EMS runs read as "10 EMS", not the word EMS ten times — in the
+        bell, the HTML email and the plain-text email alike. The metadata
+        keeps one entry per call for anything that counts them."""
+        from app.services.email_service import EmailService
+
+        send = AsyncMock(return_value=(1, 0))
+        monkeypatch.setattr(EmailService, "can_send", property(lambda self: True))
+        monkeypatch.setattr(EmailService, "send_email", send)
+
+        out = await self._run(
+            db_session,
+            [
+                {"slug": "ems", "label": "EMS"},
+                {"slug": "fire", "label": "Fire"},
+            ],
+            type_counts={"ems": 10, "fire": 2},
+        )
+
+        assert out["metadata"].get("call_types") == ["EMS"] * 10 + ["Fire"] * 2
+        assert "Call types: 10 EMS, 2 Fire" in out["message"]
+
+        send.assert_awaited_once()
+        html_body = send.await_args.kwargs["html_body"]
+        text_body = send.await_args.kwargs["text_body"]
+        assert html_body.count(">EMS<") == 1
+        assert html_body.count(">Fire<") == 1
+        assert html_body.index("<strong>10</strong>") < html_body.index(">EMS<")
+        assert html_body.index("<strong>2</strong>") < html_body.index(">Fire<")
+        assert "<li>" not in html_body
+        assert "Call types: 10 EMS, 2 Fire\n" in text_body
 
 
 # ── run_post_shift_validation ─────────────────────────────────────────

@@ -937,8 +937,8 @@ export const GrantDetailPage: React.FC = () => {
                   <p className="text-theme-text-secondary">No budget items yet</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="rwd-table-container overflow-x-auto">
+                  <table className="rwd-table rwd-table-wide w-full">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
                         <th
@@ -994,22 +994,34 @@ export const GrantDetailPage: React.FC = () => {
                         const isOver = spent > budgeted;
                         return (
                           <tr key={item.id}>
-                            <td className="text-theme-text-primary px-4 py-3 text-sm font-medium whitespace-nowrap">
+                            <td
+                              data-label="Category"
+                              className="text-theme-text-primary px-4 py-3 text-sm font-medium whitespace-nowrap"
+                            >
                               {budgetCategoryLabel(item.category)}
                             </td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-sm">{item.description}</td>
-                            <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
+                            <td data-label="Description" className="text-theme-text-secondary px-4 py-3 text-sm">
+                              {item.description}
+                            </td>
+                            <td
+                              data-label="Budgeted"
+                              className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
+                            >
                               {formatCurrency(item.amountBudgeted)}
                             </td>
-                            <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
+                            <td
+                              data-label="Spent"
+                              className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
+                            >
                               {formatCurrency(item.amountSpent)}
                             </td>
                             <td
+                              data-label="Remaining"
                               className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${isOver ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
                             >
                               {formatCurrency(remaining)}
                             </td>
-                            <td className="px-4 py-3">
+                            <td data-label="Progress" className="px-4 py-3">
                               <div className="flex items-center gap-2">
                                 <div className="bg-theme-surface-hover h-2 w-24 overflow-hidden rounded-full">
                                   <div
@@ -1021,7 +1033,7 @@ export const GrantDetailPage: React.FC = () => {
                               </div>
                             </td>
                             {canManage && (
-                              <td className="px-4 py-3 whitespace-nowrap">
+                              <td data-label="Actions" className="px-4 py-3 whitespace-nowrap">
                                 <div className="flex items-center justify-end gap-1">
                                   <button
                                     type="button"
@@ -1047,25 +1059,40 @@ export const GrantDetailPage: React.FC = () => {
                           </tr>
                         );
                       })}
-                      {/* Total row */}
+                    </tbody>
+                    {/* In the card layout the empty footer cells hide, and the totals keep their labels. */}
+                    <tfoot className="border-theme-surface-border border-t">
                       <tr className="bg-theme-surface-secondary font-semibold">
-                        <td className="text-theme-text-primary px-4 py-3 text-sm">Total</td>
-                        <td className="px-4 py-3" />
-                        <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
+                        <th
+                          scope="row"
+                          data-label="Total"
+                          className="rwd-table-lead text-theme-text-primary px-4 py-3 text-left text-sm"
+                        >
+                          Total
+                        </th>
+                        <td aria-hidden="true" className="px-4 py-3" />
+                        <td
+                          data-label="Budgeted"
+                          className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
+                        >
                           {formatCurrency(budgetTotal)}
                         </td>
-                        <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
+                        <td
+                          data-label="Spent"
+                          className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
+                        >
                           {formatCurrency(spentTotal)}
                         </td>
                         <td
+                          data-label="Remaining"
                           className={`px-4 py-3 text-right text-sm whitespace-nowrap ${remainingTotal >= 0 ? 'text-green-700 dark:text-green-600' : 'text-red-600'}`}
                         >
                           {formatCurrency(remainingTotal)}
                         </td>
-                        <td className="px-4 py-3" />
-                        {canManage && <td className="px-4 py-3" />}
+                        <td aria-hidden="true" className="px-4 py-3" />
+                        {canManage && <td aria-hidden="true" className="px-4 py-3" />}
                       </tr>
-                    </tbody>
+                    </tfoot>
                   </table>
                 </div>
               )}
@@ -1099,8 +1126,8 @@ export const GrantDetailPage: React.FC = () => {
                   <p className="text-theme-text-secondary">No expenditures recorded</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="rwd-table-container overflow-x-auto">
+                  <table className="rwd-table rwd-table-xwide w-full">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
                         <th
@@ -1151,20 +1178,28 @@ export const GrantDetailPage: React.FC = () => {
                         const linkedBudgetItem = budgetItems.find((b) => b.id === exp.budgetItemId);
                         return (
                           <tr key={exp.id} className="hover:bg-theme-surface-hover transition-colors">
-                            <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
+                            <td
+                              data-label="Date"
+                              className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap"
+                            >
                               {formatDate(exp.expenditureDate, tz)}
                             </td>
-                            <td className="text-theme-text-primary px-4 py-3 text-sm">{exp.description}</td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                            <td data-label="Description" className="text-theme-text-primary px-4 py-3 text-sm">
+                              {exp.description}
+                            </td>
+                            <td data-label="Vendor" className="text-theme-text-secondary px-4 py-3 text-sm">
                               {exp.vendor ?? '--'}
                             </td>
-                            <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+                            <td
+                              data-label="Amount"
+                              className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap"
+                            >
                               {formatCurrency(exp.amount)}
                             </td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                            <td data-label="Budget Category" className="text-theme-text-secondary px-4 py-3 text-sm">
                               {linkedBudgetItem ? budgetCategoryLabel(linkedBudgetItem.category) : '--'}
                             </td>
-                            <td className="px-4 py-3 text-sm whitespace-nowrap">
+                            <td data-label="Receipt" className="px-4 py-3 text-sm whitespace-nowrap">
                               {exp.receiptUrl && isSafeExternalUrl(exp.receiptUrl) ? (
                                 <a
                                   href={exp.receiptUrl}
@@ -1180,7 +1215,7 @@ export const GrantDetailPage: React.FC = () => {
                               )}
                             </td>
                             {canManage && (
-                              <td className="px-4 py-3 whitespace-nowrap">
+                              <td data-label="Actions" className="px-4 py-3 whitespace-nowrap">
                                 <div className="flex items-center justify-end gap-1">
                                   <button
                                     type="button"

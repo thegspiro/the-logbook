@@ -6,15 +6,19 @@ Accessible by admins via the membership module admin area.
 """
 
 import copy
+import difflib
+import hashlib
 import uuid
 from typing import Any, Optional
 
 from fastapi import (
     APIRouter,
+    Cookie,
     Depends,
     File,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -23,7 +27,12 @@ from sqlalchemy import select
 from sqlalchemy.exc import DataError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission, user_has_permission
+from app.api.dependencies import (
+    ensure_stepup,
+    request_access_token,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -542,10 +551,121 @@ async def get_email_template(
     return await _with_list_metadata(EmailTemplateService(db), template)
 
 
+# Fields copied into the audit row's diff. The bodies are diffed rather than
+# stored whole, and also fingerprinted, so a change can be proven even when the
+# diff is cut off at _AUDIT_DIFF_LIMIT.
+_AUDITED_TEMPLATE_FIELDS = (
+    "name",
+    "subject",
+    "html_body",
+    "text_body",
+    "description",
+    "is_active",
+    "allow_attachments",
+    "default_cc",
+    "default_bcc",
+    "footer_key",
+    "header_accent",
+    "status_chip",
+    "layout",
+)
+_TEMPLATE_BODY_FIELDS = frozenset({"html_body", "text_body"})
+_AUDIT_DIFF_LIMIT = 4000
+
+PROTECTED_TEMPLATE_EDIT_REFUSED = (
+    "This email carries a password, a reset or ballot token, or an applicant's "
+    "private link, so only a full administrator may change it."
+)
+
+
+def _template_snapshot(template: EmailTemplate) -> dict:
+    return {
+        f: copy.deepcopy(getattr(template, f, None)) for f in _AUDITED_TEMPLATE_FIELDS
+    }
+
+
+def _fingerprint(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _template_changes(before: dict, after: dict) -> dict:
+    """What changed, in a form an audit reviewer can read."""
+    changes: dict = {}
+    for field in _AUDITED_TEMPLATE_FIELDS:
+        old, new = before.get(field), after.get(field)
+        if old == new:
+            continue
+        if field in _TEMPLATE_BODY_FIELDS:
+            diff = "".join(
+                difflib.unified_diff(
+                    (old or "").splitlines(keepends=True),
+                    (new or "").splitlines(keepends=True),
+                    lineterm="\n",
+                )
+            )
+            changes[field] = {
+                "diff": diff[:_AUDIT_DIFF_LIMIT],
+                "diff_truncated": len(diff) > _AUDIT_DIFF_LIMIT,
+                "sha256_before": _fingerprint(old),
+                "sha256_after": _fingerprint(new),
+            }
+        else:
+            changes[field] = {"from": old, "to": new}
+    return changes
+
+
+async def _audit_template_change(
+    db: AsyncSession,
+    *,
+    event_type: str,
+    template: EmailTemplate,
+    before: dict,
+    protected: bool,
+    current_user: User,
+) -> None:
+    await log_audit_event(
+        db=db,
+        event_type=event_type,
+        event_category="settings",
+        # A credential template is where a rewrite steals passwords; its
+        # changes are raised so a reviewer filtering for warnings sees them.
+        severity="warning" if protected else "info",
+        event_data={
+            "template_id": str(template.id),
+            "template_type": _type_value(template.template_type),
+            "credential_template": protected,
+            "changes": _template_changes(before, _template_snapshot(template)),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
+async def _load_template_for_write(
+    db: AsyncSession, template_id: str, organization_id: str
+) -> EmailTemplate:
+    result = await db.execute(
+        select(EmailTemplate).where(
+            EmailTemplate.id == template_id,
+            EmailTemplate.organization_id == organization_id,
+        )
+    )
+    template = result.scalar_one_or_none()
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
+        )
+    return template
+
+
 @router.put("/{template_id}", response_model=EmailTemplateResponse)
 async def update_email_template(
     template_id: str,
     update_data: EmailTemplateUpdate,
+    request: Request,
+    access_token: Optional[str] = Cookie(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("settings.manage", "organization.update_settings")
@@ -555,7 +675,26 @@ async def update_email_template(
     Update an email template's content, subject, CSS, or settings.
 
     Admins use this to customize the welcome email message, styling, etc.
+    A template that carries a credential or private link (``always_sent``)
+    can be changed only by a holder of ``*``, after step-up re-verification.
     """
+    existing = await _load_template_for_write(
+        db, template_id, current_user.organization_id
+    )
+    protected = is_always_sent(existing.template_type)
+    if protected:
+        # settings.manage is held by the Secretary. Rewriting the welcome or
+        # reset email reaches every new member's temporary password and every
+        # reset token, which is a takeover path settings.manage was never
+        # meant to carry.
+        if not user_has_permission(current_user, "*"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=PROTECTED_TEMPLATE_EDIT_REFUSED,
+            )
+        await ensure_stepup(db, request_access_token(request, access_token))
+    before = _template_snapshot(existing)
+
     service = EmailTemplateService(db)
     # exclude_unset, not exclude_none: a null here is the client saying
     # "clear this field", and dropping it strips the clear a layer before
@@ -577,6 +716,14 @@ async def update_email_template(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Email template not found"
         )
+    await _audit_template_change(
+        db,
+        event_type="email_template_updated",
+        template=template,
+        before=before,
+        protected=protected,
+        current_user=current_user,
+    )
     await db.commit()
 
     logger.info(
@@ -630,6 +777,10 @@ async def reset_email_template(
     Restores the subject, HTML body, text body, and CSS styles to the
     system defaults. Custom CC/BCC settings are preserved.
     """
+    existing = await _load_template_for_write(
+        db, template_id, current_user.organization_id
+    )
+    before = _template_snapshot(existing)
     service = EmailTemplateService(db)
     template = await service.reset_to_default(
         template_id=template_id,
@@ -641,6 +792,17 @@ async def reset_email_template(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Email template not found or has no built-in default",
         )
+    # Restoring the shipped default is the safe direction, so it keeps the
+    # settings.manage gate; it is audited so a protected template's history
+    # does not have a gap where a reset happened.
+    await _audit_template_change(
+        db,
+        event_type="email_template_reset",
+        template=template,
+        before=before,
+        protected=is_always_sent(template.template_type),
+        current_user=current_user,
+    )
     await db.commit()
 
     logger.info(

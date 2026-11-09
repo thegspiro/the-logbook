@@ -4,6 +4,7 @@ from typing import Any, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import permission_matches
 from app.mcp.principal import McpPrincipal
 from app.mcp.redaction import scrub_text
 from app.mcp.registry import logbook_tool
@@ -17,7 +18,7 @@ from app.mcp.tools._common import (
     parse_datetime,
     parse_uuid,
 )
-from app.models.event import AttendeeVisibility
+from app.models.event import AttendeeVisibility, Event
 from app.models.user import Organization
 from app.services.event_service import EventService, resolve_attendee_visibility
 
@@ -107,6 +108,29 @@ def _event(event: Any, counts: Optional[dict] = None) -> dict:
     }
 
 
+def _may_see_drafts(principal: McpPrincipal) -> bool:
+    """Whether this connection may read unpublished (draft) events.
+
+    The HTTP API shows drafts to events.manage holders only. A member's OAuth
+    connection carries that member's permissions and gets the same answer; a
+    service key has no member behind it and is department-wide by design, as
+    for every other tool it reaches.
+    """
+    if principal.member_permissions is None:
+        return True
+    return permission_matches("events.manage", set(principal.member_permissions))
+
+
+def _visible_event(principal: McpPrincipal, event: Optional[Event]) -> Event:
+    """The event, or "not found" for a missing one or a draft this caller may not see.
+
+    The same answer for both, so a draft's id confirms nothing.
+    """
+    if event is None or (event.is_draft and not _may_see_drafts(principal)):
+        raise ValueError("Event not found")
+    return event
+
+
 def register(server: Any) -> None:
     @logbook_tool(
         server, title="List events", permissions=("events.view", "events.manage")
@@ -137,7 +161,7 @@ def register(server: Any) -> None:
             start_after=parse_datetime(start_after, "start_after"),
             start_before=parse_datetime(start_before, "start_before"),
             include_cancelled=include_cancelled,
-            include_drafts=include_drafts,
+            include_drafts=include_drafts and _may_see_drafts(principal),
             skip=offset,
             limit=limit,
         )
@@ -155,11 +179,10 @@ def register(server: Any) -> None:
         RSVP settings."""
         # get_event answers (None, None) for an unknown or foreign id. The
         # RSVP roster is not read here, so it is not loaded.
-        event, _ = await EventService(db).get_event(
+        found, _ = await EventService(db).get_event(
             parse_uuid(event_id, "event_id"), org_uuid(principal), load_rsvps=False
         )
-        if event is None:
-            raise ValueError("Event not found")
+        event = _visible_event(principal, found)
         return _event(event)
 
     @logbook_tool(
@@ -180,11 +203,10 @@ def register(server: Any) -> None:
         if field not in _EVENT_TEXT_FIELDS:
             raise ValueError("field must be one of: " + ", ".join(_EVENT_TEXT_FIELDS))
         content_offset = clamp_offset(content_offset)
-        event, _ = await EventService(db).get_event(
+        found, _ = await EventService(db).get_event(
             parse_uuid(event_id, "event_id"), org_uuid(principal), load_rsvps=False
         )
-        if event is None:
-            raise ValueError("Event not found")
+        event = _visible_event(principal, found)
         body = _chunk(getattr(event, field) or "", content_offset)
         body.update({"event_id": event.id, "title": event.title, "field": field})
         return body

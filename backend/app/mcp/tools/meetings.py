@@ -35,7 +35,7 @@ from app.models.minute import (
     ActionItem,
     Motion,
 )
-from app.services.meetings_service import MeetingsService
+from app.services.meetings_service import MeetingsService, member_visible_meeting
 from app.services.minute_service import MinuteService
 from app.utils.rich_text import FORMAT_HTML, html_to_text, normalize_format
 from app.utils.sql_ordering import nulls_last_asc
@@ -287,7 +287,9 @@ def register(server: Any) -> None:
         date and times, location, status and agenda. ``start_time`` and
         ``end_time`` are the department's local clock times, not UTC. An
         agenda is cut at 20,000 characters (``agenda_truncated``);
-        ``get_meeting_agenda`` reads the rest."""
+        ``get_meeting_agenda`` reads the rest. Approved, non-executive
+        meetings only, as for minutes: drafts and executive sessions are never
+        listed."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
         # The service drops a filter it cannot parse, which would turn a
@@ -315,6 +317,7 @@ def register(server: Any) -> None:
             from_date=parse_date(from_date, "from_date"),
             skip=offset,
             limit=limit,
+            member_visible_only=True,
         )
         items = []
         for m in meetings:
@@ -363,6 +366,7 @@ def register(server: Any) -> None:
             select(Meeting).where(
                 Meeting.id == str(parse_uuid(meeting_id, "meeting_id")),
                 Meeting.organization_id == principal.organization_id,
+                member_visible_meeting(),
             )
         )
         meeting = result.scalar_one_or_none()
@@ -393,11 +397,18 @@ def register(server: Any) -> None:
         ``get_action_item_description`` reads the rest."""
         limit = clamp_limit(limit)
         offset = clamp_offset(offset)
+        # An item's description is drawn from its meeting's deliberation, so
+        # it is listed only where the meeting itself would be.
+        visible_meeting_ids = select(Meeting.id).where(
+            Meeting.organization_id == principal.organization_id,
+            member_visible_meeting(),
+        )
         criteria = (
             MeetingActionItem.organization_id == principal.organization_id,
             MeetingActionItem.status.in_(
                 [ActionItemStatus.OPEN, ActionItemStatus.IN_PROGRESS]
             ),
+            MeetingActionItem.meeting_id.in_(visible_meeting_ids),
         )
         total = (
             await db.execute(
@@ -464,6 +475,12 @@ def register(server: Any) -> None:
                 MeetingActionItem.id
                 == str(parse_uuid(action_item_id, "action_item_id")),
                 MeetingActionItem.organization_id == principal.organization_id,
+                MeetingActionItem.meeting_id.in_(
+                    select(Meeting.id).where(
+                        Meeting.organization_id == principal.organization_id,
+                        member_visible_meeting(),
+                    )
+                ),
             )
         )
         item = result.scalar_one_or_none()

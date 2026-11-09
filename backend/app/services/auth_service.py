@@ -20,6 +20,7 @@ from app.core.breached_password import check_password_not_breached
 from app.core.config import settings
 from app.core.constants import ROLE_MEMBER
 from app.core.security import (
+    burn_password_verification,
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -323,17 +324,13 @@ class AuthService:
             # SEC-02: Perform a dummy hash to prevent timing-based username
             # enumeration.  Without this, "user not found" returns in ~1ms
             # while "wrong password" takes ~100-300ms (Argon2 cost).
-            verify_password(
-                "dummy-password", hash_password("dummy-password", skip_validation=True)
-            )
+            burn_password_verification(password)
             logger.warning("Authentication failed for login attempt")
             self.last_auth_failure = AuthFailure(AUTH_FAILURE_UNKNOWN_USER)
             return None, "Incorrect username or password"
 
         if not user.password_hash:
-            verify_password(
-                "dummy-password", hash_password("dummy-password", skip_validation=True)
-            )
+            burn_password_verification(password)
             logger.warning("Authentication failed for login attempt")
             self.last_auth_failure = self._failure(user, AUTH_FAILURE_NO_PASSWORD)
             return None, "Incorrect username or password"
@@ -348,7 +345,7 @@ class AuthService:
             else user.locked_until
         )
         if locked_until and locked_until > datetime.now(timezone.utc):
-            logger.warning(f"Authentication failed: account locked - {username}")
+            logger.warning("Authentication failed: account locked - user {}", user.id)
             self.last_auth_failure = self._failure(user, AUTH_FAILURE_ACCOUNT_LOCKED)
             if settings.ACCOUNT_LOCKOUT_REVEAL:
                 remaining_min = max(
@@ -366,9 +363,7 @@ class AuthService:
             # real Argon2 verify below, so without a dummy hash a locked (i.e.
             # existing) account would answer noticeably faster than the
             # wrong-password path and be distinguishable by timing. Equalize it.
-            verify_password(
-                "dummy-password", hash_password("dummy-password", skip_validation=True)
-            )
+            burn_password_verification(password)
             return None, "Incorrect username or password"
 
         # Verify password

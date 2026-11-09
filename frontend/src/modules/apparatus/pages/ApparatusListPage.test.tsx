@@ -314,7 +314,9 @@ describe('ApparatusListPage maintenance due', () => {
   it("shows the tile's own figure in the summary, without adding the overdue share twice", () => {
     renderWithRouter(<ApparatusListPage />);
 
-    expect(screen.getByRole('link', { name: 'Maintenance due: 2. Show the maintenance due' })).toHaveAttribute(
+    // Named by its visible words first, then where it goes, so voice control's
+    // "click Maintenance Due" finds it (WCAG 2.5.3).
+    expect(screen.getByRole('link', { name: /^Maintenance Due\s*2\b.*Show the maintenance due$/ })).toHaveAttribute(
       'href',
       '/apparatus?maintenance=due'
     );

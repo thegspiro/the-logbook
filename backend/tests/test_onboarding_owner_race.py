@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import database_manager
 from app.services.onboarding import OnboardingService
+from tests.audit_cleanup import discard_committed_audit_rows
 
 _PASSWORD = "Sup3rSecret!2026"
 
@@ -167,16 +168,15 @@ class TestConcurrentSystemOwnerCreation:
                 "caller reported success."
             )
         finally:
+            # create_system_owner logs an audit event on success (the
+            # winner's, real and committed) -- clean it up too, or it
+            # outlives this test as an orphaned row once `organizations`
+            # is gone.
+            await discard_committed_audit_rows(
+                "organization_id = :org", {"org": org_id}
+            )
             async with database_manager.engine.connect() as cleanup_conn:
                 async with cleanup_conn.begin():
-                    # create_system_owner logs an audit event on success (the
-                    # winner's, real and committed) -- clean it up too, or it
-                    # outlives this test as an orphaned row once `organizations`
-                    # is gone.
-                    await cleanup_conn.execute(
-                        text("DELETE FROM audit_logs WHERE organization_id = :org"),
-                        {"org": org_id},
-                    )
                     await cleanup_conn.execute(
                         text("DELETE FROM users WHERE organization_id = :org"),
                         {"org": org_id},
