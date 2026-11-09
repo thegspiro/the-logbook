@@ -393,7 +393,7 @@ describe('CreateTrainingSessionPage attendance requirements', () => {
 
     await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Company Drill');
     await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
+    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.type(screen.getByPlaceholderText('e.g., CPR/AED for Healthcare Providers'), 'Company Drill');
     await user.click(await screen.findByRole('checkbox', { name: /Company drills/ }));

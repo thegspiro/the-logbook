@@ -66,7 +66,7 @@ const TRAINING_PERMISSIONS = [...TEST_USER.permissions, 'training.view', 'traini
 // than scrolled. It was an eight-column table until 2026-11; the list has to
 // fit at every width the table had to.
 test.describe('Member training history list fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/members/:userId/training — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: TRAINING_PERMISSIONS });
@@ -96,7 +96,7 @@ test.describe('Member training history list fits its card', () => {
 // badges, section and criteria counts, and up to six action buttons that grow
 // to 44px on a touch screen. Wide enough to overflow its card on a tablet.
 test.describe('Skills testing templates table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/training/admin?page=skills-testing&tab=templates — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: TRAINING_PERMISSIONS });
