@@ -364,6 +364,20 @@ describe('LabelPrintPage sheet start position', () => {
     expect(mockGenerate.mock.calls[0]?.[2]).toMatchObject({ label_format: 'letter', start_position: 5 });
   });
 
+  it('lays the sheet out on Avery 5160 columns, gutters and margins', async () => {
+    renderPage('?ids=a1');
+    await screen.findByLabelText('Start at label');
+
+    // Equal flexible columns with a 2px gap printed the outer columns off
+    // their labels and drifted a row gap down the sheet.
+    const grid = screen.getByTestId('label-sheet-grid');
+    expect(grid.style.gridTemplateColumns).toBe('repeat(3, 2.625in)');
+    expect(grid.style.columnGap).toBe('0.125in');
+    expect(grid.style.rowGap).toMatch(/^0(px)?$/);
+    const pageRule = screen.getByTestId('label-page-css').textContent;
+    expect(pageRule).toContain('margin: 0.5in 0.1875in');
+  });
+
   it('is not offered for a roll, and a roll PDF carries no position', async () => {
     mockGetPreset.mockResolvedValue({ preset: 'rollo_4x6' });
     const user = userEvent.setup();

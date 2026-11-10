@@ -379,11 +379,32 @@ describe('DocumentsPage', () => {
     const dialog = screen.getByRole('dialog');
     await user.type(within(dialog).getByLabelText(/folder name/i), 'Stores');
     await user.click(within(dialog).getByRole('radio', { name: 'Specific positions' }));
-    expect(within(dialog).getByRole('button', { name: /^create folder$/i })).toBeDisabled();
+    // Forms review F-3: the button used to grey out here; pressing it now
+    // says what it is waiting for, and sends nothing.
+    await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      'Choose at least one position who can open the folder.'
+    );
+    expect(mockCreateFolder).not.toHaveBeenCalled();
     await user.click(await within(dialog).findByRole('checkbox', { name: 'Quartermaster' }));
     await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
 
     await waitFor(() => expect(mockCreateFolder).toHaveBeenCalledWith({ name: 'Stores', allowed_roles: ['pos-qm'] }));
+  });
+
+  it('names a missing folder name on an empty save and focuses it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /new folder/i }));
+    const dialog = screen.getByRole('dialog');
+
+    await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
+
+    const name = within(dialog).getByLabelText(/folder name/i);
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Enter a name for the folder.');
+    expect(name).toHaveFocus();
+    expect(mockCreateFolder).not.toHaveBeenCalled();
   });
 
   it('confirms a folder only full administrators could open, then creates it', async () => {

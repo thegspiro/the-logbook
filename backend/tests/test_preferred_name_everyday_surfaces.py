@@ -138,6 +138,9 @@ class TestEquipmentCheckExportsUseLegalNames:
         service.get_failure_log = AsyncMock(return_value={"items": []})
         service.get_item_trends = AsyncMock(return_value={"periods": []})
         monkeypatch.setattr(endpoint, "EquipmentCheckService", lambda _db: service)
+        # Auditing is asserted against a real session in
+        # test_pdf_export_audit.py; this stub session cannot hold the row.
+        monkeypatch.setattr(endpoint, "_audit_equipment_export", AsyncMock())
         org = MagicMock()
         org.scalar_one_or_none.return_value = SimpleNamespace(
             timezone="America/New_York", name="Dept"

@@ -1138,25 +1138,24 @@ jobs:
   # about 35-38 minutes plus ~2 minutes of setup (PR #4082, cancelled twice at
   # 30 with every test passing), which leaves 45 too little headroom.
   #
-  # Split in two on 2026-11-10 rather than raised a third time. The test
-  # step ran 42-48 minutes, so #4179 and #4190 were cancelled at 50 with
-  # every test so far passing, and main had grown to 744 tests by then —
-  # about 50-60 minutes serially at 4-5 s a test. Each limit raise bought one
-  # batch of new specs; a shard halves the test step and keeps halving as the
-  # suite grows. `--shard=i/2` splits this project 372/372 by test count, and
-  # no one spec file dominates it the way the sweep dominates the Chromium
-  # legs, so a plain shard balances well. 50 stays as each leg's hang guard,
-  # against about 25-31 minutes of tests plus setup.
-  #
-  # Renaming the check is safe: branch protection requires only `CI Success`,
-  # which `needs:` this job by id and so waits on both legs.
+  # Two shards, 2026-11-09, instead of a third raise. More table-fit specs took
+  # the project to 744 tests (from ~450 four days earlier), and main's run on
+  # f2f54d9a and two PR runs (#4125, #4177) were cancelled at 50 minutes with
+  # every test so far passing, 654 in. A limit chasing a growing suite only moves
+  # the cancellation later. Split by count, unlike the Chromium legs above:
+  # `fullyParallel` makes `--shard` divide tests rather than files, and with
+  # `@sweep` excluded every test here takes the same 4-5 s, so `--list` puts 372
+  # in each leg, about 28 minutes plus setup. 45 is a hang guard with room for
+  # growth, not a target; when a leg nears it, add a shard (`[1, 2, 3]` and
+  # `/3` below) rather than raise it. The job id is unchanged, so `ci-success`
+  # still needs it: a matrix job's `needs` result is failure when any leg fails.
   frontend-e2e-safari:
     name: Frontend E2E (Mobile Safari ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 45
     strategy:
-      # One leg failing must not cancel the other: its passes and failures
-      # are still worth having.
+      # One leg failing must not cancel the other, for the reason given on the
+      # Chromium legs above.
       fail-fast: false
       matrix:
         shard: [1, 2]
@@ -1220,6 +1219,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          # Per shard: two legs uploading one name collide, and the second
+          # upload fails the step.
           name: playwright-report-safari-${{ matrix.shard }}
           path: frontend/playwright-report/
           retention-days: 7
