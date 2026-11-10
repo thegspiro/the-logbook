@@ -35,6 +35,8 @@ import { formatCurrency } from '@/utils/currencyFormatting';
 import { blankToNull } from '../../../utils/formValues';
 import { isSafeExternalUrl } from '../../../utils/safeUrl';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { formatVendorAddress, primaryContact } from '../utils/vendorHelpers';
 import { EmptyState } from '../../../components/ux';
 import type {
@@ -93,6 +95,54 @@ const EMPTY_VENDOR: VendorFD = {
   contact_phone: '',
 };
 
+type VendorField = Exclude<keyof VendorFD, 'is_preferred'>;
+
+// Ids are the inputs' own; the contact keys are where the server reports a
+// problem with the one contact this form sends.
+const VENDOR_FIELDS: FieldSpecs<VendorField> = {
+  name: { id: 'vendor-name', label: 'Vendor Name' },
+  account_number: { id: 'vendor-account', label: 'Account Number' },
+  payment_terms: { id: 'vendor-terms', label: 'Payment Terms' },
+  phone: { id: 'vendor-phone', label: 'Phone' },
+  email: { id: 'vendor-email', label: 'Email' },
+  fax: { id: 'vendor-fax', label: 'Fax' },
+  website: { id: 'vendor-website', label: 'Website' },
+  address_line1: { id: 'vendor-address1', label: 'Street Address' },
+  address_line2: { id: 'vendor-address2', label: 'Suite / Unit' },
+  city: { id: 'vendor-city', label: 'City' },
+  state: { id: 'vendor-state', label: 'State' },
+  postal_code: { id: 'vendor-zip', label: 'Postal Code' },
+  country: { id: 'vendor-country', label: 'Country' },
+  contact_name: { id: 'vendor-contact-name', label: 'Name', apiKeys: ['contacts.0.name'] },
+  contact_title: { id: 'vendor-contact-title', label: 'Title', apiKeys: ['contacts.0.title'] },
+  contact_email: { id: 'vendor-contact-email', label: 'Email', apiKeys: ['contacts.0.email'] },
+  contact_phone: { id: 'vendor-contact-phone', label: 'Phone', apiKeys: ['contacts.0.phone'] },
+  notes: { id: 'vendor-notes', label: 'Notes' },
+};
+
+// Limits mirror InventoryVendorBase / InventoryVendorContactBase (notes is
+// FreeText, capped at 2000).
+const VENDOR_MAX_LENGTH: Record<VendorField, number> = {
+  name: 255,
+  account_number: 100,
+  payment_terms: 100,
+  phone: 50,
+  email: 255,
+  fax: 50,
+  website: 255,
+  address_line1: 255,
+  address_line2: 255,
+  city: 100,
+  state: 100,
+  postal_code: 20,
+  country: 100,
+  contact_name: 255,
+  contact_title: 150,
+  contact_email: 255,
+  contact_phone: 50,
+  notes: 2000,
+};
+
 // -- Create/Edit Vendor Modal --
 const VendorFormModal: React.FC<{
   isOpen: boolean;
@@ -102,11 +152,12 @@ const VendorFormModal: React.FC<{
 }> = ({ isOpen, onClose, onSaved, editVendor }) => {
   const [f, setF] = useState<VendorFD>(EMPTY_VENDOR);
   const [saving, setSaving] = useState(false);
-  const [contactNameError, setContactNameError] = useState<string | null>(null);
+  const fieldErrors = useFieldErrors(VENDOR_FIELDS);
+  const { clear: clearErrors } = fieldErrors;
 
   useEffect(() => {
     if (!isOpen) return;
-    setContactNameError(null);
+    clearErrors();
     if (editVendor) {
       setF({
         ...EMPTY_VENDOR,
@@ -129,24 +180,31 @@ const VendorFormModal: React.FC<{
     } else {
       setF(EMPTY_VENDOR);
     }
-  }, [editVendor, isOpen]);
+  }, [editVendor, isOpen, clearErrors]);
 
-  const up = (k: keyof VendorFD, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
+  const up = (k: VendorField, v: string) => {
+    setF((p) => ({ ...p, [k]: v }));
+    fieldErrors.setError(k, null);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!f.name.trim()) {
-      toast.error('Vendor name is required');
-      return;
-    }
+    // Checked here rather than by the browser's required bubble, which
+    // vanished after a few seconds and named nothing (forms review F-3).
+    const problems: FieldErrors<VendorField> = {};
+    if (!f.name.trim()) problems.name = 'Enter the vendor name.';
     // The primary contact is only created when it has a name, so a title,
     // email or phone typed without one was dropped behind a success toast.
     const contactDetailTyped = [f.contact_title, f.contact_email, f.contact_phone].some((v) => v.trim());
     if (!editVendor && contactDetailTyped && !f.contact_name.trim()) {
-      setContactNameError('Contact name is required to save a contact');
+      problems.contact_name = 'Contact name is required to save a contact';
+    }
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
-    setContactNameError(null);
     setSaving(true);
     try {
       if (editVendor) {
@@ -208,11 +266,37 @@ const VendorFormModal: React.FC<{
       onSaved();
       onClose();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save vendor'));
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to save vendor'));
     } finally {
       setSaving(false);
     }
   };
+
+  const textField = (
+    name: VendorField,
+    opts: { type?: 'tel' | 'email'; placeholder?: string; className?: string; required?: boolean } = {}
+  ) => (
+    <FormField
+      id={VENDOR_FIELDS[name].id}
+      label={VENDOR_FIELDS[name].label}
+      required={opts.required ?? false}
+      error={fieldErrors.errors[name]}
+      labelClassName={lbl}
+      {...(opts.className ? { className: opts.className } : {})}
+    >
+      {(field) => (
+        <input
+          {...field}
+          type={opts.type ?? 'text'}
+          className={inp}
+          value={f[name]}
+          maxLength={VENDOR_MAX_LENGTH[name]}
+          onChange={(e) => up(name, e.target.value)}
+          {...(opts.placeholder ? { placeholder: opts.placeholder } : {})}
+        />
+      )}
+    </FormField>
+  );
 
   return (
     <Modal
@@ -235,154 +319,36 @@ const VendorFormModal: React.FC<{
       }
     >
       <div className="space-y-4 p-4">
+        {fieldErrors.formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {fieldErrors.formError}
+          </p>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className={lbl} htmlFor="vendor-name">
-              Vendor Name *
-            </label>
-            <input
-              id="vendor-name"
-              className={inp}
-              value={f.name}
-              onChange={(e) => up('name', e.target.value)}
-              placeholder="e.g. Galls"
-              required
-            />
-          </div>
-          <div>
-            <label className={lbl} htmlFor="vendor-account">
-              Account Number
-            </label>
-            <input
-              id="vendor-account"
-              className={inp}
-              value={f.account_number}
-              onChange={(e) => up('account_number', e.target.value)}
-              placeholder="Our account with them"
-            />
-          </div>
-          <div>
-            <label className={lbl} htmlFor="vendor-terms">
-              Payment Terms
-            </label>
-            <input
-              id="vendor-terms"
-              className={inp}
-              value={f.payment_terms}
-              onChange={(e) => up('payment_terms', e.target.value)}
-              placeholder="e.g. Net 30"
-            />
-          </div>
+          {textField('name', { required: true, placeholder: 'e.g. Galls', className: 'sm:col-span-2' })}
+          {textField('account_number', { placeholder: 'Our account with them' })}
+          {textField('payment_terms', { placeholder: 'e.g. Net 30' })}
         </div>
 
         <fieldset>
           <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Contact Details</legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className={lbl} htmlFor="vendor-phone">
-                Phone
-              </label>
-              <input
-                id="vendor-phone"
-                type="tel"
-                className={inp}
-                value={f.phone}
-                onChange={(e) => up('phone', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-email">
-                Email
-              </label>
-              <input
-                id="vendor-email"
-                type="email"
-                className={inp}
-                value={f.email}
-                onChange={(e) => up('email', e.target.value)}
-                placeholder="orders@vendor.com"
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-fax">
-                Fax
-              </label>
-              <input id="vendor-fax" className={inp} value={f.fax} onChange={(e) => up('fax', e.target.value)} />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-website">
-                Website
-              </label>
-              <input
-                id="vendor-website"
-                className={inp}
-                value={f.website}
-                onChange={(e) => up('website', e.target.value)}
-                placeholder="https://"
-              />
-            </div>
+            {textField('phone', { type: 'tel' })}
+            {textField('email', { type: 'email', placeholder: 'orders@vendor.com' })}
+            {textField('fax')}
+            {textField('website', { placeholder: 'https://' })}
           </div>
         </fieldset>
 
         <fieldset>
           <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Address</legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className={lbl} htmlFor="vendor-address1">
-                Street Address
-              </label>
-              <input
-                id="vendor-address1"
-                className={inp}
-                value={f.address_line1}
-                onChange={(e) => up('address_line1', e.target.value)}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className={lbl} htmlFor="vendor-address2">
-                Suite / Unit
-              </label>
-              <input
-                id="vendor-address2"
-                className={inp}
-                value={f.address_line2}
-                onChange={(e) => up('address_line2', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-city">
-                City
-              </label>
-              <input id="vendor-city" className={inp} value={f.city} onChange={(e) => up('city', e.target.value)} />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-state">
-                State
-              </label>
-              <input id="vendor-state" className={inp} value={f.state} onChange={(e) => up('state', e.target.value)} />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-zip">
-                Postal Code
-              </label>
-              <input
-                id="vendor-zip"
-                className={inp}
-                value={f.postal_code}
-                onChange={(e) => up('postal_code', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="vendor-country">
-                Country
-              </label>
-              <input
-                id="vendor-country"
-                className={inp}
-                value={f.country}
-                onChange={(e) => up('country', e.target.value)}
-              />
-            </div>
+            {textField('address_line1', { className: 'sm:col-span-2' })}
+            {textField('address_line2', { className: 'sm:col-span-2' })}
+            {textField('city')}
+            {textField('state')}
+            {textField('postal_code')}
+            {textField('country')}
           </div>
         </fieldset>
 
@@ -392,91 +358,34 @@ const VendorFormModal: React.FC<{
               Primary Contact <span className="text-theme-text-muted font-normal">(optional)</span>
             </legend>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className={lbl} htmlFor="vendor-contact-name">
-                  Name
-                </label>
-                <input
-                  id="vendor-contact-name"
-                  className={inp}
-                  value={f.contact_name}
-                  onChange={(e) => {
-                    up('contact_name', e.target.value);
-                    if (e.target.value.trim()) setContactNameError(null);
-                  }}
-                  placeholder="Sales rep or service desk"
-                  aria-invalid={contactNameError ? true : undefined}
-                  aria-describedby={contactNameError ? 'vendor-contact-name-error' : undefined}
-                />
-                {contactNameError && (
-                  <p
-                    id="vendor-contact-name-error"
-                    role="alert"
-                    className="mt-1 text-xs text-red-700 dark:text-red-300"
-                  >
-                    {contactNameError}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className={lbl} htmlFor="vendor-contact-title">
-                  Title
-                </label>
-                <input
-                  id="vendor-contact-title"
-                  className={inp}
-                  value={f.contact_title}
-                  onChange={(e) => up('contact_title', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={lbl} htmlFor="vendor-contact-email">
-                  Email
-                </label>
-                <input
-                  id="vendor-contact-email"
-                  type="email"
-                  className={inp}
-                  value={f.contact_email}
-                  onChange={(e) => up('contact_email', e.target.value)}
-                />
-              </div>
-              <div>
-                <label className={lbl} htmlFor="vendor-contact-phone">
-                  Phone
-                </label>
-                <input
-                  id="vendor-contact-phone"
-                  type="tel"
-                  className={inp}
-                  value={f.contact_phone}
-                  onChange={(e) => up('contact_phone', e.target.value)}
-                />
-              </div>
+              {textField('contact_name', { placeholder: 'Sales rep or service desk' })}
+              {textField('contact_title')}
+              {textField('contact_email', { type: 'email' })}
+              {textField('contact_phone', { type: 'tel' })}
             </div>
           </fieldset>
         )}
 
-        <div>
-          <label className={lbl} htmlFor="vendor-notes">
-            Notes
-          </label>
-          <textarea
-            id="vendor-notes"
-            className={inp}
-            rows={2}
-            value={f.notes}
-            onChange={(e) => up('notes', e.target.value)}
-            placeholder="Ordering quirks, contract numbers, lead times..."
-          />
-        </div>
+        <FormField id={VENDOR_FIELDS.notes.id} label="Notes" error={fieldErrors.errors.notes} labelClassName={lbl}>
+          {(field) => (
+            <textarea
+              {...field}
+              className={inp}
+              rows={2}
+              maxLength={VENDOR_MAX_LENGTH.notes}
+              value={f.notes}
+              onChange={(e) => up('notes', e.target.value)}
+              placeholder="Ordering quirks, contract numbers, lead times..."
+            />
+          )}
+        </FormField>
 
         <label className="text-theme-text-primary flex items-center gap-3 text-sm">
           <input
             type="checkbox"
             className="form-checkbox"
             checked={f.is_preferred}
-            onChange={(e) => up('is_preferred', e.target.checked)}
+            onChange={(e) => setF((p) => ({ ...p, is_preferred: e.target.checked }))}
           />
           Preferred vendor (sorts first when picking one)
         </label>
