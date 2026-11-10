@@ -882,6 +882,9 @@ class RequirementProgress(BaseModel):
     # Set when an existing member is inside the requirement's catch-up period
     # and has not met it yet; due_date then carries the same date.
     catch_up_deadline: Optional[date] = None
+    # A session-attendance requirement no session of which has been held yet:
+    # neither complete nor incomplete (workflow review W80-9).
+    not_applicable: bool = False
 
 
 class ComplianceSummary(BaseModel):

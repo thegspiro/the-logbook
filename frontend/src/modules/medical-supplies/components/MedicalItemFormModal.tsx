@@ -17,8 +17,21 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull, formatNameList, numberOrNull, parseNameList } from '../../../utils/formValues';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { MEDICAL_UNITS } from '../types';
 import type { MedicalStorageOptions } from '../types';
+
+/** The shared item schema's EntityName max_length (forms review F-2). */
+const SUPPLY_NAME_MAX_LENGTH = 255;
+
+// Only the two fields this form requires carry their own message; any other
+// refusal from the server is said above the actions.
+type SupplyField = 'name' | 'category_id';
+const SUPPLY_FIELDS: FieldSpecs<SupplyField> = {
+  name: { id: 'ms-name', label: 'Name' },
+  category_id: { id: 'ms-category', label: 'Category' },
+};
 
 interface MedicalItemFormModalProps {
   categories: InventoryCategory[];
@@ -93,6 +106,11 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }));
+  const fieldErrors = useFieldErrors(SUPPLY_FIELDS);
+  const setRequired = (key: SupplyField, value: string) => {
+    set(key, value);
+    fieldErrors.setError(key, null);
+  };
 
   // The rooms and areas come from Inventory › Storage Areas. Read through the
   // medical route so a medical-only officer can file a supply too.
@@ -147,12 +165,20 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) {
-      toast.error('Give the supply a name');
-      return;
-    }
+    // Checked here rather than by greying out Add supply, which told an
+    // officer nothing about why it would not press (forms review F-3).
+    const problems: FieldErrors<SupplyField> = {};
+    if (!form.name.trim()) problems.name = 'Give the supply a name.';
     if (!form.category_id) {
-      toast.error('Choose a category — it is what makes this a medical supply');
+      problems.category_id =
+        categories.length === 0
+          ? 'Add a medical supply category first — the notice above links to the page.'
+          : 'Choose a category — it is what makes this a medical supply.';
+    }
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
 
@@ -213,7 +239,9 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
       }
       onSaved();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, isEdit ? 'Failed to update supply' : 'Failed to add supply'));
+      fieldErrors.focusFirst(
+        fieldErrors.setFromApiError(err, isEdit ? 'Failed to update supply' : 'Failed to add supply')
+      );
     } finally {
       setIsSaving(false);
     }
@@ -228,7 +256,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
       onSubmit={(e) => void handleSubmit(e)}
       footer={
         <>
-          <button type="submit" className="btn-primary" disabled={isSaving || categories.length === 0}>
+          <button type="submit" className="btn-primary" disabled={isSaving}>
             {isSaving ? 'Saving…' : isEdit ? 'Save changes' : 'Add supply'}
           </button>
           <button
@@ -269,19 +297,23 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           </div>
         ) : null}
 
-        <div>
-          <label htmlFor="ms-name" className="form-label">
-            Name <span aria-hidden="true">*</span>
-          </label>
-          <input
-            id="ms-name"
-            className="form-input w-full"
-            value={form.name}
-            onChange={(e) => set('name', e.target.value)}
-            placeholder="e.g. 4x4 Gauze Pads"
-            required
-          />
-        </div>
+        {fieldErrors.formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {fieldErrors.formError}
+          </p>
+        )}
+        <FormField id={SUPPLY_FIELDS.name.id} label="Name" required error={fieldErrors.errors.name}>
+          {(field) => (
+            <input
+              {...field}
+              className="form-input w-full"
+              value={form.name}
+              maxLength={SUPPLY_NAME_MAX_LENGTH}
+              onChange={(e) => setRequired('name', e.target.value)}
+              placeholder="e.g. 4x4 Gauze Pads"
+            />
+          )}
+        </FormField>
 
         <div>
           <label htmlFor="ms-also-called" className="form-label">
@@ -300,25 +332,23 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           </p>
         </div>
 
-        <div>
-          <label htmlFor="ms-category" className="form-label">
-            Category <span aria-hidden="true">*</span>
-          </label>
-          <select
-            id="ms-category"
-            className="form-input w-full"
-            value={form.category_id}
-            onChange={(e) => set('category_id', e.target.value)}
-            required
-          >
-            <option value="">Select a category</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <FormField id={SUPPLY_FIELDS.category_id.id} label="Category" required error={fieldErrors.errors.category_id}>
+          {(field) => (
+            <select
+              {...field}
+              className="form-input w-full"
+              value={form.category_id}
+              onChange={(e) => setRequired('category_id', e.target.value)}
+            >
+              <option value="">Select a category</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </FormField>
 
         <div>
           <label htmlFor="ms-size" className="form-label">

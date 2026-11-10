@@ -64,6 +64,7 @@ import { LABEL_FONT_FAMILY, labelNameStyle } from '../../../components/labels/la
 import { PrintSetupChecklist } from '../../../components/labels/PrintSetupChecklist';
 import { isPrintChecklistSkipped } from '../../../components/labels/printChecklist';
 import { SheetStartPicker } from '../../../components/labels/SheetStartPicker';
+import { AVERY_5160_COLUMN_GAP, AVERY_5160_PAGE_MARGIN } from '../../../components/labels/labelPresets';
 import {
   buildLabelFilterPath,
   MAX_LABEL_BATCH,
@@ -1074,7 +1075,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
 <style>
   @page {
     size: ${preset.pageWidth} ${preset.pageHeight};
-    margin: ${isThermal ? '0' : '0.5in 0.19in'};
+    margin: ${isThermal ? '0' : AVERY_5160_PAGE_MARGIN};
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: white; }
@@ -1350,12 +1351,12 @@ const InventoryBarcodePrintPage: React.FC = () => {
   return (
     <>
       {/* Dynamic print styles */}
-      <style>
+      <style data-testid="label-page-css">
         {`
           /* @page must be top-level — browsers ignore size when nested in @media */
           @page {
             size: ${preset.pageWidth} ${preset.pageHeight};
-            margin: ${isThermal ? '0' : '0.5in 0.19in'};
+            margin: ${isThermal ? '0' : AVERY_5160_PAGE_MARGIN};
           }
 
           @media print {
@@ -2094,13 +2095,15 @@ const InventoryBarcodePrintPage: React.FC = () => {
           <div className="overflow-x-auto print:overflow-visible">
             <div
               className="barcode-labels-container"
+              data-testid="label-sheet-grid"
               style={{
                 display: isThermal ? 'flex' : 'grid',
                 flexDirection: isThermal ? 'column' : undefined,
                 gridTemplateColumns: isThermal ? undefined : `repeat(${preset.columns}, ${preset.width})`,
-                gap: isThermal ? '8px' : '0',
+                gap: isThermal ? '8px' : undefined,
+                columnGap: isThermal ? undefined : AVERY_5160_COLUMN_GAP,
+                rowGap: isThermal ? undefined : 0,
                 alignItems: isThermal ? 'center' : undefined,
-                justifyContent: isThermal ? undefined : 'center',
               }}
             >
               {Array.from({ length: skippedPositions }, (_, index) => (

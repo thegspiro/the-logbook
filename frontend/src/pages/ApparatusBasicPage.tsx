@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
 import { schedulingService } from '../modules/scheduling/services/api';
 
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -107,6 +109,43 @@ const UNIT_NUMBER_MAX_LENGTH = 20;
 const NAME_MAX_LENGTH = 100;
 const MIN_STAFFING_MAX = 50;
 
+// The type and crew list are pickers with no free text to get wrong; a
+// refusal against either falls through to the dialog-level message.
+type ApparatusField = 'unit_number' | 'name' | 'min_staffing';
+
+const APPARATUS_FIELDS: FieldSpecs<ApparatusField> = {
+  unit_number: { id: 'apparatus-basic-unit', label: 'Unit Number' },
+  name: { id: 'apparatus-basic-name', label: 'Name' },
+  min_staffing: { id: 'apparatus-basic-min-staffing', label: 'Minimum Staffing' },
+};
+
+/**
+ * What stops a save. The limits mirror BasicApparatusCreate (unit_number
+ * max_length=20, name max_length=100, min_staffing ge=1 le=50), so the form
+ * names the problem on its field instead of the save failing with a bare
+ * error (forms review F-3).
+ */
+function checkApparatus(form: {
+  unit_number: string;
+  name: string;
+  min_staffing: string;
+}): FieldErrors<ApparatusField> {
+  const errors: FieldErrors<ApparatusField> = {};
+  const unit = form.unit_number.trim();
+  if (!unit) errors.unit_number = 'Enter the unit number.';
+  else if (unit.length > UNIT_NUMBER_MAX_LENGTH) {
+    errors.unit_number = `Unit number must be ${UNIT_NUMBER_MAX_LENGTH} characters or fewer.`;
+  }
+  const name = form.name.trim();
+  if (!name) errors.name = 'Enter a name for the apparatus.';
+  else if (name.length > NAME_MAX_LENGTH) errors.name = `Name must be ${NAME_MAX_LENGTH} characters or fewer.`;
+  const minStaffing = form.min_staffing.trim() === '' ? Number.NaN : Number(form.min_staffing);
+  if (!Number.isInteger(minStaffing) || minStaffing < 1 || minStaffing > MIN_STAFFING_MAX) {
+    errors.min_staffing = `Minimum staffing must be a whole number from 1 to ${MIN_STAFFING_MAX}.`;
+  }
+  return errors;
+}
+
 export default function ApparatusBasicPage() {
   const { confirm } = useConfirm();
   const [apparatusList, setApparatusList] = useState<BasicApparatus[]>([]);
@@ -129,6 +168,9 @@ export default function ApparatusBasicPage() {
     positions: ['officer', 'driver', 'firefighter', 'firefighter'] as string[],
   });
   const [isSaving, setIsSaving] = useState(false);
+  const fieldErrors = useFieldErrors(APPARATUS_FIELDS);
+  const clearFieldErrors = fieldErrors.clear;
+  const setFieldError = fieldErrors.setError;
 
   const loadApparatus = useCallback(async () => {
     setIsLoading(true);
@@ -177,6 +219,7 @@ export default function ApparatusBasicPage() {
       min_staffing: '4',
       positions: [...(DEFAULT_POSITIONS_BY_TYPE.engine ?? [])],
     });
+    clearFieldErrors();
     setShowModal(true);
   };
 
@@ -189,6 +232,7 @@ export default function ApparatusBasicPage() {
       min_staffing: String(apparatus.min_staffing || 1),
       positions: apparatus.positions || [],
     });
+    clearFieldErrors();
     setShowModal(true);
   };
 
@@ -222,31 +266,21 @@ export default function ApparatusBasicPage() {
     }));
   };
 
+  /** Set one field, and drop the error it carried: editing it is the answer. */
+  const editField = (key: 'unit_number' | 'name' | 'min_staffing', value: string) => {
+    setForm((p) => ({ ...p, [key]: value }));
+    setFieldError(key, null);
+  };
+
   const handleSave = async () => {
-    if (!form.unit_number.trim()) {
-      toast.error('Unit number is required');
+    const problems = checkApparatus(form);
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
-    // These mirror BasicApparatusCreate (unit_number max_length=20, name
-    // max_length=100, min_staffing ge=1 le=50), so the form names the problem
-    // instead of the save failing with a bare error.
-    if (form.unit_number.trim().length > UNIT_NUMBER_MAX_LENGTH) {
-      toast.error(`Unit number must be ${UNIT_NUMBER_MAX_LENGTH} characters or fewer`);
-      return;
-    }
-    if (!form.name.trim()) {
-      toast.error('Name is required');
-      return;
-    }
-    if (form.name.trim().length > NAME_MAX_LENGTH) {
-      toast.error(`Name must be ${NAME_MAX_LENGTH} characters or fewer`);
-      return;
-    }
-    const minStaffing = form.min_staffing.trim() === '' ? Number.NaN : Number(form.min_staffing);
-    if (!Number.isInteger(minStaffing) || minStaffing < 1 || minStaffing > MIN_STAFFING_MAX) {
-      toast.error(`Minimum staffing must be a whole number from 1 to ${MIN_STAFFING_MAX}`);
-      return;
-    }
+    const minStaffing = Number(form.min_staffing);
     setIsSaving(true);
     try {
       const payload = {
@@ -266,7 +300,10 @@ export default function ApparatusBasicPage() {
       setShowModal(false);
       void loadApparatus();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save apparatus'));
+      // The dialog stays open with the officer's values; a refusal lands on
+      // the field it names, anything else (a duplicate unit number) above
+      // the actions.
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to save apparatus'));
     } finally {
       setIsSaving(false);
     }
@@ -530,32 +567,44 @@ export default function ApparatusBasicPage() {
             </div>
             <div className="space-y-4 p-6">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="apparatus-basic-unit" className={labelCls}>
-                    Unit Number *
-                  </label>
-                  <input
-                    id="apparatus-basic-unit"
-                    type="text"
-                    value={form.unit_number}
-                    onChange={(e) => setForm((p) => ({ ...p, unit_number: e.target.value }))}
-                    placeholder="e.g., E-1, L-1, M-1"
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="apparatus-basic-name" className={labelCls}>
-                    Name *
-                  </label>
-                  <input
-                    id="apparatus-basic-name"
-                    type="text"
-                    value={form.name}
-                    onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                    placeholder="e.g., Engine 1, Ladder 1"
-                    className={inputCls}
-                  />
-                </div>
+                <FormField
+                  id={APPARATUS_FIELDS.unit_number.id}
+                  label="Unit Number"
+                  required
+                  labelClassName={labelCls}
+                  error={fieldErrors.errors.unit_number}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="text"
+                      value={form.unit_number}
+                      maxLength={UNIT_NUMBER_MAX_LENGTH}
+                      onChange={(e) => editField('unit_number', e.target.value)}
+                      placeholder="e.g., E-1, L-1, M-1"
+                      className={inputCls}
+                    />
+                  )}
+                </FormField>
+                <FormField
+                  id={APPARATUS_FIELDS.name.id}
+                  label="Name"
+                  required
+                  labelClassName={labelCls}
+                  error={fieldErrors.errors.name}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="text"
+                      value={form.name}
+                      maxLength={NAME_MAX_LENGTH}
+                      onChange={(e) => editField('name', e.target.value)}
+                      placeholder="e.g., Engine 1, Ladder 1"
+                      className={inputCls}
+                    />
+                  )}
+                </FormField>
               </div>
 
               <div>
@@ -576,23 +625,26 @@ export default function ApparatusBasicPage() {
                 </select>
               </div>
 
-              <div>
-                <label htmlFor="apparatus-basic-min-staffing" className={labelCls}>
-                  Minimum Staffing *
-                </label>
-                <input
-                  id="apparatus-basic-min-staffing"
-                  type="number"
-                  min={1}
-                  max={MIN_STAFFING_MAX}
-                  step={1}
-                  required
-                  aria-required="true"
-                  value={form.min_staffing}
-                  onChange={(e) => setForm((p) => ({ ...p, min_staffing: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
+              <FormField
+                id={APPARATUS_FIELDS.min_staffing.id}
+                label="Minimum Staffing"
+                required
+                labelClassName={labelCls}
+                error={fieldErrors.errors.min_staffing}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    min={1}
+                    max={MIN_STAFFING_MAX}
+                    step={1}
+                    value={form.min_staffing}
+                    onChange={(e) => editField('min_staffing', e.target.value)}
+                    className={inputCls}
+                  />
+                )}
+              </FormField>
 
               <div>
                 <div className="mb-2 flex items-center justify-between">
@@ -635,6 +687,11 @@ export default function ApparatusBasicPage() {
                 </div>
               </div>
             </div>
+            {fieldErrors.formError && (
+              <p role="alert" className={`px-6 pb-2 text-sm ${FIELD_ERROR_CLASS}`}>
+                {fieldErrors.formError}
+              </p>
+            )}
             <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
               <button
                 onClick={() => setShowModal(false)}
@@ -646,7 +703,7 @@ export default function ApparatusBasicPage() {
                 onClick={() => {
                   void handleSave();
                 }}
-                disabled={isSaving || !form.unit_number.trim() || !form.name.trim()}
+                disabled={isSaving}
                 className="btn-primary flex items-center gap-2 px-5"
               >
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

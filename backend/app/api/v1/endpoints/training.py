@@ -99,8 +99,8 @@ from app.services.requirement_override_service import (
     holds_chief_position,
 )
 from app.services.training_compliance import (
-    CATCH_UP_STATUS,
     STANDING_NOT_APPLICABLE,
+    UNGRADED_STATUSES,
     ComplianceGrading,
     _load_compliance_config,
     classify_standing,
@@ -260,9 +260,10 @@ async def get_training_dashboard_summary(
                 held_sessions=held_sessions,
             )
             statuses.append(req_status)
-            # Inside an existing member's catch-up period the requirement is
-            # neither unmet nor part of the at-risk denominator.
-            if req_status == CATCH_UP_STATUS:
+            # Inside an existing member's catch-up period, or with no session
+            # held yet, the requirement is neither unmet nor part of the
+            # at-risk denominator.
+            if req_status in UNGRADED_STATUSES:
                 continue
             applicable_counts[str(req.id)] += 1
             if req_status != TrainingStatus.COMPLETED.value:
@@ -3316,8 +3317,10 @@ class RequirementStatusItem(BaseModel):
 
     requirement_id: str
     requirement_name: str
-    # "completed", "in_progress", "expired", "not_started", or "catch_up" for an
-    # existing member's unmet requirement before its catch-up deadline.
+    # "completed", "in_progress", "expired", "not_started", "catch_up" for an
+    # existing member's unmet requirement before its catch-up deadline, or
+    # "not_applicable" for a session-attendance requirement with no session
+    # held yet in the member's window (graded neither way, W80-9).
     status: str
     completion_date: str | None = None
     expiry_date: str | None = None

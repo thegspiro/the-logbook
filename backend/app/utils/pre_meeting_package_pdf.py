@@ -38,6 +38,7 @@ from reportlab.platypus import (
 )
 
 from app.utils.election_pdf_style import (
+    BOTTOM_MARGIN,
     INK,
     MUTED,
     SIDE_MARGIN,
@@ -202,7 +203,7 @@ def render_pre_meeting_package_pdf(
         buf,
         pagesize=letter,
         topMargin=VERTICAL_MARGIN,
-        bottomMargin=VERTICAL_MARGIN,
+        bottomMargin=BOTTOM_MARGIN,
         leftMargin=SIDE_MARGIN,
         rightMargin=SIDE_MARGIN,
         title="Pre-Meeting Package",
