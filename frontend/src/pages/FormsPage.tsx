@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { useFieldErrors, type FieldSpecs } from '@/hooks/useFieldErrors';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 import toast from 'react-hot-toast';
 import {
   FormInput,
@@ -62,6 +64,14 @@ const capitalize = (value: string) => value.charAt(0).toUpperCase() + value.slic
 // The server enforces this on both the in-app and the public submit path
 // (FORM-10), and refuses anonymous submissions for such a form, since "once
 // each" needs to know who is submitting.
+/** FormBase.name max_length (forms review F-2). */
+const FORM_NAME_MAX_LENGTH = 255;
+const CREATE_LABEL_CLASS = 'text-theme-text-secondary mb-1 block text-sm font-medium';
+const CREATE_FORM_FIELDS: FieldSpecs<'name' | 'description'> = {
+  name: { id: 'form-name', label: 'Form Name' },
+  description: { id: 'form-description', label: 'Description' },
+};
+
 const ONE_PER_PERSON_HINT =
   'Each member can submit once, whether in the app or through the public link. Submitting then requires signing in.';
 
@@ -81,6 +91,8 @@ const FormsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const createErrors = useFieldErrors(CREATE_FORM_FIELDS);
+  const clearCreateErrors = createErrors.clear;
   const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
 
   // Data
@@ -139,8 +151,22 @@ const FormsPage: React.FC = () => {
     void loadData();
   }, [loadData]);
 
+  // Each opening of Create Form starts without the last attempt's errors.
+  useEffect(() => {
+    if (showCreateModal) clearCreateErrors();
+  }, [showCreateModal, clearCreateErrors]);
+
   const handleCreateForm = async () => {
-    if (!formData.name.trim()) return;
+    // Checked here rather than by greying out Create Form, which told a
+    // member nothing about why it would not press (forms review F-3).
+    createErrors.setFormError(null);
+    if (!formData.name.trim()) {
+      const problems = { name: 'Enter a name for the form.' };
+      createErrors.setErrors(problems);
+      createErrors.focusFirst(problems);
+      return;
+    }
+    createErrors.setErrors({});
     setCreating(true);
     try {
       await formsService.createForm({
@@ -154,7 +180,9 @@ const FormsPage: React.FC = () => {
       setFormData({ name: '', description: '', category: 'Operations', is_public: false, one_per_person: false });
       await loadData();
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to create form'));
+      // In the dialog, which stays open: the page-level banner this used to
+      // set sat behind the modal, out of sight.
+      createErrors.focusFirst(createErrors.setFromApiError(err, 'Failed to create form'));
     } finally {
       setCreating(false);
     }
@@ -1206,21 +1234,33 @@ const FormsPage: React.FC = () => {
                     </button>
                   </div>
                   <div className="space-y-4">
-                    <div>
-                      <label htmlFor="form-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                        Form Name <span aria-hidden="true">*</span>
-                      </label>
-                      <input
-                        id="form-name"
-                        type="text"
-                        required
-                        aria-required="true"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="form-input"
-                        placeholder="e.g., Monthly Safety Report"
-                      />
-                    </div>
+                    {createErrors.formError && (
+                      <p className={`text-sm ${FIELD_ERROR_CLASS}`} role="alert">
+                        {createErrors.formError}
+                      </p>
+                    )}
+                    <FormField
+                      id={CREATE_FORM_FIELDS.name.id}
+                      label="Form Name"
+                      required
+                      labelClassName={CREATE_LABEL_CLASS}
+                      error={createErrors.errors.name}
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="text"
+                          value={formData.name}
+                          maxLength={FORM_NAME_MAX_LENGTH}
+                          onChange={(e) => {
+                            setFormData({ ...formData, name: e.target.value });
+                            createErrors.setError('name', null);
+                          }}
+                          className="form-input"
+                          placeholder="e.g., Monthly Safety Report"
+                        />
+                      )}
+                    </FormField>
                     <div>
                       <label
                         htmlFor="form-category"
@@ -1240,22 +1280,26 @@ const FormsPage: React.FC = () => {
                         <option value="Training">Training</option>
                       </select>
                     </div>
-                    <div>
-                      <label
-                        htmlFor="form-description"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Description
-                      </label>
-                      <textarea
-                        id="form-description"
-                        rows={3}
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className="form-input"
-                        placeholder="Describe the purpose of this form..."
-                      />
-                    </div>
+                    <FormField
+                      id={CREATE_FORM_FIELDS.description.id}
+                      label="Description"
+                      labelClassName={CREATE_LABEL_CLASS}
+                      error={createErrors.errors.description}
+                    >
+                      {(field) => (
+                        <textarea
+                          {...field}
+                          rows={3}
+                          value={formData.description}
+                          onChange={(e) => {
+                            setFormData({ ...formData, description: e.target.value });
+                            createErrors.setError('description', null);
+                          }}
+                          className="form-input"
+                          placeholder="Describe the purpose of this form..."
+                        />
+                      )}
+                    </FormField>
                     <div className="flex items-center space-x-3 rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3">
                       <input
                         type="checkbox"
@@ -1298,7 +1342,7 @@ const FormsPage: React.FC = () => {
                     onClick={() => {
                       void handleCreateForm();
                     }}
-                    disabled={!formData.name.trim() || creating}
+                    disabled={creating}
                     className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {creating ? 'Creating...' : 'Create Form'}

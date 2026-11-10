@@ -5,7 +5,9 @@ snake_case on the wire, like the shift history import whose batches this
 creates (``schemas/shift_history_import.py`` carries no alias generator).
 """
 
-from datetime import date, datetime
+from datetime import date
+from datetime import date as CalendarDate
+from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -367,3 +369,213 @@ class DrillPreview(BaseModel):
 
 class SuggestionsAccepted(BaseModel):
     mapped: int
+
+
+# ---------------------------------------------------------------------------
+# Staffing roster
+# ---------------------------------------------------------------------------
+
+StaffingFileKind = Literal["seats", "events"]
+
+
+class StaffingMappingUpdate(BaseModel):
+    """The whole mapping for one file, replacing what was stored. A null or
+    empty header leaves that field unmapped."""
+
+    column_mapping: Dict[str, Optional[str]]
+
+    @field_validator("column_mapping")
+    @classmethod
+    def _check(cls, value: Dict[str, Any]) -> Dict[str, Any]:
+        checked = _bounded(value)
+        return checked if checked is not None else {}
+
+
+class StaffingFileView(BaseModel):
+    kind: StaffingFileKind
+    source_filename: str
+    headers: List[str]
+    column_mapping: Dict[str, str]
+    row_count: int
+    created_at: Optional[datetime] = None
+
+
+class StaffingMissingEvent(BaseModel):
+    event_key: str
+    seats: int
+
+
+class StaffingSeatSummary(BaseModel):
+    rows: int
+    filled: int
+    unfilled: int
+    without_event_key: int
+    # Seats whose event key the events file does not have: no date to place
+    # them on.
+    missing_event: int
+    missing_event_filled: int
+    missing_event_keys: int
+    missing_event_examples: List[StaffingMissingEvent]
+
+
+class StaffingUnusualEvent(BaseModel):
+    line_number: int
+    date: date
+    activity: str
+    seats: int
+
+
+class StaffingEventSummary(BaseModel):
+    rows: int
+    staffed: int
+    unstaffed: int
+    # Unstaffed events with a date in the usual range: these become calendar
+    # events (scheduled ones when upcoming).
+    unstaffed_importable: int
+    undated: int
+    undated_examples: List[int]
+    # The years most of the file's events fall in; an event outside them is
+    # flagged as a possible test entry.
+    usual_first_year: Optional[int] = None
+    usual_last_year: Optional[int] = None
+    outside_usual_range: int
+    outside_usual_range_examples: List[StaffingUnusualEvent]
+    upcoming: int
+    overnight: int
+    duplicate_keys: int
+    first_date: Optional[date] = None
+    last_date: Optional[date] = None
+
+
+class StaffingSummary(BaseModel):
+    seats: StaffingSeatSummary
+    events: StaffingEventSummary
+
+
+class StaffingPreview(BaseModel):
+    files: List[StaffingFileView]
+    # The fields each kind of file can map, in display order.
+    fields: Dict[str, List[str]]
+    # True when the seats file carries its events' dates and no events file
+    # is needed.
+    flat_file: bool
+    # What must be chosen before the files can be read together.
+    problems: List[str]
+    summary: Optional[StaffingSummary] = None
+
+
+StaffingMappingList = Literal["activities", "seat_titles", "event_titles"]
+
+
+class StaffingDecisionsUpdate(BaseModel):
+    """Decisions merged into one list, by key; a null clears that key."""
+
+    decisions: Dict[str, Optional[str]]
+
+    @field_validator("decisions")
+    @classmethod
+    def _check(cls, value: Dict[str, Any]) -> Dict[str, Any]:
+        if len(value) > 5_000:
+            raise ValueError("At most 5000 entries per request.")
+        if any(len(k) > 200 for k in value):
+            raise ValueError("A key is too long.")
+        if any(v is not None and len(str(v)) > 100 for v in value.values()):
+            raise ValueError("A value is too long.")
+        return value
+
+
+class StaffingMappingItem(BaseModel):
+    key: str
+    label: str
+    seats: int
+    events: int
+    suggestion: Optional[str] = None
+    choice: Optional[str] = None
+    # A few spellings of a title sharing this key.
+    examples: List[str] = Field(default_factory=list)
+
+
+class StaffingMappingProgress(BaseModel):
+    items: int
+    decided: int
+    suggested: int
+    undecided: int
+    seats: int
+    seats_settled: int
+
+
+class StaffingChoice(BaseModel):
+    value: str
+    label: str
+
+
+class StaffingMappingView(BaseModel):
+    list: StaffingMappingList
+    # One page of the list, most seats first, filtered by ``search``.
+    items: List[StaffingMappingItem]
+    total: int
+    progress: Dict[str, StaffingMappingProgress]
+    # The department's crew seats and outreach roles: the only values a title
+    # may take, besides attendance (events) and leaving it out.
+    seat_choices: List[StaffingChoice]
+    role_choices: List[StaffingChoice]
+
+
+class StaffingCommitPreview(BaseModel):
+    """What writing the roster would do, and what it leaves out."""
+
+    # shifts, shift_seats, events, upcoming_events, check_ins, outreach_seats,
+    # assigned_unfilled
+    counts: Dict[str, int]
+    # Seats left out, by reason (no_event, undated, outside_usual_range,
+    # activity_left_out, activity_undecided, title_left_out, title_undecided,
+    # unfilled).
+    skipped: Dict[str, int]
+    unfilled_seats: int
+    include_unstaffed: bool
+    members: List[AdminMember]
+    member_options: List[AdminMemberOption]
+    can_commit: bool
+    result: Optional[Dict[str, Any]] = None
+
+
+class StaffingOptionsUpdate(BaseModel):
+    include_unstaffed: bool
+
+
+class StaffingUnfilledSeat(BaseModel):
+    line_number: int
+    # Annotated through an alias: a field named ``date`` with a default
+    # shadows the type inside the class body, and pydantic would then accept
+    # only None.
+    date: Optional[CalendarDate] = None
+    activity: str
+    title: str
+    # The department's seat, role or attendance the title maps to.
+    maps_to: str
+    required: bool
+    assigned_user_id: Optional[str] = None
+
+
+class StaffingUnfilledView(BaseModel):
+    items: List[StaffingUnfilledSeat]
+    total: int
+    assigned: int
+    member_options: List[AdminMemberOption]
+
+
+class StaffingUnfilledUpdate(BaseModel):
+    """Members for unfilled seats, by seat line; a null empties the seat."""
+
+    assignments: Dict[str, Optional[str]]
+
+    @field_validator("assignments")
+    @classmethod
+    def _check(cls, value: Dict[str, Any]) -> Dict[str, Any]:
+        if len(value) > 2_000:
+            raise ValueError("At most 2000 entries per request.")
+        if any(len(k) > 10 for k in value):
+            raise ValueError("A seat is named by its line number.")
+        if any(v is not None and len(str(v)) > 36 for v in value.values()):
+            raise ValueError("A member id is too long.")
+        return value

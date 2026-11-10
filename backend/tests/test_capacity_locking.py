@@ -888,3 +888,49 @@ class TestChiefOverrideOverlapLocking:
         )
         listing = _source_of(RequirementOverrideService.list_overrides)
         assert "with_for_update()" in listing
+
+
+class TestTrainingModuleConfigRace:
+    """Two concurrent first-ever reads of a department's training visibility
+    config (e.g. two members opening a training page the moment the org has
+    never configured one) both read the row as missing and both attempt an
+    insert; ``organization_id`` is unique, so the loser's flush raises
+    ``IntegrityError``. Unlike the capacity checks above this isn't a
+    read-then-insert *count*, but the same read-then-insert race shape, and it
+    was unguarded: the loser's raw ``IntegrityError`` surfaced as an unhandled
+    500 on a plain page load (TRX-18 pass 14). The fix mirrors
+    ``SchedulingModuleConfigService._create_row``'s own guard against the
+    identical race on the sibling settings table (pitfall #27)."""
+
+    def test_the_insert_is_wrapped_in_a_savepoint_and_guarded(self):
+        from app.services.training_module_config_service import (
+            TrainingModuleConfigService,
+        )
+
+        source = _source_of(TrainingModuleConfigService.get_config)
+        assert "begin_nested()" in source, (
+            "the insert must run inside a savepoint so the loser's session "
+            "stays usable after the IntegrityError."
+        )
+        assert "except IntegrityError" in source, (
+            "the loser's flush must be caught, not left to surface as an "
+            "unhandled 500."
+        )
+        assert source.index("begin_nested()") < source.index(
+            "except IntegrityError"
+        ), "the savepoint must wrap the insert that can raise."
+
+    def test_the_loser_re_reads_with_a_locking_read(self):
+        from app.services.training_module_config_service import (
+            TrainingModuleConfigService,
+        )
+
+        source = _source_of(TrainingModuleConfigService.get_config)
+        assert "with_for_update()" in source, (
+            "under REPEATABLE READ a plain SELECT after the race would still "
+            "answer from the snapshot taken before it, which is the one that "
+            "found no row — the re-read must lock to see the winner's commit."
+        )
+        assert source.index("except IntegrityError") < source.index(
+            "with_for_update()"
+        ), "the locking re-read must happen in the exception handler, not before."

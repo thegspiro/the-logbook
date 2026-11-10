@@ -27,10 +27,21 @@ while its posting waited is marked ``superseded`` and not sent.
 
 Accounts are the export's own: ``_resolve_category_accounts`` names the
 expense account (the line) and the paid-from account (the Purchase's
-``AccountRef``), and they are found in QuickBooks by name, exactly. The
-paid-from account must be a QuickBooks Bank account: a cash Purchase paid from
-a bank account is the combination Intuit's documentation shows; check and
-credit card purchases were not confirmed there, so they are not sent.
+``AccountRef``), and they are found in QuickBooks by name, exactly.
+
+What kind of Purchase a payment becomes (owner decision 2026-11-06, "checks
+and cards"; the Intuit values are in quickbooks_online_client.py):
+
+- an issued check is a QuickBooks **Check**, its check number the
+  ``DocNumber`` and its request number the ``PrivateNote``. It must be paid
+  from a Bank account; a check cannot be drawn on a card.
+- anything else paid from a **Credit Card** account is a credit card expense.
+- anything else paid from a **Bank** account is a cash expense, as before.
+
+Purchase requests and expense reports record no check, so only the account
+decides them. (An expense report's ``payment_method`` is free text the
+screens never fill in, so it is not read.) Any other account type is refused
+and the payment goes in the CSV export.
 
 Idempotency (CLAUDE.md pitfall #36): the posting row is unique per payment,
 the Purchase id QuickBooks returns is stored on it, and every create carries
@@ -132,9 +143,6 @@ STATUS_SUPERSEDED = "superseded"
 CONNECTED = "connected"
 DISCONNECTED = "disconnected"
 RECONNECT_REQUIRED = "reconnect_required"
-
-# QuickBooks' own name for the account type a cash Purchase is paid from.
-BANK_ACCOUNT_TYPE = "Bank"
 
 
 class QuickBooksConnectError(Exception):
@@ -609,6 +617,10 @@ class _Payment:
     document_number: str
     # (budget line id, amount), one per Purchase line.
     lines: list[tuple[Optional[str], Decimal]]
+    # An issued check: posted as a QuickBooks Check. ``check_number`` is
+    # None when the check was issued with a blank one.
+    is_check: bool = False
+    check_number: Optional[str] = None
 
 
 class _NotPostable(ValueError):
@@ -708,6 +720,8 @@ async def _load_payment(
             _local_day(cr.check_date, tz),
             cr.request_number,
             lines,
+            is_check=True,
+            check_number=(cr.check_number or "").strip() or None,
         )
 
     if posting.payment_type == PAYMENT_REPORT:
@@ -845,38 +859,58 @@ async def _purchase_body(
     if ctx.accounts is None:
         ctx.accounts = _account_index(await client.list_accounts())
     paid_from_name = next(iter(paid_from_names))
-    bank = ctx.accounts.get(paid_from_name)
-    if bank is None:
+    source = ctx.accounts.get(paid_from_name)
+    if source is None:
         raise _NotPostable(f"QuickBooks has no account named '{paid_from_name}'")
-    if bank.get("AccountType") != BANK_ACCOUNT_TYPE:
-        raise _NotPostable(
-            f"'{paid_from_name}' is not a Bank account in QuickBooks; payments "
-            "post live only from bank accounts. Send this one in the CSV export"
-        )
-    lines: list[dict[str, Any]] = []
+    payment_type = _payment_type(payment, paid_from_name, source)
+    lines: list[tuple[str, Decimal]] = []
     for account, _, amount in resolved:
         target = ctx.accounts.get(account)
         if target is None:
             raise _NotPostable(f"QuickBooks has no account named '{account}'")
         if target.get("Active") is False:
             raise _NotPostable(f"'{account}' is inactive in QuickBooks")
-        lines.append(
-            {
-                "Amount": float(amount),
-                "DetailType": "AccountBasedExpenseLineDetail",
-                "AccountBasedExpenseLineDetail": {
-                    "AccountRef": {"value": str(target["Id"])}
-                },
-            }
+        lines.append((str(target["Id"]), amount))
+    if payment_type == qbo.PAYMENT_TYPE_CHECK:
+        doc_number, note = payment.check_number, payment.document_number
+    else:
+        doc_number, note = payment.document_number, None
+    try:
+        body = qbo.purchase_body(
+            payment_type=payment_type,
+            account_id=str(source["Id"]),
+            txn_date=payment.day,
+            doc_number=doc_number,
+            private_note=note,
+            lines=lines,
         )
-    body = {
-        "PaymentType": "Cash",
-        "AccountRef": {"value": str(bank["Id"])},
-        "TxnDate": payment.day,
-        "DocNumber": payment.document_number,
-        "Line": lines,
-    }
-    return body, str(bank["Id"])
+    except ValueError as exc:
+        raise _NotPostable(
+            f"{payment.document_number}: {exc}. Send it in the CSV export"
+        ) from exc
+    return body, str(source["Id"])
+
+
+def _payment_type(payment: _Payment, name: str, account: dict[str, Any]) -> str:
+    """Check, CreditCard or Cash, from what the payment is and the type of
+    account QuickBooks says it is paid from."""
+    account_type = account.get("AccountType")
+    if payment.is_check:
+        if account_type != qbo.ACCOUNT_TYPE_BANK:
+            raise _NotPostable(
+                f"{payment.document_number} is a check, and '{name}' is not a "
+                "Bank account in QuickBooks; a check is paid from a bank "
+                "account. Send it in the CSV export"
+            )
+        return qbo.PAYMENT_TYPE_CHECK
+    if account_type == qbo.ACCOUNT_TYPE_BANK:
+        return qbo.PAYMENT_TYPE_CASH
+    if account_type == qbo.ACCOUNT_TYPE_CREDIT_CARD:
+        return qbo.PAYMENT_TYPE_CREDIT_CARD
+    raise _NotPostable(
+        f"'{name}' is not a Bank or Credit Card account in QuickBooks; payments "
+        "post live only from those. Send this one in the CSV export"
+    )
 
 
 async def _vendor_id(

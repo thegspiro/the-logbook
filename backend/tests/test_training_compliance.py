@@ -1224,6 +1224,7 @@ class TestEvaluateRequirementDetailFields:
             "progress_percentage",
             "is_met",
             "overridden",
+            "not_applicable",
             "due_date",
             "days_until_due",
             "waived_months",

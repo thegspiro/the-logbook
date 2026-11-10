@@ -64,7 +64,7 @@ export const CardTapTable: React.FC<CardTapTableProps> = ({
     <tbody className="divide-theme-surface-border divide-y">
       {taps.map((tap) => (
         <tr key={tap.id}>
-          <td className="text-theme-text-secondary p-3 whitespace-nowrap" data-label="Time">
+          <td className="text-theme-text-secondary p-3" data-label="Time">
             {formatDateTime(tap.tappedAt, tz)}
           </td>
           <td className="p-3" data-label="Outcome">

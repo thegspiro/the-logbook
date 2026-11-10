@@ -516,7 +516,11 @@ class _UserResponseFields(_UserBaseFields, UTCResponseBase):
     organization_id: UUID
     # Optional because it is withheld from a caller the contact-visibility
     # rules exclude (see `_clear_hidden_contact_fields` in the users endpoint).
-    email: Optional[EmailStr] = None
+    # A plain str, not EmailStr: the app itself stores reserved `.invalid`
+    # placeholders (the shift history import's former members, anonymized
+    # members), which EmailStr refuses, and one such row failed the whole
+    # roster with a 500. Addresses are validated where they are written.
+    email: Optional[str] = None
     photo_url: Optional[str] = None
     personal_email: Optional[str] = None
     status: str
@@ -808,6 +812,20 @@ class UserProfileResponse(_UserResponseFields):
     model_config = _response_config
 
 
+class PastPositionResponse(UTCResponseBase):
+    """An office or committee seat the member held and has since given up.
+
+    ``name`` is the position's current name, or the name it had when held if
+    the position has since been deleted (then ``position_id`` is null).
+    """
+
+    position_id: Optional[str] = None
+    name: str
+    kind: Optional[str] = None
+    started_at: datetime
+    ended_at: datetime
+
+
 class MemberProfileResponse(UserProfileResponse):
     """``GET /users/{id}/with-roles``: the profile and digital ID card's read.
 
@@ -819,6 +837,11 @@ class MemberProfileResponse(UserProfileResponse):
     # for a member who never left, later for one who returned after a break.
     # See ``member_service_history_service.service_since``.
     service_since: Optional[date] = None
+    # Offices and committee seats held earlier, newest first (owner decision
+    # 2026-11-06). Shown wherever the profile shows the positions held now, so
+    # it carries the same audience; the baseline Member position and the rank
+    # mirrors are left out, as they are from the current list.
+    past_positions: list[PastPositionResponse] = Field(default_factory=list)
 
 
 class AdminPasswordReset(BaseModel):

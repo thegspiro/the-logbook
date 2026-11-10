@@ -532,7 +532,10 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['events.manage'],
-    expectText: 'Failed to load event requests.',
+    expectText: 'Needs a reply',
+    // The drawer a request opens in: the whole of the coordinator's work on a
+    // request happens there, so it is measured at phone width like the list.
+    states: [{ selector: 'li button[aria-haspopup="dialog"]', label: 'Request drawer', max: 1 }],
   },
   { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 0 },

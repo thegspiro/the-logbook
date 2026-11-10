@@ -28,6 +28,8 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { useTimezone } from '../hooks/useTimezone';
 import { buildSummary, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import { ErrorSummary } from '../components/ux/ErrorSummary';
+import { DraftRestoredNotice } from '../components/ux/DraftRestoredNotice';
+import { useSessionDraft } from '../hooks/useSessionDraft';
 import { FormField } from '../components/ux/FormField';
 import { trainingProgramService, trainingSubmissionService, trainingService } from '../services/api';
 import { blankToNull } from '../utils/formValues';
@@ -93,6 +95,33 @@ type TrainingField =
 
 // In page order, so the summary reads top to bottom. The labels are the
 // defaults; a department's own field labels show on the fields themselves.
+/** `max_length` of each text column, from TrainingSubmissionCreate (backend/app/schemas/training_submission.py). */
+const MAX_LENGTH = {
+  course_name: 255,
+  instructor: 255,
+  location: 255,
+  certification_number: 100,
+  issuing_agency: 255,
+} as const;
+
+/** The values a new submission keeps in its local draft (useSessionDraft). No PHI is asked for here. */
+interface TrainingDraft {
+  courseName: string;
+  trainingType: TrainingType;
+  categoryId: string;
+  completionDate: string;
+  startTime: string;
+  durationMinutes: number;
+  instructor: string;
+  location: string;
+  description: string;
+  hasCertification: boolean;
+  certificationNumber: string;
+  issuingAgency: string;
+  expirationDate: string;
+  certificationNeverExpires: boolean;
+}
+
 const TRAINING_FIELDS: FieldSpecs<TrainingField> = {
   course_name: { id: 'course-name', label: 'Course or class name' },
   category_id: { id: 'training-category', label: 'Category' },
@@ -213,6 +242,47 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
   // Editing a field answers the server's refusal of it; the missing-value
   // message is derived from the live value and clears on its own.
   const edited = (name: TrainingField) => setTrainingError(name, null);
+  // A new submission is drafted in this tab so leaving the page does not lose
+  // it (forms review F-6). An edit is not: the submission is already stored on
+  // the server, and refilling it from a local copy could hide what the
+  // officer sent back.
+  const draft = useSessionDraft<TrainingDraft>({
+    form: 'training-submission',
+    enabled: !isEdit && !receipt,
+    value: {
+      courseName,
+      trainingType,
+      categoryId,
+      completionDate,
+      startTime,
+      durationMinutes,
+      instructor,
+      location,
+      description,
+      hasCertification,
+      certificationNumber,
+      issuingAgency,
+      expirationDate,
+      certificationNeverExpires,
+    },
+    onRestore: (saved) => {
+      setCourseName(saved.courseName);
+      setTrainingType(saved.trainingType);
+      setCategoryId(saved.categoryId);
+      setCompletionDate(saved.completionDate);
+      setStartTime(saved.startTime);
+      setDurationMinutes(Math.min(maxDurationMinutes, Math.max(MIN_DURATION_MINUTES, saved.durationMinutes)));
+      setInstructor(saved.instructor);
+      setLocation(saved.location);
+      setDescription(saved.description);
+      certificationTouched.current = true;
+      setHasCertification(saved.hasCertification);
+      setCertificationNumber(saved.certificationNumber);
+      setIssuingAgency(saved.issuingAgency);
+      setExpirationDate(saved.expirationDate);
+      setCertificationNeverExpires(saved.certificationNeverExpires);
+    },
+  });
   // The id of a draft this form has just saved. Saving echoes it back in as
   // `editSubmission`, and the open fields must stay flagged across that
   // re-seed (owner rule, 2026-11-05), where any other submission opens clean.
@@ -577,6 +647,8 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
         const uploaded = attachOnCreate ? null : await uploadAttachmentIfAny(created.id);
         if (attachOnCreate) setAttachment(null);
 
+        // Stored on the server now, so the local copy has done its job.
+        draft.clear();
         if (options.asDraft) {
           toast.success(`Draft saved. It stays in your list until you submit it.${draftRemainder}`);
           // A queued offline create has no server id yet, so there is nothing
@@ -691,6 +763,15 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
           </div>
         )}
 
+        {draft.restored && (
+          <DraftRestoredNotice
+            onDiscard={() => {
+              draft.discard();
+              resetForm();
+            }}
+          />
+        )}
+
         <ErrorSummary items={errorSummary} formError={trainingErrors.formError} />
 
         {/* ---------- The class ---------- */}
@@ -701,6 +782,8 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
               label={fieldLabel('course_name', 'Course or class name')}
               required
               error={fieldErrors.course_name}
+              maxLength={MAX_LENGTH.course_name}
+              count={courseName.length}
             >
               {(field) => (
                 <input
@@ -860,6 +943,8 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                   required={isFieldRequired('instructor')}
                   optional={!isFieldRequired('instructor')}
                   error={fieldErrors.instructor}
+                  maxLength={MAX_LENGTH.instructor}
+                  count={instructor.length}
                 >
                   {(field) => (
                     <input
@@ -887,6 +972,8 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                   required={isFieldRequired('location')}
                   optional={!isFieldRequired('location')}
                   error={fieldErrors.location}
+                  maxLength={MAX_LENGTH.location}
+                  count={location.length}
                 >
                   {(field) => (
                     <input
@@ -955,6 +1042,8 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                     label={fieldLabel('certification_number', 'Certificate no.')}
                     required={isFieldRequired('certification_number')}
                     error={fieldErrors.certification_number}
+                    maxLength={MAX_LENGTH.certification_number}
+                    count={certificationNumber.length}
                   >
                     {(field) => (
                       <input
@@ -980,6 +1069,8 @@ const SubmissionForm: React.FC<SubmissionFormProps> = ({
                     required={isFieldRequired('issuing_agency')}
                     optional={!isFieldRequired('issuing_agency')}
                     error={fieldErrors.issuing_agency}
+                    maxLength={MAX_LENGTH.issuing_agency}
+                    count={issuingAgency.length}
                   >
                     {(field) => (
                       <input

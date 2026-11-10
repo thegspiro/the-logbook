@@ -350,6 +350,40 @@ describe('CreateTrainingSessionPage attendance requirements', () => {
     expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ attendance_requirement_ids: ['req-drills'] }));
   });
 
+  // Workflow review W80-12: the ticked requirements were saved but the review
+  // step did not list them, so the officer confirmed without seeing them.
+  it('lists the ticked attendance requirements on the review step', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Company Drill');
+    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
+    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.type(screen.getByPlaceholderText('e.g., CPR/AED for Healthcare Providers'), 'Company Drill');
+    await user.click(await screen.findByRole('checkbox', { name: /Company drills/ }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(screen.getByText('Counts toward attendance:')).toBeInTheDocument();
+    expect(screen.getByText('Company drills')).toBeInTheDocument();
+  });
+
+  // Workflow review W80-13: the hint said attendees are credited these hours;
+  // finalize credits the time each one actually attended.
+  it('explains that credit follows the time attended, not the credit hours', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Company Drill');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
+      /planned length\. Each attendee is credited with the time they actually attended/
+    );
+    expect(screen.queryByText('The training hours each attendee is credited with.')).not.toBeInTheDocument();
+  });
+
   it('leaves the session optional when nothing is ticked', async () => {
     const user = userEvent.setup();
     renderWithRouter(<CreateTrainingSessionPage />);

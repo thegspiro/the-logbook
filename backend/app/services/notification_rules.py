@@ -51,6 +51,10 @@ _DEFAULT_CONFIG: Dict[NotificationTrigger, Dict[str, Any]] = {
     # or issued. Switching it off stops the bell entry, push and email alike;
     # the request's status on My Equipment is unaffected.
     NotificationTrigger.EQUIPMENT_REQUEST_UPDATE: {},
+    # The member's tiered email before a screening falls due (W71b-4). On
+    # with no rule, as the owner decided the reminders should exist; a
+    # department that does not want them disables a rule for this trigger.
+    NotificationTrigger.MEDICAL_SCREENING_EXPIRY: {},
 }
 
 

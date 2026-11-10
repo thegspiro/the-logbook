@@ -51,8 +51,8 @@ class _EnumColumn(NamedTuple):
 # canonical lowercase enum that the model now declares via ``values_callable``.
 _TARGET_COLUMNS: tuple[_EnumColumn, ...] = (
     _EnumColumn("screening_requirements", "screening_type", ScreeningType, None),
-    _EnumColumn("screening_records", "screening_type", ScreeningType, None),
-    # Not screening_records.status: it is ciphertext since MS-18, and the
+    # Not screening_records.status or .screening_type: both are ciphertext
+    # since MS-18 (the type since 2026-11-06), and the
     # repair below rewrites any non-ENUM column it lists to VARCHAR(64) and
     # back to an ENUM, which would destroy every encrypted value.
     # ``shift_assignments.position`` and ``standing_shift_claims.position`` were

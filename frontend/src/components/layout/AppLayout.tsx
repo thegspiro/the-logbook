@@ -52,6 +52,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     () => (localStorage.getItem('navigationLayout') as 'top' | 'left') || 'left'
   );
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(false);
 
   // Start each newly-opened page at the top. Called here rather than per-page
   // so every route gets it — react-router carries the previous page's scroll
@@ -191,16 +192,34 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     return (
       <div
         className="has-bottom-nav has-side-nav flex min-h-screen flex-col"
+        data-nav-collapsed={navCollapsed ? 'true' : 'false'}
         style={{
-          background:
+          // The first two layers repeat SideNavigation's background and right
+          // border down the full height of the page, beneath the fixed nav, so
+          // the sidebar reaches the footer however tall the document is. The nav
+          // is `fixed` and sized to the viewport, so in a full-page screenshot
+          // or PDF, or when the viewport height shifts, the column beside the
+          // footer otherwise showed the page gradient. See `--side-nav-width`
+          // in index.css.
+          background: [
+            'linear-gradient(var(--surface-border), var(--surface-border)) calc(var(--side-nav-width) - 1px) 0 / 1px 100% no-repeat',
+            'linear-gradient(var(--nav-bg), var(--nav-bg)) 0 0 / var(--side-nav-width) 100% no-repeat',
             'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))',
+          ].join(', '),
         }}
       >
         <TopProgressBar />
         <PullToRefreshIndicator pulling={pulling} refreshing={refreshing} pullDistance={pullDistance} />
         <CommandPalette />
-        <SideNavigation departmentName={departmentName} logoPreview={logoPreview} onLogout={handleLogoutClick} />
-        <div className="mobile-header-offset flex min-h-screen flex-col md:ml-64">
+        <SideNavigation
+          departmentName={departmentName}
+          logoPreview={logoPreview}
+          onLogout={handleLogoutClick}
+          onCollapsedChange={setNavCollapsed}
+        />
+        {/* Offset by the width the nav occupies, which narrows with the
+            collapsed rail; the transition matches the nav's own 300ms. */}
+        <div className="mobile-header-offset flex min-h-screen flex-col transition-[margin-left] duration-300 motion-reduce:transition-none md:ml-(--side-nav-width)">
           {/* At least a screen tall, so the footer starts below the fold. A
               page is short while its code or data loads, and with flex-1
               alone the footer sat mid-screen until the content arrived and

@@ -43,7 +43,7 @@ const CARD_TAPS = {
 // tablet or a laptop a table wider than the card is clipped rather than
 // scrolled, and the last columns cannot be reached at all.
 test.describe('Member ID cards — tap log table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/members/admin/id-cards?tab=taps — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });

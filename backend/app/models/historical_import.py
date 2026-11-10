@@ -68,6 +68,13 @@ class ImportedRecordKind(str, Enum):
     # A drill date the import turned into a held training session; its
     # source_id is engine.drill_source_id(date) and record_id the session.
     TRAINING_SESSION = "training_session"
+    # The staffing roster: a duty shift or outreach sheet it filled or made,
+    # a member's seat on one, a calendar event, and a check-in at one. The
+    # source ids are historical_staffing_plan's staff-* keys.
+    SHIFT = "shift"
+    SHIFT_ASSIGNMENT = "shift_assignment"
+    EVENT = "event"
+    EVENT_RSVP = "event_rsvp"
 
 
 class HistoricalImport(Base):
@@ -129,6 +136,13 @@ class HistoricalImport(Base):
     # training provider may already have synced. See
     # ``historical_import_engine.TrainingSettings``.
     training_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+    # How the staffing roster is read: what each activity is (shift, event or
+    # left out) and which of the department's seats or outreach roles each
+    # seat title means. See ``historical_staffing_mapping.Decisions``. Kept on
+    # the import, not the staffing file, so replacing a file keeps them.
+    staffing_settings: Mapped[Optional[dict[str, Any]]] = mapped_column(
         JSON, nullable=True
     )
     # What each step committed, by step: ``{"admin": {...counts...}}``.
@@ -227,4 +241,91 @@ class ImportedSourceRecord(Base):
             name="uq_imported_source_records_org_system_id",
         ),
         Index("ix_imported_source_records_record", "record_kind", "record_id"),
+    )
+
+
+class HistoricalStaffingFileKind(str, Enum):
+    """The two halves of a staffing export.
+
+    ``seats`` holds one row per seat at an event: the seat's title and who held
+    it. ``events`` holds one row per event: when and what it was. A system that
+    writes the date on every seat row needs only the seats file.
+    """
+
+    SEATS = "seats"
+    EVENTS = "events"
+
+
+class HistoricalStaffingFile(Base):
+    """A staffing export attached to a historical import, while it is mapped.
+
+    Staffing is the roster: who was scheduled into which seat. It credits no
+    hours (the hours file did that), so it is kept beside the import rather
+    than routed with its rows. It shares the import's source system, time zone
+    and member decisions. One file of each kind per import; uploading another
+    replaces it.
+    """
+
+    __tablename__ = "historical_staffing_files"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    historical_import_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("historical_imports.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    source_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    headers: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    # ``{field: header}``; the fields are ``historical_staffing_engine``'s
+    # SEAT_FIELDS or EVENT_FIELDS, by kind.
+    column_mapping: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "historical_import_id", "kind", name="uq_historical_staffing_files_kind"
+        ),
+        Index("ix_historical_staffing_files_org", "organization_id"),
+        CheckConstraint(
+            "kind IN ('seats', 'events')", name="ck_historical_staffing_files_kind"
+        ),
+    )
+
+
+class HistoricalStaffingRow(Base):
+    """One data row of a staffing file, exactly as read.
+
+    Tenant-scoped only through its file, which is resolved through an import
+    already in the caller's organization (pitfall #14, parent resolution).
+    """
+
+    __tablename__ = "historical_staffing_rows"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    file_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("historical_staffing_files.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    line_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    raw: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+    __table_args__ = (
+        Index("ix_historical_staffing_rows_file_line", "file_id", "line_number"),
     )

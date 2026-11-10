@@ -733,7 +733,7 @@ const Members: React.FC = () => {
             {/* Desktop table view */}
             <div className="card hidden overflow-hidden md:block">
               <div className="rwd-table-container overflow-x-auto">
-                <table className="rwd-table rwd-table-2xwide w-full">
+                <table className="rwd-table rwd-table-xwide w-full">
                   <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
                       {canPrintBadges && (
@@ -829,7 +829,7 @@ const Members: React.FC = () => {
                             />
                           </td>
                         )}
-                        <td data-label="Member" className="px-6 py-4 whitespace-nowrap">
+                        <td data-label="Member" className="px-6 py-4">
                           <div className="flex items-center">
                             <Avatar
                               firstName={member.first_name}
@@ -846,7 +846,7 @@ const Members: React.FC = () => {
                                 {displayNameOf(member)}
                               </Link>
                               {canManageMembers && (
-                                <div className="text-theme-text-muted text-sm">@{member.username}</div>
+                                <div className="text-theme-text-muted text-sm break-all">@{member.username}</div>
                               )}
                             </div>
                           </div>

@@ -20,6 +20,8 @@ import { Search, Loader2, ChevronLeft, PackageSearch, Ruler, PencilLine, Info } 
 import { inventoryService } from '../../../services/api';
 import type { RequestableCategory, RequestableProduct, RequestableVariant } from '../types';
 import { styleAttributesLabel } from '../types';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux';
@@ -113,6 +115,17 @@ const availabilityNotice = (
 
 const MAX_QUANTITY = 99;
 
+type RequestField = 'item' | 'size' | 'quantity' | 'reason';
+
+const REQUEST_FIELDS: FieldSpecs<RequestField> = {
+  // The free-text box answers "what do you need" when nothing is picked from
+  // the list, so a missing item is flagged there.
+  item: { id: 'request-free-text', label: 'What you need', apiKeys: ['item_name'] },
+  size: { id: 'request-size', label: 'Size', apiKeys: ['requested_size'] },
+  quantity: { id: 'request-quantity', label: 'Quantity' },
+  reason: { id: 'request-reason', label: 'Reason' },
+};
+
 export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ isOpen, onClose, onSubmitted }) => {
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -128,6 +141,9 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
   const [quantity, setQuantity] = useState('1');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const fieldErrors = useFieldErrors(REQUEST_FIELDS);
+  const setFieldError = fieldErrors.setError;
+  const clearFieldErrors = fieldErrors.clear;
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
@@ -150,7 +166,8 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
     setDuration('temporary');
     setQuantity('1');
     setReason('');
-  }, []);
+    clearFieldErrors();
+  }, [clearFieldErrors]);
 
   const loadCatalog = useCallback(async (term: string, category: string) => {
     const seq = ++loadSeq.current;
@@ -227,6 +244,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
 
   const chooseProduct = (product: RequestableProduct) => {
     setSelected(product);
+    setFieldError('item', null);
     setQuantity('1');
     if (!product.has_sizes) {
       setSelectedVariant(product.variants[0] ? variantKey(product.variants[0]) : '');
@@ -266,16 +284,16 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
 
   const handleSubmit = async () => {
     const itemName = selected ? selected.name : freeText.trim();
-    if (!itemName) {
-      toast.error('Choose an item, or describe what you need');
-      return;
-    }
-    if (selected?.has_sizes && !activeVariant) {
-      toast.error('Choose a size');
-      return;
-    }
-    if (isPool && !quantityValid) {
-      toast.error(`Enter a quantity between 1 and ${MAX_QUANTITY}`);
+    // Checked here rather than by greying out Submit, which told a member
+    // nothing about what was missing (forms review F-3).
+    const problems: FieldErrors<RequestField> = {};
+    if (!itemName) problems.item = 'Choose an item from the list, or describe what you need here.';
+    if (selected?.has_sizes && !activeVariant) problems.size = 'Choose a size.';
+    if (isPool && !quantityValid) problems.quantity = `Enter a quantity between 1 and ${MAX_QUANTITY}.`;
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
 
@@ -296,7 +314,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
       onSubmitted();
       onClose();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to submit request'));
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to submit request'));
     } finally {
       setSubmitting(false);
     }
@@ -335,19 +353,21 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
   );
 
   const reasonField = (
-    <div>
-      <label className="form-label" htmlFor="request-reason">
-        Reason (optional)
-      </label>
-      <textarea
-        id="request-reason"
-        rows={3}
-        value={reason}
-        onChange={(e) => setReason(e.target.value)}
-        className="form-input"
-        placeholder="Why do you need it? (e.g. worn out, doesn't fit, new member) — this helps the quartermaster decide"
-      />
-    </div>
+    <FormField id={REQUEST_FIELDS.reason.id} label="Reason (optional)" error={fieldErrors.errors.reason}>
+      {(field) => (
+        <textarea
+          {...field}
+          rows={3}
+          value={reason}
+          onChange={(e) => {
+            setReason(e.target.value);
+            setFieldError('reason', null);
+          }}
+          className="form-input"
+          placeholder="Why do you need it? (e.g. worn out, doesn't fit, new member) — this helps the quartermaster decide"
+        />
+      )}
+    </FormField>
   );
 
   return (
@@ -365,7 +385,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
           <button
             type="button"
             onClick={() => void handleSubmit()}
-            disabled={submitting || (!selected && !freeText.trim())}
+            disabled={submitting}
             className="btn-info btn-md disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? 'Submitting…' : 'Submit Request'}
@@ -376,6 +396,11 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
         </>
       }
     >
+      {fieldErrors.formError && (
+        <p role="alert" className={`mb-4 text-sm ${FIELD_ERROR_CLASS}`}>
+          {fieldErrors.formError}
+        </p>
+      )}
       {selected === null ? (
         <div className="space-y-4">
           <div>
@@ -463,22 +488,31 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
           </div>
 
           <div className="border-theme-surface-border space-y-2 border-t pt-4">
-            <label className="form-label" htmlFor="request-free-text">
-              <PencilLine className="mr-1 inline h-3.5 w-3.5" />
-              Not listed? Describe what you need
-            </label>
-            <input
-              id="request-free-text"
-              type="text"
-              value={freeText}
-              onChange={(e) => setFreeText(e.target.value)}
-              placeholder="e.g. Wildland gloves, size L"
-              className="form-input"
-            />
-            <p className="text-theme-text-muted text-xs">
-              The quartermaster reviews these like any other request and decides whether to get it. It is also how the
-              department learns what it is missing.
-            </p>
+            <FormField
+              id={REQUEST_FIELDS.item.id}
+              label={
+                <>
+                  <PencilLine className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />
+                  Not listed? Describe what you need
+                </>
+              }
+              hint="The quartermaster reviews these like any other request and decides whether to get it. It is also how the department learns what it is missing."
+              error={fieldErrors.errors.item}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="text"
+                  value={freeText}
+                  onChange={(e) => {
+                    setFreeText(e.target.value);
+                    setFieldError('item', null);
+                  }}
+                  placeholder="e.g. Wildland gloves, size L"
+                  className="form-input"
+                />
+              )}
+            </FormField>
             {freeText.trim() !== '' && (
               <div className="space-y-4 pt-2">
                 {durationField}
@@ -513,7 +547,20 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
               <span className="form-label block" id="request-size-label">
                 Size
               </span>
-              <div className="flex flex-wrap gap-2" role="group" aria-labelledby="request-size-label">
+              {fieldErrors.errors.size && (
+                <p id={`${REQUEST_FIELDS.size.id}-error`} className={`mb-2 text-sm ${FIELD_ERROR_CLASS}`}>
+                  {fieldErrors.errors.size}
+                </p>
+              )}
+              <div
+                id={REQUEST_FIELDS.size.id}
+                // Focus target for a missing size: the chips answer it together.
+                tabIndex={-1}
+                className="flex flex-wrap gap-2 focus:outline-none"
+                role="group"
+                aria-labelledby="request-size-label"
+                aria-describedby={fieldErrors.errors.size ? `${REQUEST_FIELDS.size.id}-error` : undefined}
+              >
                 {sizeOptions.map((variant) => {
                   const key = variantKey(variant);
                   const stock = stockPhrase(variant);
@@ -521,7 +568,10 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setSelectedVariant(key)}
+                      onClick={() => {
+                        setSelectedVariant(key);
+                        setFieldError('size', null);
+                      }}
                       aria-pressed={selectedVariant === key}
                       // Spelled out rather than left to the concatenated text:
                       // the visible form collapses to "L· 3" for a screen
@@ -558,20 +608,22 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
           {durationField}
 
           {isPool && (
-            <div>
-              <label className="form-label" htmlFor="request-quantity">
-                Quantity
-              </label>
-              <input
-                id="request-quantity"
-                type="number"
-                min={1}
-                max={MAX_QUANTITY}
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                className="form-input w-28"
-              />
-            </div>
+            <FormField id={REQUEST_FIELDS.quantity.id} label="Quantity" error={fieldErrors.errors.quantity}>
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  min={1}
+                  max={MAX_QUANTITY}
+                  value={quantity}
+                  onChange={(e) => {
+                    setQuantity(e.target.value);
+                    setFieldError('quantity', null);
+                  }}
+                  className="form-input w-28"
+                />
+              )}
+            </FormField>
           )}
 
           {notice && (
