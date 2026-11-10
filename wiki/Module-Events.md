@@ -967,7 +967,11 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
   table, with date range filtering (`GET /events/analytics/summary`).
 - **`/events/:id/analytics`** — per-event analytics dashboard.
 - **QR Code Analytics** and **Community Engagement** tabs in the Events admin
-  hub.
+  hub. Community Engagement (`GET /dashboard/community-engagement?period=`,
+  `events.manage`) reports events held, people reached — signed-in guests, or
+  the request's audience size where nobody signed in, reported separately —
+  member hours, requests received and completed, a monthly and by-type
+  breakdown and recent events, against the same span of the previous period.
 
 ---
 

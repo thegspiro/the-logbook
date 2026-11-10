@@ -62,6 +62,7 @@ from app.schemas.dashboard_pulse import (
     stored_layout,
 )
 from app.services.apparatus_service import ApparatusService
+from app.services.community_engagement_service import CommunityEngagementService
 from app.services.dashboard_widget_service import PERIOD_LABELS, DashboardWidgetService
 from app.services.facilities_service import (
     FACILITY_MAINTENANCE_DUE_DAYS,
@@ -585,13 +586,77 @@ class ActionItemPage(BaseModel):
     offset: int
 
 
+class CommunityReachTotals(BaseModel):
+    """One period's outreach totals. See community_engagement_service for the rules."""
+
+    events_held: int
+    people_reached: int
+    signed_in: int
+    estimated: int
+    member_hours: float
+    members_involved: int
+    requests_received: int
+    requests_completed: int
+
+
+class CommunityTurnout(BaseModel):
+    """Events with both a requester's expected audience and sign-ins."""
+
+    events: int
+    signed_in: int
+    expected: int
+
+
+class CommunityReachBucket(BaseModel):
+    period: str
+    events: int
+    signed_in: int
+    estimated: int
+
+
+class CommunityTypeBucket(BaseModel):
+    label: str
+    events: int
+    people_reached: int
+
+
+class CommunityEventReach(BaseModel):
+    event_id: str
+    title: str
+    start_datetime: datetime
+    type_label: str
+    organization_name: str | None = None
+    request_id: str | None = None
+    signed_in: int
+    expected: int | None = None
+    people_reached: int
+    reach_is_estimate: bool
+    crew: int
+    member_hours: float
+
+
 class CommunityEngagement(BaseModel):
-    """Community engagement metrics for Public Outreach."""
+    """Community engagement metrics for Public Outreach.
+
+    The first four fields are all-time and unchanged from before the report
+    was added; everything after them follows ``period``.
+    """
 
     total_public_events: int
     total_member_attendees: int
     total_external_attendees: int
     upcoming_public_events: int
+    period: str
+    period_start: datetime | None = None
+    period_end: datetime
+    current: CommunityReachTotals
+    previous: CommunityReachTotals | None = None
+    upcoming_events: int
+    turnout: CommunityTurnout
+    granularity: Literal["month", "year"]
+    by_period: list[CommunityReachBucket]
+    by_type: list[CommunityTypeBucket]
+    recent_events: list[CommunityEventReach]
 
 
 class OperationsItem(BaseModel):
@@ -1814,6 +1879,7 @@ async def _meeting_item_labels(
 
 @router.get("/community-engagement", response_model=CommunityEngagement)
 async def get_community_engagement(
+    period: Literal["month", "quarter", "year", "rolling_12", "all"] = Query("all"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ) -> CommunityEngagement:
@@ -1889,9 +1955,11 @@ async def get_community_engagement(
     )
     upcoming_public = result.scalar() or 0
 
+    report = await CommunityEngagementService(db).report(str(org_id), period)
     return CommunityEngagement(
         total_public_events=total_public,
         total_member_attendees=total_member_attendees,
         total_external_attendees=total_external,
         upcoming_public_events=upcoming_public,
+        **report,
     )
