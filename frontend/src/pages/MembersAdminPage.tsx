@@ -98,6 +98,20 @@ function repeatsMembershipStatus(roleName: string, memberStatus: string | null |
   return !!standing && standingKey(roleName) === standingKey(standing);
 }
 
+/**
+ * A position named after the member's own member class — a department's
+ * "Administrative Member" office held by an administrative member. Same rule
+ * and reason as `repeatsMembershipStatus`, for the class half of the
+ * Membership cell (owner decision 2026-11-10).
+ */
+function repeatsMemberClass(
+  roleName: string,
+  member: { member_class?: string | null | undefined; membership_type?: string | undefined }
+): boolean {
+  const cls = memberClassLabel(effectiveMemberClass(member.member_class, member.membership_type));
+  return !!cls && standingKey(roleName) === standingKey(cls);
+}
+
 interface EditProfileForm {
   first_name: string;
   middle_name: string;
@@ -843,7 +857,8 @@ export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population =
                         const shown = withoutRankMirrors(user.roles).filter(
                           (role) =>
                             (role.slug !== 'member' || !isLockedBasePosition(user, role)) &&
-                            !repeatsMembershipStatus(role.name, user.member_status)
+                            !repeatsMembershipStatus(role.name, user.member_status) &&
+                            !repeatsMemberClass(role.name, user)
                         );
                         if (shown.length === 0) {
                           return (
