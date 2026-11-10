@@ -144,7 +144,7 @@ google-api-python-client==2.201.0
 # Development & Testing
 # ============================================
 pytest==9.2.0  # schemathesis 4.10+ requires >=9; clears PYSEC-2026-1845
-pytest-asyncio==1.4.1
+pytest-asyncio==1.4.1.post1
 pytest-cov==7.1.0
 pytest-randomly==5.0.0
 pytest-timeout==2.4.0
@@ -180,7 +180,7 @@ mypy==2.4.1
 # above because it arrives through google-api-python-client.
 types-defusedxml==0.7.0.20260504
 types-httplib2==0.32.1.20261029
-types-python-dateutil==2.9.0.20261029
+types-python-dateutil==2.9.0.20261104
 types-reportlab==5.0.0.20261008
 isort==9.0.2
 # pylint declares a hard upper bound on isort, so the two only move together:

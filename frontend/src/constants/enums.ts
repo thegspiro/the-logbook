@@ -1134,6 +1134,12 @@ export const CellTone = {
    * `tally_standing()` leaves it out of both sides of the standing.
    */
   CATCH_UP: 'catch_up',
+  /**
+   * A session-attendance requirement no session of which has been held in the
+   * member's window yet (backend status `not_applicable`): nothing to have
+   * attended, so counted neither met nor open, like CATCH_UP (W80-9).
+   */
+  NOT_YET_HELD: 'not_yet_held',
 } as const;
 export type CellTone = (typeof CellTone)[keyof typeof CellTone];
 

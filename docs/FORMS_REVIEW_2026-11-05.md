@@ -124,6 +124,14 @@ the field it names. Since followed by the shift template and pattern dialogs,
 which had relied on the browser's `required` bubble. The other dialogs move
 over module by module.
 
+Every dialog in the table's first row — a button disabled until valid, with no
+message — has now moved: Create Shift with the shared pieces, New Pattern and
+New Template in the next batch, and the rest in the one after (Add Station and
+Add Room, Add Facility, the facility type / status / maintenance type dialog,
+New Folder, Create Form, Add supply, Add several items, Request Equipment, the
+suggestion box form and Apparatus (basic)). Each keeps its button enabled,
+names what is missing on its field, and puts a 422 on the field it names.
+
 Pressing the primary button of an empty create dialog was probed 70 times
 (about 40 distinct dialogs). The outcomes:
 

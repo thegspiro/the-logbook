@@ -43,7 +43,9 @@ import {
   isAdminOnlyRefusal,
 } from '../components/documents/folderAccess';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail } from '../utils/errorHandling';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { FormField } from '../components/ux/FormField';
 import { fileTypeLabel } from '../utils/fileTypeLabel';
 
 type ViewMode = 'grid' | 'list';
@@ -58,6 +60,14 @@ const DOCUMENTS_PAGE_SIZE = 50;
 // rows at every breakpoint (1, 2 and 3 across) rather than leave a ragged tail.
 const FOLDER_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
+
+/** DocumentFolderCreate.name max_length (forms review F-2). */
+const FOLDER_NAME_MAX_LENGTH = 255;
+type CreateFolderField = 'name' | 'description';
+const CREATE_FOLDER_FIELDS: FieldSpecs<CreateFolderField> = {
+  name: { id: 'folder-name', label: 'Folder Name' },
+  description: { id: 'folder-description', label: 'Description' },
+};
 
 /**
  * How a restricted folder is described to the people who file into it. The
@@ -115,7 +125,8 @@ const DocumentsPage: React.FC = () => {
   // Form state
   const [folderForm, setFolderForm] = useState({ name: '', description: '' });
   const [folderAccess, setFolderAccess] = useState(EMPTY_FOLDER_ACCESS);
-  const [createFolderError, setCreateFolderError] = useState<string | null>(null);
+  const createFolderErrors = useFieldErrors(CREATE_FOLDER_FIELDS);
+  const clearCreateFolderErrors = createFolderErrors.clear;
   const [uploadForm, setUploadForm] = useState({
     name: '',
     description: '',
@@ -248,10 +259,24 @@ const DocumentsPage: React.FC = () => {
   // Handlers
   // -------------------------------------------------------
 
+  const { setErrors: setCreateFolderFieldErrors, setFormError: setCreateFolderFormError } = createFolderErrors;
+  const { focusFirst: focusFirstCreateFolderError, setFromApiError: setCreateFolderApiError } = createFolderErrors;
   const handleCreateFolder = useCallback(async () => {
-    if (!folderForm.name.trim() || folderAccessIncomplete(folderAccess)) return;
+    // Checked here rather than by greying out Create Folder, which told a
+    // member nothing about why it would not press (forms review F-3).
+    const problems: FieldErrors<CreateFolderField> = {};
+    if (!folderForm.name.trim()) problems.name = 'Enter a name for the folder.';
+    setCreateFolderFieldErrors(problems);
+    // The positions list says "Choose at least one position" beside itself;
+    // this repeats it where the press happened.
+    setCreateFolderFormError(
+      folderAccessIncomplete(folderAccess) ? 'Choose at least one position who can open the folder.' : null
+    );
+    if (Object.keys(problems).length > 0 || folderAccessIncomplete(folderAccess)) {
+      focusFirstCreateFolderError(problems);
+      return;
+    }
     setActionLoading(true);
-    setCreateFolderError(null);
     const payload = {
       name: folderForm.name.trim(),
       ...(folderForm.description.trim() ? { description: folderForm.description.trim() } : {}),
@@ -273,12 +298,27 @@ const DocumentsPage: React.FC = () => {
       await fetchSummary();
     } catch (err: unknown) {
       // Shown in the dialog, not behind it: the server's reason (an unknown
-      // position, settings that would shut you out) is what to fix.
-      setCreateFolderError(getErrorMessage(err, 'Unable to create folder. Check your connection and try again.'));
+      // position, settings that would shut you out) is what to fix. A
+      // refusal naming the folder's name or description lands on that field.
+      focusFirstCreateFolderError(
+        setCreateFolderApiError(err, 'Unable to create folder. Check your connection and try again.')
+      );
     } finally {
       setActionLoading(false);
     }
-  }, [folderForm, folderAccess, currentFolder, folderSkip, fetchFolders, fetchSummary, confirm]);
+  }, [
+    folderForm,
+    folderAccess,
+    currentFolder,
+    folderSkip,
+    fetchFolders,
+    fetchSummary,
+    confirm,
+    setCreateFolderFieldErrors,
+    setCreateFolderFormError,
+    focusFirstCreateFolderError,
+    setCreateFolderApiError,
+  ]);
 
   const handleUploadDocument = useCallback(async () => {
     if (!uploadForm.file) return;
@@ -465,7 +505,7 @@ const DocumentsPage: React.FC = () => {
             onClick={() => {
               // Fresh access settings and no stale error each time it opens.
               setFolderAccess(EMPTY_FOLDER_ACCESS);
-              setCreateFolderError(null);
+              clearCreateFolderErrors();
               setShowCreateFolder(true);
             }}
             className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
@@ -1197,9 +1237,9 @@ const DocumentsPage: React.FC = () => {
                     </button>
                   </div>
                   <div className="space-y-4">
-                    {createFolderError && (
+                    {createFolderErrors.formError && (
                       <p className="alert-danger" role="alert">
-                        {createFolderError}
+                        {createFolderErrors.formError}
                       </p>
                     )}
                     <p className="text-theme-text-secondary text-sm">
@@ -1207,36 +1247,55 @@ const DocumentsPage: React.FC = () => {
                       <span className="text-theme-text-primary font-medium">{currentFolder?.name ?? 'Root'}</span>
                       {showAllDocuments && ' (folders created from All Documents are placed at the root)'}
                     </p>
-                    <div>
-                      <label htmlFor="folder-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                        Folder Name <span aria-hidden="true">*</span>
-                      </label>
-                      <input
-                        id="folder-name"
-                        type="text"
-                        required
-                        value={folderForm.name}
-                        onChange={(e) => setFolderForm({ ...folderForm, name: e.target.value })}
-                        className="form-input focus:ring-amber-500"
-                        placeholder="e.g., Safety Bulletins"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="folder-description"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Description
-                      </label>
-                      <textarea
-                        id="folder-description"
-                        rows={2}
-                        value={folderForm.description}
-                        onChange={(e) => setFolderForm({ ...folderForm, description: e.target.value })}
-                        className="form-input focus:ring-amber-500"
-                      />
-                    </div>
-                    <FolderAccessFields idPrefix="create-folder" value={folderAccess} onChange={setFolderAccess} />
+                    <FormField
+                      id={CREATE_FOLDER_FIELDS.name.id}
+                      label="Folder Name"
+                      required
+                      labelClassName="text-theme-text-secondary mb-1 block text-sm font-medium"
+                      error={createFolderErrors.errors.name}
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="text"
+                          value={folderForm.name}
+                          maxLength={FOLDER_NAME_MAX_LENGTH}
+                          onChange={(e) => {
+                            setFolderForm({ ...folderForm, name: e.target.value });
+                            createFolderErrors.setError('name', null);
+                          }}
+                          className="form-input focus:ring-amber-500"
+                          placeholder="e.g., Safety Bulletins"
+                        />
+                      )}
+                    </FormField>
+                    <FormField
+                      id={CREATE_FOLDER_FIELDS.description.id}
+                      label="Description"
+                      labelClassName="text-theme-text-secondary mb-1 block text-sm font-medium"
+                      error={createFolderErrors.errors.description}
+                    >
+                      {(field) => (
+                        <textarea
+                          {...field}
+                          rows={2}
+                          value={folderForm.description}
+                          onChange={(e) => {
+                            setFolderForm({ ...folderForm, description: e.target.value });
+                            createFolderErrors.setError('description', null);
+                          }}
+                          className="form-input focus:ring-amber-500"
+                        />
+                      )}
+                    </FormField>
+                    <FolderAccessFields
+                      idPrefix="create-folder"
+                      value={folderAccess}
+                      onChange={(next) => {
+                        setFolderAccess(next);
+                        createFolderErrors.setFormError(null);
+                      }}
+                    />
                   </div>
                 </div>
                 <div className="bg-theme-surface-secondary flex justify-end space-x-3 rounded-b-lg px-6 py-3">
@@ -1250,11 +1309,9 @@ const DocumentsPage: React.FC = () => {
                     onClick={() => {
                       void handleCreateFolder();
                     }}
-                    disabled={!folderForm.name.trim() || folderAccessIncomplete(folderAccess) || actionLoading}
+                    disabled={actionLoading}
                     className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 text-white transition-colors ${
-                      !folderForm.name.trim() || folderAccessIncomplete(folderAccess) || actionLoading
-                        ? 'cursor-not-allowed bg-amber-700 opacity-50'
-                        : 'bg-amber-700 hover:bg-amber-800'
+                      actionLoading ? 'cursor-not-allowed bg-amber-700 opacity-50' : 'bg-amber-700 hover:bg-amber-800'
                     }`}
                   >
                     {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}

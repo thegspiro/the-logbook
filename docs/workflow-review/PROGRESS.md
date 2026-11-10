@@ -172,11 +172,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   placed at a facility (`location_id`) would publish no location; read from
   code, not driven (W76).
 
-- **Tooling** — a full `npm run lint` needs about 3.5 GB of heap (2,350
-  files with type-aware rules). It aborted out of memory under the 2 GB default
-  of the W77 container and passed with `--max-old-space-size=8192`. CI's
-  `ubuntu-latest` default is larger, but the margin is thin (W77).
-
 ## Log
 
 ### W80 — Training event lifecycle: create, credit, correct, excuse, move — 2026-11-08
@@ -198,6 +193,15 @@ one member on a past drill), W80-9 (LOW — "0/0 sessions — Complete"), W80-10
 (LOW — an excused drill stays in "missed mandatory"). Open: W80-12 to W80-15
 (NIT/LOW). Gate: typecheck, lint (with the larger heap of the W77 lead),
 flake8, black, isort and the touched suites clean. Next: W80-11's pull request.
+
+### Lead — Lint runs with a heap ceiling it can finish under — 2026-11-08
+
+Fixed (W77-6), on the owner's decision to raise the ceiling in the script
+rather than only document it: `npm run lint` and `lint:fix` run ESLint through
+`frontend/scripts/eslint-heap.mjs` with `--max-old-space-size=8192`, unless
+`NODE_OPTIONS` already sets one. On this machine, plain ESLint capped at 2 GB
+died with "JavaScript heap out of memory" (exit 134), and `npm run lint`
+passed (exit 0) with the child running under the 8 GB ceiling.
 
 ### W50 follow-up — Meeting link, Import Attendees, unlink — 2026-11-08
 

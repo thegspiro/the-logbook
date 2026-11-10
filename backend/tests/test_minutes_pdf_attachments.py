@@ -198,3 +198,29 @@ class TestBudgets:
 
         drawn = Image.open(BytesIO(prepared["img"].image or b""))
         assert max(drawn.size) <= budget.IMAGE_MAX_EDGE
+
+
+def test_bare_table_cells_print_as_written_not_as_escape_codes():
+    """Attendance, action-item and attachment columns that are bare table
+    cells print their text literally, so escaping it there put "&amp;" on
+    the adopted record."""
+    attachment = _attachment("a1", "application/pdf", 10)
+    attachment["category"] = "r&d_report"
+    data = {
+        "title": "Monthly meeting",
+        "attendees": [{"name": "Pat", "status": "chief's_guest"}],
+        "action_items": [
+            {
+                "description": "Order hose",
+                "priority": "high & urgent",
+                "status": "on_hold_'vendor'",
+            }
+        ],
+        "attachments": [attachment],
+    }
+    out = render_minutes_pdf(data, META).read()
+    text = " ".join(_text(PdfReader(BytesIO(out))).split())
+    for literal in ("chief's_guest", "high & urgent", "on hold 'vendor'", "r&d report"):
+        assert literal in text
+    for code in ("&amp;", "&#x27;"):
+        assert code not in text

@@ -698,6 +698,9 @@ class TrainingService:
         course_checklist: Optional[List[Dict]] = None
         attendance_met: Optional[bool] = None
         attendance_overridden = False
+        # No linked session held in the window yet: not graded at all
+        # (training_compliance.NOT_YET_HELD_STATUS, workflow review W80-9).
+        nothing_held = False
 
         # ---- HOURS ----
         if req_type == RequirementType.HOURS.value:
@@ -841,6 +844,7 @@ class TrainingService:
             base_required = float(tally.base_needed)
             attendance_met = tally.met
             attendance_overridden = tally.overridden
+            nothing_held = tally.held == 0
 
         # ---- Fallback ----
         else:
@@ -881,7 +885,9 @@ class TrainingService:
             # the no-target rule above would read it as unmet.
             pct = 100.0 if attendance_met else pct
 
-        is_met = pct >= 100 and not cert_expired
+        if nothing_held:
+            pct = 0.0
+        is_met = pct >= 100 and not cert_expired and not nothing_held
 
         # Effective due date
         rolling_months = get_rolling_period_months(req)
@@ -992,7 +998,7 @@ class TrainingService:
         )
 
         deadline = catch_up_deadline(req, join_date, real_today)
-        if deadline is not None and not is_met:
+        if deadline is not None and not is_met and not nothing_held:
             effective_due_date = deadline
             days_until_due = (deadline - real_today).days
             # Nothing is held against the member until the deadline passes,
@@ -1017,6 +1023,9 @@ class TrainingService:
             "completed_hours": completed_value,
             "progress_percentage": round(pct, 1),
             "is_met": is_met,
+            # Neither met nor unmet: no linked session held yet. Callers leave
+            # it out of met/total, as the compliance grader does.
+            "not_applicable": nothing_held,
             # Met by a Chief's override rather than by the count.
             "overridden": attendance_overridden,
             "due_date": str(effective_due_date) if effective_due_date else None,
@@ -1629,6 +1638,7 @@ class TrainingService:
             due_date=date.fromisoformat(due) if due else None,
             days_until_due=detail["days_until_due"],
             catch_up_deadline=date.fromisoformat(deadline) if deadline else None,
+            not_applicable=detail["not_applicable"],
         )
 
     async def get_all_requirements_progress(

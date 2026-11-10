@@ -233,6 +233,19 @@ export const LABEL_PRESETS: LabelPreset[] = [
   },
 ];
 
+/**
+ * Avery 5160's published geometry: 0.5" top margin, 0.1875" sides, and a
+ * 0.125" gutter between the three 2.625" columns (a 2.75" pitch). A grid laid
+ * edge to edge, or with equal flexible columns, prints the outer columns up to
+ * 1/8" off their labels, and any row gap accumulates down the sheet. The
+ * server-rendered sheet uses the same numbers (SHEET_* in
+ * backend/app/utils/label_renderer.py); keep the two in step.
+ */
+export const AVERY_5160_TOP_MARGIN = '0.5in';
+export const AVERY_5160_SIDE_MARGIN = '0.1875in';
+export const AVERY_5160_COLUMN_GAP = '0.125in';
+export const AVERY_5160_PAGE_MARGIN = `${AVERY_5160_TOP_MARGIN} ${AVERY_5160_SIDE_MARGIN}`;
+
 export const DEFAULT_PRESET_ID = 'dymo_30252';
 export const CUSTOM_PRESET_ID = 'custom';
 
