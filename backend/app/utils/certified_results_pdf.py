@@ -49,6 +49,7 @@ from app.utils.election_pdf_style import (
     section,
 )
 from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT, body_table_style
+from app.utils.pdfa import to_pdfa
 
 _TIE_POLICY_LABELS = {
     "co_winners": "All tied candidates are declared winners",
@@ -381,5 +382,5 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
 
     footer = page_footer(f"Certified Election Results · {election.get('title') or ''}")
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
-    buf.seek(0)
-    return buf
+    # A certified result is a record kept for years: archival PDF/A-2b.
+    return BytesIO(to_pdfa(buf.getvalue()))

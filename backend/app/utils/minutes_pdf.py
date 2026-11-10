@@ -34,6 +34,7 @@ from reportlab.platypus import (
 
 from app.utils.minutes_pdf_attachments import (
     IMAGE,
+    PDF,
     PreparedAttachment,
     append_pdfs,
     prepare,
@@ -46,6 +47,7 @@ from app.utils.pdf_fonts import (
     body_table_style,
     document_stylesheet,
 )
+from app.utils.pdfa import to_pdfa
 from app.utils.print_geometry import BINDING_EDGE, SAFE_EDGE
 from app.utils.rich_text import (
     FORMAT_HTML,
@@ -655,9 +657,10 @@ def render_minutes_pdf(
         canvas.restoreState()
 
     doc.build(story, onFirstPage=_decorate, onLaterPages=_decorate)
-    if prepared:
+    if any(entry.kind == PDF for entry in prepared.values()):
         # PDF attachments go after the minutes, page for page. They carry no
         # minutes footer: the version and hash above are the record's own.
+        # Pages from outside cannot be vouched for, so this file makes no
+        # PDF/A claim (owner decision, 2026-11-09).
         return BytesIO(append_pdfs(buf.getvalue(), attachments, prepared))
-    buf.seek(0)
-    return buf
+    return BytesIO(to_pdfa(buf.getvalue()))

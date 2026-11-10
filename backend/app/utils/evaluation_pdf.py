@@ -34,6 +34,7 @@ from app.utils.election_pdf_style import (
     section,
 )
 from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT
+from app.utils.pdfa import to_pdfa
 
 
 def _multiline(text: Any) -> str:
@@ -323,4 +324,5 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
         f"Member performance evaluation · {record.get('member_name') or ''}"
     )
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
-    return buf.getvalue()
+    # The finalized evaluation is a personnel record: archival PDF/A-2b.
+    return to_pdfa(buf.getvalue())
