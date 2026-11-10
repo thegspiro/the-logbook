@@ -646,18 +646,20 @@ export const MembersAdminPage: React.FC = () => {
               View by Position
             </button>
           </div>
-          <label className="text-theme-text-secondary mobile-touch-target mt-3 flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="form-checkbox"
-              checked={showFormerMembers}
-              onChange={(e) => setShowFormerMembers(e.target.checked)}
-            />
-            Show former members (archived or dropped)
-            {!showFormerMembers && hiddenFormerCount > 0 && (
-              <span className="text-theme-text-muted">&middot; {hiddenFormerCount} hidden</span>
-            )}
-          </label>
+          <div className="mt-3">
+            <label className="text-theme-text-secondary mobile-touch-target gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="form-checkbox"
+                checked={showFormerMembers}
+                onChange={(e) => setShowFormerMembers(e.target.checked)}
+              />
+              Show former members (archived or dropped)
+              {!showFormerMembers && hiddenFormerCount > 0 && (
+                <span className="text-theme-text-muted">&middot; {hiddenFormerCount} hidden</span>
+              )}
+            </label>
+          </div>
         </div>
 
         <p className="text-theme-text-muted mb-4 text-sm">
