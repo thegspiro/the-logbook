@@ -1149,8 +1149,16 @@ jobs:
   # growth, not a target; when a leg nears it, add a shard (`[1, 2, 3]` and
   # `/3` below) rather than raise it. The job id is unchanged, so `ci-success`
   # still needs it: a matrix job's `needs` result is failure when any leg fails.
+  #
+  # Three shards, 2026-11-10, as the note above says to. The 372-test leg ran
+  # about 34 minutes on its own, and "Install WebKit system libraries" varies
+  # between 7 and 15 minutes from runner to runner despite the apt cache: on
+  # #4125 (36365c27) leg 1/2 spent 15 minutes there and was cancelled at 45
+  # with 29 minutes of tests behind it, every test so far passing; on #4202
+  # (89811d54) the same leg passed at 43 minutes. A third leg brings the tests
+  # to about 23 minutes, so the slowest install observed still finishes near 40.
   frontend-e2e-safari:
-    name: Frontend E2E (Mobile Safari ${{ matrix.shard }}/2)
+    name: Frontend E2E (Mobile Safari ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
@@ -1158,7 +1166,7 @@ jobs:
       # Chromium legs above.
       fail-fast: false
       matrix:
-        shard: [1, 2]
+        shard: [1, 2, 3]
     defaults:
       run:
         working-directory: frontend
@@ -1213,7 +1221,7 @@ jobs:
         run: npx playwright install-deps webkit
 
       - name: Run Mobile Safari E2E tests
-        run: npx playwright test --project="Mobile Safari" --grep-invert '@screenshots|@sweep' --shard=${{ matrix.shard }}/2
+        run: npx playwright test --project="Mobile Safari" --grep-invert '@screenshots|@sweep' --shard=${{ matrix.shard }}/3
 
       - name: Upload Playwright report
         if: failure()
