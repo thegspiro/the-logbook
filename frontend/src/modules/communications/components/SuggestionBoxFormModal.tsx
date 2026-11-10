@@ -9,8 +9,9 @@
 import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import { SUGGESTION_ANONYMITY_LABELS, SuggestionAnonymityMode } from '../../../constants/enums';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { blankToNull } from '../../../utils/formValues';
 import { suggestionsService } from '../services/suggestionsService';
 import type { ReviewerOptions, SuggestionBoxAdmin } from '../types/suggestions';
@@ -28,6 +29,18 @@ interface SuggestionBoxFormModalProps {
 }
 
 const ANONYMITY_MODES = Object.values(SuggestionAnonymityMode);
+
+type BoxField = 'name' | 'description' | 'reviewers';
+
+const BOX_FIELDS: FieldSpecs<BoxField> = {
+  name: { id: 'box-name', label: 'Name' },
+  description: { id: 'box-description', label: 'Description' },
+  reviewers: {
+    id: 'box-reviewers',
+    label: 'Reviewers',
+    apiKeys: ['reviewerPositionIds', 'reviewerMemberIds'],
+  },
+};
 
 const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
   box,
@@ -52,6 +65,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
   const [watcherFilter, setWatcherFilter] = useState('');
   const [questions, setQuestions] = useState<EditableQuestion[]>(() => withEditorIds(box?.intakeQuestions));
   const [isSaving, setIsSaving] = useState(false);
+  const fieldErrors = useFieldErrors(BOX_FIELDS);
   const routeTargets = useMemo(() => boxes.filter((b) => b.id !== box?.id), [boxes, box]);
 
   const hasReviewers = positionIds.length + memberIds.length > 0;
@@ -70,8 +84,15 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isActive && !hasReviewers) {
-      toast.error('Choose at least one reviewer, or save the box as inactive.');
+    // Checked here rather than by greying out Save, which told an officer
+    // nothing about why it would not press (forms review F-3).
+    const problems: FieldErrors<BoxField> = {};
+    if (!name.trim()) problems.name = 'Enter a name for the box.';
+    if (isActive && !hasReviewers) problems.reviewers = 'Choose at least one reviewer, or save the box as inactive.';
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
     setIsSaving(true);
@@ -100,7 +121,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
       toast.success(box ? 'Suggestion box updated' : 'Suggestion box created');
       onSaved(saved);
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Unable to save the suggestion box.'));
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Unable to save the suggestion box.'));
     } finally {
       setIsSaving(false);
     }
@@ -115,7 +136,7 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
       onSubmit={(e) => void handleSubmit(e)}
       footer={
         <>
-          <button type="submit" className="btn-primary" disabled={isSaving || !name.trim()}>
+          <button type="submit" className="btn-primary" disabled={isSaving}>
             {isSaving ? 'Saving…' : 'Save box'}
           </button>
           <button
@@ -129,33 +150,49 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
       }
     >
       <div className="space-y-4">
-        <div>
-          <label htmlFor="box-name" className="form-label">
-            Name
-          </label>
-          <input
-            id="box-name"
-            className="form-input"
-            value={name}
-            maxLength={100}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Training ideas"
-            required
-          />
-        </div>
-        <div>
-          <label htmlFor="box-description" className="form-label">
-            Description <span className="text-theme-text-muted font-normal">(shown to members)</span>
-          </label>
-          <textarea
-            id="box-description"
-            className="form-input"
-            rows={2}
-            maxLength={2000}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
+        {fieldErrors.formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {fieldErrors.formError}
+          </p>
+        )}
+        <FormField id={BOX_FIELDS.name.id} label="Name" required error={fieldErrors.errors.name}>
+          {(field) => (
+            <input
+              {...field}
+              className="form-input"
+              value={name}
+              maxLength={100}
+              onChange={(e) => {
+                setName(e.target.value);
+                fieldErrors.setError('name', null);
+              }}
+              placeholder="e.g. Training ideas"
+            />
+          )}
+        </FormField>
+        <FormField
+          id={BOX_FIELDS.description.id}
+          label={
+            <>
+              Description <span className="text-theme-text-muted font-normal">(shown to members)</span>
+            </>
+          }
+          error={fieldErrors.errors.description}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              className="form-input"
+              rows={2}
+              maxLength={2000}
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                fieldErrors.setError('description', null);
+              }}
+            />
+          )}
+        </FormField>
         {/* Right after the name: what a member is asked shapes everything
             below it, and at the foot of a long modal it went unfound. */}
         <IntakeQuestionsEditor
@@ -205,7 +242,10 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
             type="checkbox"
             className="form-checkbox"
             checked={isActive}
-            onChange={(e) => setIsActive(e.target.checked)}
+            onChange={(e) => {
+              setIsActive(e.target.checked);
+              fieldErrors.setError('reviewers', null);
+            }}
           />
           Accepting submissions
         </label>
@@ -231,30 +271,52 @@ const SuggestionBoxFormModal: React.FC<SuggestionBoxFormModalProps> = ({
             an email when something new arrives. Managing boxes does not by itself let you read them.
           </p>
         </div>
-        <ReviewerChecklist
-          legend="Reviewer positions"
-          items={options.positions}
-          selected={positionIds}
-          onChange={setPositionIds}
-        />
-        <div>
-          <label htmlFor="box-member-filter" className="form-label">
-            Find members
-          </label>
-          <input
-            id="box-member-filter"
-            className="form-input mb-2"
-            value={memberFilter}
-            onChange={(e) => setMemberFilter(e.target.value)}
-            placeholder="Filter by name"
-          />
+        {/* Focus target for the reviewer error: the two checklists below
+            answer it together, so neither one is "the" field. */}
+        <div
+          id={BOX_FIELDS.reviewers.id}
+          role="group"
+          aria-label="Reviewers"
+          tabIndex={-1}
+          aria-describedby={fieldErrors.errors.reviewers ? `${BOX_FIELDS.reviewers.id}-error` : undefined}
+          className="space-y-4 focus:outline-none"
+        >
+          {fieldErrors.errors.reviewers && (
+            <p id={`${BOX_FIELDS.reviewers.id}-error`} className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {fieldErrors.errors.reviewers}
+            </p>
+          )}
           <ReviewerChecklist
-            legend="Reviewer members"
-            items={memberItems}
-            selected={memberIds}
-            onChange={setMemberIds}
-            filter={memberFilter}
+            legend="Reviewer positions"
+            items={options.positions}
+            selected={positionIds}
+            onChange={(ids) => {
+              setPositionIds(ids);
+              fieldErrors.setError('reviewers', null);
+            }}
           />
+          <div>
+            <label htmlFor="box-member-filter" className="form-label">
+              Find members
+            </label>
+            <input
+              id="box-member-filter"
+              className="form-input mb-2"
+              value={memberFilter}
+              onChange={(e) => setMemberFilter(e.target.value)}
+              placeholder="Filter by name"
+            />
+            <ReviewerChecklist
+              legend="Reviewer members"
+              items={memberItems}
+              selected={memberIds}
+              onChange={(ids) => {
+                setMemberIds(ids);
+                fieldErrors.setError('reviewers', null);
+              }}
+              filter={memberFilter}
+            />
+          </div>
         </div>
 
         <section aria-labelledby="box-watchers-heading" className="border-theme-surface-border space-y-4 border-t pt-4">

@@ -309,6 +309,11 @@ Add Member. The rest of the app's
 forms still refuse a save on error in various ways (F-3 in that review) and
 come into line module by module.
 
+Also on the shared pieces since: every create dialog the review found with a
+button greyed out until valid (Locations, Facilities, Documents' New Folder,
+Forms' Create Form, Medical Supplies' Add supply, Inventory's Add several
+items and Request Equipment, the suggestion box form, Apparatus (basic)).
+
 Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
 needs a course name and a completion date, because both are NOT NULL
 columns, and making them nullable was declined. Every other field follows
