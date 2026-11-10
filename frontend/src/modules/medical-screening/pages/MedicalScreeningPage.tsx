@@ -18,6 +18,7 @@ import { useCanViewNarrative } from '../hooks/useCanViewNarrative';
 import AdminPageHeader from '../../../components/admin/AdminPageHeader';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { mapServerFieldErrors } from '../../../utils/serverFieldErrors';
 import { formatCalendarDate } from '../../../utils/dateFormatting';
 import { SCREENING_TYPE_LABELS, SCREENING_STATUS_LABELS, SCREENING_STATUS_COLORS } from '../types';
 import type {
@@ -27,6 +28,7 @@ import type {
   ScreeningRequirementUpdate,
   ScreeningRecordCreate,
   ScreeningRecordUpdate,
+  ScreeningSaveOptions,
 } from '../types';
 
 const MEDICAL_SCREENING_TABS = ['requirements', 'records', 'compliance'] as const;
@@ -97,18 +99,22 @@ export const MedicalScreeningPage: React.FC = () => {
   );
 
   const handleSaveRequirement = useCallback(
-    async (data: ScreeningRequirementCreate | ScreeningRequirementUpdate) => {
+    async (data: ScreeningRequirementCreate | ScreeningRequirementUpdate, options?: ScreeningSaveOptions) => {
       try {
         if (editingRequirement) {
           await updateRequirement(editingRequirement.id, data);
-          toast.success('Requirement updated');
+          if (!options?.keepOpen) toast.success('Requirement updated');
         } else {
           await createRequirement(data as ScreeningRequirementCreate);
           toast.success('Requirement created');
         }
+        // A partial save: the form stays open with the refused fields flagged.
+        if (options?.keepOpen) return;
         setShowRequirementForm(false);
         setEditingRequirement(null);
       } catch (err: unknown) {
+        // A validation refusal goes back to the form, which puts it on its field.
+        if (mapServerFieldErrors(err, {})) throw err;
         toast.error(getErrorMessage(err, 'Failed to save requirement'));
       }
     },
@@ -116,18 +122,22 @@ export const MedicalScreeningPage: React.FC = () => {
   );
 
   const handleSaveRecord = useCallback(
-    async (data: ScreeningRecordCreate | ScreeningRecordUpdate) => {
+    async (data: ScreeningRecordCreate | ScreeningRecordUpdate, options?: ScreeningSaveOptions) => {
       try {
         if (editingRecord) {
           await updateRecord(editingRecord.id, data);
-          toast.success('Record updated');
+          if (!options?.keepOpen) toast.success('Record updated');
         } else {
           await createRecord(data as ScreeningRecordCreate);
           toast.success('Record created');
         }
+        // A partial save: the form stays open with the refused fields flagged.
+        if (options?.keepOpen) return;
         setShowRecordForm(false);
         setEditingRecord(null);
       } catch (err: unknown) {
+        // A validation refusal goes back to the form, which puts it on its field.
+        if (mapServerFieldErrors(err, {})) throw err;
         toast.error(getErrorMessage(err, 'Failed to save record'));
       }
     },

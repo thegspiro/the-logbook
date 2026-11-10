@@ -340,6 +340,46 @@ the flag on a form that has already navigated away. An event saved as a draft
 is still refused for the rules the server enforces on every event (an end after
 the start, an RSVP deadline before it).
 
+**Rolled out further on 2026-11-08** (batch 16). The shared field, 422s on
+their fields, schema `maxLength`, `<form>` with Enter, and discard protection
+now also cover:
+
+- **Top-level pages:** Action Items › Update, Locations › Station and Room,
+  basic Apparatus, Role Management, Documents › Create Folder and Upload, and
+  Scheduling's outside-shift form.
+- **Inventory and assets:** Inventory › Add / Edit Item, Apparatus › Fuel Log,
+  Maintenance Record, Equipment and Operator, Facilities › Add Facility,
+  Medical Supplies › Add / Edit, and the Store's item and order-window dialogs.
+- **Finance and grants:** purchase, check and expense requests (the server
+  draft and the expense session draft still work), the budget line and dues
+  schedule dialogs, pledges, fundraising events, donations, grant
+  opportunities and applications, and Admin Hours' category, manual entry and
+  entry editor.
+- **Minutes, communications and the smaller modules:** medical screening
+  records and requirements, messages, shift patterns and Generate Shifts,
+  Record Meeting Minutes, IP exception requests, meeting action items, legal
+  revisions and Add Applicant.
+
+Edits on these follow the single-save rule above, including Edit Pattern and
+the meeting action item, whose pages now refresh behind a dialog left open on a
+refused field. **One exception: Admin Hours' entry editor does not partially
+save.** It resubmits the whole entry and checks the start and end together, so
+saving one time without the other could leave an entry whose duration makes no
+sense; it saves nothing until every refusal is fixed. Dialogs that check their
+own fields turn off the browser's validation bubbles (`noValidate`), so the
+reason appears on the field instead of a native popup.
+
+Still to come, module by module: Create Election, the member admin edit page
+(its uppercase label style needs a `FormField` option first), the training
+builders and pipeline pages, the rest of Inventory (vendors, receiving, kits,
+storage areas, settings), the full apparatus form, the facility detail
+sections, medical supply deliveries and imports, store checkout, the remaining
+finance dialogs and settings cards, the minutes editor and its dialogs, report
+and evaluation dialogs, communications templates, scheduling templates and
+settings, applicant conversion and stage settings, and onboarding, history,
+membership and the public portal. Each is listed in
+`docs/FORMS_REVIEW_2026-11-05.md`.
+
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
 
@@ -347,9 +387,10 @@ Two of the three options, and not the third:
   changed asks "Keep editing" / "Discard changes" before Escape, its X or its
   Cancel throws them away; a clean dialog closes at once, so Escape stays the
   way out (Pitfall #31). It is opt-in per dialog (`isDirty` on `Modal` /
-  `DialogPanel`, or `useDiscardGuard`), and adopted so far on Inventory › Add /
-  Edit Item and Scheduling › Create Shift; other dialogs still close without
-  asking until they pass the flag.
+  `DialogPanel`, or `useDiscardGuard`), adopted on Inventory › Add / Edit Item
+  and Scheduling › Create Shift on 2026-11-06 and on every dialog the 2026-11-08
+  rollout converted (above); other dialogs still close without asking until
+  they pass the flag.
 - **Local drafts — built** for training submission (new ones; an edit is
   already stored on the server), the manual shift report (Scheduling's shift
   reports already kept their own draft), the expense report and Add Member.

@@ -24,7 +24,7 @@ const storedPattern: PatternFormData = {
 };
 
 describe('PatternFormModal payload', () => {
-  const onSubmit = vi.fn<(data: Record<string, unknown>) => Promise<void>>();
+  const onSubmit = vi.fn<(data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>>();
 
   // Reset before installing the default, so no override leaks between tests
   // (CLAUDE.md pitfall #28).
@@ -195,7 +195,7 @@ describe('PatternFormModal deactivated templates', () => {
 // Forms review F-3: the dialog leaned on the browser's own `required` bubble,
 // which vanishes after a moment and names nothing the member can come back to.
 describe('PatternFormModal validation', () => {
-  const onSubmit = vi.fn<(data: Record<string, unknown>) => Promise<void>>();
+  const onSubmit = vi.fn<(data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>>();
 
   beforeEach(() => {
     onSubmit.mockReset();
@@ -256,5 +256,102 @@ describe('PatternFormModal validation', () => {
     await waitFor(() => expect(name).toHaveAccessibleDescription('A pattern with this name already exists.'));
     expect(name).toHaveFocus();
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('PatternFormModal errors and leaving', () => {
+  const onSubmit = vi.fn<(data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>>();
+
+  beforeEach(() => {
+    onSubmit.mockReset();
+    onSubmit.mockResolvedValue(undefined);
+  });
+
+  it('puts a server refusal on the field it names and leaves the dialog open', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    onSubmit.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'start_date', message: 'Invalid date format.' }] } },
+    });
+    renderWithRouter(
+      <PatternFormModal isOpen onClose={onClose} onSubmit={onSubmit} title="Create Pattern" templates={templates} />
+    );
+
+    fireEvent.change(screen.getByLabelText(/^Start Date/), { target: { value: '2026-02-01' } });
+    // Enter in a field submits: the dialog is a real form (forms review F-7).
+    await user.type(screen.getByLabelText(/^Name/), 'Daily Days{Enter}');
+
+    const start = screen.getByLabelText(/^Start Date/);
+    await waitFor(() => expect(start).toHaveAccessibleDescription('Invalid date format.'));
+    expect(start).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryByText(/start_date/)).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('on edit saves the rest without a refused field and stays open with it flagged', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    onSubmit
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'end_date', message: 'Invalid date format.' }] } },
+      })
+      .mockResolvedValue(undefined);
+    renderWithRouter(
+      <PatternFormModal
+        isOpen
+        onClose={onClose}
+        onSubmit={onSubmit}
+        initialData={storedPattern}
+        title="Edit Pattern"
+        templates={templates}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save Pattern' }));
+
+    const end = screen.getByLabelText(/^End Date/);
+    await waitFor(() => expect(end).toHaveAccessibleDescription('Invalid date format.'));
+    expect(onSubmit).toHaveBeenCalledTimes(2);
+    const [rest, options] = onSubmit.mock.calls[1] ?? [];
+    expect(rest && 'end_date' in rest).toBe(false);
+    expect(rest?.name).toBe('24/48 Rotation');
+    expect(options).toEqual({ keepOpen: true });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('says on the field what a new pattern is missing, and saves nothing', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <PatternFormModal isOpen onClose={vi.fn()} onSubmit={onSubmit} title="Create Pattern" templates={templates} />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save Pattern' }));
+
+    expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Enter a name for the pattern.');
+    expect(screen.getByLabelText(/^Name/)).toHaveAttribute('aria-required', 'true');
+    expect(screen.getByLabelText(/^Start Date/)).toHaveAccessibleDescription('Choose the date the pattern starts.');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('asks before Escape discards a changed pattern', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithRouter(
+      <PatternFormModal
+        isOpen
+        onClose={onClose}
+        onSubmit={onSubmit}
+        initialData={storedPattern}
+        title="Edit Pattern"
+        templates={templates}
+      />
+    );
+
+    await user.type(screen.getByLabelText(/^Name/), ' (2027)');
+    await user.keyboard('{Escape}');
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^Name/)).toHaveValue('24/48 Rotation (2027)');
   });
 });
