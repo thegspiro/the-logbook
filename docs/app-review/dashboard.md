@@ -1,7 +1,127 @@
 # Application Review — Dashboard & Action Items
 
 **Prefix:** `DASH` · **Iteration:** A7 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2), 2026-10-04 (pass 3)
+2026-08-08 (pass 2), 2026-10-04 (pass 3), 2026-11-10 (pass 4)
+
+## Pass 4 (2026-11-10) — the pulse layout and the paged action-item feed
+
+Scope: the delta since pass 3 (`f9211ea3`, 2026-10-04) — 762 changed lines in
+`dashboard.py`, the new `schemas/dashboard_pulse.py`, and the two services —
+plus the open list. `dashboard.py` now has **13 routes** (was 7): five
+`/pulse-layout` routes and `/action-items/page` are new. **2 fixes, 0 newly
+flagged; DASH-37, 38 and 39 verified resolved; DASH-2 still open and now
+recorded in KNOWN_LIMITATIONS.**
+
+### DASH-41 — LOW — The department-default audit rows recorded no origin — ✅ FIXED
+
+`set_department_pulse_layout` and `reset_department_pulse_layout`
+(`dashboard.py:1126`, `:1155`) write an `organization_settings_updated` row
+naming who changed a setting every member's dashboard reads, but left
+`ip_address` and `user_agent` empty — the gap W02-12 closed for the member
+endpoints. Both handlers now take the request (keyword-only in effect, no
+change to the HTTP API) and pass `get_client_ip(request)` and the user agent.
+`TestDepartmentDefaultAuditRows` in `test_dashboard_pulse_layout.py` failed
+before the fix, and with the two arguments removed again it fails on
+`[(None, None), (None, None)]`.
+
+The same gap in `organizations.py`'s own settings rows is not this feature's
+code and is left to the organizations pass; the attendance-waiver row in
+`meetings.py:596` is left to B6.
+
+### DASH-42 — LOW — "Save as department default" was hidden from a holder the server accepts — ✅ FIXED
+
+The two `/pulse-layout/default` routes accept `settings.manage` **or**
+`organization.update_settings`; `DashboardOrganizationWidgets` offered the save
+and reset buttons on `settings.manage` alone. No seeded position holds one
+without the other (`fire_chief` and `president` hold both), so only a custom
+role saw the difference — a member allowed to set the default who was never
+shown the control. The gate now checks the same pair, as `ReviewRulesTab` and
+the three finance settings cards already do. A new Vitest case
+(`offers the department default to someone holding only
+organization.update_settings`) failed before the change. The existing
+negative case is renamed, not changed: its assertion — no settings permission,
+no button — still holds.
+
+### Re-verified
+
+- **DASH-37 — resolved** (`7f0ef2c1d`, `253b9e330`). All 22 server-supplied
+  tile targets were enumerated from `dashboard.py`, and every query parameter
+  is read by its page (`stock`, `status`, `serviceStatus`, `hasDeficiency`,
+  `inspection`, `maintenance`, `dueWithin`, `compliance`, `source`, `range`,
+  `page`/`tab`). Spot-checked that tile and list count the same rows where no
+  shared helper ties them: the inspections and compliance tiles match
+  `page_inspections`/`list_compliance_checklists`' `due_within_days`
+  conditions, both on `resolve_org_today`; the events tile's 30 department
+  days match `EventsPage`'s `nextThirtyDaysWindow`, and both exclude cancelled
+  events.
+- **DASH-38, DASH-39 — resolved** by the owner's 2026-11-01 decisions (batch
+  6): `?maintenance=due` on the fleet board, and a genuine
+  `maintenance_due_soon_conditions` facility figure with a matching `due`
+  list filter.
+- **DASH-40 — resolved 2026-11-05**, as recorded above.
+- **DASH-2 — still open.** `GET /dashboard/stats` still returns
+  `total_documents=0`, `setup_percentage=100` and `pending_tasks_count=0`, and
+  `dashboardService.getStats` still has no caller. Four passes flagged it and
+  none mirrored it into KNOWN_LIMITATIONS, so it missed the owner's 2026-11-01
+  round; it is recorded there now.
+
+### Verified good ✅
+
+- **All 13 routes authenticated** (an AST check of each handler's
+  dependencies): the per-member routes use `get_current_active_user` and gate
+  per section or are self-scoped; `/pulse-layout/default` (both methods)
+  requires `settings.manage` or `organization.update_settings`,
+  `/admin-summary` `settings.manage`, `/community-engagement` `events.manage`.
+- **The pulse layout is preference only and bounded.** The personal routes
+  take no id and write only the caller's row; the card list is a closed set of
+  eight with duplicates refused, titles are length- and control-character
+  checked, unknown keys forbidden; stored JSON is read through
+  `normalize_pulse_layout`, which degrades a bad value to "not set" rather
+  than failing the page (pitfall #19). A fresh dict is written each time
+  (pitfall #12), and `update_organization_settings` deep-copies.
+- **The paged feed returns the rows a full merge would.** Each half is read in
+  the merge key's order, `(due IS NULL, day, created_at, id)`, only as far as
+  `offset + limit`; `heapq.merge` is stable, so the slice matches. Totals are
+  counted under the same conditions as the rows, and the meeting-label lookups
+  are confined to the caller's organization.
+- **One definition of open and overdue per source**
+  (`meeting_action_item_open`, `minutes_action_item_overdue`, …) is now shared
+  by the operations tiles, the admin summary and the feed, and minutes items
+  are overdue by the department's calendar day.
+- **A `status_filter` outside an enum matches nothing rather than erroring**:
+  SQLAlchemy's `Enum` passes an unknown string through when
+  `validate_strings` is off, so a stray value is an empty list, not a 500.
+
+### Leads for other passes
+
+- **B6 meetings:** `grant_attendance_waiver`'s audit row (`meetings.py:596`)
+  records no IP or browser.
+- **B18 training:** the training-officer dashboard's cards
+  (`components/dashboard/widgets/training/index.tsx:19`) are plain `<a href>`,
+  a full page load inside the SPA, and the member-status card builds its year
+  from the browser clock (`new Date().getFullYear()`), not the department's.
+
+### Pass 4 completion gate
+
+| Check                                           | Result                                                                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `npm run typecheck`                             | ✅ 0 errors                                                                                            |
+| `npm run lint`                                  | ✅ exit 0                                                                                              |
+| `python -m flake8 app/ tests/`                  | ✅ 0 violations                                                                                        |
+| `black --check app/ tests/`                     | ✅ 2330 files unchanged                                                                                |
+| `isort --check-only` (changed files)            | ✅ clean                                                                                               |
+| `vitest DashboardOrganizationWidgets`           | ✅ 16 passed (1 added)                                                                                 |
+| `pytest -k "dashboard or action_item or pulse"` | ✅ 202 passed, 1 skipped (`py_vapid` not installed), 1 setup error — see below; its file then 8 passed |
+
+The first backend run errored one test at setup,
+`test_medical_screening_read_audit.py::test_own_dashboard_counts_are_not_logged`,
+on `Data too long for column 'requirement_id'`. That was this sandbox's
+database, built at session start from an older branch and so behind MS-18's
+widening of the column (`alembic current` read `8b2d4f6a1c3e`, head
+`67ad01c43434`). After `alembic upgrade head` and `repair_schema.py`, the
+file's 8 tests pass; no code was involved.
+
+---
 
 ## Pass 3 (2026-10-04) — the three endpoints pass 2 never saw
 

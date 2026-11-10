@@ -10,7 +10,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import and_, case, func, or_, select
@@ -23,6 +23,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.models.admin_hours import AdminHoursEntry, AdminHoursEntryStatus
 from app.models.apparatus import Apparatus
 from app.models.event import Event, EventExternalAttendee, EventRSVP, EventType
@@ -1124,6 +1125,7 @@ async def reset_my_pulse_layout(
 @router.put("/pulse-layout/default", response_model=DashboardPulseResponse)
 async def set_department_pulse_layout(
     body: DashboardPulseLayout,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("settings.manage", "organization.update_settings")
@@ -1143,12 +1145,15 @@ async def set_department_pulse_layout(
         event_data={"settings_changed": ["dashboard_pulse"]},
         user_id=str(current_user.id),
         username=current_user.username,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
     return await _pulse_response(db, organization_id, personal)
 
 
 @router.delete("/pulse-layout/default", response_model=DashboardPulseResponse)
 async def reset_department_pulse_layout(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("settings.manage", "organization.update_settings")
@@ -1168,6 +1173,8 @@ async def reset_department_pulse_layout(
         event_data={"settings_changed": ["dashboard_pulse"], "reset": True},
         user_id=str(current_user.id),
         username=current_user.username,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
     )
     return await _pulse_response(db, organization_id, personal)
 
