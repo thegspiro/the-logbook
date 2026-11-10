@@ -94,7 +94,9 @@ const SettingsTab: React.FC<{ onMetricsSaved: () => void }> = ({ onMetricsSaved 
 const TabContent: React.FC<{ tab: MembersAdminTab; onMetricsSaved: () => void }> = ({ tab, onMetricsSaved }) => {
   switch (tab) {
     case 'manage':
-      return <MembersAdminPage />;
+      return <MembersAdminPage population="current" />;
+    case 'former':
+      return <MembersAdminPage population="former" />;
     case 'add':
       return <AddMember />;
     case 'import':
