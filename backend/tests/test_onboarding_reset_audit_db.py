@@ -8,11 +8,12 @@ transaction does afterwards can take it back.
 import uuid
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import select
 
 from app.api.v1.onboarding import _audit_reset_durably
 from app.core.database import async_session_factory
 from app.models.audit import AuditLog
+from tests.audit_cleanup import discard_committed_audit_rows
 
 pytestmark = pytest.mark.integration
 
@@ -33,8 +34,5 @@ async def test_the_record_is_committed_by_its_own_transaction():
             )
         ).all()
         assert rows
-        # Leave the chain as found for the integrity checks other tests run.
-        await other.execute(
-            text("DELETE FROM audit_logs WHERE ip_address = '198.51.100.7'")
-        )
-        await other.commit()
+    # Leave the chain as found for the integrity checks other tests run.
+    await discard_committed_audit_rows("ip_address = :ip", {"ip": "198.51.100.7"})

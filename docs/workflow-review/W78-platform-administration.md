@@ -87,6 +87,12 @@ nothing to resolve against.
 
 `src/pages/PlatformAnalyticsPage.w78.test.tsx`.
 
+### W78-4 — LOW — The other 30-day figures counted a different month from the charts — ✅ FIXED (2026-11-08)
+
+Read from code after the pass. W78-1 made the two charts and their totals whole local days ending today, but new users, events, training hours, forms and documents still counted from a rolling `now - 30 days`. That reaches back into a 31st local day from the current time of day, so on one page "last 30 days" meant two different windows. Training hours compared a date column with the UTC date 30 days ago, so for part of each day they counted a 31st day as well.
+
+**Fix:** `platform_analytics.py` has one window, `month_first_day` / `month_since` (local midnight 29 days ago), used for every 30-day figure as well as the login chart. `tests/test_platform_analytics_w78.py::TestThirtyDayFigures` places a member and an event halfway between the two window starts, plus a training record on the day before the window. It failed against the unfixed endpoint (3 new users, not 2).
+
 ## Checklist
 
 | Section                 | Result                                                                     |

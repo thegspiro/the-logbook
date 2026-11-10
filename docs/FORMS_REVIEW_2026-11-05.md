@@ -127,12 +127,25 @@ backend's snake_case key, no limit stated, and no field highlighted.
 
 ### F-3 — MED — Seventy create dialogs refuse an empty submit four different ways
 
-**Status: fixed on the first five forms**, 2026-11-06. They follow the pattern
-recommended below: submit always enabled (Create Shift's button no longer waits
-for a date), validated on submit, a message under each failing field with
-`aria-invalid` and `aria-describedby`, focus on the first. Create Event and Add
-Member are `noValidate` now, so the browser bubble no longer stands in for the
-message. **Pending** on the other dialogs listed in the table.
+**Status: in progress.** The shared pattern is built (`FormField`,
+`ErrorSummary`, `useFieldErrors`). The first five forms (Create Shift, Submit
+Training, `/account`, Add Member, Create Event) follow it: submit always
+enabled (Create Shift's button no longer waits for a date), validated on
+submit, a message under each failing field with `aria-invalid` and
+`aria-describedby`, and a 422 on the field it names. Create Event and Add
+Member are `noValidate`, so the browser bubble no longer stands in for the
+message. Since followed by the shift template and pattern dialogs, which had
+relied on the browser's `required` bubble. The other dialogs move over module
+by module.
+
+Two sessions built this pattern in parallel (#4121 and #4130/#4157). Their two
+`FormField` components were combined into one on 2026-11-09: `id` is optional
+(generated when left out), it takes `maxLength` with a counter near the limit,
+`labelClassName`, `optional` (written "(optional)"), and still exports
+`FIELD_ERROR_CLASS` and `FormFieldControlProps`. Create Shift, Submit
+Training, `/account` and Add Member use `useFieldErrors` (with
+`ErrorSummary` on the long forms); Create Event and the later rollout use
+`utils/serverFieldErrors.ts`. No field runs both.
 
 Pressing the primary button of an empty create dialog was probed 70 times
 (about 40 distinct dialogs). The outcomes:
@@ -158,9 +171,11 @@ template.
 
 ### F-4 — MED — Error messages are visible but not connected to their fields
 
-**Status: fixed on the first five forms**, 2026-11-06. Add Member's errors are
-tied to their fields and focus moves to the first; Submit Training writes the
-reason under each field instead of a red outline alone. **Pending** elsewhere.
+**Status: in progress.** Submit Training shows a message under each missing
+field, tied by `aria-describedby`, plus a summary at the top linking to each
+one; `/account` and Create Shift tie theirs the same way. Add Member ties each
+message to its field and moves focus to a summary at the top on a refused
+save. **Pending** elsewhere.
 
 **Add Member** (`/members/admin?tab=add`, as `membership_coordinator`): an empty
 Save Member shows a toast and a red message under every required field — good —

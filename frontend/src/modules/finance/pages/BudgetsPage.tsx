@@ -309,8 +309,8 @@ const BudgetsPage: React.FC = () => {
         />
       ) : (
         <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="rwd-table-container overflow-x-auto">
+            <table className="rwd-table rwd-table-2xwide w-full">
               <thead>
                 <tr className="border-theme-surface-border border-b">
                   <th
@@ -373,7 +373,11 @@ const BudgetsPage: React.FC = () => {
 
                     return (
                       <tr key={budget.id} className="hover:bg-theme-surface-hover transition-colors">
-                        <td className="px-4 py-3" style={{ paddingLeft: `${1 + Math.min(depth, 4) * 1.25}rem` }}>
+                        <td
+                          data-label="Category"
+                          className="px-4 py-3"
+                          style={{ paddingLeft: `${1 + Math.min(depth, 4) * 1.25}rem` }}
+                        >
                           <Link
                             to={`/finance/budgets/${budget.id}`}
                             className="text-theme-text-primary touch:inline-flex touch:min-h-11 touch:items-center text-sm font-medium hover:text-red-600"
@@ -381,37 +385,47 @@ const BudgetsPage: React.FC = () => {
                             {categoryMap.get(budget.categoryId) ?? 'Unknown'}
                           </Link>
                         </td>
-                        <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                        <td data-label="Station" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {budget.stationId ? budget.stationName || 'Unknown station' : 'Department-wide'}
                         </td>
-                        <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                        <td data-label="Owner" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {budgetOwnerLabel(budget)}
                         </td>
-                        <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+                        <td
+                          data-label="Budgeted"
+                          className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap"
+                        >
                           {formatCurrencyWhole(Number(budget.amountBudgeted))}
                           {budget.amendmentCount ? (
                             <span className="text-theme-text-secondary ml-1 text-xs font-normal">(amended)</span>
                           ) : null}
                         </td>
-                        <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
+                        <td
+                          data-label="Spent"
+                          className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap"
+                        >
                           {formatCurrencyWhole(Number(budget.amountSpent))}
                         </td>
-                        <td className="text-theme-text-secondary px-4 py-3 text-right text-sm whitespace-nowrap">
+                        <td
+                          data-label="Encumbered"
+                          className="text-theme-text-secondary px-4 py-3 text-right text-sm whitespace-nowrap"
+                        >
                           {formatCurrencyWhole(Number(budget.amountEncumbered))}
                         </td>
                         <td
+                          data-label="Remaining"
                           className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${remaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
                         >
                           {formatCurrencyWhole(remaining)}
                         </td>
-                        <td className="px-4 py-3" style={{ minWidth: 160 }}>
+                        <td data-label="% Used" className="px-4 py-3" style={{ minWidth: 160 }}>
                           <BudgetProgress
                             spent={Number(budget.amountSpent)}
                             encumbered={Number(budget.amountEncumbered)}
                             budgeted={Number(budget.amountBudgeted)}
                           />
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-label="Actions" className="px-4 py-3">
                           <Link
                             to={`/finance/budgets/${budget.id}`}
                             aria-label={`Open ${categoryMap.get(budget.categoryId) ?? 'this budget line'}`}
@@ -433,19 +447,31 @@ const BudgetsPage: React.FC = () => {
                           >
                             {group.rootName} total
                           </th>
-                          <td className="text-theme-text-primary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap">
+                          <td
+                            data-label="Budgeted"
+                            className="text-theme-text-primary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap"
+                          >
                             {formatCurrencyWhole(group.rows.reduce((s, r) => s + Number(r.budget.amountBudgeted), 0))}
                           </td>
-                          <td className="text-theme-text-primary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap">
+                          <td
+                            data-label="Spent"
+                            className="text-theme-text-primary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap"
+                          >
                             {formatCurrencyWhole(group.rows.reduce((s, r) => s + Number(r.budget.amountSpent), 0))}
                           </td>
-                          <td className="text-theme-text-secondary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap">
+                          <td
+                            data-label="Encumbered"
+                            className="text-theme-text-secondary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap"
+                          >
                             {formatCurrencyWhole(group.rows.reduce((s, r) => s + Number(r.budget.amountEncumbered), 0))}
                           </td>
-                          <td className="text-theme-text-primary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap">
+                          <td
+                            data-label="Remaining"
+                            className="text-theme-text-primary px-4 py-2 text-right text-sm font-semibold whitespace-nowrap"
+                          >
                             {formatCurrencyWhole(group.rows.reduce((s, r) => s + getRemaining(r.budget), 0))}
                           </td>
-                          <td colSpan={2} />
+                          <td data-label="% Used" colSpan={2} className="rwd-table-lead" />
                         </tr>,
                       ]
                     : []),
@@ -454,19 +480,33 @@ const BudgetsPage: React.FC = () => {
               {/* Totals row */}
               <tfoot>
                 <tr className="border-theme-surface-border bg-theme-surface border-t-2">
-                  <td colSpan={3} className="text-theme-text-primary px-4 py-3 text-sm font-bold">
+                  <td
+                    data-label="Total"
+                    colSpan={3}
+                    className="rwd-table-lead text-theme-text-primary px-4 py-3 text-sm font-bold"
+                  >
                     Total
                   </td>
-                  <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-bold whitespace-nowrap">
+                  <td
+                    data-label="Budgeted"
+                    className="text-theme-text-primary px-4 py-3 text-right text-sm font-bold whitespace-nowrap"
+                  >
                     {formatCurrencyWhole(visibleBudgets.reduce((s, b) => s + Number(b.amountBudgeted), 0))}
                   </td>
-                  <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-bold whitespace-nowrap">
+                  <td
+                    data-label="Spent"
+                    className="text-theme-text-primary px-4 py-3 text-right text-sm font-bold whitespace-nowrap"
+                  >
                     {formatCurrencyWhole(visibleBudgets.reduce((s, b) => s + Number(b.amountSpent), 0))}
                   </td>
-                  <td className="text-theme-text-secondary px-4 py-3 text-right text-sm font-bold whitespace-nowrap">
+                  <td
+                    data-label="Encumbered"
+                    className="text-theme-text-secondary px-4 py-3 text-right text-sm font-bold whitespace-nowrap"
+                  >
                     {formatCurrencyWhole(visibleBudgets.reduce((s, b) => s + Number(b.amountEncumbered), 0))}
                   </td>
                   <td
+                    data-label="Remaining"
                     className={`px-4 py-3 text-right text-sm font-bold whitespace-nowrap ${totalRemaining < 0 ? 'text-red-600' : 'text-green-700 dark:text-green-600'}`}
                   >
                     {formatCurrencyWhole(totalRemaining)}

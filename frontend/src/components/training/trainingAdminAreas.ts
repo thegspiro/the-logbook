@@ -74,6 +74,11 @@ export interface TrainingAdminDestination {
    * gate is enough.
    */
   anyPermission?: readonly string[];
+  /**
+   * Extra words the command palette matches this destination on, beyond its
+   * label and hint — a fuller name a short tab label leaves out.
+   */
+  keywords?: readonly string[];
 }
 
 export interface TrainingAdminArea {
@@ -191,9 +196,10 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
     destinations: [
       {
         id: 'manual-entry',
-        label: 'Manual Entry Rules',
+        label: 'Manual Entry',
         hint: 'What members may record themselves',
         icon: PencilRuler,
+        keywords: ['manual entry rules'],
       },
       {
         id: 'practical-skills',
@@ -208,18 +214,32 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
         icon: ClipboardList,
       },
       {
+        // A way in from Settings & Data, where officers look for setup; the
+        // requirements themselves stay under Curriculum, which this links to.
+        // Its id differs from Curriculum's `requirements` because destination
+        // ids must be unique across the hub for the flat `?tab=` links.
+        id: 'requirements-link',
+        label: 'Requirements',
+        hint: 'Hours, certifications and courses members owe — opens Curriculum',
+        icon: ListChecks,
+      },
+      {
         id: 'compliance-settings',
-        label: 'Compliance Settings',
+        // Short so all of Settings & Data fits a 1280px screen; the palette
+        // still finds it by its full name.
+        label: 'Compliance',
         hint: 'Thresholds, profiles and scheduled compliance reports',
         icon: ShieldCheck,
+        keywords: ['compliance settings'],
         anyPermission: COMPLIANCE_CONFIG_PERMISSIONS,
       },
       { id: 'integrations', label: 'Integrations', hint: 'Connections to outside training systems', icon: Plug },
       {
         id: 'import',
-        label: 'Import Past Training',
+        label: 'Import History',
         hint: 'Upload training completed before The Logbook',
         icon: History,
+        keywords: ['import past training'],
       },
       { id: 'metrics', label: 'Headline Metrics', hint: 'The figures shown at the top of this page', icon: Activity },
     ],
@@ -279,6 +299,9 @@ export const tabPanelId = (area: string, tab: string) => `training-admin-tabpane
  */
 export const PROGRAM_WIZARD_VIEW = 'new';
 export const NEW_PROGRAM_HREF = `/training/admin?page=curriculum&tab=pipelines&view=${PROGRAM_WIZARD_VIEW}`;
+
+/** Curriculum's Requirements destination, which Settings & Data links to. */
+export const REQUIREMENTS_HREF = '/training/admin?page=curriculum&tab=requirements';
 
 /** The compliance configuration screen, a route of its own outside the hub. */
 export const COMPLIANCE_CONFIG_HREF = '/training/compliance-config';

@@ -83,10 +83,13 @@ from app.services.event_request_service import (
 )
 from app.services.event_request_service import (
     send_volunteer_call,
+    short_notice_request_ids,
+    staffing_counts_by_request,
     sync_calendar_event_cancelled,
     sync_calendar_event_date,
     sync_staffing_shift_cancelled,
     sync_staffing_shift_date,
+    user_names_by_id,
 )
 from app.services.forms_service import FormsService
 from app.utils.model_updates import apply_updates
@@ -638,11 +641,22 @@ async def list_event_requests(
     result = await db.execute(query)
     requests = result.scalars().all()
 
+    staffing = await staffing_counts_by_request(
+        db, current_user.organization_id, requests
+    )
+    short_notice = await short_notice_request_ids(db, [r.id for r in requests])
+    names = await user_names_by_id(
+        db, current_user.organization_id, [r.assigned_to for r in requests]
+    )
+
     items = []
     for req in requests:
-        assignee_name = None
-        if req.assigned_to:
-            assignee_name = await get_user_name(db, req.assigned_to)
+        # A request with no live sheet is absent from `staffing`, and reports
+        # both counts as null rather than as an empty sheet.
+        counts = staffing.get(str(req.id))
+        filled: int | None = counts[0] if counts else None
+        total: int | None = counts[1] if counts else None
+        assignee_name = names.get(str(req.assigned_to)) if req.assigned_to else None
 
         items.append(
             EventRequestListItem(
@@ -661,6 +675,9 @@ async def list_event_requests(
                 task_completions=req.task_completions,
                 event_date=req.event_date,
                 staffing_shift_id=req.staffing_shift_id,
+                short_notice=str(req.id) in short_notice,
+                staffing_slots_filled=filled,
+                staffing_slots_total=total,
                 created_at=req.created_at,
             )
         )

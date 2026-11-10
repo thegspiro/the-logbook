@@ -53,6 +53,7 @@ const UNCACHEABLE_PREFIXES = [
   '/inventory/reorder-requests', // requester_name on the list and the detail (PII)
   '/operational-ranks/validate', // resolves member_name for each rank being validated (PII)
   '/organization/settings/file-storage/status', // where uploads go right now: a stale answer hides the result of a connection test or a settings save
+  '/training/programs/milestone-options', // member names and membership numbers for the milestone recipient picker (PII)
   '/suggestions', // suggestion boxes: complaints, anonymous submissions and follow-up threads — never cached, and a cached thread would hide a reply
   '/testing-checklist', // shared testing run: another tester's mark can land at any moment, and a stale one reads as a lost result
   '/training/waivers', // medical/health waivers (PHI)

@@ -118,6 +118,35 @@ describe('MinutesPage links meetings to their minutes (W51)', () => {
     expect(link).toHaveTextContent('Circulated for review');
   });
 
+  // A member sees only approved meetings, but may read minutes circulated
+  // for review while their meeting is still a draft. The link must not
+  // vanish with the meeting card it used to render inside.
+  it('lists circulated minutes whose meeting is not shown', async () => {
+    mockGetMeetings.mockResolvedValue({ meetings: [] });
+    renderWithRouter(<MinutesPage />);
+
+    const section = await screen.findByRole('region', { name: 'Minutes circulated for review' });
+    const link = within(section).getByRole('link', { name: /Minutes: October Business Meeting/ });
+    expect(link).toHaveAttribute('href', '/minutes/min-1');
+  });
+
+  it('does not list them again when their meeting is shown', async () => {
+    renderWithRouter(<MinutesPage />);
+
+    await screen.findByRole('link', { name: /Minutes: October Business Meeting/ });
+    expect(screen.queryByRole('region', { name: 'Minutes circulated for review' })).not.toBeInTheDocument();
+  });
+
+  it('leaves approved minutes to their meeting card', async () => {
+    mockGetMeetings.mockResolvedValue({ meetings: [] });
+    mockListAllMinutes.mockResolvedValue([minutesItem({ status: 'approved' })]);
+    renderWithRouter(<MinutesPage />);
+
+    // The empty state renders only once the lists have loaded.
+    await screen.findByText(/Structured templates for recording meeting minutes/);
+    expect(screen.queryByRole('region', { name: 'Minutes circulated for review' })).not.toBeInTheDocument();
+  });
+
   it('counts minutes awaiting approval from the minutes service', async () => {
     // Every other tile, and the meeting summary's own pending figure, holds a
     // different number, so "7" can only have come from the minutes stats.

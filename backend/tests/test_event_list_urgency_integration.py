@@ -15,6 +15,7 @@ also the one that decides whether a member who was present gets told they
 missed a mandatory drill.
 """
 
+import json
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -531,3 +532,122 @@ class TestMissedMandatoryExclusions:
         )
 
         assert event_id not in {r["event"].id for r in rows}
+
+
+class TestMissedMandatoryTrainingWaivers:
+    """Workflow review W80-10 (owner decision 2026-11-08): a training waiver
+    that covers the drill's day takes it off "missed" when it is blanket, or
+    names a requirement the drill's session counts toward."""
+
+    async def _waiver(self, db_session, org_id, user_id, requirement_ids=None, **kw):
+        today = datetime.now(timezone.utc).date()
+        await db_session.execute(
+            text(
+                "INSERT INTO training_waivers (id, organization_id, user_id, "
+                "waiver_type, start_date, end_date, requirement_ids, active) "
+                "VALUES (:id, :org, :usr, 'personal', :start, :end, :reqs, :active)"
+            ),
+            {
+                "id": _uid(),
+                "org": org_id,
+                "usr": user_id,
+                "start": kw.get("start", today - timedelta(days=10)),
+                "end": kw.get("end", today + timedelta(days=10)),
+                "reqs": (
+                    None if requirement_ids is None else json.dumps(requirement_ids)
+                ),
+                "active": 1 if kw.get("active", True) else 0,
+            },
+        )
+        await db_session.flush()
+
+    async def _drill_counting_toward(self, db_session, org_id, title):
+        """A mandatory drill whose session counts toward a new requirement."""
+        event_id = await _insert_event(
+            db_session, org_id, title=title, is_mandatory=True
+        )
+        requirement_id, session_id = _uid(), _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO training_requirements (id, organization_id, name, "
+                "frequency) VALUES (:id, :org, 'Monthly Drill Attendance', 'annual')"
+            ),
+            {"id": requirement_id, "org": org_id},
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO training_sessions (id, organization_id, event_id, "
+                "course_name, training_type, credit_hours) "
+                "VALUES (:id, :org, :ev, :title, 'skills_practice', 2)"
+            ),
+            {"id": session_id, "org": org_id, "ev": event_id, "title": title},
+        )
+        await db_session.execute(
+            text(
+                "INSERT INTO training_session_requirements (id, organization_id, "
+                "session_id, requirement_id) VALUES (:id, :org, :s, :r)"
+            ),
+            {"id": _uid(), "org": org_id, "s": session_id, "r": requirement_id},
+        )
+        await db_session.flush()
+        return event_id, requirement_id
+
+    async def _missed(self, db_session, org_id, user_id):
+        rows = await EventService(db_session).list_missed_mandatory_events(
+            organization_id=uuid.UUID(org_id),
+            user_id=uuid.UUID(user_id),
+            since=datetime.now(timezone.utc) - timedelta(days=30),
+        )
+        return {r["event"].id for r in rows}
+
+    async def test_a_blanket_waiver_covering_the_day_excuses_it(
+        self, db_session, org_and_user
+    ):
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Excused Drill", is_mandatory=True
+        )
+        await self._waiver(db_session, org_id, user_id)
+
+        assert event_id not in await self._missed(db_session, org_id, user_id)
+
+    async def test_a_waiver_naming_the_sessions_requirement_excuses_it(
+        self, db_session, org_and_user
+    ):
+        org_id, user_id = org_and_user
+        event_id, requirement_id = await self._drill_counting_toward(
+            db_session, org_id, "Scoped Drill"
+        )
+        await self._waiver(db_session, org_id, user_id, [requirement_id])
+
+        assert event_id not in await self._missed(db_session, org_id, user_id)
+
+    async def test_a_waiver_naming_another_requirement_does_not(
+        self, db_session, org_and_user
+    ):
+        org_id, user_id = org_and_user
+        event_id, _ = await self._drill_counting_toward(
+            db_session, org_id, "Unrelated Waiver Drill"
+        )
+        await self._waiver(db_session, org_id, user_id, [_uid()])
+
+        assert event_id in await self._missed(db_session, org_id, user_id)
+
+    async def test_a_waiver_for_other_days_does_not(self, db_session, org_and_user):
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Before The Waiver", is_mandatory=True
+        )
+        today = datetime.now(timezone.utc).date()
+        await self._waiver(db_session, org_id, user_id, start=today, end=today)
+
+        assert event_id in await self._missed(db_session, org_id, user_id)
+
+    async def test_an_inactive_waiver_excuses_nothing(self, db_session, org_and_user):
+        org_id, user_id = org_and_user
+        event_id = await _insert_event(
+            db_session, org_id, title="Deactivated Waiver", is_mandatory=True
+        )
+        await self._waiver(db_session, org_id, user_id, active=False)
+
+        assert event_id in await self._missed(db_session, org_id, user_id)

@@ -24,6 +24,7 @@ from app.api.v1.endpoints import member_status as member_status_endpoint
 from app.api.v1.endpoints import users as users_endpoint
 from app.models.training import Shift, ShiftAssignment, StandingShiftClaim
 from app.services import member_shift_release_service
+from tests.fake_request import fake_request
 
 pytestmark = [pytest.mark.integration]
 
@@ -175,6 +176,7 @@ class TestSoftDelete:
             hard=False,
             db=db_session,
             current_user=_admin(rostered),
+            request=fake_request(),
         )
 
         _assert_released(await _remaining(db_session, rostered), audit, "soft_deleted")

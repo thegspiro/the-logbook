@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
-import { FormField } from '../../../components/ux/FormField';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
-import toast from 'react-hot-toast';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { FormField, FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
 import { formatTimeOfDay } from '../../../utils/dateFormatting';
 import { formCoercions } from '../../../utils/formValues';
 import { X } from 'lucide-react';
@@ -29,31 +27,37 @@ type PatternField =
   | 'start_date'
   | 'end_date';
 
-/** ShiftPatternCreate / Update are snake_case and set no max_length on any of these. */
-const PATTERN_FIELDS: Record<PatternField, ServerFieldSpec> = {
-  name: { label: 'Name' },
-  description: { label: 'Description' },
-  pattern_type: { label: 'Pattern type' },
-  template_id: { label: 'Shift template' },
-  rotation_days: { label: 'Rotation days' },
-  days_on: { label: 'Days on' },
-  days_off: { label: 'Days off' },
-  start_date: { label: 'Start date' },
-  end_date: { label: 'End date' },
+const PATTERN_FIELDS: FieldSpecs<PatternField> = {
+  name: { id: 'pattern-name', label: 'Name' },
+  description: { id: 'pattern-description', label: 'Description' },
+  pattern_type: { id: 'pattern-type', label: 'Pattern type' },
+  template_id: { id: 'pattern-template', label: 'Shift template' },
+  rotation_days: { id: 'pattern-rotation', label: 'Rotation days' },
+  days_on: { id: 'pattern-days-on', label: 'Days on' },
+  days_off: { id: 'pattern-days-off', label: 'Days off' },
+  start_date: { id: 'pattern-start-date', label: 'Start date' },
+  end_date: { id: 'pattern-end-date', label: 'End date' },
 };
 
-/** In the order they appear, so the first failing one takes focus. */
-const PATTERN_FIELD_IDS: Record<PatternField, string> = {
-  name: 'pattern-name',
-  description: 'pattern-description',
-  pattern_type: 'pattern-type',
-  template_id: 'pattern-template',
-  rotation_days: 'pattern-rotation',
-  days_on: 'pattern-days-on',
-  days_off: 'pattern-days-off',
-  start_date: 'pattern-start-date',
-  end_date: 'pattern-end-date',
-};
+const WHOLE_DAYS_MESSAGE = 'Enter a whole number of 1 or more.';
+
+/** What stops a save, checked before anything is sent (forms review F-3). */
+function checkPattern(form: PatternFormData, showsRotation: boolean): FieldErrors<PatternField> {
+  const errors: FieldErrors<PatternField> = {};
+  if (!form.name.trim()) errors.name = 'Enter a name for the pattern.';
+  if (!form.start_date) errors.start_date = 'Choose the date the pattern starts.';
+  // ISO dates compare correctly as strings.
+  if (form.start_date && form.end_date && form.end_date < form.start_date) {
+    errors.end_date = 'The end date must be on or after the start date.';
+  }
+  if (showsRotation) {
+    for (const key of ['rotation_days', 'days_on', 'days_off'] as const) {
+      const raw = form[key];
+      if (raw !== '' && !(Number.isInteger(Number(raw)) && Number(raw) >= 1)) errors[key] = WHOLE_DAYS_MESSAGE;
+    }
+  }
+  return errors;
+}
 
 interface PatternFormModalProps {
   isOpen: boolean;
@@ -78,18 +82,19 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
 }) => {
   const [formData, setFormData] = useState<PatternFormData>(initialData || emptyPatternForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<PatternField, string>>>({});
-  const [formError, setFormError] = useState<string | null>(null);
+  const fieldErrors = useFieldErrors(PATTERN_FIELDS);
+  const clearErrors = fieldErrors.clear;
+  const setFieldError = fieldErrors.setError;
 
   useEffect(() => {
     setFormData(initialData || emptyPatternForm);
-    setErrors({});
-    setFormError(null);
-  }, [initialData, isOpen]);
+    clearErrors();
+  }, [initialData, isOpen, clearErrors]);
 
-  const update = <K extends PatternField>(field: K, value: PatternFormData[K]) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    setErrors((prev) => ({ ...prev, [field]: undefined }));
+  /** Set one field, and drop the error it carried: editing it is the answer. */
+  const update = <K extends keyof PatternFormData & PatternField>(key: K, value: PatternFormData[K]) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    setFieldError(key, null);
   };
 
   // Anything changed from what the dialog opened with is unsaved work, so
@@ -98,11 +103,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
   const requestClose = useDiscardGuard({ isDirty, onClose });
   const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose: requestClose });
 
-  const showErrors = (next: Partial<Record<PatternField, string>>) => {
-    setErrors(next);
-    const first = (Object.keys(PATTERN_FIELD_IDS) as PatternField[]).find((field) => next[field]);
-    if (first) window.setTimeout(() => document.getElementById(PATTERN_FIELD_IDS[first])?.focus(), 0);
-  };
+  const showsRotation = formData.pattern_type === 'platoon' || formData.pattern_type === 'custom';
 
   // A stored weekly/custom pattern keeps its own type on screen, so an edit
   // here cannot silently change it; it still cannot be switched to one.
@@ -114,18 +115,14 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Checked here rather than by the browser, so the reason is shown on the
-    // field (forms review F-3). Nothing is written until these are fixed —
-    // on an edit too, because the page closes the dialog on any successful
-    // update and a flag on a closed dialog would be lost.
-    const missing: Partial<Record<PatternField, string>> = {};
-    if (!formData.name.trim()) missing.name = 'Give the pattern a name.';
-    if (!formData.start_date) missing.start_date = 'Choose the date the pattern starts.';
-    if (Object.keys(missing).length > 0) {
-      showErrors(missing);
+    const problems = checkPattern(formData, showsRotation);
+    fieldErrors.setFormError(null);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.setErrors(problems);
+      fieldErrors.focusFirst(problems);
       return;
     }
-    setFormError(null);
+    fieldErrors.setErrors({});
     setIsSubmitting(true);
     try {
       // The edit modal is the one handed a pattern to start from. On edit a
@@ -152,25 +149,21 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
         // On edit the rest still saves: resend without the refused fields,
         // which keep their stored values and stay flagged (owner rule,
         // 2026-11-05). A create creates nothing until every field is fixed.
-        const mapped = mapServerFieldErrors(err, PATTERN_FIELDS);
-        const refused = mapped ? (Object.keys(mapped.fieldErrors) as PatternField[]) : [];
-        if (initialData === undefined || !mapped || refused.length === 0 || mapped.unmatched.length > 0) throw err;
+        const placed = placeApiError(PATTERN_FIELDS, err);
+        const refused = placed ? (Object.keys(placed.fieldErrors) as PatternField[]) : [];
+        if (initialData === undefined || !placed || refused.length === 0 || placed.unmatched.length > 0) throw err;
         const rest = { ...payload };
         for (const field of refused) delete rest[field];
         await onSubmit(rest, { keepOpen: true });
-        showErrors(mapped.fieldErrors);
+        fieldErrors.setErrors(placed.fieldErrors);
+        fieldErrors.focusFirst(placed.fieldErrors);
         return;
       }
       onClose();
     } catch (err) {
-      // A refused field is shown on that field, in its own words (forms review F-2).
-      const mapped = mapServerFieldErrors(err, PATTERN_FIELDS);
-      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
-        showErrors(mapped.fieldErrors);
-        setFormError(mapped.unmatched.length ? mapped.unmatched.join(' ') : null);
-      } else {
-        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to save pattern'));
-      }
+      // A refusal lands on the field it names; the dialog stays open with the
+      // member's values in it.
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Could not save the pattern. Try again.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -201,18 +194,13 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
         </div>
 
         <form
+          noValidate
           onSubmit={(e) => {
             void handleSubmit(e);
           }}
-          noValidate
           className="space-y-4 p-6"
         >
-          {formError && (
-            <p role="alert" className="alert-danger text-theme-text-primary text-sm">
-              {formError}
-            </p>
-          )}
-          <FormField label="Name" required error={errors.name} id="pattern-name">
+          <FormField id={PATTERN_FIELDS.name.id} label="Name" required error={fieldErrors.errors.name}>
             {(field) => (
               <input
                 {...field}
@@ -226,7 +214,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
             )}
           </FormField>
 
-          <FormField label="Description" error={errors.description} id="pattern-description">
+          <FormField id={PATTERN_FIELDS.description.id} label="Description" error={fieldErrors.errors.description}>
             {(field) => (
               <textarea
                 {...field}
@@ -240,10 +228,10 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
           </FormField>
 
           <FormField
+            id={PATTERN_FIELDS.pattern_type.id}
             label="Pattern Type"
             required
-            error={errors.pattern_type}
-            id="pattern-type"
+            error={fieldErrors.errors.pattern_type}
             hint={
               <>
                 Weekly and custom patterns pick their days or dates, so create them from the{' '}
@@ -271,7 +259,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
           </FormField>
 
           <div>
-            <FormField label="Shift Template" error={errors.template_id} id="pattern-template">
+            <FormField id={PATTERN_FIELDS.template_id.id} label="Shift Template" error={fieldErrors.errors.template_id}>
               {(field) => (
                 <select
                   {...field}
@@ -281,7 +269,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
                 >
                   <option value="">No template</option>
                   {/* A deactivated template is kept for the shifts and patterns that
-                  use it; it is offered only to a pattern that already names it. */}
+                      use it; it is offered only to a pattern that already names it. */}
                   {templates
                     .filter((t) => t.is_active !== false || t.id === formData.template_id)
                     .map((t) => (
@@ -302,55 +290,40 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
             )}
           </div>
 
-          {(formData.pattern_type === 'platoon' || formData.pattern_type === 'custom') && (
+          {showsRotation && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <FormField label="Rotation Days" error={errors.rotation_days} id="pattern-rotation">
-                {(field) => (
-                  <input
-                    {...field}
-                    type="number"
-                    inputMode="numeric"
-                    value={formData.rotation_days}
-                    onChange={(e) => update('rotation_days', e.target.value)}
-                    className="form-input"
-                    min="1"
-                    placeholder="e.g., 3"
-                  />
-                )}
-              </FormField>
-              <FormField label="Days On" error={errors.days_on} id="pattern-days-on">
-                {(field) => (
-                  <input
-                    {...field}
-                    type="number"
-                    inputMode="numeric"
-                    value={formData.days_on}
-                    onChange={(e) => update('days_on', e.target.value)}
-                    className="form-input"
-                    min="1"
-                    placeholder="e.g., 1"
-                  />
-                )}
-              </FormField>
-              <FormField label="Days Off" error={errors.days_off} id="pattern-days-off">
-                {(field) => (
-                  <input
-                    {...field}
-                    type="number"
-                    inputMode="numeric"
-                    value={formData.days_off}
-                    onChange={(e) => update('days_off', e.target.value)}
-                    className="form-input"
-                    min="1"
-                    placeholder="e.g., 2"
-                  />
-                )}
-              </FormField>
+              {(
+                [
+                  ['rotation_days', 'Rotation Days', 'e.g., 3'],
+                  ['days_on', 'Days On', 'e.g., 1'],
+                  ['days_off', 'Days Off', 'e.g., 2'],
+                ] as const
+              ).map(([key, label, placeholder]) => (
+                <FormField key={key} id={PATTERN_FIELDS[key].id} label={label} error={fieldErrors.errors[key]}>
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="number"
+                      inputMode="numeric"
+                      value={formData[key]}
+                      onChange={(e) => update(key, e.target.value)}
+                      className="form-input"
+                      min="1"
+                      placeholder={placeholder}
+                    />
+                  )}
+                </FormField>
+              ))}
             </div>
           )}
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <FormField label="Start Date" required error={errors.start_date} id="pattern-start-date">
+            <FormField
+              id={PATTERN_FIELDS.start_date.id}
+              label="Start Date"
+              required
+              error={fieldErrors.errors.start_date}
+            >
               {(field) => (
                 <input
                   {...field}
@@ -361,7 +334,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
                 />
               )}
             </FormField>
-            <FormField label="End Date" error={errors.end_date} id="pattern-end-date">
+            <FormField id={PATTERN_FIELDS.end_date.id} label="End Date" error={fieldErrors.errors.end_date}>
               {(field) => (
                 <input
                   {...field}
@@ -373,6 +346,12 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
               )}
             </FormField>
           </div>
+
+          {fieldErrors.formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {fieldErrors.formError}
+            </p>
+          )}
 
           <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
             <button

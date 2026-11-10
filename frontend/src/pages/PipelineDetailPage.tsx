@@ -62,6 +62,7 @@ import {
   phaseHasNoActiveRequirements,
 } from '../utils/pipelineProgress';
 import { checklistClaimedIds, checklistDoneIds } from '../utils/checklistItems';
+import { compareMilestones, describeRecipients, describeTrigger } from '../utils/milestoneSummary';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { ENROLLMENT_STATUSES } from '../types/training';
 import type {
@@ -1827,7 +1828,7 @@ const PipelineDetailPage: React.FC = () => {
             <>
               <button
                 onClick={() => window.open(`/training/print/program?id=${programId}`, '_blank')}
-                className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm print:hidden"
+                className="btn-secondary flex items-center space-x-1 text-sm print:hidden"
               >
                 <Printer className="h-4 w-4" />
                 <span>Print</span>
@@ -1850,7 +1851,7 @@ const PipelineDetailPage: React.FC = () => {
               {canManage && (
                 <button
                   onClick={() => setShowEditProgram(true)}
-                  className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm"
+                  className="btn-secondary flex items-center space-x-1 text-sm"
                 >
                   <Pencil className="h-4 w-4" />
                   <span>Edit</span>
@@ -1871,7 +1872,7 @@ const PipelineDetailPage: React.FC = () => {
                     void handleDuplicate();
                   }}
                   disabled={isDuplicating}
-                  className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex items-center space-x-1 rounded-lg px-3 py-2 text-sm disabled:opacity-50"
+                  className="btn-secondary flex items-center space-x-1 text-sm"
                 >
                   <Copy className="h-4 w-4" />
                   <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
@@ -1881,7 +1882,7 @@ const PipelineDetailPage: React.FC = () => {
                 <button
                   onClick={() => void confirmDeleteProgram()}
                   title="Delete pipeline"
-                  className="flex items-center space-x-1 rounded-lg px-3 py-2 text-sm text-red-700 hover:bg-red-500/10 dark:text-red-400"
+                  className="btn-secondary flex items-center space-x-1 text-sm"
                 >
                   <Trash2 className="h-4 w-4" />
                   <span>Delete</span>
@@ -2165,7 +2166,7 @@ const PipelineDetailPage: React.FC = () => {
                 <div className="space-y-2">
                   {milestones
                     .slice()
-                    .sort((a, b) => a.completion_percentage_threshold - b.completion_percentage_threshold)
+                    .sort(compareMilestones)
                     .map((m) => (
                       <div
                         key={m.id}
@@ -2174,8 +2175,12 @@ const PipelineDetailPage: React.FC = () => {
                         <div className="min-w-0">
                           <p className="text-theme-text-primary truncate text-sm">{m.name}</p>
                           <p className="text-theme-text-muted text-xs">
-                            Triggers at {Math.round(m.completion_percentage_threshold)}%
+                            {describeTrigger(
+                              m,
+                              (m.items ?? []).map((item) => item.name || 'a removed course or test')
+                            )}
                           </p>
+                          {canManage && <p className="text-theme-text-muted text-xs">{describeRecipients(m)}</p>}
                         </div>
                         {canManage && (
                           <div className="flex shrink-0 items-center gap-0.5">

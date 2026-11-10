@@ -192,6 +192,73 @@ describe('PatternFormModal deactivated templates', () => {
   });
 });
 
+// Forms review F-3: the dialog leaned on the browser's own `required` bubble,
+// which vanishes after a moment and names nothing the member can come back to.
+describe('PatternFormModal validation', () => {
+  const onSubmit = vi.fn<(data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>>();
+
+  beforeEach(() => {
+    onSubmit.mockReset();
+    onSubmit.mockResolvedValue(undefined);
+  });
+
+  const renderCreate = () =>
+    renderWithRouter(
+      <PatternFormModal isOpen onClose={vi.fn()} onSubmit={onSubmit} title="Create Pattern" templates={templates} />
+    );
+
+  it('names each missing field on the field and focuses the first', async () => {
+    const user = userEvent.setup();
+    renderCreate();
+
+    await user.click(screen.getByRole('button', { name: 'Save Pattern' }));
+
+    const name = screen.getByLabelText(/^Name/);
+    expect(name).toHaveAccessibleDescription('Enter a name for the pattern.');
+    expect(name).toHaveFocus();
+    expect(screen.getByLabelText(/^Start Date/)).toHaveAccessibleDescription('Choose the date the pattern starts.');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('refuses an end date before the start date', async () => {
+    const user = userEvent.setup();
+    renderCreate();
+
+    await user.type(screen.getByLabelText(/^Name/), 'Daily Days');
+    fireEvent.change(screen.getByLabelText(/^Start Date/), { target: { value: '2026-02-01' } });
+    fireEvent.change(screen.getByLabelText('End Date'), { target: { value: '2026-01-01' } });
+    await user.click(screen.getByRole('button', { name: 'Save Pattern' }));
+
+    expect(screen.getByLabelText('End Date')).toHaveAccessibleDescription(
+      'The end date must be on or after the start date.'
+    );
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('puts a server refusal on the field it names, and keeps the dialog open', async () => {
+    onSubmit.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'name', message: 'A pattern with this name already exists.' }], code: 'LB-VAL-001' },
+      },
+    });
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderWithRouter(
+      <PatternFormModal isOpen onClose={onClose} onSubmit={onSubmit} title="Create Pattern" templates={templates} />
+    );
+
+    await user.type(screen.getByLabelText(/^Name/), 'Daily Days');
+    fireEvent.change(screen.getByLabelText(/^Start Date/), { target: { value: '2026-02-01' } });
+    await user.click(screen.getByRole('button', { name: 'Save Pattern' }));
+
+    const name = screen.getByLabelText(/^Name/);
+    await waitFor(() => expect(name).toHaveAccessibleDescription('A pattern with this name already exists.'));
+    expect(name).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
 describe('PatternFormModal errors and leaving', () => {
   const onSubmit = vi.fn<(data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>>();
 
@@ -215,7 +282,7 @@ describe('PatternFormModal errors and leaving', () => {
     await user.type(screen.getByLabelText(/^Name/), 'Daily Days{Enter}');
 
     const start = screen.getByLabelText(/^Start Date/);
-    await waitFor(() => expect(start).toHaveAccessibleDescription('Start date needs a valid date.'));
+    await waitFor(() => expect(start).toHaveAccessibleDescription('Invalid date format.'));
     expect(start).toHaveAttribute('aria-invalid', 'true');
     expect(screen.queryByText(/start_date/)).not.toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
@@ -243,7 +310,7 @@ describe('PatternFormModal errors and leaving', () => {
     await user.click(screen.getByRole('button', { name: 'Save Pattern' }));
 
     const end = screen.getByLabelText(/^End Date/);
-    await waitFor(() => expect(end).toHaveAccessibleDescription('End date needs a valid date.'));
+    await waitFor(() => expect(end).toHaveAccessibleDescription('Invalid date format.'));
     expect(onSubmit).toHaveBeenCalledTimes(2);
     const [rest, options] = onSubmit.mock.calls[1] ?? [];
     expect(rest && 'end_date' in rest).toBe(false);
@@ -260,7 +327,7 @@ describe('PatternFormModal errors and leaving', () => {
 
     await user.click(screen.getByRole('button', { name: 'Save Pattern' }));
 
-    expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Give the pattern a name.');
+    expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Enter a name for the pattern.');
     expect(screen.getByLabelText(/^Name/)).toHaveAttribute('aria-required', 'true');
     expect(screen.getByLabelText(/^Start Date/)).toHaveAccessibleDescription('Choose the date the pattern starts.');
     expect(onSubmit).not.toHaveBeenCalled();

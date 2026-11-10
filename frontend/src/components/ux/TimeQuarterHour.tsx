@@ -16,7 +16,11 @@ interface TimeQuarterHourProps {
   required?: boolean;
   placeholder?: string;
   'aria-label'?: string;
-  /** From FormField, so a refusal is announced on each select, not only shown under them. */
+  /**
+   * From FormField, which wraps this picker by its `id` (the hour select, the
+   * one the label names). Put on each select, so a refusal is announced
+   * wherever focus lands, not only shown under them.
+   */
   'aria-invalid'?: true | undefined;
   'aria-describedby'?: string | undefined;
   'aria-required'?: true | undefined;

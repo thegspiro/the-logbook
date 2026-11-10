@@ -65,6 +65,9 @@ from app.services.training_course_names import (
 )
 from app.services.training_module_config_service import TrainingModuleConfigService
 from app.services.training_program_service import TrainingProgramService
+from app.services.training_requirement_courses import (
+    load_required_course_catalog,
+)
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import (
     fetch_user_waivers,
@@ -238,8 +241,14 @@ async def _evaluate_member_requirements(
     member_with_roles: User | None,
     org_id: str,
     today: date,
+    include_course_checklist: bool = True,
 ) -> tuple[list[dict[str, Any]], list[str], float]:
     """Every active requirement that applies to ``member``, evaluated.
+
+    ``include_course_checklist`` loads the course names a COURSES
+    requirement's ``course_checklist`` lists. A caller that will not return
+    the per-requirement breakdown passes False and skips that query; the
+    checklist is then null, and no figure depends on it.
 
     One definition for the member's own page and the officer's view of that
     member (CLAUDE.md pitfall 29), so the two cannot disagree about a target,
@@ -305,6 +314,11 @@ async def _evaluate_member_requirements(
         )
     ).get(user_id, [])
     held_sessions = await load_held_sessions(db, str(org_id), applicable)
+    course_catalog = (
+        await load_required_course_catalog(db, str(org_id), applicable)
+        if include_course_checklist
+        else None
+    )
 
     # Evaluate every applicable requirement using the shared helper which
     # handles all requirement types (hours, courses, certification,
@@ -323,6 +337,7 @@ async def _evaluate_member_requirements(
             join_date=join_date,
             shift_dates=shift_dates,
             held_sessions=held_sessions,
+            course_catalog=course_catalog,
         )
         requirements_detail.append(detail)
         # Listed with its deadline, but left out of the summary until the
@@ -477,9 +492,17 @@ async def get_my_training_summary(
     result["hours_summary"] = hours_summary
 
     # --- Requirements Summary (always returned for core stats) ---
+    shows_requirement_details = is_officer or visibility.get(
+        "show_requirement_details", True
+    )
     requirements_detail, statuses, total_progress_pct = (
         await _evaluate_member_requirements(
-            db, current_user, user_with_roles, org_id, today
+            db,
+            current_user,
+            user_with_roles,
+            org_id,
+            today,
+            include_course_checklist=shows_requirement_details,
         )
     )
 
@@ -510,7 +533,7 @@ async def get_my_training_summary(
     # ``show_requirement_details`` names, and until now only the copy nested
     # inside Pipeline Progress honoured it while this one — hours, due dates,
     # overdue-by-N-days — was returned to everybody.
-    if is_officer or visibility.get("show_requirement_details", True):
+    if shows_requirement_details:
         result["requirements_detail"] = requirements_detail
 
     # --- Certification Status ---
@@ -622,7 +645,7 @@ async def get_my_training_summary(
             }
 
             # Requirement details (if allowed)
-            if is_officer or visibility.get("show_requirement_details", True):
+            if shows_requirement_details:
                 rp_result = await db.execute(
                     select(RequirementProgress).where(
                         RequirementProgress.enrollment_id == str(enrollment.id)
@@ -940,19 +963,14 @@ async def get_my_training_records(
         TrainingRecord.status == TrainingStatus.COMPLETED,
         TrainingRecord.voided_at.is_(None),
     )
+    # Hours come only from completed, unvoided records; every record counts.
+    counted_hours = func.coalesce(
+        func.sum(case((and_(*counted), TrainingRecord.hours_completed), else_=0)),
+        0,
+    )
     aggregate_columns: list[Any] = [year_col, func.count(TrainingRecord.id)]
     if show_hours:
-        aggregate_columns.append(
-            func.coalesce(
-                func.sum(
-                    case(
-                        (and_(*counted), TrainingRecord.hours_completed),
-                        else_=0,
-                    )
-                ),
-                0,
-            )
-        )
+        aggregate_columns.append(counted_hours)
     aggregate_result = await db.execute(
         select(*aggregate_columns).where(*filters).group_by(year_col)
     )
@@ -961,10 +979,44 @@ async def get_my_training_records(
         entry: dict[str, Any] = {
             "year": str(int(row[0])) if row[0] is not None else UNDATED_YEAR,
             "records": row[1],
+            "months": [],
         }
         if show_hours:
             entry["hours"] = float(row[2])
         years.append(entry)
+
+    # The same totals per calendar month, so the history can head each month
+    # with its whole total even while only one page of its rows is loaded.
+    # A separate query rather than summing these into the year figures: the
+    # year totals stay exactly what they were. Only months with a record
+    # appear; undated records have no month and keep an empty list.
+    month_col = func.extract("month", TrainingRecord.completion_date)
+    month_columns: list[Any] = [
+        year_col.label("year"),
+        month_col.label("month"),
+        func.count(TrainingRecord.id).label("records"),
+    ]
+    if show_hours:
+        month_columns.append(counted_hours.label("hours"))
+    month_result = await db.execute(
+        select(*month_columns)
+        .where(*filters, TrainingRecord.completion_date.is_not(None))
+        .group_by(year_col, month_col)
+    )
+    by_year = {y["year"]: y for y in years}
+    for month_row in month_result.mappings():
+        year_entry = by_year.get(str(int(month_row["year"])))
+        if year_entry is None:
+            continue
+        month_entry: dict[str, Any] = {
+            "month": f"{int(month_row['year']):04d}-{int(month_row['month']):02d}",
+            "records": month_row["records"],
+        }
+        if show_hours:
+            month_entry["hours"] = float(month_row["hours"])
+        year_entry["months"].append(month_entry)
+    for year_entry in years:
+        year_entry["months"].sort(key=lambda m: m["month"], reverse=True)
     # Newest year first, undated records (no year) ahead of all of them.
     years.sort(key=lambda y: (y["year"] == UNDATED_YEAR, y["year"]), reverse=True)
 

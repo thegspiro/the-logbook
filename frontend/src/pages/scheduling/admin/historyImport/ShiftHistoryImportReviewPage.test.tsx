@@ -4,7 +4,12 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { ConfirmProvider } from '../../../../contexts/ConfirmContext';
 import { nth } from '../../../../test/utils';
-import type { HistoryImportAttendance, HistoryImportDetail } from '../../../../modules/scheduling/types/historyImport';
+import type {
+  HistoryImportAttendance,
+  HistoryImportDetail,
+  HistoryImportIssue,
+  HistoryImportRow,
+} from '../../../../modules/scheduling/types/historyImport';
 
 const mockGet = vi.fn();
 const mockMappings = vi.fn();
@@ -58,6 +63,21 @@ const attendance = (overrides: Partial<HistoryImportAttendance> = {}): HistoryIm
   duplicate_existing: false,
   ...overrides,
 });
+
+const fileRow = (id: string, line: number, overrides: Partial<HistoryImportRow> = {}): HistoryImportRow => ({
+  id,
+  line_number: line,
+  raw: { Member: `Member ${line}`, Unit: 'A106E' },
+  values: { member_name: `Member ${line}`, unit: 'A106E' },
+  excluded: false,
+  keep_separate: false,
+  errors: [],
+  ...overrides,
+});
+
+/** A draft whose Rows tab holds these rows and these issues. */
+const rowsDraft = (rows: HistoryImportRow[], issues: HistoryImportIssue[]): HistoryImportDetail =>
+  draft({ rows, issues, blocking_issue_count: issues.length });
 
 const draft = (overrides: Partial<NonNullable<HistoryImportDetail['analysis']>> = {}): HistoryImportDetail => ({
   import: {
@@ -453,6 +473,106 @@ describe('ShiftHistoryImportReviewPage', () => {
     });
   });
 
+  describe('outside units', () => {
+    const unmatchedM7 = {
+      key: '|m7',
+      unit: 'M7',
+      agency: '',
+      status: 'unmatched',
+      candidates: [],
+      new_agency_name: '',
+      new_unit_name: '',
+      row_count: 2,
+      remembered: false,
+    };
+    const outsideDraft = () =>
+      draft({
+        units: [unmatchedM7],
+        options: {
+          members: [],
+          units: [{ kind: 'external', id: 'ext-a106', name: 'A106', agency_name: 'County EMS', is_active: false }],
+          agencies: [{ id: 'ag-county', name: 'County EMS', is_active: true }],
+          seats: ['firefighter'],
+        },
+      });
+
+    beforeEach(() => {
+      mockGet.mockReset();
+      mockGet.mockResolvedValue(outsideDraft());
+    });
+
+    it('adds a new unit under an agency picked from the list', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Units/ }));
+      await user.selectOptions(screen.getByLabelText('Which unit is M7?'), "Add as an outside agency's unit…");
+      await user.selectOptions(screen.getByLabelText('Agency'), 'ag-county');
+
+      expect(screen.queryByLabelText('New agency name')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Use this unit' }));
+
+      expect(mockMappings).toHaveBeenCalledWith('imp-1', {
+        units: {
+          '|m7': { action: 'create_external', agency_id: 'ag-county', agency_name: 'County EMS', unit_name: 'M7' },
+        },
+      });
+    });
+
+    it('still lets a new agency be typed', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Units/ }));
+      await user.selectOptions(screen.getByLabelText('Which unit is M7?'), "Add as an outside agency's unit…");
+      await user.type(screen.getByLabelText('New agency name'), 'Metro Fire');
+      await user.click(screen.getByRole('button', { name: 'Use this unit' }));
+
+      expect(mockMappings).toHaveBeenCalledWith('imp-1', {
+        units: { '|m7': { action: 'create_external', agency_name: 'Metro Fire', unit_name: 'M7' } },
+      });
+    });
+
+    it('sends a name to the catch-all Other unit', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Units/ }));
+      await user.selectOptions(screen.getByLabelText('Which unit is M7?'), 'Catch-all: Other');
+
+      expect(mockMappings).toHaveBeenCalledWith('imp-1', {
+        units: { '|m7': { action: 'create_external', agency_id: undefined, agency_name: 'Other', unit_name: 'Other' } },
+      });
+    });
+
+    it('labels an own unit that is retired', async () => {
+      mockGet.mockResolvedValue(
+        draft({
+          units: [unmatchedM7],
+          options: {
+            members: [],
+            units: [
+              { kind: 'own', id: 'app-e1', name: 'E1', is_active: false },
+              { kind: 'own', id: 'app-e2', name: 'E2', is_active: true },
+            ],
+            seats: ['firefighter'],
+          },
+        })
+      );
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Units/ }));
+
+      expect(screen.getByRole('option', { name: 'E1 — retired' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'E2' })).toBeInTheDocument();
+    });
+
+    it('labels an outside unit hidden from members', async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await user.click(await screen.findByRole('tab', { name: /Units/ }));
+
+      expect(screen.getByRole('option', { name: 'A106 (County EMS) — hidden from members' })).toBeInTheDocument();
+    });
+  });
+
   it('names a former member the file knows only by number', async () => {
     mockGet.mockResolvedValue(
       draft({
@@ -486,6 +606,156 @@ describe('ShiftHistoryImportReviewPage', () => {
 
     expect(mockMappings).toHaveBeenCalledWith('imp-1', {
       members: { 'number:6178': { action: 'create', first_name: 'Pat', last_name: 'Lee' } },
+    });
+  });
+
+  describe('Rows tab', () => {
+    const probable: HistoryImportIssue = {
+      code: 'probable_match',
+      message: 'Line 3 is a 70% match for the shift starting with line 2.',
+      blocking: true,
+      row_ids: ['r3'],
+      ref: 'r2',
+    };
+    const overlap: HistoryImportIssue = {
+      code: 'overlapping_entries',
+      message: 'Lines 4 and 5 put the same member on the same unit at overlapping times.',
+      blocking: true,
+      row_ids: ['r4', 'r5'],
+    };
+    const rows = [fileRow('r2', 2), fileRow('r3', 3), fileRow('r4', 4), fileRow('r5', 5)];
+
+    const openRows = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(await screen.findByRole('tab', { name: /Rows/ }));
+    };
+
+    it('confirms a probable match from the row itself', async () => {
+      mockGet.mockResolvedValue(rowsDraft(rows, [probable]));
+      const user = userEvent.setup();
+      renderPage();
+      await openRows(user);
+
+      await user.click(screen.getByRole('button', { name: 'Same shift' }));
+      expect(mockRow).toHaveBeenCalledWith('imp-1', 'r3', { match_decision: 'accept' });
+    });
+
+    it('keeps a probable match separate from the row itself', async () => {
+      mockGet.mockResolvedValue(rowsDraft(rows, [probable]));
+      const user = userEvent.setup();
+      renderPage();
+      await openRows(user);
+
+      await user.click(screen.getByRole('button', { name: 'Keep separate' }));
+      expect(mockRow).toHaveBeenCalledWith('imp-1', 'r3', { match_decision: 'separate' });
+    });
+
+    it('answers every probable match at once without leaving the tab', async () => {
+      mockGet.mockResolvedValue(rowsDraft(rows, [probable]));
+      const user = userEvent.setup();
+      renderPage();
+      await openRows(user);
+
+      expect(screen.getByText(/1 row is a probable match/)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Keep all separate' }));
+      expect(mockDecideAll).toHaveBeenCalledWith('imp-1', 'separate');
+    });
+
+    it('keeps the later of two lines that list a member twice on its own shift', async () => {
+      const twice: HistoryImportIssue = {
+        code: 'duplicate_member_in_shift',
+        message: 'Lines 4 and 5 put the same member on this shift twice.',
+        blocking: true,
+        row_ids: ['r4', 'r5'],
+        ref: 'r2',
+      };
+      mockGet.mockResolvedValue(rowsDraft(rows, [twice]));
+      const user = userEvent.setup();
+      renderPage();
+      await openRows(user);
+
+      // Offered once, on line 5 — line 4 is the one the shift already holds.
+      await user.click(screen.getByRole('button', { name: 'Keep this line separate' }));
+      expect(mockRow).toHaveBeenCalledWith('imp-1', 'r5', { match_decision: 'separate' });
+    });
+
+    it('settles a match against a scheduled shift from the rows', async () => {
+      const existing: HistoryImportIssue = {
+        code: 'probable_existing_match',
+        message: 'The shift starting with line 2 is a 75% match for a shift already on the schedule.',
+        blocking: true,
+        row_ids: ['r2'],
+        ref: 'r2',
+      };
+      mockGet.mockResolvedValue(rowsDraft(rows, [existing]));
+      const user = userEvent.setup();
+      renderPage();
+      await openRows(user);
+
+      await user.click(screen.getByRole('button', { name: 'Add to the scheduled shift' }));
+      expect(mockMappings).toHaveBeenCalledWith('imp-1', { existing_shifts: { r2: 'accept' } });
+    });
+
+    it('narrows the rows to one kind of issue', async () => {
+      mockGet.mockResolvedValue(rowsDraft(rows, [probable, overlap]));
+      const user = userEvent.setup();
+      renderPage();
+      await openRows(user);
+
+      expect(screen.getAllByRole('row')).toHaveLength(4); // header + lines 3, 4, 5
+      await user.click(screen.getByRole('button', { name: 'Overlapping times (2)' }));
+
+      const body = screen.getAllByRole('row').slice(1);
+      expect(body.map((r) => within(r).getAllByRole('cell')[0]?.textContent)).toEqual(['4', '5']);
+    });
+
+    it('opens the Rows tab on just the lines an issue names', async () => {
+      mockGet.mockResolvedValue(rowsDraft(rows, [overlap, probable]));
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText(overlap.message);
+      await user.click(nth(screen.getAllByRole('button', { name: 'Resolve' }), 0));
+
+      expect(screen.getByRole('tab', { name: /Rows/ })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByText(/Showing lines 4, 5:/)).toBeInTheDocument();
+      expect(screen.getAllByRole('row')).toHaveLength(3);
+
+      await user.click(screen.getByRole('button', { name: 'Show all rows' }));
+      expect(screen.queryByText(/Showing lines/)).not.toBeInTheDocument();
+      expect(screen.getAllByRole('row')).toHaveLength(4);
+    });
+
+    it('compares the lines of an overlap side by side', async () => {
+      mockGet.mockResolvedValue(rowsDraft(rows, [probable, overlap]));
+      const user = userEvent.setup();
+      renderPage();
+      await openRows(user);
+
+      await user.click(nth(screen.getAllByRole('button', { name: 'Compare lines' }), 0));
+      expect(screen.getByText(/Showing lines 4, 5:/)).toBeInTheDocument();
+      expect(screen.getAllByRole('row')).toHaveLength(3);
+    });
+
+    it('shows a row its issue, the other line involved and what the file said', async () => {
+      const edited = fileRow('r4', 4, {
+        values: { member_name: 'Member Four', unit: 'A106E' },
+        edits: { member_name: 'Member Four' },
+      });
+      const withEdit = rowsDraft([nth(rows, 0), nth(rows, 1), edited, nth(rows, 3)], [overlap]);
+      mockGet.mockResolvedValue(withEdit);
+      mockRow.mockResolvedValue(withEdit);
+      const user = userEvent.setup();
+      renderPage();
+      await openRows(user);
+
+      await user.click(screen.getByRole('button', { name: 'Edit line 4' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByText(overlap.message)).toBeInTheDocument();
+      expect(within(dialog).getByText('In the file: Member 4')).toBeInTheDocument();
+
+      await user.click(within(dialog).getByRole('button', { name: 'Exclude line 5' }));
+      expect(mockRow).toHaveBeenCalledWith('imp-1', 'r5', { excluded: true });
+      // A decision taken in the dialog leaves it open on the same row.
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
     });
   });
 });

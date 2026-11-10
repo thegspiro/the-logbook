@@ -854,7 +854,7 @@ const MedicalSuppliesPage: React.FC = () => {
                 // apparatus, with the stock on hand to do it.
                 <Link
                   to="/inventory/admin/checklists/supply"
-                  className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium whitespace-nowrap"
+                  className="btn-secondary inline-flex items-center gap-2 text-sm whitespace-nowrap"
                 >
                   <ClipboardList className="h-4 w-4" aria-hidden="true" />
                   Restock worklist
@@ -867,7 +867,7 @@ const MedicalSuppliesPage: React.FC = () => {
                     to the page that makes one. */}
                   <Link
                     to="/medical-supplies/categories"
-                    className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium"
+                    className="btn-secondary inline-flex items-center gap-2 text-sm"
                   >
                     <Tag className="h-4 w-4" aria-hidden="true" />
                     Categories
@@ -875,7 +875,7 @@ const MedicalSuppliesPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowImportExport(true)}
-                    className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium whitespace-nowrap"
+                    className="btn-secondary inline-flex items-center gap-2 text-sm whitespace-nowrap"
                   >
                     <ArrowUpDown className="h-4 w-4" aria-hidden="true" />
                     Import / export
@@ -883,7 +883,7 @@ const MedicalSuppliesPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowDeliveryModal(true)}
-                    className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium"
+                    className="btn-secondary inline-flex items-center gap-2 text-sm"
                   >
                     <PackagePlus className="h-4 w-4" />
                     Receive delivery

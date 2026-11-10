@@ -319,12 +319,12 @@ const AuditLogPage: React.FC = () => {
             })}
           </div>
           <div
-            className="card hidden overflow-x-auto md:block"
+            className="card rwd-table-container hidden overflow-x-auto md:block"
             tabIndex={0}
             role="region"
             aria-label="Audit log entries"
           >
-            <table className="w-full">
+            <table className="rwd-table rwd-table-xwide w-full">
               <thead className="bg-theme-surface-secondary text-theme-text-muted text-left text-xs font-medium uppercase">
                 <tr>
                   <th scope="col" className="px-4 py-3">
@@ -360,7 +360,7 @@ const AuditLogPage: React.FC = () => {
                         className="hover:bg-theme-surface-hover cursor-pointer"
                         onClick={() => setExpandedId(expanded ? null : entry.id)}
                       >
-                        <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                        <td data-label="When" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {/* The row click is a pointer convenience; this button is
                               what a keyboard or screen-reader user operates. */}
                           <button
@@ -376,7 +376,7 @@ const AuditLogPage: React.FC = () => {
                             {entry.timestamp ? formatDateTime(entry.timestamp, tz) : '—'}
                           </button>
                         </td>
-                        <td className="px-4 py-3">
+                        <td data-label="Severity" className="px-4 py-3">
                           {sev && (
                             <span
                               className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium uppercase ${SEVERITY_BADGE[sev]}`}
@@ -386,7 +386,7 @@ const AuditLogPage: React.FC = () => {
                             </span>
                           )}
                         </td>
-                        <td className="text-theme-text-primary px-4 py-3 font-mono text-sm">
+                        <td data-label="Event" className="text-theme-text-primary px-4 py-3 font-mono text-sm">
                           <button
                             type="button"
                             aria-expanded={expanded}
@@ -400,19 +400,25 @@ const AuditLogPage: React.FC = () => {
                             {entry.event_type}
                           </button>
                         </td>
-                        <td className="text-theme-text-secondary hidden px-4 py-3 text-sm md:table-cell">
+                        <td
+                          data-label="Category"
+                          className="text-theme-text-secondary hidden px-4 py-3 text-sm md:table-cell"
+                        >
                           {entry.event_category}
                         </td>
-                        <td className="text-theme-text-secondary px-4 py-3 text-sm">
+                        <td data-label="User" className="text-theme-text-secondary px-4 py-3 text-sm">
                           {entry.username || <span className="text-theme-text-muted italic">system</span>}
                         </td>
-                        <td className="text-theme-text-muted hidden px-4 py-3 font-mono text-sm lg:table-cell">
+                        <td
+                          data-label="IP"
+                          className="text-theme-text-muted hidden px-4 py-3 font-mono text-sm break-all lg:table-cell"
+                        >
                           {entry.ip_address || '—'}
                         </td>
                       </tr>
                       {expanded && (
                         <tr id={`audit-entry-${entry.id}`} className="bg-theme-surface-secondary">
-                          <td colSpan={6} className="px-4 py-3">
+                          <td colSpan={6} data-label="Details" className="rwd-table-lead px-4 py-3">
                             <pre className="text-theme-text-secondary font-mono text-xs whitespace-pre-wrap">
                               {JSON.stringify(entry.event_data, null, 2)}
                             </pre>

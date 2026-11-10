@@ -19,6 +19,11 @@ export { Pagination } from './Pagination';
 export { PageTransition } from './PageTransition';
 export { Collapsible } from './Collapsible';
 
+// Forms
+export { FormField, FIELD_ERROR_CLASS } from './FormField';
+export type { FieldControlProps, FormFieldControlProps } from './FormField';
+export { ErrorSummary } from './ErrorSummary';
+
 // Feedback & Confirmation
 export { EmptyState } from './EmptyState';
 export { ConfirmDialog } from './ConfirmDialog';
@@ -45,8 +50,6 @@ export { FloatingActionButton } from './FloatingActionButton';
 
 // Form Controls
 export { default as DateTimeQuarterHour } from './DateTimeQuarterHour';
-export { FormField } from './FormField';
-export type { FieldControlProps } from './FormField';
 export { DraftRestoredNotice } from './DraftRestoredNotice';
 
 // Information
