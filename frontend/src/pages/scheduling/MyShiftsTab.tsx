@@ -36,6 +36,7 @@ import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { CalendarSubscribeCard } from './CalendarSubscribeCard';
 import { MyHoursSummary } from './MyHoursSummary';
 import { PastShiftsHistory } from './PastShiftsHistory';
+import { buildPastRows, groupByMonth, monthHeading } from './pastShiftsModel';
 
 /** How many upcoming shifts the swap "Specific shift" picker reads. */
 const SWAP_TARGET_LIMIT = 50;
@@ -330,10 +331,21 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
   };
 
   const today = getTodayLocalDate(tz);
-  const upcoming = assignments.filter((a) => {
-    const shiftDate = a.shift?.shift_date || '';
-    return shiftDate >= today && a.status !== AssignmentStatus.DECLINED && a.status !== AssignmentStatus.CANCELLED;
-  });
+  // Soonest first, so the month sections read in calendar order. start_time
+  // breaks ties between two shifts on one day.
+  const upcoming = assignments
+    .filter((a) => {
+      const shiftDate = a.shift?.shift_date || '';
+      return shiftDate >= today && a.status !== AssignmentStatus.DECLINED && a.status !== AssignmentStatus.CANCELLED;
+    })
+    .sort(
+      (a, b) =>
+        (a.shift?.shift_date ?? '').localeCompare(b.shift?.shift_date ?? '') ||
+        (a.shift?.start_time ?? '').localeCompare(b.shift?.start_time ?? '')
+    );
+  // The same calendar grouping the Past view uses. No attendance is passed: an
+  // upcoming shift has no hours yet, so its headers count shifts only.
+  const upcomingMonths = groupByMonth(buildPastRows(upcoming, new Map()), 'soonest');
   // A declined or cancelled seat is a shift the member did not work, so it is
   // not part of their history. If attendance shows they worked it anyway, the
   // attendance-only path below still lists it, with its hours.
@@ -553,187 +565,202 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift, refreshKe
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {upcoming.map((assignment) => {
-              const shift = assignment.shift;
-              const statusColor = ASSIGNMENT_STATUS_COLORS[assignment.status] || ASSIGNMENT_STATUS_COLORS.assigned;
-              // A calendar date, not an instant: formatted as written, so a viewer
-              // whose browser is hours from the department still sees its day.
-              const shiftDay = shift?.shift_date
-                ? formatCalendarDate(shift.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })
-                : null;
-              // Every row carries the same four actions, so each needs the
-              // shift in its name or a screen reader hears "Confirm" per row
-              // with nothing to tell them apart.
-              const when = shiftDay
-                ? `${shiftDay}${shift?.start_time ? `, ${formatTime(shift.start_time, tz)}` : ''}`
-                : 'an unknown date';
+          <div className="space-y-6">
+            {upcomingMonths.map((group) => (
+              <section key={group.key} aria-labelledby={`upcoming-shifts-${group.key}-heading`} className="space-y-3">
+                <div className="surface-secondary-opaque border-theme-surface-border sticky top-0 z-10 flex items-baseline justify-between gap-3 rounded-lg border px-4 py-2">
+                  <h3
+                    id={`upcoming-shifts-${group.key}-heading`}
+                    className="text-theme-text-primary text-sm font-semibold tracking-wide uppercase"
+                  >
+                    {monthHeading(group)}
+                  </h3>
+                  <span className="text-theme-text-muted text-xs">
+                    {`${group.shifts} ${group.shifts === 1 ? 'shift' : 'shifts'}`}
+                  </span>
+                </div>
+                {group.rows.map(({ assignment }) => {
+                  const shift = assignment.shift;
+                  const statusColor = ASSIGNMENT_STATUS_COLORS[assignment.status] || ASSIGNMENT_STATUS_COLORS.assigned;
+                  // A calendar date, not an instant: formatted as written, so a viewer
+                  // whose browser is hours from the department still sees its day.
+                  const shiftDay = shift?.shift_date
+                    ? formatCalendarDate(shift.shift_date, { weekday: 'short', month: 'short', day: 'numeric' })
+                    : null;
+                  // Every row carries the same four actions, so each needs the
+                  // shift in its name or a screen reader hears "Confirm" per row
+                  // with nothing to tell them apart.
+                  const when = shiftDay
+                    ? `${shiftDay}${shift?.start_time ? `, ${formatTime(shift.start_time, tz)}` : ''}`
+                    : 'an unknown date';
 
-              return (
-                <div key={assignment.id} className="card hover:border-theme-text-muted/30 p-4 sm:p-5">
-                  {/* Stacks on a phone so the actions get a full-width row of
+                  return (
+                    <div key={assignment.id} className="card hover:border-theme-text-muted/30 p-4 sm:p-5">
+                      {/* Stacks on a phone so the actions get a full-width row of
                     their own. They carry visible labels, and a phone has no
                     hover to reveal a title attribute — four bare glyphs on the
                     screen members open most is where a mis-tap costs a seat on
                     the truck. */}
-                  <div className="split-row gap-3 sm:items-center">
-                    <div className="split-row-main flex items-center gap-3 sm:gap-4">
-                      {assignment.status === AssignmentStatus.ASSIGNED && pendingAssigned.length > 1 && (
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(assignment.id)}
-                          onChange={() => toggleSelection(assignment.id)}
-                          className="border-theme-input-border h-4 w-4 shrink-0 rounded text-violet-600 focus:ring-violet-500"
-                          aria-label={`Select shift for ${shiftDay ?? 'unknown date'}`}
-                        />
-                      )}
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
-                        <Clock className="h-5 w-5 text-violet-500 sm:h-6 sm:w-6" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-theme-text-primary truncate text-sm font-semibold sm:text-base">
-                          {shiftDay ?? 'Unknown Date'}
-                        </p>
-                        <p className="text-theme-text-secondary text-xs sm:text-sm">
-                          {shift?.start_time
-                            ? `${formatTime(shift.start_time, tz)}${shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}`
-                            : ''}
-                        </p>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                          {/* Keyed on either field, not on the name. `unit_number`
+                      <div className="split-row gap-3 sm:items-center">
+                        <div className="split-row-main flex items-center gap-3 sm:gap-4">
+                          {assignment.status === AssignmentStatus.ASSIGNED && pendingAssigned.length > 1 && (
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(assignment.id)}
+                              onChange={() => toggleSelection(assignment.id)}
+                              className="border-theme-input-border h-4 w-4 shrink-0 rounded text-violet-600 focus:ring-violet-500"
+                              aria-label={`Select shift for ${shiftDay ?? 'unknown date'}`}
+                            />
+                          )}
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 sm:h-12 sm:w-12">
+                            <Clock className="h-5 w-5 text-violet-500 sm:h-6 sm:w-6" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-theme-text-primary truncate text-sm font-semibold sm:text-base">
+                              {shiftDay ?? 'Unknown Date'}
+                            </p>
+                            <p className="text-theme-text-secondary text-xs sm:text-sm">
+                              {shift?.start_time
+                                ? `${formatTime(shift.start_time, tz)}${shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}`
+                                : ''}
+                            </p>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                              {/* Keyed on either field, not on the name. `unit_number`
                             is the required department identifier ("Engine 5")
                             and `name` an optional nickname ("Old Reliable"), so
                             gating on the name hid the rig entirely for any
                             apparatus without one — the exact fact this row was
                             changed to show. */}
-                          {(shift?.apparatus_unit_number || shift?.apparatus_name) && (
-                            <p className="text-theme-text-secondary text-xs font-medium">
-                              {[shift.apparatus_unit_number, shift.apparatus_name].filter(Boolean).join(' — ')}
-                            </p>
-                          )}
-                          {/* On an outreach signup sheet the seat is a plain
+                              {(shift?.apparatus_unit_number || shift?.apparatus_name) && (
+                                <p className="text-theme-text-secondary text-xs font-medium">
+                                  {[shift.apparatus_unit_number, shift.apparatus_name].filter(Boolean).join(' — ')}
+                                </p>
+                              )}
+                              {/* On an outreach signup sheet the seat is a plain
                             `volunteer` and the job the member chose lives on
                             outreach_role — showing the position alone tells
                             them they are a Volunteer and loses the role. */}
-                          <p className="text-theme-text-muted text-xs capitalize">
-                            {assignment.outreach_role_label
-                              ? `Role: ${assignment.outreach_role_label}`
-                              : `Position: ${positionLabel(assignment.position)}`}
-                          </p>
+                              <p className="text-theme-text-muted text-xs capitalize">
+                                {assignment.outreach_role_label
+                                  ? `Role: ${assignment.outreach_role_label}`
+                                  : `Position: ${positionLabel(assignment.position)}`}
+                              </p>
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize sm:hidden ${statusColor}`}
+                              >
+                                {assignment.status}
+                              </span>
+                              {(() => {
+                                const att = shift ? attendanceMap.get(shift.id) : undefined;
+                                if (!att) return null;
+                                if (att.checked_out_at && att.duration_minutes) {
+                                  const hrs = formatHours(att.duration_minutes / 60);
+                                  return (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium whitespace-nowrap text-green-800 dark:text-green-400">
+                                      <Clock className="h-3 w-3" aria-hidden="true" /> {hrs}h worked
+                                    </span>
+                                  );
+                                }
+                                if (att.checked_in_at) {
+                                  return (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400">
+                                      <LogIn className="h-3 w-3" /> Checked in
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="split-row-aside border-theme-surface-border flex flex-wrap items-center gap-2 border-t pt-3 sm:border-0 sm:pt-0">
                           <span
-                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize sm:hidden ${statusColor}`}
+                            className={`hidden rounded-full border px-2.5 py-1 text-xs font-medium capitalize sm:inline-block ${statusColor}`}
                           >
                             {assignment.status}
                           </span>
-                          {(() => {
-                            const att = shift ? attendanceMap.get(shift.id) : undefined;
-                            if (!att) return null;
-                            if (att.checked_out_at && att.duration_minutes) {
-                              const hrs = formatHours(att.duration_minutes / 60);
-                              return (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium whitespace-nowrap text-green-800 dark:text-green-400">
-                                  <Clock className="h-3 w-3" aria-hidden="true" /> {hrs}h worked
-                                </span>
-                              );
-                            }
-                            if (att.checked_in_at) {
-                              return (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400">
-                                  <LogIn className="h-3 w-3" /> Checked in
-                                </span>
-                              );
-                            }
-                            return null;
-                          })()}
+                          {assignment.status === AssignmentStatus.ASSIGNED && confirmingDecline !== assignment.id && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  void handleConfirm(assignment.id);
+                                }}
+                                disabled={confirmingId === assignment.id}
+                                className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
+                                title="Confirm you are working this shift"
+                                aria-label={`Confirm shift on ${when}`}
+                              >
+                                {confirmingId === assignment.id ? (
+                                  <Loader2 className="h-5 w-5 animate-spin" />
+                                ) : (
+                                  <Check className="h-5 w-5" />
+                                )}
+                                {/* Same verb as the bulk bar and the status badge —
+                                a third phrasing for one action is the drift
+                                this module already has too much of. */}
+                                <span>Confirm</span>
+                              </button>
+                              <button
+                                onClick={() => setConfirmingDecline(assignment.id)}
+                                className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                                title="Give this shift up so it can be re-filled"
+                                aria-label={`Decline shift on ${when}`}
+                              >
+                                <XCircle className="h-5 w-5" />
+                                <span>Decline</span>
+                              </button>
+                            </>
+                          )}
+                          {confirmingDecline === assignment.id && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-red-500 dark:text-red-400">Decline?</span>
+                              <button
+                                onClick={() => {
+                                  void handleDecline(assignment.id);
+                                }}
+                                className="btn-primary rounded-md px-2 py-1 text-xs"
+                                aria-label="Confirm decline"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                onClick={() => setConfirmingDecline(null)}
+                                className="text-theme-text-muted hover:text-theme-text-primary px-2 py-1 text-xs"
+                                aria-label="Cancel decline"
+                              >
+                                No
+                              </button>
+                            </div>
+                          )}
+                          <button
+                            onClick={() => {
+                              void openSwapRequest(assignment);
+                            }}
+                            className="text-theme-text-secondary mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-violet-500/10 hover:text-violet-600"
+                            title="Ask someone to swap shifts with you"
+                            aria-label={`Swap shift on ${when}`}
+                          >
+                            <ArrowLeftRight className="h-5 w-5" />
+                            <span>Swap</span>
+                          </button>
+                          {shift && onViewShift && (
+                            <button
+                              onClick={() => onViewShift(shift)}
+                              className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+                              title="Open the full shift details"
+                              aria-label={`Details for shift on ${when}`}
+                            >
+                              <ChevronDown className="h-5 w-5" />
+                              <span>Details</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
-                    <div className="split-row-aside border-theme-surface-border flex flex-wrap items-center gap-2 border-t pt-3 sm:border-0 sm:pt-0">
-                      <span
-                        className={`hidden rounded-full border px-2.5 py-1 text-xs font-medium capitalize sm:inline-block ${statusColor}`}
-                      >
-                        {assignment.status}
-                      </span>
-                      {assignment.status === AssignmentStatus.ASSIGNED && confirmingDecline !== assignment.id && (
-                        <>
-                          <button
-                            onClick={() => {
-                              void handleConfirm(assignment.id);
-                            }}
-                            disabled={confirmingId === assignment.id}
-                            className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-green-700 transition-colors hover:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20"
-                            title="Confirm you are working this shift"
-                            aria-label={`Confirm shift on ${when}`}
-                          >
-                            {confirmingId === assignment.id ? (
-                              <Loader2 className="h-5 w-5 animate-spin" />
-                            ) : (
-                              <Check className="h-5 w-5" />
-                            )}
-                            {/* Same verb as the bulk bar and the status badge —
-                                a third phrasing for one action is the drift
-                                this module already has too much of. */}
-                            <span>Confirm</span>
-                          </button>
-                          <button
-                            onClick={() => setConfirmingDecline(assignment.id)}
-                            className="mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                            title="Give this shift up so it can be re-filled"
-                            aria-label={`Decline shift on ${when}`}
-                          >
-                            <XCircle className="h-5 w-5" />
-                            <span>Decline</span>
-                          </button>
-                        </>
-                      )}
-                      {confirmingDecline === assignment.id && (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-red-500 dark:text-red-400">Decline?</span>
-                          <button
-                            onClick={() => {
-                              void handleDecline(assignment.id);
-                            }}
-                            className="btn-primary rounded-md px-2 py-1 text-xs"
-                            aria-label="Confirm decline"
-                          >
-                            Yes
-                          </button>
-                          <button
-                            onClick={() => setConfirmingDecline(null)}
-                            className="text-theme-text-muted hover:text-theme-text-primary px-2 py-1 text-xs"
-                            aria-label="Cancel decline"
-                          >
-                            No
-                          </button>
-                        </div>
-                      )}
-                      <button
-                        onClick={() => {
-                          void openSwapRequest(assignment);
-                        }}
-                        className="text-theme-text-secondary mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-violet-500/10 hover:text-violet-600"
-                        title="Ask someone to swap shifts with you"
-                        aria-label={`Swap shift on ${when}`}
-                      >
-                        <ArrowLeftRight className="h-5 w-5" />
-                        <span>Swap</span>
-                      </button>
-                      {shift && onViewShift && (
-                        <button
-                          onClick={() => onViewShift(shift)}
-                          className="text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover mobile-touch-target flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors"
-                          title="Open the full shift details"
-                          aria-label={`Details for shift on ${when}`}
-                        >
-                          <ChevronDown className="h-5 w-5" />
-                          <span>Details</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </section>
+            ))}
           </div>
         ))}
 
