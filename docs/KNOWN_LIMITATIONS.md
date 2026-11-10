@@ -39,32 +39,41 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
 
 ## Medical Screening — What Is Still Plaintext at Rest (MS-18, 2026-11-05)
 
-**Decided 2026-11-04: encrypt the status first.** `screening_records.status` is
-now AES-256-GCM ciphertext (`EncryptedEnum`, migration `80fa2c83bf9d`), so a
+**Decided 2026-11-04: encrypt the status first.** `screening_records.status`
+is AES-256-GCM ciphertext (`EncryptedEnum`, migration `80fa2c83bf9d`), so a
 dump no longer says which member _failed_ a screening. The provider, results
 and notes were already encrypted (MS-1). Searchable fingerprints were ruled
 out: with seven statuses and six types, a keyed hash puts every "failed"
 record under one value, and one known record reveals the rest.
 
-Still plaintext, and each waiting on its own decision:
+✅ **Decided 2026-11-06: "type + link + audit", built.** Migration
+`ac1687769b62`:
 
-- **The screening type.** A dump still reads "this member — psychological
-  evaluation — 25 Oct 2026", without the outcome. Encrypting it is the same
-  shape of change as the status: the pipeline gate's lookup by type, the
-  Members hub's grouping by type and the records list's type filter move to
-  Python, and `screening_type` leaves `enum_normalization`.
-- **The requirement link reveals the type anyway.** `requirement_id` is a
-  plain foreign key to a requirement whose name and type are plaintext (for
-  example "Pre-membership Drug Screen"), and the record form links most
-  records. Encrypting the type without it protects only unlinked records.
-  Encrypting the link means giving up the database foreign key, so deleting a
-  requirement would clear its records' links in code instead.
-- **The audit log names the type.** Creating a record writes `screening_type`
-  into the audit entry, and the records-list filters are logged too. New
-  entries could stop doing that. Existing ones cannot be scrubbed: the audit
-  log is hash-chained, so rewriting a row breaks the chain.
-- **The dates and the member link** stay plaintext: grading, the expiring list
-  and every screen filter and join on them.
+- **The screening type is ciphertext** (`EncryptedEnum`). The pipeline gate's
+  lookup by type, the records list's type filter and the Members hub's
+  grouping by type match the decrypted value in Python, org-scoped;
+  `screening_records.screening_type` left `enum_normalization`. The
+  requirement's own type stays plaintext: it is the department's policy, not
+  a person's history.
+- **The requirement link is ciphertext** (`EncryptedReference`). The database
+  foreign key is gone; deleting a requirement clears its records' links in
+  `MedicalScreeningService.delete_requirement`, over the deleting
+  organization's records only. Grading and the expiring list match the link
+  after decryption. `tests/test_medical_screening_type_encrypted.py`.
+- **New audit entries do not name the type.** The record-created entry no
+  longer carries `screening_type`, and the records-list entry says only
+  whether a type filter was used (`screening_type_filtered`).
+
+Still plaintext, and staying that way unless decided otherwise:
+
+- **The dates and the member link.** Grading, the expiring list, the expiry
+  reminders and every screen filter and join on them.
+- **Audit entries written before 2026-11-06** still name the type of each
+  record created, and the type filter used on the records list. The audit log
+  is hash-chained, so rewriting a row breaks the chain.
+- **The records-list status filter** is still written into the audit entry,
+  as before; only the type was in scope.
+- **Backups taken before the upgrade** hold every one of these in plaintext.
 
 ## Owner Decisions of 2026-11-01
 
@@ -302,12 +311,17 @@ finalizing is.
 Built so far: the legal-name fields on `/account` and the officer's
 edit-member page (forms review F-1, `docs/FORMS_REVIEW_2026-11-05.md`), and
 the shared pieces the rest move onto — `FormField` and `ErrorSummary` in
-`components/ux/` and `useFieldErrors` in `hooks/` — piloted on Submit
-Training, `/account` and Scheduling's Create Shift, then extended to the
-shift template and pattern dialogs, the scheduling notification CC lists and
-Add Member. The rest of the app's
-forms still refuse a save on error in various ways (F-3 in that review) and
-come into line module by module.
+`components/ux/`, `useFieldErrors` in `hooks/` and the 422 mapping in
+`utils/serverFieldErrors.ts` — on Submit Training, `/account`, Add Member,
+Create Shift and Create Event, then extended to the shift template and
+pattern dialogs and the scheduling notification CC lists. Two sessions built
+these in parallel; their two `FormField` components were combined into one on
+2026-11-09, keeping both feature sets. On `/account` any field the server
+refuses is handled the way a blank name was: the request is resent without
+it, the rest of the profile saves, and the field keeps what was typed, flagged
+with the server's reason, until it is changed. The rest of the app's forms
+still refuse a save on error in various ways (F-3 in that review) and come
+into line module by module.
 
 Also on the shared pieces since: every create dialog the review found with a
 button greyed out until valid (Locations, Facilities, Documents' New Folder,
@@ -318,6 +332,35 @@ Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
 needs a course name and a completion date, because both are NOT NULL
 columns, and making them nullable was declined. Every other field follows
 the rule above.
+
+**Create forms do not partially save.** Add Member, Create Shift and Create
+Event put each refusal on its field and create nothing until it is fixed:
+creating a record without the refused value and then flagging it would leave
+the flag on a form that has already navigated away. An event saved as a draft
+is still refused for the rules the server enforces on every event (an end after
+the start, an RSVP deadline before it).
+
+**Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
+Two of the three options, and not the third:
+
+- **Escape asks first — built.** A dialog that tracks whether its fields have
+  changed asks "Keep editing" / "Discard changes" before Escape, its X or its
+  Cancel throws them away; a clean dialog closes at once, so Escape stays the
+  way out (Pitfall #31). It is opt-in per dialog (`isDirty` on `Modal` /
+  `DialogPanel`, or `useDiscardGuard`), and adopted so far on Inventory › Add /
+  Edit Item and Scheduling › Create Shift; other dialogs still close without
+  asking until they pass the flag.
+- **Local drafts — built** for training submission (new ones; an edit is
+  already stored on the server), the manual shift report (Scheduling's shift
+  reports already kept their own draft), the expense report and Add Member.
+  sessionStorage, keyed by member and form, so a draft lasts as long as the tab
+  and never reaches another member; purged at sign-out. **PHI is never
+  drafted:** Add Member's draft leaves out the emergency contacts and the date
+  of birth, and no medical-screening form drafts. Attached files are not
+  drafted. Finance's purchase request keeps its existing server-side draft.
+- **A data router — rejected.** Navigating away inside the app (a sidebar
+  link) still leaves a page without asking; the drafts are what bring the work
+  back. `hooks/useUnsavedChanges.ts` still covers closing the tab.
 
 ## Fundraising — The Donations List's Receipt Column Is Never Filled (2026-11-05)
 
@@ -413,19 +456,35 @@ each changes saved members' standing, writes PHI rows, or adds behaviour.
   changes what the tile counts. Separately, decide whether a lapsed
   screening should in fact block scheduling, or the claim should go.
 - **Nothing reminds anyone a screening is about to expire (W71b-4, MED).**
-  Certifications get tiered 90/60/30/7-day emails, and screenings get none.
-  A lapse is visible only on the Compliance tab and the member's dashboard.
-  If added, reminders would be email-first (pitfall #18).
-- **A new requirement starts as one-time (W71b-5, LOW).** The One-time box
-  starts ticked, though the hidden frequency is pre-filled with 12, so an
-  annual physical added in a hurry never falls due. The fix is one line,
-  `ScreeningRequirementForm.tsx:32`.
+  ✅ **Resolved 2026-11-08 (owner decision 2026-11-06: the same as
+  certifications).** A daily task emails the member 90, 60, 30 and 7 days
+  before a screening falls due, once per tier per screening and due date
+  (`screening_reminder_sends`, unique on that key). Email only, gated by the
+  Medical Screening module, the `medical_screening_expiry` notification rule
+  (on with no rule) and the member's "Training and certification reminders"
+  choice. The email names the requirement and the due date only; there is no
+  bell entry, which would store the requirement name beside the member in
+  plaintext. Officers are not copied, unlike the certification 30- and 7-day
+  tiers: the owner's decision named the member, and a copy to officers would
+  tell them which screening a member owes. `tests/test_screening_expiry_reminders.py`.
+  Original finding: certifications get tiered 90/60/30/7-day emails, and
+  screenings got none; a lapse was visible only on the Compliance tab and the
+  member's dashboard.
+- **A new requirement starts as one-time (W71b-5, LOW).** ✅ **Resolved
+  2026-11-08 (owner decision 2026-11-06: recurring by default).** A new
+  requirement starts with One-time unticked and recurs every 12 months;
+  existing requirements open as they were saved.
+  `ScreeningRequirementForm.recurringDefault.test.tsx`. Original finding: the
+  box started ticked though the hidden frequency was pre-filled with 12, so an
+  annual physical added in a hurry never fell due.
 
 ## Zeffy — What the Integration Leaves to the Treasurer (2026-10-31)
 
 The Zeffy integration ([ZEFFY_INTEGRATION.md](ZEFFY_INTEGRATION.md)) applies
 Zeffy payments to donations, fundraising-event revenue and member dues. These
-were chosen deliberately and are open for the owner to confirm or change:
+were chosen deliberately and are open for the owner to confirm or change.
+**Owner decision (2026-11-06): all five confirmed as built.** The list is kept
+as the record of what the integration leaves to the treasurer:
 
 - **A refund of dues already credited is flagged, not reversed.** The dues
   ledger has no reversal entry, so the payment shows **Needs review** and the
@@ -617,6 +676,36 @@ assignment; none existed in the development database when this was built.
 **Still open:** an org chart does not read the relationship.
 
 ## Members — No History of Positions Held (2026-11-01)
+
+**✅ Resolved (owner decision 2026-11-06: keep a dated history; built
+2026-11-08).** `member_position_terms` (migration `67ad01c43434`) records each
+stretch a member held a position: `started_at`, `ended_at` (NULL while held),
+and who assigned and removed it when the path knows (the position endpoints and
+the position service do; onboarding and the membership pipeline's conversion
+record no one). A session hook keeps it in step with `user_positions` on every
+path that goes through the relationship, in the same transaction; the paths
+that write `user_positions` with Core statements (member creation, the position
+service, the onboarding position step's bulk delete, the test-user seed) call
+the same reconciliation. One open term per member and position is held by a
+generated `open_marker` column under a unique key, and a repeated assignment or
+a removal of a position not held opens or closes nothing.
+
+What is kept and what is not:
+
+- A position deleted outright closes its open terms, and the terms survive
+  under the name and kind it had (`position_id` becomes NULL). A hard-deleted
+  member's terms go with them, as their `user_positions` rows do.
+- History starts at each member's current `assigned_at` when the migration
+  ran. Earlier changes are **not** reconstructed from the audit log's
+  `user_role_assigned` / `user_role_removed` events.
+- "Positions held" on an evaluation now lists every office and committee seat
+  held at any time during the review period (a term overlapping it), not only
+  those held when the figures were taken.
+- The member profile lists earlier offices and committee seats with their
+  dates, to everyone who sees the current ones, without the baseline Member
+  position or the rank mirrors.
+
+The original entry follows.
 
 `user_positions` records only who holds each position now: assigning one adds
 a row stamped `assigned_at`, and removing one deletes the row. Nothing keeps a
@@ -3304,15 +3393,29 @@ documentation (the list and URLs are in
 was left out rather than guessed, and is listed here with the other gaps. Each
 needs a decision or a follow-up change:
 
-- **Every payment posts as a cash expense from a bank account.** Intuit's
-  pages show a Purchase with `PaymentType` `Cash` paid from a Bank account,
-  and name check and credit card purchases without showing their
-  `PaymentType` values or the account type each needs. So a check is recorded
-  as an expense, not a QuickBooks Check (no check number on it), and a
-  category paid from a credit card account is refused live ("not a Bank
-  account") and goes in the CSV export instead. Posting checks as Checks and
-  card payments as credit card expenses needs Intuit's Purchase reference page
-  read and those two values confirmed.
+- **✅ Resolved 2026-11-08 — checks post as checks, card payments as credit
+  card expenses.** Owner decision (2026-11-06): "checks and cards". An issued
+  check posts as a QuickBooks Check with its check number (`DocNumber`; the
+  request number goes in the private note) and is not queued to print; a
+  payment from a category whose paid-from account is a QuickBooks Credit Card
+  account posts as a credit card expense instead of being refused; the rest
+  stay cash expenses from a bank account. The values were confirmed against
+  what Intuit publishes beside its Purchase reference (its v3 schema in the
+  PHP and Java SDKs, the .NET SDK's tests, and its Java "Data services
+  extensions" page; sources in `quickbooks_online_client.py`), because the
+  reference page itself renders only in a browser. What remains:
+  - Purchase requests and expense reports record no payment method, so one
+    paid by check from a bank account posts as a cash expense, not a Check.
+    Recording how a request was paid would be its own change.
+  - A check whose paid-from account is a credit card account is refused
+    live and goes in the CSV export; a check number longer than QuickBooks'
+    21 characters likewise. A check number QuickBooks already holds is
+    refused by QuickBooks (it is not sent with `allowduplicatedocnum`), and
+    the posting shows QuickBooks' reason.
+  - A check posted before this change stays in QuickBooks as the cash expense
+    it was posted as. A payment refused as "not a Bank account" before it
+    stays refused until the Treasurer presses **Send again**, or sends it in
+    the CSV export.
 - **Some payments still need the CSV export.** Cash advances, expense reports
   and reimbursement checks that account for an advance (a Purchase is paid from
   one account, and those are paid partly from the advance), dues, returned
@@ -3321,7 +3424,8 @@ needs a decision or a follow-up change:
 - **Voiding a posted check does not reverse it in QuickBooks.** The CSV export
   reverses a voided check; the live connection makes no change to a Purchase
   it created (the scope it holds can, but deleting records was not part of the
-  decision). Void it in QuickBooks too.
+  decision). Void it in QuickBooks too. Owner decision (2026-11-06): not built
+  now.
 - **Vendors are matched by display name**, ignoring case. A vendor renamed in
   QuickBooks gets a new one created under the old name on the next payment to
   it; a name used by a QuickBooks customer or employee is refused (Intuit error 6240) and the posting says so. An inactive vendor is refused, not
@@ -3333,9 +3437,10 @@ needs a decision or a follow-up change:
   with "QuickBooks has no account named …". Matching is exact, case included,
   as the CSV export's chart check is.
 - **`TxnDate` and `DocNumber`** are set from the payment's day on the
-  department's calendar and its request number. Intuit documents both on
-  transaction entities generally and shows them on other transactions' examples;
-  they were not seen on a Purchase example.
+  department's calendar and its request number (a check's `DocNumber` is its
+  check number). _(2026-11-08)_ Both are confirmed on Purchase: Intuit's schema
+  puts them on the Transaction type Purchase extends, and its own SDK tests set
+  them on a Purchase.
 - **A payment waiting on a retry when the department disconnects stays out of
   the CSV export**: QuickBooks may already hold it. Reconnecting to the same
   company sends it again under the same request id, which Intuit answers with
@@ -3344,7 +3449,8 @@ needs a decision or a follow-up change:
 - **Posting starts from the moment of connecting.** Earlier payments stay on
   the CSV export; the Treasurer can move the date (**Post payments made on or
   after**), and a payment already sent in a file is never posted.
-- **Reading budgets and actuals back from QuickBooks** is not built.
+- **Reading budgets and actuals back from QuickBooks** is not built. Owner
+  decision (2026-11-06): not built now.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 
@@ -9275,6 +9381,26 @@ was flagged rather than changed. The options are to keep it, to require
 the drill, and a training officer would link it), or to require both grants.
 Found by `docs/security-review/TR-17-training-core.md` pass 14.
 
+## Training — Records From the Older CSV Importers Read "The Logbook" (2026-11-10)
+
+**Accepted (owner decision 2026-11-10).** Training lists, the print page and
+the individual CSV and PDF exports show where each record came from:
+
+- the provider for a sync ("Target Solutions");
+- "Imported" for the Historical Data Import;
+- "The Logbook" for everything else.
+
+The server decides the label in `app/services/training_record_source.py`. It
+needs nothing stored: a sync carries `external_provider_id` and
+`external_record_id`, and the Historical Data Import ledgers every record it
+writes in `imported_source_records`.
+
+The two older importers on the Training screens, the CSV import wizard
+(`POST /training/import/confirm`) and `POST /training/records/import-csv`,
+leave no such mark. Their records therefore read "The Logbook". The owner chose
+this over adding a stored source column, which could only have labelled records
+imported after the change.
+
 ## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06, resolved 2026-10-29)
 
 Found by security review SKT-19 pass 7
@@ -9457,3 +9583,47 @@ mirrored here so they're visible outside the log. The parallel module-by-module
 security audit tracks its rotation and per-module findings under
 [`docs/module-audit/`](./module-audit/PROGRESS.md); its open decisions are
 mirrored in the Multi-Tenant Isolation section above.
+
+## LIFE-11 — Anonymizing a Member Leaves Their Separation Letter, With Home Address, in Documents (2026-11-10, app review A6 pass 6)
+
+Anonymization (`POST /users/{id}/anonymize`, `MemberAnonymizationService`)
+scrubs the member's personal data from a long list of tables but touches no
+`Document`. The property-return letter generated when the member was dropped is
+filed in the leadership-only **Member Separations** folder, and its body states
+the member's home address and the reason given for the separation. After an
+erasure both remain readable to anyone with access to that folder.
+
+A separation letter may be a record the department must keep: it states a
+chargeable liability for property not returned. So this is a decision, not a
+fix. Options:
+
+1. **Redact on anonymization** — rewrite stored letters with the address and
+   reason removed, keeping the item list and values.
+2. **Delete** the letters with the rest of the member's personal data.
+3. **Keep them as they are** and say so in the anonymization docstring and
+   `docs/COMPLIANCE.md`, so a privacy reviewer is not told the member is fully
+   scrubbed.
+
+## LIFE-2 — A Pool Issuance Is Valued Three Ways, and the Departure Clearance's Figure Is Wrong (2026-08-05, evidence added 2026-11-10, app review A6)
+
+A departing member's unreturned pool issuance (uniform pieces and the like) is
+valued differently by the three places that state what the member owes:
+
+| Where                                                  | Formula                                                          |
+| ------------------------------------------------------ | ---------------------------------------------------------------- |
+| Member charges (`inventory_service.py:8550`)           | `unit_cost_at_issuance × quantity issued`                        |
+| Property-return letter (`property_return_service.py`)  | `current_value × quantity issued`                                |
+| Departure clearance (`departure_clearance_service.py`) | `current_value ÷ (quantity + quantity_issued) × quantity issued` |
+
+`current_value` is a per-unit value: every inventory valuation total sums
+`current_value * quantity`. So the clearance divides a per-unit value by the
+pool's whole size and **understates the item by that factor**. A pool of 40
+shirts at $25 each, two of them issued, shows $1.25 outstanding on the clearance and
+$50 on the letter.
+
+Which basis is right — today's value, or the cost recorded at issuance that
+charges already use — is an accounting decision. Whichever is chosen, the
+clearance and the letter should both use it; the clearance's current formula
+is wrong under either. Existing clearances store their line values, so a
+change applies to new clearances unless the owner also wants open ones
+recomputed.

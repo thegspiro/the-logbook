@@ -67,6 +67,47 @@ function terminate(message: string): string {
   return /[.!?]$/.test(message) ? message : `${message}.`;
 }
 
+/** Each request key a field answers for, by its name and its `apiKeys`. */
+function apiKeyMap<F extends string>(fields: FieldSpecs<F>): Map<string, F> {
+  const map = new Map<string, F>();
+  for (const name of Object.keys(fields) as F[]) {
+    map.set(name, name);
+    for (const key of fields[name].apiKeys ?? []) map.set(key, name);
+  }
+  return map;
+}
+
+/**
+ * A 422's entries split into the ones a field of this form answers for and
+ * the ones it does not. `null` when the failure is not a field-level 422.
+ *
+ * Pure, so a form can decide what to do with a refusal (the profile page
+ * resends the save without the refused fields) before anything is shown.
+ */
+export function placeApiError<F extends string>(
+  fields: FieldSpecs<F>,
+  error: unknown
+): { fieldErrors: FieldErrors<F>; unmatched: string[] } | null {
+  const entries = validationEntries(error);
+  if (!entries) return null;
+  const keyToField = apiKeyMap(fields);
+  const fieldErrors: FieldErrors<F> = {};
+  const unmatched: string[] = [];
+  for (const entry of entries) {
+    const key = entry.field ?? (entry.loc?.length ? String(entry.loc[entry.loc.length - 1]) : undefined);
+    const message = terminate(entry.message || entry.msg || 'Invalid value');
+    const field = key ? keyToField.get(key) : undefined;
+    if (field) {
+      if (!fieldErrors[field]) fieldErrors[field] = message;
+    } else {
+      // `request` is the backend's name for an error it could not pin on
+      // any field; prefixing it would read as a field called "request".
+      unmatched.push(key && key !== 'request' ? `${key}: ${message}` : message);
+    }
+  }
+  return { fieldErrors, unmatched };
+}
+
 export function useFieldErrors<F extends string>(fields: FieldSpecs<F>) {
   const [errors, setErrorsState] = useState<FieldErrors<F>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -74,15 +115,6 @@ export function useFieldErrors<F extends string>(fields: FieldSpecs<F>) {
   // Field order is the order the form declares them in, so the summary and
   // the first focused field follow the page from top to bottom.
   const order = useMemo(() => Object.keys(fields) as F[], [fields]);
-
-  const apiKeyToField = useMemo(() => {
-    const map = new Map<string, F>();
-    for (const name of order) {
-      map.set(name, name);
-      for (const key of fields[name].apiKeys ?? []) map.set(key, name);
-    }
-    return map;
-  }, [fields, order]);
 
   const setErrors = useCallback((next: FieldErrors<F>) => {
     setErrorsState(next);
@@ -115,31 +147,17 @@ export function useFieldErrors<F extends string>(fields: FieldSpecs<F>) {
    */
   const setFromApiError = useCallback(
     (error: unknown, fallback = 'Could not save. Try again.'): FieldErrors<F> => {
-      const entries = validationEntries(error);
-      if (!entries) {
+      const placed = placeApiError(fields, error);
+      if (!placed) {
         setErrorsState({});
         setFormError(getErrorMessage(error, fallback));
         return {};
       }
-      const next: FieldErrors<F> = {};
-      const unmatched: string[] = [];
-      for (const entry of entries) {
-        const key = entry.field ?? (entry.loc?.length ? String(entry.loc[entry.loc.length - 1]) : undefined);
-        const message = terminate(entry.message || entry.msg || 'Invalid value');
-        const field = key ? apiKeyToField.get(key) : undefined;
-        if (field) {
-          if (!next[field]) next[field] = message;
-        } else {
-          // `request` is the backend's name for an error it could not pin on
-          // any field; prefixing it would read as a field called "request".
-          unmatched.push(key && key !== 'request' ? `${key}: ${message}` : message);
-        }
-      }
-      setErrorsState(next);
-      setFormError(unmatched.length ? unmatched.join(' ') : null);
-      return next;
+      setErrorsState(placed.fieldErrors);
+      setFormError(placed.unmatched.length ? placed.unmatched.join(' ') : null);
+      return placed.fieldErrors;
     },
-    [apiKeyToField]
+    [fields]
   );
 
   const firstInvalid = useCallback(

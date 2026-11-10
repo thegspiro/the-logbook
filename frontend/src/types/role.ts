@@ -46,6 +46,16 @@ export interface PermissionCategory {
   permissions: Permission[];
 }
 
+/** One closed term in a position, from `member_position_terms`. */
+export interface PastPosition {
+  /** Null once the position itself has been deleted; `name` is then the name it had. */
+  position_id: string | null;
+  name: string;
+  kind: string | null;
+  started_at: string;
+  ended_at: string;
+}
+
 export interface UserWithRoles {
   id: string;
   organization_id: string;
@@ -80,6 +90,13 @@ export interface UserWithRoles {
    * a page replacing its record with their response keeps the value it had.
    */
   service_since?: string | null | undefined;
+  /**
+   * Offices and committee seats held earlier, newest first. Sent by
+   * GET /users/{id}/with-roles only, like `service_since`, and to everyone who
+   * sees the current positions; the baseline Member position and the rank
+   * mirrors are already left out by the server.
+   */
+  past_positions?: PastPosition[] | undefined;
   date_of_birth?: string | undefined;
   rank?: string | undefined;
   station?: string | undefined;

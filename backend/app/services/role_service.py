@@ -24,6 +24,7 @@ from app.core.permissions import (
     permission_matches,
     permission_matches_any,
 )
+from app.models.member_position_term import note_position_actor, sync_position_terms
 from app.models.user import Organization, Role, User, user_roles
 from app.services.admin_continuity_service import (
     assert_positions_retain_administrator,
@@ -526,7 +527,10 @@ class RoleManagementService:
             db, organization_id, str(role_id), role_name
         )
 
-        # Delete role (cascade will remove user_roles entries)
+        # Delete role (cascade will remove user_roles entries). The flush hook
+        # in member_position_term closes the holders' open terms first, naming
+        # whoever deleted it as the one who ended them.
+        note_position_actor(db, deleted_by)
         await db.delete(role)
         try:
             await db.flush()
@@ -703,6 +707,7 @@ class RoleManagementService:
                 assigned_by=assigned_by,
             )
         )
+        await sync_position_terms(db, [(user_id, role_id)], actor_id=assigned_by)
         # Get role name for audit
         role = await db.execute(select(Role.name).where(Role.id == str(role_id)))
         role_name = role.scalar()
@@ -780,6 +785,7 @@ class RoleManagementService:
         )
         if rows_affected(result) == 0:
             return False  # Wasn't assigned
+        await sync_position_terms(db, [(user_id, role_id)], actor_id=removed_by)
 
         # Audit log
         try:
@@ -913,6 +919,10 @@ class RoleManagementService:
                     for role_id in to_add
                 ],
             )
+        # Core statements above, so the flush hook cannot see them.
+        await sync_position_terms(
+            db, [(user_id, rid) for rid in to_add | to_remove], actor_id=set_by
+        )
 
         # Audit log the bulk change
         if to_add or to_remove:

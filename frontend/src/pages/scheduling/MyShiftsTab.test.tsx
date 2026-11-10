@@ -560,4 +560,60 @@ describe('MyShiftsTab', () => {
       expect(scroll.mock.contexts[0]).toBe(screen.getByRole('region', { name: 'August 2025' }));
     });
   });
+
+  describe('upcoming shifts by month', () => {
+    // Far enough ahead to stay upcoming whenever the suite runs.
+    const upcoming = (id: string, date: string, hour: string, status = 'confirmed') => ({
+      id,
+      user_id: 'user-1',
+      shift_id: `shift-${id}`,
+      position: 'emt',
+      status,
+      assignment_status: status,
+      shift: {
+        id: `shift-${id}`,
+        shift_date: date,
+        start_time: `${date}T${hour}:00:00Z`,
+        end_time: `${date}T23:00:00Z`,
+      },
+    });
+
+    beforeEach(() => {
+      mockGetMyAssignments.mockReset();
+      // Out of order on purpose: the list must sort them, not trust the API.
+      mockGetMyAssignments.mockResolvedValue([
+        upcoming('jan', '2100-01-03', '11'),
+        upcoming('dec-late', '2099-12-20', '11'),
+        upcoming('dec-early-pm', '2099-12-05', '20'),
+        upcoming('dec-early-am', '2099-12-05', '11'),
+        upcoming('declined', '2099-12-10', '11', 'declined'),
+      ]);
+      mockGetMyAttendanceHistory.mockReset();
+      mockGetMyAttendanceHistory.mockResolvedValue([]);
+    });
+
+    it('groups shifts under month headers, soonest month and shift first, across the new year', async () => {
+      renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
+
+      const december = await screen.findByRole('region', { name: 'December 2099' });
+      const january = screen.getByRole('region', { name: 'January 2100' });
+      expect(within(december).getByText('3 shifts')).toBeInTheDocument();
+      expect(within(january).getByText('1 shift')).toBeInTheDocument();
+
+      const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+      expect(headings).toEqual(['December 2099', 'January 2100']);
+
+      const decemberDetails = within(december)
+        .getAllByRole('button', { name: /^Details for shift on/ })
+        .map((b) => b.getAttribute('aria-label'));
+      expect(decemberDetails).toEqual([
+        expect.stringContaining('Dec 5'),
+        expect.stringContaining('Dec 5'),
+        expect.stringContaining('Dec 20'),
+      ]);
+      // Two shifts on Dec 5: the morning one comes first.
+      expect(decemberDetails[0]).toMatch(/AM/);
+      expect(decemberDetails[1]).toMatch(/PM/);
+    });
+  });
 });

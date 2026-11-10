@@ -2055,20 +2055,35 @@
   }
 }
 
-/* Set on the AppLayout root in the LEFT-navigation layout only, so a page-level
- * fixed element can start where the content column starts instead of spanning
- * the side navigation. That layout offsets its content with a matching
- * `md:ml-64` while the nav is `fixed left-0 z-40`, so a viewport-anchored bar
- * at the same z-index paints over the nav's bottom. The top-navigation layout
- * renders content full width and never sets this, so the same element stays
- * edge to edge there. Must stay in step with SideNavigation's own `w-64` and
- * AppLayout's `md:ml-64`. */
+/* Set on the AppLayout root in the LEFT-navigation layout only: the width the
+ * side navigation occupies, which everything beside it reads. AppLayout offsets
+ * its content column by it, paints the nav's background down the full page at
+ * it, and a page-level fixed element starts there instead of spanning the nav
+ * (the nav is `fixed left-0 z-40`, so a viewport-anchored bar at the same
+ * z-index paints over the nav's bottom). The top-navigation layout renders
+ * content full width and never sets this, so the same element stays edge to
+ * edge there. Must stay in step with SideNavigation's `w-64` and its collapsed
+ * `w-20`. */
 .has-side-nav {
   --side-nav-width: 0px;
 }
 @media (min-width: 768px) {
   .has-side-nav {
     --side-nav-width: 16rem;
+  }
+}
+
+/* The collapsed icon rail. The content column used to keep its 16rem offset
+ * when the nav shrank to `w-20`, leaving an empty 11rem stripe between the
+ * rail and the page. AppLayout mirrors SideNavigation's state onto its root as
+ * `data-nav-collapsed` — an attribute on the element that owns the variable,
+ * not a `:has()` match on a descendant, so collapsing restyles the root once
+ * rather than asking the engine to watch the nav. This lives in its own 768px
+ * block because below it the nav is an off-canvas drawer and the width must
+ * stay 0px. */
+@media (min-width: 768px) {
+  .has-side-nav[data-nav-collapsed='true'] {
+    --side-nav-width: 5rem;
   }
 }
 

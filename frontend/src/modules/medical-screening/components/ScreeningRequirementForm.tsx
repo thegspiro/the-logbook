@@ -29,7 +29,11 @@ export const ScreeningRequirementForm: React.FC<ScreeningRequirementFormProps> =
   );
   const [description, setDescription] = useState(requirement?.description ?? '');
   const [frequencyMonths, setFrequencyMonths] = useState<string>(requirement?.frequency_months?.toString() ?? '12');
-  const [isOneTime, setIsOneTime] = useState(!requirement?.frequency_months);
+  // W71b-5 (owner decision 2026-11-06): a new requirement starts recurring,
+  // matching the 12 already in the frequency field. Starting it one-time let
+  // an annual physical added in a hurry never fall due. An existing
+  // requirement opens as it was saved.
+  const [isOneTime, setIsOneTime] = useState(requirement ? !requirement.frequency_months : false);
   const [appliesTo, setAppliesTo] = useState(requirement?.applies_to_roles?.join(', ') ?? '');
   const [isActive, setIsActive] = useState(requirement?.is_active ?? true);
   const [gracePeriodDays, setGracePeriodDays] = useState<string>(requirement?.grace_period_days?.toString() ?? '30');

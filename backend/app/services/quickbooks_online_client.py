@@ -24,10 +24,50 @@ documentation on 2026-11-06, not recalled (CLAUDE.md pitfall #34):
 - Fault format and codes: https://developer.intuit.com/quickbooks-online/docs/develop/troubleshooting/handling-common-errors
   and .../troubleshooting/error-codes
 
+The Purchase's payment type, checked on 2026-11-08. Intuit's API reference
+page for Purchase renders in the browser only and could not be read from
+here, so each value below is taken from what Intuit publishes beside it, and
+nothing was built on a value those sources do not give:
+
+- ``PaymentType`` is ``Cash``, ``Check`` or ``CreditCard``, and the account
+  each is paid from: Intuit's v3 schema, as generated into its PHP SDK,
+  https://github.com/intuit/QuickBooks-V3-PHP-SDK/blob/master/src/Data/IPPPurchase.php
+  ("Expense Type can be Cash, Check or CreditCard"; AccountRef: "Check should
+  have bank account, CreditCard should specify credit card account"), and
+  its Java SDK's PaymentTypeEnum,
+  https://github.com/intuit/QuickBooks-V3-Java-SDK/blob/develop/ipp-v3-java-data/src/main/java/com/intuit/ipp/data/PaymentTypeEnum.java
+- The account types as QuickBooks names them, ``Bank`` and ``Credit Card``
+  (with the space): the Java SDK's AccountTypeEnum,
+  .../ipp-v3-java-data/src/main/java/com/intuit/ipp/data/AccountTypeEnum.java
+- A check's number is its ``DocNumber``: Intuit's "Data services extensions
+  and parameters" page, https://developer.intuit.com/quickbooks-online/docs/develop/sdks-and-samples-collections/java/data-services-extensions-and-parameters
+  (``allowduplicatedocnum`` is "supported by the Purchase resource, to allow
+  duplicate check numbers"), and the .NET SDK's own test that creates a Check
+  Purchase with a DocNumber and needs that parameter to create a second,
+  https://github.com/intuit/QuickBooks-V3-DotNET-SDK/blob/master/IPPDotNetDevKitCSV3/Test/Intuit.Ipp.Test/SDKV3Test/Services/QBO/Purchase.cs
+  (CheckPurchaseAddDuplicateDocNumberGlobalTestUsingoAuth). The parameter is
+  not sent: a duplicate check number is more likely a check the Treasurer
+  already entered by hand than one to record twice.
+- ``DocNumber`` is at most 21 characters in QuickBooks Online, and on a
+  purchase is left empty when not given; ``TxnDate`` and ``PrivateNote``
+  ("organization-private note") are on every transaction, which Purchase
+  extends: the schema's Transaction type,
+  https://github.com/intuit/QuickBooks-V3-PHP-SDK/blob/master/src/Data/IPPTransaction.php
+  and .../ipp-v3-java-data/src/main/java/com/intuit/ipp/data/Purchase.java
+  ("Purchase extends Transaction").
+- ``PrintStatus`` is ``NotSet``, ``NeedToPrint`` or ``PrintComplete`` (the
+  Java SDK's PrintStatusEnum); the .NET SDK's helper that builds the test
+  purchases sets ``NotSet`` on every purchase but a card one, and ``Credit``
+  false on a card one ("If Credit is Null or False, it is considered as
+  Charge"), https://github.com/intuit/QuickBooks-V3-DotNET-SDK/blob/master/IPPDotNetDevKitCSV3/Test/Intuit.Ipp.Test/SDKV3Test/Common/QBOHelper.cs
+  (CreatePurchase). A check posted here was already written, so it is
+  ``NotSet``: ``NeedToPrint`` would put it in QuickBooks' print queue.
+
 The Accounting scope grants read and write to the whole company, and there is
 no narrower one. This module is therefore the whole of what the app does with
 it: read the chart of accounts and the vendor list, create a vendor, create a
-Purchase. Nothing here updates or deletes anything in QuickBooks.
+Purchase (a cash expense, a check, or a credit card expense). Nothing here
+updates or deletes anything in QuickBooks.
 """
 
 from __future__ import annotations
@@ -35,6 +75,7 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any, Optional
 from urllib.parse import urlencode
 
@@ -73,6 +114,24 @@ REQUEST_ID_MAX = 50
 
 # On HTTP 429 Intuit asks for a 60-second wait before retrying.
 RATE_LIMIT_WAIT = timedelta(seconds=60)
+
+
+PAYMENT_TYPE_CASH = "Cash"
+PAYMENT_TYPE_CHECK = "Check"
+PAYMENT_TYPE_CREDIT_CARD = "CreditCard"
+
+ACCOUNT_TYPE_BANK = "Bank"
+ACCOUNT_TYPE_CREDIT_CARD = "Credit Card"
+
+# The account type each payment type is paid from.
+PAID_FROM_ACCOUNT_TYPE = {
+    PAYMENT_TYPE_CASH: ACCOUNT_TYPE_BANK,
+    PAYMENT_TYPE_CHECK: ACCOUNT_TYPE_BANK,
+    PAYMENT_TYPE_CREDIT_CARD: ACCOUNT_TYPE_CREDIT_CARD,
+}
+
+DOC_NUMBER_MAX = 21
+PRINT_STATUS_NOT_SET = "NotSet"
 
 
 class QuickBooksError(Exception):
@@ -421,6 +480,49 @@ class AccountingClient:
             "POST", "purchase", {"requestid": _request_id(request_id)}, purchase
         )
         return _entity(payload, "Purchase")
+
+
+def purchase_body(
+    *,
+    payment_type: str,
+    account_id: str,
+    txn_date: str,
+    doc_number: Optional[str],
+    lines: list[tuple[str, Decimal]],
+    private_note: Optional[str] = None,
+) -> dict[str, Any]:
+    """The Purchase to create: paid from ``account_id``, one expense line per
+    ``(account id, amount)``. The vendor's ``EntityRef`` is added by the
+    caller once the vendor is found."""
+    if payment_type not in PAID_FROM_ACCOUNT_TYPE:
+        raise ValueError(f"Unknown QuickBooks payment type {payment_type!r}")
+    if doc_number is not None and len(doc_number) > DOC_NUMBER_MAX:
+        raise ValueError(
+            f"'{doc_number}' is longer than the {DOC_NUMBER_MAX} characters "
+            "QuickBooks allows in a transaction number"
+        )
+    body: dict[str, Any] = {
+        "PaymentType": payment_type,
+        "AccountRef": {"value": account_id},
+        "TxnDate": txn_date,
+    }
+    if doc_number is not None:
+        body["DocNumber"] = doc_number
+    if private_note is not None:
+        body["PrivateNote"] = private_note
+    if payment_type == PAYMENT_TYPE_CHECK:
+        body["PrintStatus"] = PRINT_STATUS_NOT_SET
+    elif payment_type == PAYMENT_TYPE_CREDIT_CARD:
+        body["Credit"] = False
+    body["Line"] = [
+        {
+            "Amount": float(amount),
+            "DetailType": "AccountBasedExpenseLineDetail",
+            "AccountBasedExpenseLineDetail": {"AccountRef": {"value": account}},
+        }
+        for account, amount in lines
+    ]
+    return body
 
 
 def _request_id(value: str) -> str:
