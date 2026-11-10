@@ -563,6 +563,48 @@ def is_session_attendance(req) -> bool:
 
 
 @dataclass(frozen=True)
+class GoverningRequirement:
+    """The session-attendance requirement that speaks for one member.
+
+    ``requirement`` is None when none applies, or when ``ambiguous``: more
+    than one applies and nothing decides between them.
+    """
+
+    requirement: Optional[TrainingRequirement]
+    ambiguous: bool = False
+
+
+def governing_attendance_requirement(
+    member, member_requirements: Iterable
+) -> GoverningRequirement:
+    """Which session-attendance requirement a member's attendance is read against.
+
+    ``member_requirements`` are the requirements that already grade the
+    member (``ComplianceGrading.for_member(...).requirements``), so profiles,
+    scoping and grandfathering have been applied. Of the session-attendance
+    ones, a single one is used as is. Several are narrowed to the ones naming
+    the member's membership type (owner decision, 2026-11-10: "the one
+    related to their membership type"); if that does not leave exactly one,
+    the answer is ambiguous rather than a guess, because two requirements can
+    link different sessions at different percentages and either pick would
+    report a figure the other contradicts.
+    """
+    candidates = [r for r in member_requirements if is_session_attendance(r)]
+    if len(candidates) <= 1:
+        return GoverningRequirement(candidates[0] if candidates else None)
+    # requirement_applies_to_user reads a missing type as "active"; so does this.
+    membership_type = getattr(member, "membership_type", None) or "active"
+    named = [
+        r
+        for r in candidates
+        if membership_type in (getattr(r, "required_membership_types", None) or [])
+    ]
+    if len(named) == 1:
+        return GoverningRequirement(named[0])
+    return GoverningRequirement(None, ambiguous=True)
+
+
+@dataclass(frozen=True)
 class HeldSession:
     """A session linked to an attendance requirement that has been held.
 
@@ -625,6 +667,7 @@ def tally_session_attendance(
     as_of: date,
     waivers=None,
     join_date: Optional[date] = None,
+    window: Optional[Tuple[date, date]] = None,
 ) -> AttendanceTally:
     """Count a member's attendance at ``req``'s sessions as of ``as_of``.
 
@@ -636,8 +679,18 @@ def tally_session_attendance(
     COMPLETED record whose ``source_event_id`` is the session's event, the
     record finalizing the session writes. A Chief's override covering
     ``as_of`` makes the tally met; the counts stay as they are.
+
+    ``window`` replaces the requirement's own window with an explicit
+    ``(first, last)`` day range, for a reader whose period is not the
+    requirement's: the annual evaluation measures over its review period
+    (owner decision, 2026-11-10), where a monthly requirement's own window
+    would show only the final month. Everything else about the rule, what
+    is held, attended and excused, is the same either way.
     """
-    start, end = completion_window(req, as_of)
+    if window is None:
+        start, end = completion_window(req, as_of)
+    else:
+        start, end = window
     last = as_of if end is None else min(end, as_of)
     req_id = str(req.id)
     attended_events = {

@@ -142,6 +142,12 @@ class TestCoverage:
         ]
         assert coverage.excludes(date(2026, 5, 5))
         assert not coverage.excludes(date(2026, 7, 5))
+        # A gap in membership is not a leave: training-session attendance
+        # drops sessions held while separated, and lets the waiver rule
+        # decide the ones held on leave (a member who came anyway counts).
+        assert coverage.separated_on(date(2026, 5, 5))
+        assert not coverage.separated_on(date(2026, 8, 15))
+        assert coverage.excludes(date(2026, 8, 15))
 
     def test_a_separated_member_is_measured_to_their_last_day(self):
         coverage = compute_coverage(

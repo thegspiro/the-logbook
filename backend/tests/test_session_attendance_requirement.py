@@ -41,6 +41,7 @@ from app.services.training_compliance import (
     compute_org_compliance_tally,
     evaluate_member_requirement,
     evaluate_member_requirement_detail,
+    governing_attendance_requirement,
     load_graded_records,
     load_held_sessions,
     tally_session_attendance,
@@ -603,3 +604,116 @@ class TestNothingHeldAtTheDepartmentLevel:
         )
 
         assert (tally.graded, tally.not_applicable) == (1, 0)
+
+
+@pytest.mark.unit
+class TestAnExplicitWindow:
+    """The annual evaluation measures over its own review period (owner,
+    2026-11-10), so the tally accepts a window in place of the requirement's."""
+
+    LAST_YEAR = [date(2025, m, 16) for m in (7, 9, 11)]
+
+    def test_the_window_replaces_the_requirements_own(self):
+        held = _held(*self.LAST_YEAR, *FIVE)
+        records = _attended(self.LAST_YEAR[0], *FIVE)
+        tally = tally_session_attendance(
+            _req(),
+            records,
+            held,
+            TODAY,
+            window=(date(2025, 6, 1), date(2025, 12, 31)),
+        )
+        assert (tally.held, tally.charged, tally.attended) == (3, 3, 1)
+
+    def test_without_a_window_the_requirements_own_applies(self):
+        held = _held(*self.LAST_YEAR, *FIVE)
+        tally = tally_session_attendance(
+            _req(), _attended(self.LAST_YEAR[0]), held, TODAY
+        )
+        assert (tally.held, tally.attended) == (5, 0)
+
+    def test_a_session_after_the_cut_off_is_not_counted(self):
+        tally = tally_session_attendance(
+            _req(),
+            [],
+            _held(*FIVE),
+            date(2026, 3, 31),
+            window=(date(2026, 1, 1), date(2026, 12, 31)),
+        )
+        assert tally.held == 3
+
+    def test_waivers_and_attendance_apply_inside_the_window(self):
+        tally = tally_session_attendance(
+            _req(),
+            _attended(FIVE[1]),
+            _held(*FIVE),
+            TODAY,
+            waivers=[_waiver(FIVE[0], FIVE[1])],
+            window=(date(2026, 1, 1), date(2026, 12, 31)),
+        )
+        # The excused session the member attended anyway still counts.
+        assert (tally.held, tally.charged, tally.attended) == (5, 4, 1)
+
+
+def _typed_member(membership_type="active"):
+    return SimpleNamespace(membership_type=membership_type)
+
+
+def _scoped(req_id, *types, applies_to_all=False):
+    return _req(
+        id=req_id,
+        applies_to_all=applies_to_all,
+        required_membership_types=list(types) or None,
+    )
+
+
+@pytest.mark.unit
+class TestTheGoverningRequirement:
+    """Which session-attendance requirement speaks for a member: the one for
+    their membership type, and never a guess between two (owner, 2026-11-10)."""
+
+    def test_none_applies(self):
+        hours = _req(id="hours", requirement_type=RequirementType.HOURS)
+        choice = governing_attendance_requirement(_typed_member(), [hours])
+        assert choice.requirement is None
+        assert not choice.ambiguous
+
+    def test_the_only_one_is_used(self):
+        only = _scoped("only", applies_to_all=True)
+        choice = governing_attendance_requirement(_typed_member(), [only])
+        assert choice.requirement is only
+
+    def test_the_one_naming_the_members_type_wins(self):
+        everyone = _scoped("everyone", applies_to_all=True)
+        senior = _scoped("senior", "senior")
+        active = _scoped("active", "active")
+        choice = governing_attendance_requirement(
+            _typed_member("active"), [everyone, senior, active]
+        )
+        assert choice.requirement is active
+
+    def test_two_that_name_nobody_are_not_guessed_between(self):
+        choice = governing_attendance_requirement(
+            _typed_member(),
+            [
+                _scoped("a", applies_to_all=True),
+                _scoped("b", applies_to_all=True),
+            ],
+        )
+        assert choice.requirement is None
+        assert choice.ambiguous
+
+    def test_two_that_both_name_the_type_are_not_guessed_between(self):
+        choice = governing_attendance_requirement(
+            _typed_member("active"), [_scoped("a", "active"), _scoped("b", "active")]
+        )
+        assert choice.requirement is None
+        assert choice.ambiguous
+
+    def test_a_member_with_no_recorded_type_reads_as_active(self):
+        everyone = _scoped("everyone", applies_to_all=True)
+        active = _scoped("active", "active")
+        choice = governing_attendance_requirement(
+            _typed_member(None), [everyone, active]
+        )
+        assert choice.requirement is active

@@ -9,11 +9,12 @@ leaves of absence are excluded.
 
 Wherever another screen already decides a figure, this module asks that
 screen's code rather than re-deriving it (CLAUDE.md pitfall #29): training
-compliance uses the dashboard's grading, meeting attendance the voting
-check's tally, shift hours and calls the member's own hours page. Three
-sources have no existing calculation (training-session attendance, events
-attended, skills tests passed); they apply the rules the neighbouring
-screens apply, named at each.
+compliance uses the dashboard's grading, training-session attendance the
+session-attendance requirement's tally, meeting attendance the voting
+check's tally, shift hours and calls the member's own hours page. Two
+sources have no existing calculation (events attended, skills tests
+passed); they apply the rules the neighbouring screens apply, named at
+each.
 
 A figure that cannot honestly be given is reported unavailable with a note,
 never as zero or 100%: an empty denominator is "nothing to measure", not a
@@ -33,10 +34,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.call_tracking import CallTrackingMode
-from app.models.event import Event, EventRSVP, EventType
+from app.models.event import Event, EventRSVP
 from app.models.meeting import Meeting, MeetingAttendee, MeetingType
 from app.models.skills_testing import SkillTest, SkillTestResult, SkillTestStatus
-from app.models.training import TrainingRequirement
+from app.models.training import TrainingRecord, TrainingRequirement
 from app.models.user import (
     MemberLeaveOfAbsence,
     MemberServicePeriod,
@@ -64,10 +65,12 @@ from app.services.training_compliance import (
     ComplianceGrading,
     _load_compliance_config,
     evaluate_member_requirement_detail,
+    governing_attendance_requirement,
     load_credited_shift_dates,
     load_graded_records,
     load_held_sessions,
     member_join_date,
+    tally_session_attendance,
     tally_standing,
 )
 from app.services.training_service import TrainingService
@@ -81,7 +84,11 @@ from app.utils.org_timezone import (
 
 #: Bumped when the stored shape changes, so a reader can tell an old snapshot
 #: from a new one rather than guessing from the keys present.
-SNAPSHOT_VERSION = 1
+#: 2: ``training.session_attendance_pct`` is graded by the member's
+#: session-attendance requirement (designated sessions, finalized attendance,
+#: every waiver) instead of counting every training event's check-ins, and
+#: its extras changed. A version-1 snapshot holds the old figure.
+SNAPSHOT_VERSION = 2
 
 #: Sources answered from the member's monthly shift totals.
 _SHIFT_SOURCES = frozenset(
@@ -114,6 +121,17 @@ class Coverage:
 
     def excludes(self, day: date) -> bool:
         return any(r.start <= day <= r.end for r in self.excluded)
+
+    def separated_on(self, day: date) -> bool:
+        """Whether ``day`` falls in a gap between stints of membership.
+
+        Narrower than :meth:`excludes`, which also covers leaves: a source
+        whose own rule already excuses leave, and credits a member who came
+        in anyway, drops only the days they were not a member at all.
+        """
+        return any(
+            r.reason == "separation" and r.start <= day <= r.end for r in self.excluded
+        )
 
     def as_json(self) -> Dict[str, Any]:
         return {
@@ -331,7 +349,7 @@ class EvaluationDataService:
         if key == "training.requirements_met_pct":
             return await self._requirements_met(org_id, member, coverage)
         if key == "training.session_attendance_pct":
-            return await self._session_attendance(org_id, member, coverage, tz)
+            return await self._session_attendance(org_id, member, coverage)
         if key == "events.meeting_attendance_pct":
             return await self._meeting_attendance(org_id, member, coverage)
         if key == "events.attended_count":
@@ -371,18 +389,15 @@ class EvaluationDataService:
         )
         return _value(round(sum(float(t.total_hours or 0) for t in by_type), 2))
 
-    async def _requirements_met(
-        self, org_id: str, member: User, coverage: Coverage
-    ) -> Dict[str, Any]:
-        """The compliance dashboard's percentage, graded as of coverage end.
+    async def _grading_inputs(
+        self, org_id: str, member: User
+    ) -> Tuple[User, List[TrainingRequirement], ComplianceGrading]:
+        """The member (positions loaded), the department's active requirements
+        and its grading config: what ``ComplianceGrading.for_member`` needs.
 
-        The same steps as ``grade_org_members`` for one member: the
-        department's grading config and profiles, its records, credited
-        shifts and waivers, each requirement's own window ending on
-        ``coverage.end``.
+        Shared by both training sources so they decide which requirements
+        grade the member the same way.
         """
-        if member.compliance_exempt:
-            return _unavailable("Exempt from training requirements.")
         loaded = (
             await self.db.execute(
                 select(User)
@@ -402,11 +417,26 @@ class EvaluationDataService:
             .scalars()
             .all()
         )
-        if not requirements:
-            return _unavailable("The department has no active training requirements.")
         grading = ComplianceGrading.from_config(
             await _load_compliance_config(self.db, org_id)
         )
+        return loaded, requirements, grading
+
+    async def _requirements_met(
+        self, org_id: str, member: User, coverage: Coverage
+    ) -> Dict[str, Any]:
+        """The compliance dashboard's percentage, graded as of coverage end.
+
+        The same steps as ``grade_org_members`` for one member: the
+        department's grading config and profiles, its records, credited
+        shifts and waivers, each requirement's own window ending on
+        ``coverage.end``.
+        """
+        if member.compliance_exempt:
+            return _unavailable("Exempt from training requirements.")
+        loaded, requirements, grading = await self._grading_inputs(org_id, member)
+        if not requirements:
+            return _unavailable("The department has no active training requirements.")
         as_of = coverage.end
         records = await load_graded_records(
             self.db,
@@ -447,49 +477,91 @@ class EvaluationDataService:
         return _value(pct, met=met, total=total)
 
     async def _session_attendance(
-        self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
+        self, org_id: str, member: User, coverage: Coverage
     ) -> Dict[str, Any]:
-        """Training events attended out of those held.
+        """Attendance at the sessions the member's requirement counts.
 
-        Attended is a check-in or an officer's after-the-fact override, the
-        rule ``EventService`` applies to attendance (an override sets only
-        ``override_check_in_at``). Sessions on days the member was excused
-        from all training by a waiver, or outside their coverage, are dropped
-        from both counts; working from id sets drops a session that is both
-        exactly once, as ``tally_attendance`` does for meetings.
+        The requirement's own rule, ``tally_session_attendance`` (CLAUDE.md
+        pitfall #29), over the review period rather than the requirement's
+        window (owner decisions 12 and 6, 2026-11-10). Only the sessions
+        linked to the member's session-attendance requirement are counted, a
+        member attended one when finalizing it wrote their record, and every
+        waiver and leave the training screens apply excuses a session the
+        member missed, while one they came to anyway still counts. The
+        requirement is the one for the member's membership type when several
+        apply (decision 13), and none is guessed at when that does not decide.
+
+        Days between stints of membership are dropped: the member owed
+        nothing then. Leave is not dropped here; the tally excuses it.
         """
-        start_utc, end_utc = local_range_utc(coverage.start, coverage.end, tz)
-        events = (
-            await self.db.execute(
-                select(Event.id, Event.start_datetime).where(
-                    Event.organization_id == org_id,
-                    Event.event_type == EventType.TRAINING,
-                    Event.is_cancelled.is_(False),
-                    Event.start_datetime >= start_utc,
-                    Event.start_datetime < end_utc,
+        if member.compliance_exempt:
+            return _unavailable("Exempt from training requirements.")
+        loaded, requirements, grading = await self._grading_inputs(org_id, member)
+        choice = governing_attendance_requirement(
+            loaded, grading.for_member(loaded, requirements).requirements
+        )
+        if choice.ambiguous:
+            return _unavailable(
+                "More than one session-attendance requirement applies to this "
+                "member, and none is set for their membership type."
+            )
+        req = choice.requirement
+        if req is None:
+            return _unavailable(
+                "No session-attendance requirement applies to this member."
+            )
+        held = [
+            session
+            for session in (await load_held_sessions(self.db, str(org_id), [req])).get(
+                str(req.id), []
+            )
+            if not coverage.separated_on(session.held_on)
+        ]
+        records = (
+            (
+                await self.db.execute(
+                    select(TrainingRecord).where(
+                        TrainingRecord.organization_id == org_id,
+                        TrainingRecord.user_id == loaded.id,
+                        TrainingRecord.source_event_id.in_(
+                            [session.event_id for session in held]
+                        ),
+                    )
                 )
             )
-        ).all()
-        waivers = [
-            w
-            for w in await fetch_user_waivers(self.db, org_id, member.id)
-            if w.requirement_ids is None
-        ]
-        eligible = set()
-        for event_id, starts_at in events:
-            day = local_date(starts_at, tz)
-            if coverage.excludes(day):
-                continue
-            if any(w.start_date <= day <= w.end_date for w in waivers):
-                continue
-            eligible.add(event_id)
-        if not eligible:
-            return _unavailable("No training sessions were held in the period.")
-        attended = await self._attended_event_ids(org_id, member.id, eligible)
+            .scalars()
+            .all()
+            if held
+            else []
+        )
+        tally = tally_session_attendance(
+            req,
+            records,
+            held,
+            coverage.end,
+            waivers=await fetch_user_waivers(self.db, org_id, loaded.id),
+            join_date=member_join_date(loaded),
+            window=(coverage.start, coverage.end),
+        )
+        if tally.held == 0:
+            return _unavailable(
+                f"No sessions counting toward {req.name} were held in the period."
+            )
+        # Excused from all of them is nothing to measure, not a perfect record.
+        if tally.charged == 0:
+            return _unavailable(
+                f"Excused from every session counting toward {req.name} "
+                "in the period."
+            )
         return _value(
-            _pct(len(attended), len(eligible)),
-            attended=len(attended),
-            held=len(eligible),
+            _pct(tally.attended, tally.charged),
+            attended=tally.attended,
+            held=tally.held,
+            excused=tally.held - tally.charged,
+            required_pct=float(req.required_attendance_pct or 0),
+            met=tally.met,
+            overridden=tally.overridden,
+            requirement=req.name,
         )
 
     async def _attended_event_ids(
