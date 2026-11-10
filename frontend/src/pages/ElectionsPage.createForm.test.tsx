@@ -122,10 +122,10 @@ describe('ElectionsPage create form', () => {
       expect(title).toHaveAttribute('aria-invalid', 'true');
       expect(title).toHaveAccessibleDescription('Enter a title for the election.');
       expect(title).toHaveFocus();
-      const start = screen.getByRole('group', { name: /Start Date & Time/ });
+      const start = screen.getByLabelText(/Start Date & Time/, { selector: 'input' });
       expect(start).toHaveAttribute('aria-invalid', 'true');
       expect(start).toHaveAccessibleDescription('Choose when voting opens.');
-      expect(screen.getByRole('group', { name: /End Date & Time/ })).toHaveAccessibleDescription(
+      expect(screen.getByLabelText(/End Date & Time/, { selector: 'input' })).toHaveAccessibleDescription(
         'Choose when voting closes.'
       );
       expect(mockCreateElection).not.toHaveBeenCalled();
@@ -136,7 +136,7 @@ describe('ElectionsPage create form', () => {
       await userEvent.type(screen.getByRole('textbox', { name: 'Title' }), 'Officers 2027');
       await userEvent.click(within(dialog).getByRole('button', { name: 'Create Election' }));
 
-      expect(screen.getByRole('group', { name: /Start Date & Time/ })).toHaveFocus();
+      expect(screen.getByLabelText(/Start Date & Time/, { selector: 'input' })).toHaveFocus();
       expect(mockCreateElection).not.toHaveBeenCalled();
     });
 

@@ -84,8 +84,8 @@ const ELECTION_FIELDS: FieldSpecs<ElectionField> = {
   description: { id: 'election-description', label: 'Description' },
   // The group around each date-and-time picker, not its date input: see the
   // comment where the pickers render.
-  start_date: { id: 'election-start-date-group', label: 'Start Date & Time' },
-  end_date: { id: 'election-end-date-group', label: 'End Date & Time' },
+  start_date: { id: 'election-start-date', label: 'Start Date & Time' },
+  end_date: { id: 'election-end-date', label: 'End Date & Time' },
 };
 
 const holdsBuiltInDefaults = (form: ElectionCreate): boolean =>
@@ -837,64 +837,40 @@ export const ElectionsPage: React.FC = () => {
                     </p>
                   </div>
 
-                  {/* DateTimeQuarterHour renders a date input and three time
-                      selects, and passes no aria attributes through, so the
-                      required marker, error and focus target sit on a group
-                      around it, as the suggestion box's reviewer checklists
-                      do. */}
                   <div className="space-y-4">
-                    {(
-                      [
-                        ['start_date', 'election-start-date'],
-                        ['end_date', 'election-end-date'],
-                      ] as const
-                    ).map(([name, inputId]) => {
+                    {(['start_date', 'end_date'] as const).map((name) => {
                       const spec = ELECTION_FIELDS[name];
-                      const error = electionErrors.errors[name];
                       const isStart = name === 'start_date';
+                      // The picker hands these props to its date input, so the
+                      // error, required state and focus sit on the control the
+                      // label names.
                       return (
-                        <div
+                        <FormField
                           key={name}
                           id={spec.id}
-                          role="group"
-                          tabIndex={-1}
-                          aria-labelledby={`${inputId}-label`}
-                          aria-describedby={error ? `${spec.id}-error` : undefined}
-                          aria-invalid={error ? true : undefined}
-                          className="focus:outline-none"
+                          label={spec.label}
+                          required
+                          error={electionErrors.errors[name]}
+                          labelClassName="text-theme-text-primary block text-sm font-medium"
                         >
-                          <label
-                            id={`${inputId}-label`}
-                            htmlFor={inputId}
-                            className="text-theme-text-primary block text-sm font-medium"
-                          >
-                            {spec.label}{' '}
-                            <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
-                              *
-                            </span>
-                            <span className="sr-only"> (required)</span>
-                          </label>
-                          <DateTimeQuarterHour
-                            id={inputId}
-                            timeLabel={isStart ? 'Start time' : 'End time'}
-                            timezone={tz}
-                            value={formData[name]}
-                            onChange={(val) => {
-                              if (isStart) {
-                                handleStartDateChange(val);
-                              } else {
-                                setFormData({ ...formData, end_date: val });
-                                electionErrors.setError('end_date', null);
-                              }
-                            }}
-                            className="form-input mt-1 shadow-xs"
-                          />
-                          {error && (
-                            <p id={`${spec.id}-error`} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
-                              {error}
-                            </p>
+                          {(field) => (
+                            <DateTimeQuarterHour
+                              {...field}
+                              timeLabel={isStart ? 'Start time' : 'End time'}
+                              timezone={tz}
+                              value={formData[name]}
+                              onChange={(val) => {
+                                if (isStart) {
+                                  handleStartDateChange(val);
+                                } else {
+                                  setFormData({ ...formData, end_date: val });
+                                  electionErrors.setError('end_date', null);
+                                }
+                              }}
+                              className="form-input mt-1 shadow-xs"
+                            />
                           )}
-                        </div>
+                        </FormField>
                       );
                     })}
 

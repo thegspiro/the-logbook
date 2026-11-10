@@ -163,8 +163,7 @@ Area and both reorder dialogs, and Notifications › Add Rule. Three of them
 never fired at all. Still open on this row: the vendor Contacts dialog keeps a
 native `required`, and dialogs built on the shared `Modal` keep native `min` and
 `type="email"` checks, which can still raise the browser bubble because `Modal`
-offers no `noValidate`. Election start and end dates take focus on a wrapping
-group, because the shared date picker passes no ARIA attributes through.
+offers no `noValidate`.
 
 Pressing the primary button of an empty create dialog was probed 70 times
 (about 40 distinct dialogs). The outcomes:
