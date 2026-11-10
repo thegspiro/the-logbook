@@ -56,6 +56,14 @@ test files — 175 passed.
 Row 20 → ✅ (pending this PR's merge). Next is Feature 21 (Admin hours) —
 re-check the rotation table fresh rather than trusting this note.
 
+**2026-11-10 watchdog check-in:** a second watchdog session, subscribed to
+this PR's activity, found its `CI` workflow run on this head SHA
+(`613a43687`) still `pending` with 0 jobs roughly an hour after it was
+opened — the zero-jobs stuck-trigger symptom CLAUDE.md Pitfall #24
+describes, the same one a prior check-in hit on PR #4198. This commit is
+the documented fix: a substantive push producing a fresh head SHA, rather
+than an empty commit or a close/reopen.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 14, PR #4198, merged), preserved for history</summary>
 
