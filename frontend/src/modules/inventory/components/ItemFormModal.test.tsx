@@ -1,5 +1,6 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { InventoryCategory, InventoryItem, InventoryVendor } from '../types';
 
@@ -34,6 +35,11 @@ vi.mock('react-hot-toast', () => ({
 
 import { ItemFormModal } from './ItemFormModal';
 import { createMockApiError } from '../../../test/utils';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
+
+// The dialog asks before discarding typed input (forms review F-6), which
+// needs the app shell's ConfirmProvider.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 // The Condition control renders only for item types whose ITEM_TYPE_FIELDS
 // include `inspection_interval_days` — ppe alone — so these tests need a PPE
@@ -120,6 +126,28 @@ describe('ItemFormModal', () => {
 
     await user.selectOptions(select, 'pool');
     expect(select).toHaveAccessibleDescription(/Pool: one record for a stock of identical items/);
+  });
+
+  it('asks before Escape or Cancel discards a typed name, and closes a clean form at once', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    const view = render(<ItemFormModal {...baseProps} isOpen onClose={onClose} />);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    view.unmount();
+    onClose.mockClear();
+
+    render(<ItemFormModal {...baseProps} isOpen onClose={onClose} />);
+    await user.type(nameInput(), 'Halligan');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(nameInput()).toHaveValue('Halligan');
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('renders nothing when closed', () => {
@@ -956,13 +984,15 @@ describe('ItemFormModal', () => {
       expect(screen.getByRole('button', { name: /Create 1 Item/ })).toBeInTheDocument();
     });
 
-    it('still closes on the Cancel button', async () => {
+    it('still closes on the Cancel button, once the member confirms the discard', async () => {
       const user = userEvent.setup();
       const onClose = vi.fn();
       render(<ItemFormModal {...baseProps} onClose={onClose} isOpen />);
 
       await user.type(nameInput(), 'Dept Polo');
       await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      // A typed name is unsaved work, so Cancel asks first (owner decision 2026-11-06).
+      await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
 
       expect(onClose).toHaveBeenCalledTimes(1);
     });

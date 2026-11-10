@@ -46,6 +46,8 @@ import { useOrganizerOptions } from '../hooks/useOrganizerOptions';
 import { EventOrganizerPickers } from './EventOrganizerPickers';
 import { Collapsible } from './ux/Collapsible';
 import DateTimeQuarterHour from './ux/DateTimeQuarterHour';
+import { FormField } from './ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
 import { TrainingDetailsFields } from './training/TrainingDetailsFields';
 import {
   EMPTY_TRAINING_DETAILS,
@@ -153,6 +155,39 @@ const DEFAULT_FORM_DATA: EventCreate = {
 };
 
 /* Shared Tailwind classes for consistency */
+/**
+ * The event endpoints' field names as this form labels them, with the
+ * schema's `max_length` (EventBase, backend/app/schemas/event.py), so a 422
+ * lands on its field (forms review F-2).
+ */
+const EVENT_FIELDS = {
+  title: { label: 'Title', maxLength: 200 },
+  description: { label: 'Description' },
+  event_type: { label: 'Event type' },
+  start_datetime: { label: 'Start' },
+  end_datetime: { label: 'End' },
+  location: { label: 'Location', maxLength: 300 },
+  location_details: { label: 'Additional directions' },
+  rsvp_deadline: { label: 'RSVP deadline' },
+  max_attendees: { label: 'Max attendees' },
+  recurrence_end_date: { label: 'Recurrence end date' },
+} satisfies Record<string, ServerFieldSpec>;
+type EventField = keyof typeof EVENT_FIELDS;
+
+/** The control each field's error points focus at, in reading order. */
+const EVENT_FIELD_IDS: Record<EventField, string> = {
+  title: 'event-title',
+  description: 'event-description',
+  event_type: 'event-type',
+  start_datetime: 'start-datetime',
+  end_datetime: 'end-datetime',
+  recurrence_end_date: 'recurrence-end-date',
+  location: 'location-text',
+  location_details: 'location-details',
+  rsvp_deadline: 'rsvp-deadline',
+  max_attendees: 'max-attendees',
+};
+
 const inputClass = 'form-input py-3';
 
 const selectClass = 'form-input py-3';
@@ -262,6 +297,24 @@ export const EventForm: React.FC<EventFormProps> = ({
     ...normalizedInitial,
   });
   const [error, setError] = useState<string | null>(null);
+  // Each refusal shown under the field it is about, with aria-invalid and the
+  // message tied to the control (forms review F-3/F-4), rather than one banner
+  // at the top of a long form.
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<EventField, string>>>({});
+  const showFieldErrors = (errors: Partial<Record<EventField, string>>, unmatched: string[] = []) => {
+    setFieldErrors(errors);
+    // An error summary at the top, announced as an alert, for whoever does not
+    // reach the field by focus; the message itself stays under its field.
+    const messages = Object.values(errors);
+    const summary = messages.length === 1 ? (messages[0] ?? '') : `Fix the ${messages.length} fields marked below.`;
+    setError([summary, ...unmatched].filter(Boolean).join(' ') || null);
+    const first = (Object.keys(EVENT_FIELD_IDS) as EventField[]).find((field) => errors[field]);
+    if (first) {
+      // The "Other" location box and the fallback box share the field.
+      const id = first === 'location' && locations.length === 0 ? 'location-text-fallback' : EVENT_FIELD_IDS[first];
+      window.setTimeout(() => document.getElementById(id)?.focus(), 0);
+    }
+  };
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>(initialData?.location ? 'other' : 'select');
   const [visibleTypes, setVisibleTypes] = useState<EventType[]>(EVENT_TYPES);
@@ -412,6 +465,13 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   const update = (partial: Partial<EventCreate>) => {
     setFormData((prev) => ({ ...prev, ...partial }));
+    if (Object.keys(partial).some((key) => key in fieldErrors)) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        for (const key of Object.keys(partial)) delete next[key as EventField];
+        return next;
+      });
+    }
   };
 
   // Keep the standard one-hour window unless another meeting runs directly
@@ -611,26 +671,40 @@ export const EventForm: React.FC<EventFormProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setFieldErrors({});
 
+    // Every field check is collected first, so all of them show at once and
+    // focus goes to the first; the form is noValidate, so these replace the
+    // browser's bubbles (forms review F-3).
+    const invalid: Partial<Record<EventField, string>> = {};
+    if (!formData.title.trim()) invalid.title = 'Enter a title for the event.';
+    if (!formData.start_datetime) invalid.start_datetime = 'Choose when the event starts.';
+    if (!formData.end_datetime) invalid.end_datetime = 'Choose when the event ends.';
     // Not on a finalized event: its times are locked, left out of the save and
     // validated by the server as stored, and the minute-precision pair the
     // pickers show can read as zero length across the hour clocks fall back —
     // an error the user would have no enabled control left to clear.
-    if (!attendanceLocked && new Date(formData.end_datetime) <= new Date(formData.start_datetime)) {
-      setError('End date must be after start date');
-      return;
+    else if (
+      !attendanceLocked &&
+      formData.start_datetime &&
+      new Date(formData.end_datetime) <= new Date(formData.start_datetime)
+    ) {
+      invalid.end_datetime = 'End must be after the start.';
     }
 
     if (rsvpDeadlineRequired && !formData.rsvp_deadline) {
-      setError('Set an RSVP deadline, or turn off Require RSVP');
-      return;
-    }
-
-    if (formData.requires_rsvp && formData.rsvp_deadline) {
+      invalid.rsvp_deadline = 'Set an RSVP deadline, or turn off Require RSVP.';
+    } else if (formData.requires_rsvp && formData.rsvp_deadline) {
       if (new Date(formData.rsvp_deadline) >= new Date(formData.start_datetime)) {
-        setError('RSVP deadline must be before event start');
-        return;
+        invalid.rsvp_deadline = 'The RSVP deadline must be before the event starts.';
       }
+    }
+    if (isRecurring && onSubmitRecurring && !isRolling && !recurrenceEndDate) {
+      invalid.recurrence_end_date = 'Choose the date the series ends.';
+    }
+    if (Object.keys(invalid).length > 0) {
+      showFieldErrors(invalid);
+      return;
     }
 
     if (formData.is_mandatory && !formData.mandatory_membership_types?.length && !storedMandatoryForEveryone) {
@@ -700,10 +774,6 @@ export const EventForm: React.FC<EventFormProps> = ({
 
     try {
       if (isRecurring && onSubmitRecurring) {
-        if (!isRolling && !recurrenceEndDate) {
-          setError('Recurrence end date is required');
-          return;
-        }
         if (recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
           setError('Select at least one day for custom recurrence');
           return;
@@ -725,13 +795,18 @@ export const EventForm: React.FC<EventFormProps> = ({
         await onSubmit(submitData);
       }
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'An error occurred');
-      setError(message);
+      const mapped = mapServerFieldErrors(err, EVENT_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        showFieldErrors(mapped.fieldErrors, mapped.unmatched);
+      } else {
+        setError(mapped?.unmatched.join(' ') || getErrorMessage(err, 'An error occurred'));
+      }
     }
   };
 
   return (
     <form
+      noValidate
       onSubmit={(e) => {
         void handleSubmit(e);
       }}
@@ -774,21 +849,26 @@ export const EventForm: React.FC<EventFormProps> = ({
         </h2>
 
         {/* Title */}
-        <div>
-          <label htmlFor="event-title" className={labelClass}>
-            Title <span className="text-red-700 dark:text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            id="event-title"
-            required
-            maxLength={200}
-            value={formData.title}
-            onChange={(e) => update({ title: e.target.value })}
-            className={inputClass}
-            placeholder="e.g., Monthly Business Meeting"
-          />
-        </div>
+        <FormField
+          id="event-title"
+          label="Title"
+          required
+          error={fieldErrors.title}
+          maxLength={EVENT_FIELDS.title.maxLength}
+          count={formData.title.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              autoComplete="off"
+              value={formData.title}
+              onChange={(e) => update({ title: e.target.value })}
+              className={inputClass}
+              placeholder="e.g., Monthly Business Meeting"
+            />
+          )}
+        </FormField>
 
         {/* Description */}
         <div>
@@ -840,12 +920,19 @@ export const EventForm: React.FC<EventFormProps> = ({
           <textarea
             ref={descriptionRef}
             id="event-description"
+            aria-invalid={fieldErrors.description ? true : undefined}
+            aria-describedby={fieldErrors.description ? 'event-description-error' : undefined}
             rows={4}
             value={formData.description || ''}
             onChange={(e) => update({ description: e.target.value })}
             className={inputClass}
             placeholder="What is this event about? Use **bold**, *italic*, - lists, or [links](url)"
           />
+          {fieldErrors.description && (
+            <p id="event-description-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+              {fieldErrors.description}
+            </p>
+          )}
         </div>
 
         {/* Event Type */}
@@ -1064,32 +1151,28 @@ export const EventForm: React.FC<EventFormProps> = ({
           {/* Side by side only from lg: a date and three time selects need about
               380px, and a tablet's half-width column is under 200. */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div>
-              <label htmlFor="start-datetime" className={labelClass}>
-                Start Date & Time <span className="text-red-700 dark:text-red-500">*</span>
-              </label>
-              <DateTimeQuarterHour
-                id="start-datetime"
-                timeLabel="Start time"
-                required
-                value={formData.start_datetime}
-                onChange={(val) => handleStartDateChange(val)}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="end-datetime" className={labelClass}>
-                End Date & Time <span className="text-red-700 dark:text-red-500">*</span>
-              </label>
-              <DateTimeQuarterHour
-                id="end-datetime"
-                timeLabel="End time"
-                required
-                value={formData.end_datetime}
-                onChange={(val) => update({ end_datetime: val })}
-                className={inputClass}
-              />
-            </div>
+            <FormField id="start-datetime" label="Start Date & Time" required error={fieldErrors.start_datetime}>
+              {(field) => (
+                <DateTimeQuarterHour
+                  {...field}
+                  timeLabel="Start time"
+                  value={formData.start_datetime}
+                  onChange={(val) => handleStartDateChange(val)}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
+            <FormField id="end-datetime" label="End Date & Time" required error={fieldErrors.end_datetime}>
+              {(field) => (
+                <DateTimeQuarterHour
+                  {...field}
+                  timeLabel="End time"
+                  value={formData.end_datetime}
+                  onChange={(val) => update({ end_datetime: val })}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
           </div>
 
           {/* Conflict Warning */}
@@ -1193,14 +1276,26 @@ export const EventForm: React.FC<EventFormProps> = ({
                           New occurrences are added automatically so the series always runs 12 months ahead.
                         </p>
                       ) : (
-                        <input
-                          type="date"
-                          id="recurrence-end-date"
-                          aria-label="Series end date"
-                          value={recurrenceEndDate}
-                          onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                          className={inputClass}
-                        />
+                        <>
+                          <input
+                            type="date"
+                            id="recurrence-end-date"
+                            aria-label="Series end date"
+                            aria-invalid={fieldErrors.recurrence_end_date ? true : undefined}
+                            aria-describedby={fieldErrors.recurrence_end_date ? 'recurrence-end-date-error' : undefined}
+                            value={recurrenceEndDate}
+                            onChange={(e) => {
+                              setRecurrenceEndDate(e.target.value);
+                              setFieldErrors(({ recurrence_end_date: _cleared, ...rest }) => rest);
+                            }}
+                            className={inputClass}
+                          />
+                          {fieldErrors.recurrence_end_date && (
+                            <p id="recurrence-end-date-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                              {fieldErrors.recurrence_end_date}
+                            </p>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -1378,15 +1473,24 @@ export const EventForm: React.FC<EventFormProps> = ({
               <option value="__other__">Other (off-site / enter manually)</option>
             </select>
           ) : (
-            <input
-              type="text"
-              id="location-text-fallback"
-              maxLength={300}
-              value={formData.location || ''}
-              onChange={(e) => update({ location: e.target.value })}
-              className={inputClass}
-              placeholder="e.g., Station 1 Conference Room"
-            />
+            <>
+              <input
+                type="text"
+                id="location-text-fallback"
+                maxLength={EVENT_FIELDS.location.maxLength}
+                aria-invalid={fieldErrors.location ? true : undefined}
+                aria-describedby={fieldErrors.location ? 'location-text-fallback-error' : undefined}
+                value={formData.location || ''}
+                onChange={(e) => update({ location: e.target.value })}
+                className={inputClass}
+                placeholder="e.g., Station 1 Conference Room"
+              />
+              {fieldErrors.location && (
+                <p id="location-text-fallback-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                  {fieldErrors.location}
+                </p>
+              )}
+            </>
           )}
         </div>
 
@@ -1427,35 +1531,38 @@ export const EventForm: React.FC<EventFormProps> = ({
 
         {/* Free-text location when "Other" is selected */}
         {locationMode === 'other' && locations.length > 0 && (
-          <div>
-            <label htmlFor="location-text" className={labelClass}>
-              Location Name / Address
-            </label>
-            <input
-              type="text"
-              id="location-text"
-              maxLength={300}
-              value={formData.location || ''}
-              onChange={(e) => update({ location: e.target.value })}
-              className={inputClass}
-              placeholder="e.g., City Hall — 123 Main St, Anytown"
-            />
-          </div>
+          <FormField
+            id="location-text"
+            label="Location Name / Address"
+            error={fieldErrors.location}
+            maxLength={EVENT_FIELDS.location.maxLength}
+            count={(formData.location || '').length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                value={formData.location || ''}
+                onChange={(e) => update({ location: e.target.value })}
+                className={inputClass}
+                placeholder="e.g., City Hall — 123 Main St, Anytown"
+              />
+            )}
+          </FormField>
         )}
 
-        <div>
-          <label htmlFor="location-details" className={labelClass}>
-            Additional Directions
-          </label>
-          <input
-            type="text"
-            id="location-details"
-            value={formData.location_details || ''}
-            onChange={(e) => update({ location_details: e.target.value })}
-            className={inputClass}
-            placeholder="e.g., Enter through side door, Room 204"
-          />
-        </div>
+        <FormField id="location-details" label="Additional Directions" error={fieldErrors.location_details}>
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              value={formData.location_details || ''}
+              onChange={(e) => update({ location_details: e.target.value })}
+              className={inputClass}
+              placeholder="e.g., Enter through side door, Room 204"
+            />
+          )}
+        </FormField>
       </section>
 
       <hr className="border-theme-surface-border" />
@@ -1556,35 +1663,39 @@ export const EventForm: React.FC<EventFormProps> = ({
               an organizer unable to cap a voluntary event. */}
           {formData.requires_rsvp && (
             <div className="space-y-4 border-l-2 border-red-500/30 pl-4">
-              <div>
-                <label htmlFor="rsvp-deadline" className={labelClass}>
-                  RSVP Deadline {rsvpDeadlineRequired && <span className="text-red-700 dark:text-red-500">*</span>}
-                </label>
-                <DateTimeQuarterHour
-                  id="rsvp-deadline"
-                  value={formData.rsvp_deadline || ''}
-                  onChange={(val) => update({ rsvp_deadline: val })}
-                  className={inputClass}
-                />
-              </div>
+              <FormField
+                id="rsvp-deadline"
+                label="RSVP Deadline"
+                required={rsvpDeadlineRequired}
+                error={fieldErrors.rsvp_deadline}
+              >
+                {(field) => (
+                  <DateTimeQuarterHour
+                    {...field}
+                    value={formData.rsvp_deadline || ''}
+                    onChange={(val) => update({ rsvp_deadline: val })}
+                    className={inputClass}
+                  />
+                )}
+              </FormField>
             </div>
           )}
 
           <div className="space-y-4 border-l-2 border-red-500/30 pl-4">
-            <div>
-              <label htmlFor="max-attendees" className={labelClass}>
-                Max Attendees
-              </label>
-              <input
-                type="number"
-                id="max-attendees"
-                min="1"
-                value={formData.max_attendees || ''}
-                onChange={(e) => update({ max_attendees: e.target.value ? parseInt(e.target.value) : undefined })}
-                className={inputClass}
-                placeholder="Unlimited"
-              />
-            </div>
+            <FormField id="max-attendees" label="Max Attendees" error={fieldErrors.max_attendees}>
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  value={formData.max_attendees || ''}
+                  onChange={(e) => update({ max_attendees: e.target.value ? parseInt(e.target.value) : undefined })}
+                  className={inputClass}
+                  placeholder="Unlimited"
+                />
+              )}
+            </FormField>
 
             <label className="mobile-touch-target flex items-center justify-start space-x-3">
               <input

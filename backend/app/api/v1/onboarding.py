@@ -2841,6 +2841,7 @@ async def save_session_roles(
     # Backend stores: ["module.view", "module.manage", ...]
     from sqlalchemy import delete
 
+    from app.models.member_position_term import close_terms_for_positions
     from app.models.user import Role, user_positions
 
     # Get existing system roles. Read before the delete below (which only
@@ -2857,6 +2858,15 @@ async def save_session_roles(
     _check_submitted_positions(data.roles, set(existing_system_roles))
 
     # Delete existing non-system roles for this organization (custom roles from previous attempts)
+    # A bulk delete bypasses the flush hook, so anyone's open term in one of
+    # them is closed first; the foreign key would otherwise orphan it.
+    await close_terms_for_positions(
+        db,
+        select(Role.id).where(
+            Role.organization_id == organization_id,
+            Role.is_system.is_(False),
+        ),
+    )
     await db.execute(
         delete(Role).where(
             Role.organization_id == organization_id,
