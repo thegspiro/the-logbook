@@ -422,12 +422,10 @@ describe('MembersAdminPage — the base Member position (workflow review W11-9)'
   });
 
   it('still offers removal from an archived member', async () => {
-    const user = userEvent.setup();
     vi.mocked(userService.getUsersWithRoles).mockResolvedValue([{ ...member, status: 'archived' }] as never);
-    renderWithRouter(<MembersAdminPage />);
+    // An archived member is listed on the Former Members page.
+    renderWithRouter(<MembersAdminPage population="former" />);
 
-    // Archived members are hidden until asked for.
-    await user.click(await screen.findByRole('checkbox', { name: /Show former members/ }));
     expect(await screen.findByRole('button', { name: 'Remove Member position from Jordan Avery' })).toBeInTheDocument();
   });
 });
@@ -630,7 +628,7 @@ describe("MembersAdminPage — removing a lost phone's passkey", () => {
   });
 });
 
-describe('MembersAdminPage — former members are hidden until asked for', () => {
+describe('MembersAdminPage — Member Management and Former Members split the roster', () => {
   const current = [
     member,
     {
@@ -677,6 +675,8 @@ describe('MembersAdminPage — former members are hidden until asked for', () =>
       status: 'dropped_involuntary',
     },
   ];
+  const currentNames = [/Jordan Avery/, /Pia Probie/, /Rex Retired/, /Lee Leave/];
+  const formerNames = [/Former Archived/, /Dana Quit/, /Drew Removed/];
 
   beforeEach(() => {
     vi.mocked(userService.getUsersWithRoles).mockReset();
@@ -688,33 +688,35 @@ describe('MembersAdminPage — former members are hidden until asked for', () =>
     vi.mocked(userService.assignUserRoles).mockReset();
   });
 
-  it('opens on current, retired and on-leave members, and says how many are hidden', async () => {
+  it('lists current, retired and on-leave members on Member Management, and no former ones', async () => {
     renderWithRouter(<MembersAdminPage />);
 
     await screen.findByRole('row', { name: /Jordan Avery/ });
-    for (const name of [/Pia Probie/, /Rex Retired/, /Lee Leave/]) {
-      expect(screen.getByRole('row', { name })).toBeInTheDocument();
-    }
-    for (const name of [/Former Archived/, /Dana Quit/, /Drew Removed/]) {
-      expect(screen.queryByRole('row', { name })).not.toBeInTheDocument();
-    }
-    const toggle = screen.getByRole('checkbox', { name: /Show former members/ });
-    expect(toggle).not.toBeChecked();
-    expect(screen.getByText(/3 hidden/)).toBeInTheDocument();
+    for (const name of currentNames) expect(screen.getByRole('row', { name })).toBeInTheDocument();
+    for (const name of formerNames) expect(screen.queryByRole('row', { name })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /former members/i })).not.toBeInTheDocument();
   });
 
-  it('lists archived and dropped members once the box is ticked', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<MembersAdminPage />);
+  it('lists only archived and dropped members on Former Members', async () => {
+    renderWithRouter(<MembersAdminPage population="former" />);
 
-    await user.click(await screen.findByRole('checkbox', { name: /Show former members/ }));
-
-    for (const name of [/Former Archived/, /Dana Quit/, /Drew Removed/, /Jordan Avery/]) {
-      expect(screen.getByRole('row', { name })).toBeInTheDocument();
-    }
+    await screen.findByRole('row', { name: /Former Archived/ });
+    for (const name of formerNames) expect(screen.getByRole('row', { name })).toBeInTheDocument();
+    for (const name of currentNames) expect(screen.queryByRole('row', { name })).not.toBeInTheDocument();
+    // The same actions as Member Management.
+    const row = screen.getByRole('row', { name: /Dana Quit/ });
+    expect(within(row).getByRole('button', { name: /Manage positions for Dana Quit/ })).toBeInTheDocument();
   });
 
-  it('hides them from View by Position and its member picker too', async () => {
+  it('says so when there are no former members', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue(current as never);
+    renderWithRouter(<MembersAdminPage population="former" />);
+
+    expect(await screen.findByText('No archived or dropped members.')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('keeps each population to its own page in View by Position and the member picker', async () => {
     const user = userEvent.setup();
     renderWithRouter(<MembersAdminPage />);
 
@@ -728,13 +730,13 @@ describe('MembersAdminPage — former members are hidden until asked for', () =>
     expect(within(dialog).getByRole('checkbox', { name: /Jordan Avery/ })).toBeInTheDocument();
   });
 
-  // The picker lists only the visible members, but the save diffs against the
-  // whole roster: a hidden member who holds the position must keep it.
-  it('does not take a position from a hidden former member on save', async () => {
+  // The picker lists one page's members, but the save diffs against the whole
+  // roster: a member on the other page who holds the position must keep it.
+  it('does not take a position from a former member when it is saved from Member Management', async () => {
     const user = userEvent.setup();
     const chiefHolder = { ...current[1], roles: [memberRole] };
-    const hiddenChief = { ...former[0], roles: [memberRole, chiefRole] };
-    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member, chiefHolder, hiddenChief] as never);
+    const formerChief = { ...former[0], roles: [memberRole, chiefRole] };
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member, chiefHolder, formerChief] as never);
     vi.mocked(userService.assignUserRoles).mockResolvedValue({} as never);
     renderWithRouter(<MembersAdminPage />);
 

@@ -61,11 +61,11 @@ import { displayNameOf, givenName } from '../utils/memberName';
 type ViewMode = 'by-member' | 'by-role';
 
 /**
- * Account statuses kept off this screen until "Show former members" is ticked
- * (owner decision 2026-11-10). The shift history import files every former
- * member it meets as archived, so an older department's list here was mostly
- * people who left long ago. Retired and on-leave members stay listed: officers
- * still manage their records and positions.
+ * Account statuses listed on the Former Members page rather than Member
+ * Management (owner decision 2026-11-10). The shift history import files every
+ * former member it meets as archived, so an older department's roster here was
+ * mostly people who left long ago. Retired and on-leave members stay on Member
+ * Management: officers still manage their records and positions.
  */
 const FORMER_MEMBER_STATUSES: readonly string[] = [
   UserStatus.ARCHIVED,
@@ -103,7 +103,13 @@ function membershipSummary(user: {
   return cls ? `${cls} · ${status} member` : `${status} member`;
 }
 
-export const MembersAdminPage: React.FC = () => {
+interface MembersAdminPageProps {
+  /** Current members (Member Management) or archived and dropped ones (Former Members). */
+  population?: 'current' | 'former';
+}
+
+export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population = 'current' }) => {
+  const showingFormer = population === 'former';
   const { confirm } = useConfirm();
   const navigate = useNavigate();
   const { checkPermission, user: currentUser } = useAuthStore();
@@ -112,7 +118,6 @@ export const MembersAdminPage: React.FC = () => {
   const [unlockingUserId, setUnlockingUserId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('by-member');
   const [users, setUsers] = useState<UserWithRoles[]>([]);
-  const [showFormerMembers, setShowFormerMembers] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -191,10 +196,9 @@ export const MembersAdminPage: React.FC = () => {
   };
 
   // Only what is drawn is filtered. `users` stays the whole roster because the
-  // position saves diff against it: a hidden former member who holds a
-  // position keeps it when an officer saves that position's member list.
-  const visibleUsers = showFormerMembers ? users : users.filter((user) => !isFormerMember(user.status));
-  const hiddenFormerCount = users.filter((user) => isFormerMember(user.status)).length;
+  // position saves diff against it: a member on the other page who holds a
+  // position keeps it when an officer saves that position's member list here.
+  const visibleUsers = users.filter((user) => isFormerMember(user.status) === showingFormer);
 
   const handleEditRoles = (user: UserWithRoles) => {
     setSelectedUser(user);
@@ -602,7 +606,7 @@ export const MembersAdminPage: React.FC = () => {
         {/* The hub's section nav already names this page, and its header carries
            the one red Add Member action; a second here broke the frame's
            one-primary rule. The title stays for heading navigation only. */}
-        <h2 className="sr-only">Member Management</h2>
+        <h2 className="sr-only">{showingFormer ? 'Former Members' : 'Member Management'}</h2>
 
         {/* Former members still holding property (member lifecycle): the
             same panel the Inventory Member Equipment page shows. */}
@@ -646,20 +650,6 @@ export const MembersAdminPage: React.FC = () => {
               View by Position
             </button>
           </div>
-          <div className="mt-3">
-            <label className="text-theme-text-secondary mobile-touch-target gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="form-checkbox"
-                checked={showFormerMembers}
-                onChange={(e) => setShowFormerMembers(e.target.checked)}
-              />
-              Show former members (archived or dropped)
-              {!showFormerMembers && hiddenFormerCount > 0 && (
-                <span className="text-theme-text-muted">&middot; {hiddenFormerCount} hidden</span>
-              )}
-            </label>
-          </div>
         </div>
 
         <p className="text-theme-text-muted mb-4 text-sm">
@@ -673,8 +663,21 @@ export const MembersAdminPage: React.FC = () => {
           <strong>status</strong> &mdash; on leave, retired, dropped &mdash; is changed from their profile.
         </p>
 
+        {showingFormer && (
+          <p className="text-theme-text-muted mb-4 text-sm">
+            Archived and dropped members. A member is moved back to the roster by changing their account status on their
+            profile.
+          </p>
+        )}
+
+        {viewMode === 'by-member' && visibleUsers.length === 0 && (
+          <p className="card text-theme-text-muted p-6 text-center text-sm">
+            {showingFormer ? 'No archived or dropped members.' : 'No current members.'}
+          </p>
+        )}
+
         {/* View by Member */}
-        {viewMode === 'by-member' && (
+        {viewMode === 'by-member' && visibleUsers.length > 0 && (
           // A named, focusable scroll region. The table reflows to cards when
           // this wrapper is under 64rem (rwd-table-container / rwd-table-wide),
           // so it should not need to scroll; if unusually long data still makes

@@ -186,12 +186,15 @@ Requires `members.manage` permission. Drawn with the same two-level navigation a
 | Area         | `?tab=`          | Label                 | Additional Permission |
 | ------------ | ---------------- | --------------------- | --------------------- |
 | Roster       | `manage`         | Member Management     | —                     |
+| Roster       | `former`         | Former Members        | —                     |
 | Add & Import | `add`            | Add Member            | `users.create`        |
 | Add & Import | `import`         | Import Members        | `users.create`        |
 | Add & Import | `qualifications` | Import Qualifications | —                     |
 | Settings     | `settings`       | Settings              | —                     |
 
 A missing or unknown `?tab=`, or one the viewer lacks the permission for, opens Member Management.
+
+Member Management lists every member except the archived and dropped (voluntary or involuntary) ones; Former Members lists only those, with the same views and actions. Retired and on-leave members stay on Member Management.
 
 ### Members Admin Pages
 
