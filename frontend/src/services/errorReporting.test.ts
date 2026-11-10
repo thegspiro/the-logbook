@@ -541,6 +541,39 @@ describe('setupGlobalErrorHandlers', () => {
     expect((mockFetch.mock.calls[0]?.[1] as RequestInit).keepalive).toBe(true);
   });
 
+  // WebKit cancels a keepalive request when the page goes away, and the
+  // cancelled fetch rejects. Left uncaught it surfaced as an unhandled
+  // "TypeError: … access control checks" on every navigation that had a
+  // report queued (seen in the Mobile Safari E2E legs).
+  it('swallows a keepalive request the browser cancels as the page goes away', async () => {
+    vi.useFakeTimers();
+    mockFetch.mockImplementation(() => Promise.reject(new Error('offline')));
+    reportError({ errorType: 'API_SERVER_ERROR', errorMessage: 'HTTP 500' });
+    await vi.advanceTimersByTimeAsync(0);
+    // A plain function, not the vi.fn above: a spy attaches its own handler
+    // to the promise it returns (to record settledResults), which would mark
+    // the rejection handled and hide the very thing this test looks for.
+    let keepaliveCalls = 0;
+    vi.stubGlobal('fetch', () => {
+      keepaliveCalls += 1;
+      return Promise.reject(new TypeError('Load failed'));
+    });
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+
+    try {
+      window.dispatchEvent(new Event('pagehide'));
+      expect(keepaliveCalls).toBe(1);
+      vi.useRealTimers();
+      // Node reports an unhandled rejection after the microtask queue drains.
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
+
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
   it('keeps reports it could not flush, since the page may come back', async () => {
     vi.useFakeTimers();
     mockFetch.mockImplementation(() => Promise.reject(new Error('offline')));

@@ -646,9 +646,16 @@ function flushOnHide(): void {
   // user switching apps, a tab restored from the back/forward cache — so
   // clearing the whole queue here would discard everything past the flush cap
   // in exactly the situation where it could still have been delivered.
+  // The try covers a synchronous throw; the .catch covers the browser
+  // cancelling the request as the page unloads, which WebKit does by
+  // rejecting it. Left uncaught, that rejection surfaced as an unhandled
+  // "TypeError: … access control checks" on every navigation with a report
+  // queued — noise that looks like the very failure this module reports.
   for (const item of queue.splice(0, MAX_KEEPALIVE_REPORTS)) {
     try {
-      void fetch(ERROR_LOG_ENDPOINT, buildRequestInit(item.payload, true));
+      fetch(ERROR_LOG_ENDPOINT, buildRequestInit(item.payload, true)).catch(() => {
+        // Nothing further to try — the page is going away.
+      });
     } catch {
       // Nothing further to try — the page is going away.
     }
