@@ -174,7 +174,7 @@ class CommunityEngagementService:
         # A request can be re-pointed at an event another request already
         # names; the most recent one is the requester whose expectation the
         # event was scheduled against.
-        requests: dict[str, EventRequest] = {}
+        request_for_event: dict[str, EventRequest] = {}
         request_rows = await self.db.execute(
             select(EventRequest)
             .where(
@@ -184,7 +184,7 @@ class CommunityEngagementService:
             .order_by(EventRequest.created_at.asc())
         )
         for linked in request_rows.scalars().all():
-            requests[str(linked.event_id)] = linked
+            request_for_event[str(linked.event_id)] = linked
 
         guest_rows = await self.db.execute(
             select(EventExternalAttendee.event_id, func.count())
@@ -211,7 +211,7 @@ class CommunityEngagementService:
         rows: list[EventReach] = []
         for event in events:
             eid = str(event.id)
-            req = requests.get(eid)
+            req = request_for_event.get(eid)
             crew = rsvps_by_event.get(eid, [])
             effective_end = EventService.effective_end(event)
             # The same credited-minutes rule the training ledger and admin
@@ -280,7 +280,7 @@ class CommunityEngagementService:
         return int(received or 0), int(completed or 0)
 
     @staticmethod
-    def _totals(rows: list[EventReach], requests: tuple[int, int]) -> Totals:
+    def _totals(rows: list[EventReach], request_counts: tuple[int, int]) -> Totals:
         members: set[str] = set()
         for r in rows:
             members |= r.member_ids
@@ -291,8 +291,8 @@ class CommunityEngagementService:
             estimated=sum(r.expected or 0 for r in rows if r.reach_is_estimate),
             member_hours=sum_hours_to_quarter(r.member_hours for r in rows),
             members_involved=len(members),
-            requests_received=requests[0],
-            requests_completed=requests[1],
+            requests_received=request_counts[0],
+            requests_completed=request_counts[1],
         )
 
     @staticmethod
