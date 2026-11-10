@@ -283,6 +283,29 @@ describe('MemberProfilePage position badges', () => {
     expect(screen.getByText('History Committee')).toBeInTheDocument();
     expect(screen.queryByText('Member')).not.toBeInTheDocument();
   });
+
+  // Owner decision 2026-11-06: offices given up are kept, with their dates,
+  // beside the ones held now.
+  it('lists the positions the member held earlier', async () => {
+    getUserWithRoles.mockResolvedValue({
+      ...targetUser,
+      roles: [],
+      past_positions: [
+        {
+          position_id: 'role-treasurer',
+          name: 'Treasurer',
+          kind: 'office',
+          started_at: '2023-03-04T12:00:00Z',
+          ended_at: '2025-01-02T12:00:00Z',
+        },
+      ],
+    });
+    renderWithRouter(<MemberProfilePage />);
+
+    await screen.findByRole('heading', { name: 'Jane Doe' });
+    expect(screen.getByText('Earlier positions (1)')).toBeInTheDocument();
+    expect(screen.getByText('Treasurer')).toBeInTheDocument();
+  });
 });
 
 const shareNothing = {

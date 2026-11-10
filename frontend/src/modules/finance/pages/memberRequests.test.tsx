@@ -12,7 +12,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { ConfirmProvider } from '@/contexts/ConfirmContext';
@@ -255,6 +255,31 @@ describe('request forms pick a budget line by name and amount left', () => {
     ]) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
+  });
+
+  // Forms review F-6, owner decision 2026-11-06: a half-entered expense
+  // report survives leaving the page, in this tab only.
+  it('restores an expense report from its local draft, lines and budget line included', async () => {
+    sessionStorage.clear();
+    const user = userEvent.setup();
+    const view = renderAt('/finance/expenses/new', '/finance/expenses/new', ExpenseReportFormPage);
+    await screen.findByRole('option', { name: /FY2026/ });
+    await user.type(screen.getByLabelText('Title *'), 'Conference travel');
+    await user.click(screen.getByRole('button', { name: 'Add Item' }));
+    await user.type(screen.getByLabelText('Description *'), 'Hotel');
+    await user.selectOptions(screen.getByLabelText('Budget line'), 'b-1');
+    view.unmount();
+
+    renderAt('/finance/expenses/new', '/finance/expenses/new', ExpenseReportFormPage);
+    expect(await screen.findByText('Restored your unsaved draft.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Title *')).toHaveValue('Conference travel');
+    expect(screen.getByLabelText('Description *')).toHaveValue('Hotel');
+    await waitFor(() => expect(screen.getByLabelText('Budget line')).toHaveValue('b-1'));
+
+    await user.click(screen.getByRole('button', { name: 'Discard draft' }));
+    expect(screen.getByLabelText('Title *')).toHaveValue('');
+    expect(screen.queryByLabelText('Description *')).not.toBeInTheDocument();
+    sessionStorage.clear();
   });
 
   it('shows the name alone when the server sends no amount', async () => {

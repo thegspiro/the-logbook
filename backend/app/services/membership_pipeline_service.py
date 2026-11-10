@@ -2421,21 +2421,21 @@ class MembershipPipelineService:
                     ScreeningStatus,
                 )
 
+                # Scoped through the prospect, already resolved in-org.
                 screening_result = await self.db.execute(
                     select(ScreeningRecord).where(
-                        and_(
-                            ScreeningRecord.prospect_id == prospect.id,
-                            ScreeningRecord.screening_type.in_(required_screenings),
-                        )
+                        ScreeningRecord.prospect_id == prospect.id
                     )
                 )
-                # The status is ciphertext (MS-18), so the cleared results are
-                # picked here rather than in the query.
+                # The status and the type are ciphertext (MS-18), so the
+                # cleared results of the required types are picked here
+                # rather than in the query.
                 cleared = (ScreeningStatus.PASSED, ScreeningStatus.COMPLETED)
                 passed_types = {
                     record.screening_type.value
                     for record in screening_result.scalars().all()
                     if record.status in cleared
+                    and record.screening_type.value in required_screenings
                 }
                 missing = [s for s in required_screenings if s not in passed_types]
                 if missing:

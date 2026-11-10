@@ -35,6 +35,7 @@ from app.models.evaluation import (
 )
 from app.models.event import Event, EventRSVP, EventType
 from app.models.meeting import Meeting, MeetingAttendee
+from app.models.member_position_term import sync_position_terms
 from app.models.training import TrainingRecord, TrainingStatus, TrainingType
 from app.models.user import MemberLeaveOfAbsence, User, user_positions
 from app.services import evaluation_notice_service
@@ -205,6 +206,8 @@ async def _user(
         text("INSERT INTO user_positions (user_id, position_id) VALUES (:u, :p)"),
         {"u": user_id, "p": position_id},
     )
+    # A Core insert, so the term the app would open is opened explicitly.
+    await sync_position_terms(db, [(user_id, position_id)])
     user = await db.get(User, user_id)
     assert user is not None
     await db.refresh(user, ["positions"])
@@ -392,7 +395,9 @@ class TestDrafting:
         )
         # Assigned during the period; a seat taken after it ended is not listed.
         await dept.db.execute(
-            text("UPDATE user_positions SET assigned_at = :at WHERE user_id = :u"),
+            text(
+                "UPDATE member_position_terms SET started_at = :at WHERE user_id = :u"
+            ),
             {"at": datetime(2025, 6, 1, tzinfo=timezone.utc), "u": captain.id},
         )
         detail = await _draft(await make_client(dept.manager), dept, member=captain)
@@ -405,6 +410,50 @@ class TestDrafting:
         assert detail["data"]["positions.held"]["value"] == [
             {"label": "Safety Officer"}
         ]
+
+    async def test_positions_held_lists_every_seat_held_during_the_period(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        """A seat given up mid-period is listed; one given up before it is not."""
+        captain = await _user(
+            dept.db, dept.org, [], rank="captain", position_name="Safety Officer"
+        )
+        history = await _user(dept.db, dept.org, [], position_name="Historian")
+        before = await _user(dept.db, dept.org, [], position_name="Old Board")
+        for holder, started, ended in (
+            (history, datetime(2024, 6, 1), datetime(2025, 4, 30)),
+            (before, datetime(2023, 1, 1), datetime(2024, 12, 31)),
+        ):
+            position_id = holder.positions[0].id
+            await dept.db.execute(
+                user_positions.delete().where(user_positions.c.user_id == holder.id)
+            )
+            await dept.db.execute(
+                text(
+                    "UPDATE member_position_terms SET user_id = :u, "
+                    "started_at = :s, ended_at = :e WHERE position_id = :p"
+                ),
+                {
+                    "u": captain.id,
+                    "s": started.replace(tzinfo=timezone.utc),
+                    "e": ended.replace(tzinfo=timezone.utc),
+                    "p": position_id,
+                },
+            )
+        await dept.db.execute(
+            text(
+                "UPDATE member_position_terms SET started_at = :at "
+                "WHERE user_id = :u AND ended_at IS NULL"
+            ),
+            {"at": datetime(2025, 6, 1, tzinfo=timezone.utc), "u": captain.id},
+        )
+        detail = await _draft(await make_client(dept.manager), dept, member=captain)
+
+        assert detail["data"]["positions.held"] == {
+            "available": True,
+            "value": [{"label": "Historian"}, {"label": "Safety Officer"}],
+            "note": "Positions held at any time during the period.",
+        }
 
     async def test_a_member_who_joined_mid_year_is_measured_from_the_next_full_month(
         self, dept: _Dept, make_client: ClientFactory

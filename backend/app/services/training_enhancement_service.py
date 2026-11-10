@@ -57,6 +57,7 @@ from app.services.training_compliance import (
     requirement_applies_to_user,
     tally_standing,
 )
+from app.services.training_record_source import RecordSource, record_sources
 from app.utils.csv_export import SafeCsvChunks, collect_csv
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
@@ -1323,6 +1324,7 @@ class ReportExportService:
 
         records_result = await self.db.execute(query)
         records = records_result.scalars().all()
+        sources = await record_sources(self.db, organization_id, records)
 
         cert_headers = ["Certification #", "Issuing Agency", "Expiration Date"]
 
@@ -1340,6 +1342,9 @@ class ReportExportService:
                     "Score",
                     "Instructor",
                     "Location",
+                    # Last, so a sheet that reads the columns by position
+                    # keeps working.
+                    "Source",
                 ]
             )
 
@@ -1366,6 +1371,7 @@ class ReportExportService:
                         f"{r.score:.1f}" if r.score else "",
                         r.instructor or "",
                         r.location or "",
+                        sources[str(r.id)].label,
                     ]
                 )
 
@@ -1717,7 +1723,9 @@ class ReportExportService:
         return io.BytesIO(pdf)
 
     @staticmethod
-    def _individual_rows(records: Sequence[TrainingRecord]) -> List[Dict[str, str]]:
+    def _individual_rows(
+        records: Sequence[TrainingRecord], sources: Dict[str, RecordSource]
+    ) -> List[Dict[str, str]]:
         """A member's records as plain strings, ready for layout."""
         rows = []
         for r in records:
@@ -1733,6 +1741,7 @@ class ReportExportService:
                     "hours": f"{r.hours_completed:.1f}" if r.hours_completed else "0",
                     "cert": r.certification_number or "",
                     "expires": str(r.expiration_date) if r.expiration_date else "",
+                    "source": sources[str(r.id)].label,
                 }
             )
         return rows
@@ -1753,7 +1762,11 @@ class ReportExportService:
 
         if not rows:
             return [Paragraph("No completed training in this period.", styles["body"])]
-        headers = ["Course", "Type", "Completed", "Hours"]
+        # Source sits under the course name rather than in a column of its
+        # own: every column here is already at the width its longest value
+        # needs (a certificate number must print on one line), and the course
+        # column is the only one that wraps gracefully.
+        headers = ["Course / Source", "Type", "Completed", "Hours"]
         widths = [1.25 * inch, 0.8 * inch, 0.55 * inch]
         if include_certifications:
             headers += ["Cert #", "Expires"]
@@ -1761,7 +1774,10 @@ class ReportExportService:
         table_rows = []
         for row in rows:
             cells = [
-                pdf_cell(row["course"]),
+                [
+                    pdf_cell(row["course"]),
+                    pdf_cell(row["source"], styles["cell_muted"]),
+                ],
                 pdf_cell(row["type"]),
                 pdf_cell(row["completed"]),
                 pdf_num(row["hours"]),
@@ -1827,7 +1843,9 @@ class ReportExportService:
             query = query.where(TrainingRecord.completion_date >= start_date)
 
         records = (await self.db.execute(query)).scalars().all()
-        rows = self._individual_rows(records)
+        rows = self._individual_rows(
+            records, await record_sources(self.db, organization_id, records)
+        )
         total_hours = sum(r.hours_completed or 0 for r in records)
         period_label = (
             f"{start_date} to {end_date}"
@@ -2001,8 +2019,10 @@ class ReportExportService:
         )
         if start_date:
             query = query.where(TrainingRecord.completion_date >= start_date)
+        all_records = (await self.db.execute(query)).scalars().all()
+        sources = await record_sources(self.db, organization_id, all_records)
         records_by_user: Dict[str, List[TrainingRecord]] = {}
-        for record in (await self.db.execute(query)).scalars().all():
+        for record in all_records:
             records_by_user.setdefault(str(record.user_id), []).append(record)
 
         ordered_users = []
@@ -2019,7 +2039,7 @@ class ReportExportService:
             _MemberRecords(
                 id=str(user.id),
                 name=f"{user.first_name} {user.last_name}",
-                rows=self._individual_rows(records_by_user[str(user.id)]),
+                rows=self._individual_rows(records_by_user[str(user.id)], sources),
                 hours=float(
                     sum(r.hours_completed or 0 for r in records_by_user[str(user.id)])
                 ),

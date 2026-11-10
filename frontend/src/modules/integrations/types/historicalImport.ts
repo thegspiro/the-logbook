@@ -404,3 +404,42 @@ export interface StaffingMappingView {
   seat_choices: StaffingChoice[];
   role_choices: StaffingChoice[];
 }
+
+/** A member of the department, offered when deciding who a row names. */
+export interface StaffingMemberOption {
+  id: string;
+  name: string;
+  membership_number: string;
+  status: string;
+}
+
+export interface StaffingCommitPreview {
+  /** shifts, shift_seats, events, upcoming_events, check_ins, outreach_seats, assigned_unfilled */
+  counts: Record<string, number>;
+  /** Seats left out, by reason. */
+  skipped: Record<string, number>;
+  unfilled_seats: number;
+  include_unstaffed: boolean;
+  members: AdminMember[];
+  member_options: StaffingMemberOption[];
+  can_commit: boolean;
+  result?: Record<string, number | string> | null;
+}
+
+export interface StaffingUnfilledSeat {
+  line_number: number;
+  date?: string | null;
+  activity: string;
+  title: string;
+  /** The department's seat, role or attendance the title maps to. */
+  maps_to: string;
+  required: boolean;
+  assigned_user_id?: string | null;
+}
+
+export interface StaffingUnfilledView {
+  items: StaffingUnfilledSeat[];
+  total: number;
+  assigned: number;
+  member_options: StaffingMemberOption[];
+}

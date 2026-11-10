@@ -112,7 +112,17 @@ describe('NotificationsPage rules', () => {
       'training_expiry',
       'suggestion_submitted',
       'equipment_request_update',
+      'medical_screening_expiry',
     ]);
+  });
+
+  it('describes the medical screening reminder rule (W71b-4)', async () => {
+    const user = userEvent.setup();
+    renderRules([]);
+    await openCreateModal(user);
+
+    await user.selectOptions(screen.getByLabelText(/trigger event/i), 'medical_screening_expiry');
+    expect(await screen.findByText(/before one of their medical screenings falls due/i)).toBeInTheDocument();
   });
 
   it('describes what the rule will do instead of a channel it does not control', async () => {

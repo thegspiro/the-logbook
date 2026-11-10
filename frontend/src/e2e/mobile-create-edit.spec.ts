@@ -111,7 +111,14 @@ test.describe('mobile create and edit surfaces', () => {
     expect(await name.evaluate((input) => parseFloat(getComputedStyle(input).fontSize))).toBeGreaterThanOrEqual(16);
 
     await page.screenshot({ path: testInfo.outputPath('inventory-create-mobile.png'), fullPage: true });
+    // A dialog with a typed name asks before it discards it (forms review F-6,
+    // owner decision 2026-11-06): keeping it leaves the name in place, and
+    // discarding closes the dialog and releases the mask as before.
     await (await visibleButton(page, 'Cancel')).click();
+    await page.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(name).toHaveValue('Mobile test item');
+    await (await visibleButton(page, 'Cancel')).click();
+    await page.getByRole('button', { name: 'Discard changes' }).click();
 
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.locator('.modal-overlay')).toHaveCount(0);
