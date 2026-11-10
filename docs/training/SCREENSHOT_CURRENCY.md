@@ -1,5 +1,20 @@
 # Screenshot currency
 
+## Queued by the November 8 – 10 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--10-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | My Shifts **Upcoming** under month headers | Replace `03-04` |
+| 03 | My Shifts **Past** with Year dropdown, hours chart, month headers | Create |
+| 04 | Event attendance **Check In** dialog with **Add a member** on a closed event | Create |
+| 02 | Training History records showing the source line | Create |
+| 02 | Requirement card reading **No sessions held yet** | Create |
+| 01 | Members roster as a table at a desktop width | Replace `01-01` |
+| 16 | Historical import members list with the collapsed "to be created" section | Create |
+
 ## Captured 2026-11-08 — Requests tab triage list and drawer (#4141)
 
 Taken on the demo department seeded from this branch, with malware scanning on.

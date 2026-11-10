@@ -627,6 +627,23 @@ Monitoring Dashboard**. It shows:
 > **Yes / No** are full-size touch targets.
 
 An officer-edited time is marked "(times edited)" on the attendance list.
+
+_Added 2026-11-10._ **Recording one member after check-in has closed.** On an
+event whose check-in window is over (and that is neither finalized nor
+cancelled), **Check In** offers **Add a member**. Pick the member, enter when they
+arrived and left (prefilled with the event's actual or scheduled span), and select
+**Record attendance**. They appear on the attendance list and the approval page
+like any other correction. Times outside the event are warned about, not refused.
+
+**Reminders after a reschedule.** Changing an event's start time, on one event or
+a whole series, lets its reminders go out again for the new time. Any other edit
+keeps the reminders already sent, so fixing a title does not re-send them. A small
+correction to the start can therefore send one reminder twice; that is accepted.
+
+**Excused drills leave "missed".** A drill covered by an active training waiver
+no longer shows under a member's missed mandatory events: a blanket waiver, or one
+naming a requirement the session counts toward, excuses it for the waiver's dates.
+A waiver naming other requirements leaves the drill listed.
 **Edit Times** shows the exact minutes it will save: a member who tapped in at
 9:07 shows as 9:07. Pick the quarter hour you mean, and the duration under the
 pickers shows what will be credited.

@@ -391,6 +391,24 @@ From here you can also **Swap** a shift or **Request Time Off**. See
 
 ![My Shifts tab listing upcoming shifts with status badges](./images/03-04-my-shifts.png)
 
+_Added 2026-11-10._ **Upcoming** is sorted soonest first and sits under pinned
+month headers such as **December 2026 · 2 shifts**. The year is in every header,
+so a schedule that runs past New Year reads December, then January. The cards
+and their Confirm, Decline, Swap and Details actions are unchanged.
+
+**Past** opens on your newest year. Pick another year, or **All time**, from the
+**Year** dropdown; the three stat tiles follow it. A bar chart shows hours worked
+by month (by year under **All time**), and tapping a bar jumps to that month.
+Shifts are listed under month headers carrying the month's shift count and hours,
+and a header always equals the sum of the **Xh worked** pills under it. Shifts you
+declined or that were cancelled no longer appear in Past, because you did not work
+them; a seat you declined but then worked still shows, with its hours.
+
+_Added 2026-11-10._ **End-of-shift summary.** The email and the in-app notice
+list call types as counts, most frequent first ("3 × EMS, 1 × Fire Alarm"),
+instead of one line per call. Every distinct type is listed; the old notice cut
+off after five calls and the email after ten.
+
 ### Your hours and calls for the year
 
 _Added 2026-11-04._ The same figures appear on a member's profile as **Shift &
