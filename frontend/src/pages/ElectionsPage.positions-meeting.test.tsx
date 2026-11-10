@@ -112,11 +112,11 @@ describe('ElectionsPage create form: positions and linked meeting', () => {
 
     await userEvent.selectOptions(await screen.findByLabelText(/Linked Meeting/), 'meeting:m1');
 
-    expect(screen.getByLabelText(/Start Date & Time/)).toHaveValue('2099-12-10');
+    expect(screen.getByLabelText(/Start Date & Time/, { selector: 'input' })).toHaveValue('2099-12-10');
     expect(screen.getByRole('combobox', { name: 'Start time hour' })).toHaveDisplayValue('7');
     expect(screen.getByRole('combobox', { name: 'Start time minute' })).toHaveDisplayValue('00');
     expect(screen.getByRole('combobox', { name: 'Start time AM/PM' })).toHaveDisplayValue('PM');
-    expect(screen.getByLabelText(/End Date & Time/)).toHaveValue('2099-12-10');
+    expect(screen.getByLabelText(/End Date & Time/, { selector: 'input' })).toHaveValue('2099-12-10');
     expect(screen.getByRole('combobox', { name: 'End time hour' })).toHaveDisplayValue('9');
     expect(screen.getByRole('combobox', { name: 'End time minute' })).toHaveDisplayValue('30');
     expect(screen.getByRole('combobox', { name: 'End time AM/PM' })).toHaveDisplayValue('PM');
@@ -130,6 +130,6 @@ describe('ElectionsPage create form: positions and linked meeting', () => {
 
     await userEvent.selectOptions(await screen.findByLabelText(/Linked Meeting/), 'meeting:m1');
 
-    expect(screen.getByLabelText(/Start Date & Time/)).toHaveValue('');
+    expect(screen.getByLabelText(/Start Date & Time/, { selector: 'input' })).toHaveValue('');
   });
 });
