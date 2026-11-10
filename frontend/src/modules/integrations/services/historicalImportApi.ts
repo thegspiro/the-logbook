@@ -20,6 +20,12 @@ import type {
   HistoricalImportSummary,
   ShiftBatch,
   DrillPreview,
+  StaffingCommitPreview,
+  StaffingFileKind,
+  StaffingMappingList,
+  StaffingMappingView,
+  StaffingPreview,
+  StaffingUnfilledView,
   TrainingPreview,
   TrainingSettingsUpdate,
 } from '../types/historicalImport';
@@ -135,6 +141,139 @@ export const historicalImportService = {
   /** Make each held drill a session linked to the chosen requirements; safe to run again. */
   async commitDrills(importId: string): Promise<DrillPreview> {
     const response = await api.post<DrillPreview>(`${BASE}/${importId}/drills/commit`, null, { timeout: 0 });
+    return response.data;
+  },
+
+  async getStaffing(importId: string): Promise<StaffingPreview> {
+    const response = await api.get<StaffingPreview>(`${BASE}/${importId}/staffing`, { timeout: 0 });
+    return response.data;
+  },
+
+  /** Store the seats or events file, replacing one of that kind. */
+  async uploadStaffingFile(importId: string, kind: StaffingFileKind, file: File): Promise<StaffingPreview> {
+    const form = new FormData();
+    form.append('file', file);
+    const response = await api.post<StaffingPreview>(`${BASE}/${importId}/staffing/${kind}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 0,
+    });
+    return response.data;
+  },
+
+  /** Replace the whole column mapping of one staffing file; a null header unmaps a field. */
+  async updateStaffingMapping(
+    importId: string,
+    kind: StaffingFileKind,
+    columnMapping: Record<string, string | null>
+  ): Promise<StaffingPreview> {
+    const response = await api.patch<StaffingPreview>(
+      `${BASE}/${importId}/staffing/${kind}`,
+      { column_mapping: columnMapping },
+      { timeout: 0 }
+    );
+    return response.data;
+  },
+
+  async removeStaffingFile(importId: string, kind: StaffingFileKind): Promise<StaffingPreview> {
+    const response = await api.delete<StaffingPreview>(`${BASE}/${importId}/staffing/${kind}`, { timeout: 0 });
+    return response.data;
+  },
+
+  async getStaffingMapping(
+    importId: string,
+    list: StaffingMappingList,
+    params: { search?: string; offset?: number; limit?: number } = {}
+  ): Promise<StaffingMappingView> {
+    const response = await api.get<StaffingMappingView>(`${BASE}/${importId}/staffing/mapping/${list}`, {
+      params: { search: params.search ?? '', offset: params.offset ?? 0, limit: params.limit ?? 50 },
+      timeout: 0,
+    });
+    return response.data;
+  },
+
+  /** Merge decisions into one list by key; a null clears that key. */
+  async updateStaffingDecisions(
+    importId: string,
+    list: StaffingMappingList,
+    decisions: Record<string, string | null>,
+    params: { search?: string; offset?: number; limit?: number } = {}
+  ): Promise<StaffingMappingView> {
+    const response = await api.patch<StaffingMappingView>(
+      `${BASE}/${importId}/staffing/mapping/${list}`,
+      { decisions },
+      {
+        params: { search: params.search ?? '', offset: params.offset ?? 0, limit: params.limit ?? 50 },
+        timeout: 0,
+      }
+    );
+    return response.data;
+  },
+
+  /** Take every suggestion in one list that has no decision yet; returns how many. */
+  async acceptStaffingSuggestions(importId: string, list: StaffingMappingList): Promise<number> {
+    const response = await api.post<{ mapped: number }>(
+      `${BASE}/${importId}/staffing/mapping/${list}/accept-suggestions`,
+      null,
+      { timeout: 0 }
+    );
+    return response.data?.mapped ?? 0;
+  },
+
+  async getStaffingCommit(importId: string): Promise<StaffingCommitPreview> {
+    const response = await api.get<StaffingCommitPreview>(`${BASE}/${importId}/staffing/commit`, { timeout: 0 });
+    return response.data;
+  },
+
+  async setStaffingIncludeUnstaffed(importId: string, includeUnstaffed: boolean): Promise<StaffingCommitPreview> {
+    const response = await api.patch<StaffingCommitPreview>(
+      `${BASE}/${importId}/staffing/options`,
+      { include_unstaffed: includeUnstaffed },
+      { timeout: 0 }
+    );
+    return response.data;
+  },
+
+  /** Who a member the roster names is; shared with the import's other steps. */
+  async updateStaffingMembers(
+    importId: string,
+    members: Record<string, AdminMemberMapping | null>
+  ): Promise<StaffingCommitPreview> {
+    const response = await api.put<StaffingCommitPreview>(
+      `${BASE}/${importId}/staffing/members`,
+      { members },
+      { timeout: 0 }
+    );
+    return response.data;
+  },
+
+  async getStaffingUnfilled(
+    importId: string,
+    params: { offset?: number; limit?: number } = {}
+  ): Promise<StaffingUnfilledView> {
+    const response = await api.get<StaffingUnfilledView>(`${BASE}/${importId}/staffing/unfilled`, {
+      params: { offset: params.offset ?? 0, limit: params.limit ?? 50 },
+      timeout: 0,
+    });
+    return response.data;
+  },
+
+  /** Assign members to unfilled seats by line; a null empties the seat again. */
+  async assignStaffingUnfilled(
+    importId: string,
+    assignments: Record<string, string | null>,
+    params: { offset?: number; limit?: number } = {}
+  ): Promise<StaffingUnfilledView> {
+    const response = await api.patch<StaffingUnfilledView>(
+      `${BASE}/${importId}/staffing/unfilled`,
+      { assignments },
+      { params: { offset: params.offset ?? 0, limit: params.limit ?? 50 }, timeout: 0 }
+    );
+    return response.data;
+  },
+
+  /** Write the roster; safe to run again. */
+  async commitStaffing(importId: string): Promise<StaffingCommitPreview> {
+    const response = await api.post<StaffingCommitPreview>(`${BASE}/${importId}/staffing/commit`, null, { timeout: 0 });
     return response.data;
   },
 

@@ -293,7 +293,7 @@ async function serveApprovals(page: Page): Promise<void> {
 // The Treasurer's review of next year's budget requests: ten columns, five of
 // them money, plus a Review/Change action on every decided row.
 test.describe('Budget request review table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/finance/budget-requests/review — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
@@ -312,7 +312,7 @@ test.describe('Budget request review table', () => {
 // Approval steps waiting on the viewer: long request titles with late-line and
 // fund-shortfall badges, email-link status, and Approve/Deny buttons.
 test.describe('Pending approvals table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/finance/approvals — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
@@ -328,7 +328,7 @@ test.describe('Pending approvals table', () => {
 // Requests no chain routes, decided on their own page: the "Needs" column
 // spells out what each one is waiting for.
 test.describe('Manual decisions table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/finance/approvals manual decisions — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
@@ -353,7 +353,7 @@ const REPORTS = [
 
 for (const report of REPORTS) {
   test.describe(report.label, () => {
-    for (const viewport of TABLE_FIT_VIEWPORTS) {
+    for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
       test(`/finance/reports?report=${report.key} — ${viewport.name}`, async ({ page }) => {
         await page.setViewportSize(viewport);
         await signIn(page, { permissions: PERMISSIONS });
@@ -370,7 +370,7 @@ for (const report of REPORTS) {
 // Member dues: the member name never wraps, and an owing row carries both
 // Record payment and Waive.
 test.describe('Member dues table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/finance/dues — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });
@@ -386,7 +386,7 @@ test.describe('Member dues table', () => {
 // QuickBooks export history: date-time, period, status with its hint, and the
 // "Mark as imported" button.
 test.describe('QuickBooks export history table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/finance/settings/quickbooks — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });

@@ -176,7 +176,7 @@ that code (pitfall #29).
 | `admin_hours.hours`               | approved administrative hours                                          |
 | `skills.tests_passed`             | skills tests passed                                                    |
 | `certifications.current`          | qualifications held at the period's end, with expiry dates             |
-| `positions.held`                  | offices and positions held (see `docs/KNOWN_LIMITATIONS.md`)           |
+| `positions.held`                  | offices and committee seats held at any time during the period         |
 
 A figure that cannot honestly be given is reported unavailable with a note,
 never as zero or 100%.

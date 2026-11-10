@@ -192,9 +192,10 @@ export const QuickBooksOnlineSection: React.FC = () => {
           QuickBooks Online connection
         </h2>
         <p className="text-theme-text-secondary mt-1 text-sm">
-          Connected, each paid purchase request, issued check and paid expense report posts to QuickBooks as an expense
-          to its vendor, paid from the bank account mapped below. Cash advances, dues and voided checks still go in the
-          CSV export, as does any payment QuickBooks refuses.
+          Connected, each paid purchase request, issued check and paid expense report posts to QuickBooks to its vendor,
+          paid from the account mapped below: an issued check as a QuickBooks check with its check number, a payment
+          from a credit card account as a credit card expense, and anything else from a bank account as an expense. Cash
+          advances, dues and voided checks still go in the CSV export, as does any payment QuickBooks refuses.
         </p>
       </div>
 

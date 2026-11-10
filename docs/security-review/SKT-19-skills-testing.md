@@ -3030,3 +3030,174 @@ scope files since pass 12's reviewed baseline. Every standing fix from passes
 1–12 re-confirmed present at its current citation. Route surface (29/29) and
 route-permission registry (289, 0 errors) unchanged in shape. No open findings
 remain in this feature.
+
+---
+
+## Pass 14 (2026-11-09) — watchdog pickup, real delta, 0 new findings
+
+**Prefix:** `SKT14` · **PR:** see `PROGRESS.md`'s **Open PR** row.
+
+**Watchdog note.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents` → "No
+reachable agents"). No open PR's head branch starts with
+`claude/security-review-` (`gh api … search/code`/`pulls?state=open`, 0
+matches). PR #4180 (Feature 18, Training extended, pass 14) had just merged.
+Row 19 (Skills testing) confirmed the next `⬜` by reading the rotation table
+directly on a freshly fetched `main`.
+
+### Scope check — real delta since pass 13
+
+Baseline: `85c3b760` (pass 13's own merge, PR #3935).
+
+```
+git diff 85c3b760..origin/main -- \
+  backend/app/api/v1/endpoints/skills_testing.py \
+  backend/app/services/skills_testing_service.py \
+  backend/app/schemas/skills_testing.py \
+  backend/app/models/skills_testing.py
+```
+
+One file changed: `skills_testing.py`, +14/-0. The other three declared scope
+files are byte-identical.
+
+### Change reviewed (traced safe, 0 fixes needed)
+
+**A new cross-feature hook: a passing, validated official test now also
+evaluates the candidate's program milestones.** `complete_test` (the
+auto-validate branch, officer completing) and `validate_test` (the
+member-submission-then-officer-validates path) each gained an identical
+four-line block, placed immediately after the existing
+`apply_test_pass_to_pipeline` call and under the same guard condition
+(`test.result == PASS`, `not test.is_practice`, `test.validated_at` truthy):
+
+```python
+if (
+    test.result == SkillTestResult.PASS.value
+    and not test.is_practice
+    and test.validated_at
+):
+    await process_milestones_for_user(
+        db, current_user.organization_id, test.candidate_id
+    )
+```
+
+`process_milestones_for_user` (`app/services/program_milestones.py:691`,
+aliased on import as `process_milestones_for_user` — the module itself is
+Feature 17 (Training core)'s own file, part of the program-milestones system
+reviewed under that feature's rotation, not re-derived here) is the thing
+checked for this feature's own call sites:
+
+- **Org scoping** — called with `current_user.organization_id` (the
+  authenticated caller's own org, never client-supplied) and
+  `test.candidate_id` (pulled from a `test` row already fetched filtered on
+  `SkillTest.organization_id == current_user.organization_id` earlier in the
+  same handler). `process_user` itself re-filters
+  `ProgramEnrollment.organization_id == str(organization_id)` **and**
+  `ProgramEnrollment.user_id == str(user_id)` before touching anything — no
+  new by-id or cross-tenant surface (CHECKLIST §3).
+- **Fails closed on the test-completion flow, not into it** —
+  `process_user`'s docstring and body: "Never raises: the result that
+  prompted it is saved." It wraps its own body in `try/except Exception`,
+  logs, rolls back its own (separate) work, and returns `0` rather than
+  propagating. Confirmed by reading the function: a milestone-evaluation bug
+  cannot turn into a 500 on `POST /tests/{id}/complete` or `/validate`, and
+  cannot un-commit the already-committed test result (the call runs after
+  `db.commit()` in `complete_test`, and after `validate_test`'s own commit,
+  matching the established "runs after the commit above because the
+  progress updater commits internally" pattern already documented for the
+  sibling `apply_test_pass_to_pipeline` call one block above it).
+- **Double-fire not reachable for one test.** `complete_test`'s branch only
+  sets `test.validated_at` when `auto_validate` (an officer completing) is
+  true; `validate_test` only runs on a test not yet validated (the "already
+  validated" guard 400s first). The two call sites are mutually exclusive
+  for a given test's first validation, and `ProgramMilestoneAchievement` is
+  additionally unique on `(milestone_id, enrollment_id)` per
+  `program_milestones.py`'s own docstring, so even a hypothetical re-run is
+  idempotent by constraint, not just by this call-site reasoning.
+- **No new data exposure.** The call returns an `int` (count processed) that
+  is not read or returned by either endpoint — nothing from the milestone
+  evaluation reaches the `complete_test`/`validate_test` HTTP response.
+
+No finding. This is a correctly-scoped, fail-safe wiring of an
+already-reviewed helper into two already-reviewed endpoints' existing
+post-commit hook pattern.
+
+### Re-verification, by direct grep against current code
+
+- **SKT-1** — `update_template` still routes through `apply_updates`
+  (`skills_testing.py:764`).
+- **SKT-2/SKT-3 and all four separation-of-duties sites** —
+  `assert_different_person(...)` present at `create_test` (`:1610`),
+  `validate_test` (`:2447`), `void_test` (`:3098`),
+  `return_test_for_correction` (`:3268`).
+- **SKT-4** — `lock_attempt_capacity`'s `.with_for_update()` (`:785`) and the
+  capacity count's `.with_for_update(of=SkillTest)` (`:891`) both still
+  present in `skills_testing_service.py`.
+- **SKT2-1** — zero `is_practice ==` literal comparisons (`grep -c` → 0).
+- **SKT3-1** — `add_test_viewer` still rejects naming the examiner
+  ("The examiner already sees this result in full", `:2830`).
+- **SKT5-1** — `redact_test_for_view`'s `scores` branch still scrubs
+  `waive_reason` (`skills_testing_service.py:1315`).
+- **Pitfall #32** — `search_candidates` still uses
+  `User.status.in_(ACTIVE_ACCOUNT_STATUSES)` (`:1055`), not a literal
+  `== ACTIVE`.
+
+**Route surface.** Fresh AST walk (own script, not reused from any prior
+pass) over every `@router.get/post/put/patch/delete` decorator and its
+function's `Depends(...)` defaults: **29/29 routes**, identical count to
+passes 1–13, every one carrying a recognized auth dependency.
+`python3 scripts/check_route_permissions.py --strict` (repo root): **305
+total application routes, 0 errors, 0 warnings** — up from pass 13's 289
+from other features merging in the interim, confirming no new top-level page
+from this feature (Pitfall #30a n/a).
+
+### Frontend
+
+No file matching `skillsTestingService`/`skillsTestingStore`/
+`practicalSkillsStore` changed in the window since pass 13's own frontend
+sweep found the live state clean; the new milestone hook is backend-only
+(the response shape `complete_test`/`validate_test` return is unchanged — no
+new field was added for the frontend to consume). `UNCACHEABLE_PREFIXES`'
+`/training/skills-testing/tests` entry (`frontend/src/utils/apiCache.ts`)
+unaffected.
+
+### Findings
+
+**0 new findings.** The one real change in scope — wiring
+`process_milestones_for_user` into `complete_test` and `validate_test` — is
+an already-reviewed, fail-safe, org-scoped helper called with
+already-validated inputs at the correct point in an existing, established
+post-commit-hook pattern. Every standing SKT fix re-verified present at its
+current citation. No open or flagged item existed coming into this pass, and
+none is newly opened.
+
+### Corrections to prior write-ups
+
+None.
+
+### Guard tests added
+
+None — no defect found to guard against; the reviewed change is a correctly
+fail-safe cross-feature hook whose own idempotency is already enforced by
+`ProgramMilestoneAchievement`'s unique constraint, which belongs to Feature
+17's own test suite, not this feature's.
+
+### Completion gate (pass 14)
+
+| Check                                                                                                   | Result                                                   |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, CI's pin, installed this pass — ambient resolved 7.5.0) | ✅ 0 violations                                          |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, CI's pin)                                       | ✅ 3047 files unchanged                                  |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, CI's pin)                                    | ✅ clean                                                 |
+| `python3 scripts/validate_migrations.py --strict`                                                       | ✅ 750 revisions, single head `55e20c02dea7`             |
+| `python3 scripts/check_route_permissions.py --strict` (root)                                            | ✅ 305 routes, 0 errors, 0 warnings                      |
+| `pytest tests/ -q -k "skill or skt"` (via `python3.13`)                                                 | ✅ 642 passed, 1 skipped (pre-existing `pywebpush` skip) |
+| `cd frontend && npm run typecheck`                                                                      | ✅ 0 errors                                              |
+| `cd frontend && npm run lint`                                                                           | ✅ 0 errors, 0 warnings                                  |
+
+**Final disposition: 0 fixed, 0 newly flagged, 0 findings closed.** One real
+backend change since pass 13 — a new, correctly-scoped, fail-safe milestone
+hook added to `complete_test` and `validate_test` — traced safe end-to-end.
+Every standing fix from passes 1–13 re-confirmed present at its current
+citation. Route surface (29/29) and route-permission registry (305, 0
+errors) unchanged in shape. No open findings remain in this feature.

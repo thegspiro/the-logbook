@@ -27,12 +27,13 @@ import {
   MONTH_NAMES,
   buildPastRows,
   groupByMonth,
+  monthHeading,
   resolveScope,
   rowsInScope,
   summarizeYears,
   totalsFor,
 } from './pastShiftsModel';
-import type { MonthGroup, PastShiftRow, PeriodTotals } from './pastShiftsModel';
+import type { PastShiftRow, PeriodTotals } from './pastShiftsModel';
 
 const plural = (count: number, one: string, many: string): string => `${count} ${count === 1 ? one : many}`;
 
@@ -190,9 +191,6 @@ const ShiftRow: React.FC<{
     </li>
   );
 };
-
-const monthHeading = (group: MonthGroup): string =>
-  group.year !== null && group.month !== null ? `${MONTH_NAMES[group.month - 1] ?? ''} ${group.year}` : 'No shift date';
 
 interface PastShiftsHistoryProps {
   /** Past assignments, newest first. Declined and cancelled seats are already removed. */

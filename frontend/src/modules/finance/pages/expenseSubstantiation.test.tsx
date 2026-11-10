@@ -63,6 +63,9 @@ const rules = (substantiationMode: string, substantiationDays = 60) => ({
 });
 
 beforeEach(() => {
+  // The expense form keeps a local draft (forms review F-6); one test's lines
+  // must not come back as the next test's restored draft.
+  sessionStorage.clear();
   mockGetSettings.mockReset();
   mockGetSettings.mockResolvedValue(rules('warn'));
   storeState = { createExpenseReport: vi.fn() };

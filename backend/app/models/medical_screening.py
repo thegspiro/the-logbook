@@ -22,12 +22,18 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.core.database import Base
-from app.core.encrypted_types import EncryptedEnum, EncryptedJSON, EncryptedText
+from app.core.encrypted_types import (
+    EncryptedEnum,
+    EncryptedJSON,
+    EncryptedReference,
+    EncryptedText,
+)
 from app.core.utils import generate_uuid
 
 if TYPE_CHECKING:
@@ -117,20 +123,12 @@ class ScreeningRequirement(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    # Relationships
-    # A screening record is a member's medical history and must outlive the
-    # requirement it was filed against: ScreeningRecord.requirement_id is
-    # ondelete="SET NULL", and deleting a requirement only unlinks its
-    # records. No "delete" / "delete-orphan" here -- either would have the ORM
-    # delete the records before the database's SET NULL ever applied.
-    # passive_deletes=True leaves unloaded records to that SET NULL instead
-    # of loading the whole collection just to null it; any already loaded
-    # are nulled by the ORM, the same outcome.
-    records: Mapped[list["ScreeningRecord"]] = relationship(
-        "ScreeningRecord",
-        back_populates="requirement",
-        passive_deletes=True,
-    )
+    # No relationship to ScreeningRecord: the record's requirement_id is
+    # ciphertext since MS-18 (owner decision 2026-11-06), so there is no
+    # foreign key to join on. A record is a member's medical history and must
+    # outlive the requirement it was filed against; deleting a requirement
+    # clears its records' links in MedicalScreeningService.delete_requirement,
+    # which is what the old ON DELETE SET NULL did.
 
     __table_args__ = (
         Index("idx_screening_req_org_type", "organization_id", "screening_type"),
@@ -156,9 +154,13 @@ class ScreeningRecord(Base):
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # MS-18 (owner decision 2026-11-06): the link is ciphertext. A plain id
+    # leads straight to a requirement whose name says what the screening was,
+    # which would undo encrypting screening_type below. No foreign key: the
+    # database cannot match ciphertext, so the link is checked in-org when it
+    # is written and cleared in code when its requirement is deleted.
     requirement_id: Mapped[Optional[str]] = mapped_column(
-        String(36),
-        ForeignKey("screening_requirements.id", ondelete="SET NULL"),
+        EncryptedReference,
         nullable=True,
     )
     user_id: Mapped[Optional[str]] = mapped_column(
@@ -173,12 +175,13 @@ class ScreeningRecord(Base):
         nullable=True,
         comment="For prospective members. NULL if this is for an active member.",
     )
+    # MS-18 (owner decision 2026-11-06): which screening a member had is PHI
+    # on its own — "this member — psychological evaluation" — so the type is
+    # ciphertext like the status below, and is matched in Python after
+    # decryption. The requirement's own type stays plaintext: it describes
+    # the department's policy, not a person.
     screening_type: Mapped[ScreeningType] = mapped_column(
-        Enum(
-            ScreeningType,
-            name="screening_type_enum",
-            values_callable=lambda x: [e.value for e in x],
-        ),
+        EncryptedEnum(ScreeningType),
         nullable=False,
     )
     # MS-18: the outcome is PHI too — "failed" beside a member's name and a
@@ -236,9 +239,6 @@ class ScreeningRecord(Base):
     )
 
     # Relationships
-    requirement: Mapped[Optional["ScreeningRequirement"]] = relationship(
-        "ScreeningRequirement", back_populates="records"
-    )
     user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[user_id])
     prospect: Mapped[Optional["ProspectiveMember"]] = relationship(
         "ProspectiveMember", foreign_keys=[prospect_id]
@@ -264,4 +264,56 @@ class ScreeningRecord(Base):
             "organization_id",
             "expiration_date",
         ),
+    )
+
+
+class ScreeningReminderSend(Base):
+    """One expiry reminder sent for one screening, at one tier (W71b-4).
+
+    The unique key ``(screening_record_id, tier_days, due_date)`` is what makes
+    a second daily run, or two runs at once, a no-op (pitfall #36): the run
+    inserts this row before it sends, and a duplicate insert means another run
+    already has that reminder. ``due_date`` is part of the key so an officer
+    who corrects the record's expiration date re-arms the reminders for the
+    new date rather than leaving them spent on the old one.
+
+    Holds no PHI beyond what ``screening_records`` already keeps in plaintext:
+    the record id and the due date.
+    """
+
+    __tablename__ = "screening_reminder_sends"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    screening_record_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("screening_records.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    tier_days: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="The reminder tier: days before the due date (90, 60, 30 or 7).",
+    )
+    due_date: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+        comment="The due date this reminder was about.",
+    )
+    sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "screening_record_id",
+            "tier_days",
+            "due_date",
+            name="uq_screening_reminder_send",
+        ),
+        Index("idx_screening_reminder_org", "organization_id"),
     )

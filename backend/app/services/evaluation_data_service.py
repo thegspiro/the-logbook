@@ -35,6 +35,7 @@ from sqlalchemy.orm import selectinload
 from app.models.call_tracking import CallTrackingMode
 from app.models.event import Event, EventRSVP, EventType
 from app.models.meeting import Meeting, MeetingAttendee, MeetingType
+from app.models.member_position_term import MemberPositionTerm
 from app.models.skills_testing import SkillTest, SkillTestResult, SkillTestStatus
 from app.models.training import TrainingRequirement
 from app.models.user import (
@@ -42,7 +43,6 @@ from app.models.user import (
     MemberServicePeriod,
     Position,
     User,
-    user_positions,
 )
 from app.schemas.evaluation import TemplateDefinition
 from app.services.admin_hours_service import AdminHoursService
@@ -720,31 +720,46 @@ class EvaluationDataService:
     async def _positions(
         self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
     ) -> Dict[str, Any]:
-        """Offices and committee seats held now and assigned by period end.
+        """Offices and committee seats held at any time during the period.
 
-        The application keeps no history of positions: removing one deletes
-        its row. A position held earlier in the period and since given up
-        cannot be listed (docs/KNOWN_LIMITATIONS.md).
+        Read from ``member_position_terms`` (owner decision 2026-11-06): a term
+        counts when ``[started_at, ended_at)`` overlaps the period's
+        ``[start, end)``, so a seat given up mid-period is listed and one taken
+        after it ended is not. A position held twice in the period is listed
+        once. The position's current name is shown, or the name it had when it
+        was held if it has since been deleted. History starts when the terms
+        table was created: a position given up before then is not known
+        (docs/KNOWN_LIMITATIONS.md).
         """
-        _, end_utc = local_range_utc(coverage.start, coverage.end, tz)
-        rows = await self.db.execute(
-            select(Position.name)
-            .join(user_positions, user_positions.c.position_id == Position.id)
+        start_utc, end_utc = local_range_utc(coverage.start, coverage.end, tz)
+        name = func.coalesce(Position.name, MemberPositionTerm.position_name)
+        kind = func.coalesce(Position.kind, MemberPositionTerm.position_kind)
+        query = (
+            select(name)
+            .select_from(MemberPositionTerm)
+            .outerjoin(Position, Position.id == MemberPositionTerm.position_id)
             .where(
-                user_positions.c.user_id == member.id,
-                Position.organization_id == org_id,
-                Position.kind.in_(_LISTED_POSITION_KINDS),
-                or_(
-                    user_positions.c.assigned_at.is_(None),
-                    user_positions.c.assigned_at < end_utc,
-                ),
+                MemberPositionTerm.user_id == member.id,
+                MemberPositionTerm.organization_id == org_id,
+                kind.in_(_LISTED_POSITION_KINDS),
             )
-            .order_by(Position.name)
+            .distinct()
+            .order_by(name)
         )
+        if end_utc is not None:
+            query = query.where(MemberPositionTerm.started_at < end_utc)
+        if start_utc is not None:
+            query = query.where(
+                or_(
+                    MemberPositionTerm.ended_at.is_(None),
+                    MemberPositionTerm.ended_at > start_utc,
+                )
+            )
+        rows = await self.db.execute(query)
         names = [row[0] for row in rows.all()]
         return _value(
-            [{"label": name} for name in names],
-            note="Positions held when the figures were taken.",
+            [{"label": label} for label in names],
+            note="Positions held at any time during the period.",
         )
 
 

@@ -44,7 +44,7 @@ const attendanceDashboard = {
 // directly in an overflow-hidden card, so a table wider than the card on a
 // tablet or laptop is clipped with no way to scroll to the cut-off columns.
 test.describe('Meeting attendance table fits its card', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/minutes/attendance — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: [...TEST_USER.permissions, 'meetings.view', 'meetings.manage'] });

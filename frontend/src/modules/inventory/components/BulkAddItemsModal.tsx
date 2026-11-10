@@ -19,7 +19,8 @@ import { Loader2, PackagePlus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '@/components/Modal';
 import { inventoryService } from '@/services/inventoryService';
-import { getErrorMessage } from '@/utils/errorHandling';
+import { useFieldErrors, type FieldSpecs } from '@/hooks/useFieldErrors';
+import { FIELD_ERROR_CLASS, FormField } from '@/components/ux/FormField';
 import type { InventoryCategory, InventoryItemBulkEntry } from '@/services/api';
 import { parseBulkLines } from '../utils/bulkItemLines';
 
@@ -32,11 +33,16 @@ interface BulkAddItemsModalProps {
   onCreated: (createdIds: string[]) => void;
 }
 
+// A refusal against one pasted line names its index, which no single field
+// matches; it is said above the actions instead.
+const BULK_FIELDS: FieldSpecs<'list'> = { list: { id: 'bulk-add-list', label: 'One item per line' } };
+
 const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, categories, onCreated }) => {
   const [text, setText] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [trackingType, setTrackingType] = useState<'pool' | 'individual'>('pool');
   const [saving, setSaving] = useState(false);
+  const fieldErrors = useFieldErrors(BULK_FIELDS);
 
   const parsed = useMemo(() => parseBulkLines(text), [text]);
 
@@ -44,10 +50,20 @@ const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, 
     setText('');
     setCategoryId('');
     setTrackingType('pool');
+    fieldErrors.clear();
   };
 
   const submit = async () => {
-    if (parsed.length === 0) return;
+    // Checked here rather than by greying out Add, which told a member
+    // nothing about why it would not press (forms review F-3).
+    fieldErrors.setFormError(null);
+    if (parsed.length === 0) {
+      const problems = { list: 'Paste or type at least one item name, one per line.' };
+      fieldErrors.setErrors(problems);
+      fieldErrors.focusFirst(problems);
+      return;
+    }
+    fieldErrors.setErrors({});
     setSaving(true);
     try {
       const entries: InventoryItemBulkEntry[] = parsed.map((line) => ({
@@ -78,7 +94,7 @@ const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, 
       reset();
       onClose();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to add the items'));
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to add the items'));
     } finally {
       setSaving(false);
     }
@@ -101,7 +117,7 @@ const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, 
         <button
           type="button"
           onClick={() => void submit()}
-          disabled={saving || parsed.length === 0}
+          disabled={saving}
           className="flex items-center gap-1.5 rounded-md bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:opacity-40"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
@@ -114,23 +130,37 @@ const BulkAddItemsModal: React.FC<BulkAddItemsModalProps> = ({ isOpen, onClose, 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add several items" size="lg" footer={footer}>
       <div className="space-y-4">
-        <div>
-          <label className="form-label" htmlFor="bulk-add-list">
-            One item per line
-          </label>
-          <textarea
-            id="bulk-add-list"
-            className="form-input font-mono text-sm"
-            rows={10}
-            placeholder={'Gauze Pads, 4x4 Sterile\nNitrile Gloves, Large\nOropharyngeal Airway Set | 2 | Set'}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <p className="text-theme-text-muted mt-1 text-xs">
-            Add <code className="font-mono">| quantity | unit</code> after a name to set those too. Names already in
-            your inventory are skipped.
+        {fieldErrors.formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {fieldErrors.formError}
           </p>
-        </div>
+        )}
+        <FormField
+          id={BULK_FIELDS.list.id}
+          label="One item per line"
+          required
+          error={fieldErrors.errors.list}
+          hint={
+            <>
+              Add <code className="font-mono">| quantity | unit</code> after a name to set those too. Names already in
+              your inventory are skipped.
+            </>
+          }
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              className="form-input font-mono text-sm"
+              rows={10}
+              placeholder={'Gauze Pads, 4x4 Sterile\nNitrile Gloves, Large\nOropharyngeal Airway Set | 2 | Set'}
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                fieldErrors.setError('list', null);
+              }}
+            />
+          )}
+        </FormField>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>

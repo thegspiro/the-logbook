@@ -291,7 +291,11 @@ async def list_records(
             "filters": {
                 "user_id": user_id,
                 "prospect_id": prospect_id,
-                "screening_type": screening_type,
+                # MS-18 (owner decision 2026-11-06): whether the list was
+                # narrowed to one type, not which type. Beside a user_id
+                # filter the value would name the member's screening in a
+                # log that cannot be scrubbed later (it is hash-chained).
+                "screening_type_filtered": bool(screening_type),
                 "status": record_status,
                 "skip": pagination.skip,
                 "limit": pagination.limit,
@@ -388,7 +392,9 @@ async def create_record(
         event_data={
             "record_id": record.id,
             "record_user_id": data.user_id,
-            "screening_type": data.screening_type,
+            # No screening_type (MS-18, owner decision 2026-11-06): the type is
+            # encrypted on the record, and the audit log is hash-chained, so a
+            # type written here could never be removed.
             "self_recorded": record.self_recorded,
         },
         user_id=str(current_user.id),
