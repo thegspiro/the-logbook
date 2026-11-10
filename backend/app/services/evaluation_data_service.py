@@ -71,7 +71,10 @@ from app.services.training_compliance import (
     tally_standing,
 )
 from app.services.training_service import TrainingService
-from app.services.training_waiver_service import fetch_user_waivers
+from app.services.training_waiver_service import (
+    SOURCE_SESSION_EXCUSAL,
+    fetch_user_waivers,
+)
 from app.utils.org_timezone import (
     local_date,
     local_day_start_utc,
@@ -456,7 +459,10 @@ class EvaluationDataService:
         ``override_check_in_at``). Sessions on days the member was excused
         from all training by a waiver, or outside their coverage, are dropped
         from both counts; working from id sets drops a session that is both
-        exactly once, as ``tally_attendance`` does for meetings.
+        exactly once, as ``tally_attendance`` does for meetings. A session the
+        member was excused from by an approved waiver request is dropped too,
+        unless they attended it anyway, which counts (owner decision,
+        2026-11-10, the rule ``tally_session_attendance`` applies).
         """
         start_utc, end_utc = local_range_utc(coverage.start, coverage.end, tz)
         events = (
@@ -470,11 +476,16 @@ class EvaluationDataService:
                 )
             )
         ).all()
+        periods = await fetch_user_waivers(self.db, org_id, member.id)
+        # A session excusal also carries requirement_ids=None, but it names
+        # one event rather than excusing the day: read as a blanket waiver it
+        # would drop every session held that day.
         waivers = [
             w
-            for w in await fetch_user_waivers(self.db, org_id, member.id)
-            if w.requirement_ids is None
+            for w in periods
+            if w.requirement_ids is None and w.source != SOURCE_SESSION_EXCUSAL
         ]
+        excused = {w.event_id for w in periods if w.source == SOURCE_SESSION_EXCUSAL}
         eligible = set()
         for event_id, starts_at in events:
             day = local_date(starts_at, tz)
@@ -483,9 +494,10 @@ class EvaluationDataService:
             if any(w.start_date <= day <= w.end_date for w in waivers):
                 continue
             eligible.add(event_id)
+        attended = await self._attended_event_ids(org_id, member.id, eligible)
+        eligible -= excused - attended
         if not eligible:
             return _unavailable("No training sessions were held in the period.")
-        attended = await self._attended_event_ids(org_id, member.id, eligible)
         return _value(
             _pct(len(attended), len(eligible)),
             attended=len(attended),

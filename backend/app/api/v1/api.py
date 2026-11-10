@@ -15,6 +15,7 @@ from app.api.v1.endpoints import (
     admin_hub,
     analytics,
     apparatus,
+    attendance_waiver_requests,
     audit_logs,
     auth,
     calcom_sync,
@@ -548,6 +549,17 @@ api_router.include_router(
 )
 api_router.include_router(
     scheduled.router, prefix="/scheduled", tags=["scheduled-tasks"]
+)
+# Mounted before training_waivers, whose /{waiver_id} also matches the path
+# /training/waivers/requests. Starlette prefers a full match over a method-only
+# one, and that router has only PATCH and DELETE there, so today the order
+# changes nothing; it matters if it ever gains a GET or POST /{waiver_id}.
+# TestRouterOrder in tests/test_attendance_waiver_endpoints.py pins the order.
+api_router.include_router(
+    attendance_waiver_requests.router,
+    prefix="/training/waivers/requests",
+    tags=["training-waivers"],
+    dependencies=module_gate("training", "Training"),
 )
 api_router.include_router(
     training_waivers.router,
