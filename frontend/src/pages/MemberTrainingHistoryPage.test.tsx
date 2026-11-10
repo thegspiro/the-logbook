@@ -301,6 +301,19 @@ describe('MemberTrainingHistoryPage record list', () => {
     expect(within(item).queryByText(/Expires/)).not.toBeInTheDocument();
   });
 
+  it('says where each record came from', async () => {
+    mockGetRecords.mockResolvedValue([
+      record({ id: 'ts', course_name: 'Synced class', source: 'provider', source_label: 'Target Solutions' }),
+      record({ id: 'imp', course_name: 'Imported class', source: 'imported', source_label: 'Imported' }),
+    ]);
+    renderWithRouter(<MemberTrainingHistoryPage />);
+
+    const list = await screen.findByRole('list', { name: 'Training records' });
+    const [synced, imported] = within(list).getAllByRole('listitem');
+    expect(synced).toHaveTextContent('Continuing Education · 9/1/2026 · 1 hr · Target Solutions');
+    expect(imported).toHaveTextContent('Continuing Education · 9/1/2026 · 1 hr · Imported');
+  });
+
   it('does not repeat a course code the imported name already carries', async () => {
     mockGetRecords.mockResolvedValue([
       record({ course_name: 'CAPCE HIPAA Awareness (3088740)', course_code: '3088740' }),

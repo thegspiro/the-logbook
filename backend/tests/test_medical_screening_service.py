@@ -589,10 +589,17 @@ class TestCRUD:
     ):
         """Deleting an existing requirement returns True."""
         req = make_requirement(org_id)
-        with patch.object(service, "get_requirement", return_value=req):
+        # The link is ciphertext with no foreign key (MS-18), so the delete
+        # unlinks the requirement's records itself, in this org.
+        unlink = AsyncMock(return_value=0)
+        with (
+            patch.object(service, "get_requirement", return_value=req),
+            patch.object(service, "unlink_records_from_requirement", unlink),
+        ):
             result = await service.delete_requirement(req.id, org_id)
         assert result is True
         assert mock_db.delete.called
+        unlink.assert_awaited_once_with(str(req.id), org_id)
 
     async def test_create_record_adds_to_db(self, service, mock_db, org_id):
         """Creating a record adds it to the session."""

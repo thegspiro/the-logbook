@@ -67,6 +67,7 @@ from app.services.training_course_names import (
 )
 from app.services.training_module_config_service import TrainingModuleConfigService
 from app.services.training_program_service import TrainingProgramService
+from app.services.training_record_source import record_sources
 from app.services.training_requirement_courses import (
     load_required_course_catalog,
 )
@@ -1046,8 +1047,12 @@ async def get_my_training_records(
     page_course_names = await library_course_names(
         db, str(current_user.organization_id), (r.course_id for r in page_records)
     )
+    page_sources = await record_sources(
+        db, str(current_user.organization_id), page_records
+    )
     items: list[dict[str, Any]] = []
     for r in page_records:
+        source = page_sources[str(r.id)]
         item: dict[str, Any] = {
             "id": str(r.id),
             "course_name": member_course_name(
@@ -1065,6 +1070,8 @@ async def get_my_training_records(
             "instructor": r.instructor,
             "voided_at": r.voided_at.isoformat() if r.voided_at else None,
             "void_reason": r.void_reason,
+            "source": source.kind,
+            "source_label": source.label,
         }
         if show_hours:
             item["hours_completed"] = (
