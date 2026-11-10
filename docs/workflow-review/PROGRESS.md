@@ -178,6 +178,33 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### W09 second pass — Import members from a spreadsheet — 2026-11-10
+
+The owner asked to continue with W09. Driven as `admin` at 1280×900 and
+390×844 with a nine-row file, with `member2` refused.
+
+Held:
+
+- the pre-check names bad rows by column and value;
+- "Confirm it's you" opens mid-import and the run continues from that row;
+- every imported value is stored as written;
+- rows the server refuses come back in the error report;
+- a re-upload flags every imported row;
+- every create is audited;
+- the phone layout is clean.
+
+Fixed:
+
+- W09-4 (LOW): the pre-check passed an administrative member with a rank, which the server refuses.
+- W09-5 (LOW): the instructions promised a blank membershipNumber would be assigned; with numbering off it stays blank.
+
+Flagged:
+
+- W09-6 (MED): Add Member requires a membership number, the import does not. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+- W09-7 (LOW, lead): a bad phone passes the pre-check and fails at import; the rule exists only on the server.
+
+Gate: typecheck and lint clean, no warnings; 65 import tests pass, and each new case failed before its fix; docs links clean. Next: W10 when the owner asks.
+
 ### W08 second pass — Add a member and their first sign-in — 2026-11-09
 
 The owner asked to continue with W08. Driven as `admin`, the new member and

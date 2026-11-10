@@ -1618,6 +1618,25 @@ existing rows were deliberately not rewritten: the correct date is derivable
 would change historical compliance results, and that was judged not worth it.
 An officer can correct an individual record's date where it matters.
 
+## Membership Number — Add Member Requires One, Import Does Not (W09-6, 2026-11-10)
+
+**Owner decision needed.** When the department does not number members
+automatically (Members Administration → Settings → Membership IDs), the two
+ways of adding a member disagree:
+
+- **Add Member** refuses to save without a membership number (`AddMember.tsx`).
+- **Import Members** creates a member with none when the column is blank. The workflow review's W09 second pass imported three members this way.
+
+`POST /users` accepts either. It assigns a number when automatic numbering is
+on, and otherwise stores none. The rule exists only in Add Member's form.
+
+Until W09-5, the import's instructions promised that a blank number would be
+assigned, so an officer had no reason to fill the column. The instruction now
+says whether one will be. Two questions are open:
+
+- **Should a membership number be required when numbering is off?** If so, the rule belongs on `POST /users`, so that both paths and any API caller meet it.
+- **What happens to members already stored without one?** They can be found by a query and given numbers from each profile; no bulk assignment was checked.
+
 ## Department Contact Details — Settings Stores Them However They Are Typed (W06-6, 2026-11-08)
 
 **Owner decision needed.** Under Settings → Contact, the department's phone
