@@ -135,6 +135,60 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### A screening record's type and requirement link are encrypted at rest (2026-11-08)
+
+A migration (`ac1687769b62`) runs on the next start and turns
+`screening_records.screening_type` from an `ENUM` and
+`screening_records.requirement_id` from a `VARCHAR(36)` into `TEXT`, then
+**encrypts every existing value of both in place**. It first drops the
+**foreign key** from `requirement_id` to `screening_requirements` (whatever
+the constraint is named on your database) and the index under it: the
+database cannot match ciphertext. Same rules as the status change below:
+
+- `ENCRYPTION_KEY` must be set when screening records exist; with it missing
+  the migration stops with a clear error and changes nothing.
+- **Take the database backup first.** The downgrade decrypts both columns,
+  restores the `ENUM` and the `ON DELETE SET NULL` foreign key, and clears any
+  link whose requirement no longer exists (the restored key would refuse it).
+  Only the same `ENCRYPTION_KEY` / `ENCRYPTION_SALT` can read the ciphertext.
+  Backups taken before the upgrade still hold both columns in plaintext.
+- **Deleting a requirement still keeps its records**, now unlinking them in
+  the application rather than through the database. A requirement deleted by
+  hand in SQL leaves its records pointing at nothing; they then count toward
+  no requirement, as an unlinked record always has.
+- **New audit entries no longer name a screening's type**: the record-created
+  entry drops `screening_type`, and the records-list entry records only
+  `screening_type_filtered: true/false`. Existing entries are unchanged — the
+  audit log is hash-chained, and rewriting a row would break the chain.
+- The screens, compliance grading, the expiring list, the Members hub, the
+  membership pipeline's screening stage, the data export and anonymisation
+  behave as before. A report or query of your own that reads, filters or joins
+  on either column directly will now see ciphertext.
+- `scripts/rotate_encryption_key.py` and `scripts/reencrypt_to_aesgcm.py` cover
+  both columns.
+- **Still plaintext:** the dates and which member a record belongs to (see
+  `docs/KNOWN_LIMITATIONS.md`, MS-18).
+
+### Positions held now have a dated history (2026-11-08)
+
+A migration (`67ad01c43434`) runs on the next start, creates
+`member_position_terms` and gives every existing `user_positions` row one
+open term. It does not refuse to start on any data it meets, but what it
+records is worth knowing before an evaluation cycle relies on it:
+
+- Each current position's history starts at its `assigned_at` (or, where
+  that is empty, the member's `created_at`). **Nothing earlier is
+  reconstructed:** a position a member gave up before this upgrade does not
+  appear, and the audit log is not replayed into the history.
+- From then on every assignment and removal opens or closes a term in the
+  same transaction, whichever screen or service made it. A report or script
+  of your own that writes `user_positions` with raw SQL bypasses that; call
+  `sync_position_terms` (`app/models/member_position_term.py`) after it, as
+  `scripts/seed_test_users.py` now does.
+- The downgrade drops the table and the history with it; `user_positions` is
+  untouched, so the previous release boots. Take the backup first if the
+  history matters to you.
+
 ### A screening record's status is encrypted at rest (2026-11-05)
 
 A migration (`80fa2c83bf9d`) runs on the next start and turns
@@ -720,6 +774,58 @@ every authentication and public endpoint at once.
 
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
+
+### Medical screening: expiry reminder emails, and new requirements recur by default (2026-11-08)
+
+Nothing blocks a restart. Migration `cf93f3b65274` creates an empty table,
+`screening_reminder_sends`, and lets `notification_rules.trigger` hold
+`medical_screening_expiry`. No existing row changes.
+
+- **Members start receiving emails.** A new daily scheduled task,
+  `medical_screening_expiry_reminders` (06:15 in the external crontab, and in
+  the in-process scheduler), emails a member 90, 60, 30 and 7 days before
+  one of their medical screenings falls due — the certification reminders'
+  tiers. Only the most urgent tier a screening has reached is sent, so on the
+  first run after the upgrade a member whose physical is due in three weeks
+  gets the 30-day email once, not three. The subject is "A medical screening
+  is due soon"; the body names the requirement and the due date, nothing
+  about the result.
+- **On by default** for every department with the Medical Screening module
+  switched on. To turn them off, add a **Medical Screening Expiry** rule under
+  **Notifications › Rules** and disable it. A member who has turned off
+  "Training and certification reminders" (or all reminder emails) is not
+  emailed. There is no text message and no notification-bell entry.
+- **Each reminder goes once.** A second run the same day, or two runs at once,
+  sends nothing more. An officer who corrects a screening's expiration date
+  re-arms the reminders for the new date.
+- **A new screening requirement starts recurring every 12 months**; the
+  One-time box starts unticked. Requirements already saved keep their setting.
+- **Downgrading** drops the table, so the next run after re-upgrading may send
+  a screening's current tier again, and deletes any Medical Screening Expiry
+  rule.
+
+### QuickBooks Online: checks post as checks, card payments as credit card expenses (2026-11-08)
+
+Nothing blocks a restart, and nothing changes for a department that has not
+connected QuickBooks Online. No migration. For a connected department, from
+the next posting run:
+
+- **An issued check posts as a QuickBooks Check**, numbered with its check
+  number, with the check request's number in the transaction's private note.
+  It used to post as a cash expense numbered with the request number. Checks
+  already in QuickBooks are left as they were posted.
+- **A payment from a category whose paid-from account is a QuickBooks Credit
+  Card account now posts** as a credit card expense. It used to be refused
+  ("not a Bank account") and left for the CSV export. A payment refused that
+  way before the upgrade stays refused: press **Send again** on it to post it
+  live, or send it in the CSV export as before — not both.
+- **A check paid from a credit card account, or numbered past QuickBooks' 21
+  characters, is refused** and left for the CSV export. A check number already
+  used in the QuickBooks company is refused by QuickBooks, with its reason on
+  the posting.
+- A posting already waiting on a retry is resent under its original request
+  id; if QuickBooks had created it, QuickBooks answers with that original
+  (cash) Purchase rather than creating a Check beside it.
 
 ### Finance: an optional live QuickBooks Online connection (2026-11-06)
 

@@ -1137,10 +1137,36 @@ jobs:
   # 4-5 s a test under WebKit, and the table-fit specs took it to 450 tests,
   # about 35-38 minutes plus ~2 minutes of setup (PR #4082, cancelled twice at
   # 30 with every test passing), which leaves 45 too little headroom.
+  #
+  # Two shards, 2026-11-09, instead of a third raise. More table-fit specs took
+  # the project to 744 tests (from ~450 four days earlier), and main's run on
+  # f2f54d9a and two PR runs (#4125, #4177) were cancelled at 50 minutes with
+  # every test so far passing, 654 in. A limit chasing a growing suite only moves
+  # the cancellation later. Split by count, unlike the Chromium legs above:
+  # `fullyParallel` makes `--shard` divide tests rather than files, and with
+  # `@sweep` excluded every test here takes the same 4-5 s, so `--list` puts 372
+  # in each leg, about 28 minutes plus setup. 45 is a hang guard with room for
+  # growth, not a target; when a leg nears it, add a shard (`[1, 2, 3]` and
+  # `/3` below) rather than raise it. The job id is unchanged, so `ci-success`
+  # still needs it: a matrix job's `needs` result is failure when any leg fails.
+  #
+  # Three shards, 2026-11-10, as the note above says to. The 372-test leg ran
+  # about 34 minutes on its own, and "Install WebKit system libraries" varies
+  # between 7 and 15 minutes from runner to runner despite the apt cache: on
+  # #4125 (36365c27) leg 1/2 spent 15 minutes there and was cancelled at 45
+  # with 29 minutes of tests behind it, every test so far passing; on #4202
+  # (89811d54) the same leg passed at 43 minutes. A third leg brings the tests
+  # to about 23 minutes, so the slowest install observed still finishes near 40.
   frontend-e2e-safari:
-    name: Frontend E2E (Mobile Safari)
+    name: Frontend E2E (Mobile Safari ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 45
+    strategy:
+      # One leg failing must not cancel the other, for the reason given on the
+      # Chromium legs above.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     defaults:
       run:
         working-directory: frontend
@@ -1195,13 +1221,15 @@ jobs:
         run: npx playwright install-deps webkit
 
       - name: Run Mobile Safari E2E tests
-        run: npx playwright test --project="Mobile Safari" --grep-invert '@screenshots|@sweep'
+        run: npx playwright test --project="Mobile Safari" --grep-invert '@screenshots|@sweep' --shard=${{ matrix.shard }}/3
 
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report-safari
+          # Per shard: two legs uploading one name collide, and the second
+          # upload fails the step.
+          name: playwright-report-safari-${{ matrix.shard }}
           path: frontend/playwright-report/
           retention-days: 7
 

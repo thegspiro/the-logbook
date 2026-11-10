@@ -294,6 +294,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         audience=_M,
         includes=(
             "Certifications expiring or expired",
+            "A medical screening due within 90 days",
             "Training requirement due soon",
             "Training requirements not met",
             "Training pipeline milestones you reach",

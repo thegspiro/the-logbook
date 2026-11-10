@@ -10,7 +10,7 @@ fastapi==0.162.0
 # the security fixes pip-audit flagged; fastapi>=0.141 accepts it.
 starlette==1.10.0
 uvicorn[standard]==0.54.0
-pydantic==2.14.2
+pydantic==2.14.3
 pydantic-settings==2.16.2
 slowapi==0.1.10
 
@@ -24,7 +24,7 @@ mcp==2.3.0
 # ============================================
 # Database - MySQL
 # ============================================
-sqlalchemy==2.1.6
+sqlalchemy==2.1.8
 alembic==1.20.1
 pymysql==1.2.0  # Held: 1.2.1+ removed escape_bytes_prefixed, which aiomysql 0.3.2 calls for every bytes param (see docs/KNOWN_LIMITATIONS.md)
 aiomysql==0.3.2
@@ -49,7 +49,7 @@ webauthn==3.0.1
 qrcode==8.2
 
 # OAuth & SSO
-authlib==1.9.1
+authlib==1.9.5
 
 # ============================================
 # Encryption & Security
@@ -64,7 +64,7 @@ jinja2==3.1.6
 # ============================================
 # SMS
 # ============================================
-twilio==9.12.0
+twilio==9.13.0
 
 # ============================================
 # Web Push (PWA notifications)
@@ -76,7 +76,7 @@ pywebpush==2.5.0
 # ============================================
 # File Storage
 # ============================================
-boto3==1.43.123  # AWS S3
+boto3==1.43.126  # AWS S3
 azure-storage-blob==12.31.1
 google-cloud-storage==3.17.1
 python-magic==0.4.27
@@ -117,7 +117,7 @@ stripe==16.1.0
 # Monitoring & Logging
 # ============================================
 loguru==0.7.3
-sentry-sdk==2.73.0
+sentry-sdk==2.74.0
 psutil==7.2.2  # System monitoring for health checks
 
 # ============================================
@@ -128,7 +128,7 @@ geoip2==5.3.0
 # ============================================
 # Task Queue
 # ============================================
-celery==5.6.3
+celery==5.7.0
 
 
 # ============================================
@@ -136,7 +136,7 @@ celery==5.6.3
 # ============================================
 msal==1.39.0
 msgraph-core==1.5.2
-google-auth==2.62.0
+google-auth==2.62.1
 google-auth-oauthlib==1.5.0
 google-api-python-client==2.201.0
 
@@ -148,8 +148,8 @@ pytest-asyncio==1.4.1.post1
 pytest-cov==7.1.0
 pytest-randomly==5.0.0
 pytest-timeout==2.4.0
-hypothesis==6.170.14  # schemathesis 4.x requires >=6.130.12
-schemathesis==4.32.7
+hypothesis==6.170.15  # schemathesis 4.x requires >=6.130.12
+schemathesis==4.33.1
 # Pinned because these two move together. 4.24.3 called
 # CanonicalSchema.is_satisfiable(), which jsonschema-rs 0.50 removed, and an
 # unbounded transitive upgrade made every generated API contract case fail
@@ -180,8 +180,8 @@ mypy==2.4.1
 # above because it arrives through google-api-python-client.
 types-defusedxml==0.7.0.20260504
 types-httplib2==0.32.1.20261029
-types-python-dateutil==2.9.0.20261029
-types-reportlab==5.0.0.20261008
+types-python-dateutil==2.9.0.20261104
+types-reportlab==5.1.0.20261104
 isort==9.0.2
 # pylint declares a hard upper bound on isort, so the two only move together:
 # an isort bump on its own makes this file unresolvable. 3.x capped it at <7,
@@ -193,4 +193,4 @@ pylint==4.1.3
 # Utilities
 # ============================================
 python-dotenv==1.2.4
-click==8.5.0
+click==8.5.1

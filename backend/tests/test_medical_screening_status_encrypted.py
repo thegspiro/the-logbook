@@ -172,4 +172,7 @@ def test_startup_enum_repair_leaves_the_encrypted_column_alone():
     listed = {(c.table, c.column) for c in NORMALIZED_ENUM_COLUMNS}
 
     assert ("screening_records", "status") not in listed
-    assert ("screening_records", "screening_type") in listed
+    # The type is ciphertext too since 2026-11-06 (see
+    # test_medical_screening_type_encrypted.py); the requirement's stays an ENUM.
+    assert ("screening_records", "screening_type") not in listed
+    assert ("screening_requirements", "screening_type") in listed

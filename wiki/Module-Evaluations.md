@@ -313,6 +313,7 @@ it from the evaluator onward and records why.
 **What does the member see of calibration?** The items that were flagged, once
 the evaluation reaches them, and nothing else.
 
-**Known limitation:** "Positions held" counts the positions a member holds
-now and was assigned before the period ended; the Logbook does not keep a
-history of positions given up. See `docs/KNOWN_LIMITATIONS.md`.
+**What does "Positions held" count?** Every office and committee seat the
+member held at any time during the period, including one given up partway
+through. The dated history began when the 2026-11-08 upgrade ran, so a
+position given up before then is not known. See `docs/KNOWN_LIMITATIONS.md`.

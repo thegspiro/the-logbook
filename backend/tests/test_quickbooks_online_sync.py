@@ -261,8 +261,20 @@ async def _make_due(db: AsyncSession, org_id: str) -> None:
     await db.commit()
 
 
+async def _check(db: AsyncSession, org_id: str) -> CheckRequest:
+    result = await db.execute(
+        select(CheckRequest).where(CheckRequest.organization_id == org_id)
+    )
+    return result.scalar_one()
+
+
 def _bodies(intuit: FakeIntuit) -> dict[str, dict[str, Any]]:
-    return {p["DocNumber"]: p for p in intuit.purchases.values()}
+    """Purchases by the payment's own number: a check's DocNumber is its
+    check number, so its request number is in PrivateNote."""
+    return {
+        (p["PrivateNote"] if p["PaymentType"] == "Check" else p["DocNumber"]): p
+        for p in intuit.purchases.values()
+    }
 
 
 @pytest.mark.usefixtures("connected")
@@ -468,7 +480,46 @@ class TestPosting:
         }
         assert statuses == {"queued"}
 
-    async def test_the_paid_from_account_must_be_a_bank_account(
+    async def test_an_issued_check_posts_as_a_check_with_its_number(
+        self, db_session, books, configured, intuit
+    ):
+        await _run(db_session, books["org_id"], intuit)
+
+        check = _bodies(intuit)["CR-2026-0001"]
+        assert check["PaymentType"] == "Check"
+        assert check["DocNumber"] == "1042"
+        assert check["PrivateNote"] == "CR-2026-0001"
+        assert check["PrintStatus"] == "NotSet"
+        assert check["AccountRef"] == {"value": "35"}
+        assert "Credit" not in check
+        # The others record no check, so they stay cash expenses.
+        assert _bodies(intuit)["PR-2026-0001"]["PaymentType"] == "Cash"
+        assert _bodies(intuit)["ER-2026-0001"]["PaymentType"] == "Cash"
+
+    async def test_a_check_with_a_blank_number_posts_with_none(
+        self, db_session, books, configured, intuit
+    ):
+        (await _check(db_session, books["org_id"])).check_number = "  "
+        await db_session.flush()
+        await _run(db_session, books["org_id"], intuit)
+
+        check = _bodies(intuit)["CR-2026-0001"]
+        assert check["PaymentType"] == "Check"
+        assert "DocNumber" not in check
+
+    async def test_a_check_number_longer_than_quickbooks_allows_is_refused(
+        self, db_session, books, configured, intuit
+    ):
+        (await _check(db_session, books["org_id"])).check_number = "9" * 22
+        await db_session.flush()
+        await _run(db_session, books["org_id"], intuit)
+
+        posting = (await _postings(db_session, books["org_id"]))["CR-2026-0001"]
+        assert posting.status == "failed"
+        assert "21 characters" in (posting.last_error or "")
+        assert "CR-2026-0001" not in _bodies(intuit)
+
+    async def test_a_card_paid_category_posts_as_a_credit_card_expense(
         self, db_session, books, configured, intuit
     ):
         for mapping in (books["training_map"], books["fuel_map"]):
@@ -476,9 +527,49 @@ class TestPosting:
         await db_session.flush()
         await _run(db_session, books["org_id"], intuit)
 
+        bodies = _bodies(intuit)
+        for number in ("PR-2026-0001", "ER-2026-0001"):
+            assert bodies[number]["PaymentType"] == "CreditCard"
+            assert bodies[number]["AccountRef"] == {"value": "40"}
+            assert bodies[number]["Credit"] is False
+            assert bodies[number]["DocNumber"] == number
+        postings = await _postings(db_session, books["org_id"])
+        assert postings["PR-2026-0001"].status == "posted"
+        assert postings["ER-2026-0001"].status == "posted"
+        # A check cannot be drawn on a card account.
+        assert postings["CR-2026-0001"].status == "failed"
+        assert "a check is paid from a bank account" in (
+            postings["CR-2026-0001"].last_error or ""
+        )
+        assert "CR-2026-0001" not in bodies
+
+    async def test_card_payments_posted_live_stay_out_of_the_csv_file(
+        self, db_session, books, configured, intuit
+    ):
+        for mapping in (books["training_map"], books["fuel_map"]):
+            mapping.qb_offset_account_name = "Visa"
+        await db_session.flush()
+        await _run(db_session, books["org_id"], intuit)
+
+        rows = await _rows(db_session, books["org_id"], books["user_id"])
+        # Only the refused check is left for the file.
+        assert {row[0] for row in rows} == {"CR-2026-0001"}
+
+    async def test_a_paid_from_account_neither_bank_nor_card_is_refused(
+        self, db_session, books, configured, intuit
+    ):
+        for mapping in (books["training_map"], books["fuel_map"]):
+            mapping.qb_offset_account_name = "Training Expense"
+        await db_session.flush()
+        await _run(db_session, books["org_id"], intuit)
+
         postings = (await _postings(db_session, books["org_id"])).values()
         assert {p.status for p in postings} == {"failed"}
-        assert all("not a Bank account" in (p.last_error or "") for p in postings)
+        assert all(
+            "not a Bank or Credit Card account" in (p.last_error or "")
+            or "a check is paid from a bank account" in (p.last_error or "")
+            for p in postings
+        )
         assert intuit.calls("/purchase") == []
 
     async def test_a_purchase_request_with_no_vendor_is_refused_before_sending(

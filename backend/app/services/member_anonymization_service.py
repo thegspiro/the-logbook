@@ -38,6 +38,9 @@ What is deliberately NOT touched:
 - votes/ballots — election integrity signatures must not change.
 - Operational history rows (training, attendance, hours, custody, dues,
   exposure records) — they now point at the anonymized shell.
+- membership_number and previous_membership_number — department-assigned
+  keys, not personal data: they are what rosters and paper records cite, and
+  the anonymized shell is identified by them.
 
 Preconditions: the member must already be departed (soft-deleted or in a
 departed/archived status). Anonymization is irreversible by design.

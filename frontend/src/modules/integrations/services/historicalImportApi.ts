@@ -20,10 +20,12 @@ import type {
   HistoricalImportSummary,
   ShiftBatch,
   DrillPreview,
+  StaffingCommitPreview,
   StaffingFileKind,
   StaffingMappingList,
   StaffingMappingView,
   StaffingPreview,
+  StaffingUnfilledView,
   TrainingPreview,
   TrainingSettingsUpdate,
 } from '../types/historicalImport';
@@ -215,6 +217,64 @@ export const historicalImportService = {
       { timeout: 0 }
     );
     return response.data?.mapped ?? 0;
+  },
+
+  async getStaffingCommit(importId: string): Promise<StaffingCommitPreview> {
+    const response = await api.get<StaffingCommitPreview>(`${BASE}/${importId}/staffing/commit`, { timeout: 0 });
+    return response.data;
+  },
+
+  async setStaffingIncludeUnstaffed(importId: string, includeUnstaffed: boolean): Promise<StaffingCommitPreview> {
+    const response = await api.patch<StaffingCommitPreview>(
+      `${BASE}/${importId}/staffing/options`,
+      { include_unstaffed: includeUnstaffed },
+      { timeout: 0 }
+    );
+    return response.data;
+  },
+
+  /** Who a member the roster names is; shared with the import's other steps. */
+  async updateStaffingMembers(
+    importId: string,
+    members: Record<string, AdminMemberMapping | null>
+  ): Promise<StaffingCommitPreview> {
+    const response = await api.put<StaffingCommitPreview>(
+      `${BASE}/${importId}/staffing/members`,
+      { members },
+      { timeout: 0 }
+    );
+    return response.data;
+  },
+
+  async getStaffingUnfilled(
+    importId: string,
+    params: { offset?: number; limit?: number } = {}
+  ): Promise<StaffingUnfilledView> {
+    const response = await api.get<StaffingUnfilledView>(`${BASE}/${importId}/staffing/unfilled`, {
+      params: { offset: params.offset ?? 0, limit: params.limit ?? 50 },
+      timeout: 0,
+    });
+    return response.data;
+  },
+
+  /** Assign members to unfilled seats by line; a null empties the seat again. */
+  async assignStaffingUnfilled(
+    importId: string,
+    assignments: Record<string, string | null>,
+    params: { offset?: number; limit?: number } = {}
+  ): Promise<StaffingUnfilledView> {
+    const response = await api.patch<StaffingUnfilledView>(
+      `${BASE}/${importId}/staffing/unfilled`,
+      { assignments },
+      { params: { offset: params.offset ?? 0, limit: params.limit ?? 50 }, timeout: 0 }
+    );
+    return response.data;
+  },
+
+  /** Write the roster; safe to run again. */
+  async commitStaffing(importId: string): Promise<StaffingCommitPreview> {
+    const response = await api.post<StaffingCommitPreview>(`${BASE}/${importId}/staffing/commit`, null, { timeout: 0 });
+    return response.data;
   },
 
   async discard(importId: string): Promise<void> {

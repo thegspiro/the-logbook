@@ -14,6 +14,8 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { useConnectedIntegrations } from '../hooks/useConnectedIntegrations';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import { ErrorSummary } from '../components/ux/ErrorSummary';
+import { DraftRestoredNotice } from '../components/ux/DraftRestoredNotice';
+import { useSessionDraft } from '../hooks/useSessionDraft';
 import { FIELD_ERROR_CLASS } from '../components/ux/FormField';
 import type { CreatedMember } from '../services/userServices';
 import { PASSWORD_CHECKLIST, validatePasswordStrength } from '../utils/passwordValidation';
@@ -87,12 +89,63 @@ const ADD_MEMBER_FIELDS: FieldSpecs<AddMemberField> = {
   email: { id: 'add-email', label: 'Email' },
   password: { id: 'add-password', label: 'Password' },
   confirmPassword: { id: 'add-confirm-password', label: 'Confirm password' },
-  emergencyName1: { id: 'add-emergencyName1', label: 'Emergency contact name' },
-  emergencyRelationship1: { id: 'add-emergencyRelationship1', label: 'Emergency contact relationship' },
-  emergencyPhone1: { id: 'add-emergencyPhone1', label: 'Emergency contact phone' },
-  emergencyName2: { id: 'add-emergencyName2', label: 'Second contact name' },
-  emergencyRelationship2: { id: 'add-emergencyRelationship2', label: 'Second contact relationship' },
-  emergencyPhone2: { id: 'add-emergencyPhone2', label: 'Second contact phone' },
+  emergencyName1: { id: 'add-emergencyName1', label: 'Emergency contact name', apiKeys: ['emergency_contacts.0.name'] },
+  emergencyRelationship1: {
+    id: 'add-emergencyRelationship1',
+    label: 'Emergency contact relationship',
+    apiKeys: ['emergency_contacts.0.relationship'],
+  },
+  emergencyPhone1: {
+    id: 'add-emergencyPhone1',
+    label: 'Emergency contact phone',
+    apiKeys: ['emergency_contacts.0.phone'],
+  },
+  emergencyName2: { id: 'add-emergencyName2', label: 'Second contact name', apiKeys: ['emergency_contacts.1.name'] },
+  emergencyRelationship2: {
+    id: 'add-emergencyRelationship2',
+    label: 'Second contact relationship',
+    apiKeys: ['emergency_contacts.1.relationship'],
+  },
+  emergencyPhone2: {
+    id: 'add-emergencyPhone2',
+    label: 'Second contact phone',
+    apiKeys: ['emergency_contacts.1.phone'],
+  },
+};
+
+/**
+ * The local draft (useSessionDraft) leaves out the emergency contacts and the
+ * date of birth: client-side storage is outside the controls the server puts
+ * on PHI, so those are never drafted (owner decision 2026-11-06, forms review
+ * F-6). Passwords are not part of formData and are never drafted either.
+ */
+type MemberDraft = Omit<
+  MemberFormData,
+  | 'dateOfBirth'
+  | 'emergencyName1'
+  | 'emergencyRelationship1'
+  | 'emergencyPhone1'
+  | 'emergencyEmail1'
+  | 'emergencyName2'
+  | 'emergencyRelationship2'
+  | 'emergencyPhone2'
+  | 'emergencyEmail2'
+>;
+
+const toDraft = (data: MemberFormData): MemberDraft => {
+  const {
+    dateOfBirth: _dob,
+    emergencyName1: _n1,
+    emergencyRelationship1: _r1,
+    emergencyPhone1: _p1,
+    emergencyEmail1: _e1,
+    emergencyName2: _n2,
+    emergencyRelationship2: _r2,
+    emergencyPhone2: _p2,
+    emergencyEmail2: _e2,
+    ...kept
+  } = data;
+  return kept;
 };
 
 const AddMember: React.FC = () => {
@@ -112,7 +165,7 @@ const AddMember: React.FC = () => {
   // field is required: requiring it while auto-assignment is on meant the typed
   // value always won and the counter never issued a number from this screen.
   const [membershipIdPreview, setMembershipIdPreview] = useState<string | null>(null);
-  const [formData, setFormData] = useState<MemberFormData>({
+  const initialFormData = (): MemberFormData => ({
     firstName: '',
     lastName: '',
     middleName: '',
@@ -144,6 +197,22 @@ const AddMember: React.FC = () => {
     emergencyPhone2: '',
     emergencyEmail2: '',
   });
+  const [formData, setFormData] = useState<MemberFormData>(initialFormData);
+  const draft = useSessionDraft<MemberDraft>({
+    form: 'add-member',
+    value: toDraft(formData),
+    onRestore: (saved) => setFormData((prev) => ({ ...prev, ...saved })),
+  });
+
+  // The second contact is optional as a whole, but once begun its name,
+  // relationship and phone are required (see validateForm), and the
+  // asterisks and aria-required say so.
+  const secondaryContactStarted = [
+    formData.emergencyName2,
+    formData.emergencyRelationship2,
+    formData.emergencyPhone2,
+    formData.emergencyEmail2,
+  ].some((value) => value.trim());
 
   const fieldErrors = useFieldErrors(ADD_MEMBER_FIELDS);
   const errors = fieldErrors.errors;
@@ -408,6 +477,7 @@ const AddMember: React.FC = () => {
         }
       }
 
+      draft.clear();
       const outcome = created ? directoryOutcome(created) : null;
       if (outcome && !outcome.ok) toast.error(outcome.message);
       else toast.success(outcome?.message ?? 'Member added');
@@ -442,6 +512,7 @@ const AddMember: React.FC = () => {
           cancelLabel: 'Keep editing',
         })
       ) {
+        draft.discard();
         void navigate('/members');
       }
     } else {
@@ -459,11 +530,21 @@ const AddMember: React.FC = () => {
 
       <div data-page-main className="mx-auto max-w-4xl py-6 sm:py-8">
         <form
+          noValidate
           onSubmit={(e) => {
             void handleSubmit(e);
           }}
           className="space-y-6"
         >
+          {draft.restored && (
+            <DraftRestoredNotice
+              onDiscard={() => {
+                draft.discard();
+                setFormData(initialFormData());
+                fieldErrors.clear();
+              }}
+            />
+          )}
           <ErrorSummary
             items={fieldErrors.summary}
             formError={fieldErrors.formError}
@@ -480,11 +561,16 @@ const AddMember: React.FC = () => {
             <div className="field-grid gap-4">
               <div>
                 <label htmlFor="add-firstName" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  First Name <span className="text-red-700 dark:text-red-400">*</span>
+                  First Name{' '}
+                  <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                    *
+                  </span>
                 </label>
                 <input
                   type="text"
                   id="add-firstName"
+                  autoComplete="off"
+                  maxLength={100}
                   {...fieldA11y('firstName', { required: true })}
                   value={formData.firstName}
                   onChange={(e) => handleInputChange('firstName', e.target.value)}
@@ -505,6 +591,8 @@ const AddMember: React.FC = () => {
                 <input
                   type="text"
                   id="add-middleName"
+                  autoComplete="off"
+                  maxLength={100}
                   value={formData.middleName}
                   onChange={(e) => handleInputChange('middleName', e.target.value)}
                   className="form-input placeholder-theme-text-muted"
@@ -514,11 +602,16 @@ const AddMember: React.FC = () => {
 
               <div>
                 <label htmlFor="add-lastName" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Last Name <span className="text-red-700 dark:text-red-400">*</span>
+                  Last Name{' '}
+                  <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                    *
+                  </span>
                 </label>
                 <input
                   type="text"
                   id="add-lastName"
+                  autoComplete="off"
+                  maxLength={100}
                   {...fieldA11y('lastName', { required: true })}
                   value={formData.lastName}
                   onChange={(e) => handleInputChange('lastName', e.target.value)}
@@ -540,6 +633,7 @@ const AddMember: React.FC = () => {
               <input
                 type="text"
                 id="add-preferredName"
+                autoComplete="off"
                 maxLength={100}
                 value={formData.preferredName}
                 onChange={(e) => handleInputChange('preferredName', e.target.value)}
@@ -559,11 +653,18 @@ const AddMember: React.FC = () => {
                   htmlFor="add-membershipNumber"
                   className="text-theme-text-primary mb-2 block text-sm font-medium"
                 >
-                  Membership Number {!membershipIdPreview && <span className="text-red-700 dark:text-red-400">*</span>}
+                  Membership Number{' '}
+                  {!membershipIdPreview && (
+                    <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                      *
+                    </span>
+                  )}
                 </label>
                 <input
                   type="text"
                   id="add-membershipNumber"
+                  autoComplete="off"
+                  maxLength={50}
                   {...fieldA11y('membershipNumber', {
                     required: !membershipIdPreview,
                     hintId: membershipIdPreview ? 'add-membershipNumber-hint' : undefined,
@@ -593,6 +694,7 @@ const AddMember: React.FC = () => {
                 <input
                   type="date"
                   id="add-dateOfBirth"
+                  autoComplete="off"
                   value={formData.dateOfBirth}
                   onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
                   className="form-input"
@@ -611,11 +713,16 @@ const AddMember: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <label htmlFor="add-street" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Street Address <span className="text-red-700 dark:text-red-400">*</span>
+                  Street Address{' '}
+                  <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                    *
+                  </span>
                 </label>
                 <input
                   type="text"
                   id="add-street"
+                  autoComplete="off"
+                  maxLength={255}
                   {...fieldA11y('street', { required: true })}
                   value={formData.street}
                   onChange={(e) => handleInputChange('street', e.target.value)}
@@ -632,11 +739,16 @@ const AddMember: React.FC = () => {
               <div className="field-grid gap-4">
                 <div>
                   <label htmlFor="add-city" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                    City <span className="text-red-700 dark:text-red-400">*</span>
+                    City{' '}
+                    <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                      *
+                    </span>
                   </label>
                   <input
                     type="text"
                     id="add-city"
+                    autoComplete="off"
+                    maxLength={100}
                     {...fieldA11y('city', { required: true })}
                     value={formData.city}
                     onChange={(e) => handleInputChange('city', e.target.value)}
@@ -652,11 +764,15 @@ const AddMember: React.FC = () => {
 
                 <div>
                   <label htmlFor="add-state" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                    State <span className="text-red-700 dark:text-red-400">*</span>
+                    State{' '}
+                    <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                      *
+                    </span>
                   </label>
                   <input
                     type="text"
                     id="add-state"
+                    autoComplete="off"
                     {...fieldA11y('state', { required: true })}
                     value={formData.state}
                     onChange={(e) => handleInputChange('state', e.target.value)}
@@ -673,11 +789,16 @@ const AddMember: React.FC = () => {
 
                 <div>
                   <label htmlFor="add-zipCode" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                    ZIP Code <span className="text-red-700 dark:text-red-400">*</span>
+                    ZIP Code{' '}
+                    <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                      *
+                    </span>
                   </label>
                   <input
                     type="text"
                     id="add-zipCode"
+                    autoComplete="off"
+                    maxLength={20}
                     {...fieldA11y('zipCode', { required: true })}
                     value={formData.zipCode}
                     onChange={(e) => handleInputChange('zipCode', e.target.value)}
@@ -704,11 +825,16 @@ const AddMember: React.FC = () => {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label htmlFor="add-primaryPhone" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Primary Phone <span className="text-red-700 dark:text-red-400">*</span>
+                  Primary Phone{' '}
+                  <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                    *
+                  </span>
                 </label>
                 <input
                   type="tel"
                   id="add-primaryPhone"
+                  autoComplete="off"
+                  maxLength={20}
                   {...fieldA11y('primaryPhone', { required: true })}
                   value={formData.primaryPhone}
                   onChange={(e) => handleInputChange('primaryPhone', e.target.value)}
@@ -729,6 +855,8 @@ const AddMember: React.FC = () => {
                 <input
                   type="tel"
                   id="add-secondaryPhone"
+                  autoComplete="off"
+                  maxLength={20}
                   value={formData.secondaryPhone}
                   onChange={(e) => handleInputChange('secondaryPhone', e.target.value)}
                   className="form-input placeholder-theme-text-muted"
@@ -739,11 +867,14 @@ const AddMember: React.FC = () => {
               <div>
                 <label htmlFor="add-email" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   {creatingAccount ? 'Personal email' : 'Email'}{' '}
-                  <span className="text-red-700 dark:text-red-400">*</span>
+                  <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                    *
+                  </span>
                 </label>
                 <input
                   type="email"
                   id="add-email"
+                  autoComplete="off"
                   {...fieldA11y('email', { required: true })}
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
@@ -816,7 +947,10 @@ const AddMember: React.FC = () => {
                 <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
                     <label htmlFor="add-password" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                      Password <span className="text-red-700 dark:text-red-400">*</span>
+                      Password{' '}
+                      <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                        *
+                      </span>
                     </label>
                     <div className="relative">
                       <input
@@ -853,7 +987,10 @@ const AddMember: React.FC = () => {
                       htmlFor="add-confirm-password"
                       className="text-theme-text-primary mb-2 block text-sm font-medium"
                     >
-                      Confirm Password <span className="text-red-700 dark:text-red-400">*</span>
+                      Confirm Password{' '}
+                      <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                        *
+                      </span>
                     </label>
                     <input
                       id="add-confirm-password"
@@ -1052,11 +1189,16 @@ const AddMember: React.FC = () => {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label htmlFor="add-emergencyName1" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Name <span className="text-red-700 dark:text-red-400">*</span>
+                  Name{' '}
+                  <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                    *
+                  </span>
                 </label>
                 <input
                   type="text"
                   id="add-emergencyName1"
+                  autoComplete="off"
+                  maxLength={100}
                   {...fieldA11y('emergencyName1', { required: true })}
                   value={formData.emergencyName1}
                   onChange={(e) => handleInputChange('emergencyName1', e.target.value)}
@@ -1075,11 +1217,16 @@ const AddMember: React.FC = () => {
                   htmlFor="add-emergencyRelationship1"
                   className="text-theme-text-primary mb-2 block text-sm font-medium"
                 >
-                  Relationship <span className="text-red-700 dark:text-red-400">*</span>
+                  Relationship{' '}
+                  <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                    *
+                  </span>
                 </label>
                 <input
                   type="text"
                   id="add-emergencyRelationship1"
+                  autoComplete="off"
+                  maxLength={50}
                   {...fieldA11y('emergencyRelationship1', { required: true })}
                   value={formData.emergencyRelationship1}
                   onChange={(e) => handleInputChange('emergencyRelationship1', e.target.value)}
@@ -1095,11 +1242,16 @@ const AddMember: React.FC = () => {
 
               <div>
                 <label htmlFor="add-emergencyPhone1" className="text-theme-text-primary mb-2 block text-sm font-medium">
-                  Phone <span className="text-red-700 dark:text-red-400">*</span>
+                  Phone{' '}
+                  <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                    *
+                  </span>
                 </label>
                 <input
                   type="tel"
                   id="add-emergencyPhone1"
+                  autoComplete="off"
+                  maxLength={20}
                   {...fieldA11y('emergencyPhone1', { required: true })}
                   value={formData.emergencyPhone1}
                   onChange={(e) => handleInputChange('emergencyPhone1', e.target.value)}
@@ -1120,6 +1272,7 @@ const AddMember: React.FC = () => {
                 <input
                   type="email"
                   id="add-emergencyEmail1"
+                  autoComplete="off"
                   value={formData.emergencyEmail1}
                   onChange={(e) => handleInputChange('emergencyEmail1', e.target.value)}
                   className="form-input placeholder-theme-text-muted"
@@ -1141,11 +1294,19 @@ const AddMember: React.FC = () => {
               <div>
                 <label htmlFor="add-emergencyName2" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Name
+                  {secondaryContactStarted && (
+                    <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                      {' '}
+                      *
+                    </span>
+                  )}
                 </label>
                 <input
                   type="text"
                   id="add-emergencyName2"
-                  {...fieldA11y('emergencyName2')}
+                  autoComplete="off"
+                  maxLength={100}
+                  {...fieldA11y('emergencyName2', { required: secondaryContactStarted })}
                   value={formData.emergencyName2}
                   onChange={(e) => handleInputChange('emergencyName2', e.target.value)}
                   className={`form-input placeholder-theme-text-muted ${errors.emergencyName2 ? 'border-red-500' : ''}`}
@@ -1164,11 +1325,19 @@ const AddMember: React.FC = () => {
                   className="text-theme-text-primary mb-2 block text-sm font-medium"
                 >
                   Relationship
+                  {secondaryContactStarted && (
+                    <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                      {' '}
+                      *
+                    </span>
+                  )}
                 </label>
                 <input
                   type="text"
                   id="add-emergencyRelationship2"
-                  {...fieldA11y('emergencyRelationship2')}
+                  autoComplete="off"
+                  maxLength={50}
+                  {...fieldA11y('emergencyRelationship2', { required: secondaryContactStarted })}
                   value={formData.emergencyRelationship2}
                   onChange={(e) => handleInputChange('emergencyRelationship2', e.target.value)}
                   className={`form-input placeholder-theme-text-muted ${errors.emergencyRelationship2 ? 'border-red-500' : ''}`}
@@ -1184,11 +1353,19 @@ const AddMember: React.FC = () => {
               <div>
                 <label htmlFor="add-emergencyPhone2" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Phone
+                  {secondaryContactStarted && (
+                    <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                      {' '}
+                      *
+                    </span>
+                  )}
                 </label>
                 <input
                   type="tel"
                   id="add-emergencyPhone2"
-                  {...fieldA11y('emergencyPhone2')}
+                  autoComplete="off"
+                  maxLength={20}
+                  {...fieldA11y('emergencyPhone2', { required: secondaryContactStarted })}
                   value={formData.emergencyPhone2}
                   onChange={(e) => handleInputChange('emergencyPhone2', e.target.value)}
                   className={`form-input placeholder-theme-text-muted ${errors.emergencyPhone2 ? 'border-red-500' : ''}`}
@@ -1208,6 +1385,7 @@ const AddMember: React.FC = () => {
                 <input
                   type="email"
                   id="add-emergencyEmail2"
+                  autoComplete="off"
                   value={formData.emergencyEmail2}
                   onChange={(e) => handleInputChange('emergencyEmail2', e.target.value)}
                   className="form-input placeholder-theme-text-muted"

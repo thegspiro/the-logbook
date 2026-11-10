@@ -17,6 +17,7 @@ import { formatNumber } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import type {
   InventoryItem,
   InventoryCategory,
@@ -196,6 +197,9 @@ const VARIANT_ITEM_TYPES = new Set([
   'other',
 ]);
 
+const changeSnapshot = (form: FD, variants: boolean, sizes: string[], styles: string[], colors: string) =>
+  JSON.stringify([form, variants, sizes, styles, colors]);
+
 export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   isOpen,
   onClose,
@@ -225,6 +229,12 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [variantColors, setVariantColors] = useState('');
+  // What the form held when it opened, so Escape, the X and Cancel can ask
+  // before discarding anything typed since (forms review F-6).
+  const [baseline, setBaseline] = useState('');
+  const isDirty =
+    baseline !== '' && changeSnapshot(f, generateVariants, selectedSizes, selectedStyles, variantColors) !== baseline;
+  const requestClose = useDiscardGuard({ isDirty, onClose });
 
   // Read as primitives so an inline `defaults={{...}}` at the call site does
   // not re-run the reset effect on every parent render and wipe what is typed.
@@ -257,6 +267,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
+    let seeded: FD;
     if (editItem) {
       // The two size columns are one control here. Prefer the structured
       // `standard_size`, but fall back to the legacy free-text `size`: an
@@ -265,7 +276,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       // Anything outside the vocabulary (a boot width, a chest measurement)
       // resolves to '' and opens the picker on Custom with the text intact.
       const sizeCode = standardSizeCode(editItem.standard_size || editItem.size);
-      setF({
+      seeded = {
         name: editItem.name,
         also_called: formatNameList(editItem.also_called),
         description: editItem.description ?? '',
@@ -297,16 +308,18 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           editItem.inspection_interval_days != null ? String(editItem.inspection_interval_days) : '',
         condition: editItem.condition,
         notes: editItem.notes ?? '',
-      });
+      };
     } else {
-      setF({
+      seeded = {
         ...EMPTY,
         category_id: defaultCategoryId,
         location_id: defaultLocationId,
         storage_area_id: defaultStorageAreaId,
         tracking_type: defaultTrackingType || EMPTY.tracking_type,
-      });
+      };
     }
+    setF(seeded);
+    setBaseline(changeSnapshot(seeded, false, [], [], ''));
     setShowFin(false);
     setDateError(null);
     clearFieldErrors();
@@ -579,7 +592,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={editItem ? 'Edit Item' : 'Add Item'}
       size="lg"
       footer={
@@ -593,7 +606,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   ? `Create ${variantCount} Item${variantCount === 1 ? '' : 's'}`
                   : 'Create'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+          <button type="button" onClick={requestClose} className="btn-secondary btn-md">
             Cancel
           </button>
         </>

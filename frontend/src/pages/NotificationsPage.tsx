@@ -26,6 +26,7 @@ import {
   PackageCheck,
   Pencil,
   Trash2,
+  Stethoscope,
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../components/ux';
 import { useAuthStore } from '../stores/authStore';
@@ -87,6 +88,11 @@ const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; la
     color: 'text-amber-700 dark:text-amber-400',
     label: 'Equipment Request Update',
   },
+  medical_screening_expiry: {
+    icon: <Stethoscope className="h-5 w-5" />,
+    color: 'text-rose-700 dark:text-rose-400',
+    label: 'Medical Screening Expiry',
+  },
 };
 
 // Dropdown options for the create modal.
@@ -128,6 +134,12 @@ const TRIGGER_OPTIONS = [
     effect:
       'Tells a member when the quartermaster approves, declines or issues their equipment request, with any note left for them. Disabling it stops the notice; the request’s status still shows on My Equipment.',
   },
+  {
+    label: 'Medical Screening Expiry',
+    value: 'medical_screening_expiry',
+    effect:
+      'Emails a member 90, 60, 30 and 7 days before one of their medical screenings falls due, when the Medical Screening module is on. On unless a rule for it is disabled; the Compliance tab still shows what is due.',
+  },
 ];
 
 // Category mapping from trigger to category
@@ -140,6 +152,7 @@ const TRIGGER_CATEGORY_MAP: Record<string, string> = {
   form_submitted: 'general',
   suggestion_submitted: 'general',
   equipment_request_update: 'general',
+  medical_screening_expiry: 'general',
 };
 
 function getTriggerDisplay(trigger: string) {

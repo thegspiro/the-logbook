@@ -2,7 +2,12 @@
  * Training type definitions
  */
 
-import type { LeaveMonthRule, PracticalSkillsMethod, RequirementChangeScope } from '../constants/enums';
+import type {
+  LeaveMonthRule,
+  PracticalSkillsMethod,
+  RequirementChangeScope,
+  TrainingRecordSource,
+} from '../constants/enums';
 import type { Event } from './event';
 
 export type TrainingType =
@@ -603,6 +608,13 @@ export interface TrainingRecord {
   voided_at?: string | null;
   voided_by?: string | null;
   void_reason?: string | null;
+  /**
+   * Where the record came from, worked out by the server for record lists:
+   * a provider sync ("Target Solutions"), the Historical Data Import
+   * ("Imported") or The Logbook itself. Absent on a create or edit reply.
+   */
+  source?: TrainingRecordSource | null;
+  source_label?: string | null;
   notes?: string;
   attachments?: string[];
   rank_at_completion?: string;
@@ -2495,6 +2507,8 @@ export interface MyTrainingHistoryRecord {
   instructor?: string | null;
   voided_at?: string | null;
   void_reason?: string | null;
+  source: TrainingRecordSource;
+  source_label: string;
 }
 
 export interface MyTrainingHistoryYear {
