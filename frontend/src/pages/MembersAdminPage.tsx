@@ -60,6 +60,23 @@ import { displayNameOf, givenName } from '../utils/memberName';
 
 type ViewMode = 'by-member' | 'by-role';
 
+/**
+ * Account statuses kept off this screen until "Show former members" is ticked
+ * (owner decision 2026-11-10). The shift history import files every former
+ * member it meets as archived, so an older department's list here was mostly
+ * people who left long ago. Retired and on-leave members stay listed: officers
+ * still manage their records and positions.
+ */
+const FORMER_MEMBER_STATUSES: readonly string[] = [
+  UserStatus.ARCHIVED,
+  UserStatus.DROPPED_VOLUNTARY,
+  UserStatus.DROPPED_INVOLUNTARY,
+];
+
+function isFormerMember(status: string | null | undefined): boolean {
+  return !!status && FORMER_MEMBER_STATUSES.includes(status);
+}
+
 interface EditProfileForm {
   first_name: string;
   middle_name: string;
@@ -95,6 +112,7 @@ export const MembersAdminPage: React.FC = () => {
   const [unlockingUserId, setUnlockingUserId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('by-member');
   const [users, setUsers] = useState<UserWithRoles[]>([]);
+  const [showFormerMembers, setShowFormerMembers] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -171,6 +189,12 @@ export const MembersAdminPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Only what is drawn is filtered. `users` stays the whole roster because the
+  // position saves diff against it: a hidden former member who holds a
+  // position keeps it when an officer saves that position's member list.
+  const visibleUsers = showFormerMembers ? users : users.filter((user) => !isFormerMember(user.status));
+  const hiddenFormerCount = users.filter((user) => isFormerMember(user.status)).length;
 
   const handleEditRoles = (user: UserWithRoles) => {
     setSelectedUser(user);
@@ -622,6 +646,18 @@ export const MembersAdminPage: React.FC = () => {
               View by Position
             </button>
           </div>
+          <label className="text-theme-text-secondary mobile-touch-target mt-3 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="form-checkbox"
+              checked={showFormerMembers}
+              onChange={(e) => setShowFormerMembers(e.target.checked)}
+            />
+            Show former members (archived or dropped)
+            {!showFormerMembers && hiddenFormerCount > 0 && (
+              <span className="text-theme-text-muted">&middot; {hiddenFormerCount} hidden</span>
+            )}
+          </label>
         </div>
 
         <p className="text-theme-text-muted mb-4 text-sm">
@@ -701,7 +737,7 @@ export const MembersAdminPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-theme-surface-border divide-y">
-                {users.map((user) => (
+                {visibleUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-theme-surface-hover">
                     <td data-label="Member" className="px-4 py-4">
                       <div className="flex items-center">
@@ -846,7 +882,7 @@ export const MembersAdminPage: React.FC = () => {
         {viewMode === 'by-role' && (
           <div className="space-y-4">
             {withoutRankMirrors(roles).map((role) => {
-              const usersWithRole = users.filter((user) => user.roles.some((r) => r.id === role.id));
+              const usersWithRole = visibleUsers.filter((user) => user.roles.some((r) => r.id === role.id));
 
               return (
                 <div key={role.id} className="bg-theme-surface shadow-sm backdrop-blur-xs sm:rounded-lg">
@@ -1408,7 +1444,7 @@ export const MembersAdminPage: React.FC = () => {
           )}
 
           <div className="space-y-2">
-            {users.map((user) => (
+            {visibleUsers.map((user) => (
               <label
                 key={user.id}
                 className="hover:bg-theme-surface-hover flex cursor-pointer items-start rounded-lg p-3"
