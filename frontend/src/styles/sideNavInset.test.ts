@@ -5,6 +5,7 @@ import { describe, it, expect } from 'vitest';
 const srcDir = join(__dirname, '..');
 const stylesheet = readFileSync(join(__dirname, 'index.css'), 'utf8');
 const appLayout = readFileSync(join(srcDir, 'components/layout/AppLayout.tsx'), 'utf8');
+const sideNavigation = readFileSync(join(srcDir, 'components/layout/SideNavigation.tsx'), 'utf8');
 
 /**
  * The content-column inset contract, read from the source rather than a render.
@@ -52,6 +53,21 @@ describe('side navigation inset contract', () => {
     // …keyed on the root AppLayout owns, not a `:has()` match on the nav.
     expect(appLayout).toMatch(/data-nav-collapsed=\{navCollapsed \? 'true' : 'false'\}/);
     expect(appLayout).toMatch(/onCollapsedChange=\{setNavCollapsed\}/);
+  });
+
+  it('collapses the rail and its content offset without a transition under reduced motion', () => {
+    // The global reduced-motion rule only shortens transitions to 0.01ms, and
+    // WebKit did not finish even that one on the rail: five seconds after a
+    // collapse the rail still measured its expanded 256px, and the Expand
+    // toggle inside it never stopped moving long enough to be clicked
+    // (Frontend E2E, Mobile Safari, on every branch after #4148). With no
+    // transition the width is applied as soon as the class changes. The
+    // content column already did this; the rail and the column must agree,
+    // or one lands while the other is still moving.
+    const rail = /<nav\s[^>]*id="side-navigation"[^>]*className=\{`([^`]*)`/s.exec(sideNavigation)?.[1] ?? '';
+    expect(rail).toMatch(/\btransition-all\b/);
+    expect(rail).toMatch(/\bmotion-reduce:transition-none\b/);
+    expect(appLayout).toMatch(/transition-\[margin-left\][^"]*motion-reduce:transition-none/);
   });
 
   it('opts in from the left-navigation layout only', () => {

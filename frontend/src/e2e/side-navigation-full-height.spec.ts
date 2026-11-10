@@ -19,11 +19,15 @@
  * driven desktop context, and a `scale: 'css'` screenshot, hold on every
  * project and engine.
  *
- * Layout is measured settled, under reduced motion, which index.css turns into
- * 0.01ms transitions — as mobile-presentation.spec.ts does for the same nav's
- * slide. Under WebKit the rail's 300ms width transition was still reporting
- * the expanded 256px edge five seconds after the collapse, and the Expand
- * toggle inside it never counted as stable enough to click.
+ * Layout is measured settled, under reduced motion, as mobile-presentation.spec.ts
+ * does for the same nav's slide. Under WebKit the rail's 300ms width transition
+ * was still reporting the expanded 256px edge five seconds after the collapse,
+ * and the Expand toggle inside it never counted as stable enough to click. The
+ * global reduced-motion rule in index.css only shortens a transition to
+ * 0.01ms, and WebKit did not finish even that one on the rail, so the rail now
+ * drops its transition under reduced motion (`motion-reduce:transition-none`),
+ * as the content column beside it already did. styles/sideNavInset.test.ts pins
+ * both.
  */
 
 import { test, expect } from '@playwright/test';
