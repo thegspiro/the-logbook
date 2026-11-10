@@ -197,8 +197,9 @@ describe('VendorsPage', () => {
     await user.type(screen.getByLabelText(/^Phone$/, { selector: '#vendor-contact-phone' }), '555-0100');
     await user.click(screen.getByRole('button', { name: 'Add Vendor' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Contact name is required to save a contact');
-    expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true');
+    const contactName = screen.getByLabelText('Name');
+    await waitFor(() => expect(contactName).toHaveAttribute('aria-invalid', 'true'));
+    expect(contactName).toHaveAccessibleDescription('Contact name is required to save a contact');
     expect(mockCreateVendor).not.toHaveBeenCalled();
 
     await user.type(screen.getByLabelText('Name'), 'Alex Chen');
@@ -208,6 +209,57 @@ describe('VendorsPage', () => {
     expect(mockCreateVendor.mock.calls[0]?.[0]).toMatchObject({
       name: 'Fire Supply Co',
       contacts: [{ name: 'Alex Chen', phone: '555-0100', is_primary: true }],
+    });
+  });
+
+  describe('new vendor dialog refusing a save', () => {
+    it('names the missing vendor name under its field and focuses it', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<VendorsPage />);
+      await screen.findByText('No vendors yet');
+
+      await user.click(screen.getByRole('button', { name: /New Vendor/i }));
+      await user.click(screen.getByRole('button', { name: 'Add Vendor' }));
+
+      const name = screen.getByRole('textbox', { name: /^Vendor Name/ });
+      expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toHaveAttribute('aria-required', 'true');
+      expect(name).toHaveAccessibleDescription('Enter the vendor name.');
+      expect(name).toHaveFocus();
+      expect(mockCreateVendor).not.toHaveBeenCalled();
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+
+    it('puts a 422 on the field the server names', async () => {
+      const user = userEvent.setup();
+      mockCreateVendor.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'account_number', message: 'Value is too long.' }] } },
+      });
+      renderWithRouter(<VendorsPage />);
+      await screen.findByText('No vendors yet');
+
+      await user.click(screen.getByRole('button', { name: /New Vendor/i }));
+      await user.type(screen.getByLabelText('Vendor Name *'), 'Fire Supply Co');
+      await user.click(screen.getByRole('button', { name: 'Add Vendor' }));
+
+      const account = await screen.findByRole('textbox', { name: 'Account Number', description: 'Value is too long.' });
+      expect(account).toHaveAttribute('aria-invalid', 'true');
+      expect(account).toHaveFocus();
+    });
+
+    it('shows a server failure inside the dialog rather than as a toast', async () => {
+      const user = userEvent.setup();
+      mockCreateVendor.mockRejectedValue(new Error('Vendor service unavailable'));
+      renderWithRouter(<VendorsPage />);
+      await screen.findByText('No vendors yet');
+
+      await user.click(screen.getByRole('button', { name: /New Vendor/i }));
+      await user.type(screen.getByLabelText('Vendor Name *'), 'Fire Supply Co');
+      await user.click(screen.getByRole('button', { name: 'Add Vendor' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Vendor service unavailable');
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(mockToastError).not.toHaveBeenCalled();
     });
   });
 

@@ -45,7 +45,7 @@ import { ElectionsPage } from './ElectionsPage';
  */
 function endPicker() {
   return {
-    dateInput: screen.getByLabelText(/End Date & Time/),
+    dateInput: screen.getByLabelText(/End Date & Time/, { selector: 'input' }),
     hour: screen.getAllByLabelText(/hour$/)[1],
     minute: screen.getAllByLabelText(/minute$/)[1],
     period: screen.getAllByLabelText(/AM\/PM$/)[1],
@@ -60,7 +60,7 @@ async function openCreateDialogWithStart() {
   });
   await userEvent.click(screen.getByRole('button', { name: /^Create Election$/ }));
   // Picking a date with no time yet gives a 09:00 start in the department zone.
-  const startDate = screen.getByLabelText(/Start Date & Time/);
+  const startDate = screen.getByLabelText(/Start Date & Time/, { selector: 'input' });
   fireEvent.change(startDate, { target: { value: '2026-10-01' } });
   expect(startDate).toHaveValue('2026-10-01');
 }

@@ -203,3 +203,59 @@ describe('VariantGroupsPage', () => {
     expect(screen.queryByRole('button', { name: 'Edit Class A Uniform' })).not.toBeInTheDocument();
   });
 });
+
+describe('VariantGroupsPage add dialog validation', () => {
+  beforeEach(() => {
+    mockGetVariantGroups.mockReset();
+    mockGetCategories.mockReset();
+    mockCreateVariantGroup.mockReset();
+    mockCheckPermission.mockReset();
+    mockToastError.mockReset();
+    mockGetVariantGroups.mockResolvedValue([makeGroup()]);
+    mockGetCategories.mockResolvedValue([]);
+    mockCreateVariantGroup.mockResolvedValue({});
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  const openAdd = async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<VariantGroupsPage />);
+    await screen.findByText('Class A Uniform');
+    await user.click(screen.getByRole('button', { name: /Add Group/ }));
+    await screen.findByText('Add Variant Group');
+    return user;
+  };
+
+  it('names the missing name under its field and sends nothing', async () => {
+    const user = await openAdd();
+    await user.click(screen.getByRole('button', { name: 'Create Group' }));
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Enter a name for the group.');
+    expect(name).toHaveFocus();
+    expect(mockCreateVariantGroup).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the field it names', async () => {
+    mockCreateVariantGroup.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'unit_of_measure', message: 'Value is too long.' }] } },
+    });
+    const user = await openAdd();
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Dress Shirts');
+    await user.click(screen.getByRole('button', { name: 'Create Group' }));
+    expect(
+      await screen.findByRole('textbox', { name: 'Unit of Measure', description: 'Value is too long.' })
+    ).toHaveFocus();
+  });
+
+  it('shows a server failure inside the dialog, not as a toast', async () => {
+    mockCreateVariantGroup.mockRejectedValue(new Error('Database unavailable'));
+    const user = await openAdd();
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Dress Shirts');
+    await user.click(screen.getByRole('button', { name: 'Create Group' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Database unavailable');
+    expect(mockToastError).not.toHaveBeenCalled();
+    expect(screen.getByText('Add Variant Group')).toBeInTheDocument();
+  });
+});

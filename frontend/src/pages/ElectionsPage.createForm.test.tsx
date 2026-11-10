@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
 const mockGetElections = vi.fn();
+const mockCreateElection = vi.fn();
 
 vi.mock('../services/api', () => ({
   // Read by the Governance section strip in the page header.
@@ -12,6 +13,7 @@ vi.mock('../services/api', () => ({
   },
   electionService: {
     getElections: (...args: unknown[]) => mockGetElections(...args) as unknown,
+    createElection: (...args: unknown[]) => mockCreateElection(...args) as unknown,
     getElectionSettings: vi.fn().mockRejectedValue(new Error('not needed')),
   },
   eventService: { getEvents: vi.fn().mockResolvedValue([]) },
@@ -45,6 +47,8 @@ async function openCreateDialog() {
 describe('ElectionsPage create form', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreateElection.mockReset();
+    mockCreateElection.mockResolvedValue({ id: 'e1' });
   });
 
   it('shows the selected winner rule rather than painting it white on white', async () => {
@@ -105,5 +109,52 @@ describe('ElectionsPage create form', () => {
     expect(screen.getByLabelText('Open Automatically at Start Time')).toHaveAccessibleDescription(
       /Ballot emails are still sent separately/
     );
+  });
+
+  // Forms review F-3: an empty submit was refused by the browser's required
+  // bubble, which vanished after a few seconds and was tied to no field.
+  describe('required fields', () => {
+    it('names each missing field under it and focuses the first', async () => {
+      const dialog = await openCreateDialog();
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Create Election' }));
+
+      const title = screen.getByRole('textbox', { name: 'Title' });
+      expect(title).toHaveAttribute('aria-invalid', 'true');
+      expect(title).toHaveAccessibleDescription('Enter a title for the election.');
+      expect(title).toHaveFocus();
+      const start = screen.getByLabelText(/Start Date & Time/, { selector: 'input' });
+      expect(start).toHaveAttribute('aria-invalid', 'true');
+      expect(start).toHaveAccessibleDescription('Choose when voting opens.');
+      expect(screen.getByLabelText(/End Date & Time/, { selector: 'input' })).toHaveAccessibleDescription(
+        'Choose when voting closes.'
+      );
+      expect(mockCreateElection).not.toHaveBeenCalled();
+    });
+
+    it('focuses the dates when only they are missing', async () => {
+      const dialog = await openCreateDialog();
+      await userEvent.type(screen.getByRole('textbox', { name: 'Title' }), 'Officers 2027');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Create Election' }));
+
+      expect(screen.getByLabelText(/Start Date & Time/, { selector: 'input' })).toHaveFocus();
+      expect(mockCreateElection).not.toHaveBeenCalled();
+    });
+
+    it('puts a 422 on the field it names', async () => {
+      mockCreateElection.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'title', message: 'Value is too long.' }] } },
+      });
+      const dialog = await openCreateDialog();
+      await userEvent.type(screen.getByRole('textbox', { name: 'Title' }), 'Officers 2027');
+      // Picking a start fills the end with that day's close.
+      fireEvent.change(screen.getByLabelText(/Start Date & Time/, { selector: 'input' }), {
+        target: { value: '2099-12-10' },
+      });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Create Election' }));
+
+      expect(await screen.findByRole('textbox', { description: 'Value is too long.' })).toHaveAccessibleName('Title');
+      expect(mockCreateElection).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
   });
 });
