@@ -625,6 +625,19 @@ class TestAnExplicitWindow:
         )
         assert (tally.held, tally.charged, tally.attended) == (3, 3, 1)
 
+    def test_a_session_before_the_window_is_not_counted(self):
+        held = _held(date(2025, 3, 16), date(2025, 6, 1), *self.LAST_YEAR)
+        records = _attended(date(2025, 3, 16), self.LAST_YEAR[0])
+        tally = tally_session_attendance(
+            _req(),
+            records,
+            held,
+            TODAY,
+            window=(date(2025, 6, 1), date(2025, 12, 31)),
+        )
+        # 1 June is the window's first day and counts; 16 March does not.
+        assert (tally.held, tally.charged, tally.attended) == (4, 4, 1)
+
     def test_without_a_window_the_requirements_own_applies(self):
         held = _held(*self.LAST_YEAR, *FIVE)
         tally = tally_session_attendance(

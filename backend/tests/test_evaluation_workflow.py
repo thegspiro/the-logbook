@@ -47,7 +47,12 @@ from app.models.training import (
     TrainingType,
     TrainingWaiver,
 )
-from app.models.user import MemberLeaveOfAbsence, User, user_positions
+from app.models.user import (
+    MemberLeaveOfAbsence,
+    MemberServicePeriod,
+    User,
+    user_positions,
+)
 from app.services import evaluation_notice_service
 from app.services.email_service import EmailService
 from app.services.evaluation_notice_service import (
@@ -1081,8 +1086,8 @@ async def _attendance_figure(dept: _Dept, make_client: ClientFactory) -> dict:
 
 class TestSessionAttendanceFigure:
     """The evaluation's training-session attendance is the requirement's own
-    rule, measured over the review period (owner decisions 12, 13 and 6 of
-    2026-11-10): only the sessions designated to count, attendance as
+    rule, measured over the review period (owner decisions of 2026-11-10):
+    only the sessions designated to count, attendance as
     finalizing records it, every waiver the tally reads, and the requirement
     for the member's membership type."""
 
@@ -1113,8 +1118,6 @@ class TestSessionAttendanceFigure:
             "held": 3,
             "excused": 0,
             "required_pct": 50.0,
-            "met": False,
-            "overridden": False,
             "requirement": "Company drills",
         }
 
@@ -1133,7 +1136,7 @@ class TestSessionAttendanceFigure:
 
         figure = await _attendance_figure(dept, make_client)
         assert (figure["value"], figure["attended"], figure["held"]) == (66.7, 2, 4)
-        assert (figure["excused"], figure["met"]) == (1, True)
+        assert figure["excused"] == 1
 
     async def test_the_requirement_for_the_members_type_is_used(
         self, dept: _Dept, make_client: ClientFactory
@@ -1163,7 +1166,8 @@ class TestSessionAttendanceFigure:
             "value": None,
             "note": (
                 "More than one session-attendance requirement applies to "
-                "this member, and none is set for their membership type."
+                "this member, and their membership type does not single one "
+                "out."
             ),
         }
 
@@ -1211,6 +1215,102 @@ class TestSessionAttendanceFigure:
             "note": "Excused from every session counting toward Company drills "
             "in the period.",
         }
+
+    async def test_two_requirements_for_the_same_type_are_not_guessed_between(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        first = await _attendance_requirement(
+            dept, name="Drills A", membership_types=["active"]
+        )
+        second = await _attendance_requirement(
+            dept, name="Drills B", membership_types=["active"]
+        )
+        await _drill(dept, date(2025, 3, 3), link=(first,), attended=True)
+        await _drill(dept, date(2025, 6, 3), link=(second,))
+
+        figure = await _attendance_figure(dept, make_client)
+        assert figure["available"] is False
+        assert figure["note"] == (
+            "More than one session-attendance requirement applies to this "
+            "member, and their membership type does not single one out."
+        )
+
+    async def test_sessions_outside_the_review_period_are_not_counted(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        drills = await _attendance_requirement(dept)
+        await _drill(dept, date(2024, 12, 15), link=(drills,), attended=True)
+        await _drill(dept, date(2025, 1, 1), link=(drills,))
+        await _drill(dept, date(2025, 6, 3), link=(drills,), attended=True)
+        await _drill(dept, date(2026, 2, 3), link=(drills,), attended=True)
+
+        figure = await _attendance_figure(dept, make_client)
+        # The first day of the period counts; the days either side do not.
+        assert (figure["value"], figure["attended"], figure["held"]) == (50.0, 1, 2)
+
+    async def test_a_session_held_between_stints_of_membership_is_dropped(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        dept.db.add_all(
+            [
+                MemberServicePeriod(
+                    organization_id=dept.org,
+                    user_id=dept.member.id,
+                    start_date=None,
+                    end_date=date(2025, 3, 31),
+                    separation_status="dropped_voluntary",
+                    counts_toward_service=True,
+                ),
+                MemberServicePeriod(
+                    organization_id=dept.org,
+                    user_id=dept.member.id,
+                    start_date=date(2025, 6, 20),
+                    end_date=None,
+                    counts_toward_service=True,
+                ),
+            ]
+        )
+        await dept.db.flush()
+        drills = await _attendance_requirement(dept)
+        # In the gap: the member owed nothing, so it is neither missed nor
+        # excused; it is not counted at all.
+        await _drill(dept, date(2025, 5, 3), link=(drills,))
+        await _drill(dept, date(2025, 8, 3), link=(drills,), attended=True)
+        await _drill(dept, date(2025, 10, 3), link=(drills,))
+
+        template = await _attendance_template(dept)
+        detail = await _draft(
+            await make_client(dept.manager), dept, template_id=template.id
+        )
+        figure = detail["data"]["training.session_attendance_pct"]
+        assert [r["reason"] for r in detail["excluded_ranges"]] == ["separation"]
+        assert (figure["value"], figure["attended"], figure["held"]) == (50.0, 1, 2)
+        assert figure["excused"] == 0
+
+    async def test_leave_excuses_a_missed_session_and_one_attended_still_counts(
+        self, dept: _Dept, make_client: ClientFactory
+    ):
+        drills = await _attendance_requirement(dept)
+        await _drill(dept, date(2025, 3, 3), link=(drills,), attended=True)
+        await _drill(dept, date(2025, 6, 3), link=(drills,))
+        await _drill(dept, date(2025, 9, 3), link=(drills,), attended=True)
+        await _drill(dept, date(2025, 11, 3), link=(drills,))
+        dept.db.add(
+            MemberLeaveOfAbsence(
+                organization_id=dept.org,
+                user_id=dept.member.id,
+                start_date=date(2025, 6, 1),
+                end_date=date(2025, 9, 30),
+                active=True,
+            )
+        )
+        await dept.db.flush()
+
+        figure = await _attendance_figure(dept, make_client)
+        # June, missed on leave, is excused. September, attended on leave,
+        # counts: checking in wins over the leave.
+        assert (figure["held"], figure["excused"]) == (4, 1)
+        assert (figure["value"], figure["attended"]) == (66.7, 2)
 
     async def test_no_session_held_is_not_a_perfect_record(
         self, dept: _Dept, make_client: ClientFactory

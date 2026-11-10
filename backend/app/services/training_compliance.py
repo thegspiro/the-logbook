@@ -684,8 +684,11 @@ def tally_session_attendance(
     ``(first, last)`` day range, for a reader whose period is not the
     requirement's: the annual evaluation measures over its review period
     (owner decision, 2026-11-10), where a monthly requirement's own window
-    would show only the final month. Everything else about the rule, what
-    is held, attended and excused, is the same either way.
+    would show only the final month. What is held, attended and excused is
+    decided the same way either way. ``met`` and ``overridden`` are not: an
+    override is checked on ``as_of`` alone, so over a replaced window they
+    describe the cut-off, not the range, and a windowed reader should report
+    the counts.
     """
     if window is None:
         start, end = completion_window(req, as_of)

@@ -483,13 +483,18 @@ class EvaluationDataService:
 
         The requirement's own rule, ``tally_session_attendance`` (CLAUDE.md
         pitfall #29), over the review period rather than the requirement's
-        window (owner decisions 12 and 6, 2026-11-10). Only the sessions
+        window (owner decision, 2026-11-10). Only the sessions
         linked to the member's session-attendance requirement are counted, a
         member attended one when finalizing it wrote their record, and every
         waiver and leave the training screens apply excuses a session the
         member missed, while one they came to anyway still counts. The
         requirement is the one for the member's membership type when several
-        apply (decision 13), and none is guessed at when that does not decide.
+        apply, and none is guessed at when that does not decide.
+
+        The figure is the counts, not a pass or fail: whether the requirement
+        is met is the dashboard's question, answered by
+        ``training.requirements_met_pct``, and a Chief's override is judged on
+        one cut-off day, which says nothing about a whole review period.
 
         Days between stints of membership are dropped: the member owed
         nothing then. Leave is not dropped here; the tally excuses it.
@@ -503,7 +508,7 @@ class EvaluationDataService:
         if choice.ambiguous:
             return _unavailable(
                 "More than one session-attendance requirement applies to this "
-                "member, and none is set for their membership type."
+                "member, and their membership type does not single one out."
             )
         req = choice.requirement
         if req is None:
@@ -559,8 +564,6 @@ class EvaluationDataService:
             held=tally.held,
             excused=tally.held - tally.charged,
             required_pct=float(req.required_attendance_pct or 0),
-            met=tally.met,
-            overridden=tally.overridden,
             requirement=req.name,
         )
 

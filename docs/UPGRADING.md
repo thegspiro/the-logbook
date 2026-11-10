@@ -749,10 +749,14 @@ it:
 - **The figure covers the evaluation's review period**, not the requirement's
   own window.
 
-**Finalized evaluations keep the figure they were signed with.** Drafts,
-amendments, refreshed figures and live previews show the new one. The stored
-snapshot's `version` is now `2`; snapshots with `version` 1 hold the old
-figure.
+**Stored figures are not recalculated.** A finalized evaluation keeps the
+figure it was signed with. So does an evaluation already open at the upgrade,
+and an amendment of a finalized one, until the evaluator or a manager presses
+**Update figures**. That is possible only until the evaluator locks their part,
+so an evaluation whose evaluator had already locked it is signed with the old
+figure. Evaluations drafted after the upgrade, refreshed figures and template
+previews show the new one. The stored snapshot's `version` is now `2`; a
+snapshot still at `version` 1 holds the old figure.
 
 ### Finance: an optional live QuickBooks Online connection (2026-11-06)
 
