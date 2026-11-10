@@ -30,8 +30,12 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
   timezone,
   audience = 'self',
 }) => {
-  const isOverdue = req.days_until_due != null && req.days_until_due < 0 && !req.is_met;
-  const isDueSoon = req.days_until_due != null && req.days_until_due <= 30 && req.days_until_due >= 0 && !req.is_met;
+  // No session held yet: nothing to have attended, so neither met nor owed,
+  // and not "0/0 - Complete" (workflow review W80-9).
+  const notYetHeld = req.not_applicable === true;
+  const isOverdue = !notYetHeld && req.days_until_due != null && req.days_until_due < 0 && !req.is_met;
+  const isDueSoon =
+    !notYetHeld && req.days_until_due != null && req.days_until_due <= 30 && req.days_until_due >= 0 && !req.is_met;
   const self = audience === 'self';
   const unitFor = (count: number) => requirementUnitSuffix(req.requirement_type, count);
 
@@ -45,6 +49,8 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
             <CheckCircle2 className="h-5 w-5 shrink-0 text-green-700 dark:text-green-400" />
           ) : isOverdue ? (
             <AlertTriangle className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" />
+          ) : notYetHeld ? (
+            <Clock className="text-theme-text-muted h-5 w-5 shrink-0" />
           ) : (
             <Clock className="h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400" />
           )}
@@ -63,19 +69,27 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
                   : 'text-theme-text-primary'
             }`}
           >
-            {req.completed_hours}/{req.required_hours}
-            {unitFor(req.required_hours)}
+            {notYetHeld ? (
+              <span className="text-theme-text-muted font-normal">No sessions held yet</span>
+            ) : (
+              <>
+                {req.completed_hours}/{req.required_hours}
+                {unitFor(req.required_hours)}
+              </>
+            )}
           </span>
         </div>
       </div>
 
       {/* Progress bar */}
-      <div className="bg-theme-surface-hover mb-2 h-2 w-full rounded-full">
-        <div
-          className={`h-2 rounded-full transition-all ${getProgressBarColor(req.progress_percentage, req.is_met, isOverdue)}`}
-          style={{ width: `${Math.min(req.progress_percentage, 100)}%` }}
-        />
-      </div>
+      {!notYetHeld && (
+        <div className="bg-theme-surface-hover mb-2 h-2 w-full rounded-full">
+          <div
+            className={`h-2 rounded-full transition-all ${getProgressBarColor(req.progress_percentage, req.is_met, isOverdue)}`}
+            style={{ width: `${Math.min(req.progress_percentage, 100)}%` }}
+          />
+        </div>
+      )}
 
       <RequirementMonthlyHours requirement={req} />
       <RequirementCourseList requirement={req} timezone={timezone} />
@@ -125,7 +139,9 @@ export const RequirementDetailCard: React.FC<RequirementDetailCardProps> = ({
           {req.training_type ? ` (${req.training_type.replace('_', ' ')})` : ''}
         </span>
         <div className="flex items-center space-x-2">
-          {req.is_met ? (
+          {notYetHeld ? (
+            <span>Not graded until a session is held</span>
+          ) : req.is_met ? (
             <span className="text-green-700 dark:text-green-400">Complete</span>
           ) : req.catch_up_deadline ? (
             <span>Due by {formatCalendarDate(req.catch_up_deadline)}</span>

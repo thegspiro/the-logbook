@@ -1,101 +1,36 @@
 """
 Equipment Check PDF Report Generator
 
-Produces downloadable PDF reports using reportlab:
-- Compliance summary (per-apparatus stats)
-- Deficiency / failure log (table)
-- Individual check report (compartment-by-compartment)
+Produces downloadable PDF reports on the shared report layout
+(:mod:`app.utils.pdf_report_kit`):
+
+- Compliance summary (per-apparatus and per-member stats)
+- Deficiency / failure log
+- Individual check report (compartment by compartment)
+
+Every value goes through ``cell``/``num``, which escape and wrap: notes and
+item names print in full rather than being cut at a character count, and a
+``<`` or ``&`` a member typed can neither break the build nor inject markup.
 """
 
-import io
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from xml.sax.saxutils import escape as _xml_escape
 
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Paragraph, Spacer
 
 from app.models.user import Organization
 from app.utils.check_types import describe_count, describe_status
 from app.utils.org_timezone import format_in_org_timezone
-
-_styles = getSampleStyleSheet()
-
-
-def _esc(value: Any) -> str:
-    """XML-escape a value for safe inclusion in a ReportLab ``Paragraph``.
-
-    ``Paragraph`` content is parsed as intra-paragraph XML markup, so raw
-    user-supplied text is an injection sink: an unbalanced ``<`` or ``&`` crashes
-    ``doc.build()`` (DoS on report generation) and ``<img src=.../>`` / ``<a>``
-    tags can embed local files or trigger fetches into the rendered PDF. Table
-    *cell* strings are not parsed and do not need this; only ``Paragraph`` text.
-    """
-    return _xml_escape(str(value if value is not None else ""))
-
-
-TITLE_STYLE = ParagraphStyle(
-    "ReportTitle",
-    parent=_styles["Title"],
-    fontSize=16,
-    spaceAfter=6,
-)
-
-SUBTITLE_STYLE = ParagraphStyle(
-    "ReportSubtitle",
-    parent=_styles["Normal"],
-    fontSize=10,
-    textColor=colors.grey,
-    spaceAfter=14,
-)
-
-SECTION_STYLE = ParagraphStyle(
-    "SectionHeader",
-    parent=_styles["Heading2"],
-    fontSize=12,
-    spaceBefore=14,
-    spaceAfter=6,
-)
-
-BODY_STYLE = ParagraphStyle(
-    "BodyText",
-    parent=_styles["Normal"],
-    fontSize=9,
-    leading=12,
-)
-
-SMALL_STYLE = ParagraphStyle(
-    "SmallText",
-    parent=_styles["Normal"],
-    fontSize=8,
-    leading=10,
-    textColor=colors.Color(0.4, 0.4, 0.4),
-)
-
-
-# Shared table style
-_BASE_TABLE_STYLE = TableStyle(
-    [
-        ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.15, 0.15, 0.2)),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, 0), 8),
-        ("FONTSIZE", (0, 1), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-        ("TOPPADDING", (0, 1), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.Color(0.8, 0.8, 0.8)),
-        (
-            "ROWBACKGROUNDS",
-            (0, 1),
-            (-1, -1),
-            [colors.white, colors.Color(0.96, 0.96, 0.96)],
-        ),
-        ("VALIGN", (0, 0), (-1, -1), "TOP"),
-    ]
+from app.utils.pdf_report_kit import (
+    ReportMeta,
+    bookmark,
+    cell,
+    data_table,
+    kpi_strip,
+    num,
+    render_report,
+    section_heading,
 )
 
 
@@ -124,137 +59,143 @@ def _local(value: Any, organization: Optional[Organization], fmt: str) -> str:
     return str(value)
 
 
+def _period(date_from: Optional[str], date_to: Optional[str]) -> str:
+    if date_from and date_to:
+        return f"{date_from} to {date_to}"
+    if date_from:
+        return f"From {date_from}"
+    if date_to:
+        return f"Through {date_to}"
+    return "Last 30 days"
+
+
+def _meta(
+    title: str,
+    organization: Optional[Organization],
+    generated_by: Optional[str],
+    parameters: List[Any],
+    subtitle: Optional[str] = None,
+) -> ReportMeta:
+    return ReportMeta(
+        title,
+        getattr(organization, "name", None),
+        _now_str(organization),
+        logo=getattr(organization, "logo", None),
+        generated_by=generated_by,
+        parameters=parameters,
+        subtitle=subtitle,
+        subject="Equipment check report",
+    )
+
+
 def generate_compliance_pdf(
     data: Dict[str, Any],
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     organization: Optional[Organization] = None,
+    generated_by: Optional[str] = None,
 ) -> bytes:
     """Generate a compliance summary PDF."""
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=letter,
-        topMargin=0.5 * inch,
-        bottomMargin=0.5 * inch,
-        leftMargin=0.6 * inch,
-        rightMargin=0.6 * inch,
+    meta = _meta(
+        "Equipment Check Compliance Report",
+        organization,
+        generated_by,
+        [("Period", _period(date_from, date_to))],
     )
-    elements: List[Any] = []
+    width = meta.width
 
-    elements.append(Paragraph("Equipment Check Compliance Report", TITLE_STYLE))
-    period = ""
-    if date_from and date_to:
-        period = f"{date_from} to {date_to}"
-    elif date_from:
-        period = f"From {date_from}"
-    elif date_to:
-        period = f"Through {date_to}"
-    elements.append(
-        Paragraph(
-            f"Period: {_esc(period) or 'Last 30 days'}  |  Generated: {_now_str(organization)}",
-            SUBTITLE_STYLE,
-        )
-    )
+    def body(styles: Dict[str, Any]) -> List[Any]:
+        story: List[Any] = [
+            kpi_strip(
+                [
+                    ("Total checks", data.get("total_checks", 0)),
+                    ("Missed", data.get("overdue_count", 0)),
+                    ("Pass rate", f"{data.get('pass_rate', 0)}%"),
+                    ("Avg items / check", data.get("avg_items_per_check", 0)),
+                ],
+                width,
+            ),
+            Spacer(1, 14),
+        ]
 
-    # Summary stats
-    total = data.get("total_checks", 0)
-    rate = data.get("pass_rate", 0)
-    avg_items = data.get("avg_items_per_check", 0)
-    elements.append(Paragraph("Summary", SECTION_STYLE))
-    missed = data.get("overdue_count", 0)
-    summary_data = [
-        ["Total Checks", "Missed", "Pass Rate", "Avg Items / Check"],
-        [str(total), str(missed), f"{rate}%", str(avg_items)],
-    ]
-    summary_table = Table(summary_data, colWidths=[1.65 * inch] * 4)
-    summary_table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.15, 0.15, 0.2)),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("GRID", (0, 0), (-1, -1), 0.5, colors.Color(0.8, 0.8, 0.8)),
+        apparatus_list = data.get("apparatus", [])
+        if apparatus_list:
+            # Apparatus with a deficiency first: they are what the reader
+            # needs to act on.
+            ordered = sorted(apparatus_list, key=lambda a: not a.get("has_deficiency"))
+            rows = []
+            emphasis = []
+            for index, a in enumerate(ordered):
+                last = _local(a.get("last_check_date"), organization, "%Y-%m-%d")
+                if a.get("has_deficiency"):
+                    emphasis.append(index)
+                rows.append(
+                    [
+                        cell(a.get("apparatus_name", "")),
+                        num(a.get("checks_expected", 0)),
+                        num(a.get("checks_completed", 0)),
+                        num(a.get("checks_missed", 0)),
+                        num(a.get("pass_count", 0)),
+                        num(a.get("fail_count", 0)),
+                        cell(last or "-"),
+                        cell(
+                            "Yes" if a.get("has_deficiency") else "No",
+                            styles["cell_bold"] if a.get("has_deficiency") else None,
+                        ),
+                    ]
+                )
+            fixed = 0.75 * inch * 5 + 1.0 * inch + 0.9 * inch
+            story += [
+                bookmark("Apparatus compliance", "apparatus"),
+                section_heading("Apparatus Compliance", styles),
+                data_table(
+                    [
+                        "Apparatus",
+                        "Expected",
+                        "Checks",
+                        "Missed",
+                        "Pass",
+                        "Fail",
+                        "Last check",
+                        "Deficiency",
+                    ],
+                    rows,
+                    [width - fixed] + [0.75 * inch] * 5 + [1.0 * inch, 0.9 * inch],
+                    numeric_cols=(1, 2, 3, 4, 5),
+                    emphasis_rows=emphasis,
+                ),
+                Spacer(1, 14),
             ]
-        )
-    )
-    elements.append(summary_table)
-    elements.append(Spacer(1, 12))
 
-    # Apparatus table
-    apparatus_list = data.get("apparatus", [])
-    if apparatus_list:
-        elements.append(Paragraph("Apparatus Compliance", SECTION_STYLE))
-        header = [
-            "Apparatus",
-            "Expected",
-            "Checks",
-            "Missed",
-            "Pass",
-            "Fail",
-            "Last Check",
-            "Deficiency",
-        ]
-        rows = [header]
-        for a in apparatus_list:
-            last_dt = _local(a.get("last_check_date"), organization, "%Y-%m-%d")
-            rows.append(
-                [
-                    str(a.get("apparatus_name", "")),
-                    str(a.get("checks_expected", 0)),
-                    str(a.get("checks_completed", 0)),
-                    str(a.get("checks_missed", 0)),
-                    str(a.get("pass_count", 0)),
-                    str(a.get("fail_count", 0)),
-                    str(last_dt or "-"),
-                    "Yes" if a.get("has_deficiency") else "No",
-                ]
-            )
-        col_widths = [
-            1.6 * inch,
-            0.75 * inch,
-            0.65 * inch,
-            0.65 * inch,
-            0.55 * inch,
-            0.55 * inch,
-            1 * inch,
-            0.85 * inch,
-        ]
-        t = Table(rows, colWidths=col_widths)
-        t.setStyle(_BASE_TABLE_STYLE)
-        elements.append(t)
-        elements.append(Spacer(1, 12))
+        members = data.get("members", [])
+        if members:
+            rows = []
+            for m in members:
+                done = m.get("checks_completed", 0)
+                passed = m.get("pass_count", 0)
+                rows.append(
+                    [
+                        cell(m.get("user_name", "")),
+                        num(done),
+                        num(passed),
+                        num(m.get("fail_count", 0)),
+                        num(f"{round(passed / done * 100)}%" if done > 0 else "-"),
+                    ]
+                )
+            story += [
+                bookmark("Member completion", "members"),
+                section_heading("Member Completion", styles),
+                data_table(
+                    ["Member", "Checks", "Pass", "Fail", "Rate"],
+                    rows,
+                    [width - 4 * 0.9 * inch] + [0.9 * inch] * 4,
+                    numeric_cols=(1, 2, 3, 4),
+                    zebra=True,
+                ),
+            ]
+        return story
 
-    # Member table
-    members = data.get("members", [])
-    if members:
-        elements.append(Paragraph("Member Completion", SECTION_STYLE))
-        header = ["Member", "Checks", "Pass", "Fail", "Rate"]
-        rows = [header]
-        for m in members:
-            done = m.get("checks_completed", 0)
-            p = m.get("pass_count", 0)
-            rate_val = f"{round(p / done * 100)}%" if done > 0 else "-"
-            rows.append(
-                [
-                    str(m.get("user_name", "")),
-                    str(done),
-                    str(p),
-                    str(m.get("fail_count", 0)),
-                    rate_val,
-                ]
-            )
-        col_widths = [2.5 * inch, 1 * inch, 0.8 * inch, 0.8 * inch, 1 * inch]
-        t = Table(rows, colWidths=col_widths)
-        t.setStyle(_BASE_TABLE_STYLE)
-        elements.append(t)
-
-    doc.build(elements)
-    return buf.getvalue()
+    return render_report(meta, body)
 
 
 def _item_with_count(record: Dict[str, Any]) -> str:
@@ -279,185 +220,139 @@ def generate_failure_log_pdf(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     organization: Optional[Organization] = None,
+    generated_by: Optional[str] = None,
 ) -> bytes:
     """Generate a failure/deficiency log PDF."""
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=letter,
-        topMargin=0.5 * inch,
-        bottomMargin=0.5 * inch,
-        leftMargin=0.5 * inch,
-        rightMargin=0.5 * inch,
+    meta = _meta(
+        "Equipment Check Failure Log",
+        organization,
+        generated_by,
+        [
+            ("Period", _period(date_from, date_to)),
+            ("Total failures", data.get("total", 0)),
+        ],
     )
-    elements: List[Any] = []
+    width = meta.width
 
-    elements.append(Paragraph("Equipment Check Failure Log", TITLE_STYLE))
-    period = ""
-    if date_from and date_to:
-        period = f"{date_from} to {date_to}"
-    elements.append(
-        Paragraph(
-            f"Period: {_esc(period) or 'Last 30 days'}  |  "
-            f"Total failures: {data.get('total', 0)}  |  "
-            f"Generated: {_now_str(organization)}",
-            SUBTITLE_STYLE,
-        )
-    )
-
-    items = data.get("items", [])
-    if not items:
-        elements.append(
-            Paragraph(
-                "No failures recorded in this period.",
-                BODY_STYLE,
-            )
-        )
-    else:
-        header = [
-            "Date",
-            "Apparatus",
-            "Compartment",
-            "Item",
-            "Checked By",
-            "Notes",
+    def body(styles: Dict[str, Any]) -> List[Any]:
+        items = data.get("items", [])
+        if not items:
+            return [Paragraph("No failures recorded in this period.", styles["body"])]
+        rows = [
+            [
+                cell(_local(f.get("checked_at"), organization, "%Y-%m-%d") or "-"),
+                cell(f.get("apparatus_name") or "-"),
+                cell(f.get("compartment_name") or ""),
+                cell(_item_with_count(f)),
+                cell(f.get("checked_by_name") or "-"),
+                cell(f.get("notes") or ""),
+            ]
+            for f in items
         ]
-        rows = [header]
-        for f in items:
-            dt = _local(f.get("checked_at"), organization, "%Y-%m-%d")
-            notes = str(f.get("notes", "") or "")
-            if len(notes) > 60:
-                notes = notes[:57] + "..."
-            rows.append(
-                [
-                    str(dt or "-"),
-                    str(f.get("apparatus_name", "-")),
-                    str(f.get("compartment_name", "")),
-                    _item_with_count(f),
-                    str(f.get("checked_by_name", "-")),
-                    notes,
-                ]
+        fixed = 0.85 * inch + 1.1 * inch + 1.1 * inch + 1.4 * inch + 1.1 * inch
+        return [
+            data_table(
+                ["Date", "Apparatus", "Compartment", "Item", "Checked by", "Notes"],
+                rows,
+                [0.85 * inch, 1.1 * inch, 1.1 * inch, 1.4 * inch, 1.1 * inch]
+                + [width - fixed],
+                zebra=True,
             )
-        col_widths = [
-            0.9 * inch,
-            1.1 * inch,
-            1.1 * inch,
-            1.3 * inch,
-            1.1 * inch,
-            1.5 * inch,
         ]
-        t = Table(rows, colWidths=col_widths)
-        t.setStyle(_BASE_TABLE_STYLE)
-        elements.append(t)
 
-    doc.build(elements)
-    return buf.getvalue()
+    return render_report(meta, body)
 
 
 def generate_check_detail_pdf(
     check: Dict[str, Any],
     organization: Optional[Organization] = None,
+    generated_by: Optional[str] = None,
 ) -> bytes:
     """Generate an individual check report PDF
     (compartment-by-compartment results)."""
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=letter,
-        topMargin=0.5 * inch,
-        bottomMargin=0.5 * inch,
-        leftMargin=0.6 * inch,
-        rightMargin=0.6 * inch,
-    )
-    elements: List[Any] = []
-
     overall = check.get("overall_status", "unknown")
     status_label = "PASS" if overall == "pass" else "FAIL"
-    elements.append(
-        Paragraph(
-            f"Equipment Check Report — {status_label}",
-            TITLE_STYLE,
-        )
-    )
-
     checked_at = _local(check.get("checked_at"), organization, "%Y-%m-%d %H:%M %Z")
-    elements.append(
-        Paragraph(
-            f"Checked by: {_esc(check.get('checked_by_name', 'Unknown'))}  |  "
-            f"Date: {_esc(checked_at) or '-'}  |  "
-            f"Timing: {_esc(check.get('check_timing', '-'))}",
-            SUBTITLE_STYLE,
-        )
+    meta = _meta(
+        "Equipment Check Report",
+        organization,
+        generated_by,
+        [
+            ("Checked by", check.get("checked_by_name") or "Unknown"),
+            ("Date", checked_at or "-"),
+            ("Timing", check.get("check_timing") or "-"),
+        ],
+        subtitle=f"Result: {status_label}",
     )
-    elements.append(
-        Paragraph(
-            f"Total items: {check.get('total_items', 0)}  |  "
-            f"Completed: {check.get('completed_items', 0)}  |  "
-            f"Failed: {check.get('failed_items', 0)}",
-            BODY_STYLE,
-        )
-    )
-    elements.append(Spacer(1, 8))
+    width = meta.width
 
-    # Group items by compartment
-    items = check.get("items", [])
-    compartments: Dict[str, List[Dict[str, Any]]] = {}
-    for item in items:
-        comp = item.get("compartment_name", "General")
-        compartments.setdefault(comp, []).append(item)
-
-    for comp_name, comp_items in compartments.items():
-        # Items placed directly on the checklist snapshot no location, and
-        # print without a heading of their own, as the crew saw them.
-        if comp_name:
-            elements.append(Paragraph(_esc(comp_name), SECTION_STYLE))
-        header = ["Item", "Type", "Status", "Count", "Notes"]
-        rows = [header]
-        for it in comp_items:
-            status = describe_status(it.get("check_type"), it.get("status", ""))
-            notes = str(it.get("notes", "") or "")
-            if len(notes) > 40:
-                notes = notes[:37] + "..."
-            count = describe_count(
-                it.get("quantity_found"),
-                it.get("expected_quantity"),
-                it.get("count_unit"),
-            )
-            rows.append(
+    def body(styles: Dict[str, Any]) -> List[Any]:
+        story: List[Any] = [
+            kpi_strip(
                 [
-                    str(it.get("item_name", "")),
-                    str(it.get("check_type", "")),
-                    status.upper() if status else "-",
-                    count or "-",
-                    notes,
-                ]
-            )
-        col_widths = [
-            2.0 * inch,
-            0.9 * inch,
-            0.9 * inch,
-            1.4 * inch,
-            1.5 * inch,
+                    ("Result", status_label),
+                    ("Total items", check.get("total_items", 0)),
+                    ("Completed", check.get("completed_items", 0)),
+                    ("Failed", check.get("failed_items", 0)),
+                ],
+                width,
+            ),
+            Spacer(1, 12),
         ]
-        t = Table(rows, colWidths=col_widths)
-        style = TableStyle(list(_BASE_TABLE_STYLE.getCommands()))
-        # Highlight failed rows in red
-        for i, it in enumerate(comp_items, start=1):
-            if it.get("status") == "fail":
-                style.add(
-                    "BACKGROUND",
-                    (0, i),
-                    (-1, i),
-                    colors.Color(1, 0.92, 0.92),
+
+        compartments: Dict[str, List[Dict[str, Any]]] = {}
+        for item in check.get("items", []):
+            compartments.setdefault(item.get("compartment_name", "General"), []).append(
+                item
+            )
+
+        fixed = 0.9 * inch + 0.9 * inch + 1.4 * inch
+        for index, (comp_name, comp_items) in enumerate(compartments.items()):
+            # Items placed directly on the checklist snapshot no location, and
+            # print without a heading of their own, as the crew saw them.
+            if comp_name:
+                story.append(bookmark(str(comp_name), f"compartment-{index}"))
+                story.append(section_heading(str(comp_name), styles))
+            rows = []
+            failed = []
+            for row_index, it in enumerate(comp_items):
+                status = describe_status(it.get("check_type"), it.get("status", ""))
+                if it.get("status") == "fail":
+                    failed.append(row_index)
+                rows.append(
+                    [
+                        cell(it.get("item_name", "")),
+                        cell(it.get("check_type", "")),
+                        cell(
+                            status.upper() if status else "-",
+                            styles["cell_bold"] if row_index in failed else None,
+                        ),
+                        cell(
+                            describe_count(
+                                it.get("quantity_found"),
+                                it.get("expected_quantity"),
+                                it.get("count_unit"),
+                            )
+                            or "-"
+                        ),
+                        cell(it.get("notes") or ""),
+                    ]
                 )
-        t.setStyle(style)
-        elements.append(t)
-        elements.append(Spacer(1, 6))
+            name_width = (width - fixed) * 0.55
+            story.append(
+                data_table(
+                    ["Item", "Type", "Status", "Count", "Notes"],
+                    rows,
+                    [name_width, 0.9 * inch, 0.9 * inch, 1.4 * inch]
+                    + [width - fixed - name_width],
+                    emphasis_rows=failed,
+                )
+            )
+            story.append(Spacer(1, 10))
 
-    # Notes
-    if check.get("notes"):
-        elements.append(Paragraph("Overall Notes", SECTION_STYLE))
-        elements.append(Paragraph(_esc(check["notes"]), BODY_STYLE))
+        if check.get("notes"):
+            story.append(section_heading("Overall Notes", styles))
+            story.append(cell(check["notes"], styles["body"]))
+        return story
 
-    doc.build(elements)
-    return buf.getvalue()
+    return render_report(meta, body)

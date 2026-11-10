@@ -118,3 +118,27 @@ def test_a_member_cannot_inject_markup():
 )
 def test_figures_read_as_the_screens_show_them(entry, unit, expected):
     assert format_figure(entry, unit) == expected
+
+
+def test_detail_values_print_as_written_not_as_escape_codes():
+    """The Details block is a table, and a bare table cell prints its text
+    literally: escaping the value there put "O&#x27;Brien" on a member's
+    permanent record."""
+    record = {
+        **RECORD,
+        "member_name": "Sean O'Brien",
+        "evaluator_name": "Lt. A & B <Ops>",
+        "period": "Q1 & Q2",
+        "coverage": "Jan – Jun",
+        "excluded": ['Leave: "medical" & admin'],
+    }
+    text = " ".join(_text(render_evaluation_pdf(record)).split())
+    for literal in (
+        "Sean O'Brien",
+        "Lt. A & B <Ops>",
+        "Q1 & Q2",
+        'Leave: "medical" & admin',
+    ):
+        assert literal in text
+    for code in ("&amp;", "&#x27;", "&lt;", "&gt;", "&quot;"):
+        assert code not in text
