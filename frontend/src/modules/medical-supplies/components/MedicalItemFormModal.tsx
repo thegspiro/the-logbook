@@ -148,7 +148,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
   const clearError = (key: MedicalField) => fieldErrors.setError(key, null);
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
-    if (key !== 'apparatus_only') clearError(key as MedicalField);
+    if (key !== 'apparatus_only') clearError(key);
   };
 
   const showErrors = (next: FieldErrors<MedicalField>) => {
