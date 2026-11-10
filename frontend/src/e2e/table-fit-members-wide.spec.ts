@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { json, signIn, TEST_USER } from './helpers';
 import { TABLE_FIT_VIEWPORTS, expectTableFitsItsCard } from './tableFit';
 
@@ -30,6 +30,10 @@ const ROSTER = MEMBER_NAMES.map(([firstName, lastName], i) => ({
   positions: [],
 }));
 
+// rwd-table-xwide's threshold, 78rem. A card at least this wide must show
+// the roster as a table.
+const XWIDE_TIER_PX = 78 * 16;
+
 const CONTACT_INFO = { enabled: true, show_email: true, show_phone: true, show_mobile: true };
 
 // The member roster sets a member's name and username beside rank, member
@@ -57,6 +61,15 @@ test.describe('Members — roster table', () => {
         .filter({ has: page.getByRole('columnheader', { includeHidden: true, name: 'Rank', exact: true }) });
       await table.waitFor();
       await expectTableFitsItsCard(table, 'Member roster table');
+      // Cards always fit their box, so the fit check above passes in card
+      // layout too. The roster once went to cards on every screen because its
+      // tier was wider than the ~1278px the capped page column gives any card;
+      // the header row is visible only in table layout, so this pins that a
+      // card wide enough for the tier keeps the table.
+      const room = await table.evaluate((el) => el.closest('.rwd-table-container')?.clientWidth ?? 0);
+      if (room >= XWIDE_TIER_PX) {
+        await expect(table.locator('thead'), 'Member roster shows as cards in a desktop-width card').toBeVisible();
+      }
     });
   }
 });

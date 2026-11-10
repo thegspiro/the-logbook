@@ -46,6 +46,8 @@ import { getTodayLocalDate } from '../../utils/dateFormatting';
 import { prefersPdfOverBrowserPrint } from '../../utils/printEnvironment';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
+  AVERY_5160_COLUMN_GAP,
+  AVERY_5160_PAGE_MARGIN,
   CUSTOM_PRESET_ID,
   DEFAULT_PRESET_ID,
   LABEL_PRESETS,
@@ -467,7 +469,7 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
     const isThermalFmt = preset.columns === 1;
     doc.open();
     doc.write(`<!DOCTYPE html><html><head><style>
-      @page { size: ${preset.pageWidth} ${preset.pageHeight}; margin: ${isThermalFmt ? '0' : '0.5in 0.19in'}; }
+      @page { size: ${preset.pageWidth} ${preset.pageHeight}; margin: ${isThermalFmt ? '0' : AVERY_5160_PAGE_MARGIN}; }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { background: white; }
       .barcode-label { break-inside: avoid; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -521,8 +523,8 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
 
   return (
     <>
-      <style>{`
-        @page { size: ${preset.pageWidth} ${preset.pageHeight}; margin: ${isThermal ? '0' : '0.5in 0.19in'}; }
+      <style data-testid="label-page-css">{`
+        @page { size: ${preset.pageWidth} ${preset.pageHeight}; margin: ${isThermal ? '0' : AVERY_5160_PAGE_MARGIN}; }
         @media print { .print-controls { display: none !important; } }
         @media screen { .barcode-label { border: 1px dashed #ccc; background: white; } }
       `}</style>
@@ -885,10 +887,16 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
             <div
               id={`label-print-container-${module}`}
               className="barcode-labels-container"
+              data-testid="label-sheet-grid"
               style={
                 isThermal
                   ? { display: 'flex', flexDirection: 'column', gap: '4px' }
-                  : { display: 'grid', gridTemplateColumns: `repeat(${preset.columns}, 1fr)`, gap: '2px' }
+                  : {
+                      display: 'grid',
+                      gridTemplateColumns: `repeat(${preset.columns}, ${preset.width})`,
+                      columnGap: AVERY_5160_COLUMN_GAP,
+                      rowGap: 0,
+                    }
               }
             >
               {/* Blank cells ahead of the first label, so the preview and a

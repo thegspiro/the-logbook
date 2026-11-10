@@ -734,6 +734,38 @@ describe('an existing member inside a catch-up period', () => {
   });
 });
 
+// Workflow review W80-9: the backend reports "not_applicable" for a
+// session-attendance requirement no session of which has been held yet.
+describe('a session-attendance requirement with no session held yet', () => {
+  const reqs = new Map([['r1', requirement()]]);
+  const notYetHeld = cell({
+    requirement_id: 'r2',
+    status: 'not_applicable',
+    progress_current: 0,
+    progress_required: 0,
+    progress_unit: 'sessions',
+  });
+
+  it('says no session has been held, not met and not missing', () => {
+    const evaluated = evaluateCell(notYetHeld, undefined, AS_OF);
+    expect(evaluated.tone).toBe(CellTone.NOT_YET_HELD);
+    expect(evaluated.progressLabel).toBe('No sessions held yet');
+    expect(isMetTone(evaluated.tone)).toBe(false);
+    expect(isGradedTone(evaluated.tone)).toBe(false);
+  });
+
+  it('counts neither met nor open, matching the backend tally', () => {
+    const result = evaluateMember(
+      member({ requirements: [cell({ requirement_id: 'r1', status: 'completed' }), notYetHeld] }),
+      reqs,
+      AS_OF
+    );
+    expect(result.met).toBe(1);
+    expect(result.total).toBe(1);
+    expect(result.open).toBe(0);
+  });
+});
+
 describe('a Chief override', () => {
   it('says the override, not the count, met the requirement', () => {
     const overridden = evaluateCell(

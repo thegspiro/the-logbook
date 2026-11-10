@@ -656,6 +656,20 @@ export const PracticalSkillsMethod = {
 export type PracticalSkillsMethod = (typeof PracticalSkillsMethod)[keyof typeof PracticalSkillsMethod];
 
 // ============================================
+// Training — Record Source
+// ============================================
+/**
+ * Where a training record came from. The server decides it
+ * (`app/services/training_record_source.py`) and sends the label to show.
+ */
+export const TrainingRecordSource = {
+  PROVIDER: 'provider',
+  IMPORTED: 'imported',
+  LOGBOOK: 'logbook',
+} as const;
+export type TrainingRecordSource = (typeof TrainingRecordSource)[keyof typeof TrainingRecordSource];
+
+// ============================================
 // Scheduling — Assignment Status
 // ============================================
 export const AssignmentStatus = {
@@ -1134,6 +1148,12 @@ export const CellTone = {
    * `tally_standing()` leaves it out of both sides of the standing.
    */
   CATCH_UP: 'catch_up',
+  /**
+   * A session-attendance requirement no session of which has been held in the
+   * member's window yet (backend status `not_applicable`): nothing to have
+   * attended, so counted neither met nor open, like CATCH_UP (W80-9).
+   */
+  NOT_YET_HELD: 'not_yet_held',
 } as const;
 export type CellTone = (typeof CellTone)[keyof typeof CellTone];
 

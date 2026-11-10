@@ -103,8 +103,15 @@ class TestThirtyDayFigures:
         rolling_start = now - timedelta(days=30)
         # Halfway between the rolling start and local midnight 29 days ago:
         # after ``now - 30 days`` (the old window counted it) and before the
-        # first charted day (the new one does not), whatever the time of day.
-        outside = rolling_start + (window_start - rolling_start) / 2
+        # first charted day (the new one does not). That gap does not always
+        # exist: when the window spans the autumn clock change, the 29 local
+        # days before today hold an extra hour, so from 23:00 local the first
+        # charted day starts before ``now - 30 days``. Then the point just
+        # before the first charted day is still outside the new window.
+        if window_start > rolling_start:
+            outside = rolling_start + (window_start - rolling_start) / 2
+        else:
+            outside = window_start - timedelta(minutes=1)
         inside = window_start + timedelta(minutes=1)
 
         for at, tag in ((outside, "outside"), (inside, "inside")):

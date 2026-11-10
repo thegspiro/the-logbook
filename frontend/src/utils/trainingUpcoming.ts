@@ -54,6 +54,8 @@ const urgencyFor = (days: number): UpcomingUrgency => {
 
 const requirementItems = (details: RequirementDetail[], today: string): UpcomingItem[] =>
   details.flatMap((req): UpcomingItem[] => {
+    // No session held yet: nothing is owed, so nothing is due (W80-9).
+    if (req.not_applicable) return [];
     if (req.is_met) {
       // Met for this cycle: the only thing left to do is take it early for the
       // next one, once its window opens.

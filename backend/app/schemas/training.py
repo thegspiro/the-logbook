@@ -403,6 +403,12 @@ class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # Response only, filled by the record lists (see
+    # app/services/training_record_source.py): "provider", "imported" or
+    # "logbook", and the label to show for it. None where a response does not
+    # work it out, such as the reply to a create or an edit.
+    source: Optional[str] = None
+    source_label: Optional[str] = None
 
     model_config = _response_config
 
@@ -882,6 +888,9 @@ class RequirementProgress(BaseModel):
     # Set when an existing member is inside the requirement's catch-up period
     # and has not met it yet; due_date then carries the same date.
     catch_up_deadline: Optional[date] = None
+    # A session-attendance requirement no session of which has been held yet:
+    # neither complete nor incomplete (workflow review W80-9).
+    not_applicable: bool = False
 
 
 class ComplianceSummary(BaseModel):
