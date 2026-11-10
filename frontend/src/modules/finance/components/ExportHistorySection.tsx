@@ -169,23 +169,25 @@ export const ExportHistorySection: React.FC = () => {
                       {formatNumber(log.recordCount)}
                     </td>
                     <td data-label="Status" className={CELL}>
-                      <span
-                        className={`badge ${STATUS_COLORS[log.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300'}`}
-                      >
-                        {STATUS_LABELS[log.status] ?? log.status}
-                      </span>
-                      {(log.errorMessage || STATUS_HINTS[log.status]) && (
-                        <span className="text-theme-text-secondary mt-1 block text-xs">
-                          {log.errorMessage || STATUS_HINTS[log.status]}
+                      <div className="min-w-0">
+                        <span
+                          className={`badge ${STATUS_COLORS[log.status] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300'}`}
+                        >
+                          {STATUS_LABELS[log.status] ?? log.status}
                         </span>
-                      )}
+                        {(log.errorMessage || STATUS_HINTS[log.status]) && (
+                          <span className="text-theme-text-secondary mt-1 block text-xs">
+                            {log.errorMessage || STATUS_HINTS[log.status]}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td data-label="By" className={CELL}>
                       {log.exportedByName || <span className="text-theme-text-secondary">Unknown</span>}
                     </td>
                     <td data-label="In QuickBooks" className={CELL}>
                       {log.importedAt ? (
-                        <>
+                        <div className="min-w-0">
                           <span className="inline-flex items-center gap-1 text-green-800 dark:text-green-400">
                             <CheckCircle className="h-4 w-4" aria-hidden="true" />
                             Imported
@@ -203,7 +205,7 @@ export const ExportHistorySection: React.FC = () => {
                           >
                             Undo
                           </button>
-                        </>
+                        </div>
                       ) : log.status === 'successful' ? (
                         <button
                           type="button"

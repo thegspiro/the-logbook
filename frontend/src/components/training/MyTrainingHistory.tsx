@@ -98,9 +98,16 @@ const HistoryRow: React.FC<{ record: MyTrainingHistoryRecord; showHours: boolean
             )}
           </div>
         ) : (
-          <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(record.status)}`}>
-            {getTrainingStatusLabel(record.status)}
-          </span>
+          <div className="flex flex-col gap-1">
+            <span className={`w-fit rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(record.status)}`}>
+              {getTrainingStatusLabel(record.status)}
+            </span>
+            {/* Credit withdrawn by the event (deleted, cancelled, member
+                removed): why, rather than a bare "Cancelled" (W80-15). */}
+            {record.void_reason && (
+              <span className="text-theme-text-secondary text-xs whitespace-pre-line">{record.void_reason}</span>
+            )}
+          </div>
         )}
       </td>
     </tr>

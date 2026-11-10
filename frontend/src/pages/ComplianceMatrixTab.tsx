@@ -114,6 +114,12 @@ const TONE_CLASSES: Record<CellTone, { pill: string; bar: string; pip: string }>
     bar: 'bg-blue-800 dark:bg-blue-400',
     pip: 'bg-blue-800 dark:bg-blue-400',
   },
+  // No session held yet: there is nothing to grade, so no colour of judgement.
+  [CellTone.NOT_YET_HELD]: {
+    pill: 'border-theme-surface-border bg-theme-surface-hover text-theme-text-secondary',
+    bar: 'bg-theme-surface-border',
+    pip: 'bg-theme-text-muted',
+  },
 };
 
 const TONE_LABELS: Record<CellTone, string> = {
@@ -123,6 +129,7 @@ const TONE_LABELS: Record<CellTone, string> = {
   [CellTone.LAPSED]: 'Lapsed',
   [CellTone.MISSING]: 'Nothing on file',
   [CellTone.CATCH_UP]: 'Catching up',
+  [CellTone.NOT_YET_HELD]: 'No sessions yet',
 };
 
 const STANDING_CLASSES: Record<Standing, { pill: string; dot: string; head: string }> = {
@@ -899,7 +906,16 @@ const ComplianceMatrixTab: React.FC = () => {
 
         {/* Legend + provenance */}
         <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-2.5 text-xs">
-          {([CellTone.MET, CellTone.SHORT, CellTone.SOON, CellTone.LAPSED, CellTone.CATCH_UP] as const).map((tone) => (
+          {(
+            [
+              CellTone.MET,
+              CellTone.SHORT,
+              CellTone.SOON,
+              CellTone.LAPSED,
+              CellTone.CATCH_UP,
+              CellTone.NOT_YET_HELD,
+            ] as const
+          ).map((tone) => (
             <span key={tone} className="inline-flex items-center gap-1.5">
               <span className={`h-3 w-3 rounded-xs ${TONE_CLASSES[tone].pip}`} aria-hidden="true" />
               {TONE_LABELS[tone]}

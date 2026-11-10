@@ -98,7 +98,7 @@ const HISTORY_IMPORT_DETAIL = {
 // free text from a spreadsheet can overflow the review card on a tablet or a
 // laptop, hiding the Exclude button at the end of each row.
 test.describe('Shift history import — rows table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/scheduling/admin/history-import/:id — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });

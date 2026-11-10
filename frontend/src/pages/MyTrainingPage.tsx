@@ -923,9 +923,17 @@ const MyTrainingPage: React.FC = () => {
                               voided
                             </span>
                           ) : (
-                            <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(r.status)}`}>
-                              {getTrainingStatusLabel(r.status)}
-                            </span>
+                            <div className="flex flex-col gap-1">
+                              <span
+                                className={`w-fit rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(r.status)}`}
+                              >
+                                {getTrainingStatusLabel(r.status)}
+                              </span>
+                              {/* Why the event's credit was withdrawn (W80-15). */}
+                              {r.void_reason && (
+                                <span className="text-theme-text-secondary text-xs">{r.void_reason}</span>
+                              )}
+                            </div>
                           )}
                         </td>
                       </tr>

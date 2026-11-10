@@ -282,3 +282,125 @@ export interface DrillPreview {
   can_commit: boolean;
   result?: DrillResult | null;
 }
+
+// ---------------------------------------------------------------------------
+// Staffing roster
+// ---------------------------------------------------------------------------
+
+export const StaffingFileKind = {
+  SEATS: 'seats',
+  EVENTS: 'events',
+} as const;
+export type StaffingFileKind = (typeof StaffingFileKind)[keyof typeof StaffingFileKind];
+
+export interface StaffingFile {
+  kind: StaffingFileKind;
+  source_filename: string;
+  headers: string[];
+  column_mapping: Record<string, string>;
+  row_count: number;
+  created_at?: string | null;
+}
+
+export interface StaffingMissingEvent {
+  event_key: string;
+  seats: number;
+}
+
+export interface StaffingSeatSummary {
+  rows: number;
+  filled: number;
+  unfilled: number;
+  without_event_key: number;
+  /** Seats whose event the events file does not have: no date to place them on. */
+  missing_event: number;
+  missing_event_filled: number;
+  missing_event_keys: number;
+  missing_event_examples: StaffingMissingEvent[];
+}
+
+export interface StaffingUnusualEvent {
+  line_number: number;
+  date: string;
+  activity: string;
+  seats: number;
+}
+
+export interface StaffingEventSummary {
+  rows: number;
+  staffed: number;
+  unstaffed: number;
+  /** Unstaffed events with a date in the usual range: these become calendar events. */
+  unstaffed_importable: number;
+  undated: number;
+  undated_examples: number[];
+  usual_first_year?: number | null;
+  usual_last_year?: number | null;
+  /** Events outside the years most of the file falls in: possible test entries. */
+  outside_usual_range: number;
+  outside_usual_range_examples: StaffingUnusualEvent[];
+  /** After today: imported as scheduled events. */
+  upcoming: number;
+  overnight: number;
+  duplicate_keys: number;
+  first_date?: string | null;
+  last_date?: string | null;
+}
+
+export interface StaffingSummary {
+  seats: StaffingSeatSummary;
+  events: StaffingEventSummary;
+}
+
+export interface StaffingPreview {
+  files: StaffingFile[];
+  fields: Record<string, string[]>;
+  flat_file: boolean;
+  problems: string[];
+  summary?: StaffingSummary | null;
+}
+
+export const StaffingMappingList = {
+  ACTIVITIES: 'activities',
+  SEAT_TITLES: 'seat_titles',
+  EVENT_TITLES: 'event_titles',
+} as const;
+export type StaffingMappingList = (typeof StaffingMappingList)[keyof typeof StaffingMappingList];
+
+/** Choices that are not a seat or role value. */
+export const STAFFING_TITLE_SKIP = '__skip__';
+export const STAFFING_ATTENDANCE = '__attendance__';
+
+export interface StaffingMappingItem {
+  key: string;
+  label: string;
+  seats: number;
+  events: number;
+  suggestion?: string | null;
+  choice?: string | null;
+  /** A few spellings of a title that share this key. */
+  examples: string[];
+}
+
+export interface StaffingMappingProgress {
+  items: number;
+  decided: number;
+  suggested: number;
+  undecided: number;
+  seats: number;
+  seats_settled: number;
+}
+
+export interface StaffingChoice {
+  value: string;
+  label: string;
+}
+
+export interface StaffingMappingView {
+  list: StaffingMappingList;
+  items: StaffingMappingItem[];
+  total: number;
+  progress: Record<StaffingMappingList, StaffingMappingProgress>;
+  seat_choices: StaffingChoice[];
+  role_choices: StaffingChoice[];
+}

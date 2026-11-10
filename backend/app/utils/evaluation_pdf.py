@@ -20,6 +20,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from app.utils.election_pdf_style import (
+    BOTTOM_MARGIN,
     MUTED,
     SIDE_MARGIN,
     VERTICAL_MARGIN,
@@ -62,7 +63,7 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
         buf,
         pagesize=letter,
         topMargin=VERTICAL_MARGIN,
-        bottomMargin=VERTICAL_MARGIN,
+        bottomMargin=BOTTOM_MARGIN,
         leftMargin=SIDE_MARGIN,
         rightMargin=SIDE_MARGIN,
         title="Member Performance Evaluation",
@@ -102,14 +103,20 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
         Spacer(1, 10),
     ]
 
+    # Values are Paragraphs because a bare table cell prints its text
+    # literally: an escaped string there puts "O&#x27;Brien" on the page,
+    # while an unescaped one in a Paragraph would be parsed as markup.
+    def value(text: Any) -> Paragraph:
+        return Paragraph(esc(text), styles["cell"])
+
     details = [
-        ["Member", esc(record.get("member_name"))],
-        ["Evaluator", esc(record.get("evaluator_name") or "—")],
-        ["Review period", esc(record.get("period"))],
-        ["Measured over", esc(record.get("coverage") or "—")],
+        ["Member", value(record.get("member_name"))],
+        ["Evaluator", value(record.get("evaluator_name") or "—")],
+        ["Review period", value(record.get("period"))],
+        ["Measured over", value(record.get("coverage") or "—")],
     ]
     for line in record.get("excluded") or []:
-        details.append(["Left out", esc(line)])
+        details.append(["Left out", value(line)])
     story.append(section("Details", [key_value_table(details)], styles))
 
     figures = record.get("figures") or []

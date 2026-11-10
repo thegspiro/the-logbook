@@ -1126,8 +1126,8 @@ export const GrantDetailPage: React.FC = () => {
                   <p className="text-theme-text-secondary">No expenditures recorded</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+                <div className="rwd-table-container overflow-x-auto">
+                  <table className="rwd-table rwd-table-xwide w-full">
                     <thead>
                       <tr className="border-theme-surface-border border-b">
                         <th
@@ -1178,20 +1178,28 @@ export const GrantDetailPage: React.FC = () => {
                         const linkedBudgetItem = budgetItems.find((b) => b.id === exp.budgetItemId);
                         return (
                           <tr key={exp.id} className="hover:bg-theme-surface-hover transition-colors">
-                            <td className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap">
+                            <td
+                              data-label="Date"
+                              className="text-theme-text-primary px-4 py-3 text-sm whitespace-nowrap"
+                            >
                               {formatDate(exp.expenditureDate, tz)}
                             </td>
-                            <td className="text-theme-text-primary px-4 py-3 text-sm">{exp.description}</td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                            <td data-label="Description" className="text-theme-text-primary px-4 py-3 text-sm">
+                              {exp.description}
+                            </td>
+                            <td data-label="Vendor" className="text-theme-text-secondary px-4 py-3 text-sm">
                               {exp.vendor ?? '--'}
                             </td>
-                            <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
+                            <td
+                              data-label="Amount"
+                              className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap"
+                            >
                               {formatCurrency(exp.amount)}
                             </td>
-                            <td className="text-theme-text-secondary px-4 py-3 text-sm whitespace-nowrap">
+                            <td data-label="Budget Category" className="text-theme-text-secondary px-4 py-3 text-sm">
                               {linkedBudgetItem ? budgetCategoryLabel(linkedBudgetItem.category) : '--'}
                             </td>
-                            <td className="px-4 py-3 text-sm whitespace-nowrap">
+                            <td data-label="Receipt" className="px-4 py-3 text-sm whitespace-nowrap">
                               {exp.receiptUrl && isSafeExternalUrl(exp.receiptUrl) ? (
                                 <a
                                   href={exp.receiptUrl}
@@ -1207,7 +1215,7 @@ export const GrantDetailPage: React.FC = () => {
                               )}
                             </td>
                             {canManage && (
-                              <td className="px-4 py-3 whitespace-nowrap">
+                              <td data-label="Actions" className="px-4 py-3 whitespace-nowrap">
                                 <div className="flex items-center justify-end gap-1">
                                   <button
                                     type="button"

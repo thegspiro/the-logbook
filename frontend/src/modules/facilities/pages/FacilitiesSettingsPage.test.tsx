@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   deleteType: vi.fn(),
   deleteStatus: vi.fn(),
   deleteMaintenanceType: vi.fn(),
+  createType: vi.fn(),
   error: vi.fn(),
   success: vi.fn(),
 }));
@@ -85,5 +86,39 @@ describe('FacilitiesSettingsPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Add facility type' }));
     const dialog = await screen.findByRole('dialog', { name: 'Add facility type' });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  // Forms review F-3 / F-5: Save stayed greyed out until a name was typed,
+  // and the name was required without saying so.
+  it('names a missing name on an empty save, announced as required', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Add facility type' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add facility type' });
+
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    const name = within(dialog).getByRole('textbox', { name: 'Name' });
+    expect(name).toHaveAttribute('aria-required', 'true');
+    expect(name).toHaveAccessibleDescription('Enter a name for the facility type.');
+    expect(name).toHaveFocus();
+    expect(mocks.createType).not.toHaveBeenCalled();
+  });
+
+  it('puts a refused name from the server on the field', async () => {
+    mocks.createType.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Add facility type' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add facility type' });
+    await user.type(within(dialog).getByRole('textbox', { name: 'Name' }), 'Annex');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    expect(
+      await within(dialog).findByRole('textbox', { name: 'Name', description: 'Value is too long.' })
+    ).toHaveFocus();
   });
 });
