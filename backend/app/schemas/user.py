@@ -516,7 +516,11 @@ class _UserResponseFields(_UserBaseFields, UTCResponseBase):
     organization_id: UUID
     # Optional because it is withheld from a caller the contact-visibility
     # rules exclude (see `_clear_hidden_contact_fields` in the users endpoint).
-    email: Optional[EmailStr] = None
+    # A plain str, not EmailStr: the app itself stores reserved `.invalid`
+    # placeholders (the shift history import's former members, anonymized
+    # members), which EmailStr refuses, and one such row failed the whole
+    # roster with a 500. Addresses are validated where they are written.
+    email: Optional[str] = None
     photo_url: Optional[str] = None
     personal_email: Optional[str] = None
     status: str

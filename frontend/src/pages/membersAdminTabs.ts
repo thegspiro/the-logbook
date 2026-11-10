@@ -11,10 +11,10 @@
  */
 
 import type { LucideIcon } from 'lucide-react';
-import { BadgeCheck, ClipboardList, Settings, Upload, UserPlus, Users } from 'lucide-react';
+import { BadgeCheck, ClipboardList, Settings, Upload, UserPlus, Users, UserX } from 'lucide-react';
 import type { AdminHubCardTab } from '../components/admin/AdminHubCardTabs';
 
-export type MembersAdminTab = 'manage' | 'add' | 'import' | 'qualifications' | 'settings';
+export type MembersAdminTab = 'manage' | 'former' | 'add' | 'import' | 'qualifications' | 'settings';
 
 /**
  * Settings is always last — the frame's rule, on every module. Adding and
@@ -36,6 +36,16 @@ export const MEMBERS_ADMIN_TABS: (AdminHubCardTab<MembersAdminTab> & { permissio
     label: 'Member Management',
     description: 'Edit members, assign roles and reset passwords',
     icon: Users,
+  },
+  // Owner decision 2026-11-10: archived and dropped members get their own page
+  // rather than a filter on Member Management. The shift history import files
+  // every former member it meets as archived, so they outnumbered the current
+  // roster there.
+  {
+    id: 'former',
+    label: 'Former Members',
+    description: 'Archived and dropped members',
+    icon: UserX,
   },
   {
     id: 'add',
@@ -92,7 +102,7 @@ export const MEMBERS_ADMIN_AREAS: MembersAdminArea[] = [
     label: 'Roster',
     description: 'Edit members, assign roles and reset passwords',
     icon: ClipboardList,
-    destinations: [tabById('manage')],
+    destinations: [tabById('manage'), tabById('former')],
   },
   {
     id: 'add_import',
