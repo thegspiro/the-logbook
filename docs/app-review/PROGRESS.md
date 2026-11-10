@@ -24,7 +24,7 @@ been through a review pass.
 | A4  | Email templates & delivery     | `endpoints/email_templates.py` (671 L), `services/email_template_service.py` (2739 L), `email_service.py` (1633 L)                                                                                                                                                        | MAIL   | ✅     |
 | A5  | Course cohorts & syllabus      | `endpoints/course_cohorts.py` (697 L), `course_syllabus.py` (273 L), `services/course_cohort_service.py` (1442 L), `course_syllabus_service.py` (353 L); `pages/CourseLibraryPage.tsx`                                                                                    | CC     | ✅     |
 | A6  | Member lifecycle & offboarding | `services/departure_clearance_service.py` (572 L), `property_return_service.py` (529 L), `member_archive_service.py` (322 L), `member_anonymization_service.py` (283 L), `membership_tier_service.py` (267 L), `retention_service.py` (224 L)                             | LIFE   | ✅     |
-| A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ⬜     |
+| A7  | Dashboard & action items       | `endpoints/dashboard.py` (1452 L, 7 routes), `services/attendance_dashboard_service.py` (329 L), `dashboard_widget_service.py`; `pages/Dashboard.tsx`, `ActionItemsPage.tsx`, `modules/action-items`, `components/dashboard/`                                             | DASH   | ✅     |
 | A8  | Locations & kiosk              | `endpoints/locations.py` (434 L, 8 routes), `services/location_service.py` (394 L), `api/public/display.py` (550 L, 4 routes); `pages/LocationKioskPage.tsx`, `RoomCheckInPage.tsx`, `RoomQRCodesPage.tsx`                                                                | LOC    | ⬜     |
 | A9  | Platform ops & data lifecycle  | `services/admin_continuity_service.py` (216 L), `audit_ship_service.py` (165 L), `data_export_service.py` (192 L), `separation_of_duties.py` (70 L, 20 call sites in 8 modules)                                                                                           | OPS    | ⬜     |
 
@@ -3579,3 +3579,21 @@ secrets redacted for non-admins. See
   Gate: typecheck, lint, flake8, black, isort and mypy clean; 664 tests across
   the 21 files touching the changed functions pass. Next: A7 dashboard & action
   items.
+- **A7 dashboard & action items ✅ (pass 4).** Reviewed the delta since pass 3:
+  `dashboard.py` grew from 7 routes to 13 (five `/pulse-layout` routes and
+  `/action-items/page`). All 13 are authenticated (AST check). The pulse
+  layout is self-scoped preference data: bounded, validated on write and read
+  defensively. The paged feed returns the rows a full merge would, with totals
+  counted under the same filters. **2 fixes:** DASH-41 (LOW), the
+  department-default audit rows now record the caller's IP and browser; DASH-42
+  (LOW), "Save as department default" is now offered for the same two
+  permissions the server accepts. Both tests failed before the fix. **Re-verified:**
+  DASH-37 resolved (all 22 tile links read their parameters; tile and list
+  counts compared where no shared helper ties them), DASH-38/39/40 resolved.
+  DASH-2 still open and now mirrored to KNOWN_LIMITATIONS, which no earlier
+  pass did. **Leads:** B6 (waiver audit row without origin), B18
+  (training-officer cards use `<a href>` and the browser's year). Gate:
+  typecheck, lint, flake8, black and isort clean; the dashboard Vitest file and
+  the backend dashboard/action-item/pulse selection pass. One setup error was
+  the sandbox's stale schema (behind MS-18), cleared by `alembic upgrade head`.
+  See dashboard.md → Pass 4. Next: A8 locations & kiosk.

@@ -232,13 +232,25 @@ describe('DashboardOrganizationWidgets', () => {
       expect(sent.cards).toHaveLength(ALL_IDS.length);
     });
 
-    it('offers the department default only to someone holding settings.manage', async () => {
+    it('does not offer the department default to someone without a settings permission', async () => {
       const user = userEvent.setup();
       renderWithRouter(<DashboardOrganizationWidgets />);
       await screen.findByText('Community engagement');
       await user.click(screen.getByRole('button', { name: 'Customize' }));
 
       expect(screen.queryByRole('button', { name: 'Save as department default' })).not.toBeInTheDocument();
+    });
+
+    // The server accepts either permission on PUT/DELETE /dashboard/pulse-layout/default
+    // (DASH-42), so a role granted only organization.update_settings must be offered it too.
+    it('offers the department default to someone holding only organization.update_settings', async () => {
+      const user = userEvent.setup();
+      signIn(['organization.update_settings']);
+      renderWithRouter(<DashboardOrganizationWidgets />);
+      await screen.findByText('Community engagement');
+      await user.click(screen.getByRole('button', { name: 'Customize' }));
+
+      expect(screen.getByRole('button', { name: 'Save as department default' })).toBeInTheDocument();
     });
 
     it('asks before saving the department default, and saves nothing on Cancel', async () => {
