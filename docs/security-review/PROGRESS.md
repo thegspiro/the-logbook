@@ -54,6 +54,15 @@ Row 19 → ✅ (pending this PR's merge). Next is Feature 20 (Compliance) — if
 every row reads ✅ by then, the rotation has completed a full pass; re-check
 the rotation table fresh rather than trusting this note.
 
+**2026-11-10 watchdog check-in:** the dedicated `/loop 30m /security-review`
+session remained unreachable via `ListAgents`. After the prior check-in's
+merge-conflict resolution (`fee22771d`), this PR's `CI` workflow run
+(`42764489571`) sat at `pending` with 0 jobs for roughly an hour — the
+zero-jobs stuck-trigger symptom Pitfall #24 describes, not a reused branch
+name this time but the same failure mode. This commit is the documented
+fix: a substantive push producing a fresh head SHA, rather than an empty
+commit or a close/reopen.
+
 <details>
 <summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 14, PR #4180, merged), preserved for history</summary>
 
