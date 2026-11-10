@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MyTrainingHistory } from './MyTrainingHistory';
-import type { MemberVisibility, MyTrainingHistoryPage } from '../../types/training';
+import { TrainingRecordSource } from '../../constants/enums';
+import type { MemberVisibility, MyTrainingHistoryPage, MyTrainingHistoryRecord } from '../../types/training';
 
 const mockGetRecords = vi.fn();
 const mockExport = vi.fn();
@@ -29,7 +30,15 @@ const visibility = {
   allow_member_report_export: false,
 } as MemberVisibility;
 
-const record = (id: string, name: string, date: string) => ({
+const record = (
+  id: string,
+  name: string,
+  date: string,
+  source: Pick<MyTrainingHistoryRecord, 'source' | 'source_label'> = {
+    source: TrainingRecordSource.LOGBOOK,
+    source_label: 'The Logbook',
+  }
+): MyTrainingHistoryRecord => ({
   id,
   course_name: name,
   training_type: 'continuing_education',
@@ -37,6 +46,7 @@ const record = (id: string, name: string, date: string) => ({
   completion_date: date,
   expiration_date: null,
   hours_completed: 1,
+  ...source,
 });
 
 const YEARS = [
@@ -47,7 +57,13 @@ const YEARS = [
 const pageFor = (year: string | undefined, search = '', page?: number): MyTrainingHistoryPage => {
   if (year === '2026') {
     return {
-      items: [record('a', 'Sepsis', '2026-09-30'), record('b', 'Hematology', '2026-09-30')],
+      items: [
+        record('a', 'Sepsis', '2026-09-30', {
+          source: TrainingRecordSource.PROVIDER,
+          source_label: 'Target Solutions',
+        }),
+        record('b', 'Hematology', '2026-09-30', { source: TrainingRecordSource.IMPORTED, source_label: 'Imported' }),
+      ],
       total: 2,
       page: 1,
       page_size: 25,
@@ -115,6 +131,15 @@ describe('MyTrainingHistory', () => {
     await user.type(screen.getByLabelText(/search courses/i), 'zzz');
     expect(await screen.findByText('No training records match.')).toBeInTheDocument();
     expect(mockGetRecords).toHaveBeenCalledWith(expect.objectContaining({ search: 'zzz' }));
+  });
+
+  it('says where each record came from', async () => {
+    render(<MyTrainingHistory visibility={visibility} hoursSummary={hoursSummary} />);
+    await screen.findByText('Sepsis');
+
+    expect(screen.getByRole('columnheader', { name: 'Source' })).toBeInTheDocument();
+    expect(within(screen.getByRole('row', { name: /Sepsis/ })).getByText('Target Solutions')).toBeInTheDocument();
+    expect(within(screen.getByRole('row', { name: /Hematology/ })).getByText('Imported')).toBeInTheDocument();
   });
 
   it('hides the hours column and totals when the department hides hours', async () => {
