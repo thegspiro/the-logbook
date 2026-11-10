@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pulls)**
+**PR [#4224](https://github.com/thegspiro/the-logbook/pull/4224)**
 (branch `claude/security-review-admin-hours-p14`): Feature 21
 (Admin hours), pass 14, a watchdog pickup. `ListAgents` → "No reachable
 agents"; the dedicated `/loop 30m /security-review` session
