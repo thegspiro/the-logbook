@@ -33,6 +33,8 @@ from app.utils.election_pdf_style import (
     ruled_table,
     section,
 )
+from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT
+from app.utils.pdfa import to_pdfa
 
 
 def _multiline(text: Any) -> str:
@@ -61,6 +63,8 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
+        # The canvas otherwise declares Helvetica, never embedded, on every page.
+        initialFontName=BODY_FONT,
         pagesize=letter,
         topMargin=VERTICAL_MARGIN,
         bottomMargin=BOTTOM_MARGIN,
@@ -79,7 +83,7 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
     styles["item"] = ParagraphStyle(
         "EvalItem",
         parent=styles["body"],
-        fontName="Helvetica-Bold",
+        fontName=BOLD_FONT,
         spaceBefore=8,
     )
     styles["small"] = ParagraphStyle(
@@ -320,4 +324,5 @@ def render_evaluation_pdf(record: Dict[str, Any]) -> bytes:
         f"Member performance evaluation · {record.get('member_name') or ''}"
     )
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
-    return buf.getvalue()
+    # The finalized evaluation is a personnel record: archival PDF/A-2b.
+    return to_pdfa(buf.getvalue())
