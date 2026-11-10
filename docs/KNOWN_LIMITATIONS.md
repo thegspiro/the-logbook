@@ -1,5 +1,42 @@
 # Known Limitations & Open Decisions
 
+## PDF Reports — What the Generated PDFs Do Not Yet Meet (2026-11-09)
+
+A review of every server-rendered PDF (see `docs/PDF_REPORTS.md`) fixed the
+escaping, audit and truncation defects. Training and equipment-check reports
+now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
+
+- **No tagged PDF (PDF/UA).** Open-source ReportLab cannot build a structure
+  tree; automatic tagging is in the commercial ReportLab product only. Reports
+  carry a title, language and outline, but a screen reader reads them as
+  untagged text. **Accepted** until a library decision is made. Moving to an
+  HTML-to-PDF engine with PDF/UA output, such as WeasyPrint, would mean
+  rewriting every renderer and bringing that engine's SSRF hardening with it
+  (CVE-2025-68616, CVE-2026-55073).
+- **Latin-1 only, fonts not embedded, no PDF/A.** Every PDF uses the built-in
+  Helvetica family. A member's name in Cyrillic, Greek or CJK script does not
+  render, and minutes, certified results and evaluations cannot be archived as
+  PDF/A. **Decided, to build (owner, 2026-11-09):** bundle Noto Sans (SIL OFL)
+  in the kit, then add XMP metadata and an ICC output intent for the record
+  documents.
+- **The Reports page prints from the browser.** "Print / PDF" has no page
+  numbers, no repeated header, the browser's own time zone and no audit row.
+  **Decided, to build (owner, 2026-11-09):** a server-side PDF on the kit,
+  audited on the server.
+- **Print hints reach Acrobat, not browsers.** Label sheets and ID cards ask
+  to print at actual size (`/PrintScaling /None`), but most browser PDF
+  viewers ignore that and default to "Fit". The label pages tell the user to
+  set Scale to 100%; nothing can enforce it. The tray-by-page-size hint is not
+  set, because ReportLab rejects the key. The browser-printed label sheet
+  also depends on the print dialog's margins being left at "Default", where
+  the page's own `@page` margins apply. (Print-safe margins and the Avery
+  5160 alignment were fixed on 2026-11-09; see "Printing" in
+  `docs/PDF_REPORTS.md`.)
+- **Minutes, the inventory impact plan and the election documents keep their
+  own layouts**, numbered "Page N" rather than "Page X of Y" (except the
+  ballot). They escape correctly and are audited; moving them onto the kit is
+  a layout change, not a fix.
+
 ## Medical Screening — What Is Still Plaintext at Rest (MS-18, 2026-11-05)
 
 **Decided 2026-11-04: encrypt the status first.** `screening_records.status` is

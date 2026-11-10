@@ -27,6 +27,7 @@ from reportlab.platypus import Image as PdfImage
 from reportlab.platypus import KeepTogether, Paragraph, Spacer, Table, TableStyle
 
 from app.utils.app_icons import decode_logo
+from app.utils.print_geometry import SAFE_EDGE
 
 INK = colors.HexColor("#111827")
 GRID = colors.HexColor("#9ca3af")
@@ -35,8 +36,16 @@ MUTED = colors.HexColor("#4b5563")
 BAND = colors.HexColor("#e5e7eb")
 PANEL = colors.HexColor("#f3f4f6")
 
+# SIDE_MARGIN plus the frame's 6pt padding puts the first ink 0.78" from each
+# side: clear of a three-hole punch on the left and of every printer's
+# unprintable border on the right (app.utils.print_geometry).
 SIDE_MARGIN = 0.7 * inch
 VERTICAL_MARGIN = 0.6 * inch
+# The page footer sits between the print-safe edge and the frame: the footer
+# baseline just above SAFE_EDGE, the "continues" note one line above it.
+FOOTER_BASELINE = SAFE_EDGE + 3
+_CONTINUED_BASELINE = FOOTER_BASELINE + 12
+BOTTOM_MARGIN = _CONTINUED_BASELINE + 14
 # Page width less the side margins and the frame's own 6pt padding each side.
 CONTENT_WIDTH = letter[0] - 2 * SIDE_MARGIN - 12
 LOGO_BOX = 0.9 * inch
@@ -308,7 +317,7 @@ def page_footer(label: str) -> Callable[[Any, Any], None]:
         canvas.setFillColor(MUTED)
         canvas.drawCentredString(
             letter[0] / 2,
-            VERTICAL_MARGIN / 2,
+            FOOTER_BASELINE,
             f"{label} · Page {document.page}",
         )
         canvas.restoreState()
@@ -333,15 +342,13 @@ def page_of_footer(
         canvas.setFillColor(MUTED)
         canvas.drawCentredString(
             letter[0] / 2,
-            VERTICAL_MARGIN / 2,
+            FOOTER_BASELINE,
             f"{label} · Page {document.page} of {total_pages}",
         )
         if document.page < total_pages:
             canvas.setFont("Helvetica-Bold", 9)
             canvas.setFillColor(INK)
-            canvas.drawCentredString(
-                letter[0] / 2, VERTICAL_MARGIN / 2 + 12, continued_note
-            )
+            canvas.drawCentredString(letter[0] / 2, _CONTINUED_BASELINE, continued_note)
         canvas.restoreState()
 
     return draw
