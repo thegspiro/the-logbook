@@ -43,7 +43,6 @@ from reportlab.platypus import (
     SimpleDocTemplate,
     Spacer,
     Table,
-    TableStyle,
 )
 
 from app.utils.election_pdf_style import (
@@ -57,6 +56,7 @@ from app.utils.election_pdf_style import (
     esc,
     logo_flowable,
 )
+from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT, body_table_style
 from app.utils.print_geometry import BINDING_EDGE, SAFE_EDGE
 
 CONFIDENTIAL_MEMBER_RECORDS = (
@@ -112,7 +112,7 @@ def report_styles() -> Dict[str, ParagraphStyle]:
         "ReportCell", parent=styles["panel"], fontSize=8.5, leading=10.5
     )
     styles["cell_bold"] = ParagraphStyle(
-        "ReportCellBold", parent=styles["cell"], fontName="Helvetica-Bold"
+        "ReportCellBold", parent=styles["cell"], fontName=BOLD_FONT
     )
     styles["cell_muted"] = ParagraphStyle(
         "ReportCellMuted", parent=styles["cell"], fontSize=7.5, textColor=MUTED
@@ -121,7 +121,7 @@ def report_styles() -> Dict[str, ParagraphStyle]:
         "ReportNum", parent=styles["cell"], alignment=TA_RIGHT
     )
     styles["head"] = ParagraphStyle(
-        "ReportHead", parent=styles["cell"], fontName="Helvetica-Bold"
+        "ReportHead", parent=styles["cell"], fontName=BOLD_FONT
     )
     styles["head_num"] = ParagraphStyle(
         "ReportHeadNum", parent=styles["head"], alignment=TA_RIGHT
@@ -136,7 +136,7 @@ def report_styles() -> Dict[str, ParagraphStyle]:
     styles["kpi_value"] = ParagraphStyle(
         "ReportKpiValue",
         parent=styles["panel"],
-        fontName="Helvetica-Bold",
+        fontName=BOLD_FONT,
         fontSize=15,
         leading=18,
     )
@@ -230,7 +230,7 @@ def data_table(
         colWidths=list(widths),
         repeatRows=1,
         hAlign="LEFT",
-        style=TableStyle(commands),
+        style=body_table_style(commands),
     )
 
 
@@ -266,7 +266,7 @@ def kpi_strip(figures: Sequence[Tuple[str, Any]], width: float) -> Table:
             ]
         ],
         colWidths=[width / count] * count,
-        style=TableStyle(
+        style=body_table_style(
             [
                 ("BACKGROUND", (0, 0), (-1, -1), PANEL),
                 ("BOX", (0, 0), (-1, -1), 0.75, GRID),
@@ -334,7 +334,7 @@ def _letterhead(meta: ReportMeta, styles: Dict[str, ParagraphStyle]) -> List[Any
         head: Any = Table(
             [[image, text]],
             colWidths=[LOGO_BOX + 0.2 * inch, meta.width - LOGO_BOX - 0.2 * inch],
-            style=TableStyle(
+            style=body_table_style(
                 [
                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                     ("LEFTPADDING", (0, 0), (-1, -1), 0),
@@ -346,7 +346,7 @@ def _letterhead(meta: ReportMeta, styles: Dict[str, ParagraphStyle]) -> List[Any
         head = Table(
             [[text]],
             colWidths=[meta.width],
-            style=TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0)]),
+            style=body_table_style([("LEFTPADDING", (0, 0), (-1, -1), 0)]),
         )
     flowables: List[Any] = [head, Spacer(1, 8)]
     if meta.parameters:
@@ -364,7 +364,7 @@ def _letterhead(meta: ReportMeta, styles: Dict[str, ParagraphStyle]) -> List[Any
                     ]
                 ],
                 colWidths=[meta.width],
-                style=TableStyle(
+                style=body_table_style(
                     [
                         ("LINEABOVE", (0, 0), (-1, 0), 1.5, INK),
                         ("LINEBELOW", (0, 0), (-1, 0), 0.5, GRID),
@@ -404,12 +404,12 @@ def _footer(meta: ReportMeta, total_pages: int) -> Callable[[Any, Any], None]:
         canvas.setLineWidth(0.5)
         canvas.line(left, _FOOTER_RULE, right, _FOOTER_RULE)
         canvas.setFillColor(MUTED)
-        canvas.setFont("Helvetica", 7.5)
+        canvas.setFont(BODY_FONT, 7.5)
         canvas.drawString(left, ident_y, ident)
         canvas.drawRightString(right, ident_y, f"Page {document.page} of {total_pages}")
         canvas.drawString(left, _FOOTER_BASELINE, generated)
         if meta.confidentiality:
-            canvas.setFont("Helvetica-Bold", 7.5)
+            canvas.setFont(BOLD_FONT, 7.5)
             canvas.setFillColor(INK)
             canvas.drawRightString(right, _FOOTER_BASELINE, meta.confidentiality)
         canvas.restoreState()
@@ -434,6 +434,8 @@ def render_report(
         buf = BytesIO()
         doc = SimpleDocTemplate(
             buf,
+            # The canvas otherwise declares Helvetica, never embedded, on every page.
+            initialFontName=BODY_FONT,
             pagesize=meta.pagesize,
             leftMargin=left_margin,
             rightMargin=right_margin,

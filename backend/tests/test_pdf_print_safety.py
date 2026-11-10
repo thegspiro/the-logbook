@@ -38,6 +38,12 @@ from app.utils.label_renderer import (
     render_labels,
 )
 from app.utils.minutes_pdf import render_minutes_pdf
+from app.utils.pdf_fonts import (
+    BODY_FONT,
+    BOLD_FONT,
+    BOLD_ITALIC_FONT,
+    ITALIC_FONT,
+)
 from app.utils.pdf_report_kit import ReportMeta, cell, data_table, render_report
 from app.utils.pre_meeting_package_pdf import render_pre_meeting_package_pdf
 from app.utils.print_geometry import BINDING_EDGE, SAFE_EDGE
@@ -60,6 +66,21 @@ ORG = SimpleNamespace(id="org-1", name="Oakville FD", timezone="UTC", logo=None)
 LONG = "Wellington-Fairbanks Volunteer Fire & Rescue Department, Station 12 West"
 
 
+# An embedded font is named by its subset tag and PostScript name
+# ("AAAAAA+NotoSans-Bold"); measuring it needs the name it was registered under.
+_EMBEDDED_FACES = {
+    "NotoSans-Regular": BODY_FONT,
+    "NotoSans-Bold": BOLD_FONT,
+    "NotoSans-Italic": ITALIC_FONT,
+    "NotoSans-BoldItalic": BOLD_ITALIC_FONT,
+}
+
+
+def _metrics_font(base_font: str) -> str:
+    name = base_font.lstrip("/").split("+", 1)[-1]
+    return _EMBEDDED_FACES.get(name, name)
+
+
 def _runs(
     pdf: bytes,
 ) -> List[Tuple[int, float, float, float, float, float, float, str]]:
@@ -73,7 +94,7 @@ def _runs(
             text = text.rstrip("\n")
             if not text.strip() or not font:
                 return
-            name = str(font.get("/BaseFont", "/Helvetica")).lstrip("/")
+            name = _metrics_font(str(font.get("/BaseFont", "/Helvetica")))
             size = size * tm[0] if tm[0] else size
             x = tm[4] * cm[0] + tm[5] * cm[2] + cm[4]
             y = tm[4] * cm[1] + tm[5] * cm[3] + cm[5]
