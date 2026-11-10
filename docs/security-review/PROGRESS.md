@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR TBD** (branch `claude/security-review-grants-fundraising-p14`):
+**PR [#4226](https://github.com/thegspiro/the-logbook/pull/4226)**
+(branch `claude/security-review-grants-fundraising-p14`):
 Feature 22 (Grants & fundraising), pass 14, a watchdog pickup. `ListAgents`
 → "No reachable agents"; the dedicated `/loop 30m /security-review` session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable. PR #4224
