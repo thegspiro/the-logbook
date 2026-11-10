@@ -313,6 +313,10 @@ Also on the shared pieces since: every create dialog the review found with a
 button greyed out until valid (Locations, Facilities, Documents' New Folder,
 Forms' Create Form, Medical Supplies' Add supply, Inventory's Add several
 items and Request Equipment, the suggestion box form, Apparatus (basic)).
+Then the dialogs that relied on the browser's `required` bubble: Create
+Election, event templates, custom roles, Create Pipeline, Inventory's item,
+kit, category, variant group, vendor, storage area and reorder dialogs, and
+notification rules.
 
 Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
 needs a course name and a completion date, because both are NOT NULL
