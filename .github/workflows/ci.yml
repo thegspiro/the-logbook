@@ -1137,10 +1137,29 @@ jobs:
   # 4-5 s a test under WebKit, and the table-fit specs took it to 450 tests,
   # about 35-38 minutes plus ~2 minutes of setup (PR #4082, cancelled twice at
   # 30 with every test passing), which leaves 45 too little headroom.
+  #
+  # Split in two on 2026-11-10 rather than raised a third time. The test
+  # step ran 42-48 minutes, so #4179 and #4190 were cancelled at 50 with
+  # every test so far passing, and main had grown to 744 tests by then —
+  # about 50-60 minutes serially at 4-5 s a test. Each limit raise bought one
+  # batch of new specs; a shard halves the test step and keeps halving as the
+  # suite grows. `--shard=i/2` splits this project 372/372 by test count, and
+  # no one spec file dominates it the way the sweep dominates the Chromium
+  # legs, so a plain shard balances well. 50 stays as each leg's hang guard,
+  # against about 25-31 minutes of tests plus setup.
+  #
+  # Renaming the check is safe: branch protection requires only `CI Success`,
+  # which `needs:` this job by id and so waits on both legs.
   frontend-e2e-safari:
-    name: Frontend E2E (Mobile Safari)
+    name: Frontend E2E (Mobile Safari ${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    strategy:
+      # One leg failing must not cancel the other: its passes and failures
+      # are still worth having.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     defaults:
       run:
         working-directory: frontend
@@ -1195,13 +1214,13 @@ jobs:
         run: npx playwright install-deps webkit
 
       - name: Run Mobile Safari E2E tests
-        run: npx playwright test --project="Mobile Safari" --grep-invert '@screenshots|@sweep'
+        run: npx playwright test --project="Mobile Safari" --grep-invert '@screenshots|@sweep' --shard=${{ matrix.shard }}/2
 
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report-safari
+          name: playwright-report-safari-${{ matrix.shard }}
           path: frontend/playwright-report/
           retention-days: 7
 
