@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR (branch `claude/security-review-compliance`)**: Feature 20
+**PR [#4213](https://github.com/thegspiro/the-logbook/pull/4213)**
+(branch `claude/security-review-compliance`): Feature 20
 (Compliance), pass 14, a watchdog pickup. `ListAgents` → "No reachable
 agents"; the dedicated `/loop 30m /security-review` session
 (`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable. PR #4198
