@@ -796,6 +796,43 @@ describe('MembersAdminPage — a row says each thing once', () => {
     expect(within(row).getByText('Administrative · Life member')).toBeInTheDocument();
   });
 
+  it('leaves off a chip naming the member class, and keeps it on a member of another class', async () => {
+    const adminRole = {
+      ...memberRole,
+      id: 'role-admin-member',
+      name: 'Administrative Member',
+      slug: 'administrative_member',
+      is_system: false,
+    };
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      {
+        ...member,
+        member_class: 'administrative',
+        member_status: 'regular',
+        roles: [memberRole, adminRole, officeRole],
+      },
+      {
+        ...member,
+        id: 'u-op',
+        first_name: 'Opal',
+        last_name: 'Ops',
+        full_name: 'Opal Ops',
+        member_class: 'operational',
+        member_status: 'regular',
+        roles: [memberRole, adminRole],
+      },
+    ] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    const admin = await screen.findByRole('row', { name: /Jordan Avery/ });
+    expect(within(admin).queryByText('Administrative Member')).not.toBeInTheDocument();
+    expect(within(admin).getByText('Training Officer')).toBeInTheDocument();
+    expect(within(admin).getByText('Administrative · Regular member')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('row', { name: /Opal Ops/ })).getByText('Administrative Member')
+    ).toBeInTheDocument();
+  });
+
   it('still shows a status-named chip on a member whose status differs', async () => {
     vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
       { ...member, member_class: 'operational', member_status: 'regular', roles: [memberRole, lifeRole] },
