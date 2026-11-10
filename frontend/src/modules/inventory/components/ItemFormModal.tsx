@@ -15,6 +15,8 @@ import { blankToNull, formatNameList, formCoercions, parseNameList } from '../..
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import type {
   InventoryItem,
   InventoryCategory,
@@ -155,6 +157,34 @@ export interface ItemFormModalProps {
  */
 const DATE_REFUSAL = /^(Purchase date|Warranty expiration)\b/;
 
+type ItemField =
+  | 'name'
+  | 'also_called'
+  | 'description'
+  | 'serial_number'
+  | 'asset_tag'
+  | 'barcode'
+  | 'sizes'
+  | 'color'
+  | 'unit_of_measure'
+  | 'inspection_interval_days';
+
+// snake_case keys: schemas/inventory.py carries no alias generator, so a 422
+// names the request body's own keys. `base_name` is the variant builder's name
+// for the same Name box.
+const ITEM_FIELDS: FieldSpecs<ItemField> = {
+  name: { id: 'item-name', label: 'Name', apiKeys: ['base_name'] },
+  also_called: { id: 'item-also-called', label: 'Also called' },
+  description: { id: 'item-description', label: 'Description' },
+  serial_number: { id: 'item-serial_number', label: 'Serial #' },
+  asset_tag: { id: 'item-asset_tag', label: 'Asset Tag' },
+  barcode: { id: 'item-barcode', label: 'Barcode' },
+  sizes: { id: 'item-sizes', label: 'Sizes' },
+  color: { id: 'item-color', label: 'Color' },
+  unit_of_measure: { id: 'item-unit_of_measure', label: 'Unit of Measure' },
+  inspection_interval_days: { id: 'item-inspection_interval_days', label: 'Inspection Interval (days)' },
+};
+
 const VARIANT_ITEM_TYPES = new Set([
   'uniform',
   'ppe',
@@ -180,6 +210,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [showFin, setShowFin] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
+  const fieldErrors = useFieldErrors(ITEM_FIELDS);
+  const { clear: clearFieldErrors } = fieldErrors;
   // Fetched here rather than threaded through every page that opens this modal.
   // A failed load leaves the picker empty and the free-text name still usable,
   // so it never blocks adding an item.
@@ -277,11 +309,20 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     }
     setShowFin(false);
     setDateError(null);
+    clearFieldErrors();
     setGenerateVariants(false);
     setSelectedSizes([]);
     setSelectedStyles([]);
     setVariantColors('');
-  }, [editItem, isOpen, defaultCategoryId, defaultLocationId, defaultStorageAreaId, defaultTrackingType]);
+  }, [
+    editItem,
+    isOpen,
+    defaultCategoryId,
+    defaultLocationId,
+    defaultStorageAreaId,
+    defaultTrackingType,
+    clearFieldErrors,
+  ]);
 
   const cat = useMemo(() => categories.find((c) => c.id === f.category_id), [categories, f.category_id]);
   // The server refuses an item whose category requires these and lacks them
@@ -297,6 +338,11 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   );
   const has = (k: string) => tf.includes(k);
   const up = (k: keyof FD, v: string) => setF((p) => ({ ...p, [k]: v }));
+  /** Edit a field that carries its own error, clearing that error. */
+  const upField = (k: keyof FD & ItemField, v: string) => {
+    fieldErrors.setError(k, null);
+    up(k, v);
+  };
   const upDate = (k: 'purchase_date' | 'warranty_expiration', v: string) => {
     setDateError(null);
     up(k, v);
@@ -316,9 +362,14 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
     if (!supportsVariants) setGenerateVariants(false);
   }, [supportsVariants]);
 
-  const toggleSize = useCallback((value: string) => {
-    setSelectedSizes((prev) => (prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]));
-  }, []);
+  const { setError: setFieldError } = fieldErrors;
+  const toggleSize = useCallback(
+    (value: string) => {
+      setFieldError('sizes', null);
+      setSelectedSizes((prev) => (prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value]));
+    },
+    [setFieldError]
+  );
 
   /** Single-item path: one value per axis, so picking a second in the same
    *  axis replaces the first rather than making the item two things at once —
@@ -352,17 +403,34 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!f.name.trim()) {
-      toast.error('Name is required');
+    // Checked here rather than by the browser's required bubble and a toast,
+    // which vanished after a few seconds and named no field (forms review
+    // F-3). The serial and interval checks mirror the server's
+    // `_validate_category_requirements`, and apply only where the field is
+    // on screen, as the native `required` they replace did.
+    const problems: FieldErrors<ItemField> = {};
+    if (!f.name.trim()) problems.name = 'Enter a name for the item.';
+    if (generateVariants && selectedSizes.length === 0) problems.sizes = 'Select at least one size.';
+    if (!generateVariants && has('serial_number') && serialRequired && !f.serial_number.trim()) {
+      problems.serial_number = 'This category requires a serial number.';
+    }
+    if (
+      !generateVariants &&
+      has('inspection_interval_days') &&
+      intervalRequired &&
+      !f.inspection_interval_days.trim()
+    ) {
+      problems.inspection_interval_days = 'This category requires an inspection interval.';
+    }
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
 
     // Variant generation path
     if (generateVariants) {
-      if (selectedSizes.length === 0) {
-        toast.error('Select at least one size');
-        return;
-      }
       setSaving(true);
       try {
         const colorList = variantColors
@@ -390,7 +458,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
         onSaved(result.items.map((item) => item.id));
         onClose();
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to create variants'));
+        fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to create variants'));
       } finally {
         setSaving(false);
       }
@@ -485,11 +553,15 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       }
       onClose();
     } catch (err: unknown) {
+      const fieldsHit = fieldErrors.setFromApiError(err, 'Failed to save item');
       const message = getErrorMessage(err, 'Failed to save item');
-      toast.error(message);
       if (DATE_REFUSAL.test(message)) {
+        // Shown once, beside the dates it names, rather than also at the top.
+        fieldErrors.setFormError(null);
         setDateError(message);
         setShowFin(true);
+      } else {
+        fieldErrors.focusFirst(fieldsHit);
       }
     } finally {
       setSaving(false);
@@ -528,55 +600,75 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
       }
     >
       <form id="item-form" onSubmit={(e) => void submit(e)} className="space-y-5">
+        {fieldErrors.formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {fieldErrors.formError}
+          </p>
+        )}
         {/* Basic */}
         <fieldset>
           <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Basic Info</legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <label className={lbl} htmlFor="item-name">
-                Name *
-              </label>
-              <input
-                id="item-name"
-                className={inp}
-                value={f.name}
-                onChange={(e) => up('name', e.target.value)}
-                required
-              />
-            </div>
+            <FormField
+              id={ITEM_FIELDS.name.id}
+              label="Name"
+              required
+              error={fieldErrors.errors.name}
+              labelClassName={lbl}
+              className="sm:col-span-2"
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  className={inp}
+                  // SizeVariantCreate.base_name caps at 200; an item's name at 255.
+                  maxLength={generateVariants ? 200 : 255}
+                  value={f.name}
+                  onChange={(e) => upField('name', e.target.value)}
+                />
+              )}
+            </FormField>
             {/* SizeVariantCreate carries no alternate names, description,
                 current value, purchase date, vendor or warranty, so those
                 fields are offered only when one item is being saved. */}
             {!generateVariants && (
               <>
-                <div className="sm:col-span-2">
-                  <label className={lbl} htmlFor="item-also-called">
-                    Also called
-                  </label>
-                  <input
-                    id="item-also-called"
-                    className={inp}
-                    value={f.also_called}
-                    onChange={(e) => up('also_called', e.target.value)}
-                    placeholder="e.g. BVM, Ambu bag"
-                    aria-describedby="item-also-called-help"
-                  />
-                  <p id="item-also-called-help" className="text-theme-text-muted mt-1 text-xs">
-                    Other names for this item, separated by commas. Checklists use them to find it.
-                  </p>
-                </div>
-                <div className="sm:col-span-2">
-                  <label className={lbl} htmlFor="item-description">
-                    Description
-                  </label>
-                  <textarea
-                    id="item-description"
-                    className={inp}
-                    rows={2}
-                    value={f.description}
-                    onChange={(e) => up('description', e.target.value)}
-                  />
-                </div>
+                <FormField
+                  id={ITEM_FIELDS.also_called.id}
+                  label="Also called"
+                  error={fieldErrors.errors.also_called}
+                  hint="Other names for this item, separated by commas. Checklists use them to find it."
+                  labelClassName={lbl}
+                  className="sm:col-span-2"
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      className={inp}
+                      value={f.also_called}
+                      onChange={(e) => upField('also_called', e.target.value)}
+                      placeholder="e.g. BVM, Ambu bag"
+                    />
+                  )}
+                </FormField>
+                <FormField
+                  id={ITEM_FIELDS.description.id}
+                  label="Description"
+                  error={fieldErrors.errors.description}
+                  labelClassName={lbl}
+                  className="sm:col-span-2"
+                >
+                  {(field) => (
+                    <textarea
+                      {...field}
+                      className={inp}
+                      rows={2}
+                      maxLength={2000}
+                      value={f.description}
+                      onChange={(e) => upField('description', e.target.value)}
+                    />
+                  )}
+                </FormField>
               </>
             )}
             <div>
@@ -655,43 +747,58 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
             <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Identity</legend>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {has('serial_number') && (
-                <div>
-                  <label className={lbl} htmlFor="item-serial_number">
-                    Serial #{serialRequired ? ' *' : ''}
-                  </label>
-                  <input
-                    id="item-serial_number"
-                    className={inp}
-                    value={f.serial_number}
-                    onChange={(e) => up('serial_number', e.target.value)}
-                    required={serialRequired}
-                  />
-                </div>
+                <FormField
+                  id={ITEM_FIELDS.serial_number.id}
+                  label="Serial #"
+                  required={serialRequired}
+                  error={fieldErrors.errors.serial_number}
+                  labelClassName={lbl}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      className={inp}
+                      maxLength={255}
+                      value={f.serial_number}
+                      onChange={(e) => upField('serial_number', e.target.value)}
+                    />
+                  )}
+                </FormField>
               )}
               {has('asset_tag') && (
-                <div>
-                  <label className={lbl} htmlFor="item-asset_tag">
-                    Asset Tag
-                  </label>
-                  <input
-                    id="item-asset_tag"
-                    className={inp}
-                    value={f.asset_tag}
-                    onChange={(e) => up('asset_tag', e.target.value)}
-                  />
-                </div>
+                <FormField
+                  id={ITEM_FIELDS.asset_tag.id}
+                  label="Asset Tag"
+                  error={fieldErrors.errors.asset_tag}
+                  labelClassName={lbl}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      className={inp}
+                      maxLength={255}
+                      value={f.asset_tag}
+                      onChange={(e) => upField('asset_tag', e.target.value)}
+                    />
+                  )}
+                </FormField>
               )}
-              <div>
-                <label className={lbl} htmlFor="item-barcode">
-                  Barcode
-                </label>
-                <input
-                  id="item-barcode"
-                  className={inp}
-                  value={f.barcode}
-                  onChange={(e) => up('barcode', e.target.value)}
-                />
-              </div>
+              <FormField
+                id={ITEM_FIELDS.barcode.id}
+                label="Barcode"
+                error={fieldErrors.errors.barcode}
+                labelClassName={lbl}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    className={inp}
+                    maxLength={255}
+                    value={f.barcode}
+                    onChange={(e) => upField('barcode', e.target.value)}
+                  />
+                )}
+              </FormField>
             </div>
           </fieldset>
         )}
@@ -739,10 +846,27 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           <fieldset className="space-y-4">
             {/* Sizes — a toggle-button group, so it is labelled as a group
                 rather than with a <label> that names no single control. */}
-            <div>
+            {/* The focus target for the "no size" error: the chips are buttons
+                in several groups, so none of them alone is "the" field. */}
+            <div
+              id={ITEM_FIELDS.sizes.id}
+              role="group"
+              aria-labelledby="item-sizes-label"
+              aria-describedby={fieldErrors.errors.sizes ? `${ITEM_FIELDS.sizes.id}-error` : undefined}
+              tabIndex={-1}
+              className="focus:outline-none"
+            >
               <span className={lbl} id="item-sizes-label">
-                Sizes *
+                Sizes{' '}
+                <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                  *
+                </span>
               </span>
+              {fieldErrors.errors.sizes && (
+                <p id={`${ITEM_FIELDS.sizes.id}-error`} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                  {fieldErrors.errors.sizes}
+                </p>
+              )}
               {/* Grouped like the style axes below, and for more than symmetry:
                   the flat list was the letter sizes only, so a department
                   stocking boots 8-13 or trousers in waist 30-40 had no way to
@@ -860,6 +984,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                     <input
                       id="item-size"
                       aria-label="Custom size"
+                      maxLength={50}
                       className={`${inp} mt-2`}
                       value={f.size}
                       onChange={(e) => up('size', e.target.value)}
@@ -869,17 +994,22 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 </div>
               )}
               {has('color') && (
-                <div>
-                  <label className={lbl} htmlFor="item-color">
-                    Color
-                  </label>
-                  <input
-                    id="item-color"
-                    className={inp}
-                    value={f.color}
-                    onChange={(e) => up('color', e.target.value)}
-                  />
-                </div>
+                <FormField
+                  id={ITEM_FIELDS.color.id}
+                  label="Color"
+                  error={fieldErrors.errors.color}
+                  labelClassName={lbl}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      className={inp}
+                      maxLength={50}
+                      value={f.color}
+                      onChange={(e) => upField('color', e.target.value)}
+                    />
+                  )}
+                </FormField>
               )}
             </div>
             {/* Style, on the single-item path. The generator could write a
@@ -983,6 +1113,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                         value={f.vendor}
                         onChange={(e) => up('vendor', e.target.value)}
                         aria-label="Vendor name (not on file)"
+                        maxLength={255}
                         placeholder="Or type a name not on file"
                       />
                     )}
@@ -1000,7 +1131,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                       {...dateErrorProps}
                     />
                     {dateError && (
-                      <p id="item-date-error" role="alert" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                      <p id="item-date-error" role="alert" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
                         {dateError}
                       </p>
                     )}
@@ -1106,18 +1237,23 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   </>
                 )}
               </div>
-              <div>
-                <label className={lbl} htmlFor="item-unit_of_measure">
-                  Unit of Measure
-                </label>
-                <input
-                  id="item-unit_of_measure"
-                  className={inp}
-                  placeholder="e.g. pairs, boxes"
-                  value={f.unit_of_measure}
-                  onChange={(e) => up('unit_of_measure', e.target.value)}
-                />
-              </div>
+              <FormField
+                id={ITEM_FIELDS.unit_of_measure.id}
+                label="Unit of Measure"
+                error={fieldErrors.errors.unit_of_measure}
+                labelClassName={lbl}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    className={inp}
+                    maxLength={50}
+                    placeholder="e.g. pairs, boxes"
+                    value={f.unit_of_measure}
+                    onChange={(e) => upField('unit_of_measure', e.target.value)}
+                  />
+                )}
+              </FormField>
               {!generateVariants && (
                 <div>
                   <label className={lbl} htmlFor="item-reorder_point">
@@ -1144,20 +1280,24 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           <fieldset>
             <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Maintenance</legend>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className={lbl} htmlFor="item-inspection_interval_days">
-                  Inspection Interval (days){intervalRequired ? ' *' : ''}
-                </label>
-                <input
-                  id="item-inspection_interval_days"
-                  type="number"
-                  min={intervalRequired ? '1' : '0'}
-                  required={intervalRequired}
-                  className={inp}
-                  value={f.inspection_interval_days}
-                  onChange={(e) => up('inspection_interval_days', e.target.value)}
-                />
-              </div>
+              <FormField
+                id={ITEM_FIELDS.inspection_interval_days.id}
+                label="Inspection Interval (days)"
+                required={intervalRequired}
+                error={fieldErrors.errors.inspection_interval_days}
+                labelClassName={lbl}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    min={intervalRequired ? '1' : '0'}
+                    className={inp}
+                    value={f.inspection_interval_days}
+                    onChange={(e) => upField('inspection_interval_days', e.target.value)}
+                  />
+                )}
+              </FormField>
               <div>
                 <label className={lbl} htmlFor="item-condition">
                   Condition
@@ -1189,6 +1329,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
           <textarea
             id="item-notes"
             aria-label="Notes"
+            maxLength={2000}
             className={inp}
             rows={2}
             value={f.notes}
