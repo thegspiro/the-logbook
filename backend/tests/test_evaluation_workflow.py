@@ -857,9 +857,14 @@ class TestFigures:
             "note": "No business meetings were held in the period.",
         }
 
-    async def test_training_sessions_count_an_officers_override(
+    async def test_check_ins_at_sessions_nothing_requires_are_not_measured(
         self, dept: _Dept, make_client: ClientFactory
     ):
+        """A check-in, or an officer's override, at a training event no
+        session-attendance requirement counts is not attendance the
+        evaluation measures: the figure is the requirement's own rule (owner
+        decision, 2026-11-10), and with no requirement there is nothing to
+        measure. ``TestSessionAttendanceFigure`` covers the figure itself."""
         definition = json.loads(json.dumps(DEFINITION))
         definition["sections"][0]["items"][1]["data_block"] = {
             "source": "training.session_attendance_pct"
@@ -908,10 +913,9 @@ class TestFigures:
             await make_client(dept.manager), dept, template_id=sessions.id
         )
         assert detail["data"]["training.session_attendance_pct"] == {
-            "available": True,
-            "value": 66.7,
-            "attended": 2,
-            "held": 3,
+            "available": False,
+            "value": None,
+            "note": "No session-attendance requirement applies to this member.",
         }
 
     async def test_live_data_measures_the_member_now(
