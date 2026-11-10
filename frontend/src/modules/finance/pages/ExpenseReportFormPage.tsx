@@ -9,7 +9,7 @@
  * shown here previews that figure.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -24,6 +24,8 @@ import { budgetOptionLabel, selectableBudgetOptions, useRequestFormOptions } fro
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { DraftRestoredNotice } from '@/components/ux/DraftRestoredNotice';
+import { useSessionDraft } from '@/hooks/useSessionDraft';
 import { ApprovalEntityType, ExpenseType } from '../types';
 import { useMyOpenAdvances } from '../hooks/useMyOpenAdvances';
 import { useFundOptions } from '../hooks/useFundOptions';
@@ -47,6 +49,11 @@ const expenseReportSchema = z.object({
 });
 
 type ExpenseReportFormData = z.infer<typeof expenseReportSchema>;
+
+/** What the report keeps in its local draft (useSessionDraft). Receipts are files and are not drafted. */
+interface ExpenseReportDraft extends ExpenseReportFormData {
+  lineItems: LineItemEntry[];
+}
 
 interface LineItemEntry {
   description: string;
@@ -135,9 +142,17 @@ const ExpenseReportFormPage: React.FC = () => {
   const fiscalYearId = watch('fiscalYearId');
   const { fiscalYears, fiscalYearsLoaded, budgetOptions } = useRequestFormOptions(fiscalYearId || undefined);
 
+  // A restored draft sets the year and its lines together; the year arriving
+  // must not then clear the lines that belong to it.
+  const restoredYear = useRef<string | null>(null);
+
   // A line belongs to one year's budget, so choosing another year clears the
   // lines picked from the last one.
   useEffect(() => {
+    if (restoredYear.current !== null && restoredYear.current === fiscalYearId) {
+      restoredYear.current = null;
+      return;
+    }
     setLineItems((prev) =>
       prev.some((item) => item.budgetId) ? prev.map((item) => ({ ...item, budgetId: '' })) : prev
     );
@@ -152,6 +167,30 @@ const ExpenseReportFormPage: React.FC = () => {
       }
     }
   }, [fiscalYears, reset]);
+
+  // Kept in this tab so leaving the page does not lose a half-entered report
+  // (forms review F-6). Restored once the years have loaded, so the active
+  // year chosen above does not land on top of the one in the draft.
+  const headerValues = watch();
+  const draft = useSessionDraft<ExpenseReportDraft>({
+    form: 'expense-report',
+    ready: fiscalYearsLoaded,
+    value: { ...headerValues, lineItems },
+    isEmpty: (v) => !v.title.trim() && !v.description?.trim() && !v.advanceId && v.lineItems.length === 0,
+    onRestore: (saved) => {
+      const { lineItems: savedLines, ...header } = saved;
+      restoredYear.current = header.fiscalYearId;
+      reset(header);
+      setLineItems(savedLines);
+    },
+  });
+  const discardDraft = () => {
+    draft.discard();
+    const active = fiscalYears.find((fy) => fy.status === 'active');
+    reset({ title: '', description: '', fiscalYearId: active?.id ?? '' });
+    setLineItems([]);
+    setLineItemErrors({});
+  };
 
   const totalAmount = lineItems.reduce((sum, item) => sum + lineAmount(item), 0);
 
@@ -260,6 +299,7 @@ const ExpenseReportFormPage: React.FC = () => {
       if (data.advanceId) payload.advanceId = data.advanceId;
 
       const created = await createExpenseReport(payload);
+      draft.clear();
       toast.success('Expense report created');
       void navigate(`/finance/expenses/${created.id}`);
     } catch {
@@ -307,6 +347,7 @@ const ExpenseReportFormPage: React.FC = () => {
 
       {/* Form */}
       <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="space-y-6">
+        {draft.restored && <DraftRestoredNotice onDiscard={discardDraft} />}
         {/* Report Details */}
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Report Details</h2>

@@ -289,12 +289,19 @@ async def reactivate_member(
     Returns a dict with reactivation details.
     Raises ValueError if the member cannot be reactivated.
     """
+    # Locked: the archived-status check and record_rejoin's "no open stint"
+    # check are both read-then-write, so two reactivations at once (a
+    # double-click) each passed and the member got two open service stints,
+    # counting their length of service twice. A locking read also sees the
+    # ACTIVE the first request committed, so the second is refused.
     result = await db.execute(
-        select(User).where(
+        select(User)
+        .where(
             User.id == user_id,
             User.organization_id == organization_id,
             User.deleted_at.is_(None),
         )
+        .with_for_update()
     )
     member = result.scalar_one_or_none()
     if not member:

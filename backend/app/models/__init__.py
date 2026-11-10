@@ -340,6 +340,7 @@ from app.models.mcp_oauth import McpOAuthAuthorization, McpOAuthClient, McpOAuth
 from app.models.mcp_service_key import McpServiceKey
 from app.models.medical_screening import (
     ScreeningRecord,
+    ScreeningReminderSend,
     ScreeningRequirement,
     ScreeningStatus,
     ScreeningType,
@@ -352,6 +353,7 @@ from app.models.meeting import (
     MeetingStatus,
     MeetingType,
 )
+from app.models.member_position_term import MemberPositionTerm
 from app.models.member_supervisor import MemberSupervisorAssignment
 from app.models.membership_pipeline import (
     ActionType,
@@ -539,6 +541,7 @@ __all__ = [
     "user_roles",
     "MemberLeaveOfAbsence",
     "MemberServicePeriod",
+    "MemberPositionTerm",
     "MemberSupervisorAssignment",
     "LeaveType",
     # Audit models
@@ -870,6 +873,7 @@ __all__ = [
     # Medical screening models
     "ScreeningRequirement",
     "ScreeningRecord",
+    "ScreeningReminderSend",
     "ScreeningType",
     "ScreeningStatus",
     # Membership pipeline models

@@ -21,7 +21,7 @@ export { Collapsible } from './Collapsible';
 
 // Forms
 export { FormField, FIELD_ERROR_CLASS } from './FormField';
-export type { FormFieldControlProps } from './FormField';
+export type { FieldControlProps, FormFieldControlProps } from './FormField';
 export { ErrorSummary } from './ErrorSummary';
 
 // Feedback & Confirmation
@@ -50,6 +50,7 @@ export { FloatingActionButton } from './FloatingActionButton';
 
 // Form Controls
 export { default as DateTimeQuarterHour } from './DateTimeQuarterHour';
+export { DraftRestoredNotice } from './DraftRestoredNotice';
 
 // Information
 export { WhatsNew } from './WhatsNew';

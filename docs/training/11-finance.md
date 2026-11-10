@@ -1477,7 +1477,8 @@ What each payment shows, on the card and on its own detail page under **QuickBoo
 
 Things to know:
 
-- **The paid-from account must be a QuickBooks bank account.** A category paid from a credit card is refused with "not a Bank account"; export those payments in the file.
+- **How each payment appears in QuickBooks.** An issued check is a QuickBooks **check** with its check number (the request number is in its private note). A payment from a category paid from a QuickBooks **credit card** account is a **credit card expense**. Anything else, paid from a **bank** account, is an expense. A check from a credit card account, or any payment from an account that is neither a bank nor a credit card, is refused; export it in the file.
+- **A check number QuickBooks already has is refused.** QuickBooks says so on the posting. Check whether someone already entered that check in QuickBooks by hand before you send it again or export it, so it is not recorded twice.
 - **A purchase request needs a vendor.** One with none is refused until you add it. A vendor QuickBooks does not have is created under the name on the request (for an expense report, the member's name). If QuickBooks has a customer or employee with that name, the posting is refused and says so.
 - **Some payments still go in the file:** cash advances, expense reports that account for one, dues, returned advance cash and voided checks. If the department uses any of these, keep exporting them.
 - **A posted check that you void here is not voided in QuickBooks.** Void it there as well.

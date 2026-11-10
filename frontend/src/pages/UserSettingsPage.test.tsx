@@ -391,6 +391,63 @@ describe('UserSettingsPage', () => {
     });
   });
 
+  // Forms review F-2/F-7/F-9: a value the server refuses lands on its field;
+  // under the owner's rule (2026-11-05) the rest of the profile still saves.
+  describe('server refusals and form behaviour', () => {
+    const phoneMessage = 'Enter a phone number using digits, spaces, dashes or parentheses.';
+
+    beforeEach(() => {
+      vi.mocked(userService.updateUserProfile).mockReset();
+    });
+
+    it('saves everything but the refused field, which stays flagged with the reason', async () => {
+      vi.mocked(userService.updateUserProfile)
+        .mockRejectedValueOnce({
+          response: { status: 422, data: { detail: [{ field: 'mobile', message: phoneMessage }] } },
+        })
+        .mockImplementation((_id, data) => Promise.resolve({ ...defaultProfile, ...data } as never));
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const mobile = await screen.findByLabelText('Mobile');
+      await user.clear(mobile);
+      await user.type(mobile, 'call me maybe');
+      await user.type(screen.getByLabelText('Middle Name'), 'Quinn');
+      await user.click(screen.getByRole('button', { name: 'Save Profile' }));
+
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(2));
+      const retried = vi.mocked(userService.updateUserProfile).mock.calls[1]?.[1] ?? {};
+      expect(retried).not.toHaveProperty('mobile');
+      expect(retried).toEqual(expect.objectContaining({ middle_name: 'Quinn' }));
+      await waitFor(() => expect(mobile).toHaveAccessibleDescription(phoneMessage));
+      expect(mobile).toHaveAttribute('aria-invalid', 'true');
+      expect(mobile).toHaveValue('call me maybe');
+      await waitFor(() => expect(mobile).toHaveFocus());
+      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Profile saved, except mobile'));
+
+      await user.type(mobile, '1');
+      expect(mobile).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('saves on Enter in a field, and offers autofill hints and the schema limits', async () => {
+      vi.mocked(userService.updateUserProfile).mockImplementation((_id, data) =>
+        Promise.resolve({ ...defaultProfile, ...data } as never)
+      );
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      const middle = await screen.findByLabelText('Middle Name');
+      expect(screen.getByLabelText(/^First Name/)).toHaveAttribute('autocomplete', 'given-name');
+      expect(screen.getByLabelText(/^First Name/)).toHaveAttribute('maxlength', '100');
+      expect(screen.getByLabelText('Street Address')).toHaveAttribute('autocomplete', 'street-address');
+      expect(screen.getByLabelText('ZIP Code')).toHaveAttribute('autocomplete', 'postal-code');
+      expect(screen.getByLabelText('Mobile')).toHaveAttribute('maxlength', '20');
+
+      await user.type(middle, 'Quinn{Enter}');
+      await waitFor(() => expect(userService.updateUserProfile).toHaveBeenCalledTimes(1));
+    });
+  });
+
   // An emptied First Name was saved as "" behind "Profile saved", leaving the
   // member with no name on the roster or on legal records (forms review F-1).
   // Owner rule (2026-11-05): the form still saves with an error; the error is

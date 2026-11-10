@@ -2064,11 +2064,20 @@ Limits" in `docs/KNOWN_LIMITATIONS.md`.
   connecting, changeable) and not already stamped by a CSV export. Advances and
   anything that accounts for one, dues, advance returns and voids stay on the
   CSV export.
-- **The Purchase.** `PaymentType` `Cash`; `AccountRef` the category's paid-from
-  account, which must be a QuickBooks **Bank** account; one
+- **The Purchase.** `AccountRef` the category's paid-from account, and
+  `PaymentType` from what the payment is and that account's QuickBooks
+  `AccountType` _(2026-11-08, owner decision 2026-11-06)_: an issued check is a
+  `Check` (paid-from must be **Bank**; `DocNumber` its check number, left out
+  when blank and refused past QuickBooks' 21 characters; `PrivateNote` its
+  request number; `PrintStatus` `NotSet`, so it does not wait in QuickBooks'
+  print queue); anything else paid from a **Credit Card** account is a
+  `CreditCard` expense (`Credit` false, a charge); anything else paid from a
+  **Bank** account is `Cash`. Any other account type is refused. One
   `AccountBasedExpenseLineDetail` line per amount, to the category's expense
   account; `EntityRef` the vendor; `TxnDate` the payment's day on the
-  department's calendar; `DocNumber` the request number. Accounts come from
+  department's calendar; `DocNumber` the request number (but a check's, as
+  above). The Intuit sources for each value are in
+  `quickbooks_online_client.py`. Accounts come from
   `_resolve_category_accounts` (the export's own resolver, so the mappings on
   this page drive both) and are found among QuickBooks' accounts by exact name
   (`Parent:Child` through `FullyQualifiedName` when QuickBooks returns it). The
@@ -2091,7 +2100,7 @@ Limits" in `docs/KNOWN_LIMITATIONS.md`.
   timeout or 5xx: 5 min, 15 min, 1 h, 4 h, then every 12 h; a 429 waits 60
   seconds and ends the run, as Intuit asks); `posted`; `failed` (Intuit's
   `Message - Detail`, or the local reason, such as "has no vendor" or "is not a
-  Bank account"; **Send again** queues it under a new request id); `superseded`.
+  Bank or Credit Card account"; **Send again** queues it under a new request id); `superseded`.
   No Finance or Documents row is locked, so the lock order at the top of
   `documents_service.py` is not involved.
 

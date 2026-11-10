@@ -28,13 +28,14 @@ the responses a deployed instance returns, not what an in-process harness
 synthesises.
 """
 
+import atexit
 import logging
 import os
 import socket
 import threading
 import time
 from contextlib import closing
-from typing import List
+from typing import TYPE_CHECKING, List, Tuple
 
 import httpx
 import pytest
@@ -42,6 +43,11 @@ import schemathesis
 from hypothesis import HealthCheck
 from hypothesis import settings as hypothesis_settings
 from hypothesis import strategies as st
+
+if TYPE_CHECKING:
+    # Imported for real inside _start_server, which runs only when the suite
+    # is enabled; see _ENABLED.
+    import uvicorn
 
 # Mark all tests in this module as slow + integration
 pytestmark = [pytest.mark.slow, pytest.mark.integration]
@@ -94,6 +100,11 @@ _SERVER_BOOT_TIMEOUT_S = 600
 # How long to wait for /openapi.json. Generous on purpose — see the call site.
 _SCHEMA_FETCH_TIMEOUT_S = 120
 
+# How long to give the module's server to shut down when the run ends. The
+# lifespan's own shutdown waits up to 5s for queued pushes, then closes the
+# database pool and Redis; past this the thread is left to the interpreter.
+_SERVER_SHUTDOWN_TIMEOUT_S = 30
+
 
 # One traceback is worth reading; a boot loop's worth is not, and this string
 # ends up in an assertion message.
@@ -140,6 +151,43 @@ def _free_port() -> int:
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
         sock.bind(("127.0.0.1", 0))
         return int(sock.getsockname()[1])
+
+
+# The server this module started, while it is running. A list so that
+# stopping it needs no ``global``; it never holds more than one entry.
+_running_server: List[Tuple["uvicorn.Server", threading.Thread]] = []
+
+
+def _stop_server() -> None:
+    """
+    Shut the module's server down, if it is still running.
+
+    The server runs on a daemon thread, and nothing used to stop it: the
+    process simply exited with the application still live inside it, its
+    scheduled-email and cron loops still running and logging. A daemon thread
+    is frozen wherever it stands once finalization begins, so one caught
+    mid-write to stderr held that stream's lock, the main thread could not
+    flush it, and CPython aborted — "Fatal Python error: _enter_buffered_busy",
+    exit code 134 — after every contract test had passed. Setting
+    ``should_exit`` lets uvicorn close its connections and run the lifespan's
+    shutdown, which cancels those loops, while the interpreter is still whole.
+
+    Called twice, and the second call finds nothing to do. The module-scoped
+    fixture below is the one that normally does it, because it runs while
+    pytest still holds the stream loguru writes to; by the time an exit
+    handler runs, pytest has closed it and every shutdown log line fails with
+    "I/O operation on closed file". The ``atexit`` registration is the
+    backstop for a run in which no test of this module executed — the server
+    starts at import, so deselecting every test still starts it, and then no
+    module teardown happens.
+    """
+    while _running_server:
+        server, thread = _running_server.pop()
+        server.should_exit = True
+        thread.join(timeout=_SERVER_SHUTDOWN_TIMEOUT_S)
+
+
+atexit.register(_stop_server)
 
 
 def _start_server() -> str:
@@ -195,6 +243,7 @@ def _start_server() -> str:
 
     thread = threading.Thread(target=_serve, daemon=True)
     thread.start()
+    _running_server.append((server, thread))
 
     # SystemExit(3) carries an exit code and nothing else, so the exception
     # alone cannot say *why*. uvicorn logs the real cause — the application's
@@ -295,6 +344,13 @@ else:
         schema = None
         SCHEMA_AVAILABLE = False
         SKIP_REASON = f"Contract-test server unavailable: {type(exc).__name__}: {exc}"
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _server_stopped_after_module():
+    """Stop the server once this module's last test has run; see _stop_server."""
+    yield
+    _stop_server()
 
 
 def test_contract_suite_can_run():

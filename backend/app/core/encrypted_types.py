@@ -81,6 +81,23 @@ class _NoComparison(TypeDecorator.Comparator):
         return self.operate(op, other, **kwargs)
 
 
+class EncryptedReference(EncryptedText):
+    """The id of another row, stored as AES-256-GCM ciphertext.
+
+    For a link that is itself sensitive: ``screening_records.requirement_id``
+    points at a requirement whose plaintext name says what the screening was
+    ("Pre-membership Drug Screen"), so leaving the link readable would undo
+    encrypting the screening type (MS-18). The price is the database foreign
+    key and every join on it: the column cannot be compared in SQL (see
+    ``_NoComparison``), so readers load rows and match the decrypted id in
+    Python, and a deletion that would have been ``ON DELETE SET NULL`` clears
+    the link in code instead.
+    """
+
+    cache_ok = True
+    comparator_factory = _NoComparison
+
+
 class EncryptedEnum(EncryptedText):
     """An enum column stored as AES-256-GCM ciphertext; the Python value is the enum.
 
