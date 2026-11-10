@@ -16,6 +16,51 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR TBD** (branch `claude/security-review-grants-fundraising-p14`):
+Feature 22 (Grants & fundraising), pass 14, a watchdog pickup. `ListAgents`
+→ "No reachable agents"; the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable. PR #4224
+(Feature 21, Admin hours, pass 14) had already merged (`9eac8df98`). A
+fresh `list_pull_requests` (state `open`) found no PR with a
+`claude/security-review-*` head, and row 22 was the next pending feature,
+confirmed on a freshly fetched `main`.
+
+Baseline `6b816dfb` (pass 13's own merge, PR #3962). Real delta: a
+workflow-review-driven burst wiring existing create/update/delete endpoints
+into the frontend (editing donors/campaigns/donations, editing and deleting
+grant budget lines and expenditures), one genuinely new backend route
+(`GET /grants/donations/{id}`, `fundraising.view`), one new client-settable
+FK (`GrantComplianceTaskCreate.assigned_to`, validated in-org via the
+existing `assert_in_org` helper), and a new owner-decision feature: a
+donation may now pay toward a pledge (`Donation.pledge_id`), moving the
+pledge's fulfilled amount and status under a row lock — reviewed end to
+end (org-scoped lookup, donor-match check, anonymity masking extended to
+the new field, floor at zero, guard tests covering cross-org/cross-donor
+rejection). The four Federal Programs (AFG/SAFER/FP&S/Firehouse Subs) are
+now seeded as real, per-department `grant_opportunities` rows rather than
+fixed UI cards. **0 fixed, 0 newly flagged.** See
+`docs/security-review/GF-22-grants-fundraising.md`'s **Pass 14** section
+for the full trace.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`)/
+`isort --check-only` (CI's pinned `9.0.2`) on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — 755 revisions, single head
+`67ad01c43434`; `generate_schema_docs.py --check` — up to date;
+`check_route_permissions.py --strict` — 305 routes, 0 errors/warnings;
+scoped backend suite (`-k "grant or fundraising or donor or pledge or
+zeffy or federal_program"`) — 1479 passed, 1 environment-only skip
+(`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/grants-fundraising` — 158
+passed (29 files); `testingRegistry.test.ts` — 12 passed;
+`mobile-route-integrity.spec.ts` — 1 passed.
+
+Row 22 → ✅ (pending this PR's merge). Next is Feature 23 (Medical
+supplies) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 14, PR #4224, merged), preserved for history</summary>
+
 **PR [#4224](https://github.com/thegspiro/the-logbook/pull/4224)**
 (branch `claude/security-review-admin-hours-p14`): Feature 21
 (Admin hours), pass 14, a watchdog pickup. `ListAgents` → "No reachable
@@ -55,9 +100,9 @@ skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
 errors/warnings; `npx vitest run src/modules/admin-hours` — 128 passed (15
 files).
 
-Row 21 → ✅ (pending this PR's merge). Next is Feature 22 (Grants &
-fundraising) — re-check the rotation table fresh rather than trusting this
-note.
+Row 21 → ✅ (merged). Next was Feature 22 (Grants & fundraising).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 14, PR #4213, merged), preserved for history</summary>
@@ -25463,7 +25508,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                       | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                    | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                             | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                             | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                             | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                        | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                                  | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                | ⬜     |
@@ -25508,6 +25553,62 @@ way Feature 17 absorbed `shift_evaluations.py`.
 ---
 
 ## Log
+
+### 2026-11-10 — Feature 21 (Admin hours, pass 14) merged; Feature 22 (Grants & fundraising, pass 14): watchdog pickup, real delta (pledge-linked donations, budget-line/expenditure edit+delete, federal-program seeding), 0 fixed, 0 new findings
+
+PR #4224 merged (`9eac8df98`). A fresh `list_pull_requests` (state `open`)
+found 0 PRs with a `claude/security-review-*` head, and row 22 (Grants &
+fundraising) was the next `⬜` in the rotation table, confirmed on a
+freshly pulled `main`.
+
+Baseline `6b816dfb` (pass 13's own merge, PR #3962). Real delta across the
+five declared backend scope files plus the frontend module: a
+workflow-review-driven burst (all dated 2026-11-05/06/08, none from this
+rotation) wired existing, already-reviewed `PUT`/`DELETE` endpoints into
+the frontend for the first time (editing donors and campaigns; editing and
+deleting grant budget lines and expenditures from the detail page), added
+one genuinely new route (`GET /grants/donations/{id}`, `fundraising.view`,
+presented through the existing GF-8 anonymity mask), one new
+client-settable FK (`GrantComplianceTaskCreate.assigned_to`, validated
+in-org via `assert_in_org` on create, matching the update path's existing
+check), and a new owner-decision feature: a donation may pay toward a
+pledge (`donations.pledge_id`, `SET NULL`, `nullable=True`), moving that
+pledge's `fulfilled_amount`/`status` under a row lock
+(`.with_for_update()`) read on an organization-filtered query — a foreign
+or wrong-donor pledge id raises the same generic error either way, no
+existence oracle. The anonymity mask (`donor_privacy.py`) was extended by
+the same commit to cover the new field, closing the indirect-identity leak
+it would otherwise have opened. The four Federal Programs (AFG, SAFER,
+FP&S, Firehouse Subs) are now seeded as real, per-department
+`grant_opportunities` rows (idempotent by `(organization_id,
+federal_program_code)`, both in the backfill migration and in
+`OnboardingService.create_organization` for new orgs) rather than fixed UI
+cards. Route inventory re-enumerated by AST: 46 routes (up from 45 — the
+one new `get_donation` route), `check_route_permissions.py --strict`
+clean at 305 routes repo-wide. **0 fixed, 0 newly flagged** — every
+fixable item in this window's real delta had already landed correctly via
+non-rotation commits, each with its own guard tests (cross-org pledge
+rejection, cross-donor pledge rejection, row-lock assertion, anonymity
+masking) before this pass began. See
+`docs/security-review/GF-22-grants-fundraising.md`'s **Pass 14** section
+for the full trace.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`)/
+`isort --check-only` (CI's pinned `9.0.2`) on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — 755 revisions, single head
+`67ad01c43434`; `generate_schema_docs.py --check` — up to date;
+`check_route_permissions.py --strict` — 305 routes, 0 errors/warnings;
+scoped backend suite (`-k "grant or fundraising or donor or pledge or
+zeffy or federal_program"`) — 1479 passed, 1 environment-only skip
+(`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/grants-fundraising` — 158
+passed (29 files, up from 136/24); `testingRegistry.test.ts` — 12 passed
+(new `/grants/donations/:donationId/edit` entry); `mobile-route-integrity.spec.ts`
+— 1 passed.
+
+Row 22 → ✅ (pending this PR's merge). Next is Feature 23 (Medical
+supplies) — re-check `list_pull_requests` fresh rather than trusting this
+note.
 
 ### 2026-11-10 — Feature 20 (Compliance, pass 14) merged; Feature 21 (Admin hours, pass 14): watchdog pickup, real delta, 0 fixed, 0 new findings; a new unclaimed module (Historical Data Import) found and recorded
 
