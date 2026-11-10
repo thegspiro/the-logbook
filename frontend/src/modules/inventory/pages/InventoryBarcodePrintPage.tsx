@@ -1373,10 +1373,11 @@ const InventoryBarcodePrintPage: React.FC = () => {
               font-size: unset !important;
             }
 
-            /* Remove the sidebar left-margin offset so labels aren't
-               shifted off-center when the sidebar is hidden */
-            .md\\:ml-64 {
-              margin-left: 0 !important;
+            /* Remove the sidebar's width so labels aren't shifted
+               off-center when the sidebar is hidden: AppLayout offsets the
+               content column (and paints the nav strip) by this variable */
+            .has-side-nav {
+              --side-nav-width: 0px !important;
             }
 
             /* Remove the top padding added for the mobile top-bar */

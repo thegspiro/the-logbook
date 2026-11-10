@@ -196,9 +196,13 @@ unchanged. Tests in `tests/test_admin_hub_db.py` assert the tile and the
 queue against the roster itself; the old tile read "100% · 3 of 3 cleared"
 where the tab had 1 of 3.
 
-### W71b-4 — MED — Nothing tells anyone a screening is about to expire — FLAGGED (read from code)
+### W71b-4 — MED — Nothing tells anyone a screening is about to expire — ✅ FIXED (owner decision 2026-11-06)
 
-No scheduled task, email or notification reads screening records. A grep of
+**Fix (2026-11-08):** the daily `medical_screening_expiry_reminders` task emails
+the member at the 90/60/30/7-day tiers, once per tier per screening; see
+KNOWN_LIMITATIONS and `tests/test_screening_expiry_reminders.py`.
+
+**Original finding:** no scheduled task, email or notification reads screening records. A grep of
 `app/` finds only the module itself, the admin hub, anonymization and
 onboarding. A medical officer learns of a lapse only by opening the
 Compliance tab, and a member only from the dashboard line. Every other
@@ -206,7 +210,11 @@ expiring credential in the app (certifications, stock lots) sends a
 reminder. This would be new behaviour, and under CLAUDE.md pitfall #18 it
 would be email-first. Mirrored to KNOWN_LIMITATIONS.
 
-### W71b-5 — LOW — A new requirement defaults to one-time — FLAGGED
+### W71b-5 — LOW — A new requirement defaults to one-time — ✅ FIXED (owner decision 2026-11-06)
+
+**Fix (2026-11-08):** One-time starts unticked for a new requirement;
+`ScreeningRequirementForm.recurringDefault.test.tsx`.
+
 
 **Did:** Add Requirement, typed "Annual Physical (NFPA 1582)", chose Physical
 Exam, saved.
@@ -272,7 +280,7 @@ Test: `ScreeningForms.touchTargets.test.tsx` fails on the old forms.
 | 5. Coming back to it    | ✅ delete checked after a reload                                                                                                        |
 | 6. On a phone           | ❌ → ✅ panel off-screen and 36px buttons fixed                                                                                         |
 | 7. Everyone can use it  | ✅ focus now moves to the opened panel                                                                                                  |
-| 8. What happens around  | ❌ the admin hub disagrees (W71b-3); no expiry reminders (W71b-4)                                                                       |
+| 8. What happens around  | ❌ the admin hub disagrees (W71b-3); expiry reminders since 2026-11-08 (W71b-4)                                                                       |
 
 ## Completion gate
 

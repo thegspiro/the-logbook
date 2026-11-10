@@ -126,6 +126,7 @@ from app.services.training_record_notices import (
     send_training_record_notice,
     snapshot,
 )
+from app.services.training_record_source import record_sources
 from app.services.training_requirement_removal import (
     purge_requirement,
     remove_requirement,
@@ -794,23 +795,30 @@ async def list_records(
 
     result = await db.execute(query)
     records = result.scalars().all()
-    if is_officer:
-        # Officers get the stored name: the record edit form sends it back on
-        # save, so a display name here would overwrite it.
-        return records
-    names = await library_course_names(
-        db, str(current_user.organization_id), (r.course_id for r in records)
+    sources = await record_sources(db, str(current_user.organization_id), records)
+    names = (
+        {}
+        if is_officer
+        else await library_course_names(
+            db, str(current_user.organization_id), (r.course_id for r in records)
+        )
     )
     # Copies, never the ORM rows: assigning to a loaded record would let the
     # session flush the display name into the stored one.
-    return [
-        TrainingRecordResponse.model_validate(r).model_copy(
-            update={
-                "course_name": member_course_name(r.course_id, r.course_name, names)
-            }
+    responses = []
+    for r in records:
+        source = sources[str(r.id)]
+        update: dict[str, Any] = {"source": source.kind, "source_label": source.label}
+        if not is_officer:
+            # Officers get the stored name: the record edit form sends it back
+            # on save, so a display name here would overwrite it.
+            update["course_name"] = member_course_name(
+                r.course_id, r.course_name, names
+            )
+        responses.append(
+            TrainingRecordResponse.model_validate(r).model_copy(update=update)
         )
-        for r in records
-    ]
+    return responses
 
 
 @router.post(

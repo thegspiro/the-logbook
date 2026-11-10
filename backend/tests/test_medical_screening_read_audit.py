@@ -166,7 +166,10 @@ class TestListReadsLogOncePerRequest:
             db_session, scene.officer.id, "medical_screening.records_viewed"
         )
         assert event.event_data["filters"]["user_id"] == scene.member_id
-        assert event.event_data["filters"]["screening_type"] == "drug_screening"
+        # MS-18 (2026-11-06): the log says the list was narrowed by type, not
+        # which type; the type is encrypted on the record itself.
+        assert "screening_type" not in event.event_data["filters"]
+        assert event.event_data["filters"]["screening_type_filtered"] is True
         assert event.event_data["record_count"] == 1
 
     async def test_expiring_list(self, db_session, scene):
