@@ -22,6 +22,7 @@ from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.public.responses import CONFLICT, TOKEN_ADDRESSED
 from app.core.audit import log_audit_event
@@ -515,6 +516,7 @@ async def get_public_events(
             .order_by(Event.start_datetime.asc())
             .offset(offset)
             .limit(limit)
+            .options(selectinload(Event.location_obj))
         )
         events_result = await db.execute(events_query)
         event_rows = events_result.scalars().all()
@@ -535,7 +537,13 @@ async def get_public_events(
                 "end_datetime": (
                     evt.end_datetime.isoformat() if evt.end_datetime else None
                 ),
-                "location": evt.location,
+                # A facility picked from the department's locations wins over
+                # the free-text "Other" field, as in the department calendar
+                # feed; reading only the free text published no place at all
+                # for an event scheduled at a station (W76).
+                "location": (
+                    evt.location_obj.name if evt.location_obj else evt.location
+                ),
                 "event_type": evt.event_type.value if evt.event_type else None,
             }
             # Filter by whitelist

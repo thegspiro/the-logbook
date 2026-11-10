@@ -327,6 +327,10 @@ Also on the shared pieces since: every create dialog the review found with a
 button greyed out until valid (Locations, Facilities, Documents' New Folder,
 Forms' Create Form, Medical Supplies' Add supply, Inventory's Add several
 items and Request Equipment, the suggestion box form, Apparatus (basic)).
+Then the dialogs that relied on the browser's `required` bubble: Create
+Election, event templates, custom roles, Create Pipeline, Inventory's item,
+kit, category, variant group, vendor, storage area and reorder dialogs, and
+notification rules.
 
 Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
 needs a course name and a completion date, because both are NOT NULL
@@ -9422,6 +9426,26 @@ was flagged rather than changed. The options are to keep it, to require
 the drill, and a training officer would link it), or to require both grants.
 Found by `docs/security-review/TR-17-training-core.md` pass 14.
 
+## Training — Records From the Older CSV Importers Read "The Logbook" (2026-11-10)
+
+**Accepted (owner decision 2026-11-10).** Training lists, the print page and
+the individual CSV and PDF exports show where each record came from:
+
+- the provider for a sync ("Target Solutions");
+- "Imported" for the Historical Data Import;
+- "The Logbook" for everything else.
+
+The server decides the label in `app/services/training_record_source.py`. It
+needs nothing stored: a sync carries `external_provider_id` and
+`external_record_id`, and the Historical Data Import ledgers every record it
+writes in `imported_source_records`.
+
+The two older importers on the Training screens, the CSV import wizard
+(`POST /training/import/confirm`) and `POST /training/records/import-csv`,
+leave no such mark. Their records therefore read "The Logbook". The owner chose
+this over adding a stored source column, which could only have labelled records
+imported after the change.
+
 ## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06, resolved 2026-10-29)
 
 Found by security review SKT-19 pass 7
@@ -9572,6 +9596,31 @@ approving it again does not credit the trainee twice. The app's own screens
 edit only drafts; this governs `PUT /shift-reports/{id}`. Covered by
 `tests/test_shift_completion.py::TestAnEditedReportGoesBackToReview`; history
 in `docs/security-review/EC-14-equipment-check-shifts.md`.
+
+## W80 — Training Event Decisions Left Open (2026-11-08)
+
+From the training-event lifecycle pass
+([`workflow-review/W80-training-event-lifecycle.md`](./workflow-review/W80-training-event-lifecycle.md)).
+Decided and fixed in the same pass: over-credit is warned, not capped; an
+approver on a roster cannot approve it; a schedule change that strands
+check-ins is refused; a training-only waiver can name its requirements. Open:
+
+- **W80-11 — Postpone (decided, not built).** The owner chose a real Postpone
+  action with `postponed_at` / `postponed_from_start` / `postponement_reason`
+  columns. Its design is in the findings file and goes in its own pull request:
+  it adds a migration and a public endpoint.
+- **W80-8 — Recording one member on a past drill.** Check-in is refused once the
+  window closes, with a message telling the organizer to ask an organizer; the
+  only routes are adding the whole roster, or the member's own "I was there".
+  Whether an attendance manager may record a check-in after the window, with
+  times, needs a decision.
+- **W80-9 — "0/0 sessions — Complete".** A session-attendance requirement with no
+  held sessions in a member's window reads met, on My Training and the matrix.
+  Reporting "not applicable" (CLAUDE.md pitfall #29) changes compliance
+  percentages department-wide.
+- **W80-10 — Training waivers and "missed mandatory".** The missed-mandatory list
+  excludes leaves of absence only, so a drill excused by a training waiver stays
+  listed. Whether a training waiver also excuses the event is policy.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be

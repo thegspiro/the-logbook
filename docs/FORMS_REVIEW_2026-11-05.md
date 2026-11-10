@@ -155,6 +155,16 @@ New Folder, Create Form, Add supply, Add several items, Request Equipment, the
 suggestion box form and Apparatus (basic)). Each keeps its button enabled,
 names what is missing on its field, and puts a 422 on the field it names.
 
+The second row — the browser's own `required` bubble — has moved too: Create
+Election, the event template form, Create Custom Role, Create Pipeline,
+Inventory's Add Item, Add Kit, Add Category, Add Group, Add Vendor, Add Storage
+Area and both reorder dialogs, and Notifications › Add Rule. Three of them
+(Custom Role, Create Pipeline, Add Rule) had no `<form>`, so their `required`
+never fired at all. Still open on this row: the vendor Contacts dialog keeps a
+native `required`, and dialogs built on the shared `Modal` keep native `min` and
+`type="email"` checks, which can still raise the browser bubble because `Modal`
+offers no `noValidate`.
+
 Pressing the primary button of an empty create dialog was probed 70 times
 (about 40 distinct dialogs). The outcomes:
 

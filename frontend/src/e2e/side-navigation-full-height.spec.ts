@@ -21,15 +21,25 @@
  *
  * Layout is measured settled, under reduced motion, which index.css turns into
  * 0.01ms transitions — as mobile-presentation.spec.ts does for the same nav's
- * slide. Under WebKit the rail's 300ms width transition was still reporting
- * the expanded 256px edge five seconds after the collapse, and the Expand
- * toggle inside it never counted as stable enough to click.
+ * slide.
+ *
+ * The route is /dashboard, not /scheduling. What is under test is AppLayout's
+ * chrome, which every route shares, and `main` is `min-h-dvh`, so the footer
+ * starts below the fold on any of them. At desktop width the scheduling
+ * board's month grid draws ~40 `.card` day cells, each with a backdrop blur,
+ * and Playwright's Linux WebKit composites backdrop-filter in software: on
+ * that page it ran no animation frame at all in twelve seconds, against ~740
+ * with the blur removed or on /dashboard. A transition starts on a rendering
+ * update, so the collapsed rail kept reporting its expanded 256px edge, and
+ * Playwright's stability check, which waits on frames, never let the Expand
+ * toggle be clicked. That failed Frontend E2E (Mobile Safari) on every run.
  */
 
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { signIn } from './helpers';
 
+const ROUTE = '/dashboard';
 const VIEWPORT = { width: 1280, height: 600 };
 const PHONE = { width: 390, height: 844 };
 
@@ -88,7 +98,7 @@ test.describe('Side navigation beside the footer', () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await signIn(page);
-    await page.goto('/scheduling');
+    await page.goto(ROUTE);
     await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
     await expect(page.locator('#side-navigation')).toBeVisible();
   });
@@ -137,7 +147,7 @@ test.describe('Side navigation on a phone', () => {
 
   test('the content is not offset and no strip is reserved', async ({ page }) => {
     await signIn(page);
-    await page.goto('/scheduling');
+    await page.goto(ROUTE);
     await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
     await expect(page.locator('#main-content')).toBeVisible();
     expect(await contentLeft(page)).toBe(0);

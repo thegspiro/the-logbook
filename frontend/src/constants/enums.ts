@@ -656,6 +656,20 @@ export const PracticalSkillsMethod = {
 export type PracticalSkillsMethod = (typeof PracticalSkillsMethod)[keyof typeof PracticalSkillsMethod];
 
 // ============================================
+// Training — Record Source
+// ============================================
+/**
+ * Where a training record came from. The server decides it
+ * (`app/services/training_record_source.py`) and sends the label to show.
+ */
+export const TrainingRecordSource = {
+  PROVIDER: 'provider',
+  IMPORTED: 'imported',
+  LOGBOOK: 'logbook',
+} as const;
+export type TrainingRecordSource = (typeof TrainingRecordSource)[keyof typeof TrainingRecordSource];
+
+// ============================================
 // Scheduling — Assignment Status
 // ============================================
 export const AssignmentStatus = {
