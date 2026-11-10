@@ -13,12 +13,19 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   HTML-to-PDF engine with PDF/UA output, such as WeasyPrint, would mean
   rewriting every renderer and bringing that engine's SSRF hardening with it
   (CVE-2025-68616, CVE-2026-55073).
-- **Latin-1 only, fonts not embedded, no PDF/A.** Every PDF uses the built-in
-  Helvetica family. A member's name in Cyrillic, Greek or CJK script does not
-  render, and minutes, certified results and evaluations cannot be archived as
-  PDF/A. **Decided, to build (owner, 2026-11-09):** bundle Noto Sans (SIL OFL)
-  in the kit, then add XMP metadata and an ICC output intent for the record
-  documents.
+- ~~**Latin-1 only, fonts not embedded, no PDF/A.**~~ **Resolved
+  2026-11-10:** documents embed Noto Sans, and certified results,
+  evaluations and minutes are PDF/A-2b. What remains:
+  - **Scripts outside Latin, Greek and Cyrillic** (CJK, Arabic, Hebrew,
+    emoji) still print as empty boxes; Noto Sans CJK is CFF-based and
+    ReportLab cannot embed it. **Accepted** until a member needs it.
+  - **Label sheets and ID cards stay on Helvetica** by owner decision
+    (2026-11-09): their text is fitted to physical stock.
+  - **Minutes that append attachment PDFs make no PDF/A claim** (owner
+    decision, 2026-11-09): outside pages cannot be vouched for.
+  - **CI does not run veraPDF.** Conformance was confirmed with veraPDF 1.28
+    on 2026-11-10; `tests/test_pdfa.py` guards the structure it checked, not
+    every rule.
 - **The Reports page prints from the browser.** "Print / PDF" has no page
   numbers, no repeated header, the browser's own time zone and no audit row.
   **Decided, to build (owner, 2026-11-09):** a server-side PDF on the kit,
@@ -327,6 +334,10 @@ Also on the shared pieces since: every create dialog the review found with a
 button greyed out until valid (Locations, Facilities, Documents' New Folder,
 Forms' Create Form, Medical Supplies' Add supply, Inventory's Add several
 items and Request Equipment, the suggestion box form, Apparatus (basic)).
+Then the dialogs that relied on the browser's `required` bubble: Create
+Election, event templates, custom roles, Create Pipeline, Inventory's item,
+kit, category, variant group, vendor, storage area and reorder dialogs, and
+notification rules.
 
 Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
 needs a course name and a completion date, because both are NOT NULL

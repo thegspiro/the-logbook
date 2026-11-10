@@ -238,7 +238,7 @@ describe('ItemFormModal', () => {
     expect(mockUpdateItem.mock.calls[0]?.[1]).not.toHaveProperty('status');
   });
 
-  it('shows an error toast when saving fails', async () => {
+  it('shows a failed save inside the dialog rather than as a toast', async () => {
     mockCreateItem.mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
     render(<ItemFormModal {...baseProps} isOpen />);
@@ -246,7 +246,8 @@ describe('ItemFormModal', () => {
     await user.type(nameInput(), 'X');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('alert')).toHaveTextContent('boom');
+    expect(mockToastError).not.toHaveBeenCalled();
   });
 
   // Owner decision 2026-11-01: the server refuses an implausible date pair.
@@ -278,7 +279,7 @@ describe('ItemFormModal', () => {
     expect(warranty).not.toHaveAttribute('aria-invalid');
   });
 
-  it('keeps an unrelated save error in the toast only', async () => {
+  it('keeps an unrelated save error at the top of the dialog, not beside the dates', async () => {
     mockCreateItem.mockRejectedValue(createMockApiError('Serial number already in use'));
     const user = userEvent.setup();
     render(<ItemFormModal {...baseProps} isOpen />);
@@ -286,8 +287,11 @@ describe('ItemFormModal', () => {
     await user.type(nameInput(), 'X');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Serial number already in use'));
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Serial number already in use');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(mockToastError).not.toHaveBeenCalled();
+    // Financial stays collapsed: only a date refusal opens it.
+    expect(screen.queryByLabelText('Warranty Expiration')).not.toBeInTheDocument();
   });
 
   // The Size control writes both size columns. It used to be a free-text box
@@ -1019,5 +1023,104 @@ describe('ItemFormModal', () => {
 
     expect(await screen.findByLabelText('Serial #')).not.toBeRequired();
     expect(screen.getByLabelText('Inspection Interval (days)')).not.toBeRequired();
+  });
+
+  describe('refusing a save with a problem on its field', () => {
+    beforeEach(() => {
+      mockCreateItem.mockReset();
+      mockCreateItem.mockResolvedValue({ id: 'new-1' });
+      mockUpdateItem.mockReset();
+      mockUpdateItem.mockResolvedValue({});
+      mockCreateSizeVariants.mockReset();
+      mockCreateSizeVariants.mockResolvedValue({ created_count: 1, items: [] });
+      mockGetVendors.mockReset();
+      mockGetVendors.mockResolvedValue([]);
+      mockToastError.mockReset();
+    });
+
+    it('names a missing name under its field and sends nothing', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+
+      const name = screen.getByRole('textbox', { name: 'Name' });
+      expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toHaveAccessibleDescription('Enter a name for the item.');
+      expect(name).toHaveFocus();
+      expect(mockCreateItem).not.toHaveBeenCalled();
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+
+    it('names a variant run with no size under the sizes and focuses them', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.type(nameInput(), 'Dept Polo');
+      await user.click(screen.getByRole('switch', { name: /Generate Sizes & Styles/i }));
+      await user.click(screen.getByRole('button', { name: /Create 0 Items/ }));
+
+      const sizes = screen.getByRole('group', { name: 'Sizes' });
+      expect(sizes).toHaveAccessibleDescription('Select at least one size.');
+      expect(sizes).toHaveFocus();
+      expect(mockCreateSizeVariants).not.toHaveBeenCalled();
+      expect(mockToastError).not.toHaveBeenCalled();
+
+      // Picking a size answers it.
+      await user.click(screen.getByRole('button', { name: 'M' }));
+      expect(screen.queryByText('Select at least one size.')).not.toBeInTheDocument();
+    });
+
+    it('names the serial number and interval a category requires, as the server would', async () => {
+      const strictCategory = { ...ppeCategory, requires_serial_number: true, requires_maintenance: true };
+      const user = userEvent.setup();
+      render(
+        <ItemFormModal
+          {...baseProps}
+          categories={[strictCategory]}
+          isOpen
+          editItem={makeItem({ category_id: 'cat-ppe' })}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      const serial = screen.getByRole('textbox', { name: 'Serial #' });
+      expect(serial).toHaveAccessibleDescription('This category requires a serial number.');
+      expect(serial).toHaveFocus();
+      expect(screen.getByRole('spinbutton', { name: 'Inspection Interval (days)' })).toHaveAccessibleDescription(
+        'This category requires an inspection interval.'
+      );
+      expect(mockUpdateItem).not.toHaveBeenCalled();
+    });
+
+    it('puts a 422 on the field it names', async () => {
+      mockCreateItem.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'barcode', message: 'Value is too long.' }] } },
+      });
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.type(nameInput(), 'Radio');
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+
+      expect(await screen.findByRole('textbox', { name: 'Barcode', description: 'Value is too long.' })).toHaveFocus();
+    });
+
+    it("puts the variant builder's base_name 422 on the Name field", async () => {
+      mockCreateSizeVariants.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'base_name', message: 'Value is too long.' }] } },
+      });
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.type(nameInput(), 'Dept Polo');
+      await user.click(screen.getByRole('switch', { name: /Generate Sizes & Styles/i }));
+      await user.click(screen.getByRole('button', { name: 'M' }));
+      await user.click(screen.getByRole('button', { name: /Create 1 Item/ }));
+
+      expect(await screen.findByRole('textbox', { name: 'Name', description: 'Value is too long.' })).toHaveFocus();
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
   });
 });

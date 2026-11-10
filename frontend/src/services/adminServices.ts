@@ -12,6 +12,7 @@ import type {
   OperationsDashboard,
   ActionItemPage,
   CommunityEngagement,
+  CommunityPeriod,
   DashboardPulseLayout,
   DashboardPulseResponse,
   MainDashboardWidgets,
@@ -503,8 +504,8 @@ export const dashboardService = {
       offset: page.offset ?? 0,
     };
   },
-  async getCommunityEngagement(): Promise<CommunityEngagement> {
-    const response = await api.get<CommunityEngagement>('/dashboard/community-engagement');
+  async getCommunityEngagement(period: CommunityPeriod = 'all'): Promise<CommunityEngagement> {
+    const response = await api.get<CommunityEngagement>('/dashboard/community-engagement', { params: { period } });
     return response.data;
   },
   /**

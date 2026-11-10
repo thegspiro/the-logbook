@@ -79,7 +79,7 @@ describe('RoleManagementPage', () => {
     const editButton = await screen.findByRole('button', { name: 'Edit' });
     await user.click(editButton);
 
-    await waitFor(() => expect(screen.getByLabelText('Role Name')).toHaveFocus());
+    await waitFor(() => expect(screen.getByLabelText('Role Name *')).toHaveFocus());
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(editButton).toHaveFocus();
   });
@@ -91,7 +91,7 @@ describe('RoleManagementPage', () => {
     renderWithRouter(<RoleManagementPage />);
 
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
-    const name = screen.getByLabelText('Role Name');
+    const name = screen.getByLabelText('Role Name *');
     expect(name).toBeEnabled();
     expect(screen.getByText(/display name may be customized/i)).toHaveTextContent(
       'internal “member” slug remains unchanged'
@@ -114,7 +114,7 @@ describe('RoleManagementPage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Edit' }));
 
-    expect(screen.getByLabelText('Role Name')).toBeDisabled();
+    expect(screen.getByLabelText('Role Name *')).toBeDisabled();
     expect(screen.getByText(/only the description and permissions/i)).toBeInTheDocument();
   });
 
@@ -211,16 +211,43 @@ describe('RoleManagementPage', () => {
   // W05: the save error was rendered on the page behind the dialog, so a
   // refused save looked like a button that did nothing.
   describe('errors while the dialog is open', () => {
-    it('refuses an empty name inside the dialog without calling the server', async () => {
+    beforeEach(() => {
+      vi.mocked(roleService.createRole).mockReset();
+      vi.mocked(roleService.createRole).mockResolvedValue({ ...role, id: 'role-2', name: 'Report Reader' });
+    });
+
+    // Forms review F-3: the refusal now sits under the name field and takes
+    // focus there, rather than in an alert at the top of a long dialog.
+    it('refuses an empty name under the field without calling the server', async () => {
       const user = userEvent.setup();
       renderWithRouter(<RoleManagementPage />);
 
       await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
       await user.click(screen.getByRole('button', { name: 'Create Role' }));
 
-      const dialog = screen.getByRole('dialog');
-      expect(within(dialog).getByRole('alert')).toHaveTextContent('Give the role a name.');
+      const name = screen.getByRole('textbox', { name: 'Role Name' });
+      expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toHaveAttribute('aria-required', 'true');
+      expect(name).toHaveAccessibleDescription('Give the role a name.');
+      expect(name).toHaveFocus();
       expect(roleService.createRole).not.toHaveBeenCalled();
+    });
+
+    it('puts a 422 on the field it names', async () => {
+      const user = userEvent.setup();
+      vi.mocked(roleService.createRole).mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+      });
+      renderWithRouter(<RoleManagementPage />);
+
+      await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
+      await user.type(screen.getByLabelText('Role Name *'), 'Report Reader');
+      await user.click(screen.getByRole('button', { name: 'Create Role' }));
+
+      expect(await screen.findByRole('textbox', { description: 'Value is too long.' })).toHaveAccessibleName(
+        'Role Name'
+      );
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
 
     it('shows a refused save inside the dialog, once', async () => {
@@ -231,7 +258,7 @@ describe('RoleManagementPage', () => {
       renderWithRouter(<RoleManagementPage />);
 
       await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
-      await user.type(screen.getByLabelText('Role Name'), 'Report Reader');
+      await user.type(screen.getByLabelText('Role Name *'), 'Report Reader');
       await user.click(screen.getByRole('button', { name: 'Create Role' }));
 
       const dialog = screen.getByRole('dialog');
@@ -253,7 +280,7 @@ describe('RoleManagementPage', () => {
       renderWithRouter(<RoleManagementPage />);
 
       await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
-      await user.type(screen.getByLabelText('Role Name'), '  Report Reader  ');
+      await user.type(screen.getByLabelText('Role Name *'), '  Report Reader  ');
       await user.click(screen.getByRole('button', { name: 'Create Role' }));
 
       await waitFor(() => expect(roleService.createRole).toHaveBeenCalledTimes(1));
@@ -265,7 +292,7 @@ describe('RoleManagementPage', () => {
       renderWithRouter(<RoleManagementPage />);
 
       await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
-      await user.type(screen.getByLabelText('Role Name'), 'Bingo Night Crew');
+      await user.type(screen.getByLabelText('Role Name *'), 'Bingo Night Crew');
       expect(screen.getByRole('radio', { name: /^Office/ })).toBeChecked();
       await user.click(screen.getByRole('radio', { name: /^Committee/ }));
       await user.click(screen.getByRole('button', { name: 'Create Role' }));
@@ -281,7 +308,7 @@ describe('RoleManagementPage', () => {
       renderWithRouter(<RoleManagementPage />);
 
       await user.click(await screen.findByRole('button', { name: 'Edit' }));
-      await user.type(screen.getByLabelText('Role Name'), '  ');
+      await user.type(screen.getByLabelText('Role Name *'), '  ');
       await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
       await waitFor(() => expect(roleService.updateRole).toHaveBeenCalledTimes(1));

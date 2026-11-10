@@ -42,7 +42,7 @@ import { isCommittee, mirrorsRank, withoutRankMirrors } from '../utils/positions
 import { Modal } from '../components/Modal';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
-import { UserStatus } from '../constants/enums';
+import { UserStatus, userStatusLabel } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import {
   ADMINISTRATIVE_RANK_HINT,
@@ -54,6 +54,8 @@ import {
 } from '../utils/membership';
 import { useTimezone } from '../hooks/useTimezone';
 import { OverduePropertyReturnsPanel } from '../components/members/OverduePropertyReturnsPanel';
+import { RowActionsMenu } from '../components/members/RowActionsMenu';
+import type { RowAction } from '../components/members/RowActionsMenu';
 import { formatDate, formatTime } from '../utils/dateFormatting';
 import type { PasskeyInfo } from '../types/auth';
 import { displayNameOf, givenName } from '../utils/memberName';
@@ -75,6 +77,25 @@ const FORMER_MEMBER_STATUSES: readonly string[] = [
 
 function isFormerMember(status: string | null | undefined): boolean {
   return !!status && FORMER_MEMBER_STATUSES.includes(status);
+}
+
+/** "Life Member", "life" and "Life member" all name the same standing. */
+function standingKey(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+member$/, '');
+}
+
+/**
+ * A position named after the member's own membership status — a department's
+ * "Life Member" or "Probationary Member" office held by a life or probationary
+ * member. The Membership cell already says it, so the roster row leaves the
+ * chip out (owner decision 2026-11-10); Manage Positions still lists it.
+ */
+function repeatsMembershipStatus(roleName: string, memberStatus: string | null | undefined): boolean {
+  const standing = memberStatusLabel(memberStatus);
+  return !!standing && standingKey(roleName) === standingKey(standing);
 }
 
 interface EditProfileForm {
@@ -199,6 +220,34 @@ export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population =
   // position saves diff against it: a member on the other page who holds a
   // position keeps it when an officer saves that position's member list here.
   const visibleUsers = users.filter((user) => isFormerMember(user.status) === showingFormer);
+
+  // The less frequent account actions, behind each row's "⋯" menu. None of
+  // them is offered on the caller's own row.
+  const rowMenuActions = (user: UserWithRoles): RowAction[] => {
+    if (currentUser?.id === user.id) return [];
+    const name = displayNameOf(user) || user.username;
+    const actions: RowAction[] = [
+      { label: 'Reset Password', ariaLabel: `Reset password for ${name}`, onSelect: () => setResetPasswordUser(user) },
+    ];
+    if (user.locked_until) {
+      actions.push({
+        label: unlockingUserId === user.id ? 'Unlocking…' : 'Unlock',
+        ariaLabel: `Unlock ${name}`,
+        disabled: unlockingUserId === user.id,
+        onSelect: () => void handleUnlock(user),
+      });
+    }
+    if (user.mfa_enabled || user.has_passkey) {
+      actions.push({ label: 'Reset MFA', ariaLabel: `Reset MFA for ${name}`, onSelect: () => setResetMfaUser(user) });
+    }
+    actions.push({
+      label: 'Delete',
+      ariaLabel: `Delete ${name}`,
+      tone: 'danger',
+      onSelect: () => handleDeleteUser(user),
+    });
+    return actions;
+  };
 
   const handleEditRoles = (user: UserWithRoles) => {
     setSelectedUser(user);
@@ -729,12 +778,6 @@ export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population =
                   </th>
                   <th
                     scope="col"
-                    className="text-theme-text-muted px-4 py-3 text-left text-xs font-medium tracking-wider uppercase"
-                  >
-                    Status
-                  </th>
-                  <th
-                    scope="col"
                     className="text-theme-text-muted px-4 py-3 text-right text-xs font-medium tracking-wider uppercase"
                   >
                     Actions
@@ -769,60 +812,82 @@ export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population =
                       {formatRank(user.rank) || '-'}
                     </td>
                     <td data-label="Membership" className="text-theme-text-secondary px-4 py-4 text-sm">
-                      {membershipSummary(user)}
-                    </td>
-                    <td data-label="Positions" className="px-4 py-4">
-                      <div className="flex flex-wrap justify-start gap-1 @max-5xl/rwd-table:justify-end">
-                        {withoutRankMirrors(user.roles).length === 0 ? (
-                          <span className="text-theme-text-muted text-sm">No positions</span>
-                        ) : (
-                          withoutRankMirrors(user.roles).map((role) => (
-                            <span
-                              key={role.id}
-                              data-kind={isCommittee(role) ? 'committee' : 'office'}
-                              className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
-                                isCommittee(role)
-                                  ? 'bg-teal-100 text-teal-900 dark:bg-teal-500/20 dark:text-teal-300'
-                                  : role.is_system
-                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
-                                    : 'bg-theme-surface text-theme-text-secondary'
-                              }`}
-                            >
-                              {role.name}
-                              {!isLockedBasePosition(user, role) && (
-                                <button
-                                  onClick={() => {
-                                    void handleQuickRemoveRole(user, role.id);
-                                  }}
-                                  className="touch-target-phone ml-1 hover:text-red-600"
-                                  aria-label={`Remove ${role.name} position from ${displayNameOf(user) || user.username}`}
-                                >
-                                  ×
-                                </button>
-                              )}
+                      {/* One block, so on a phone — where each cell is a label
+                          and value side by side — the badge and the lock note
+                          stack under the membership text instead of beside it. */}
+                      <div className="flex flex-col items-start gap-1 @max-5xl/rwd-table:items-end @max-5xl/rwd-table:text-right">
+                        {membershipSummary(user)}
+                        {/* The account status, only when it is news: Active is
+                            the default, and "Probationary" beside "Probationary
+                            member" says nothing twice (owner decision 2026-11-10). */}
+                        {user.status !== UserStatus.ACTIVE &&
+                          !repeatsMembershipStatus(userStatusLabel(user.status), user.member_status) && (
+                            <span className="bg-theme-surface-secondary text-theme-text-secondary rounded-full px-2 text-xs leading-5 font-semibold">
+                              {userStatusLabel(user.status)}
                             </span>
-                          ))
+                          )}
+                        {user.locked_until && (
+                          <span className="text-xs font-semibold text-red-700 dark:text-red-400">
+                            Sign-in locked until {formatTime(user.locked_until, tz)}
+                          </span>
                         )}
                       </div>
                     </td>
-                    <td data-label="Status" className="px-4 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex rounded-full px-2 text-xs leading-5 font-semibold ${
-                          user.status === UserStatus.ACTIVE
-                            ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-                            : 'bg-theme-surface-secondary text-theme-text-secondary'
-                        }`}
-                      >
-                        {user.status}
-                      </span>
-                      {user.locked_until && (
-                        <span className="mt-1 block text-xs font-semibold text-red-700 dark:text-red-400">
-                          Sign-in locked until {formatTime(user.locked_until, tz)}
-                        </span>
-                      )}
+                    <td data-label="Positions" className="px-4 py-4">
+                      {(() => {
+                        // Every member holds the base Member position, so a chip
+                        // for it on every row tells nobody anything; it stays
+                        // ticked and locked in Manage Positions. On an archived
+                        // member it is not locked, and its × is how the baseline
+                        // access is taken away, so there it stays.
+                        const shown = withoutRankMirrors(user.roles).filter(
+                          (role) =>
+                            (role.slug !== 'member' || !isLockedBasePosition(user, role)) &&
+                            !repeatsMembershipStatus(role.name, user.member_status)
+                        );
+                        if (shown.length === 0) {
+                          return (
+                            <span className="text-theme-text-muted text-sm">
+                              {user.roles.some((role) => role.slug === 'member')
+                                ? 'No other positions'
+                                : 'No positions'}
+                            </span>
+                          );
+                        }
+                        return (
+                          <div className="flex flex-wrap justify-start gap-1 @max-5xl/rwd-table:justify-end">
+                            {shown.map((role) => (
+                              <span
+                                key={role.id}
+                                data-kind={isCommittee(role) ? 'committee' : 'office'}
+                                className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${
+                                  isCommittee(role)
+                                    ? 'bg-teal-100 text-teal-900 dark:bg-teal-500/20 dark:text-teal-300'
+                                    : role.is_system
+                                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400'
+                                      : 'bg-theme-surface text-theme-text-secondary'
+                                }`}
+                              >
+                                {role.name}
+                                {!isLockedBasePosition(user, role) && (
+                                  <button
+                                    onClick={() => {
+                                      void handleQuickRemoveRole(user, role.id);
+                                    }}
+                                    className="touch-target-phone ml-1 hover:text-red-600"
+                                    aria-label={`Remove ${role.name} position from ${displayNameOf(user) || user.username}`}
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td data-label="Actions" className="px-4 py-4 text-right text-sm font-medium whitespace-nowrap">
-                      <div className="flex flex-wrap justify-end gap-3">
+                      <div className="flex items-center justify-end gap-3">
                         <button
                           onClick={() => void navigate(`/members/admin/edit/${user.id}`)}
                           aria-label={`Edit ${displayNameOf(user) || user.username}`}
@@ -837,43 +902,10 @@ export const MembersAdminPage: React.FC<MembersAdminPageProps> = ({ population =
                         >
                           Manage Positions
                         </button>
-                        {currentUser?.id !== user.id && (
-                          <button
-                            onClick={() => setResetPasswordUser(user)}
-                            aria-label={`Reset password for ${displayNameOf(user) || user.username}`}
-                            className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
-                          >
-                            Reset Password
-                          </button>
-                        )}
-                        {currentUser?.id !== user.id && user.locked_until && (
-                          <button
-                            onClick={() => void handleUnlock(user)}
-                            aria-label={`Unlock ${displayNameOf(user) || user.username}`}
-                            disabled={unlockingUserId === user.id}
-                            className="touch-target-phone text-yellow-700 hover:text-yellow-800 disabled:opacity-50 dark:text-yellow-400 dark:hover:text-yellow-300"
-                          >
-                            {unlockingUserId === user.id ? 'Unlocking…' : 'Unlock'}
-                          </button>
-                        )}
-                        {currentUser?.id !== user.id && (user.mfa_enabled || user.has_passkey) && (
-                          <button
-                            onClick={() => setResetMfaUser(user)}
-                            aria-label={`Reset MFA for ${displayNameOf(user) || user.username}`}
-                            className="touch-target-phone text-yellow-700 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300"
-                          >
-                            Reset MFA
-                          </button>
-                        )}
-                        {currentUser?.id !== user.id && (
-                          <button
-                            onClick={() => handleDeleteUser(user)}
-                            aria-label={`Delete ${displayNameOf(user) || user.username}`}
-                            className="touch-target-phone text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                          >
-                            Delete
-                          </button>
-                        )}
+                        <RowActionsMenu
+                          label={`More actions for ${displayNameOf(user) || user.username}`}
+                          actions={rowMenuActions(user)}
+                        />
                       </div>
                     </td>
                   </tr>

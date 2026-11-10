@@ -43,6 +43,8 @@ import { groupNotificationsIntoStacks, isStackable, stackUnreadCount } from '../
 import { useTablist } from '../hooks/useTablist';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { blankToNull } from '../utils/formValues';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 
 // Maps trigger enum values to display-friendly icons and colors
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -102,6 +104,17 @@ const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; la
 // (ENFORCED_TRIGGERS in models/notification.py) and reports `enforced` on
 // every rule, so rules already created for those triggers are still listed,
 // labelled for what they are.
+type RuleField = 'name' | 'trigger' | 'description';
+const RULE_FIELDS: FieldSpecs<RuleField> = {
+  name: { id: 'rule-name', label: 'Rule Name' },
+  // The category is derived from the trigger, so a complaint about it is one
+  // about the trigger chosen.
+  trigger: { id: 'rule-trigger', label: 'Trigger Event', apiKeys: ['category'] },
+  description: { id: 'rule-description', label: 'Description' },
+};
+// NotificationRuleCreate.name is max_length=255; description is unbounded.
+const RULE_NAME_MAX_LENGTH = 255;
+
 const TRIGGER_OPTIONS = [
   { label: 'Event Reminder', value: 'event_reminder', effect: 'Sends reminders before scheduled events.' },
   {
@@ -332,7 +345,7 @@ const NotificationsPage: React.FC = () => {
   const [createTrigger, setCreateTrigger] = useState('event_reminder');
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const ruleErrors = useFieldErrors(RULE_FIELDS);
 
   const loadCategoryUnreadCounts = useCallback(async () => {
     try {
@@ -489,13 +502,13 @@ const NotificationsPage: React.FC = () => {
     setCreateName(rule.name);
     setCreateTrigger(rule.trigger);
     setCreateDescription(rule.description ?? '');
-    setCreateError(null);
+    ruleErrors.clear();
     setShowCreateModal(true);
   };
 
   const closeRuleDialog = () => {
     setShowCreateModal(false);
-    setCreateError(null);
+    ruleErrors.clear();
     // An edit's values must not reappear in the next Create; a create's draft
     // is kept, as it always was, so closing by mistake loses nothing.
     if (editingRule) {
@@ -507,12 +520,17 @@ const NotificationsPage: React.FC = () => {
   };
 
   const handleSaveRule = async () => {
-    if (!createName.trim()) {
-      setCreateError('Enter a rule name.');
+    // Named under the field it is about, not in a banner above the dialog
+    // (forms review F-3).
+    const problems: FieldErrors<RuleField> = {};
+    if (!createName.trim()) problems.name = 'Enter a rule name.';
+    ruleErrors.setFormError(null);
+    ruleErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      ruleErrors.focusFirst(problems);
       return;
     }
     setCreating(true);
-    setCreateError(null);
     try {
       const category = TRIGGER_CATEGORY_MAP[createTrigger] || 'general';
       if (editingRule) {
@@ -555,8 +573,9 @@ const NotificationsPage: React.FC = () => {
       setCreateDescription('');
       setShowCreateModal(false);
     } catch (err: unknown) {
-      const message = getErrorMessage(err, editingRule ? 'Failed to save the rule' : 'Failed to create rule');
-      setCreateError(message);
+      ruleErrors.focusFirst(
+        ruleErrors.setFromApiError(err, editingRule ? 'Failed to save the rule' : 'Failed to create rule')
+      );
     } finally {
       setCreating(false);
     }
@@ -1410,74 +1429,89 @@ const NotificationsPage: React.FC = () => {
                       <X className="h-5 w-5" />
                     </button>
                   </div>
-                  {createError && (
+                  {ruleErrors.formError && (
                     <div
                       role="alert"
                       className="mb-4 flex items-start space-x-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3"
                     >
                       <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-700 dark:text-red-400" />
-                      <p className="text-sm text-red-700 dark:text-red-300">{createError}</p>
+                      <p className={`text-sm ${FIELD_ERROR_CLASS}`}>{ruleErrors.formError}</p>
                     </div>
                   )}
                   <div className="space-y-4">
-                    <div>
-                      <label htmlFor="rule-name" className="text-theme-text-secondary mb-1 block text-sm font-medium">
-                        Rule Name <span aria-hidden="true">*</span>
-                      </label>
-                      <input
-                        id="rule-name"
-                        type="text"
-                        value={createName}
-                        onChange={(e) => setCreateName(e.target.value)}
-                        className="form-input"
-                        placeholder="e.g., Monthly Report Reminder"
-                        required
-                        aria-required="true"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="rule-trigger"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Trigger Event
-                      </label>
-                      <select
-                        id="rule-trigger"
-                        value={createTrigger}
-                        onChange={(e) => setCreateTrigger(e.target.value)}
-                        className="form-input"
-                      >
-                        {TRIGGER_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                        {/* An existing rule on a trigger nothing reads keeps its
-                            value selectable, so opening it to rename does not
-                            silently move it to the first trigger in the list. */}
-                        {editingRule && !TRIGGER_OPTIONS.some((opt) => opt.value === editingRule.trigger) && (
-                          <option value={editingRule.trigger}>
-                            {getTriggerDisplay(editingRule.trigger).label} (not enforced)
-                          </option>
-                        )}
-                      </select>
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="rule-description"
-                        className="text-theme-text-secondary mb-1 block text-sm font-medium"
-                      >
-                        Description
-                      </label>
-                      <textarea
-                        id="rule-description"
-                        rows={2}
-                        value={createDescription}
-                        onChange={(e) => setCreateDescription(e.target.value)}
-                        className="form-input"
-                      />
-                    </div>
+                    <FormField
+                      id={RULE_FIELDS.name.id}
+                      label="Rule Name"
+                      required
+                      error={ruleErrors.errors.name}
+                      labelClassName="text-theme-text-secondary mb-1 block text-sm font-medium"
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="text"
+                          maxLength={RULE_NAME_MAX_LENGTH}
+                          value={createName}
+                          onChange={(e) => {
+                            setCreateName(e.target.value);
+                            ruleErrors.setError('name', null);
+                          }}
+                          className="form-input"
+                          placeholder="e.g., Monthly Report Reminder"
+                        />
+                      )}
+                    </FormField>
+                    <FormField
+                      id={RULE_FIELDS.trigger.id}
+                      label="Trigger Event"
+                      error={ruleErrors.errors.trigger}
+                      labelClassName="text-theme-text-secondary mb-1 block text-sm font-medium"
+                    >
+                      {(field) => (
+                        <select
+                          {...field}
+                          value={createTrigger}
+                          onChange={(e) => {
+                            setCreateTrigger(e.target.value);
+                            ruleErrors.setError('trigger', null);
+                          }}
+                          className="form-input"
+                        >
+                          {TRIGGER_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                          {/* An existing rule on a trigger nothing reads keeps its
+                              value selectable, so opening it to rename does not
+                              silently move it to the first trigger in the list. */}
+                          {editingRule && !TRIGGER_OPTIONS.some((opt) => opt.value === editingRule.trigger) && (
+                            <option value={editingRule.trigger}>
+                              {getTriggerDisplay(editingRule.trigger).label} (not enforced)
+                            </option>
+                          )}
+                        </select>
+                      )}
+                    </FormField>
+                    <FormField
+                      id={RULE_FIELDS.description.id}
+                      label="Description"
+                      error={ruleErrors.errors.description}
+                      labelClassName="text-theme-text-secondary mb-1 block text-sm font-medium"
+                    >
+                      {(field) => (
+                        <textarea
+                          {...field}
+                          rows={2}
+                          value={createDescription}
+                          onChange={(e) => {
+                            setCreateDescription(e.target.value);
+                            ruleErrors.setError('description', null);
+                          }}
+                          className="form-input"
+                        />
+                      )}
+                    </FormField>
                     {editEffect && (
                       <div role="status" className="alert-warning flex items-start space-x-2 p-3">
                         <AlertTriangle

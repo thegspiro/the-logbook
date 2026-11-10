@@ -26,6 +26,8 @@ import type {
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
 
@@ -57,6 +59,17 @@ const EMPTY_FORM: KitFormData = {
   name: '',
   description: '',
   line_items: [{ ...EMPTY_LINE_ITEM }],
+};
+
+type KitField = 'name' | 'description' | 'line_items';
+
+// snake_case keys: schemas/inventory.py carries no alias generator, so a 422
+// names the request body's own keys. An error on one line's own field arrives
+// as `line_items.0.item_name` and is shown as the form-level message.
+const KIT_FIELDS: FieldSpecs<KitField> = {
+  name: { id: 'kit-name', label: 'Name' },
+  description: { id: 'kit-desc', label: 'Description' },
+  line_items: { id: 'kit-line-items', label: 'Line Items' },
 };
 
 const inputClass = 'form-input w-full';
@@ -101,6 +114,7 @@ const EquipmentKitsPage: React.FC = () => {
   const [editingKit, setEditingKit] = useState<EquipmentKit | null>(null);
   const [formData, setFormData] = useState<KitFormData>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
+  const kitErrors = useFieldErrors(KIT_FIELDS);
   const [detailKit, setDetailKit] = useState<EquipmentKit | null>(null);
   const [issueKit, setIssueKit] = useState<EquipmentKit | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -145,6 +159,7 @@ const EquipmentKitsPage: React.FC = () => {
   const openCreateModal = () => {
     setEditingKit(null);
     setFormData(EMPTY_FORM);
+    kitErrors.clear();
     setShowModal(true);
   };
 
@@ -167,6 +182,7 @@ const EquipmentKitsPage: React.FC = () => {
               }))
             : [{ ...EMPTY_LINE_ITEM }],
       });
+      kitErrors.clear();
       setShowModal(true);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load kit details'));
@@ -190,6 +206,7 @@ const EquipmentKitsPage: React.FC = () => {
   };
 
   const addLineItem = () => {
+    kitErrors.setError('line_items', null);
     setFormData((prev) => ({
       ...prev,
       line_items: [...prev.line_items, { ...EMPTY_LINE_ITEM }],
@@ -204,6 +221,7 @@ const EquipmentKitsPage: React.FC = () => {
   };
 
   const updateLineItem = (index: number, field: keyof LineItemFormData, value: string | boolean) => {
+    kitErrors.setError('line_items', null);
     setFormData((prev) => ({
       ...prev,
       line_items: prev.line_items.map((li, i) => (i === index ? { ...li, [field]: value } : li)),
@@ -211,6 +229,7 @@ const EquipmentKitsPage: React.FC = () => {
   };
 
   const patchLineItem = (index: number, patch: Partial<LineItemFormData>) => {
+    kitErrors.setError('line_items', null);
     setFormData((prev) => ({
       ...prev,
       line_items: prev.line_items.map((li, i) => (i === index ? { ...li, ...patch } : li)),
@@ -251,13 +270,16 @@ const EquipmentKitsPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      toast.error('Kit name is required');
-      return;
-    }
+    // Checked here rather than by the browser's required bubble and a toast,
+    // which vanished after a few seconds and named no field (forms review F-3).
     const validItems = formData.line_items.filter((li) => li.item_name.trim());
-    if (validItems.length === 0) {
-      toast.error('At least one line item is required');
+    const problems: FieldErrors<KitField> = {};
+    if (!formData.name.trim()) problems.name = 'Enter a name for the kit.';
+    if (validItems.length === 0) problems.line_items = 'Add at least one item to the kit.';
+    kitErrors.setFormError(null);
+    kitErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      kitErrors.focusFirst(problems);
       return;
     }
 
@@ -289,7 +311,7 @@ const EquipmentKitsPage: React.FC = () => {
       closeModal();
       void loadKits();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save kit'));
+      kitErrors.focusFirst(kitErrors.setFromApiError(err, 'Failed to save kit'));
     } finally {
       setIsSaving(false);
     }
@@ -497,39 +519,71 @@ const EquipmentKitsPage: React.FC = () => {
         size="lg"
       >
         <form id="kit-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
-          <div>
-            <label htmlFor="kit-name" className={labelClass}>
-              Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="kit-name"
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-              className={inputClass}
-              placeholder="e.g. New Recruit Kit"
-            />
-          </div>
-          <div>
-            <label htmlFor="kit-desc" className={labelClass}>
-              Description
-            </label>
-            <textarea
-              id="kit-desc"
-              rows={2}
-              value={formData.description}
-              onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-              className={inputClass}
-              placeholder="Optional description for this kit"
-            />
-          </div>
+          {kitErrors.formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {kitErrors.formError}
+            </p>
+          )}
+          <FormField
+            id={KIT_FIELDS.name.id}
+            label="Name"
+            required
+            error={kitErrors.errors.name}
+            labelClassName={labelClass}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                maxLength={255}
+                value={formData.name}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, name: e.target.value }));
+                  kitErrors.setError('name', null);
+                }}
+                className={inputClass}
+                placeholder="e.g. New Recruit Kit"
+              />
+            )}
+          </FormField>
+          <FormField
+            id={KIT_FIELDS.description.id}
+            label="Description"
+            error={kitErrors.errors.description}
+            labelClassName={labelClass}
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                rows={2}
+                maxLength={2000}
+                value={formData.description}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, description: e.target.value }));
+                  kitErrors.setError('description', null);
+                }}
+                className={inputClass}
+                placeholder="Optional description for this kit"
+              />
+            )}
+          </FormField>
 
-          {/* Line Items */}
-          <div className="space-y-3">
+          {/* Line Items — a group rather than one input, so the "no items"
+              error has something to sit under and focus to move to. */}
+          <div
+            id={KIT_FIELDS.line_items.id}
+            role="group"
+            aria-labelledby="kit-line-items-label"
+            aria-describedby={kitErrors.errors.line_items ? `${KIT_FIELDS.line_items.id}-error` : undefined}
+            tabIndex={-1}
+            className="space-y-3 focus:outline-none"
+          >
             <div className="flex items-center justify-between">
-              <p className="text-theme-text-secondary text-sm font-medium">
-                Line Items <span className="text-red-500">*</span>
+              <p id="kit-line-items-label" className="text-theme-text-secondary text-sm font-medium">
+                Line Items{' '}
+                <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                  *
+                </span>
               </p>
               <button
                 type="button"
@@ -539,6 +593,11 @@ const EquipmentKitsPage: React.FC = () => {
                 <Plus className="h-3.5 w-3.5" /> Add Item
               </button>
             </div>
+            {kitErrors.errors.line_items && (
+              <p id={`${KIT_FIELDS.line_items.id}-error`} className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {kitErrors.errors.line_items}
+              </p>
+            )}
 
             {formData.line_items.map((li, idx) => (
               <div
@@ -577,6 +636,7 @@ const EquipmentKitsPage: React.FC = () => {
                             type="text"
                             value={li.item_name}
                             onChange={(e) => updateLineItem(idx, 'item_name', e.target.value)}
+                            maxLength={255}
                             className={inputClass + ' mt-1 text-sm'}
                             placeholder="Custom item name"
                           />

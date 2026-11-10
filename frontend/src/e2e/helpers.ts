@@ -212,6 +212,112 @@ const enrollments = () => [
  */
 const requestDay = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
 
+/**
+ * The Community Engagement report, shaped as
+ * backend/app/api/v1/endpoints/dashboard.py returns it. Without it the tab
+ * reads the catch-all `{}` and the sweep measures its error state. One event
+ * of each reach kind — estimated, signed in against an expectation, signed in
+ * with none — because each draws a different cell, and the long organization
+ * name is the one that wraps on a phone.
+ */
+const COMMUNITY_ENGAGEMENT = {
+  total_public_events: 21,
+  total_member_attendees: 160,
+  total_external_attendees: 610,
+  upcoming_public_events: 3,
+  period: 'year',
+  period_start: requestDay(-300),
+  period_end: requestDay(0),
+  current: {
+    events_held: 19,
+    people_reached: 2140,
+    signed_in: 412,
+    estimated: 1728,
+    member_hours: 312.5,
+    members_involved: 41,
+    requests_received: 18,
+    requests_completed: 14,
+  },
+  previous: {
+    events_held: 15,
+    people_reached: 1634,
+    signed_in: 300,
+    estimated: 1334,
+    member_hours: 332,
+    members_involved: 38,
+    requests_received: 16,
+    requests_completed: 12,
+  },
+  upcoming_events: 3,
+  turnout: { events: 6, signed_in: 412, expected: 480 },
+  granularity: 'month',
+  by_period: [
+    '2025-12',
+    '2026-01',
+    '2026-02',
+    '2026-03',
+    '2026-04',
+    '2026-05',
+    '2026-06',
+    '2026-07',
+    '2026-08',
+    '2026-09',
+    '2026-10',
+    '2026-11',
+  ].map((period, i) => ({ period, events: (i % 4) + 1, signed_in: 20 + i * 9, estimated: (i * 37) % 260 })),
+  by_type: [
+    { label: 'School Visit', events: 6, people_reached: 860 },
+    { label: 'Station Tour', events: 5, people_reached: 520 },
+    { label: 'Fire Safety Demonstration', events: 3, people_reached: 410 },
+    { label: 'CPR / First Aid', events: 2, people_reached: 200 },
+    { label: 'Fundraiser', events: 1, people_reached: 150 },
+  ],
+  recent_events: [
+    {
+      event_id: 'ce-1',
+      title: 'Fire prevention assembly',
+      start_datetime: requestDay(-6),
+      type_label: 'School Visit',
+      organization_name: 'Oakville Elementary School Parent-Teacher Association',
+      request_id: 'req-1',
+      signed_in: 0,
+      expected: 120,
+      people_reached: 120,
+      reach_is_estimate: true,
+      crew: 4,
+      member_hours: 10,
+    },
+    {
+      event_id: 'ce-2',
+      title: 'CPR class',
+      start_datetime: requestDay(-12),
+      type_label: 'CPR / First Aid',
+      organization_name: 'Holt Auto Group',
+      request_id: 'req-2',
+      signed_in: 25,
+      expected: 30,
+      people_reached: 25,
+      reach_is_estimate: false,
+      crew: 2,
+      member_hours: 6,
+    },
+    {
+      event_id: 'ce-3',
+      title: 'Open house',
+      start_datetime: requestDay(-29),
+      type_label: 'Public Education',
+      organization_name: null,
+      request_id: null,
+      signed_in: 285,
+      expected: null,
+      people_reached: 285,
+      reach_is_estimate: false,
+      crew: 14,
+      member_hours: 70,
+    },
+  ],
+};
+
 const EVENT_REQUESTS = [
   {
     id: 'req-demo-1',
@@ -1020,6 +1126,7 @@ const routes = ({
     `**/api/v1/event-requests/${request.id}`,
     () => ({ ...request, ...EVENT_REQUEST_DETAIL }),
   ]),
+  ['**/api/v1/dashboard/community-engagement**', () => COMMUNITY_ENGAGEMENT],
   ['**/api/v1/admin-hub/events/metrics', eventMetricSettings],
   ['**/api/v1/admin-hub/training/metrics', trainingMetricSettings],
   // The notifications page lists rules and needs a list, not the catch-all

@@ -15,6 +15,17 @@ import { PositionKind } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { AdminPageHeader } from '../components/admin/AdminPageHeader';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+
+type RoleField = 'name' | 'description';
+
+// The role schema has no alias generator, so a 422 names the snake_case
+// request keys, which are these field names.
+const ROLE_FIELDS: FieldSpecs<RoleField> = {
+  name: { id: 'role-name', label: 'Role Name' },
+  description: { id: 'role-description', label: 'Description' },
+};
 
 export const RoleManagementPage: React.FC = () => {
   const { confirm } = useConfirm();
@@ -26,6 +37,7 @@ export const RoleManagementPage: React.FC = () => {
   const { busy, run } = useSubmitGuard();
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const roleModalRef = useFocusTrap<HTMLDivElement>(showCreateModal);
+  const roleErrors = useFieldErrors(ROLE_FIELDS);
 
   // W05-5: the server refuses a new or renamed position that reuses a name,
   // but positions that already shared one were left as they are. Mark them, so
@@ -82,6 +94,7 @@ export const RoleManagementPage: React.FC = () => {
     });
     setEditingRole(null);
     setError(null);
+    roleErrors.clear();
     setShowCreateModal(true);
   };
 
@@ -95,6 +108,7 @@ export const RoleManagementPage: React.FC = () => {
     });
     setEditingRole(role);
     setError(null);
+    roleErrors.clear();
     setShowCreateModal(true);
   };
 
@@ -133,12 +147,17 @@ export const RoleManagementPage: React.FC = () => {
   const handleSubmit = () =>
     run(async () => {
       try {
-        setError(null);
         // Checked here so the reason is ours rather than the server's
-        // "name: Value is too short" (workflow review W05).
+        // "name: Value is too short" (workflow review W05), and shown under
+        // the field it is about rather than at the top of a long dialog
+        // (forms review F-3).
         const name = formData.name.trim();
-        if (!name) {
-          setError('Give the role a name.');
+        const problems: FieldErrors<RoleField> = {};
+        if (!name) problems.name = 'Give the role a name.';
+        roleErrors.setFormError(null);
+        roleErrors.setErrors(problems);
+        if (Object.keys(problems).length > 0) {
+          roleErrors.focusFirst(problems);
           return;
         }
 
@@ -165,7 +184,9 @@ export const RoleManagementPage: React.FC = () => {
         await fetchData();
         setShowCreateModal(false);
       } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Could not save the role. Check the details and try again.'));
+        roleErrors.focusFirst(
+          roleErrors.setFromApiError(err, 'Could not save the role. Check the details and try again.')
+        );
       }
     });
 
@@ -365,12 +386,12 @@ export const RoleManagementPage: React.FC = () => {
                 className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4"
                 data-testid="role-modal-scroll-area"
               >
-                {error && (
+                {roleErrors.formError && (
                   <div
                     role="alert"
                     className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10"
                   >
-                    <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+                    <p className={`text-sm ${FIELD_ERROR_CLASS}`}>{roleErrors.formError}</p>
                   </div>
                 )}
 
@@ -384,34 +405,48 @@ export const RoleManagementPage: React.FC = () => {
                   </div>
                 )}
 
-                <div>
-                  <label htmlFor="role-name" className="text-theme-text-secondary block text-sm font-medium">
-                    Role Name
-                  </label>
-                  <input
-                    id="role-name"
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    disabled={editingRole?.is_system && editingRole.slug !== 'member'}
-                    required
-                    aria-required="true"
-                    className="form-input mt-1"
-                  />
-                </div>
+                <FormField
+                  id={ROLE_FIELDS.name.id}
+                  label="Role Name"
+                  required
+                  error={roleErrors.errors.name}
+                  labelClassName="text-theme-text-secondary block text-sm font-medium"
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="text"
+                      maxLength={100}
+                      value={formData.name}
+                      onChange={(e) => {
+                        setFormData({ ...formData, name: e.target.value });
+                        roleErrors.setError('name', null);
+                      }}
+                      disabled={editingRole?.is_system && editingRole.slug !== 'member'}
+                      className="form-input mt-1"
+                    />
+                  )}
+                </FormField>
 
-                <div>
-                  <label htmlFor="role-description" className="text-theme-text-secondary block text-sm font-medium">
-                    Description
-                  </label>
-                  <textarea
-                    id="role-description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows={2}
-                    className="form-input mt-1"
-                  />
-                </div>
+                <FormField
+                  id={ROLE_FIELDS.description.id}
+                  label="Description"
+                  error={roleErrors.errors.description}
+                  labelClassName="text-theme-text-secondary block text-sm font-medium"
+                >
+                  {(field) => (
+                    <textarea
+                      {...field}
+                      value={formData.description}
+                      onChange={(e) => {
+                        setFormData({ ...formData, description: e.target.value });
+                        roleErrors.setError('description', null);
+                      }}
+                      rows={2}
+                      className="form-input mt-1"
+                    />
+                  )}
+                </FormField>
 
                 {!editingRole?.is_system && (
                   <fieldset>
