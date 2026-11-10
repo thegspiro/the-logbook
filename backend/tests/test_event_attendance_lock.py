@@ -442,7 +442,11 @@ class TestUpdateLocksOnChangeNotPresence:
             custom_fields={}, attendance_finalized_at=None, attendance_finalized_by=None
         )
         new_end = event.end_datetime + timedelta(minutes=30)
-        svc = EventService(_mock_db(_one(event)))
+        # The second read is the check-ins a moved clock must not strand
+        # (test_event_reschedule_check_ins.py); this event has none.
+        no_check_ins = MagicMock()
+        no_check_ins.all.return_value = []
+        svc = EventService(_mock_db(_one(event), no_check_ins))
 
         await svc.update_event("event-1", "org-1", _raw(end_datetime=new_end))
 
