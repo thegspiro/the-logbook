@@ -9432,3 +9432,47 @@ mirrored here so they're visible outside the log. The parallel module-by-module
 security audit tracks its rotation and per-module findings under
 [`docs/module-audit/`](./module-audit/PROGRESS.md); its open decisions are
 mirrored in the Multi-Tenant Isolation section above.
+
+## LIFE-11 — Anonymizing a Member Leaves Their Separation Letter, With Home Address, in Documents (2026-11-10, app review A6 pass 6)
+
+Anonymization (`POST /users/{id}/anonymize`, `MemberAnonymizationService`)
+scrubs the member's personal data from a long list of tables but touches no
+`Document`. The property-return letter generated when the member was dropped is
+filed in the leadership-only **Member Separations** folder, and its body states
+the member's home address and the reason given for the separation. After an
+erasure both remain readable to anyone with access to that folder.
+
+A separation letter may be a record the department must keep: it states a
+chargeable liability for property not returned. So this is a decision, not a
+fix. Options:
+
+1. **Redact on anonymization** — rewrite stored letters with the address and
+   reason removed, keeping the item list and values.
+2. **Delete** the letters with the rest of the member's personal data.
+3. **Keep them as they are** and say so in the anonymization docstring and
+   `docs/COMPLIANCE.md`, so a privacy reviewer is not told the member is fully
+   scrubbed.
+
+## LIFE-2 — A Pool Issuance Is Valued Three Ways, and the Departure Clearance's Figure Is Wrong (2026-08-05, evidence added 2026-11-10, app review A6)
+
+A departing member's unreturned pool issuance (uniform pieces and the like) is
+valued differently by the three places that state what the member owes:
+
+| Where                                                  | Formula                                                          |
+| ------------------------------------------------------ | ---------------------------------------------------------------- |
+| Member charges (`inventory_service.py:8550`)           | `unit_cost_at_issuance × quantity issued`                        |
+| Property-return letter (`property_return_service.py`)  | `current_value × quantity issued`                                |
+| Departure clearance (`departure_clearance_service.py`) | `current_value ÷ (quantity + quantity_issued) × quantity issued` |
+
+`current_value` is a per-unit value: every inventory valuation total sums
+`current_value * quantity`. So the clearance divides a per-unit value by the
+pool's whole size and **understates the item by that factor**. A pool of 40
+shirts at $25 each, two of them issued, shows $1.25 outstanding on the clearance and
+$50 on the letter.
+
+Which basis is right — today's value, or the cost recorded at issuance that
+charges already use — is an accounting decision. Whichever is chosen, the
+clearance and the letter should both use it; the clearance's current formula
+is wrong under either. Existing clearances store their line values, so a
+change applies to new clearances unless the owner also wants open ones
+recomputed.
