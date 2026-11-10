@@ -73,9 +73,21 @@ class DepartureClearanceService:
             # open a clearance in this org naming another org's member.
             await assert_in_org(self.db, User, user_id, organization_id, label="member")
 
-            # Check for existing open clearance
+            # One open clearance per member is a check-then-insert with no
+            # unique key behind it (MySQL cannot index "one open row"), so two
+            # requests arriving together -- a double-click, or a drop and a
+            # manual initiation at once -- both found none and opened two.
+            # Lock the member to serialize the decision, and make the check a
+            # locking read so it sees a clearance the request that held the
+            # lock just committed (CLAUDE.md pitfall #27).
+            await self.db.execute(
+                select(User.id)
+                .where(User.id == user_id, User.organization_id == organization_id)
+                .with_for_update()
+            )
             existing = await self.db.execute(
-                select(DepartureClearance).where(
+                select(DepartureClearance)
+                .where(
                     DepartureClearance.organization_id == organization_id,
                     DepartureClearance.user_id == user_id,
                     DepartureClearance.status.in_(
@@ -85,6 +97,7 @@ class DepartureClearanceService:
                         ]
                     ),
                 )
+                .with_for_update()
             )
             if existing.scalar_one_or_none():
                 return (
@@ -321,12 +334,17 @@ class DepartureClearanceService:
                     # lookup itself would report for it.
                     if not line_item.item_id:
                         return None, "Failed to unassign item: Item not found"
+                    # The line records only the item, which may since have
+                    # been taken back through the inventory screens and issued
+                    # to someone else; without the expected holder this would
+                    # unassign it from them.
                     success, err = await inv_svc.unassign_item(
                         item_id=UUID(line_item.item_id),
                         organization_id=UUID(organization_id),
                         returned_by=UUID(resolved_by),
                         return_condition=effective_condition,
                         return_notes=resolution_notes,
+                        expected_user_id=UUID(str(clearance.user_id)),
                     )
                     if err:
                         return None, f"Failed to unassign item: {err}"
@@ -592,11 +610,7 @@ class DepartureClearanceService:
         clearance.items_outstanding = pending
         clearance.value_outstanding = value_outstanding
 
-        # Update status
-        if pending == 0 and clearance.total_items > 0:
-            # All resolved but don't auto-complete — leave as in_progress
-            # until explicitly completed so staff can review
-            pass
-
+        # A clearance with every line resolved is not completed here: it stays
+        # in_progress until staff complete it explicitly, so they can review.
         if cleared > 0 and clearance.status == ClearanceStatus.INITIATED:
             clearance.status = ClearanceStatus.IN_PROGRESS

@@ -29,11 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
     MemberLeaveOfAbsence,
     MemberServicePeriod,
     Organization,
     User,
-    UserStatus,
     sync_account_status_with_membership,
 )
 from app.services.member_service_history_service import (
@@ -744,7 +744,7 @@ class MembershipTierService:
         result = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
-                User.status.in_([UserStatus.ACTIVE, UserStatus.PROBATIONARY]),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
         )
