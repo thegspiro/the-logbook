@@ -16,6 +16,52 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#PENDING](https://github.com/thegspiro/the-logbook/pulls)**
+(branch `claude/security-review-admin-hours-p14`): Feature 21
+(Admin hours), pass 14, a watchdog pickup. `ListAgents` → "No reachable
+agents"; the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable. PR #4213
+(Feature 20, Compliance, pass 14) had already merged (`2775b491a`,
+squash-merged directly onto `main`). A fresh check for any open PR with a
+`claude/security-review-*` head found none, and row 21 was the next
+pending feature.
+
+Baseline `d4a510b60` (pass 13's own merge, PR #3955). Real delta:
+`models/admin_hours.py` gains one `AdminHoursEntryMethod` enum member
+(`IMPORT`), migrated correctly (`34f113ec86e3` widens the native MySQL
+enum behind a table-existence guard, with a safe downgrade); and four
+cosmetic/UX frontend files (a same-member-one-session clock-in fix with its
+own new test, a responsive-table pass, a shared header swap, a label
+wording change) — `endpoints/admin_hours.py` and `admin_hours_service.py`
+are byte-identical to pass 13. The enum's one consumer is a brand-new,
+previously-nonexistent Historical Data Import module
+(`endpoints/historical_import.py` + 5 siblings, 5,454 lines, 31 routes, all
+gated `integrations.historical_import`, System-Owner-only); the one slice
+that writes an `AdminHoursEntry` was traced and found org-scoped and
+permission-gated on every parameter that reaches the insert. The module as
+a whole carries no rotation row — noted in this table's unclaimed-modules
+paragraph for a future pass (naturally Feature 27, Integrations) rather
+than reviewed in full here. **0 fixed, 0 newly flagged.** See
+`docs/security-review/AH-21-admin-hours.md`'s **Pass 14** section for the
+full trace.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`)/
+`isort --check-only` (CI's pinned `9.0.2`) on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — 755 revisions, single head
+`67ad01c43434`; `generate_schema_docs.py --check` — up to date;
+`check_route_permissions.py --strict` — 305 routes, 0 errors/warnings;
+scoped backend suite (`-k "admin_hours"`) — 174 passed, 1 environment-only
+skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/admin-hours` — 128 passed (15
+files).
+
+Row 21 → ✅ (pending this PR's merge). Next is Feature 22 (Grants &
+fundraising) — re-check the rotation table fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 14, PR #4213, merged), preserved for history</summary>
+
 **PR [#4213](https://github.com/thegspiro/the-logbook/pull/4213)**
 (branch `claude/security-review-compliance`): Feature 20
 (Compliance), pass 14, a watchdog pickup. `ListAgents` → "No reachable
@@ -63,6 +109,8 @@ opened — the zero-jobs stuck-trigger symptom CLAUDE.md Pitfall #24
 describes, the same one a prior check-in hit on PR #4198. This commit is
 the documented fix: a substantive push producing a fresh head SHA, rather
 than an empty commit or a close/reopen.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 14, PR #4198, merged), preserved for history</summary>
@@ -25414,7 +25462,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14) | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                       | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                    | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                             | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                             | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                             | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                        | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                                  | ⬜     |
@@ -25443,9 +25491,73 @@ absorbed `shift_evaluations.py` the same way; or Feature 07, Users &
 organizations, for `member_supervisors.py`/`history.py`) rather than leaving
 them to be re-discovered by SEC-00 every lap.
 
+**Another new unclaimed module, found by Feature 21's pass 14** (not SEC-00 —
+found because it writes into Admin Hours' own table): Historical Data Import
+(`endpoints/historical_import.py`, `historical_import_service.py`,
+`historical_staffing_{engine,commit,service}.py`,
+`models/historical_import.py`, `schemas/historical_import.py` — 5,454 lines,
+31 routes, all gated `integrations.historical_import`, a System-Owner-only
+grant). It did not exist as of Feature 21 pass 13's baseline. Only the one
+code path that writes an `AdminHoursEntry` (`commit_admin`) was traced, and
+found org-scoped and permission-gated; the module's CSV/upload handling and
+its training/staffing commit paths have had no seven-dimension pass. Its
+permission string and URL prefix both read `integrations`, so Feature 27
+(Integrations) is the natural owner for a future pass to claim it, the same
+way Feature 17 absorbed `shift_evaluations.py`.
+
 ---
 
 ## Log
+
+### 2026-11-10 — Feature 20 (Compliance, pass 14) merged; Feature 21 (Admin hours, pass 14): watchdog pickup, real delta, 0 fixed, 0 new findings; a new unclaimed module (Historical Data Import) found and recorded
+
+PR #4213 merged (`2775b491a`, squash-merged directly onto `main`). A fresh
+`list_pull_requests` (state `open`) found 0 PRs with a
+`claude/security-review-*` head, and row 21 (Admin hours) was the next `⬜`
+in the rotation table, confirmed on a freshly pulled `main`.
+
+Baseline `d4a510b60` (pass 13's own merge, PR #3955). Real delta across the
+six declared backend/frontend scope areas: `models/admin_hours.py` gains one
+`AdminHoursEntryMethod` enum member (`IMPORT`), correctly migrated
+(`34f113ec86e3` widens the native MySQL enum, guarded by a table-existence
+check, with a safe downgrade that rewrites `'import'` rows to `'manual'`
+before narrowing); and four frontend files (a same-member-one-session UX fix
+on the clock-in page with its own new test file, a responsive-table markup
+pass, a shared page-header swap, a link-label wording change) — all
+cosmetic/UX, no new endpoint or permission. `endpoints/admin_hours.py` and
+`admin_hours_service.py` are byte-identical to pass 13; the route inventory
+re-enumerated by AST is unchanged at 30 routes (17 `admin_hours.manage`, 13
+`get_current_user`-only).
+
+The enum's one consumer — `HistoricalImportService.commit_admin`, reached
+from a brand-new, previously-nonexistent 5,454-line Historical Data Import
+module (`endpoints/historical_import.py` and five service/model/schema
+siblings, 31 routes, all gated `integrations.historical_import`, a
+System-Owner-only grant) — was traced for the slice that writes into this
+feature's table: org id, category id and member id all resolve through
+already-org-scoped reads, never from client-supplied values, and a
+double-commit is guarded by a unique per-source-row ledger. The module as a
+whole has not had a seven-dimension pass and carries no rotation row; a note
+was added to this table's unclaimed-modules paragraph above so a future pass
+(naturally Feature 27, Integrations — the permission string and URL prefix
+both say so) claims it rather than it being rediscovered piecemeal. **0
+fixed, 0 newly flagged** for Admin Hours itself. See
+`docs/security-review/AH-21-admin-hours.md`'s **Pass 14** section for the
+full trace.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`)/
+`isort --check-only` (CI's pinned `9.0.2`) on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — 755 revisions, single head
+`67ad01c43434`; `generate_schema_docs.py --check` — up to date;
+`check_route_permissions.py --strict` — 305 routes, 0 errors/warnings;
+scoped backend suite (`-k "admin_hours"`) — 174 passed, 1 environment-only
+skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/admin-hours` — 128 passed (15
+files).
+
+Row 21 → ✅ (pending this PR's merge). Next is Feature 22 (Grants &
+fundraising) — re-check `list_pull_requests` fresh rather than trusting
+this note.
 
 ### 2026-11-10 — Feature 19 (Skills testing, pass 14) merged; Feature 20 (Compliance, pass 14): watchdog pickup, real delta, 0 fixed, 0 new findings
 
