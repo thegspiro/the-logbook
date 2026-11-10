@@ -929,6 +929,42 @@ describe('ImportMembers — a role column naming a rank', () => {
   });
 });
 
+// W09-4: the pre-check passed an administrative member with a rank, which
+// the server refuses, so the preview counted a member the import then failed.
+describe('ImportMembers — an administrative member with a rank', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRoles.mockResolvedValue([{ id: 'member-role', slug: 'member', name: 'Member' }]);
+    mockGetUsers.mockResolvedValue([]);
+    mockCreateMember.mockResolvedValue({ id: 'u1' });
+    mockGetWelcomeEmailAvailability.mockReset();
+    mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+  });
+
+  it.each([
+    ['memberClass', 'firstName,lastName,email,memberClass,rank\nSky,Brandt,sky@example.com,administrative,Captain'],
+    [
+      'membershipType',
+      'firstName,lastName,email,membershipType,rank\nSky,Brandt,sky@example.com,administrative,Captain',
+    ],
+  ])('flags the row before import when %s makes the member administrative', async (_column, csv) => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv(csv);
+
+    expect(
+      await screen.findByText(/rank "Captain" is set on an administrative member, who holds no operational rank/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import 0 Members' })).toBeDisabled();
+  });
+
+  it('passes an operational member with the same rank', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,memberClass,rank\nSky,Brandt,sky@example.com,operational,Captain');
+
+    expect(await screen.findByRole('button', { name: 'Import 1 Member' })).toBeEnabled();
+  });
+});
+
 // The file input is display:none, so the zone is the only way to it. It was a
 // clickable <div>: no keyboard user could choose a file, and the "or drag and
 // drop" it offered handled no drop.

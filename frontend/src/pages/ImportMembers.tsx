@@ -8,7 +8,7 @@ import { mirrorsRank } from '../utils/positions';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
-import { canonicalMemberStatus, memberClassAndStatusFor } from '../utils/membership';
+import { canonicalMemberStatus, isAdministrativeMember, memberClassAndStatusFor } from '../utils/membership';
 import { MemberClass } from '../constants/enums';
 
 /**
@@ -526,6 +526,13 @@ const validateRow = (data: CSVMemberRow): string[] => {
   const memberStatus = canonicalMemberStatus(data.memberStatus);
   if (data.memberStatus?.trim() && (!memberStatus || !MEMBER_STATUS_SHAPE.test(memberStatus))) {
     problems.push(`memberStatus "${data.memberStatus}" is not a membership status or tier id`);
+  }
+  // The create endpoint refuses this pair; the same helper greys out Add
+  // Member's rank field, so the two screens agree on who is administrative.
+  if (data.rank?.trim() && isAdministrativeMember(data.memberClass, data.membershipType)) {
+    problems.push(
+      `rank "${data.rank}" is set on an administrative member, who holds no operational rank — clear the rank or make the member operational`
+    );
   }
 
   return problems;
