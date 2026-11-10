@@ -19,6 +19,13 @@ export default defineConfig({
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
 
+  /* A test that passes only on a retry fails the run. The retries still
+     happen, so the failing attempt's trace is recorded (trace: 'on-first-retry'),
+     but they no longer turn a test that fails on some runs into a green
+     check. Three specs that failed on some runs merged that way in November
+     2026. See "A Test That Passed Only on Retry Has Failed" in CLAUDE.md. */
+  failOnFlakyTests: !!process.env.CI,
+
   /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
 
