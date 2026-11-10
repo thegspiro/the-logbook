@@ -151,16 +151,6 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **Any run touching the app shell, or an accessibility activity** — every
-  page carries two "Skip to main content" links, one in `index.html` and one
-  in `AppLayout` (W20).
-
-- **Dashboard, or any activity touching a module left off at setup** — on a
-  fresh install with every module skipped, the administrator's first dashboard
-  asked `GET /training/module-config/config` and was refused `403 LB-ORG-002`
-  ("module is not enabled"). The weather and `/integrations/connected` half of
-  this lead was fixed in the W01 third pass (W01-33); the training call was not
-  seen there, because that install had Training on.
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
@@ -177,6 +167,22 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   `ubuntu-latest` default is larger, but the margin is thin (W77).
 
 ## Log
+
+### Leads — Duplicate skip link and the dashboard's Training call, confirmed fixed — 2026-11-10
+
+Re-driven, no code change. Both leads had been fixed by later work without the
+tracker being updated:
+
+- **Skip links (W20):** `/dashboard`, `/events` and `/training` each carry one
+  "Skip to main content" link, now only the static one in `index.html`
+  (#3755). As `member`, it is the first Tab stop, and Enter moves focus to
+  `#main-content`.
+- **Training's settings asked with Training off:** with `training` switched
+  off, two loads of the administrator's dashboard made no `/training/` API call
+  and no request failed. `usePracticalSkillsMethod` is passed the module check
+  by the side and top navigation and the command palette (`d92baccea`), and
+  `TrainingPageHeader` renders only behind Training's route gate. Training was
+  switched back on afterwards.
 
 ### W50 follow-up — Meeting link, Import Attendees, unlink — 2026-11-08
 
