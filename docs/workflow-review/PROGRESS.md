@@ -157,11 +157,6 @@ and not yet confirmed or fixed. The run for each activity starts from these.
   joins them (W59-1). Run `alembic heads` after a merge that brings in
   migrations.
 
-- **Public portal, a later pass** — public events are only `public_education`
-  events, and their location is the free-text `location` alone, so an event
-  placed at a facility (`location_id`) would publish no location; read from
-  code, not driven (W76).
-
 ## Log
 
 ### W80 — Training event lifecycle: create, credit, correct, excuse, move — 2026-11-08
@@ -208,6 +203,17 @@ rather than only document it: `npm run lint` and `lint:fix` run ESLint through
 `NODE_OPTIONS` already sets one. On this machine, plain ESLint capped at 2 GB
 died with "JavaScript heap out of memory" (exit 134), and `npm run lint`
 passed (exit 0) with the child running under the 8 GB ceiling.
+
+### Lead — A public event at a facility publishes its name — 2026-11-08
+
+Read from code and tested, not re-driven. Fixed (W76-7): `/events/public`
+published only an event's free-text location, so an event placed at one of
+the department's facilities reached its website with no location. The
+facility's name is now published, falling back to the free text, as the
+department calendar feed already did. Public events are still only
+`public_education` events; that filter is unchanged.
+`test_public_portal_event_location.py` failed before the fix. Gate: flake8,
+black, isort and mypy clean; the 135 public-portal tests pass.
 
 ### W50 follow-up — Meeting link, Import Attendees, unlink — 2026-11-08
 

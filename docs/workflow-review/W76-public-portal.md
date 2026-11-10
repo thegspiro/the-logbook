@@ -148,6 +148,12 @@ Data Control offers `stats.stations`, `stats.total_volunteer_hours` and
 `null`. Driven: stations enabled, and `"stations":null` returned. Each needs a
 definition the owner must choose. Mirrored to KNOWN_LIMITATIONS.
 
+### W76-7 — LOW — An event placed at a facility published no location — ✅ FIXED (2026-11-08)
+
+Read from code after the pass, since the seed has no facility events. `/events/public` published only the free-text `location`, the "Other" fallback. An event whose place was picked from the department's locations (`location_id`) reached the department's website with no location at all. The department calendar feed already published the facility's name.
+
+**Fix:** `get_public_events` loads the facility with the events and publishes its name, falling back to the free text, as the calendar feed does. Event writes already refuse a facility from another department, so only the department's own facility names can appear. `test_public_portal_event_location.py` publishes one facility event and one free-text event; it failed before the fix.
+
 ## Checklist
 
 | Section                 | Result                                                                            |
