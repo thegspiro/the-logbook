@@ -103,15 +103,15 @@ no button — still holds.
 
 ### Pass 4 completion gate
 
-| Check                                           | Result                                                                                                 |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `npm run typecheck`                             | ✅ 0 errors                                                                                            |
-| `npm run lint`                                  | ✅ exit 0                                                                                              |
-| `python -m flake8 app/ tests/`                  | ✅ 0 violations                                                                                        |
-| `black --check app/ tests/`                     | ✅ 2330 files unchanged                                                                                |
-| `isort --check-only` (changed files)            | ✅ clean                                                                                               |
-| `vitest DashboardOrganizationWidgets`           | ✅ 16 passed (1 added)                                                                                 |
-| `pytest -k "dashboard or action_item or pulse"` | ✅ 202 passed, 1 skipped (`py_vapid` not installed), 1 setup error — see below; its file then 8 passed |
+| Check                                           | Result                                              |
+| ----------------------------------------------- | --------------------------------------------------- |
+| `npm run typecheck`                             | ✅ 0 errors                                         |
+| `npm run lint`                                  | ✅ exit 0                                           |
+| `python -m flake8 app/ tests/`                  | ✅ 0 violations                                     |
+| `black --check app/ tests/`                     | ✅ 2330 files unchanged                             |
+| `isort --check-only` (changed files)            | ✅ clean                                            |
+| `vitest DashboardOrganizationWidgets`           | ✅ 16 passed (1 added)                              |
+| `pytest -k "dashboard or action_item or pulse"` | ✅ 203 passed, 1 skipped (`py_vapid` not installed) |
 
 The first backend run errored one test at setup,
 `test_medical_screening_read_audit.py::test_own_dashboard_counts_are_not_logged`,
@@ -119,7 +119,7 @@ on `Data too long for column 'requirement_id'`. That was this sandbox's
 database, built at session start from an older branch and so behind MS-18's
 widening of the column (`alembic current` read `8b2d4f6a1c3e`, head
 `67ad01c43434`). After `alembic upgrade head` and `repair_schema.py`, the
-file's 8 tests pass; no code was involved.
+file's 8 tests pass and the full selection reruns clean (the row above); no code was involved.
 
 ---
 
