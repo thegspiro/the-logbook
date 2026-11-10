@@ -91,7 +91,7 @@ describe('GrantOpportunityFormPage', () => {
     const user = userEvent.setup();
     renderAt('/grants/opportunities/new');
 
-    await user.type(screen.getByLabelText('Program name'), 'State Fire Equipment Grant');
+    await user.type(screen.getByLabelText(/^Program name/), 'State Fire Equipment Grant');
     await user.type(screen.getByLabelText(/agency or funder/i), 'State Fire Marshal');
     await user.selectOptions(screen.getByLabelText('Category'), 'equipment');
     await user.type(screen.getByLabelText(/largest typical award/i), '50000');
@@ -140,7 +140,7 @@ describe('GrantOpportunityFormPage', () => {
     const user = userEvent.setup();
     renderAt('/grants/opportunities/new');
 
-    await user.type(screen.getByLabelText('Program name'), 'Foundation grant');
+    await user.type(screen.getByLabelText(/^Program name/), 'Foundation grant');
     await user.type(screen.getByLabelText(/smallest typical award/i), '9000');
     await user.type(screen.getByLabelText(/largest typical award/i), '1000');
     await user.click(screen.getByRole('button', { name: 'Add opportunity' }));
@@ -153,7 +153,7 @@ describe('GrantOpportunityFormPage', () => {
     const user = userEvent.setup();
     renderAt('/grants/opportunities/new');
 
-    await user.type(screen.getByLabelText('Program name'), 'SAFER');
+    await user.type(screen.getByLabelText(/^Program name/), 'SAFER');
     await user.click(screen.getByRole('checkbox'));
     await user.type(screen.getByLabelText(/match percentage/i), '10');
     await user.selectOptions(screen.getByLabelText('Deadline'), 'rolling');
@@ -173,11 +173,32 @@ describe('GrantOpportunityFormPage', () => {
     const user = userEvent.setup();
     renderAt('/grants/opportunities/new');
 
-    await user.type(screen.getByLabelText('Program name'), 'Foundation grant');
+    await user.type(screen.getByLabelText(/^Program name/), 'Foundation grant');
     await user.click(screen.getByRole('button', { name: 'Add opportunity' }));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Only http and https links are allowed'));
     expect(screen.getByRole('heading', { name: 'Add Grant Opportunity' })).toBeInTheDocument();
+  });
+
+  it("puts a refused link under the link it refused, in the server validator's words", async () => {
+    createOpportunity.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'applicationUrl', message: 'Only http and https links are allowed' }] },
+      },
+    });
+    const user = userEvent.setup();
+    renderAt('/grants/opportunities/new');
+
+    await user.type(screen.getByLabelText(/^Program name/), 'Foundation grant');
+    await user.type(screen.getByLabelText(/^Application link/), 'ftp://example.org');
+    await user.click(screen.getByRole('button', { name: 'Add opportunity' }));
+
+    const link = screen.getByLabelText(/^Application link/);
+    await waitFor(() => expect(link).toHaveAttribute('aria-invalid', 'true'));
+    expect(link).toHaveAccessibleDescription('Only http and https links are allowed');
+    expect(link).toHaveFocus();
+    expect(toastError).not.toHaveBeenCalled();
   });
 });
 
@@ -219,7 +240,7 @@ describe('Editing an opportunity (W68-10)', () => {
 
     expect(await screen.findByRole('heading', { name: 'Edit Grant Opportunity' })).toBeInTheDocument();
     expect(getOpportunity).toHaveBeenCalledWith('opp-9');
-    expect(screen.getByLabelText('Program name')).toHaveValue('State Fire Equipment Grant');
+    expect(screen.getByLabelText(/^Program name/)).toHaveValue('State Fire Equipment Grant');
     await user.clear(screen.getByLabelText(/deadline date/i));
     await user.type(screen.getByLabelText(/deadline date/i), '2027-03-01');
     await user.clear(screen.getByLabelText(/agency or funder/i));

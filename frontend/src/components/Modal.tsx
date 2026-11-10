@@ -38,6 +38,13 @@ interface ModalProps {
   'aria-describedby'?: string;
   /** When supplied, the modal panel is rendered as the form element. */
   onSubmit?: FormEventHandler<HTMLFormElement>;
+  /**
+   * Turns off the browser's own validation bubbles on that form, for a dialog
+   * that checks its fields itself and shows each reason on its field (forms
+   * review F-3): otherwise a `type="email"`, `min` or `max` control stops the
+   * submit with a native bubble before the field can be flagged.
+   */
+  noValidate?: boolean | undefined;
   showCloseButton?: boolean;
   /**
    * Pass whether the form in this dialog holds unsaved changes, and Escape and
@@ -63,6 +70,7 @@ export const Modal: React.FC<ModalProps> = ({
   titleId: titleIdProp,
   'aria-describedby': ariaDescribedBy,
   onSubmit,
+  noValidate,
   showCloseButton = true,
   isDirty,
   discardMessage,
@@ -135,6 +143,7 @@ export const Modal: React.FC<ModalProps> = ({
             ref={modalRef as React.Ref<HTMLFormElement>}
             className={panelClasses}
             onSubmit={onSubmit}
+            noValidate={noValidate}
             data-testid="modal-panel"
           >
             {content}
