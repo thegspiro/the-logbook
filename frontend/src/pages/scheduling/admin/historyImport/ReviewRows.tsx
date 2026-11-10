@@ -55,6 +55,7 @@ type RowFilter = 'problems' | 'all' | 'excluded' | 'skipped';
 
 const PAGE_SIZE = 50;
 const EDIT_MAX_LENGTH = 255;
+const TIME_FIELDS = ['start_time', 'end_time'];
 
 /** The edit dialog's sections, by field. A field in none of them goes under "Other". */
 const FIELD_GROUPS: { title: string; fields: string[] }[] = [
@@ -172,6 +173,61 @@ const IssueDecisions: React.FC<{ issue: HistoryImportIssue; rowId: string } & Ro
     );
   }
   return null;
+};
+
+/**
+ * Start and end, editable in the table, for a row whose times collide with
+ * another line's. An overlap is nearly always one mistyped time, and fixing it
+ * should not take a dialog; the value is saved as an edit like any other, so
+ * Revert in the dialog still restores the file's cell. Only fields the column
+ * mapping reads are offered — a file with no end-time column has nothing here
+ * to edit for it.
+ */
+const InlineTimes: React.FC<{ row: HistoryImportRow; fields: string[] } & Pick<RowActions, 'busy' | 'onRowUpdate'>> = ({
+  row,
+  fields,
+  busy,
+  onRowUpdate,
+}) => {
+  const editable = TIME_FIELDS.filter((f) => fields.includes(f));
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(editable.map((f) => [f, row.values[f] ?? '']))
+  );
+  const changes: Record<string, string> = {};
+  for (const field of editable) {
+    const next = (values[field] ?? '').trim();
+    if (next !== (row.values[field] ?? '')) changes[field] = next;
+  }
+  const dirty = Object.keys(changes).length > 0;
+
+  return (
+    <form
+      className="flex flex-col items-start gap-1"
+      aria-label={`Times for line ${row.line_number}`}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (dirty) void onRowUpdate(row.id, { edits: changes });
+      }}
+    >
+      <div className="flex items-center gap-1">
+        {editable.map((field, index) => (
+          <React.Fragment key={field}>
+            {index > 0 && <span aria-hidden="true">–</span>}
+            <input
+              className="form-input-sm w-20"
+              aria-label={`${HISTORY_IMPORT_FIELD_LABELS[field] ?? field}, line ${row.line_number}`}
+              maxLength={EDIT_MAX_LENGTH}
+              value={values[field] ?? ''}
+              onChange={(e) => setValues({ ...values, [field]: e.target.value })}
+            />
+          </React.Fragment>
+        ))}
+      </div>
+      <button type="submit" className="btn-secondary" disabled={busy || !dirty}>
+        Save times
+      </button>
+    </form>
+  );
 };
 
 /** Why a row is ready, skipped or excluded, and any decision already made on it. */
@@ -587,7 +643,20 @@ const ReviewRows: React.FC<ReviewRowsProps> = ({
                       {row.values.date || '—'}
                     </td>
                     <td data-label="Times" className="px-3 py-2 whitespace-nowrap">
-                      {timesOf(row)}
+                      {!row.excluded &&
+                      issues.some((i) => i.code === 'overlapping_entries') &&
+                      TIME_FIELDS.some((f) => fields.includes(f)) ? (
+                        <InlineTimes
+                          // A fresh analysis with new times starts the inputs over.
+                          key={`${row.values.start_time ?? ''}|${row.values.end_time ?? ''}`}
+                          row={row}
+                          fields={fields}
+                          busy={busy}
+                          onRowUpdate={onRowUpdate}
+                        />
+                      ) : (
+                        timesOf(row)
+                      )}
                     </td>
                     <td data-label="Status" className="px-3 py-2">
                       {state ?? (
