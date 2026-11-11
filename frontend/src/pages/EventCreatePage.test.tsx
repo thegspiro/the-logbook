@@ -469,7 +469,7 @@ describe('EventCreatePage templates', () => {
     await waitFor(() => expect(screen.getByLabelText(/title/i)).toHaveValue('Monthly Business Meeting'));
 
     await user.click(screen.getByLabelText('Make this a recurring event'));
-    fireEvent.change(screen.getByLabelText('Series end date'), { target: { value: '2027-06-30' } });
+    fireEvent.change(screen.getByLabelText(/^Series end date/), { target: { value: '2027-06-30' } });
     await user.click(screen.getByRole('button', { name: /create event/i }));
 
     await waitFor(() =>
@@ -487,7 +487,7 @@ describe('EventCreatePage templates', () => {
     await user.type(screen.getByLabelText(/title/i), 'Open house');
     fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2027-04-01' } });
     await user.click(screen.getByLabelText('Make this a recurring event'));
-    fireEvent.change(screen.getByLabelText('Series end date'), { target: { value: '2027-06-30' } });
+    fireEvent.change(screen.getByLabelText(/^Series end date/), { target: { value: '2027-06-30' } });
     await user.click(screen.getByRole('button', { name: /create event/i }));
 
     await waitFor(() => expect(eventService.createRecurringEvent).toHaveBeenCalledTimes(1));

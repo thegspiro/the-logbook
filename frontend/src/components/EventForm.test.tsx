@@ -200,7 +200,11 @@ describe('EventForm', () => {
       expect(screen.getByLabelText('Add a reminder')).toBeInTheDocument();
 
       await user.click(screen.getByLabelText('Make this a recurring event'));
-      expect(screen.getByLabelText('Series end date')).toBeInTheDocument();
+      // A visible <label>, not an aria-label: its text carries the required
+      // marker, hence the prefix match.
+      const seriesEnd = screen.getByLabelText(/^Series end date/);
+      expect(seriesEnd).not.toHaveAttribute('aria-label');
+      expect(seriesEnd).toHaveAttribute('aria-required', 'true');
       await user.type(screen.getByLabelText('Date to skip'), '2026-10-12');
       await user.click(screen.getByRole('button', { name: 'Add' }));
       expect(screen.getByRole('button', { name: 'Remove 2026-10-12' })).toBeInTheDocument();

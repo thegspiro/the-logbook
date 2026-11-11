@@ -261,14 +261,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
                   </select>
                 </div>
                 <div>
-                  <label className={labelClass}>
-                    Duration{' '}
-                    {!isRolling && (
-                      <span className={FIELD_ERROR_CLASS} aria-hidden="true">
-                        *
-                      </span>
-                    )}
-                  </label>
+                  <label className={labelClass}>Duration</label>
                   <div className="space-y-3">
                     <label className="mobile-touch-target flex cursor-pointer items-center justify-start gap-2 text-sm">
                       <input
@@ -279,33 +272,36 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
                       />
                       <span className="text-theme-text-secondary">Rolling 12-month cycle</span>
                     </label>
-                    {isRolling ? (
+                    {isRolling && (
                       <p className="text-theme-text-muted text-xs">
                         New occurrences are added automatically so the series always runs 12 months ahead.
                         {rollingHint && <> {rollingHint}</>}
                       </p>
-                    ) : (
-                      <>
-                        <input
-                          type="date"
-                          id="recurrence-end-date"
-                          aria-label="Series end date"
-                          aria-invalid={fieldErrors.recurrence_end_date ? true : undefined}
-                          aria-describedby={fieldErrors.recurrence_end_date ? 'recurrence-end-date-error' : undefined}
-                          value={recurrenceEndDate}
-                          onChange={(e) => handleRecurrenceEndDateChange(e.target.value)}
-                          className={inputClass}
-                        />
-                        {fieldErrors.recurrence_end_date && (
-                          <p id="recurrence-end-date-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
-                            {fieldErrors.recurrence_end_date}
-                          </p>
-                        )}
-                      </>
                     )}
                   </div>
                 </div>
               </div>
+
+              {/* A labelled row of its own, so the refusal under it sits
+                  beneath a field the officer can see the name of. */}
+              {!isRolling && (
+                <FormField
+                  id={EVENT_FIELD_IDS.recurrence_end_date}
+                  label="Series end date"
+                  required
+                  error={fieldErrors.recurrence_end_date}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="date"
+                      value={recurrenceEndDate}
+                      onChange={(e) => handleRecurrenceEndDateChange(e.target.value)}
+                      className={inputClass}
+                    />
+                  )}
+                </FormField>
+              )}
 
               {recurrencePattern === 'custom' && (
                 <div role="group" aria-labelledby="recurrence-days-label">
