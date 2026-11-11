@@ -876,6 +876,7 @@ describe('EventForm', () => {
       const group = screen.getByRole('group', { name: 'Mandatory for' });
       expect(within(group).getByRole('radio', { name: 'All members' })).not.toBeChecked();
       expect(within(group).getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+      expect(within(group).getByText('Select one or more member types required to attend.')).toBeInTheDocument();
       await user.click(within(group).getByRole('radio', { name: 'All members' }));
       expect(within(group).queryByRole('checkbox')).not.toBeInTheDocument();
     });

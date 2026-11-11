@@ -1222,6 +1222,8 @@ describe('CreateTrainingSessionPage mandatory pre-fill', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
 
     expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+    // The approved Settings step has no "Select one or more" line here.
+    expect(screen.queryByText('Select one or more member types required to attend.')).not.toBeInTheDocument();
     expect(memberType('Probationary')).toBeChecked();
     expect(memberType('Active Member')).toBeChecked();
     expect(memberType('Senior Member')).not.toBeChecked();

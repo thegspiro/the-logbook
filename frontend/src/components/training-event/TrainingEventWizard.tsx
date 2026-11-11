@@ -744,6 +744,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
                 model={prefill.attendanceModel}
                 scopeOnTick="all"
                 typesInRow
+                typesHint={false}
                 scopeNote={
                   prefill.note && (
                     <MandatoryPrefillNote

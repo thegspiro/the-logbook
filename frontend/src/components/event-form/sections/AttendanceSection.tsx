@@ -28,6 +28,11 @@ interface AttendanceSectionProps {
   scopeNotePlacement?: 'before' | 'after' | undefined;
   /** The member-type boxes on one wrapping row, as the training form's Settings step draws them. */
   typesInRow?: boolean | undefined;
+  /**
+   * The "Select one or more" line above the member-type boxes. The training
+   * form's approved Settings step has none; a refusal after Next says it.
+   */
+  typesHint?: boolean | undefined;
 }
 
 /** Whether attendance is mandatory, and for every member or which member types. */
@@ -37,6 +42,7 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
   scopeNote,
   scopeNotePlacement = 'after',
   typesInRow = false,
+  typesHint = true,
 }) => {
   const {
     formData,
@@ -111,7 +117,9 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
 
           {mandatoryScope === 'some' && (
             <div className="space-y-2 pl-7">
-              <p className="text-theme-text-muted text-xs">Select one or more member types required to attend.</p>
+              {typesHint && (
+                <p className="text-theme-text-muted text-xs">Select one or more member types required to attend.</p>
+              )}
               <div className={typesInRow ? 'flex flex-wrap gap-x-6' : 'space-y-2'}>
                 {typeBoxes.map((type, index) => (
                   <label key={type.value} className="mobile-touch-target flex items-center justify-start space-x-3">
