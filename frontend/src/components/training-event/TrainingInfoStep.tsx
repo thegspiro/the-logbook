@@ -522,6 +522,7 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
                   <input
                     {...field}
                     type="text"
+                    autoComplete="off"
                     value={value.issuing_agency}
                     onChange={(e) => onChange({ issuing_agency: e.target.value })}
                     placeholder="e.g., AHA"
@@ -541,6 +542,7 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
                   <input
                     {...field}
                     type="text"
+                    autoComplete="off"
                     value={value.certification_number_prefix}
                     onChange={(e) => onChange({ certification_number_prefix: e.target.value })}
                     placeholder="e.g., AHA-CPR-"
