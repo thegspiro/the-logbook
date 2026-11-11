@@ -263,7 +263,7 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
   const locationLabel =
     model.locationMode === 'select'
       ? model.selectedLocation
-        ? model.formatLocationLabel(model.selectedLocation)
+        ? model.formatLocationLabel(model.selectedLocation, 'comma')
         : 'None'
       : formData.location?.trim() || 'None';
 

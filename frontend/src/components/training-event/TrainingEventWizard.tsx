@@ -664,7 +664,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               rollingHint="Each new occurrence copies the training details and attendance links (set on the next step) from the latest one."
             />
             <hr className="border-theme-surface-border" />
-            <LocationSection model={model} />
+            <LocationSection model={model} variant="training" />
           </>
         )}
 

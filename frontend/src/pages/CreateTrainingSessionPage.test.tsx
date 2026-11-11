@@ -262,6 +262,37 @@ describe('CreateTrainingSessionPage event details step', () => {
     expect(screen.getByLabelText(/Additional Directions/)).toBeInTheDocument();
   });
 
+  // The training form's Location read as the Events form's: no "(optional)",
+  // each option carrying its address (already on the card under the select),
+  // and one-line directions.
+  it('draws Location as the approved form does, and reviews it with commas', async () => {
+    getLocations.mockResolvedValue([
+      {
+        id: 'loc-bay',
+        name: 'Apparatus Bay',
+        building: 'Station 4',
+        address: '410 Elm St',
+        city: 'Example City',
+        is_active: true,
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    const location = await screen.findByLabelText('Location (optional)', { selector: 'select' });
+    expect(within(location).getByRole('option', { name: 'Apparatus Bay (Station 4)' })).toBeInTheDocument();
+    const directions = screen.getByLabelText('Additional Directions (optional)');
+    expect(directions.tagName).toBe('TEXTAREA');
+    expect(directions).toHaveClass('form-input', 'field-sizing-content');
+
+    await fillEventDetails(user);
+    await user.selectOptions(location, 'loc-bay');
+    await user.type(directions, 'Use the rear bay door');
+    await next(user);
+    await toReview(user);
+    expect(screen.getByText('Apparatus Bay (Station 4), 410 Elm St, Example City')).toBeInTheDocument();
+  });
+
   // The location label pointed at the select's id, so with no saved locations
   // the text box drawn in its place had no name.
   it('names the location box when the department has no saved locations', async () => {

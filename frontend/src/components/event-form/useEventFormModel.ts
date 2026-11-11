@@ -489,15 +489,22 @@ export const useEventFormModel = ({
     return parts.join(', ');
   };
 
-  const formatLocationLabel = (loc: Location) => {
+  /**
+   * A location's name for a list or a summary. `address` says how its street
+   * address follows: after a dash (the Events form's picker), after a comma
+   * (the training form's Review), or not at all (the training form's picker,
+   * whose preview card under the select already shows it).
+   */
+  const formatLocationLabel = (loc: Location, address: 'dash' | 'comma' | 'none' = 'dash') => {
     const roomName = hasSingleFacility && loc.facility_room_id ? loc.name.split(' — ', 1)[0] : loc.name;
     if (hasSingleFacility && loc.facility_room_id) return roomName;
     const parts = [roomName];
     const building = buildingNotInName(loc.name, loc.building);
     if (building) parts.push(`(${building})`);
+    const name = parts.join(' ');
     const addr = [loc.address, loc.city].filter(Boolean).join(', ');
-    if (addr) parts.push(`— ${addr}`);
-    return parts.join(' ');
+    if (!addr || address === 'none') return name;
+    return address === 'comma' ? `${name}, ${addr}` : `${name} — ${addr}`;
   };
 
   // Mirrors EventCreate.validate_dates on the backend, which is the only place
