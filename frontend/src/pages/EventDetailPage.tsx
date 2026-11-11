@@ -1051,7 +1051,9 @@ export const EventDetailPage: React.FC = () => {
   // own eligibility (the 30-day window, already present) is the server's call;
   // the page only decides whether to ask.
   const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
-  const canReviewAttendancePetitions = canManageOrganizers;
+  // Adds a fallback position holder a request was sent to, who need not run
+  // the event; the server decides who that is, as for the pair above.
+  const canReviewAttendancePetitions = canManageOrganizers || Boolean(event.can_review_attendance_requests);
   const checkInMembersButton =
     canManageAttendance && !isAttendanceFinalized ? (
       <button

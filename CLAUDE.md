@@ -390,11 +390,11 @@ on.
 The exceptions are the two docs a job does parse, and they are cheap to check
 on their own rather than by running everything:
 
-| Changed                        | Run                                                  |
-| ------------------------------ | ---------------------------------------------------- |
-| Any `.md` with links           | the Docs Link Check job's own script, if links moved |
-| `docs/endpoint-permissions.md` | its own contract check                               |
-| Prose only, otherwise          | nothing                                              |
+| Changed                                        | Run                                                                          |
+| ---------------------------------------------- | ---------------------------------------------------------------------------- |
+| Any `.md` with links                           | the Docs Link Check job's own script, if links moved                         |
+| An endpoint docstring under `backend/app/api/` | `python3 scripts/check_endpoint_permissions.py --strict`, from the repo root |
+| Prose only, otherwise                          | nothing                                                                      |
 
 For code, scale it the same way: the tests covering the changed module first,
 then the wider suite when the change is broad, a schema or a shared utility.

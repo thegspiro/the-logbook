@@ -70,6 +70,10 @@ CALLER_SUPPLIED = {
     "organizer_name",
     "alternate_organizer_name",
     "can_manage_organizers",
+    # And whether this caller may see and decide its attendance requests,
+    # which adds a fallback holder a request was sent to: the same per-caller
+    # resolution, detail endpoint only.
+    "can_review_attendance_requests",
     # The attendance tools are decided by the same per-caller rule (events.manage,
     # training.manage on a Training event, or the organizer pair) on the
     # detail endpoint; False is the honest default everywhere else.

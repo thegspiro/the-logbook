@@ -101,6 +101,9 @@ from app.schemas.organization import mandatory_for_tiers
 from app.schemas.training_session import TrainingSessionAttach
 from app.services import file_storage_service as file_storage
 from app.services.documents_service import DocumentsService
+from app.services.event_attendance_petition_service import (
+    EventAttendancePetitionService,
+)
 from app.services.event_organizer_service import (
     EVENT_MANAGER_PERMISSION,
     FALLBACK_POSITIONS_SETTING,
@@ -1562,6 +1565,9 @@ async def get_event(
         organizer_name=resolved_names.get("organizer_name"),
         alternate_organizer_name=resolved_names.get("alternate_organizer_name"),
         can_manage_organizers=can_manage_organizers(event, current_user),
+        can_review_attendance_requests=await EventAttendancePetitionService(
+            db
+        ).may_review(event, current_user),
         attendance_access=access,
         can_correct_attendance_times=may_correct_attendance_times(event, access),
         can_edit_event=(
