@@ -355,6 +355,52 @@ def _refuse_type_change_off_training(access: str, update_fields: dict) -> None:
         )
 
 
+def _refuse_training_details_from_training_manager(
+    access: str, event_data: EventUpdate
+) -> None:
+    """Every write to a training session needs events.manage, including
+    which sessions count toward an attendance requirement (TR14-2). A
+    training manager admitted to edit a Training event's own fields does not
+    gain that through this route."""
+    if access == ACCESS_TRAINING_MANAGER and event_data.training_details is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Training details are changed by an event manager.",
+        )
+
+
+async def _audit_training_details_updated(
+    db: AsyncSession,
+    current_user: User,
+    event_id: UUID,
+    event_data: EventUpdate,
+    scope: str,
+) -> None:
+    details = event_data.training_details
+    if details is None:
+        return
+    sent = details.model_dump(exclude_unset=True)
+    entry: Dict[str, Any] = {
+        "event_id": str(event_id),
+        "scope": scope,
+        "fields": sorted(sent),
+    }
+    if "attendance_requirement_ids" in sent:
+        entry["action"] = "attendance_requirements_set"
+        entry["attendance_requirement_ids"] = [
+            str(r) for r in details.attendance_requirement_ids or []
+        ]
+    await log_audit_event(
+        db=db,
+        event_type="training_session_updated",
+        event_category="training",
+        severity="info",
+        event_data=entry,
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 async def _audit_training_details_created(
     db: AsyncSession,
     current_user: User,
@@ -1577,6 +1623,7 @@ async def update_event(
     )
     update_fields = event_data.model_dump(exclude_unset=True)
     _refuse_type_change_off_training(access, update_fields)
+    _refuse_training_details_from_training_manager(access, event_data)
     service = EventService(db)
 
     try:
@@ -1633,6 +1680,9 @@ async def update_event(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+        )
+        await _audit_training_details_updated(
+            db, current_user, event_id, event_data, scope="this_event"
         )
 
         # Notify RSVP'd members if significant fields changed
@@ -1712,6 +1762,7 @@ async def update_future_events(
         db, event_id, current_user, EVENT_MANAGER_PERMISSION
     )
     _refuse_type_change_off_training(access, event_data.model_dump(exclude_unset=True))
+    _refuse_training_details_from_training_manager(access, event_data)
     service = EventService(db)
 
     try:
@@ -1743,6 +1794,9 @@ async def update_future_events(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+        )
+        await _audit_training_details_updated(
+            db, current_user, event_id, event_data, scope="this_and_future"
         )
 
         return {

@@ -52,6 +52,7 @@ from app.schemas.training_session import (
     RecurringTrainingSessionCreate,
     TrainingSessionAttach,
     TrainingSessionCreate,
+    TrainingSessionDetailsUpdate,
     TrainingSessionLinkageUpdate,
 )
 from app.services.admin_hours_service import AdminHoursService
@@ -161,6 +162,62 @@ class EventTrainingCredit:
     notify: Optional[Dict[str, Any]] = None
 
 
+# How an event edit's training details reach the session's columns.
+_DETAIL_ID_FIELDS = (
+    "category_id",
+    "program_id",
+    "phase_id",
+    "requirement_id",
+    "instructor_id",
+)
+_DETAIL_TEXT_FIELDS = ("instructor", "certification_number_prefix", "issuing_agency")
+_DETAIL_VALUE_FIELDS = (
+    "issues_certification",
+    "expiration_months",
+    "counts_toward_certification",
+    "auto_create_records",
+    "require_completion_confirmation",
+    "approval_deadline_days",
+)
+# A null means nothing for these, so it is refused rather than stored.
+_DETAIL_NOT_CLEARABLE = (
+    "training_type",
+    "issues_certification",
+    "counts_toward_certification",
+    "auto_create_records",
+    "require_completion_confirmation",
+    "approval_deadline_days",
+)
+
+
+@dataclass
+class SessionDetailsPlan:
+    """What an event edit does to one event's training session.
+
+    Worked out for every event first, so a series edit refuses before it
+    writes anything; then applied with ``apply_session_details``.
+    """
+
+    event: Event
+    session: Optional[TrainingSession]
+    # Columns of the existing session that change, and to what.
+    changes: Dict[str, Any] = field(default_factory=dict)
+    # The replacement attendance links, when they change.
+    link_ids: Optional[List[str]] = None
+    # A session to create, for a Training event that has none.
+    attach: Optional[TrainingSessionAttach] = None
+    course: Optional[TrainingCourse] = None
+
+    @property
+    def locked_fields(self) -> Set[str]:
+        """What a finalized event refuses: everything but the links."""
+        if not attendance_is_finalized(self.event):
+            return set()
+        if self.attach is not None:
+            return {"training details"}
+        return set(self.changes)
+
+
 class TrainingSessionService:
     """Service for training session management"""
 
@@ -169,7 +226,10 @@ class TrainingSessionService:
 
     async def _validate_linkage_ids(
         self,
-        session_data: "TrainingSessionCreate | TrainingSessionLinkageUpdate | TrainingSessionAttach",
+        session_data: (
+            "TrainingSessionCreate | TrainingSessionLinkageUpdate"
+            " | TrainingSessionAttach | TrainingSessionDetailsUpdate"
+        ),
         organization_id: UUID | str,
         stored_requirement_id: UUID | str | None = None,
     ) -> Optional[str]:
@@ -613,6 +673,205 @@ class TrainingSessionService:
                 training_session, details.attendance_requirement_ids or []
             )
         return sessions
+
+    async def plan_session_details(
+        self,
+        events: Sequence[Event],
+        details: TrainingSessionDetailsUpdate,
+        organization_id: UUID | str,
+    ) -> List[SessionDetailsPlan]:
+        """Work out what ``details`` does to each Training event's session.
+
+        Raises ``ValueError`` for a field that fails validation. Does not
+        refuse a finalized event: the caller reads each plan's
+        ``locked_fields``, so a series edit can name every occurrence it
+        would change. Run after the event's own fields are applied, so a
+        session filed under the event's title is judged against the title
+        the save leaves it with.
+        """
+        payload = details.model_dump(exclude_unset=True)
+        links_sent = "attendance_requirement_ids" in payload
+        raw_links = payload.pop("attendance_requirement_ids", None) or []
+        link_ids = [str(r) for r in dict.fromkeys(raw_links)] if links_sent else None
+        if not events or (not payload and not links_sent):
+            return []
+        for name in _DETAIL_NOT_CLEARABLE:
+            if name in payload and payload[name] is None:
+                raise ValueError(f"{name.replace('_', ' ').capitalize()} is required")
+
+        # Org scope for every id, once for the whole batch. The requirement's
+        # type is judged per session below, against what each one stores.
+        error = await self._validate_linkage_ids(
+            details, organization_id, stored_requirement_id=details.requirement_id
+        )
+        if error:
+            raise ValueError(error)
+        requirement_is_attendance = details.requirement_id is not None and (
+            await self._requirement_link_error(
+                details.requirement_id, organization_id, stored_requirement_id=None
+            )
+            == ATTENDANCE_REQUIREMENT_NOT_LINKABLE
+        )
+        course = None
+        if details.course_id is not None:
+            course = await self._course_in_org(details.course_id, organization_id)
+            if course is None:
+                raise ValueError("Training course not found")
+
+        result = await self.db.execute(
+            select(TrainingSession).where(
+                TrainingSession.event_id.in_([str(e.id) for e in events]),
+                TrainingSession.organization_id == str(organization_id),
+            )
+        )
+        sessions = {str(s.event_id): s for s in result.scalars().all()}
+        stored_links = await self.attendance_requirement_ids(
+            [str(s.id) for s in sessions.values()]
+        )
+
+        plans = []
+        for event in events:
+            session = sessions.get(str(event.id))
+            stored_requirement = session.requirement_id if session else None
+            if (
+                requirement_is_attendance
+                and str(details.requirement_id) != stored_requirement
+            ):
+                raise ValueError(ATTENDANCE_REQUIREMENT_NOT_LINKABLE)
+            if session is None:
+                plan = self._plan_new_session(event, payload, link_ids, course)
+            else:
+                plan = self._plan_session_changes(event, session, payload, course)
+                if link_ids is not None and set(link_ids) != set(
+                    stored_links[str(session.id)]
+                ):
+                    plan.link_ids = link_ids
+            if plan is not None:
+                plans.append(plan)
+        return plans
+
+    def _plan_session_changes(
+        self,
+        event: Event,
+        session: TrainingSession,
+        payload: Dict[str, Any],
+        course: Optional[TrainingCourse],
+    ) -> SessionDetailsPlan:
+        target: Dict[str, Any] = {}
+        # Re-sending the stored course is no change, even if the library
+        # course was renamed since: refiling would rewrite a finalized
+        # session's name.
+        if "course_id" in payload:
+            sent = str(payload["course_id"]) if payload["course_id"] else None
+            if sent != session.course_id:
+                if course is not None:
+                    target.update(
+                        course_id=str(course.id),
+                        course_name=course.name,
+                        course_code=course.code,
+                    )
+                else:
+                    target["course_id"] = None
+        course_after = target.get("course_id", session.course_id)
+        if course_after is None:
+            refiled = "course_id" in target
+            if refiled or "course_name" in payload:
+                target["course_name"] = (
+                    payload.get("course_name") or ""
+                ).strip() or event.title
+            if refiled or "course_code" in payload:
+                target["course_code"] = (payload.get("course_code") or "").strip() or (
+                    None
+                )
+        elif payload.get("course_name") or payload.get("course_code"):
+            raise ValueError(
+                "Pick a course from the library or name a one-off course, not both"
+            )
+
+        for name in _DETAIL_ID_FIELDS:
+            if name in payload:
+                target[name] = str(payload[name]) if payload[name] else None
+        for name in _DETAIL_TEXT_FIELDS:
+            if name in payload:
+                target[name] = (payload[name] or "").strip() or None
+        for name in _DETAIL_VALUE_FIELDS:
+            if name in payload:
+                target[name] = payload[name]
+        if "training_type" in payload:
+            target["training_type"] = TrainingType(payload["training_type"])
+        if "credit_hours" in payload:
+            hours = payload["credit_hours"]
+            target["credit_hours"] = (
+                float(hours)
+                if hours is not None
+                else scheduled_hours(event.start_datetime, event.end_datetime)
+            )
+
+        changes = {
+            name: value
+            for name, value in target.items()
+            if getattr(session, name) != value
+        }
+        return SessionDetailsPlan(
+            event=event, session=session, changes=changes, course=course
+        )
+
+    def _plan_new_session(
+        self,
+        event: Event,
+        payload: Dict[str, Any],
+        link_ids: Optional[List[str]],
+        course: Optional[TrainingCourse],
+    ) -> Optional[SessionDetailsPlan]:
+        """A session for a Training event that has none, or None when the
+        details credit exactly what the event already credits without one.
+
+        The edit form sends every field, so an event made without details
+        sends its defaults back on every save; that must not attach a
+        session, least of all on a finalized event, where it is refused.
+        """
+        attach = TrainingSessionAttach(
+            **{k: v for k, v in payload.items() if v is not None},
+            attendance_requirement_ids=link_ids or None,
+        )
+        built = self.build_session_for_event(
+            event, attach, course, event.organization_id, None
+        )
+        baseline = self.build_session_for_event(
+            event, TrainingSessionAttach(), None, event.organization_id, None
+        )
+        if not link_ids and all(
+            getattr(built, name) == getattr(baseline, name)
+            for name in SESSION_CLONE_FIELDS
+        ):
+            return None
+        return SessionDetailsPlan(
+            event=event, session=None, attach=attach, course=course
+        )
+
+    async def apply_session_details(
+        self,
+        plans: Sequence[SessionDetailsPlan],
+        organization_id: UUID | str,
+        created_by: UUID | str | None,
+    ) -> None:
+        """Write what ``plan_session_details`` worked out. Does not commit."""
+        for plan in plans:
+            if plan.session is not None:
+                if plan.changes:
+                    apply_updates(plan.session, plan.changes)
+                if plan.link_ids is not None:
+                    await self.db.execute(
+                        delete(TrainingSessionRequirement).where(
+                            TrainingSessionRequirement.session_id
+                            == str(plan.session.id)
+                        )
+                    )
+                    self._link_attendance_requirements(plan.session, plan.link_ids)
+            elif plan.attach is not None:
+                await self.add_sessions_for_events(
+                    [plan.event], plan.attach, plan.course, organization_id, created_by
+                )
 
     async def source_for_cloning(
         self, event: Event

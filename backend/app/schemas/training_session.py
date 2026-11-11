@@ -305,6 +305,63 @@ class TrainingSessionAttach(BaseModel):
         return self
 
 
+class TrainingSessionDetailsUpdate(BaseModel):
+    """The training details an event edit changes, on ``EventUpdate``.
+
+    Three-state, like every update payload here (pitfall #1): a key left out
+    is untouched, an explicit null clears it, a value sets it. Clearing
+    ``course_id`` files the session under ``course_name`` if one is sent,
+    else the event's title; clearing ``credit_hours`` credits the scheduled
+    length; ``training_type`` cannot be cleared. ``attendance_requirement_ids``,
+    when sent, replaces the whole set.
+
+    On an event whose attendance is finalized only the attendance links may
+    change: they decide how the session is graded, not any record it wrote.
+    Every other field must restate what is stored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    course_id: Optional[UUID] = None
+    course_name: Optional[str] = Field(None, max_length=255)
+    course_code: Optional[str] = Field(None, max_length=50)
+    category_id: Optional[UUID] = None
+    program_id: Optional[UUID] = None
+    phase_id: Optional[UUID] = None
+    requirement_id: Optional[UUID] = None
+    training_type: Optional[str] = None
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
+    instructor: Optional[str] = Field(None, max_length=255)
+    instructor_id: Optional[UUID] = None
+
+    issues_certification: Optional[bool] = None
+    certification_number_prefix: Optional[str] = Field(None, max_length=50)
+    issuing_agency: Optional[str] = Field(None, max_length=255)
+    expiration_months: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+
+    counts_toward_certification: Optional[bool] = None
+    auto_create_records: Optional[bool] = None
+    require_completion_confirmation: Optional[bool] = None
+    approval_deadline_days: Optional[int] = Field(None, ge=1, le=30)
+
+    attendance_requirement_ids: Optional[List[UUID]] = Field(None, max_length=50)
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
+    @model_validator(mode="after")
+    def _one_course_source(self) -> "TrainingSessionDetailsUpdate":
+        if self.course_id is not None and (self.course_name or self.course_code):
+            raise ValueError(
+                "Pick a course from the library or name a one-off course, not both"
+            )
+        return self
+
+
 class TrainingSessionResponse(UTCResponseBase):
     """Schema for training session response"""
 
