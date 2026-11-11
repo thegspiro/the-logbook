@@ -1,5 +1,42 @@
 # Known Limitations & Open Decisions
 
+## Attendance Waiver Emails and Template Copies — Choices Made Without a Ruling (2026-11-11)
+
+The waiver emails and the template-CC fix (defect D1) follow the owner
+decisions of 2026-11-10. Where those left a gap, the conservative choice was
+taken; each is listed so the owner can confirm or reverse it.
+
+- **A CC copy leaves out the category and the decider's note, not only the
+  buttons and the reason.** The decision said a copy carries "no buttons and
+  no reason text". A category (_Medical_) or a note can say as much as a
+  reason, so both read _Not included in this copy_. Reversing it is a
+  one-line change per field in `AttendanceWaiverEmails._context`.
+- **The withdrawal email goes only to approvers the request email reached.**
+  Not to everyone routed now: an approver who was never emailed has nothing
+  to stop doing. A request made before this release was never emailed, so
+  withdrawing it emails nobody (the in-app prompt is still archived).
+- **A send that dies mid-flight is not retried.** Each email is claimed before
+  it goes out and released if the send fails; a process killed between the
+  two leaves the claim, so that one email is never sent (at most once). The
+  in-app prompt reaches the same approvers either way. Claiming first is
+  what stops a retry or a second worker mailing anyone twice; the cost is
+  the rare email lost to a crash (pitfall #36 asks for the order to be
+  stated).
+- **Template copies reach every message of a bulk send.** A template with a
+  default CC that goes to many members at once (an event reminder) copies
+  the CC on each member's message, which is what the editor has always
+  promised. `docs/UPGRADING.md` tells operators to review saved CC lists.
+- **Credential templates are never copied, scheduled or not.** The exclusion
+  is `ALWAYS_SENT_TYPES` (welcome, password reset, IT password, ballot,
+  applicant status, follow-up form and contact-changed). There is no MFA or
+  sign-in-code template to add: those emails carry no template type. A
+  scheduled email of one of these types used to carry the template's CC; it
+  now keeps only the addresses typed for that email.
+- **The meeting templates are catalogued but not sent.** The meeting
+  workflow's pull request sends them, and must add its row to
+  `_TEMPLATES` in `attendance_waiver_email_service.py` and choose the
+  approvers' `EmailKind` (training uses `TRAINING_DUTIES`).
+
 ## PDF Reports — What the Generated PDFs Do Not Yet Meet (2026-11-09)
 
 A review of every server-rendered PDF (see `docs/PDF_REPORTS.md`) fixed the
