@@ -37,7 +37,7 @@ vi.mock('../services/api', () => ({
   },
   // The training form's: a Training event's session, the Course Library and
   // the lead instructor list. Installed per test in the top-level beforeEach.
-  trainingSessionService: { getSessionByEvent: vi.fn() },
+  trainingSessionService: { getSessionByEvent: vi.fn(), getMandatoryTiers: vi.fn() },
   trainingService: { getCourses: vi.fn() },
   userService: { getUsers: vi.fn() },
 }));
@@ -124,6 +124,12 @@ describe('EventEditPage', () => {
     vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue(visibleTypesWith());
     vi.mocked(trainingSessionService.getSessionByEvent).mockReset();
     vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue(null);
+    vi.mocked(trainingSessionService.getMandatoryTiers).mockReset();
+    vi.mocked(trainingSessionService.getMandatoryTiers).mockResolvedValue({
+      everyone: false,
+      tier_ids: [],
+      unmapped: [],
+    });
     vi.mocked(trainingService.getCourses).mockReset();
     vi.mocked(trainingService.getCourses).mockResolvedValue([]);
     vi.mocked(userService.getUsers).mockReset();
@@ -924,6 +930,56 @@ describe('EventEditPage', () => {
 
       expect(await screen.findByText('Failed to update event. Try again.')).toBeInTheDocument();
       expect(screen.getByText('Step 4 of 4 · Review')).toBeInTheDocument();
+    });
+
+    describe('Mandatory for, pre-filled from Counts toward attendance', () => {
+      // Stored mandatory for active members only, linked to an every-member requirement.
+      beforeEach(() => {
+        vi.mocked(eventService.getEvent).mockResolvedValue({
+          ...trainingEvent,
+          is_mandatory: true,
+          mandatory_membership_types: ['active'],
+        });
+        vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue({
+          ...session,
+          attendance_requirement_ids: ['req-att'],
+        });
+        vi.mocked(trainingSessionService.getMandatoryTiers).mockResolvedValue({
+          everyone: true,
+          tier_ids: [],
+          unmapped: [],
+        });
+      });
+
+      it('keeps the stored choice when the event loads', async () => {
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await next(user);
+        expect(screen.getByLabelText(/Company Drill Attendance/)).toBeChecked();
+        await next(user);
+
+        expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Active' })).toBeChecked();
+        expect(screen.queryByText('Pre-filled from Counts toward attendance')).not.toBeInTheDocument();
+        expect(trainingSessionService.getMandatoryTiers).not.toHaveBeenCalled();
+      });
+
+      it('fills it again once Counts toward attendance changes', async () => {
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await next(user);
+        await user.click(screen.getByLabelText(/Company Drill Attendance/));
+        await user.click(screen.getByLabelText(/Company Drill Attendance/));
+        await waitFor(() => expect(trainingSessionService.getMandatoryTiers).toHaveBeenCalledWith(['req-att']));
+        await next(user);
+
+        await waitFor(() => expect(screen.getByRole('radio', { name: 'All members' })).toBeChecked());
+        expect(screen.getByText('Company Drill Attendance → All members.')).toBeInTheDocument();
+      });
     });
 
     describe('once attendance is finalized', () => {

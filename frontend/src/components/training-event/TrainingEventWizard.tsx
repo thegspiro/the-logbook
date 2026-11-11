@@ -31,6 +31,7 @@ import type { User } from '../../types/user';
 import { trainingService, userService } from '../../services/api';
 import { useRanks } from '../../hooks/useRanks';
 import { useTrainingLinkageData } from '../../hooks/useTrainingLinkageData';
+import { useMandatoryTierPrefill } from '../../hooks/useMandatoryTierPrefill';
 import { getErrorDetail } from '../../utils/errorHandling';
 import { mapServerFieldErrors } from '../../utils/serverFieldErrors';
 import { displayNameOf } from '../../utils/memberName';
@@ -47,6 +48,7 @@ import { NotificationsSection } from '../event-form/sections/NotificationsSectio
 import { AttachmentsSection } from '../event-form/sections/AttachmentsSection';
 import { TrainingInfoStep, type TrainingInfoAccess, type TrainingReadOnlyNotice } from './TrainingInfoStep';
 import { TrainingReviewStep, type ReviewTarget } from './TrainingReviewStep';
+import { MandatoryPrefillNote } from './MandatoryPrefillNote';
 import {
   TRAINING_FIELDS,
   applyLibraryCourse,
@@ -237,8 +239,12 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     [formData.start_datetime, formData.end_datetime, tz]
   );
 
+  const prefill = useMandatoryTierPrefill(model, (id) => linkageData.requirements.find((r) => r.id === id)?.name ?? id);
+
   const updateTraining = (patch: Partial<TrainingDetailsForm>) => {
     setTraining((prev) => ({ ...prev, ...patch }));
+    // Only the officer's ticks: loading an event's links never pre-fills.
+    if (patch.attendance_requirement_ids) prefill.requirementsChanged(patch.attendance_requirement_ids);
     const touched = Object.keys(patch).map((key) => (key === 'instructor' ? 'instructor_id' : key));
     if (touched.some((key) => key in trainingErrors)) {
       setTrainingErrors((prev) => {
@@ -586,8 +592,22 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               <span>Settings</span>
             </h2>
             {/* Opens on All members: ticking Mandatory with nothing narrower
-                chosen means everyone, said on screen rather than refused. */}
-            <AttendanceSection model={model} scopeOnTick="all" />
+                chosen means everyone, said on screen rather than refused,
+                unless Counts toward attendance suggests who. */}
+            <AttendanceSection
+              model={prefill.attendanceModel}
+              scopeOnTick="all"
+              scopeNote={
+                prefill.note && (
+                  <MandatoryPrefillNote
+                    note={prefill.note}
+                    membershipTypes={model.membershipTypes}
+                    mandatoryScope={model.mandatoryScope}
+                  />
+                )
+              }
+              scopeNotePlacement={prefill.note?.kind === 'not-filled' ? 'before' : 'after'}
+            />
             <hr className="border-theme-surface-border" />
             <RsvpSection model={model} />
             <hr className="border-theme-surface-border" />

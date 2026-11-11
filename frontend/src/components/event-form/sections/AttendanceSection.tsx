@@ -22,10 +22,19 @@ interface AttendanceSectionProps {
   >;
   /** Where "Mandatory for" opens when Mandatory attendance is ticked. */
   scopeOnTick?: MandatoryScope | undefined;
+  /** A note about "Mandatory for", shown while Mandatory attendance is ticked. */
+  scopeNote?: React.ReactNode;
+  /** `before`: above Mandatory for; `after` (the default): under its choices. */
+  scopeNotePlacement?: 'before' | 'after' | undefined;
 }
 
 /** Whether attendance is mandatory, and for every member or which member types. */
-export const AttendanceSection: React.FC<AttendanceSectionProps> = ({ model, scopeOnTick = 'some' }) => {
+export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
+  model,
+  scopeOnTick = 'some',
+  scopeNote,
+  scopeNotePlacement = 'after',
+}) => {
   const {
     formData,
     fieldErrors,
@@ -65,6 +74,8 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({ model, sco
         />
         <span className="text-theme-text-secondary text-sm">Mandatory attendance</span>
       </label>
+
+      {formData.is_mandatory && scopeNotePlacement === 'before' && scopeNote}
 
       {formData.is_mandatory && (
         <fieldset
@@ -120,6 +131,7 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({ model, sco
               {error}
             </p>
           )}
+          {scopeNotePlacement === 'after' && scopeNote}
         </fieldset>
       )}
     </section>

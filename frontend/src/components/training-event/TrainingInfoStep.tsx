@@ -446,8 +446,9 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
             <p id="training-attendance-note" className="text-theme-text-muted mt-1 mb-3 text-sm">
               Attendance at {isSeries ? 'each session in the series' : 'this session'} counts toward the ticked
               requirements&apos; percentages. It does not make attending mandatory; that is set under Mandatory
-              attendance on the Settings step. An approved attendance waiver leaves the session out of that
-              member&apos;s percentage. Leave all unticked and this session counts toward no attendance requirement.
+              attendance on the Settings step, which uses these ticks to suggest who. An approved attendance waiver
+              leaves the session out of that member&apos;s percentage. Leave all unticked and this session counts toward
+              no attendance requirement.
             </p>
             <AttendanceRequirementChecklist
               requirements={linkageData.requirements}

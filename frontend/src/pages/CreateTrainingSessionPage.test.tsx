@@ -10,10 +10,14 @@ const getEvents = vi.fn();
 const getVisibleEventTypesWithCategories = vi.fn();
 const createEvent = vi.fn();
 const createRecurringEvent = vi.fn();
+const getMandatoryTiers = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: { getUsers: (...args: unknown[]) => getUsers(...args) as unknown },
   trainingService: { getCourses: (...args: unknown[]) => getCourses(...args) as unknown },
+  trainingSessionService: {
+    getMandatoryTiers: (...args: unknown[]) => getMandatoryTiers(...args) as unknown,
+  },
   locationsService: { getLocations: (...args: unknown[]) => getLocations(...args) as unknown },
   eventService: {
     getEvents: (...args: unknown[]) => getEvents(...args) as unknown,
@@ -88,6 +92,7 @@ function resetApi() {
     getVisibleEventTypesWithCategories,
     createEvent,
     createRecurringEvent,
+    getMandatoryTiers,
     navigate,
     toastError,
   ]) {
@@ -105,6 +110,7 @@ function resetApi() {
   });
   createEvent.mockResolvedValue({ id: 'event-1' });
   createRecurringEvent.mockResolvedValue([{ id: 'event-1' }, { id: 'event-2' }]);
+  getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [] });
 }
 
 /** Title and a start date; the end follows two hours later. */
@@ -635,5 +641,184 @@ describe('CreateTrainingSessionPage review step', () => {
     await user.click(screen.getByRole('button', { name: 'Edit Training Details' }));
 
     expect(screen.getByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+  });
+});
+
+describe('CreateTrainingSessionPage mandatory pre-fill', () => {
+  const DRILLS = {
+    id: 'req-drills',
+    name: 'Company Drill Attendance',
+    requirement_type: 'session_attendance',
+    required_attendance_pct: 60,
+  };
+  const ADMIN_DRILLS = {
+    id: 'req-admin',
+    name: 'Administrative Drill Attendance',
+    requirement_type: 'session_attendance',
+    required_attendance_pct: 25,
+  };
+  const ADMIN_UNMAPPED = {
+    requirement_id: 'req-admin',
+    name: 'Administrative Drill Attendance',
+    reason: 'Administrative is a member class, not a membership tier',
+  };
+
+  beforeEach(() => {
+    resetApi();
+    linkageRequirements.value = [DRILLS, ADMIN_DRILLS];
+    getVisibleEventTypesWithCategories.mockResolvedValue({
+      visible_event_types: ['training'],
+      custom_event_categories: [],
+      visible_custom_categories: [],
+      membership_types: [
+        { value: 'probationary', label: 'Probationary' },
+        { value: 'active', label: 'Active Member' },
+        { value: 'senior', label: 'Senior Member' },
+      ],
+    });
+    getMandatoryTiers.mockImplementation((ids: string[]) =>
+      Promise.resolve(
+        ids.includes('req-drills')
+          ? {
+              everyone: false,
+              tier_ids: ['probationary', 'active'],
+              unmapped: ids.includes('req-admin') ? [ADMIN_UNMAPPED] : [],
+            }
+          : { everyone: false, tier_ids: [], unmapped: [ADMIN_UNMAPPED] }
+      )
+    );
+  });
+
+  /** Event Details filled, on Training Info. */
+  async function toTrainingInfo(user: User) {
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user, 'Monday Night Drill');
+    await next(user);
+  }
+  const tick = (user: User, name: RegExp) => user.click(screen.getByRole('checkbox', { name }));
+  const memberType = (name: string) => screen.getByRole('checkbox', { name });
+
+  it('fills Mandatory for from the ticked requirements once Mandatory is ticked, naming what it could not map', async () => {
+    const user = userEvent.setup();
+    await toTrainingInfo(user);
+    await tick(user, /Company Drill Attendance/);
+    await tick(user, /Administrative Drill Attendance/);
+    await waitFor(() => expect(getMandatoryTiers).toHaveBeenLastCalledWith(['req-drills', 'req-admin']));
+    await next(user);
+
+    // Counting toward a percentage does not make attending mandatory.
+    expect(screen.getByRole('checkbox', { name: 'Mandatory attendance' })).not.toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
+
+    expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+    expect(memberType('Probationary')).toBeChecked();
+    expect(memberType('Active Member')).toBeChecked();
+    expect(memberType('Senior Member')).not.toBeChecked();
+    expect(screen.getByText('Pre-filled from Counts toward attendance')).toBeInTheDocument();
+    expect(screen.getByText('Company Drill Attendance → Probationary, Active Member.')).toBeInTheDocument();
+    expect(screen.getByText(/Administrative is a member class, not a membership tier/)).toBeInTheDocument();
+
+    await next(user);
+    await submit(user);
+    await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
+    expect(sentEvent()).toMatchObject({ is_mandatory: true, mandatory_membership_types: ['probationary', 'active'] });
+  });
+
+  it('writes straight into Mandatory for when Mandatory is already on', async () => {
+    const user = userEvent.setup();
+    await toTrainingInfo(user);
+    await next(user);
+    await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
+    expect(screen.getByRole('radio', { name: 'All members' })).toBeChecked();
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    await tick(user, /Company Drill Attendance/);
+    await waitFor(() => expect(getMandatoryTiers).toHaveBeenCalledTimes(1));
+    await next(user);
+
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked());
+    expect(memberType('Probationary')).toBeChecked();
+    expect(memberType('Active Member')).toBeChecked();
+  });
+
+  it('chooses All members for a requirement that applies to every member', async () => {
+    getMandatoryTiers.mockResolvedValue({ everyone: true, tier_ids: [], unmapped: [] });
+    const user = userEvent.setup();
+    await toTrainingInfo(user);
+    await tick(user, /Company Drill Attendance/);
+    await waitFor(() => expect(getMandatoryTiers).toHaveBeenCalledTimes(1));
+    await next(user);
+    await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
+
+    expect(screen.getByRole('radio', { name: 'All members' })).toBeChecked();
+    expect(screen.getByText('Company Drill Attendance → All members.')).toBeInTheDocument();
+  });
+
+  it('leaves Mandatory for as it was when no ticked requirement maps, and says why', async () => {
+    const user = userEvent.setup();
+    await toTrainingInfo(user);
+    await tick(user, /Administrative Drill Attendance/);
+    await waitFor(() => expect(getMandatoryTiers).toHaveBeenCalledWith(['req-admin']));
+    await next(user);
+    await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
+
+    expect(screen.getByRole('radio', { name: 'All members' })).toBeChecked();
+    expect(screen.getByText('Not pre-filled from Counts toward attendance')).toBeInTheDocument();
+    expect(screen.getByText(/Administrative is a member class, not a membership tier/)).toBeInTheDocument();
+    expect(screen.getByText(/All members is selected\. Choose member types instead/)).toBeInTheDocument();
+  });
+
+  it("does not overwrite the officer's own choice", async () => {
+    const user = userEvent.setup();
+    await toTrainingInfo(user);
+    await tick(user, /Company Drill Attendance/);
+    await waitFor(() => expect(getMandatoryTiers).toHaveBeenCalledTimes(1));
+    await next(user);
+    await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
+    await user.click(memberType('Active Member'));
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    await tick(user, /Administrative Drill Attendance/);
+    await tick(user, /Company Drill Attendance/);
+    await tick(user, /Company Drill Attendance/);
+    await next(user);
+
+    expect(getMandatoryTiers).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+    expect(memberType('Probationary')).toBeChecked();
+    expect(memberType('Active Member')).not.toBeChecked();
+  });
+
+  it('leaves both fields alone when every requirement is unticked', async () => {
+    const user = userEvent.setup();
+    await toTrainingInfo(user);
+    await next(user);
+    await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    await tick(user, /Company Drill Attendance/);
+    await waitFor(() => expect(getMandatoryTiers).toHaveBeenCalledTimes(1));
+    await tick(user, /Company Drill Attendance/);
+    await next(user);
+
+    expect(getMandatoryTiers).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('checkbox', { name: 'Mandatory attendance' })).toBeChecked();
+    expect(memberType('Probationary')).toBeChecked();
+    expect(memberType('Active Member')).toBeChecked();
+    expect(screen.queryByText('Pre-filled from Counts toward attendance')).not.toBeInTheDocument();
+  });
+
+  it('applies only the latest answer when two arrive out of order', async () => {
+    let releaseFirst: (value: unknown) => void = () => {};
+    getMandatoryTiers
+      .mockImplementationOnce(() => new Promise((resolve) => (releaseFirst = resolve)))
+      .mockResolvedValueOnce({ everyone: true, tier_ids: [], unmapped: [] });
+    const user = userEvent.setup();
+    await toTrainingInfo(user);
+    await tick(user, /Company Drill Attendance/);
+    await tick(user, /Administrative Drill Attendance/);
+    await waitFor(() => expect(getMandatoryTiers).toHaveBeenCalledTimes(2));
+    releaseFirst({ everyone: false, tier_ids: ['senior'], unmapped: [] });
+    await next(user);
+    await user.click(screen.getByRole('checkbox', { name: 'Mandatory attendance' }));
+
+    expect(screen.getByRole('radio', { name: 'All members' })).toBeChecked();
   });
 });
