@@ -7776,9 +7776,60 @@ ones skipped.
   scheduled or started.
 - **The NFPA completeness report flags a missing instructor** on records from
   events without a course.
-- **A rolling recurring series cannot carry training details** — the nightly
-  job that extends it copies events, not sessions. Its occurrences are still
-  credited, as their titles.
+- **A rolling recurring series cannot carry training details — ✅ resolved
+  2026-11-11** (owner decision 2026-11-10: rolling series inherit training
+  details and links). The nightly job now copies the latest occurrence, its
+  training session and the session's attendance links on to each new
+  occurrence. See "Training — One Form for Training Events, Backend" below.
+
+## Training — One Form for Training Events, Backend (2026-11-11)
+
+The owner chose one training-event form for both Training Admin and Events
+(2026-11-10). This is its backend: `POST /events` and `/events/recurring`
+take every training field, including "Counts toward attendance"; an event
+edit carries `training_details`, for one event or "this and all future"; a
+rolling series and a duplicate keep their session and links; and
+`POST /training/sessions/mandatory-tiers` pre-fills "Mandatory for". The form
+itself follows in later pull requests.
+
+**Defaults assumed on the owner's "Yes" (2026-11-11), and what they cost:**
+
+- **A rolling series copies its latest occurrence, not its parent.** This
+  fixed a "this and all future events" edit being lost: it never reached the
+  parent, so every occurrence the job added reverted to the old values. The
+  cost is that a "this event only" edit to the very last generated
+  occurrence, about twelve months out, now carries forward too.
+- **A training manager cannot change training details through an event
+  edit** (403). Every session write already needs `events.manage`. A training
+  manager still edits the event's own fields. TR14-2 is unchanged.
+- **A requirement no membership tier stands for is named, not guessed**, when
+  "Mandatory for" is pre-filled. That means administrative and honorary
+  (member classes, not rungs), a membership word with no tier on the ladder
+  (Retired, on the default ladder), and a requirement scoped only by rank or
+  position. If nothing maps, "Mandatory for" is left as it was rather than
+  falling back to everyone.
+
+**Known gaps, not fixed here:**
+
+- **The pre-fill is an approximation.**
+  - A requirement grades by legacy membership type; an event's "Mandatory
+    for" matches by membership tier.
+  - An administrative or social member on a mapped tier is listed as missing
+    a session the requirement never graded them on.
+  - A requirement cannot name the default ladder's Senior tier, so no
+    pre-fill ever selects it.
+  - Grandfathering and compliance profiles are ignored.
+  - The officer can edit the result.
+- **A finalized Training event with no session cannot be given attendance
+  links** from the event edit. Attaching a session to a finalized event is
+  refused, as it always was; reopen attendance first. An event with a
+  session takes new links at any time.
+- **The Events form still hides training details on a rolling series** until
+  the single form replaces that block.
+- **`TrainingSessionAttach` and `TrainingSessionDetailsUpdate` refuse unknown
+  keys** (422). Before, an unknown key was dropped and the request still
+  answered 201. Nothing in this repository sends one; an outside API client
+  that does will now see the refusal.
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 

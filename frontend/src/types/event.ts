@@ -774,7 +774,8 @@ export interface RecurringEventCreate {
   attachments?: EventAttachment[] | undefined;
   allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   template_id?: string | undefined;
-  /** Attached to every occurrence; refused on a rolling series. */
+  /** Attached to every occurrence. A rolling series copies them on to the
+   *  occurrences it adds later. */
   training_details?: EventTrainingDetails | undefined;
 }
 
