@@ -49,6 +49,19 @@ it defaults to on. The "five emails that cannot be switched off" in the
   03 about +6); Short 8AS still says about 47 seconds and gained roughly 8.
 - The member script (06) leaves out the leader-only dashboard changes by design.
 
+## Flagged by the 2026-11-08 → 11-10 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--10-2026).
+Rows are **Open**; nothing was re-recorded or rewritten.
+
+| Script                                             | Beat                            | Now                                                                                                                         |
+| -------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Member (06)**                                    | My Shifts                       | Upcoming under month headers; Past by year with a Year dropdown and chart                                                   |
+| **Training Officer (05, 16)**, **Member (06)**     | Training History                | Each record shows its source                                                                                                |
+| **Training Officer (05, 16)**, **Fire Chief (04)** | Drill attendance, missed drills | Attendance requirement with no session held is not graded; a waiver excuses a drill; **Add a member** after check-in closes |
+| **Fire Chief (04)**                                | Members roster                  | Table on desktop, cards below                                                                                               |
+| **IT (03)**                                        | Historical import               | Members list shows real names; decided members folded away                                                                  |
+
 ## Flagged by the 2026-11-06 → 11-08 changes
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-6--8-2026).
