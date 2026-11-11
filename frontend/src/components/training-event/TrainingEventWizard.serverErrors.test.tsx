@@ -40,10 +40,12 @@ vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: toastErr
 
 import { EventComposer } from '../event-form/EventComposer';
 import { EventType } from '../../constants/enums';
+import { DEFAULT_TRAINING_DETAILS } from './trainingDetailsModel';
 
 type User = ReturnType<typeof userEvent.setup>;
 
 const onSubmit = vi.fn();
+const onSubmitUpdate = vi.fn();
 
 const renderForm = () =>
   renderWithRouter(<EventComposer lockedType={EventType.TRAINING} onSubmit={onSubmit} onCancel={vi.fn()} />);
@@ -76,6 +78,7 @@ describe('TrainingEventWizard › refusals on their fields', () => {
       getVisibleEventTypesWithCategories,
       getMandatoryTiers,
       onSubmit,
+      onSubmitUpdate,
       toastError,
     ]) {
       mock.mockReset();
@@ -91,6 +94,7 @@ describe('TrainingEventWizard › refusals on their fields', () => {
       membership_types: [{ value: 'active', label: 'Active Member' }],
     });
     onSubmit.mockResolvedValue(undefined);
+    onSubmitUpdate.mockResolvedValue(undefined);
   });
 
   it("takes the officer back to the server's refused title, flagged and focused", async () => {
@@ -147,5 +151,84 @@ describe('TrainingEventWizard › refusals on their fields', () => {
     await waitFor(() => expect(courseName).toHaveFocus());
     expect(screen.getByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe('TrainingEventWizard › a refusal on an earlier step', () => {
+  beforeEach(() => {
+    for (const mock of [
+      getUsers,
+      getCourses,
+      getLocations,
+      getVisibleEventTypesWithCategories,
+      getMandatoryTiers,
+      onSubmitUpdate,
+      toastError,
+    ]) {
+      mock.mockReset();
+    }
+    getUsers.mockResolvedValue([]);
+    getCourses.mockResolvedValue([]);
+    getLocations.mockResolvedValue([]);
+    getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [] });
+    getVisibleEventTypesWithCategories.mockResolvedValue({
+      visible_event_types: ['training'],
+      custom_event_categories: [],
+      visible_custom_categories: [],
+      membership_types: [{ value: 'active', label: 'Active Member' }],
+    });
+    onSubmitUpdate.mockResolvedValue(undefined);
+  });
+
+  // The event page's "Edit training details" opens on Training Info, so Event
+  // Details is first checked by the save. The refusal is read out by the
+  // focused field; the toast says only where the form went, so a screen
+  // reader does not hear the same sentence twice.
+  it('names the step it went back to rather than repeating the refusal', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EventComposer
+        initialData={{
+          title: '',
+          event_type: EventType.TRAINING,
+          start_datetime: '2030-05-01T19:00',
+          end_datetime: '2030-05-01T21:00',
+        }}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+        trainingSubmitLabel="Save Changes"
+        editing={{
+          eventId: 'event-1',
+          attendanceLocked: false,
+          eventTypeLocked: false,
+          storedType: EventType.TRAINING,
+          initialTraining: { ...DEFAULT_TRAINING_DETAILS, credit_hours: '2', credit_hours_source: 'manual' },
+          trainingAccess: 'edit',
+          initialStep: 'training',
+          onSubmitUpdate,
+        }}
+      />
+    );
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    await next(user); // to Settings
+    await next(user); // to Review
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    const title = screen.getByLabelText(/^Title/);
+    expect(title).toHaveAccessibleDescription(/Enter a title for the event\./);
+    await waitFor(() => expect(title).toHaveFocus());
+    expect(toastError).toHaveBeenCalledTimes(1);
+    expect(toastError).toHaveBeenCalledWith('Back to Event Details: fix the flagged field');
+    expect(onSubmitUpdate).not.toHaveBeenCalled();
+  });
+
+  it('says nothing in a toast for a refusal on the step already open', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await next(user);
+
+    expect(screen.getByLabelText(/^Title/)).toHaveAttribute('aria-invalid', 'true');
+    expect(toastError).not.toHaveBeenCalled();
   });
 });

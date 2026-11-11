@@ -11,8 +11,10 @@
  * change in either form carries every value to the other.
  *
  * Each step is checked before Next; a refused save, or a 422, puts every
- * message under its field and goes to the earliest step holding one, never a
- * toast (forms review F-3/F-4).
+ * message under its field and goes to the earliest step holding one (forms
+ * review F-3/F-4). The one toast is a save the form itself refuses on an
+ * earlier step: it names the step the form went back to, not the refusal,
+ * which the focused field already reads out (forms batch 17).
  *
  * The same steps edit an existing Training event. An edit sends every training
  * field the form owns, blanks as null (pitfall #1), except where the session's
@@ -34,6 +36,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import toast from 'react-hot-toast';
 import type { EventCreate, EventUpdate, RecurringEventCreate } from '../../types/event';
 import type { TrainingCourse } from '../../types/training';
 import type { User } from '../../types/user';
@@ -74,28 +77,37 @@ import {
   type TrainingField,
 } from './trainingDetailsModel';
 
-const STEPS: { title: string; icon: LucideIcon }[] = [
-  { title: 'Event Details', icon: Calendar },
-  { title: 'Training Info', icon: GraduationCap },
-  { title: 'Settings', icon: SlidersHorizontal },
-  { title: 'Review', icon: ClipboardCheck },
-];
 const DETAILS = 0;
 const TRAINING = 1;
 const SETTINGS = 2;
 const REVIEW = 3;
+type WizardStep = typeof DETAILS | typeof TRAINING | typeof SETTINGS | typeof REVIEW;
+
+/** Each step's name: the stepper, the step line and the toast all read it here. */
+const STEP_TITLES: Record<WizardStep, string> = {
+  [DETAILS]: 'Event Details',
+  [TRAINING]: 'Training Info',
+  [SETTINGS]: 'Settings',
+  [REVIEW]: 'Review',
+};
+const STEPS: { title: string; icon: LucideIcon }[] = [
+  { title: STEP_TITLES[DETAILS], icon: Calendar },
+  { title: STEP_TITLES[TRAINING], icon: GraduationCap },
+  { title: STEP_TITLES[SETTINGS], icon: SlidersHorizontal },
+  { title: STEP_TITLES[REVIEW], icon: ClipboardCheck },
+];
 
 const STEP_HEADING_ID = 'training-wizard-step';
 const TYPE_HINT_ID = 'training-wizard-type-hint';
 
-const REVIEW_TARGET_STEP: Record<ReviewTarget, number> = {
+const REVIEW_TARGET_STEP: Record<ReviewTarget, WizardStep> = {
   details: DETAILS,
   training: TRAINING,
   settings: SETTINGS,
 };
 
 /** The step each event field is entered on. */
-const EVENT_FIELD_STEP: Record<EventField, number> = {
+const EVENT_FIELD_STEP: Record<EventField, WizardStep> = {
   title: DETAILS,
   description: DETAILS,
   event_type: DETAILS,
@@ -118,7 +130,7 @@ type EventErrors = Partial<Record<EventField, string>>;
 type TrainingErrors = Partial<Record<TrainingField, string>>;
 /** A refusal no single control owns, and the step it is about. */
 interface StepMessage {
-  step: number;
+  step: WizardStep;
   message: string;
 }
 
@@ -209,7 +221,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   // A series is created as one; an edit changes one occurrence or the rest of
   // its series through the scope choice, never the recurrence itself.
   const creatingSeries = model.isRecurring && !editing;
-  const [step, setStep] = useState(initialStep === 'training' ? TRAINING : DETAILS);
+  const [step, setStep] = useState<WizardStep>(initialStep === 'training' ? TRAINING : DETAILS);
   useEffect(() => {
     onDetailsStepChange?.(step === DETAILS);
   }, [step, onDetailsStepChange]);
@@ -315,7 +327,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   };
 
   /** The refusals on one step, or on every step when `onStep` is omitted. */
-  const collect = (onStep?: number): { event: EventErrors; training: TrainingErrors; messages: StepMessage[] } => {
+  const collect = (onStep?: WizardStep): { event: EventErrors; training: TrainingErrors; messages: StepMessage[] } => {
     const event: EventErrors = {};
     for (const [field, message] of Object.entries(model.validate()) as [EventField, string][]) {
       if (onStep === undefined || EVENT_FIELD_STEP[field] === onStep) event[field] = message;
@@ -335,14 +347,15 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   /**
    * Show refusals: each under its field, a summary in the step's banner, and
    * the wizard on the earliest step holding one, focused on its first field.
-   * Returns false when there is nothing to show.
+   * Returns that step and whether a field there was flagged, or null when
+   * there is nothing to show.
    */
   const showErrors = (
     eventErrors: EventErrors,
     trainingErrorsToShow: TrainingErrors,
     messages: StepMessage[],
     extra: string[] = []
-  ): boolean => {
+  ): { target: WizardStep; fieldFocused: boolean } | null => {
     // The type picker draws no message under itself, and Training Admin has
     // no picker at all, so a refusal of the type goes in the banner.
     const { event_type: typeMessage, ...rest } = eventErrors;
@@ -353,8 +366,8 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
       ...(Object.keys(trainingErrorsToShow).length ? [TRAINING] : []),
       ...allMessages.map((m) => m.step),
     ];
-    if (steps.length === 0 && extra.length === 0) return false;
-    const target = steps.length ? Math.min(...steps) : REVIEW;
+    if (steps.length === 0 && extra.length === 0) return null;
+    const target = steps.length ? (Math.min(...steps) as WizardStep) : REVIEW;
 
     model.setFieldErrors(fieldErrors);
     setTrainingErrors(trainingErrorsToShow);
@@ -390,7 +403,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     } else {
       requestFocus(STEP_HEADING_ID);
     }
-    return true;
+    return { target, fieldFocused: Boolean(firstField) };
   };
 
   const clearAllErrors = () => {
@@ -424,7 +437,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     if (discard) onCancel();
   };
 
-  const goTo = (next: number) => {
+  const goTo = (next: WizardStep) => {
     setStep(next);
     requestFocus(STEP_HEADING_ID);
   };
@@ -433,12 +446,12 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     const { event, training: trainingInvalid, messages } = collect(step);
     if (showErrors(event, trainingInvalid, messages)) return;
     clearAllErrors();
-    goTo(step + 1);
+    goTo(Math.min(REVIEW, step + 1) as WizardStep);
   };
 
   const handlePrevious = () => {
     clearAllErrors();
-    goTo(Math.max(DETAILS, step - 1));
+    goTo(Math.max(DETAILS, step - 1) as WizardStep);
   };
 
   /** A refused save: a 422 under the fields it names, anything else in the banner. */
@@ -491,7 +504,14 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
 
   const handleSubmit = async () => {
     const { event, training: trainingInvalid, messages } = collect();
-    if (showErrors(event, trainingInvalid, messages)) return;
+    const shown = showErrors(event, trainingInvalid, messages);
+    if (shown) {
+      // Only when the form moved: on the open step the refusal is in view.
+      if (shown.target !== step && shown.fieldFocused) {
+        toast.error(`Back to ${STEP_TITLES[shown.target]}: fix the flagged field`);
+      }
+      return;
+    }
     clearAllErrors();
     if (editing) {
       await handleUpdate();
@@ -525,7 +545,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   };
 
   const fullSubmitLabel = creatingSeries ? recurringSubmitLabel : submitLabel;
-  const stepTitle = STEPS[step]?.title ?? '';
+  const stepTitle = STEP_TITLES[step];
 
   // The session's fields are locked with the rest once attendance is
   // finalized, apart from Counts toward attendance; a training manager, who
