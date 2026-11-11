@@ -36,10 +36,12 @@ interface DetailsSectionProps {
   >;
   /**
    * Leave the Event Type block out, for a form whose type is fixed before it
-   * opens. The recruitment prompt lives in that block and goes with it.
+   * opens. The recruitment prompt and `typeHint` live in that block and go
+   * with it. With no #event-type control on the page, a host must show an
+   * event_type error in the banner (showFormError) rather than under a field.
    */
   hideTypePicker?: boolean | undefined;
-  /** Rendered under the type picker, before the recruitment prompt. */
+  /** Rendered under the type picker, before the recruitment prompt; hidden with the picker. */
   typeHint?: React.ReactNode;
   /** Rendered between the Event Type block and the category picker. */
   afterType?: React.ReactNode;

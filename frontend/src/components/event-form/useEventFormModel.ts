@@ -92,7 +92,10 @@ export const useEventFormModel = ({
   // message tied to the control (forms review F-3/F-4), rather than one banner
   // at the top of a long form.
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<EventField, string>>>({});
-  const showFieldErrors = (errors: Partial<Record<EventField, string>>, unmatched: string[] = []) => {
+  const showFieldErrors = (
+    errors: Partial<Record<EventField, string>>,
+    unmatched: string[] = []
+  ): EventField | undefined => {
     setFieldErrors(errors);
     // An error summary at the top, announced as an alert, for whoever does not
     // reach the field by focus; the message itself stays under its field.
@@ -105,6 +108,7 @@ export const useEventFormModel = ({
       const id = first === 'location' && locations.length === 0 ? 'location-text-fallback' : EVENT_FIELD_IDS[first];
       window.setTimeout(() => document.getElementById(id)?.focus(), 0);
     }
+    return first;
   };
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>(initialData?.location ? 'other' : 'select');
@@ -530,11 +534,12 @@ export const useEventFormModel = ({
   };
 
   /**
-   * The cleaned-up, UTC-converted payload the form would save, as a single
-   * event or as a series, or the refusal that stops it. Assumes `validate()`
-   * and `checkMandatory()` have passed.
+   * The cleaned-up, UTC-converted single-event payload the form would save.
+   * Assumes `validate()` and `checkMandatory()` have passed. The old training
+   * block's details are set (or left out) here; a form that edits training
+   * details itself replaces `training_details` on the result.
    */
-  const buildPayload = (): { single: EventCreate } | { recurring: RecurringEventCreate } | { error: string } => {
+  const buildSinglePayload = (): EventCreate => {
     // Clean up data before submit
     const submitData = { ...formData };
 
@@ -595,8 +600,11 @@ export const useEventFormModel = ({
       submitData.rsvp_deadline = localToUTC(submitData.rsvp_deadline, tz);
     }
 
-    if (!(isRecurring && onSubmitRecurring)) return { single: submitData };
+    return submitData;
+  };
 
+  /** The series payload built on a single-event one, or the refusal that stops it. */
+  const buildRecurringPayload = (submitData: EventCreate): { recurring: RecurringEventCreate } | { error: string } => {
     if (recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
       return { error: 'Select at least one day for custom recurrence' };
     }
@@ -616,6 +624,35 @@ export const useEventFormModel = ({
     };
   };
 
+  /**
+   * Both halves together, for a form that submits for itself. `recurring`
+   * defaults to what EventForm does: a series only when it was given an
+   * onSubmitRecurring callback and recurrence is on.
+   */
+  const buildPayload = (
+    options: { recurring?: boolean } = {}
+  ): { single: EventCreate } | { recurring: RecurringEventCreate } | { error: string } => {
+    const single = buildSinglePayload();
+    const recurring = options.recurring ?? Boolean(isRecurring && onSubmitRecurring);
+    return recurring ? buildRecurringPayload(single) : { single };
+  };
+
+  /** Show a refused save: a 422 under the fields it names, anything else in the banner. */
+  const showSubmitError = (err: unknown): EventField | undefined => {
+    const mapped = mapServerFieldErrors(err, EVENT_FIELDS);
+    if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+      return showFieldErrors(mapped.fieldErrors, mapped.unmatched);
+    }
+    setError(mapped?.unmatched.join(' ') || getErrorMessage(err, 'An error occurred'));
+    return undefined;
+  };
+
+  /** Clear the banner and every field error, as a fresh submit does. */
+  const clearErrors = () => {
+    setError(null);
+    setFieldErrors({});
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -633,28 +670,22 @@ export const useEventFormModel = ({
       return;
     }
 
+    // The single-event half is built before the try and the series half
+    // inside it, exactly where the original handleSubmit built them.
+    const submitData = buildSinglePayload();
     try {
-      // Built inside the try, as the series half always was: a date the
-      // browser accepts but `Date` cannot represent throws from localToUTC,
-      // and that shows as the form's error rather than a dead submit button.
-      const payload = buildPayload();
-      if ('error' in payload) {
-        setError(payload.error);
-        return;
-      }
-      if ('recurring' in payload) {
-        // buildPayload returns a series only when onSubmitRecurring is set.
-        await onSubmitRecurring?.(payload.recurring);
+      if (isRecurring && onSubmitRecurring) {
+        const recurring = buildRecurringPayload(submitData);
+        if ('error' in recurring) {
+          setError(recurring.error);
+          return;
+        }
+        await onSubmitRecurring(recurring.recurring);
       } else {
-        await onSubmit(payload.single);
+        await onSubmit(submitData);
       }
     } catch (err: unknown) {
-      const mapped = mapServerFieldErrors(err, EVENT_FIELDS);
-      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
-        showFieldErrors(mapped.fieldErrors, mapped.unmatched);
-      } else {
-        setError(mapped?.unmatched.join(' ') || getErrorMessage(err, 'An error occurred'));
-      }
+      showSubmitError(err);
     }
   };
 
@@ -751,10 +782,17 @@ export const useEventFormModel = ({
     toggleMandatoryMembershipType,
     handleLocationSelect,
     // Submission, in the order handleSubmit runs them; a second form can run
-    // the same checks and build the same payload without a FormEvent.
+    // the same checks, show their results, build the same payload and show a
+    // refused save without a FormEvent.
     validate,
     checkMandatory,
+    showFieldErrors,
+    showFormError: setError,
+    clearErrors,
+    buildSinglePayload,
+    buildRecurringPayload,
     buildPayload,
+    showSubmitError,
     handleSubmit,
   };
 };
