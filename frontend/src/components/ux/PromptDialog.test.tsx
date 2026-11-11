@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import { PromptDialog } from './PromptDialog';
 
 describe('PromptDialog', () => {
@@ -123,5 +124,81 @@ describe('PromptDialog', () => {
     await user.click(screen.getByRole('button', { name: /save/i }));
 
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  // Opt-in (owner decision, 2026-11-11, first used on Approvals): a typed
+  // value is not thrown away by one stray Escape, X or Cancel.
+  describe('askBeforeDiscard', () => {
+    const renderGuarded = (props: Partial<React.ComponentProps<typeof PromptDialog>> = {}) =>
+      render(
+        <ConfirmProvider>
+          <PromptDialog
+            isOpen
+            onClose={onClose}
+            onSubmit={onSubmit}
+            title="Deny request"
+            label="Reason"
+            askBeforeDiscard
+            {...props}
+          />
+        </ConfirmProvider>
+      );
+
+    it('closes at once while nothing has been typed', async () => {
+      const user = userEvent.setup();
+      renderGuarded();
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('asks before Cancel throws a typed value away, and keeps it on Keep editing', async () => {
+      const user = userEvent.setup();
+      renderGuarded();
+      await user.type(screen.getByLabelText('Reason'), 'Over budget');
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+      expect(onClose).not.toHaveBeenCalled();
+      expect(screen.getByLabelText('Reason')).toHaveValue('Over budget');
+    });
+
+    it('closes on Discard changes', async () => {
+      const user = userEvent.setup();
+      renderGuarded();
+      await user.type(screen.getByLabelText('Reason'), 'Over budget');
+      await user.keyboard('{Escape}');
+      await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats an untouched default as nothing typed', async () => {
+      const user = userEvent.setup();
+      renderGuarded({ defaultValue: 'Approved as asked' });
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('does not ask before discarding unless the caller opts in', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+    await user.type(screen.getByLabelText(/reason for voiding/i), 'typed');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Keep editing' })).not.toBeInTheDocument();
+  });
+
+  // The server's refusal goes on the field, as the owner rule (2026-11-05)
+  // puts every other form's, and clears once the value is edited.
+  it("shows the server's refusal on the field until it is edited", async () => {
+    const user = userEvent.setup();
+    renderDialog({ defaultValue: 'x', error: 'Reason is too long.' });
+    const field = screen.getByLabelText(/reason for voiding/i);
+    expect(screen.getByText('Reason is too long.')).toBeInTheDocument();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription('Reason is too long.');
+
+    await user.type(field, 'y');
+    expect(screen.queryByText('Reason is too long.')).not.toBeInTheDocument();
+    expect(field).toHaveAttribute('aria-invalid', 'false');
   });
 });

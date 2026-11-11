@@ -402,20 +402,33 @@ A missing or unknown `?tab=` opens Create Event.
 
 ### Member-Facing Pages
 
-| URL                                   | Page                                      | Permission        |
-| ------------------------------------- | ----------------------------------------- | ----------------- |
-| `/training`                           | My Training                               | Authenticated     |
-| `/training/my-training`               | My Training                               | Authenticated     |
-| `/training/submit`                    | Submit Training                           | Authenticated     |
-| `/training/record-crew`               | Record Crew Training                      | Authenticated     |
-| `/training/courses`                   | Course Library                            | Authenticated     |
-| `/training/programs`                  | Training Programs                         | Authenticated     |
-| `/training/programs/:programId`       | Program Detail                            | Authenticated     |
-| `/training/cohorts`                   | Course Cohorts                            | `training.manage` |
-| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster)   | Authenticated     |
-| `/training/my-skill-tests/:testId`    | My Skill Test Result (read-only)          | Authenticated     |
-| `/training/my-progress/:enrollmentId` | My Program Progress                       | Authenticated     |
-| `/training/approve/:token`            | Training Approval (officer credit review) | `training.manage` |
+| URL                                   | Page                                        | Permission        |
+| ------------------------------------- | ------------------------------------------- | ----------------- |
+| `/training`                           | My Training                                 | Authenticated     |
+| `/training/my-training`               | My Training                                 | Authenticated     |
+| `/training/submit`                    | Submit Training                             | Authenticated     |
+| `/training/record-crew`               | Record Crew Training                        | Authenticated     |
+| `/training/courses`                   | Course Library                              | Authenticated     |
+| `/training/programs`                  | Training Programs                           | Authenticated     |
+| `/training/programs/:programId`       | Program Detail                              | Authenticated     |
+| `/training/cohorts`                   | Course Cohorts                              | `training.manage` |
+| `/training/cohorts/:cohortId`         | Cohort Detail (class timeline + roster)     | Authenticated     |
+| `/training/my-skill-tests/:testId`    | My Skill Test Result (read-only)            | Authenticated     |
+| `/training/my-progress/:enrollmentId` | My Program Progress                         | Authenticated     |
+| `/training/approve/:token`            | Training Approval (officer credit review)   | `training.manage` |
+| `/attendance-waivers`                 | Attendance Waiver Requests (approver queue) | Authenticated     |
+| `/attendance-waivers/:id`             | Attendance Waiver Decision                  | Authenticated     |
+
+> **`/attendance-waivers` and `/attendance-waivers/:id` are the session waiver
+> request screens** _(2026-11-11)_. A member asks to be excused from a training
+> session that counts toward their attendance requirement from the event page;
+> the queue lists the requests the viewer may decide or has decided, and the
+> decision page is the one the approver's email opens. Neither route names a
+> permission: who decides is the positions the department chose in Training
+> Admin → Settings & Data → Session Waivers, the Chief and, failing both, the
+> training managers, and the API scopes the queue and answers 404 for a request
+> the viewer may not see. `?action=approve|deny` only pre-selects the choice; the
+> decision is a POST after a confirmation, because mail scanners open links.
 
 > **`/training/approve/:token` is the officer's review of a Training event's
 > credit** _(2026-09-29)_. When a Training event's session requires officer

@@ -22,8 +22,13 @@ import {
   BUDGET_REQUEST_STATUS_BADGES,
   BUDGET_REQUEST_STATUS_LABELS,
   isDecided,
+  missingBeforeSubmit,
+  requestedAmountText,
   requestWindowText,
+  type RequestContentField,
 } from '../utils/budgetRequests';
+import { refusalsOnFields } from '../utils/fieldRefusals';
+import type { ServerFieldSpec } from '@/utils/serverFieldErrors';
 import type {
   BudgetRequest,
   BudgetRequestProposalOptions,
@@ -109,7 +114,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
           label={hasLastYear ? `Spent ${lastYearName ?? 'this year'}` : 'Spent this year'}
           value={hasLastYear ? formatCurrency(lastYearSpent ?? '0') : '-'}
         />
-        <Figure label="Requested" value={request ? formatCurrency(request.requestedAmount) : 'No request yet'} />
+        <Figure label="Requested" value={request ? requestedAmountText(request.requestedAmount) : 'No request yet'} />
         <Figure
           label="Approved"
           value={
@@ -175,6 +180,12 @@ const RequestCard: React.FC<RequestCardProps> = ({
       )}
     </li>
   );
+};
+
+/** What a refused Submit names (`BudgetRequestIncompleteError`). */
+const SUBMIT_FIELDS: Record<RequestContentField, ServerFieldSpec> = {
+  amount: { label: 'Amount requested', api: ['requested_amount', 'requestedAmount'] },
+  justification: { label: 'Justification' },
 };
 
 const BudgetRequestsPage: React.FC = () => {
@@ -262,12 +273,31 @@ const BudgetRequestsPage: React.FC = () => {
     }
   };
 
-  const handleSubmit = (request: BudgetRequest) =>
-    void run(
-      () => budgetRequestService.submit(request.id),
-      'Request submitted to the Treasurer',
-      'Could not submit the request'
-    );
+  // A draft may be blank (owner decision, 2026-11-11); one that is goes to
+  // its fields to be finished rather than to the Treasurer.
+  const finishBeforeSubmit = (request: BudgetRequest, flagged: Partial<Record<RequestContentField, string>>) =>
+    setDialog({ kind: 'edit', request, flagged });
+
+  const handleSubmit = async (request: BudgetRequest) => {
+    const missing = missingBeforeSubmit(request);
+    if (Object.keys(missing).length > 0) {
+      finishBeforeSubmit(request, missing);
+      return;
+    }
+    setBusy(true);
+    try {
+      await budgetRequestService.submit(request.id);
+      toast.success('Request submitted to the Treasurer');
+    } catch (err: unknown) {
+      // The server's own check, for a draft changed since this page loaded.
+      const refused = refusalsOnFields(err, SUBMIT_FIELDS);
+      if (refused && refused.unmatched.length === 0) finishBeforeSubmit(request, refused.fieldErrors);
+      else toast.error(getErrorMessage(err, 'Could not submit the request'));
+    } finally {
+      setBusy(false);
+      await load();
+    }
+  };
 
   const handleWithdraw = async (request: BudgetRequest) => {
     const ok = await confirm({
@@ -299,7 +329,7 @@ const BudgetRequestsPage: React.FC = () => {
 
   const cardActions = {
     onEdit: (request: BudgetRequest) => setDialog({ kind: 'edit', request }),
-    onSubmit: handleSubmit,
+    onSubmit: (request: BudgetRequest) => void handleSubmit(request),
     onWithdraw: (request: BudgetRequest) => void handleWithdraw(request),
     onDelete: (request: BudgetRequest) => void handleDelete(request),
   };

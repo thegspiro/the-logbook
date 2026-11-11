@@ -21,6 +21,7 @@ from app.schemas.meetings import (
     ActionItemCreate,
     ActionItemResponse,
     ActionItemUpdate,
+    MeetingAttendanceWaiverGrant,
     MeetingAttendeeCreate,
     MeetingAttendeeResponse,
     MeetingCreate,
@@ -541,22 +542,24 @@ async def get_attendance_dashboard(
 @router.post("/{meeting_id}/attendance-waiver")
 async def grant_attendance_waiver(
     meeting_id: UUID,
-    user_id: UUID = Query(..., description="Member to grant the waiver to"),
-    reason: str = Query(
-        ..., min_length=5, max_length=500, description="Reason for the waiver"
-    ),
+    body: MeetingAttendanceWaiverGrant,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("meetings.manage")),
 ):
     """
     Grant a meeting attendance waiver to a member.
 
-    The member will not be able to vote in this meeting, but their attendance
-    percentage will not be penalized. Only secretary, president, and chief
-    (via meetings.manage) can grant waivers.
+    The member and the reason are sent as a JSON body, so the reason never
+    appears in a URL; it is kept out of the audit log too, since it may be
+    medical. A meeting the member missed then does not count against their
+    attendance percentage; a meeting they were present at still counts as
+    attended (check-in wins). Only secretary, president, and chief (via
+    meetings.manage) can grant waivers.
 
     **Requires permission: meetings.manage**
     """
+    user_id = body.user_id
+    reason = body.reason
     # Verify the meeting belongs to this org
     from app.models.meeting import Meeting
     from app.services.attendance_dashboard_service import AttendanceDashboardService
@@ -598,11 +601,12 @@ async def grant_attendance_waiver(
         event_type="meeting_attendance_waiver_granted",
         event_category="meetings",
         severity="warning",
+        # Ids only: the reason may be medical, and the member's request, when
+        # there was one, keeps it encrypted (CLAUDE.md pitfall #33).
         event_data={
             "meeting_id": str(meeting_id),
             "meeting_title": meeting.title,
             "user_id": str(user_id),
-            "reason": reason,
         },
         user_id=str(current_user.id),
         username=current_user.username,

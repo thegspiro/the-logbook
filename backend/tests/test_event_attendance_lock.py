@@ -613,9 +613,14 @@ class TestDeferredCommit:
         svc = EventService(db)
         svc._revoke_event_attendance_credit = AsyncMock(return_value=["reversal"])
         svc._reverse_pipeline_after_commit = AsyncMock()
+        svc._void_waiver_requests = AsyncMock()
 
         await svc.cancel_event("event-1", "org-1", "weather", defer_commit=True)
 
+        # Pending waiver requests are closed inside the same, deferred write.
+        svc._void_waiver_requests.assert_awaited_once_with(
+            [event], "org-1", "cancelled"
+        )
         assert event.is_cancelled is True
         db.commit.assert_not_awaited()
         await svc.complete_deferred_writes("org-1")
@@ -1012,10 +1017,12 @@ class TestSeriesPathsHonourTheLock:
         events = [_event(finalized=False), _event(finalized=False)]
         db = _mock_db(_all(events))
         svc = EventService(db)
+        svc._void_waiver_requests = AsyncMock()
 
         deleted = await svc.delete_event_series("parent-1", "org-1")
 
         assert deleted == 2
+        svc._void_waiver_requests.assert_awaited_once_with(events, "org-1", "deleted")
 
 
 class TestCustomFieldsCannotDropTheMarker:

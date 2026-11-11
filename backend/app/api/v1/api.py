@@ -58,6 +58,7 @@ from app.api.v1.endpoints import (
     mcp_oauth_admin,
     medical_screening,
     medical_supplies,
+    meeting_waiver_requests,
     meetings,
     member_badges,
     member_id_cards,
@@ -383,6 +384,15 @@ api_router.include_router(
     dependencies=module_gate("history", "History"),
 )
 api_router.include_router(documents.router, prefix="/documents", tags=["documents"])
+# Ahead of the meetings router: its /{meeting_id} also matches
+# /meetings/waiver-requests, and would answer the GET with a 422 for a
+# meeting id that is not a UUID. TestRouterOrder pins the order.
+api_router.include_router(
+    meeting_waiver_requests.router,
+    prefix="/meetings/waiver-requests",
+    tags=["meetings"],
+    dependencies=module_gate("minutes", "Meeting Minutes"),
+)
 api_router.include_router(
     meetings.router,
     prefix="/meetings",

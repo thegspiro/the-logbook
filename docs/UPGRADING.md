@@ -135,6 +135,33 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### Duplicate meeting attendance rows are removed, and cannot be restored (2026-11-11)
+
+A migration (`7b6db9dd8e4f`) runs on the next start and adds a unique index on
+`meeting_attendees (meeting_id, user_id)`, so a member is recorded once per
+meeting. Nothing stopped a member being entered twice until now, and the index
+cannot be added while two rows share a pair, so **the migration first deletes
+the extra rows** (owner-approved, 2026-11-10). For each member entered more
+than once on one meeting it keeps one row:
+
+- a row carrying a waiver, if any does (the most recent of them);
+- otherwise the most recent row.
+
+The kept row also takes "present" and "excused" from the deleted ones when any
+of them was set, so a check-in recorded only on a deleted row is not lost.
+Each deleted row is written to the migration log by its ids (meeting, member,
+deleted row, kept row); no reason text is logged.
+
+- **Take the database backup first.** This step cannot be undone: the
+  downgrade drops the index and the new column but cannot bring the deleted
+  rows back. Only the backup has them.
+- The same migration adds `meeting_attendees.waiver_request_id`, a nullable
+  link to the member request a waiver came from (empty for every existing
+  row).
+- Adding a member who is already on a meeting is now refused with a message
+  ("already an attendee"), and creating a meeting whose attendee list names a
+  member twice is refused (400).
+
 ### A screening record's type and requirement link are encrypted at rest (2026-11-08)
 
 A migration (`ac1687769b62`) runs on the next start and turns
@@ -774,6 +801,54 @@ every authentication and public endpoint at once.
 
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
+
+### Meetings: a member who was present counts as attending, waiver or not; members can ask to be excused (2026-11-11)
+
+- **Attendance figures and voting eligibility can rise on upgrade, with no
+  setting changed.** Until now a meeting waiver beat being present: a member
+  marked present at a meeting they also held a waiver for was counted as
+  excused from it, not as attending. The owner decided check-in wins
+  (2026-11-10), so such a meeting now counts as attended in the voting
+  check's attendance percentage and recent-meetings count, the Secretary's
+  attendance dashboard and the annual evaluation's business-meeting figure.
+  A member with such meetings can move above a voting threshold. A waiver
+  still excuses a meeting the member missed. The election attendee import
+  already copied members marked present; it now agrees with the tally about
+  them (D12).
+- **The Secretary's grant takes a JSON body** (D7):
+  `POST /api/v1/meetings/{id}/attendance-waiver` now reads `user_id` and
+  `reason` from the body, which is what the app already sent (so the call
+  used to fail with 422). A script that passed them as query parameters must
+  send a JSON body instead. The reason is no longer written to the audit log.
+- **Members can ask to be excused from a business meeting**, off until the
+  Secretary saves a policy (`PUT /api/v1/meetings/waiver-requests/policy`,
+  `meetings.manage`; stored in the organization's settings, so nothing to
+  configure at upgrade time). The screens arrive in a later release. An
+  approved request writes the same waiver the Secretary grants by hand onto
+  the minutes record, with the text "Excused: approved request" and the
+  category, never the member's reason.
+- **Cancelling or deleting an event now closes the pending waiver requests
+  about it**, training and meeting alike; approved and denied ones are kept.
+### Finance: a budget request draft can be saved blank (2026-11-11)
+
+Nothing blocks a restart. Migration `0136dd6d4144` makes
+`budget_requests.requested_amount` and `budget_requests.justification`
+nullable. Every existing request already holds both, and none is rewritten.
+
+- **What changes for owners.** A line owner can save a draft before deciding
+  the amount or writing the justification. Submit still needs both: pressing
+  it on an unfinished draft opens the draft with the missing fields flagged,
+  and the API refuses the submit with a 422 naming them. A submitted request's
+  edit still needs both, as before.
+- **The Treasurer's review screen** lists a blank draft's amount as _Not
+  entered yet_, and its totals count only what has been entered.
+- **Rolling back.** The previous release cannot read a blank draft: its
+  response schema requires both fields, so listing a year that has one fails.
+  Run the downgrade (`alembic downgrade 09f0171ccf5e`) before restoring the
+  previous image, or restore the database backup taken before upgrading. The
+  downgrade fills each blank draft with an amount of 0.00 and an empty
+  justification so the columns can be NOT NULL again; upgrading again does not
+  undo that fill, so those drafts then read $0.00 until their owner edits them.
 
 ### Training: members can ask to be excused from a session (2026-11-10)
 

@@ -151,6 +151,20 @@ describe('Budget request review — the list', () => {
     expect(screen.getByRole('row', { name: 'Totals' })).toHaveTextContent('Total (1 request)');
   });
 
+  // Owner decision, 2026-11-11: a draft may be blank; it reads as such, and
+  // the total counts what has been entered.
+  it('shows a blank draft as not entered yet, and totals around it', async () => {
+    list.mockResolvedValue([
+      request('a', 'draft', { requestedAmount: '250.00' }),
+      request('z', 'draft', { requestedAmount: null, justification: null }),
+    ]);
+    renderPage();
+    await screen.findByText('No submitted requests for FY2027.');
+    await userEvent.setup().selectOptions(screen.getByLabelText('Status'), 'draft');
+    expect(await row('Line z')).toHaveTextContent('Not entered yet');
+    expect(screen.getByRole('row', { name: 'Totals' })).toHaveTextContent('$250.00');
+  });
+
   it('says when nothing is waiting', async () => {
     list.mockResolvedValue([request('c', 'approved')]);
     renderPage();

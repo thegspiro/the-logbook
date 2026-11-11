@@ -5,6 +5,40 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 8 – 10, 2026
+
+Merged to `main` after `51e6e1b5` (2026-11-08 08:59 UTC, the previous pass)
+through `69d32dc1` (2026-11-10 13:56 UTC). The plain-language, phone-width and
+forms-review sweeps (#4131–#4178) and the security-review and app-review passes
+are recorded by their own PRs, `docs/FORMS_REVIEW_2026-11-05.md`, and
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+The November 8 – 9 pass below started from the same commit and covers part of this window; rows that appear in both describe the same changes.
+
+| Change                                                                                                                                                                                                           | Guide | Disposition                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------ |
+| My Shifts: **Upcoming** under month headers; **Past** by year and month with a Year dropdown and hours chart; declined and cancelled seats leave Past (#4175 area, `674728a5`, `6686002a`)                       | 03    | Added to My Shifts                                     |
+| End-of-shift summary rolls call types into counts (`16f5ea1f`)                                                                                                                                                   | 03    | Added                                                  |
+| Check In offers **Add a member** after check-in closes (W80-8)                                                                                                                                                   | 04    | Added                                                  |
+| Moving an event's start lets reminders resend (W80-16); a training waiver takes an excused drill off "missed" (W80-10)                                                                                           | 04    | Added                                                  |
+| Session-attendance requirement with no session held is not graded (W80-9); wizard review lists counted requirements, credit-hours hint, officer check-in starts a record, withdrawn-credit reason (W80-12 to 15) | 02    | Added                                                  |
+| Training records show their source: provider, Imported or The Logbook; CSV **Source** column; PDF line under the course (#4209)                                                                                  | 02    | Added to the History tab. No migration                 |
+| Member roster is a table again on desktop (`rwd-table-xwide`)                                                                                                                                                    | 01    | Added                                                  |
+| `GET /users/with-roles` no longer 500s on a `.invalid` placeholder email (`8cfabeac`)                                                                                                                            | 01    | Added; no migration, write paths still validate        |
+| Historical import: members to be created are named as they will be; the already-decided ones fold away                                                                                                           | 16    | Added                                                  |
+| PDF margins and Avery 5160 alignment (`21529f7f`)                                                                                                                                                                | none  | Already in `PDF_REPORTS.md` and `KNOWN_LIMITATIONS.md` |
+| Shared report layout for training and equipment-check PDFs; escaped text fixed in PDF cells                                                                                                                      | none  | Already in `PDF_REPORTS.md`                            |
+| Side-navigation collapse rail keyed on a root attribute, not `:has()` (`08fa40a5`); Mobile Safari E2E run in three shards (#4210); dependency bumps                                                              | none  | Internal or CI only                                    |
+
+**Screenshots to create:** My Shifts Upcoming with month headers; My Shifts Past
+with Year dropdown and chart; the event Check In dialog with **Add a member**;
+a Training History page showing the source line; a requirement card reading
+**No sessions held yet**; Historical Data Import members list with the collapsed
+section. **Replace:** `01-01` (roster as a table on a desktop width), `03-04`.
+Queued in `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Not covered:** YouTube scripts, flagged in
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`, not edited.
+
 ## Change audit: November 8 – 9, 2026
 
 Merged to `main` after `51e6e1b5` (2026-11-08 08:59 UTC, the previous pass)
