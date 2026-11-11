@@ -19,6 +19,9 @@ import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hook
 import { DuplicateCategoryNameBadge } from '../components/DuplicateCategoryNameBadge';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { placeApiError } from '../../../hooks/useFieldErrors';
 
 const ITEM_TYPE_COLORS: Record<string, string> = {
   uniform: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
@@ -62,14 +65,30 @@ const EMPTY_FORM: CategoryFormData = {
   self_checkout_loan_days: '',
 };
 
-type CategoryField = 'name' | 'description';
+type CategoryField = 'name' | 'description' | 'item_type' | 'self_checkout_loan_days' | 'low_stock_threshold';
 
 // snake_case keys: schemas/inventory.py carries no alias generator, so a 422
-// names the request body's own keys.
+// names the request body's own keys. Ordered as on screen, so the first
+// refusal takes focus.
 const CATEGORY_FIELDS: FieldSpecs<CategoryField> = {
   name: { id: 'cat-name', label: 'Name' },
   description: { id: 'cat-desc', label: 'Description' },
+  item_type: { id: 'cat-type', label: 'Item Type' },
+  self_checkout_loan_days: { id: 'cat-loan-days', label: 'Kiosk loan period (days)' },
+  low_stock_threshold: { id: 'cat-threshold', label: 'Low Stock Threshold' },
 };
+const CATEGORY_ORDER = Object.keys(CATEGORY_FIELDS) as CategoryField[];
+
+/** `EntityName` and `FreeText` in schemas/inventory.py. */
+const NAME_MAX = 255;
+const DESCRIPTION_MAX = 2000;
+
+/** A whole number in range, or null for a blank box; `undefined` when the text is not one. */
+function parseWhole(text: string, min: number, max: number): number | null | undefined {
+  if (!text.trim()) return null;
+  const n = Number(text);
+  return Number.isInteger(n) && n >= min && n <= max ? n : undefined;
+}
 
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
@@ -86,6 +105,10 @@ const InventoryCategoriesPage: React.FC = () => {
   const [formData, setFormData] = useState<CategoryFormData>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const categoryErrors = useFieldErrors(CATEGORY_FIELDS);
+  // What the dialog held when it opened (or last saved), so Escape, the X and
+  // Cancel ask before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<CategoryFormData>(EMPTY_FORM);
+  const isDirty = showModal && JSON.stringify(formData) !== JSON.stringify(baseline);
 
   const loadCategories = useCallback(async () => {
     setIsLoading(true);
@@ -106,13 +129,14 @@ const InventoryCategoriesPage: React.FC = () => {
   const openCreateModal = () => {
     setEditingCategory(null);
     setFormData(EMPTY_FORM);
+    setBaseline(EMPTY_FORM);
     categoryErrors.clear();
     setShowModal(true);
   };
 
   const openEditModal = (category: InventoryCategory) => {
     setEditingCategory(category);
-    setFormData({
+    const seeded: CategoryFormData = {
       name: category.name,
       description: category.description ?? '',
       item_type: category.item_type,
@@ -123,7 +147,9 @@ const InventoryCategoriesPage: React.FC = () => {
       low_stock_threshold: category.low_stock_threshold != null ? String(category.low_stock_threshold) : '',
       allow_self_checkout: category.allow_self_checkout ?? false,
       self_checkout_loan_days: category.self_checkout_loan_days != null ? String(category.self_checkout_loan_days) : '',
-    });
+    };
+    setFormData(seeded);
+    setBaseline(seeded);
     categoryErrors.clear();
     setShowModal(true);
   };
@@ -132,6 +158,13 @@ const InventoryCategoriesPage: React.FC = () => {
     setShowModal(false);
     setEditingCategory(null);
     setFormData(EMPTY_FORM);
+    setBaseline(EMPTY_FORM);
+  };
+  const requestClose = useDiscardGuard({ isDirty, onClose: closeModal });
+
+  const update = <K extends keyof CategoryFormData>(key: K, value: CategoryFormData[K]) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    if (key in CATEGORY_FIELDS) categoryErrors.setError(key as CategoryField, null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -141,9 +174,17 @@ const InventoryCategoriesPage: React.FC = () => {
     // could find again (forms review F-3).
     const problems: FieldErrors<CategoryField> = {};
     if (!formData.name.trim()) problems.name = 'Enter a name for the category.';
+    const threshold = parseWhole(formData.low_stock_threshold, 0, 2_147_483_647);
+    if (threshold === undefined) problems.low_stock_threshold = 'Enter a whole number of 0 or more, or leave it empty.';
+    const loanDays = formData.allow_self_checkout ? parseWhole(formData.self_checkout_loan_days, 1, 365) : null;
+    if (loanDays === undefined) {
+      problems.self_checkout_loan_days = 'Enter a whole number of days from 1 to 365, or leave it empty.';
+    }
     categoryErrors.setFormError(null);
     categoryErrors.setErrors(problems);
-    if (Object.keys(problems).length > 0) {
+    // A new category is not created until every field is fixed; an edit saves
+    // the rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!editingCategory && Object.keys(problems).length > 0) {
       categoryErrors.focusFirst(problems);
       return;
     }
@@ -155,8 +196,6 @@ const InventoryCategoriesPage: React.FC = () => {
       // `exclude_unset` and an omitted key means "leave this alone" — the clear
       // was being lost behind a success toast (CLAUDE.md pitfall #1).
       const { text, num } = formCoercions(Boolean(editingCategory));
-      const threshold = parseInt(formData.low_stock_threshold, 10);
-      const loanDays = parseInt(formData.self_checkout_loan_days, 10);
       const payload: InventoryCategoryCreate = {
         name: formData.name.trim(),
         description: text(formData.description),
@@ -165,14 +204,33 @@ const InventoryCategoriesPage: React.FC = () => {
         requires_maintenance: formData.requires_maintenance,
         requires_assignment: formData.requires_assignment,
         nfpa_tracking_enabled: formData.nfpa_tracking_enabled,
-        low_stock_threshold: isNaN(threshold) ? num('') : threshold,
+        low_stock_threshold: threshold ?? num(''),
         allow_self_checkout: formData.allow_self_checkout,
         // Only meaningful with self-checkout on; sent (as null when blank) on
         // edit so clearing the box actually removes the due date.
-        self_checkout_loan_days: isNaN(loanDays) ? num('') : loanDays,
+        self_checkout_loan_days: loanDays ?? num(''),
       };
       if (editingCategory) {
-        await inventoryService.updateCategory(editingCategory.id, payload);
+        const { refused } = await saveExceptRefused<CategoryField, unknown>({
+          payload: { ...payload },
+          refused: problems,
+          send: (body) => inventoryService.updateCategory(editingCategory.id, body),
+          place: (err) => placeApiError(CATEGORY_FIELDS, err),
+        });
+        const first = firstRefused(CATEGORY_ORDER, refused);
+        if (first) {
+          // The list refreshes behind the dialog, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          void loadCategories();
+          categoryErrors.setErrors(refused);
+          categoryErrors.setFormError(
+            `Category saved, except ${CATEGORY_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+          );
+          categoryErrors.focusFirst(refused);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as keyof CategoryFormData]]));
+          setBaseline({ ...formData, ...keep });
+          return;
+        }
         toast.success('Category updated');
       } else {
         await inventoryService.createCategory(payload);
@@ -200,7 +258,7 @@ const InventoryCategoriesPage: React.FC = () => {
       </button>
       <button
         type="button"
-        onClick={closeModal}
+        onClick={requestClose}
         className="text-theme-text-secondary hover:text-theme-text-primary mr-2 inline-flex items-center px-4 py-2 text-sm font-medium sm:mr-3"
       >
         Cancel
@@ -346,12 +404,12 @@ const InventoryCategoriesPage: React.FC = () => {
       {/* Add/Edit Modal */}
       <Modal
         isOpen={showModal}
-        onClose={closeModal}
+        onClose={requestClose}
         title={editingCategory ? 'Edit Category' : 'Add Category'}
         footer={modalFooter}
         size="md"
       >
-        <form id="category-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        <form id="category-form" onSubmit={(e) => void handleSubmit(e)} noValidate className="space-y-4">
           {categoryErrors.formError && (
             <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
               {categoryErrors.formError}
@@ -363,17 +421,16 @@ const InventoryCategoriesPage: React.FC = () => {
             required
             error={categoryErrors.errors.name}
             labelClassName={labelClass}
+            maxLength={NAME_MAX}
+            count={formData.name.length}
           >
             {(field) => (
               <input
                 {...field}
                 type="text"
-                maxLength={255}
+                autoComplete="off"
                 value={formData.name}
-                onChange={(e) => {
-                  setFormData((prev) => ({ ...prev, name: e.target.value }));
-                  categoryErrors.setError('name', null);
-                }}
+                onChange={(e) => update('name', e.target.value)}
                 className={inputClass}
                 placeholder="e.g. Turnout Gear"
               />
@@ -384,39 +441,41 @@ const InventoryCategoriesPage: React.FC = () => {
             label="Description"
             error={categoryErrors.errors.description}
             labelClassName={labelClass}
+            maxLength={DESCRIPTION_MAX}
+            count={formData.description.length}
           >
             {(field) => (
               <textarea
                 {...field}
                 rows={2}
-                maxLength={2000}
                 value={formData.description}
-                onChange={(e) => {
-                  setFormData((prev) => ({ ...prev, description: e.target.value }));
-                  categoryErrors.setError('description', null);
-                }}
+                onChange={(e) => update('description', e.target.value)}
                 className={inputClass}
                 placeholder="Optional description for this category"
               />
             )}
           </FormField>
-          <div>
-            <label htmlFor="cat-type" className={labelClass}>
-              Item Type
-            </label>
-            <select
-              id="cat-type"
-              value={formData.item_type}
-              onChange={(e) => setFormData((prev) => ({ ...prev, item_type: e.target.value }))}
-              className={selectClass}
-            >
-              {ITEM_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FormField
+            id={CATEGORY_FIELDS.item_type.id}
+            label="Item Type"
+            error={categoryErrors.errors.item_type}
+            labelClassName={labelClass}
+          >
+            {(field) => (
+              <select
+                {...field}
+                value={formData.item_type}
+                onChange={(e) => update('item_type', e.target.value)}
+                className={selectClass}
+              >
+                {ITEM_TYPES.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
           <div className="space-y-3">
             <p className="text-theme-text-secondary text-sm font-medium">Tracking Options</p>
             <ToggleSwitch
@@ -452,45 +511,49 @@ const InventoryCategoriesPage: React.FC = () => {
               onChange={(v) => setFormData((prev) => ({ ...prev, allow_self_checkout: v }))}
             />
             {formData.allow_self_checkout && (
-              <div>
-                <label htmlFor="cat-loan-days" className={labelClass}>
-                  Kiosk loan period (days)
-                </label>
-                <input
-                  id="cat-loan-days"
-                  type="number"
-                  min="1"
-                  max="365"
-                  value={formData.self_checkout_loan_days}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, self_checkout_loan_days: e.target.value }))}
-                  className={inputClass}
-                  placeholder="e.g. 14"
-                />
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Items checked out at the kiosk are due back after this many days, and are flagged overdue after that.
-                  Leave empty for no due date.
-                </p>
-              </div>
+              <FormField
+                id={CATEGORY_FIELDS.self_checkout_loan_days.id}
+                label="Kiosk loan period (days)"
+                error={categoryErrors.errors.self_checkout_loan_days}
+                labelClassName={labelClass}
+                hint="Items checked out at the kiosk are due back after this many days, and are flagged overdue after that. Leave empty for no due date."
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    max="365"
+                    value={formData.self_checkout_loan_days}
+                    onChange={(e) => update('self_checkout_loan_days', e.target.value)}
+                    className={inputClass}
+                    placeholder="e.g. 14"
+                  />
+                )}
+              </FormField>
             )}
           </div>
-          <div>
-            <label htmlFor="cat-threshold" className={labelClass}>
-              Low Stock Threshold
-            </label>
-            <input
-              id="cat-threshold"
-              type="number"
-              min="0"
-              value={formData.low_stock_threshold}
-              onChange={(e) => setFormData((prev) => ({ ...prev, low_stock_threshold: e.target.value }))}
-              className={inputClass}
-              placeholder="e.g. 5"
-            />
-            <p className="text-theme-text-muted mt-1 text-xs">
-              Flag the category as low on stock when its total quantity drops to this number or lower. Leave empty to
-              turn off.
-            </p>
-          </div>
+          <FormField
+            id={CATEGORY_FIELDS.low_stock_threshold.id}
+            label="Low Stock Threshold"
+            error={categoryErrors.errors.low_stock_threshold}
+            labelClassName={labelClass}
+            hint="Flag the category as low on stock when its total quantity drops to this number or lower. Leave empty to turn off."
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="numeric"
+                min="0"
+                value={formData.low_stock_threshold}
+                onChange={(e) => update('low_stock_threshold', e.target.value)}
+                className={inputClass}
+                placeholder="e.g. 5"
+              />
+            )}
+          </FormField>
         </form>
       </Modal>
     </div>

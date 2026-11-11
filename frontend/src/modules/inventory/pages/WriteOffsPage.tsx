@@ -15,7 +15,18 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
 import { formatDate } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import toast from 'react-hot-toast';
+
+type ReviewField = 'review_notes' | 'acknowledgement';
+
+/** `WriteOffReview` in schemas/inventory.py; ordered as on screen. */
+const REVIEW_FIELDS: Record<ReviewField, ServerFieldSpec & { id: string }> = {
+  review_notes: { label: 'Review note', maxLength: 2000, id: 'writeoff-review-notes' },
+  acknowledgement: { label: 'Acknowledgement', id: 'writeoff-acknowledge' },
+};
 
 const WriteOffsPage: React.FC = () => {
   const tz = useTimezone();
@@ -29,6 +40,17 @@ const WriteOffsPage: React.FC = () => {
   const [reviewNotes, setReviewNotes] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [reviewErrors, setReviewErrors] = useState<Partial<Record<ReviewField, string>>>({});
+  // A typed note or a ticked acknowledgement is what Escape, the X and the
+  // close ask about before throwing away (forms review F-6).
+  const closeReview = () => {
+    setReviewModal({ open: false, item: null });
+    setReviewErrors({});
+  };
+  const requestCloseReview = useDiscardGuard({
+    isDirty: reviewModal.open && (reviewNotes.trim() !== '' || acknowledged),
+    onClose: closeReview,
+  });
 
   const loadWriteOffs = useCallback(async () => {
     setLoading(true);
@@ -55,10 +77,24 @@ const WriteOffsPage: React.FC = () => {
     (writeOff) => setReviewModal({ open: true, item: writeOff })
   );
 
+  const showReviewErrors = (next: Partial<Record<ReviewField, string>>) => {
+    setReviewErrors(next);
+    const first = (Object.keys(REVIEW_FIELDS) as ReviewField[]).find((k) => next[k]);
+    if (first) window.setTimeout(() => document.getElementById(REVIEW_FIELDS[first].id)?.focus(), 0);
+  };
+
   const handleReview = async (decision: 'approved' | 'denied') => {
     if (!reviewModal.item) return;
-    if (!reviewNotes.trim()) {
-      toast.error('A review note is required');
+    // A decision is an approve-type step, so it is refused until every reason
+    // is answered, each said on its field rather than by a greyed-out button
+    // (owner rule 2026-11-05; forms review F-3).
+    const problems: Partial<Record<ReviewField, string>> = {};
+    if (!reviewNotes.trim()) problems.review_notes = 'Write a review note saying why you decided this.';
+    if (decision === 'approved' && reviewModal.item.acknowledgement_required && !acknowledged) {
+      problems.acknowledgement = 'Tick the acknowledgement before approving this write-off.';
+    }
+    if (Object.keys(problems).length > 0) {
+      showReviewErrors(problems);
       return;
     }
     setSubmitting(true);
@@ -71,12 +107,16 @@ const WriteOffsPage: React.FC = () => {
         expected_holder_signature: reviewModal.item.holder_signature,
       });
       toast.success(`Write-off ${decision}`);
-      setReviewModal({ open: false, item: null });
+      closeReview();
       setReviewNotes('');
       setAcknowledged(false);
       void loadWriteOffs();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to review write-off'));
+      const mapped = mapServerFieldErrors(err, REVIEW_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) showReviewErrors(mapped.fieldErrors);
+      if (!mapped || mapped.unmatched.length > 0 || Object.keys(mapped.fieldErrors).length === 0) {
+        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to review write-off'));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -180,6 +220,7 @@ const WriteOffsPage: React.FC = () => {
                         setReviewModal({ open: true, item: wo });
                         setReviewNotes('');
                         setAcknowledged(false);
+                        setReviewErrors({});
                       }}
                       className="btn-info shrink-0 px-3 py-1.5 text-xs"
                     >
@@ -228,7 +269,7 @@ const WriteOffsPage: React.FC = () => {
         {/* Review Modal */}
         <Modal
           isOpen={reviewModal.open}
-          onClose={() => setReviewModal({ open: false, item: null })}
+          onClose={requestCloseReview}
           title={`Review Write-Off: ${reviewModal.item?.item_name ?? ''}`}
           size="lg"
         >
@@ -291,37 +332,56 @@ const WriteOffsPage: React.FC = () => {
                 <p>Description: {reviewModal.item.description}</p>
               </div>
 
-              <div>
-                <label
-                  htmlFor="writeoff-review-notes"
-                  className="text-theme-text-primary mb-1 block text-sm font-medium"
-                >
-                  Review note <span className="text-red-600">*</span>
-                </label>
-                <textarea
-                  id="writeoff-review-notes"
-                  rows={3}
-                  value={reviewNotes}
-                  onChange={(e) => setReviewNotes(e.target.value)}
-                  className="form-input"
-                  placeholder="Document the reason for this decision..."
-                  required
-                />
-              </div>
+              <FormField
+                id={REVIEW_FIELDS.review_notes.id}
+                label="Review note"
+                required
+                error={reviewErrors.review_notes}
+                maxLength={REVIEW_FIELDS.review_notes.maxLength}
+                count={reviewNotes.length}
+              >
+                {(field) => (
+                  <textarea
+                    {...field}
+                    rows={3}
+                    value={reviewNotes}
+                    onChange={(e) => {
+                      setReviewNotes(e.target.value);
+                      setReviewErrors(({ review_notes: _cleared, ...rest }) => rest);
+                    }}
+                    className="form-input"
+                    placeholder="Document the reason for this decision..."
+                  />
+                )}
+              </FormField>
 
               {reviewModal.item.acknowledgement_required && (
-                <label className="flex items-start gap-2 rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
-                  <input
-                    type="checkbox"
-                    checked={acknowledged}
-                    onChange={(e) => setAcknowledged(e.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span>
-                    I acknowledge that this item is currently held or exceeds the organization’s $
-                    {Number(reviewModal.item.acknowledgement_threshold || 0).toFixed(2)} review threshold.
-                  </span>
-                </label>
+                <div>
+                  <label className="flex items-start gap-2 rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                    <input
+                      id={REVIEW_FIELDS.acknowledgement.id}
+                      type="checkbox"
+                      checked={acknowledged}
+                      onChange={(e) => {
+                        setAcknowledged(e.target.checked);
+                        setReviewErrors(({ acknowledgement: _cleared, ...rest }) => rest);
+                      }}
+                      className="mt-0.5"
+                      {...(reviewErrors.acknowledgement
+                        ? { 'aria-invalid': true, 'aria-describedby': 'writeoff-acknowledge-error' }
+                        : {})}
+                    />
+                    <span>
+                      I acknowledge that this item is currently held or exceeds the organization’s $
+                      {Number(reviewModal.item.acknowledgement_threshold || 0).toFixed(2)} review threshold.
+                    </span>
+                  </label>
+                  {reviewErrors.acknowledgement && (
+                    <p id="writeoff-acknowledge-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                      {reviewErrors.acknowledgement}
+                    </p>
+                  )}
+                </div>
               )}
 
               <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
@@ -329,7 +389,7 @@ const WriteOffsPage: React.FC = () => {
                   onClick={() => {
                     void handleReview('denied');
                   }}
-                  disabled={submitting || !reviewNotes.trim()}
+                  disabled={submitting}
                   className="btn-primary btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <XCircle className="h-4 w-4" />
@@ -339,9 +399,7 @@ const WriteOffsPage: React.FC = () => {
                   onClick={() => {
                     void handleReview('approved');
                   }}
-                  disabled={
-                    submitting || !reviewNotes.trim() || (reviewModal.item.acknowledgement_required && !acknowledged)
-                  }
+                  disabled={submitting}
                   className="btn-danger btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <Check className="h-4 w-4" />

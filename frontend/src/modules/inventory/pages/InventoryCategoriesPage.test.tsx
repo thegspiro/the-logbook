@@ -244,6 +244,78 @@ describe('InventoryCategoriesPage add dialog validation', () => {
   });
 });
 
+describe('InventoryCategoriesPage dialog: numbers, edits and discarding', () => {
+  beforeEach(() => {
+    mockGetCategories.mockReset();
+    mockCreateCategory.mockReset();
+    mockUpdateCategory.mockReset();
+    mockCheckPermission.mockReset();
+    mockToastSuccess.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+    mockGetCategories.mockResolvedValue([makeCategory()]);
+    mockCreateCategory.mockResolvedValue({ id: 'cat-new' });
+    mockUpdateCategory.mockResolvedValue({});
+  });
+
+  it('flags a negative threshold on its field and creates nothing', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryCategoriesPage />);
+    await screen.findByText('Turnout Gear');
+    await user.click(screen.getByText('Add Category'));
+    await user.type(await screen.findByRole('textbox', { name: 'Name' }), 'Radios');
+    await user.type(screen.getByRole('spinbutton', { name: 'Low Stock Threshold' }), '-3');
+    await user.click(screen.getByText('Create Category'));
+
+    expect(screen.getByRole('spinbutton', { name: 'Low Stock Threshold' })).toHaveAccessibleDescription(
+      expect.stringContaining('Enter a whole number of 0 or more') as string
+    );
+    expect(mockCreateCategory).not.toHaveBeenCalled();
+  });
+
+  it('saves the rest of an edit and keeps a refused field flagged, open', async () => {
+    mockUpdateCategory.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: {
+          detail: [{ field: 'low_stock_threshold', message: 'Input should be less than or equal to 2147483647' }],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryCategoriesPage />);
+    await screen.findByText('Turnout Gear');
+    await user.click(screen.getByLabelText('Edit Turnout Gear'));
+    const description = await screen.findByRole('textbox', { name: 'Description' });
+    await user.clear(description);
+    await user.type(description, 'Structural gear');
+    await user.click(screen.getByText('Update Category'));
+
+    await waitFor(() => expect(mockUpdateCategory).toHaveBeenCalledTimes(2));
+    expect(mockUpdateCategory.mock.calls[1]?.[1]).not.toHaveProperty('low_stock_threshold');
+    expect(mockUpdateCategory.mock.calls[1]?.[1]).toMatchObject({ description: 'Structural gear' });
+    expect(screen.getByRole('spinbutton', { name: 'Low Stock Threshold' })).toHaveAccessibleDescription(
+      expect.stringContaining('less than or equal to') as string
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('Category saved, except low stock threshold.');
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel discards what was typed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryCategoriesPage />);
+    await screen.findByText('Turnout Gear');
+    await user.click(screen.getByText('Add Category'));
+    await user.type(await screen.findByRole('textbox', { name: 'Name' }), 'Radios');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Radios');
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    await waitFor(() => expect(screen.queryByText('Create Category')).not.toBeInTheDocument());
+  });
+});
+
 describe('InventoryCategoriesPage duplicate names', () => {
   beforeEach(() => {
     mockGetCategories.mockReset();
