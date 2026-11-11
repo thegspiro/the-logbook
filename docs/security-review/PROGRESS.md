@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**
+**PR [#4232](https://github.com/thegspiro/the-logbook/pull/4232)**
 (branch `claude/security-review-meetings-minutes-p13`):
 Feature 24 (Meetings & minutes), pass 13, a watchdog pickup. PR #4228
 (Feature 23, Medical supplies, pass 20) had already merged. A fresh
