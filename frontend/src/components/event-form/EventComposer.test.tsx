@@ -12,18 +12,21 @@ const getUsers = vi.fn();
 const getCourses = vi.fn();
 const getLocations = vi.fn();
 const getVisibleEventTypesWithCategories = vi.fn();
+const getMandatoryTiers = vi.fn();
 
 vi.mock('../../services/api', () => ({
   userService: { getUsers: (...args: unknown[]) => getUsers(...args) as unknown },
   trainingService: { getCourses: (...args: unknown[]) => getCourses(...args) as unknown },
+  trainingSessionService: { getMandatoryTiers: (...args: unknown[]) => getMandatoryTiers(...args) as unknown },
   locationsService: { getLocations: (...args: unknown[]) => getLocations(...args) as unknown },
   eventService: {
     getVisibleEventTypesWithCategories: (...args: unknown[]) => getVisibleEventTypesWithCategories(...args) as unknown,
   },
 }));
 
+const linkageRequirements = vi.hoisted(() => ({ value: [] as unknown[] }));
 vi.mock('../../hooks/useTrainingLinkageData', () => ({
-  useTrainingLinkageData: () => ({ categories: [], requirements: [], programs: [], phases: [] }),
+  useTrainingLinkageData: () => ({ categories: [], requirements: linkageRequirements.value, programs: [], phases: [] }),
 }));
 vi.mock('../../hooks/useRanks', () => ({ useRanks: () => ({ formatRank: (rank: string) => rank }) }));
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -45,11 +48,14 @@ function resetMocks() {
     getCourses,
     getLocations,
     getVisibleEventTypesWithCategories,
+    getMandatoryTiers,
     onSubmit,
     onSubmitRecurring,
   ]) {
     mock.mockReset();
   }
+  linkageRequirements.value = [];
+  getMandatoryTiers.mockResolvedValue({ everyone: true, tier_ids: [], unmapped: [] });
   onCancel.mockReset();
   getUsers.mockResolvedValue([]);
   getCourses.mockResolvedValue([]);
@@ -206,6 +212,67 @@ describe('EventComposer hand-off to the training form', () => {
     const sent = onSubmit.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(sent.event_type).toBe('business_meeting');
     expect(sent).not.toHaveProperty('training_details');
+  });
+});
+
+// The rule that ticks stop updating Mandatory for once it was set by hand
+// holds across the hand-off: the single-page form's choice is the officer's.
+describe('EventComposer keeps a hand-set Mandatory for', () => {
+  beforeEach(() => {
+    resetMocks();
+    linkageRequirements.value = [
+      {
+        id: 'req-att',
+        organization_id: 'org',
+        name: 'Company Drill Attendance',
+        requirement_type: 'session_attendance',
+        required_attendance_pct: 60,
+        applies_to_all: true,
+        active: true,
+      },
+    ];
+  });
+
+  it('does not replace member types chosen on the single-page form', async () => {
+    const user = userEvent.setup();
+    renderComposer();
+    await user.type(screen.getByLabelText(/^Title/), 'Monday Night Drill');
+    fireEvent.change(screen.getByLabelText(/Start Date & Time/), { target: { value: '2030-05-06' } });
+    await user.click(screen.getByLabelText(/mandatory attendance/i));
+    await user.click(await screen.findByLabelText('Active Member'));
+
+    await user.selectOptions(typePicker(), 'training');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByLabelText(/Company Drill Attendance/));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+    expect(screen.getByLabelText('Active Member')).toBeChecked();
+    expect(getMandatoryTiers).not.toHaveBeenCalled();
+  });
+
+  it('does not replace a choice made in the training form after a detour to another type', async () => {
+    const user = userEvent.setup();
+    renderComposer();
+    await user.type(screen.getByLabelText(/^Title/), 'Monday Night Drill');
+    fireEvent.change(screen.getByLabelText(/Start Date & Time/), { target: { value: '2030-05-06' } });
+    await user.selectOptions(typePicker(), 'training');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByLabelText(/mandatory attendance/i));
+    await user.click(screen.getByRole('radio', { name: 'Only these member types' }));
+    await user.click(screen.getByLabelText('Active Member'));
+
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    await user.selectOptions(typePicker(), 'social');
+    await user.selectOptions(typePicker(), 'training');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByLabelText(/Company Drill Attendance/));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+    expect(screen.getByLabelText('Active Member')).toBeChecked();
   });
 });
 

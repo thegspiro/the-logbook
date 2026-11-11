@@ -401,7 +401,19 @@ export const useEventFormModel = ({
     update({ send_reminders: target !== 'none', reminder_target: target });
   };
 
+  // Whether the officer has set "Mandatory for" by hand, in either form. Held
+  // here, with the model, rather than in the training form's pre-fill, so it
+  // survives the hand-off between the two forms and a remount of either: a
+  // choice made on the single-page form is still the officer's on Settings.
+  const mandatoryForEdited = useRef(false);
+
+  /** Mandatory for, changed by the officer: a pre-fill no longer replaces it. */
   const setMandatoryScope = (scope: MandatoryScope) => {
+    mandatoryForEdited.current = true;
+    suggestMandatoryScope(scope);
+  };
+  /** Mandatory for, changed on the officer's behalf (a pre-fill): it stays theirs to change. */
+  const suggestMandatoryScope = (scope: MandatoryScope) => {
     setMandatoryScopeState(scope);
     if (fieldErrors.mandatory_membership_types) {
       setFieldErrors(({ mandatory_membership_types: _cleared, ...rest }) => rest);
@@ -425,6 +437,7 @@ export const useEventFormModel = ({
   );
 
   const toggleMandatoryMembershipType = (membershipType: string, checked: boolean) => {
+    mandatoryForEdited.current = true;
     const selected = formData.mandatory_membership_types || [];
     update({
       mandatory_membership_types: checked
@@ -704,6 +717,8 @@ export const useEventFormModel = ({
     setAlternateId,
     mandatoryScope,
     setMandatoryScope,
+    suggestMandatoryScope,
+    mandatoryForEdited,
     // Reference data
     locations,
     locationMode,

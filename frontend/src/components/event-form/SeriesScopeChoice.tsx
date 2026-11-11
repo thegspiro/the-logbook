@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { Info, Repeat } from 'lucide-react';
-import { formatDate } from '../../utils/dateFormatting';
+import { formatDateCustom } from '../../utils/dateFormatting';
 
 export type SeriesScope = 'single' | 'future';
 
@@ -19,8 +19,15 @@ export interface SeriesScopeChoiceProps {
   /** The series' last date, as an ISO instant; absent on a rolling series. */
   seriesEnd?: string | undefined;
   rolling?: boolean | undefined;
+  /** The series' first event, as an ISO instant, when the occurrence is a later one. */
+  seriesStart?: string | undefined;
   tz?: string | undefined;
 }
+
+const DATE_ONLY: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+
+/** An instant as the department's calendar date, "Thu, Nov 12, 2026". */
+const seriesDate = (iso: string, tz?: string) => formatDateCustom(iso, DATE_ONLY, tz);
 
 /** The banner the single-page edit form has always drawn above itself. */
 export const SeriesScopeBanner: React.FC<SeriesScopeChoiceProps> = ({ value, onChange }) => (
@@ -68,8 +75,8 @@ export const SeriesScopeReview: React.FC<SeriesScopeChoiceProps> = ({
   rolling,
   tz,
 }) => {
-  const day = occurrenceStart ? formatDate(occurrenceStart, tz) : undefined;
-  const through = !rolling && seriesEnd ? ` (through ${formatDate(seriesEnd, tz)})` : '';
+  const day = occurrenceStart ? seriesDate(occurrenceStart, tz) : undefined;
+  const through = !rolling && seriesEnd ? ` (through ${seriesDate(seriesEnd, tz)})` : '';
   return (
     <div className="rounded-lg border border-indigo-300 bg-indigo-50 p-4 dark:border-indigo-500/30 dark:bg-indigo-500/10">
       <div className="flex items-start gap-3 text-sm text-indigo-700 dark:text-indigo-300">

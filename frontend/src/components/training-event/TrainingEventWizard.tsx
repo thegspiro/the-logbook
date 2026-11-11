@@ -239,7 +239,11 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     [formData.start_datetime, formData.end_datetime, tz]
   );
 
-  const prefill = useMandatoryTierPrefill(model, (id) => linkageData.requirements.find((r) => r.id === id)?.name ?? id);
+  const prefill = useMandatoryTierPrefill(
+    model,
+    (id) => linkageData.requirements.find((r) => r.id === id)?.name ?? id,
+    originalTraining?.attendance_requirement_ids
+  );
 
   const updateTraining = (patch: Partial<TrainingDetailsForm>) => {
     setTraining((prev) => ({ ...prev, ...patch }));

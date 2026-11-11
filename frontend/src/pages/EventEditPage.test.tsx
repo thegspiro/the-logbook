@@ -744,6 +744,13 @@ describe('EventEditPage', () => {
       updated_at: '',
     };
 
+    const officerAttendance = {
+      ...attendanceRequirement,
+      id: 'req-att-2',
+      name: 'Officer Meeting Attendance',
+      required_attendance_pct: 75,
+    };
+
     /** Every training field the form owns, as an edit sends it: blanks as null (pitfall #1). */
     const unchangedDetails = {
       course_id: null,
@@ -898,6 +905,64 @@ describe('EventEditPage', () => {
       expect(eventService.updateEvent).not.toHaveBeenCalled();
     });
 
+    // The series end and the rolling flag are stored on the series' first
+    // event only (SERIES_PARENT_FIELDS); a later occurrence carries neither.
+    describe('on a later occurrence of a series', () => {
+      const child: Event = {
+        ...trainingEvent,
+        recurrence_parent_id: 'series-1',
+        recurrence_pattern: 'weekly',
+        recurrence_end_date: undefined,
+        rolling_recurrence: false,
+      };
+      const parent: Event = {
+        ...trainingEvent,
+        id: 'series-1',
+        is_recurring: true,
+        recurrence_pattern: 'weekly',
+        start_datetime: '2026-01-04T18:00:00Z',
+        end_datetime: '2026-01-04T20:00:00Z',
+      };
+
+      it("names the series' end, read from its first event", async () => {
+        vi.mocked(eventService.getEvent).mockImplementation((id: string) =>
+          Promise.resolve(id === 'series-1' ? { ...parent, recurrence_end_date: '2026-06-15T23:59:00Z' } : child)
+        );
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await toReview(user);
+        expect(screen.getByText('This and all future events (through Mon, Jun 15, 2026)')).toBeInTheDocument();
+        expect(screen.getByText('Sun, Mar 15, 2026', { selector: 'span' })).toBeInTheDocument();
+      });
+
+      it('says that occurrences a rolling series adds later copy the changes', async () => {
+        vi.mocked(eventService.getEvent).mockImplementation((id: string) =>
+          Promise.resolve(
+            id === 'series-1'
+              ? { ...parent, rolling_recurrence: true, recurrence_end_date: '2027-01-04T23:59:00Z' }
+              : child
+          )
+        );
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await toReview(user);
+        expect(screen.getByText(/occurrences added later copy these changes too/)).toBeInTheDocument();
+        expect(screen.getByText('This and all future events')).toBeInTheDocument();
+      });
+    });
+
+    it("names a single event's date in the subtitle", async () => {
+      renderWithRouter(<EventEditPage />);
+
+      expect(
+        await screen.findByText('Update the details for “Hose Testing Night”, Sun, Mar 15, 2026.')
+      ).toBeInTheDocument();
+    });
+
     it('puts a refused training field under its field, back on Training Info', async () => {
       vi.mocked(eventService.updateEvent).mockRejectedValue({
         response: {
@@ -967,6 +1032,27 @@ describe('EventEditPage', () => {
       });
 
       it('fills it again once Counts toward attendance changes', async () => {
+        linkageRequirements.value = [attendanceRequirement, officerAttendance];
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await next(user);
+        await user.click(screen.getByLabelText(/Officer Meeting Attendance/));
+        await waitFor(() =>
+          expect(trainingSessionService.getMandatoryTiers).toHaveBeenCalledWith(['req-att', 'req-att-2'])
+        );
+        await next(user);
+
+        await waitFor(() => expect(screen.getByRole('radio', { name: 'All members' })).toBeChecked());
+        expect(
+          screen.getByText('Company Drill Attendance, Officer Meeting Attendance → All members.')
+        ).toBeInTheDocument();
+      });
+
+      // Unticked and ticked again, Counts toward attendance is what was
+      // stored, so nothing changed and the stored Mandatory for stands.
+      it('leaves the stored choice alone when the ticks end where they started', async () => {
         const user = userEvent.setup();
         renderWithRouter(<EventEditPage />);
 
@@ -974,11 +1060,12 @@ describe('EventEditPage', () => {
         await next(user);
         await user.click(screen.getByLabelText(/Company Drill Attendance/));
         await user.click(screen.getByLabelText(/Company Drill Attendance/));
-        await waitFor(() => expect(trainingSessionService.getMandatoryTiers).toHaveBeenCalledWith(['req-att']));
         await next(user);
 
-        await waitFor(() => expect(screen.getByRole('radio', { name: 'All members' })).toBeChecked());
-        expect(screen.getByText('Company Drill Attendance → All members.')).toBeInTheDocument();
+        expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Active' })).toBeChecked();
+        expect(screen.queryByText('Pre-filled from Counts toward attendance')).not.toBeInTheDocument();
+        expect(trainingSessionService.getMandatoryTiers).not.toHaveBeenCalled();
       });
     });
 
@@ -1084,6 +1171,27 @@ describe('EventEditPage', () => {
 
       await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
       expect(sent()).toEqual(expect.objectContaining({ title: 'Hose Testing Night' }));
+      expect(sent()).not.toHaveProperty('training_details');
+    });
+
+    // The save leaves the session's hours alone, so a locked step must show
+    // them as stored, not as the event's new length.
+    it("shows a training manager the stored credit hours after the event's times move", async () => {
+      mockPermissions.clear();
+      mockPermissions.add('training.manage');
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await screen.findByText('Step 1 of 4 · Event Details');
+      await user.click(screen.getByRole('button', { name: '4 hours' }));
+      await next(user);
+      expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(2);
+      await toReview(user);
+
+      expect(screen.getByText('2 hours')).toBeInTheDocument();
+      expect(screen.queryByText(/4 hours/)).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+      await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
       expect(sent()).not.toHaveProperty('training_details');
     });
 

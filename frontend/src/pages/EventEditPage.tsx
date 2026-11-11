@@ -26,9 +26,11 @@ import { EventType as EventTypeEnum } from '../constants/enums';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { getErrorDetail } from '../utils/errorHandling';
 import { withoutAttendanceLockedFields } from '../utils/eventAttendanceLock';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDateCustom } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useAuthStore } from '../stores/authStore';
+
+const DATE_ONLY: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
 
 /** What a training manager without events.manage is told on Training Info: the API refuses them training details (403). */
 const TRAINING_MANAGER_NOTICE: TrainingReadOnlyNotice = {
@@ -54,6 +56,10 @@ export const EventEditPage: React.FC = () => {
   // rather than overwrite what it could not read.
   const [session, setSession] = useState<TrainingSessionResponse | null>(null);
   const [sessionLoadFailed, setSessionLoadFailed] = useState(false);
+  // A later occurrence's series: the end date and the rolling flag are stored
+  // on the series' first event only (SERIES_PARENT_FIELDS in event_service),
+  // so an occurrence read on its own reports neither.
+  const [seriesParent, setSeriesParent] = useState<Event | null>(null);
 
   useEffect(() => {
     void eventService
@@ -92,6 +98,13 @@ export const EventEditPage: React.FC = () => {
           setSession(await trainingSessionService.getSessionByEvent(eventId));
         } catch {
           setSessionLoadFailed(true);
+        }
+      }
+      if (data.recurrence_parent_id) {
+        try {
+          setSeriesParent(await eventService.getEvent(data.recurrence_parent_id));
+        } catch {
+          /* non-critical: the scope choice leaves out the series' end */
         }
       }
       setEvent(data);
@@ -285,13 +298,21 @@ export const EventEditPage: React.FC = () => {
     return { trainingAccess: attendanceLocked ? 'finalized' : 'edit' };
   })();
 
+  const storedTraining = session ? fromSession(session, event) : DEFAULT_TRAINING_DETAILS;
+  const series = seriesParent ?? event;
+
   const editing: EditOptions = {
     eventId: event.id,
     initialRecurrence,
     attendanceLocked,
     eventTypeLocked: !canManage,
     storedType: event.event_type,
-    initialTraining: session ? fromSession(session, event) : DEFAULT_TRAINING_DETAILS,
+    // A locked step shows the hours as stored: the save leaves them alone, so
+    // following the event's length there would show a figure never saved.
+    initialTraining:
+      trainingAccess === 'edit' || storedTraining.credit_hours_source !== 'duration'
+        ? storedTraining
+        : { ...storedTraining, credit_hours_source: 'manual' },
     trainingAccess,
     readOnlyNotice,
     storedCourseName: session?.course_name,
@@ -301,8 +322,9 @@ export const EventEditPage: React.FC = () => {
           value: updateScope,
           onChange: setUpdateScope,
           occurrenceStart: event.start_datetime,
-          seriesEnd: event.recurrence_end_date,
-          rolling: event.rolling_recurrence,
+          seriesEnd: series.recurrence_end_date,
+          rolling: series.rolling_recurrence,
+          seriesStart: seriesParent?.start_datetime,
           tz,
         }
       : undefined,
@@ -319,10 +341,14 @@ export const EventEditPage: React.FC = () => {
         subtitle={
           isSeries ? (
             <>
-              Update the details for &ldquo;{event.title}&rdquo;, the {formatDate(event.start_datetime, tz)} occurrence.
+              Update the details for &ldquo;{event.title}&rdquo;, the{' '}
+              {formatDateCustom(event.start_datetime, DATE_ONLY, tz)} occurrence.
             </>
           ) : (
-            <>Update the details for &ldquo;{event.title}&rdquo;.</>
+            <>
+              Update the details for &ldquo;{event.title}&rdquo;,{' '}
+              {formatDateCustom(event.start_datetime, DATE_ONLY, tz)}.
+            </>
           )
         }
         parentCrumbs={[{ label: event.title, path: `/events/${eventId ?? ''}` }]}
