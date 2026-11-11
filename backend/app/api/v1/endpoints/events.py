@@ -96,7 +96,7 @@ from app.schemas.event import (
     UserRSVPSummary,
     VisibleEventTypesResponse,
 )
-from app.schemas.organization import MembershipTierSettings
+from app.schemas.organization import mandatory_for_tiers
 from app.schemas.training_session import TrainingSessionAttach
 from app.services import file_storage_service as file_storage
 from app.services.documents_service import DocumentsService
@@ -1315,16 +1315,13 @@ async def get_visible_event_types(
         "visible_custom_categories",
         EVENT_SETTINGS_DEFAULTS["visible_custom_categories"],
     )
-    tier_settings = MembershipTierSettings.model_validate(
-        (org.settings or {}).get("membership_tiers", {})
-    )
     return {
         "visible_event_types": visible,
         "custom_event_categories": custom_categories,
         "visible_custom_categories": visible_custom,
         "membership_types": [
             {"value": tier.id, "label": tier.name}
-            for tier in sorted(tier_settings.tiers, key=lambda tier: tier.sort_order)
+            for tier in mandatory_for_tiers(org.settings)
         ],
     }
 

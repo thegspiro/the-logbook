@@ -362,6 +362,32 @@ class TrainingSessionDetailsUpdate(BaseModel):
         return self
 
 
+class MandatoryTiersRequest(BaseModel):
+    """The session-attendance requirements an event is set to count toward."""
+
+    requirement_ids: List[UUID] = Field(default_factory=list, max_length=50)
+
+
+class UnmappedRequirementResponse(BaseModel):
+    requirement_id: str
+    name: str
+    reason: str
+
+
+class MandatoryTiersResponse(BaseModel):
+    """Who those requirements grade, as an event's "Mandatory for".
+
+    ``everyone`` is "All members"; otherwise ``tier_ids`` are membership tier
+    ids in ladder order. ``unmapped`` names each requirement (or membership
+    word in one) that no tier stands for, for the form to say so rather than
+    guess.
+    """
+
+    everyone: bool
+    tier_ids: List[str]
+    unmapped: List[UnmappedRequirementResponse]
+
+
 class TrainingSessionResponse(UTCResponseBase):
     """Schema for training session response"""
 

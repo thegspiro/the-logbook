@@ -46,7 +46,8 @@ from app.models.training import (
     TrainingStatus,
     TrainingType,
 )
-from app.models.user import Role, User
+from app.models.user import Organization, Role, User
+from app.schemas.organization import mandatory_for_tiers
 from app.schemas.training_session import (
     AttendeeApprovalData,
     RecurringTrainingSessionCreate,
@@ -62,6 +63,10 @@ from app.services.event_service import (
     attendance_locked_error,
 )
 from app.services.location_service import LocationService
+from app.services.training_compliance import (
+    MandatoryTiers,
+    mandatory_tiers_for_requirements,
+)
 from app.utils.json_ids import json_array_contains
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
@@ -872,6 +877,42 @@ class TrainingSessionService:
                 await self.add_sessions_for_events(
                     [plan.event], plan.attach, plan.course, organization_id, created_by
                 )
+
+    async def mandatory_tiers(
+        self, requirement_ids: Sequence[UUID | str], organization_id: UUID | str
+    ) -> Tuple[Optional[MandatoryTiers], Optional[str]]:
+        """Who the given session-attendance requirements grade, as the tiers
+        an event counting toward them is mandatory for.
+
+        Every id must name a session-attendance requirement in the caller's
+        organization; the tiers are the ones the event forms' "Mandatory
+        for" offers.
+        """
+        wanted = list(dict.fromkeys(str(r) for r in requirement_ids))
+        if not wanted:
+            return MandatoryTiers(everyone=False, tier_ids=[], unmapped=[]), None
+        result = await self.db.execute(
+            select(TrainingRequirement).where(
+                TrainingRequirement.id.in_(wanted),
+                TrainingRequirement.organization_id == str(organization_id),
+                TrainingRequirement.requirement_type
+                == RequirementType.SESSION_ATTENDANCE,
+            )
+        )
+        found = {str(r.id): r for r in result.scalars().all()}
+        if set(found) != set(wanted):
+            return None, "Invalid attendance requirement"
+        settings_result = await self.db.execute(
+            select(Organization.settings).where(Organization.id == str(organization_id))
+        )
+        ladder = [
+            tier.id
+            for tier in mandatory_for_tiers(settings_result.scalar_one_or_none())
+        ]
+        return (
+            mandatory_tiers_for_requirements([found[r] for r in wanted], ladder),
+            None,
+        )
 
     async def source_for_cloning(
         self, event: Event
