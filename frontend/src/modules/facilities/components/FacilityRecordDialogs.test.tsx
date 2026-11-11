@@ -88,12 +88,48 @@ describe('facility record dialogs', () => {
     await user.click(await screen.findByRole('button', { name: /New Record/ }));
     const dialog = screen.getByRole('dialog', { name: 'New Maintenance Record' });
 
-    expect(within(dialog).getByRole('combobox', { name: 'Maintenance Type *' })).toBeRequired();
+    // The shared field's required marker is aria-hidden, so the name is the label alone.
+    expect(within(dialog).getByRole('combobox', { name: 'Maintenance Type' })).toBeRequired();
     await user.type(within(dialog).getByRole('textbox', { name: /^Description/ }), 'Replace bay door seal');
     await user.click(within(dialog).getByRole('button', { name: 'Create Record' }));
 
-    expect(mockToastError).toHaveBeenCalledWith('Choose a maintenance type');
+    // Said on the field, not in a toast that vanished (forms review F-3).
+    expect(within(dialog).getByRole('combobox', { name: /^Maintenance Type/ })).toHaveAccessibleDescription(
+      'Choose a maintenance type.'
+    );
     expect(mockCreateMaintenanceRecord).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the field it names, and creates nothing until it is fixed', async () => {
+    mockCreateMaintenanceRecord.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'vendor', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<MaintenanceSection facilityId="f-1" canEdit canDelete />);
+    await user.click(await screen.findByRole('button', { name: /New Record/ }));
+    const dialog = screen.getByRole('dialog', { name: 'New Maintenance Record' });
+
+    await user.type(within(dialog).getByRole('textbox', { name: /^Description/ }), 'Replace bay door seal');
+    await user.selectOptions(within(dialog).getByRole('combobox', { name: /^Maintenance Type/ }), 'mt-1');
+    await user.click(within(dialog).getByRole('button', { name: 'Create Record' }));
+
+    await vi.waitFor(() =>
+      expect(within(dialog).getByRole('textbox', { name: /^Vendor/ })).toHaveAccessibleDescription(
+        expect.stringContaining('Value is too long.')
+      )
+    );
+    expect(screen.getByRole('dialog', { name: 'New Maintenance Record' })).toBeInTheDocument();
+  });
+
+  it('asks before Cancel discards a typed description', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MaintenanceSection facilityId="f-1" canEdit canDelete />);
+    await user.click(await screen.findByRole('button', { name: /New Record/ }));
+    const dialog = screen.getByRole('dialog', { name: 'New Maintenance Record' });
+    await user.type(within(dialog).getByRole('textbox', { name: /^Description/ }), 'Replace bay door seal');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByRole('textbox', { name: /^Description/ })).toHaveValue('Replace bay door seal');
   });
 
   it("shows the server's reason when a save is refused", async () => {
@@ -107,7 +143,8 @@ describe('facility record dialogs', () => {
     await user.selectOptions(within(dialog).getByRole('combobox', { name: /^Maintenance Type/ }), 'mt-1');
     await user.click(within(dialog).getByRole('button', { name: 'Create Record' }));
 
-    await vi.waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Due date cannot be before the scheduled date'));
+    // In the dialog, where it stays until the next save, rather than a toast.
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Due date cannot be before the scheduled date');
   });
 
   it('says on the row when a record is overdue, and when it was due', async () => {

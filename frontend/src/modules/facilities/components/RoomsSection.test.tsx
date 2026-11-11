@@ -294,3 +294,73 @@ describe('RoomsSection deleting a room', () => {
     await waitFor(() => expect(getRooms).toHaveBeenCalledTimes(2));
   });
 });
+
+describe('RoomsSection refusals and discarding', () => {
+  beforeEach(() => {
+    getRooms.mockReset();
+    createRoom.mockReset();
+    updateRoom.mockReset();
+    getRooms.mockResolvedValue([storage, office]);
+  });
+
+  it('names a missing name and a negative capacity on their fields, and adds nothing', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await screen.findByText('Volunteer Office');
+    await user.click(screen.getByRole('button', { name: /Add Room/ }));
+    await user.type(screen.getByRole('spinbutton', { name: /^Capacity/ }), '-2');
+    await user.click(screen.getByRole('button', { name: /Save Room/ }));
+
+    expect(screen.getByRole('textbox', { name: /^Name/ })).toHaveAccessibleDescription('Enter a name for the room.');
+    expect(screen.getByRole('spinbutton', { name: /^Capacity/ })).toHaveAccessibleDescription(
+      'Enter a whole number, 0 or more, or leave it empty.'
+    );
+    expect(createRoom).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the field it names', async () => {
+    createRoom.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'room_number', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await screen.findByText('Volunteer Office');
+    await user.click(screen.getByRole('button', { name: /Add Room/ }));
+    await user.type(screen.getByPlaceholderText('e.g., Engine Bay 1'), 'Bay 2');
+    await user.click(screen.getByRole('button', { name: /Save Room/ }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: /^Room Number/ })).toHaveAccessibleDescription(
+        expect.stringContaining('Value is too long.')
+      )
+    );
+  });
+
+  it('saves the rest of an edit and keeps a refused field flagged, open', async () => {
+    updateRoom
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'description', message: 'Too long.' }] } },
+      })
+      .mockResolvedValueOnce(office);
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: 'Edit room Volunteer Office' }));
+    await user.click(screen.getByRole('button', { name: /Save Changes/ }));
+
+    await waitFor(() => expect(updateRoom).toHaveBeenCalledTimes(2));
+    expect(updateRoom.mock.calls[1]?.[1]).not.toHaveProperty('description');
+    expect(updateRoom.mock.calls[1]?.[1]).toMatchObject({ name: 'Volunteer Office' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Room saved, except description.');
+  });
+
+  it('asks before Cancel discards a typed name', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await screen.findByText('Volunteer Office');
+    await user.click(screen.getByRole('button', { name: /Add Room/ }));
+    await user.type(screen.getByPlaceholderText('e.g., Engine Bay 1'), 'Bay 2');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByPlaceholderText('e.g., Engine Bay 1')).toHaveValue('Bay 2');
+  });
+});

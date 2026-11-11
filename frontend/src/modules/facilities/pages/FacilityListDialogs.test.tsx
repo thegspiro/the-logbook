@@ -46,30 +46,52 @@ vi.mock('../hooks/useInspectionForm', () => ({
   }),
 }));
 
-vi.mock('../hooks/useMaintenanceForm', () => ({
-  useMaintenanceForm: () => ({
-    records: [],
-    maintenanceTypes: [{ id: 'mt-1', name: 'Annual Service' }],
-    isLoading: false,
-    loadError: null,
-    reload: vi.fn(),
-    searchQuery: '',
-    setSearchQuery: vi.fn(),
-    statusFilter: 'overdue',
-    setStatusFilter: vi.fn(),
-    showModal: true,
-    setShowModal: vi.fn(),
-    editingRecord: null,
-    isSaving: false,
-    formData: {},
-    setFormData: vi.fn(),
-    openCreate: vi.fn(),
-    openEdit: vi.fn(),
-    handleSave: vi.fn(),
-    handleDelete: vi.fn(),
-    handleComplete: vi.fn(),
-  }),
-}));
+// The real field specs and limits: the shared dialog reads them, and a mock
+// that invented its own would not prove the ids the dialog is labelled by.
+vi.mock('../hooks/useMaintenanceForm', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useMaintenanceForm')>();
+  return {
+    ...actual,
+    useMaintenanceForm: () => ({
+      records: [],
+      maintenanceTypes: [{ id: 'mt-1', name: 'Annual Service' }],
+      isLoading: false,
+      loadError: null,
+      reload: vi.fn(),
+      searchQuery: '',
+      setSearchQuery: vi.fn(),
+      statusFilter: 'overdue',
+      setStatusFilter: vi.fn(),
+      showModal: true,
+      setShowModal: vi.fn(),
+      editingRecord: null,
+      isSaving: false,
+      formData: {
+        facility_id: '',
+        maintenance_type_id: '',
+        description: '',
+        scheduled_date: '',
+        due_date: '',
+        performed_by: '',
+        cost: '',
+        vendor: '',
+        work_order_number: '',
+        notes: '',
+      },
+      setField: vi.fn(),
+      isDirty: false,
+      fieldSpecs: actual.maintenanceFieldSpecs('maintenance-list'),
+      errors: {},
+      formError: null,
+      setFormData: vi.fn(),
+      openCreate: vi.fn(),
+      openEdit: vi.fn(),
+      handleSave: vi.fn(),
+      handleDelete: vi.fn(),
+      handleComplete: vi.fn(),
+    }),
+  };
+});
 
 import InspectionsListPage from './InspectionsListPage';
 import MaintenanceListPage from './MaintenanceListPage';

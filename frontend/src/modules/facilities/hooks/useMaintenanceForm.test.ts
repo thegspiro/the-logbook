@@ -107,22 +107,41 @@ describe('useMaintenanceForm payload contract', () => {
   // The column is NOT NULL, so a blank type is refused before anything is
   // sent: nulling it would be rejected by the server, and omitting it on
   // create was refused there with a message the form never showed.
-  it.each(['create', 'edit'] as const)('sends nothing on %s while the maintenance type is blank', async (mode) => {
+  it('sends nothing on create while the maintenance type is blank, and says so on the field', async () => {
     const { result } = renderHook(() => useMaintenanceForm({ facilityId: 'fac-1' }));
 
     await act(async () => {
-      if (mode === 'create') result.current.openCreate('fac-1');
-      else result.current.openEdit(existing);
+      result.current.openCreate('fac-1');
     });
     await act(async () => {
-      result.current.setFormData({ ...cleared, maintenance_type_id: '' });
+      result.current.setFormData({ ...cleared, description: 'Seal', maintenance_type_id: '' });
     });
     await act(async () => {
       await result.current.handleSave();
     });
 
     expect(createMaintenanceRecord).not.toHaveBeenCalled();
-    expect(updateMaintenanceRecord).not.toHaveBeenCalled();
+    expect(result.current.errors.maintenance_type_id).toBe('Choose a maintenance type.');
+  });
+
+  // An edit saves the rest under the owner's single-save rule (2026-11-05):
+  // the blank type's key is left out, so the stored type is kept.
+  it('saves the rest of an edit while the maintenance type is blank, keeping the stored type', async () => {
+    const { result } = renderHook(() => useMaintenanceForm({ facilityId: 'fac-1' }));
+
+    await act(async () => {
+      result.current.openEdit(existing);
+    });
+    await act(async () => {
+      result.current.setFormData({ ...cleared, description: 'Seal', maintenance_type_id: '' });
+    });
+    await act(async () => {
+      await result.current.handleSave();
+    });
+
+    expect(updateMaintenanceRecord).toHaveBeenCalledTimes(1);
+    expect(updateMaintenanceRecord.mock.calls[0]?.[1]).not.toHaveProperty('maintenance_type_id');
+    expect(result.current.formError).toBe('Record saved, except maintenance type. Fix it and save again.');
   });
 
   it.each([
