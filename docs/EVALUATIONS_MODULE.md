@@ -181,6 +181,44 @@ that code (pitfall #29).
 A figure that cannot honestly be given is reported unavailable with a note,
 never as zero or 100%.
 
+### Waiver requests
+
+Four more sources show the member's requests to be excused from a session
+(owner decisions, 2026-11-10):
+
+| Key                                | Figure                                                                  |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| `training.session_waivers_summary` | requests to be excused from a training session, and what became of them |
+| `training.session_waiver_history`  | one line per training-session waiver request                            |
+| `meetings.waivers_summary`         | requests to be excused from a business meeting, and what became of them |
+| `meetings.waiver_history`          | one line per business-meeting waiver request                            |
+
+Each reads `attendance_waiver_requests` for one workflow, counting a request
+by the date of the session it excuses, within the review period and the
+member's coverage: a session held between stints of membership is dropped, one
+held during a leave is kept. Business-meeting requests read zero until that
+workflow writes them.
+
+The summary's value is the number of requests; beside it are `approved` (what
+counts toward the cap, a Chief's override of a denial included), `overridden`
+(the part of `approved` that came by override), `denied` (standing denials),
+`withdrawn`, `pending` and `voided`, and a `breakdown` sentence. A withdrawn
+request and its resubmission are two requests. Each history line carries the
+session date and title, the status, the outcome in order ("denied by A, then
+approved on the Chief's override by B"), the category, the decider,
+`chief_override`, `attachment_on_file`, and the decision log's steps with
+actor and local date.
+
+They are **never scored** (`DataSource.scored=False`: a count of waivers is not
+a grade), and they **never carry the member's reason, a decider's note or an
+attachment**: an evaluation is permanent, the member reads it, and any of the
+three may be medical. The rows are read column by column, so neither text is
+loaded at all. `attachment_on_file` reads false until the attachments table
+exists (`_waiver_attachments_on_file`). The evaluation screens show the
+summary's count only; the breakdown is in the stored entry, and the history
+lines say what became of each request. Adding these sources changed the stored
+shape of no existing entry, so `SNAPSHOT_VERSION` stays 2.
+
 ## Workflow
 
 1. **Drafting** (`POST /evaluations`, or `/bulk` for a whole period) takes
@@ -287,6 +325,7 @@ table `create_all` has not built (pitfall #26).
 - `tests/test_evaluation_workflow.py`: drafting, visibility, the workflow,
   figures, signing, notices and the daily scan, bulk drafting, deletion,
   amendments, responses and calibration flags, driven over HTTP.
+- `tests/test_evaluation_waiver_sources.py`: the four waiver-request sources.
 - `tests/test_evaluation_rules.py`, `test_evaluation_template_schema.py`,
   `test_evaluation_models.py`: definition, workflow and model rules.
 - `tests/test_evaluation_pdf.py`: the PDF text.

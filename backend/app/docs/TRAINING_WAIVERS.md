@@ -278,6 +278,14 @@ once. The data export lists each document's record (type, size, checksum,
 date) but not the file. Documents never appear in the annual review or in a
 notification.
 
+**In the annual review.** An evaluation template can show a member's requests
+for the review period, by session date: `training.session_waivers_summary`
+(how many were made, approved, overridden, denied, withdrawn, pending and
+voided) and `training.session_waiver_history` (one line per request: session,
+outcome with who decided, category). Neither shows the reason, a decider's
+note or an attachment, and neither can be scored. See
+`docs/EVALUATIONS_MODULE.md`, "Figures".
+
 **Where it is in the app.**
 
 | Who              | Where                                                                                                                                                                                                                                                                             |
