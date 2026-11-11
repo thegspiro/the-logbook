@@ -777,7 +777,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
         <div
           role="group"
           aria-label="Step navigation"
-          className="border-theme-surface-border max-md:bg-theme-nav-bg max-md:action-bar-safe flex items-center gap-3 border-t pt-6 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:gap-2 max-md:px-4 max-md:shadow-[0_-4px_12px_rgb(0_0_0/0.08)]"
+          className="border-theme-surface-border max-md:bg-theme-nav-bg max-md:action-bar-safe flex items-center gap-3 border-t pt-6 max-md:fixed max-md:right-0 max-md:bottom-0 max-md:left-[var(--side-nav-width,0px)] max-md:z-30 max-md:gap-2 max-md:px-4 max-md:shadow-[0_-4px_12px_rgb(0_0_0/0.08)]"
         >
           <button
             type="button"
