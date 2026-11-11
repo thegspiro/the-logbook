@@ -11,6 +11,9 @@ export interface TrainingLinkageValue {
   requirement_id?: string | undefined;
 }
 
+/** A name in quotes, or a description of a missing one as it is. */
+const quoted = (name: string): string => (name.startsWith('the linked') ? name : `"${name}"`);
+
 const requirementLabel = (req: TrainingRequirement): string =>
   `${req.name}${req.registry_code ? ` (${req.registry_code})` : ''}`;
 
@@ -73,23 +76,27 @@ export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
     [suggestedRequirements]
   );
 
+  // Named where a list holds them; a link to one it does not (an inactive
+  // program, a retired requirement) is described without its name rather
+  // than read out as "undefined".
   const categoryName = categories.find((c) => c.id === value.category_id)?.name;
-  const programName = programs.find((p) => p.id === value.program_id)?.name;
-  const requirementName = requirements.find((r) => r.id === value.requirement_id)?.name;
+  const inCategory = categoryName ? `in the "${categoryName}" category` : 'in the linked category';
+  const programName = programs.find((p) => p.id === value.program_id)?.name ?? 'the linked program';
+  const requirementName = requirements.find((r) => r.id === value.requirement_id)?.name ?? 'the linked requirement';
 
   // Plain-language preview of what the chosen links will do when attendance is finalized
   const linkageSummary = ((): string | null => {
     if (value.program_id && value.requirement_id) {
-      return `Attendance will advance "${requirementName}" for members enrolled in ${programName}.`;
+      return `Attendance will advance ${quoted(requirementName)} for members enrolled in ${programName}.`;
     }
     if (value.program_id && value.category_id) {
-      return `Attendance hours will advance ${programName}'s hour-based requirements in the "${categoryName}" category for enrolled members.`;
+      return `Attendance hours will advance ${programName}'s hour-based requirements ${inCategory} for enrolled members.`;
     }
     if (value.requirement_id) {
-      return `Linked to "${requirementName}". Also select a training program to automatically advance enrolled members' pipeline progress.`;
+      return `Linked to ${quoted(requirementName)}. Also select a training program to automatically advance enrolled members' pipeline progress.`;
     }
     if (value.category_id) {
-      return `Attendees' training records will be tagged "${categoryName}" and count toward department requirements linked to that category.`;
+      return `Attendees' training records will be tagged ${categoryName ? `"${categoryName}"` : 'with the linked category'} and count toward department requirements linked to that category.`;
     }
     return null;
   })();
@@ -138,7 +145,7 @@ export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
           </select>
           <p className="text-theme-text-muted mt-1 text-xs">Hours count toward requirements linked to this category</p>
         </div>
-        <div>
+        <div className={legacyRequirement ? 'md:col-span-2' : undefined}>
           <label
             htmlFor={`${fieldId}-requirement`}
             className="text-theme-text-primary mb-2 block text-sm font-semibold"
@@ -149,6 +156,7 @@ export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
             id={`${fieldId}-requirement`}
             value={value.requirement_id || ''}
             onChange={(e) => onChange({ requirement_id: e.target.value || undefined })}
+            aria-describedby={legacyRequirement ? `${fieldId}-requirement-legacy` : undefined}
             className="form-input py-3"
           >
             <option value="">No specific requirement</option>
@@ -184,6 +192,18 @@ export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
               ))
             )}
           </select>
+          {/* The closed select cuts the option's marker off, so it is said
+              here too, with why the link cannot be chosen again. */}
+          {legacyRequirement && (
+            <p id={`${fieldId}-requirement-legacy`} className="text-theme-text-secondary mt-2 text-sm">
+              <span className="badge mr-1 bg-amber-500/15 text-xs text-amber-800 dark:text-amber-300">
+                Currently linked, no longer offered
+              </span>{' '}
+              {requirementLabel(legacyRequirement)} is a session-attendance requirement. These are now linked under
+              Counts toward attendance; this older link is kept until someone chooses another requirement, and
+              can&apos;t be chosen again.
+            </p>
+          )}
           <p className="text-theme-text-muted mt-1 text-xs">
             Attendance advances this requirement for members enrolled in the training program
           </p>

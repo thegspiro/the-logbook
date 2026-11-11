@@ -952,6 +952,7 @@ describe('EventEditPage', () => {
         await screen.findByText('Step 1 of 4 · Event Details');
         await toReview(user);
         expect(screen.getByText('This and all future events (through Mon, Jun 15, 2026)')).toBeInTheDocument();
+        expect(screen.getByText('Sun, Mar 15, 2026, in a series running since Sun, Jan 4, 2026.')).toBeInTheDocument();
         expect(screen.getByText('Sun, Mar 15, 2026', { selector: 'span' })).toBeInTheDocument();
       });
 
@@ -971,6 +972,78 @@ describe('EventEditPage', () => {
         expect(screen.getByText(/occurrences added later copy these changes too/)).toBeInTheDocument();
         expect(screen.getByText('This and all future events')).toBeInTheDocument();
       });
+    });
+
+    describe('with a library course and a legacy requirement link', () => {
+      const PUMP = {
+        id: 'course-pump',
+        organization_id: 'org-1',
+        name: 'Pump Operations',
+        code: 'PUMP',
+        training_type: 'skills_practice',
+        credit_hours: 2,
+        is_active: true,
+      };
+      beforeEach(() => {
+        vi.mocked(trainingService.getCourses).mockResolvedValue([PUMP] as never);
+        vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue({
+          ...session,
+          course_id: 'course-pump',
+          course_name: 'Pump Operations',
+          requirement_id: 'req-att',
+        });
+      });
+
+      it('reads stored hours equal to the course as from the course', async () => {
+        window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        const hours = await screen.findByLabelText(/Credit Hours/);
+        // Once the Course Library has loaded.
+        await waitFor(() =>
+          expect(hours).toHaveAccessibleDescription(expect.stringContaining('From the course (2 hours).'))
+        );
+        await toReview(user);
+        expect(screen.getByText('2 hours (from the course)')).toBeInTheDocument();
+      });
+
+      it('says why the session-attendance requirement link is kept, on the step and on Review', async () => {
+        window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        expect(await screen.findByLabelText('Requirement')).toHaveAccessibleDescription(
+          expect.stringContaining('Company Drill Attendance is a session-attendance requirement.')
+        );
+        await toReview(user);
+        expect(screen.getByText('Company Drill Attendance (currently linked, no longer offered)')).toBeInTheDocument();
+      });
+
+      it("does not tell a reader they can change the course's type", async () => {
+        mockPermissions.clear();
+        mockPermissions.add('training.manage');
+        window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+        renderWithRouter(<EventEditPage />);
+
+        const type = await screen.findByLabelText(/Training Type/);
+        await waitFor(() => expect(type).toHaveAccessibleDescription('From the course.'));
+      });
+    });
+
+    it('says on Review that attachments are managed on the event page', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...trainingEvent,
+        attachments: [
+          { id: 'att-1', file_name: 'Pump chart.pdf', file_size: 2048, file_type: 'application/pdf' } as never,
+        ],
+      });
+      const user = userEvent.setup();
+      renderWithRouter(<EventEditPage />);
+
+      await screen.findByText('Step 1 of 4 · Event Details');
+      await toReview(user);
+      expect(screen.getByText('Attachments are managed on the event page.')).toBeInTheDocument();
     });
 
     it("names a single event's date in the subtitle", async () => {

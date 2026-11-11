@@ -7,15 +7,23 @@
 
 import React from 'react';
 import { ClipboardCheck } from 'lucide-react';
-import type { TrainingCourse } from '../../types/training';
+import type { MandatoryTiersUnmapped, TrainingCourse } from '../../types/training';
 import type { TrainingLinkageData } from '../../hooks/useTrainingLinkageData';
 import { TRAINING_TYPE_LABELS } from '../../constants/enums';
 import { getEventTypeLabel } from '../../utils/eventHelpers';
-import { formatCalendarDate, formatDateTime, localToUTC } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatDateCustom, formatDateTime, localToUTC } from '../../utils/dateFormatting';
 import type { EventFormModel } from '../event-form/useEventFormModel';
 import { MONTHS, ORDINALS, RECURRENCE_PATTERNS, WEEKDAYS } from '../event-form/eventFormConstants';
 import type { TrainingDetailsForm } from './trainingDetailsModel';
-import { effectiveCreditHours } from './trainingDetailsModel';
+import { creditHoursFromCourse, effectiveCreditHours } from './trainingDetailsModel';
+
+/** On a series edit: the occurrence being edited and its series' first, as ISO instants. */
+export interface SeriesOccurrence {
+  occurrenceStart?: string | undefined;
+  seriesStart?: string | undefined;
+}
+
+const WEEKDAY_PLURALS = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'];
 
 type ReviewModel = Pick<
   EventFormModel,
@@ -62,6 +70,9 @@ interface TrainingReviewStepProps {
   organizerNames?: { organizer?: string | null | undefined; alternate?: string | null | undefined } | undefined;
   /** The stored session's course name, for a course the library no longer lists. */
   storedCourseName?: string | undefined;
+  /** Ticked requirements the Mandatory-for pre-fill could not map, with why. */
+  unmapped?: readonly MandatoryTiersUnmapped[] | undefined;
+  seriesOccurrence?: SeriesOccurrence | undefined;
 }
 
 const hoursLabel = (hours: number | string) => `${hours} ${Number(hours) === 1 ? 'hour' : 'hours'}`;
@@ -132,12 +143,27 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
   scopeChoice,
   organizerNames,
   storedCourseName,
+  unmapped = [],
+  seriesOccurrence,
 }) => {
   const { tz, formData } = model;
   const nameOf = (id: string) => model.organizerOptions.options.find((o) => o.id === id)?.name ?? 'Selected member';
   const { categories, requirements, programs, phases } = linkageData;
   const nameIn = (list: { id: string; name: string }[], id: string) =>
     id ? (list.find((item) => item.id === id)?.name ?? 'Selected') : 'None';
+  // A session-attendance requirement is graded through Counts toward
+  // attendance now; one linked here before that is kept, and marked as the
+  // event page's card marks it.
+  const requirementLabel = (id: string): string => {
+    const requirement = requirements.find((r) => r.id === id);
+    if (!requirement) return nameIn(requirements, id);
+    return requirement.requirement_type === 'session_attendance'
+      ? `${requirement.name} (currently linked, no longer offered)`
+      : requirement.name;
+  };
+  const courseOf = (value: TrainingDetailsForm) =>
+    value.course_mode === 'library' ? courses.find((c) => c.id === value.course_id) : undefined;
+  const selectedCourse = courseOf(training);
 
   const recurrenceLabel = (() => {
     const base = RECURRENCE_PATTERNS.find((p) => p.value === model.recurrencePattern)?.label ?? model.recurrencePattern;
@@ -151,6 +177,13 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
       const month =
         model.recurrencePattern === 'annually_weekday' ? ` of ${MONTHS[model.recurrenceMonth - 1] ?? ''}` : '';
       return `${base}: ${ordinal} ${weekday}${month}`;
+    }
+    if (model.recurrencePattern === 'weekly' || model.recurrencePattern === 'biweekly') {
+      // The day the series repeats on is the start's, as the backend reads it.
+      const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(formData.start_datetime);
+      if (!match) return base;
+      const sundayFirst = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))).getUTCDay();
+      return `${base} on ${WEEKDAY_PLURALS[(sundayFirst + 6) % 7] ?? ''}`;
     }
     return base;
   })();
@@ -170,18 +203,28 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
     return `No course yet: filed under “${formData.title.trim() || 'the event title'}”`;
   };
 
-  const instructorLabel = (value: TrainingDetailsForm): string =>
-    value.instructor_id
-      ? value.instructor || 'Selected member'
-      : value.instructor.trim()
-        ? `${value.instructor.trim()} (${value.course_mode === 'library' ? 'from the course, ' : ''}not a member)`
-        : 'None';
+  // Under a library course the backend fills a blank instructor or expiry
+  // from the course, so Review says what the save will store, not "None".
+  const instructorLabel = (value: TrainingDetailsForm): string => {
+    if (value.instructor_id) return value.instructor || 'Selected member';
+    if (value.instructor.trim()) {
+      return `${value.instructor.trim()} (${value.course_mode === 'library' ? 'from the course, ' : ''}not a member)`;
+    }
+    const fromCourse = courseOf(value)?.instructor?.trim();
+    return fromCourse ? `${fromCourse} (from the course, not a member)` : 'None';
+  };
+
+  const expiryLabel = (value: TrainingDetailsForm): string => {
+    if (value.expiration_months.trim()) return `${value.expiration_months.trim()} months`;
+    const fromCourse = courseOf(value)?.expiration_months;
+    return fromCourse ? `${fromCourse} months (from the course)` : '—';
+  };
 
   const creditLabel = (value: TrainingDetailsForm): string => {
     const hours = effectiveCreditHours(value, durationHours);
     if (!hours) return '—';
     return `${hoursLabel(hours)}${
-      value.credit_hours_source === 'course'
+      creditHoursFromCourse(value, courseOf(value))
         ? ' (from the course)'
         : value.credit_hours_source === 'duration'
           ? " (the event's length)"
@@ -281,6 +324,14 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
         {model.isRecurring && (
           <Section title="Recurrence" target="details" onEdit={editing ? undefined : onEdit}>
             <Row label="Pattern">{recurrenceLabel}</Row>
+            {editing && seriesOccurrence?.occurrenceStart && (
+              <Row label="This occurrence">
+                {formatDateCustom(seriesOccurrence.occurrenceStart, DATE_ONLY, tz)}
+                {seriesOccurrence.seriesStart
+                  ? `, in a series running since ${formatDateCustom(seriesOccurrence.seriesStart, DATE_ONLY, tz)}.`
+                  : ''}
+              </Row>
+            )}
             <Row label="Duration">
               {model.isRolling
                 ? 'Rolling 12-month cycle'
@@ -333,8 +384,8 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
           {training.issues_certification && (
             <>
               <Row label="Cert number prefix">{training.certification_number_prefix.trim() || '—'}</Row>
-              <Row label="Expires after">
-                {training.expiration_months.trim() ? `${training.expiration_months.trim()} months` : '—'}
+              <Row label="Expires after" was={was(expiryLabel)}>
+                {expiryLabel(training)}
               </Row>
             </>
           )}
@@ -342,7 +393,7 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
 
         <Section title="Requirement & Program Links" target="training" onEdit={onEdit}>
           <Row label="Training category">{nameIn(categories, training.category_id)}</Row>
-          <Row label="Requirement">{nameIn(requirements, training.requirement_id)}</Row>
+          <Row label="Requirement">{requirementLabel(training.requirement_id)}</Row>
           <Row label="Program">{nameIn(programs, training.program_id)}</Row>
           {training.program_id && (
             <Row label="Phase">
@@ -370,6 +421,9 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
         <Section title="Attendance" target="settings" onEdit={onEdit}>
           <Row label="Mandatory">{formData.is_mandatory ? 'Yes' : 'No'}</Row>
           {formData.is_mandatory && <Row label="Mandatory for">{mandatoryFor}</Row>}
+          {formData.is_mandatory && unmapped.length > 0 && (
+            <Row label="Not mapped">{unmapped.map((u) => `${u.name} (${u.reason})`).join('\n')}</Row>
+          )}
         </Section>
 
         <Section title="RSVP" target="settings" onEdit={onEdit}>
@@ -379,7 +433,15 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
               ? formatDateTime(localToUTC(formData.rsvp_deadline, tz), tz)
               : '—'}
           </Row>
-          <Row label="Max attendees">{formData.max_attendees ? String(formData.max_attendees) : 'Unlimited'}</Row>
+          <Row label="Max attendees">
+            {formData.max_attendees
+              ? `${formData.max_attendees}${
+                  selectedCourse?.max_participants && formData.max_attendees === selectedCourse.max_participants
+                    ? ' (from the course)'
+                    : ''
+                }`
+              : 'Unlimited'}
+          </Row>
           <Row label="Guests">{formData.allow_guests ? 'Allowed' : 'Not allowed'}</Row>
           <Row label="Status options">
             {(formData.allowed_rsvp_statuses ?? []).map((s) => statusNames[s] ?? s).join(', ') || '—'}

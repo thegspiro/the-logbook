@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import type { TrainingRequirement } from '../../types/training';
 import { attendanceRequirements } from '../../utils/attendanceRequirements';
 
@@ -8,39 +8,84 @@ interface AttendanceRequirementChecklistProps {
   value: string[];
   onChange: (next: string[]) => void;
   disabled?: boolean | undefined;
+  /** The department's member types, to name whom a requirement applies to. */
+  membershipTypes?: readonly { value: string; label: string }[] | undefined;
 }
 
 /**
- * One tick box per session-attendance requirement. A ticked requirement
- * charges the members it grades with attending the session; none ticked
- * leaves the session optional. Shared by the create form and the event page
- * so the two offer the same choice the same way.
+ * Whom a requirement applies to, as configured on it. A description of the
+ * requirement's own fields, not a decision: who it grades is the backend's
+ * (requirement_applies_to_member), and Mandatory for's pre-fill asks it.
+ */
+const appliesTo = (
+  requirement: TrainingRequirement,
+  membershipTypes: readonly { value: string; label: string }[]
+): string => {
+  const types = requirement.required_membership_types ?? [];
+  if (
+    requirement.applies_to_all ||
+    (!types.length && !requirement.required_roles?.length && !requirement.required_positions?.length)
+  ) {
+    return 'Applies to all members';
+  }
+  if (types.length) {
+    const label = (type: string) =>
+      membershipTypes.find((t) => t.value === type)?.label ?? type.charAt(0).toUpperCase() + type.slice(1);
+    return `Applies to ${types.map(label).join(', ')}`;
+  }
+  return 'Applies to members by rank or position';
+};
+
+/**
+ * One option per session-attendance requirement. Attendance at a session
+ * counts toward the ticked requirements' percentages; ticking one does not by
+ * itself make attending mandatory (owner decision, 2026-11-10), which is
+ * Mandatory attendance's job on the Settings step. None ticked: the session
+ * counts toward no attendance requirement.
  */
 const AttendanceRequirementChecklist: React.FC<AttendanceRequirementChecklistProps> = ({
   requirements,
   value,
   onChange,
   disabled = false,
+  membershipTypes = [],
 }) => {
+  const idPrefix = useId();
   const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
 
   return (
-    <div className="space-y-2">
-      {attendanceRequirements(requirements).map((r) => (
-        <label key={r.id} className="text-theme-text-primary flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="form-checkbox"
-            checked={value.includes(r.id)}
-            onChange={() => toggle(r.id)}
-            disabled={disabled}
-          />
-          {r.name}
-          {r.required_attendance_pct ? (
-            <span className="text-theme-text-muted">({r.required_attendance_pct}%)</span>
-          ) : null}
-        </label>
-      ))}
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {attendanceRequirements(requirements).map((r) => {
+        const checked = value.includes(r.id);
+        const descriptionId = `${idPrefix}-${r.id}`;
+        return (
+          <label
+            key={r.id}
+            className={`touch:min-h-11 flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${
+              checked ? 'bg-theme-surface-secondary border-red-700 dark:border-red-500' : 'border-theme-surface-border'
+            } ${disabled ? 'cursor-not-allowed' : ''}`}
+          >
+            <input
+              type="checkbox"
+              className="form-checkbox mt-0.5 shrink-0"
+              checked={checked}
+              onChange={() => toggle(r.id)}
+              disabled={disabled}
+              aria-describedby={descriptionId}
+            />
+            <span className="min-w-0">
+              <span className="text-theme-text-primary block font-medium">
+                {r.required_attendance_pct ? `${r.name} (${r.required_attendance_pct}%)` : r.name}
+              </span>
+              {/* Its description, not part of its name: aria-describedby still
+                  reads it, and the name stays the requirement's alone. */}
+              <span id={descriptionId} aria-hidden="true" className="text-theme-text-muted block">
+                {appliesTo(r, membershipTypes)}
+              </span>
+            </span>
+          </label>
+        );
+      })}
     </div>
   );
 };

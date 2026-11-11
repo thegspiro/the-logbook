@@ -14,10 +14,22 @@ interface CheckInSectionProps {
     | 'handleCheckInMinutesBeforeChange'
     | 'updateGuestSwitches'
   >;
+  /**
+   * `steps`: the training form's wording ("Check-In", with the rules under a
+   * subheading and short window options explained once); the single-page
+   * form keeps its own.
+   */
+  variant?: 'single-page' | 'steps' | undefined;
+  /** Drawn under the heading, before the rules. */
+  intro?: React.ReactNode;
 }
 
+const WINDOW_HINT_ID = 'checkin-window-hint';
+const CHECKOUT_HINT_ID = 'require-checkout-hint';
+
 /** The check-in window, manual check-out and guest sign-in. */
-export const CheckInSection: React.FC<CheckInSectionProps> = ({ model }) => {
+export const CheckInSection: React.FC<CheckInSectionProps> = ({ model, variant = 'single-page', intro }) => {
+  const steps = variant === 'steps';
   const {
     formData,
     update,
@@ -29,9 +41,11 @@ export const CheckInSection: React.FC<CheckInSectionProps> = ({ model }) => {
   return (
     <section className="space-y-4">
       <h2 className="text-theme-text-primary flex items-center space-x-2 text-lg font-bold">
-        <QrCode className="h-5 w-5 text-red-700" />
-        <span>Check-In Settings</span>
+        <QrCode className="h-5 w-5 text-red-700" aria-hidden="true" />
+        <span>{steps ? 'Check-In' : 'Check-In Settings'}</span>
       </h2>
+      {intro}
+      {steps && <h3 className="text-theme-text-primary font-semibold">Check-in rules</h3>}
       {attendanceLocked && (
         <p id={checkInLockHintId} className="text-theme-text-muted flex items-center gap-1.5 text-sm">
           <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -53,12 +67,29 @@ export const CheckInSection: React.FC<CheckInSectionProps> = ({ model }) => {
             id="checkin-window"
             value={formData.check_in_window_type || 'flexible'}
             onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
+            aria-describedby={steps && !attendanceLocked ? WINDOW_HINT_ID : undefined}
             className={selectClass}
           >
-            <option value="flexible">Flexible - Opens before the start, closes when the event ends</option>
-            <option value="strict">Strict - Only while the event is running</option>
-            <option value="window">Window - Opens before the start, closes after the end</option>
+            {steps ? (
+              <>
+                <option value="flexible">Flexible</option>
+                <option value="strict">Strict</option>
+                <option value="window">Custom window</option>
+              </>
+            ) : (
+              <>
+                <option value="flexible">Flexible - Opens before the start, closes when the event ends</option>
+                <option value="strict">Strict - Only while the event is running</option>
+                <option value="window">Window - Opens before the start, closes after the end</option>
+              </>
+            )}
           </select>
+          {steps && (
+            <p id={WINDOW_HINT_ID} className="text-theme-text-muted mt-1 text-sm">
+              Flexible opens before the start and closes when the event ends. Strict is open only while the event runs.
+              Custom window opens before the start and closes after the end.
+            </p>
+          )}
         </div>
 
         {(formData.check_in_window_type === CheckInWindowType.FLEXIBLE ||
@@ -107,10 +138,16 @@ export const CheckInSection: React.FC<CheckInSectionProps> = ({ model }) => {
             id="require-checkout"
             checked={formData.require_checkout}
             onChange={(e) => update({ require_checkout: e.target.checked })}
+            aria-describedby={steps && !attendanceLocked ? CHECKOUT_HINT_ID : undefined}
             className={checkboxClass}
           />
           <span className="text-theme-text-secondary text-sm">Require manual check-out</span>
         </label>
+        {steps && (
+          <p id={CHECKOUT_HINT_ID} className="text-theme-text-muted -mt-3 pl-7 text-sm">
+            When off, members are checked out when the event ends.
+          </p>
+        )}
       </fieldset>
 
       <label className="mobile-touch-target flex items-center justify-start space-x-3">

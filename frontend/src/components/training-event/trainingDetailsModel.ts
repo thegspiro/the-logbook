@@ -130,8 +130,18 @@ const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().t
 export const applyLibraryCourse = (
   value: TrainingDetailsForm,
   course: TrainingCourse,
-  members: readonly InstructorOption[]
+  members: readonly InstructorOption[],
+  /**
+   * The programs the Program picker offers (active ones). A course's program
+   * outside it is not filled in: the picker would read "No program" while
+   * the save carried it.
+   */
+  listedProgramIds?: readonly string[]
 ): TrainingDetailsForm => {
+  const courseProgram =
+    course.program_id && (listedProgramIds === undefined || listedProgramIds.includes(course.program_id))
+      ? course.program_id
+      : undefined;
   // Credit Hours is what a course is worth; Duration is how long it runs. A
   // course saved with only a duration is worth its duration, the same
   // fallback a submission uses. Without it the session saved 0 and every
@@ -143,9 +153,9 @@ export const applyLibraryCourse = (
     course_id: course.id,
     training_type: course.training_type || value.training_type,
     category_id: value.category_id || course.category_ids?.[0] || '',
-    program_id: value.program_id || course.program_id || '',
+    program_id: value.program_id || courseProgram || '',
     // A program the course brought in has its own phases.
-    phase_id: value.program_id || !course.program_id ? value.phase_id : '',
+    phase_id: value.program_id || !courseProgram ? value.phase_id : '',
   };
   if (courseHours !== undefined && courseHours !== null) {
     next.credit_hours = String(courseHours);
@@ -162,6 +172,33 @@ export const applyLibraryCourse = (
   }
   return next;
 };
+
+/** What a library course's hours are worth: its credit hours, or else its duration. */
+export const courseCreditHours = (course: TrainingCourse | undefined): number | undefined =>
+  course ? (course.credit_hours ?? course.duration_hours ?? undefined) : undefined;
+
+/**
+ * Whether Credit Hours hold the library course's figure: pre-filled from it,
+ * or, on an edit, stored equal to it.
+ */
+export const creditHoursFromCourse = (value: TrainingDetailsForm, course: TrainingCourse | undefined): boolean => {
+  const hours = courseCreditHours(course);
+  if (value.course_mode !== 'library' || hours === undefined) return false;
+  if (value.credit_hours_source === 'course') return true;
+  return (
+    value.credit_hours_source === 'manual' && value.credit_hours.trim() !== '' && Number(value.credit_hours) === hours
+  );
+};
+
+/**
+ * A change of course choice. Hours that came from a library course no longer
+ * describe the session once it has none, so they go back to following the
+ * event's length, the default a course-less session starts on.
+ */
+export const withCourseChoice = (value: TrainingDetailsForm): TrainingDetailsForm =>
+  value.credit_hours_source === 'course' && (value.course_mode !== 'library' || !value.course_id)
+    ? { ...value, credit_hours_source: 'duration' }
+    : value;
 
 /** The ISO instants' length in hours, for a stored event. */
 const storedHours = (startIso: string, endIso: string): number | null => {

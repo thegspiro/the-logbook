@@ -18,7 +18,12 @@ import AttendanceRequirementChecklist from '../training/AttendanceRequirementChe
 import { attendanceRequirements } from '../../utils/attendanceRequirements';
 import { TrainingSettingsFields } from './TrainingSettingsFields';
 import type { CourseMode, InstructorOption, TrainingDetailsForm, TrainingField } from './trainingDetailsModel';
-import { TRAINING_FIELDS, effectiveCreditHours } from './trainingDetailsModel';
+import {
+  TRAINING_FIELDS,
+  courseCreditHours,
+  creditHoursFromCourse,
+  effectiveCreditHours,
+} from './trainingDetailsModel';
 
 const TRAINING_TYPES = Object.keys(TRAINING_TYPE_LABELS) as TrainingType[];
 
@@ -56,6 +61,8 @@ interface TrainingInfoStepProps {
   courses: TrainingCourse[];
   members: InstructorOption[];
   linkageData: TrainingLinkageData;
+  /** The department's member types, to say whom each attendance requirement applies to. */
+  membershipTypes?: readonly { value: string; label: string }[] | undefined;
   /** A series: the attendance note speaks of every session in it. */
   isSeries: boolean;
   access?: TrainingInfoAccess | undefined;
@@ -118,6 +125,7 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
   courses,
   members,
   linkageData,
+  membershipTypes = [],
   isSeries,
   access = 'edit',
   readOnlyNotice,
@@ -133,7 +141,7 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
       ? !courses.some((c) => c.id === value.course_id)
       : false;
   const selectedCourse = value.course_mode === 'library' ? courses.find((c) => c.id === value.course_id) : undefined;
-  const courseHours = selectedCourse ? (selectedCourse.credit_hours ?? selectedCourse.duration_hours) : undefined;
+  const courseHours = courseCreditHours(selectedCourse);
   const creditHours = effectiveCreditHours(value, durationHours);
   const instructorIsMember = Boolean(value.instructor_id) && members.some((m) => m.id === value.instructor_id);
   const freeTextInstructor = !value.instructor_id && value.instructor.trim() ? value.instructor.trim() : null;
@@ -149,20 +157,25 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
         ? `Follows the event's length until you change it. ${CREDIT_NOTE}`
         : `Follows the event's length (${hoursLabel(durationHours)}) until you change it. ${CREDIT_NOTE}`;
     }
-    if (value.credit_hours_source === 'course' && courseHours !== undefined && courseHours !== null) {
+    if (creditHoursFromCourse(value, selectedCourse) && courseHours !== undefined) {
       return `From the course (${hoursLabel(courseHours)}). ${CREDIT_NOTE}`;
     }
     return CREDIT_NOTE;
   })();
 
   // A stored session can hold a name typed elsewhere, not from any course.
-  const instructorHint = freeTextInstructor
-    ? selectedCourse
-      ? `From the course: ${freeTextInstructor}, not a member`
-      : `${freeTextInstructor}, not a member`
-    : selectedCourse?.instructor && instructorIsMember && value.instructor === selectedCourse.instructor.trim()
-      ? 'From the course.'
-      : undefined;
+  // Left blank under a library course, the save stores the course's.
+  const courseInstructor = selectedCourse?.instructor?.trim();
+  const instructorHint =
+    !value.instructor_id && !freeTextInstructor && courseInstructor
+      ? `Left blank, the course's instructor (${courseInstructor}) is used.`
+      : freeTextInstructor
+        ? selectedCourse
+          ? `From the course: ${freeTextInstructor}, not a member`
+          : `${freeTextInstructor}, not a member`
+        : selectedCourse?.instructor && instructorIsMember && value.instructor === selectedCourse.instructor.trim()
+          ? 'From the course.'
+          : undefined;
 
   const linkageValue: TrainingLinkageValue = {
     category_id: value.category_id || undefined,
@@ -341,7 +354,9 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
           error={errors.training_type}
           hint={
             selectedCourse && value.training_type === selectedCourse.training_type
-              ? 'From the course; you can change it.'
+              ? locked
+                ? 'From the course.'
+                : 'From the course; you can change it.'
               : undefined
           }
         >
@@ -451,6 +466,7 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
               no attendance requirement.
             </p>
             <AttendanceRequirementChecklist
+              membershipTypes={membershipTypes}
               requirements={linkageData.requirements}
               value={value.attendance_requirement_ids}
               onChange={(next) => onChange({ attendance_requirement_ids: next })}
@@ -484,7 +500,7 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
 
         {value.issues_certification && (
           <div className="space-y-4 border-l-2 border-red-500/30 pl-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <FormField
                 id={TRAINING_FIELDS.issuing_agency.id}
                 label="Issuing Agency"
@@ -523,33 +539,35 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
                   />
                 )}
               </FormField>
+              <FormField
+                id={TRAINING_FIELDS.expiration_months.id}
+                label="Expiration (months)"
+                optional
+                error={errors.expiration_months}
+                hint={
+                  !selectedCourse?.expiration_months
+                    ? undefined
+                    : value.expiration_months === String(selectedCourse.expiration_months)
+                      ? 'From the course.'
+                      : !value.expiration_months.trim()
+                        ? `Left blank, the course's ${selectedCourse.expiration_months} months is used.`
+                        : undefined
+                }
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    inputMode="numeric"
+                    min="1"
+                    value={value.expiration_months}
+                    onChange={(e) => onChange({ expiration_months: e.target.value })}
+                    placeholder="e.g., 24 (for 2 years)"
+                    className="form-input py-3"
+                  />
+                )}
+              </FormField>
             </div>
-            <FormField
-              id={TRAINING_FIELDS.expiration_months.id}
-              label="Expiration (months)"
-              optional
-              error={errors.expiration_months}
-              hint={
-                selectedCourse?.expiration_months &&
-                value.expiration_months === String(selectedCourse.expiration_months)
-                  ? 'From the course.'
-                  : undefined
-              }
-              className="md:w-1/2"
-            >
-              {(field) => (
-                <input
-                  {...field}
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  value={value.expiration_months}
-                  onChange={(e) => onChange({ expiration_months: e.target.value })}
-                  placeholder="e.g., 24 (for 2 years)"
-                  className="form-input py-3"
-                />
-              )}
-            </FormField>
           </div>
         )}
       </fieldset>

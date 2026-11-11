@@ -2232,6 +2232,8 @@ _CLASS_MEMBERSHIP_WORDS = frozenset({"administrative", "honorary"})
 class UnmappedRequirement:
     requirement_id: str
     name: str
+    # Shown to the officer as written, after the requirement's name, so it is
+    # plain language: no "tier" or "member class".
     reason: str
 
 
@@ -2291,8 +2293,8 @@ def mandatory_tiers_for_requirements(
                         UnmappedRequirement(
                             req_id,
                             name,
-                            f"{key.capitalize()} is a member class, "
-                            "not a membership tier",
+                            f"{key.capitalize()} members can't be chosen "
+                            "by member type",
                         )
                     )
                     continue
@@ -2302,14 +2304,19 @@ def mandatory_tiers_for_requirements(
                 if not matched:
                     unmapped.append(
                         UnmappedRequirement(
-                            req_id, name, f"No membership tier stands for {key}"
+                            req_id,
+                            name,
+                            f"No member type here stands for {key} members",
                         )
                     )
                 tiers.extend(matched)
         elif req.required_roles or req.required_positions:
             unmapped.append(
                 UnmappedRequirement(
-                    req_id, name, "It applies by rank or position, not membership"
+                    req_id,
+                    name,
+                    "It applies by rank or position, which can't be chosen "
+                    "as a member type",
                 )
             )
 

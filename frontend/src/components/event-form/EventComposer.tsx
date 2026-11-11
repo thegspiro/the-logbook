@@ -252,6 +252,10 @@ export const EventComposer: React.FC<EventComposerProps> = ({
               initialStep: storedTraining ? editing.initialStep : undefined,
               organizerNames: editing.organizerNames,
               scopeChoice: scope && <SeriesScopeReview {...scope} />,
+              seriesOccurrence: scope && {
+                occurrenceStart: scope.occurrenceStart,
+                seriesStart: scope.seriesStart,
+              },
             }
           : {})}
       />

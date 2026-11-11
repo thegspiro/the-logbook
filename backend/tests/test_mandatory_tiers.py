@@ -83,7 +83,7 @@ class TestTheProjection:
             UnmappedRequirement(
                 "req-admin",
                 "Admin",
-                f"{word.capitalize()} is a member class, not a membership tier",
+                f"{word.capitalize()} members can't be chosen by member type",
             )
         ]
 
@@ -95,7 +95,9 @@ class TestTheProjection:
         assert tiers.tier_ids == []
         assert tiers.unmapped == [
             UnmappedRequirement(
-                "req-retirees", "Retirees", "No membership tier stands for retired"
+                "req-retirees",
+                "Retirees",
+                "No member type here stands for retired members",
             )
         ]
 
@@ -109,7 +111,7 @@ class TestTheProjection:
 
         assert tiers.tier_ids == []
         assert [u.reason for u in tiers.unmapped] == [
-            "It applies by rank or position, not membership"
+            "It applies by rank or position, which can't be chosen as a member type"
         ]
 
     def test_membership_types_win_over_ranks_as_the_grader_reads_them(self):

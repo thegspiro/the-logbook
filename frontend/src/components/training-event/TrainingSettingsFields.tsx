@@ -86,6 +86,7 @@ export const TrainingSettingsFields: React.FC<TrainingSettingsFieldsProps> = ({
         <FormField
           id={TRAINING_FIELDS.approval_deadline_days.id}
           label="Approval deadline (days)"
+          required
           error={errors.approval_deadline_days}
           hint="Days the instructor or a training officer has to approve completions once attendance is finalized."
         >

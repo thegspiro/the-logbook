@@ -14,12 +14,17 @@ interface MandatoryPrefillNoteProps {
 
 const joinNames = (names: string[]) => names.join(', ');
 
-/** Each requirement no member type stands for, with the backend's reason. */
-const UnmappedList: React.FC<{ unmapped: Note['unmapped'] }> = ({ unmapped }) => (
+/**
+ * Each requirement no member type stands for, with the backend's reason
+ * (worded for the officer there, so it is shown as is) and what follows from
+ * it, which differs by note.
+ */
+const UnmappedList: React.FC<{ unmapped: Note['unmapped']; then: string }> = ({ unmapped, then }) => (
   <>
     {unmapped.map((u, index) => (
       <p key={`${u.requirement_id}-${index}`} className="text-sm">
-        <span className="font-semibold">{u.name}</span>: {u.reason}.
+        <span className="font-semibold">{u.name}</span>: {u.reason}
+        {then}
       </p>
     ))}
   </>
@@ -38,10 +43,13 @@ export const MandatoryPrefillNote: React.FC<MandatoryPrefillNoteProps> = ({
         <Info className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
         <div className="space-y-1">
           <p className="font-semibold">Not pre-filled from Counts toward attendance</p>
-          <UnmappedList unmapped={note.unmapped} />
+          <UnmappedList
+            unmapped={note.unmapped}
+            then={mandatoryScope === 'all' ? ', so All members is selected.' : '.'}
+          />
           <p className="text-sm">
             {mandatoryScope === 'all'
-              ? 'All members is selected. Choose member types instead if only some must attend.'
+              ? 'Choose member types instead if only some must attend.'
               : 'Mandatory for is left as it was. Choose All members if they must attend.'}
           </p>
         </div>
@@ -59,10 +67,10 @@ export const MandatoryPrefillNote: React.FC<MandatoryPrefillNoteProps> = ({
           <p className="font-semibold">Pre-filled from Counts toward attendance</p>
           <p className="text-sm">{note.sources.length ? `${joinNames(note.sources)} → ${who}.` : `${who}.`}</p>
           {note.unmapped.length > 0 && (
-            <>
-              <UnmappedList unmapped={note.unmapped} />
-              {!note.everyone && <p className="text-sm">Choose All members if they must attend.</p>}
-            </>
+            <UnmappedList
+              unmapped={note.unmapped}
+              then={note.everyone ? '.' : '; choose All members if they must attend.'}
+            />
           )}
         </div>
       </div>

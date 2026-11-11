@@ -576,6 +576,169 @@ describe('CreateTrainingSessionPage training info step', () => {
   });
 });
 
+// The approved form's Training Info, Settings and Review, where they drifted.
+describe('CreateTrainingSessionPage as approved', () => {
+  const PUMP = {
+    id: 'course-pump',
+    organization_id: 'org',
+    name: 'Pump Operations',
+    code: 'PUMP',
+    training_type: 'skills_practice',
+    credit_hours: 2,
+    instructor: 'Capt. Owen Kittredge',
+    expiration_months: 24,
+    max_participants: 40,
+    program_id: 'prog-archived',
+    is_active: true,
+  };
+
+  beforeEach(() => {
+    resetApi();
+    getCourses.mockResolvedValue([CPR, PUMP]);
+    getVisibleEventTypesWithCategories.mockResolvedValue({
+      visible_event_types: ['training'],
+      custom_event_categories: [],
+      visible_custom_categories: [],
+      membership_types: [
+        { value: 'probationary', label: 'Probationary' },
+        { value: 'active', label: 'Active Member' },
+      ],
+    });
+  });
+
+  async function pickPump(user: User) {
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await screen.findByRole('option', { name: 'PUMP - Pump Operations' });
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-pump');
+  }
+
+  it('draws each attendance requirement as an option saying whom it applies to', async () => {
+    linkageRequirements.value = [
+      {
+        id: 'req-drills',
+        name: 'Company Drill Attendance',
+        requirement_type: 'session_attendance',
+        required_attendance_pct: 60,
+        applies_to_all: false,
+        required_membership_types: ['probationary', 'active'],
+      },
+      { id: 'req-all', name: 'Annual Drill Attendance', requirement_type: 'session_attendance', applies_to_all: true },
+    ];
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+
+    expect(screen.getByRole('checkbox', { name: 'Company Drill Attendance (60%)' })).toHaveAccessibleDescription(
+      'Applies to Probationary, Active Member'
+    );
+    expect(screen.getByRole('checkbox', { name: /Annual Drill Attendance/ })).toHaveAccessibleDescription(
+      'Applies to all members'
+    );
+  });
+
+  it('says on Review where the hours and the capacity came from, and the weekday of a weekly series', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await user.type(screen.getByLabelText(/^Title/), 'Pump Night');
+    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-06');
+    await user.click(screen.getByRole('checkbox', { name: /Make this a recurring event/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Rolling 12-month cycle' }));
+    await next(user);
+    await pickPump(user);
+    await next(user);
+    expect(screen.getByLabelText(/Max Attendees/)).toHaveAccessibleDescription(
+      'From the course. Leave blank for unlimited.'
+    );
+    await next(user);
+
+    expect(screen.getByText('2 hours (from the course)')).toBeInTheDocument();
+    expect(screen.getByText('40 (from the course)')).toBeInTheDocument();
+    expect(screen.getByText('Weekly on Mondays')).toBeInTheDocument();
+  });
+
+  // A program the active list does not hold read as "No program", opened a
+  // phase picker and gave the summary "undefined's".
+  it('fills no program from a course whose program is not on offer', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await pickPump(user);
+
+    expect(screen.getByLabelText('Training Program')).toHaveValue('');
+    expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
+    await toReview(user);
+    expect(screen.queryByText('Phase', { selector: 'dt' })).not.toBeInTheDocument();
+  });
+
+  // The backend fills a blank from the library course, so a blank does not
+  // read as None.
+  it("says a blank instructor or expiry under a library course is the course's", async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await pickPump(user);
+    await user.clear(screen.getByLabelText(/Expiration \(months\)/));
+    expect(screen.getByLabelText(/Expiration \(months\)/)).toHaveAccessibleDescription(
+      "Left blank, the course's 24 months is used."
+    );
+    await toReview(user);
+
+    expect(screen.getByText('24 months (from the course)')).toBeInTheDocument();
+  });
+
+  // The hours kept saying "(from the course)" after the course was dropped.
+  it('follows the event length again once the library course is left', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await pickPump(user);
+    await user.click(screen.getByRole('radio', { name: /No course yet/ }));
+    await toReview(user);
+
+    expect(screen.getByText("2 hours (the event's length)")).toBeInTheDocument();
+    expect(screen.queryByText(/from the course/)).not.toBeInTheDocument();
+  });
+
+  it('marks the approval deadline required while sign-off is', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByLabelText(/Require sign-off/));
+
+    expect(screen.getByLabelText(/Approval deadline \(days\)/)).toBeRequired();
+  });
+
+  it('names the Settings sections and options as the approved form does', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await next(user);
+
+    expect(screen.getByRole('heading', { name: 'RSVP' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Check-In' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Check-in rules' })).toBeInTheDocument();
+    const window = screen.getByLabelText('Check-In Window');
+    expect(
+      within(window)
+        .getAllByRole('option')
+        .map((o) => o.textContent)
+    ).toEqual(['Flexible', 'Strict', 'Custom window']);
+    expect(window).toHaveAccessibleDescription(
+      'Flexible opens before the start and closes when the event ends. Strict is open only while the event runs. Custom window opens before the start and closes after the end.'
+    );
+    expect(screen.getByLabelText('Max Attendees (optional)')).toHaveAccessibleDescription('Leave blank for unlimited.');
+    expect(screen.getByLabelText('Require manual check-out')).toHaveAccessibleDescription(
+      'When off, members are checked out when the event ends.'
+    );
+  });
+});
+
 describe('CreateTrainingSessionPage saving', () => {
   beforeEach(() => {
     resetApi();
@@ -861,7 +1024,7 @@ describe('CreateTrainingSessionPage mandatory pre-fill', () => {
   const ADMIN_UNMAPPED = {
     requirement_id: 'req-admin',
     name: 'Administrative Drill Attendance',
-    reason: 'Administrative is a member class, not a membership tier',
+    reason: "Administrative members can't be chosen by member type",
   };
 
   beforeEach(() => {
@@ -917,9 +1080,17 @@ describe('CreateTrainingSessionPage mandatory pre-fill', () => {
     expect(memberType('Senior Member')).not.toBeChecked();
     expect(screen.getByText('Pre-filled from Counts toward attendance')).toBeInTheDocument();
     expect(screen.getByText('Company Drill Attendance → Probationary, Active Member.')).toBeInTheDocument();
-    expect(screen.getByText(/Administrative is a member class, not a membership tier/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Administrative members can't be chosen by member type; choose All members if they must attend\./
+      )
+    ).toBeInTheDocument();
 
     await next(user);
+    expect(screen.getByText('Not mapped', { selector: 'dt' })).toBeInTheDocument();
+    expect(
+      screen.getByText("Administrative Drill Attendance (Administrative members can't be chosen by member type)")
+    ).toBeInTheDocument();
     await submit(user);
     await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
     expect(sentEvent()).toMatchObject({ is_mandatory: true, mandatory_membership_types: ['probationary', 'active'] });
@@ -964,8 +1135,10 @@ describe('CreateTrainingSessionPage mandatory pre-fill', () => {
 
     expect(screen.getByRole('radio', { name: 'All members' })).toBeChecked();
     expect(screen.getByText('Not pre-filled from Counts toward attendance')).toBeInTheDocument();
-    expect(screen.getByText(/Administrative is a member class, not a membership tier/)).toBeInTheDocument();
-    expect(screen.getByText(/All members is selected\. Choose member types instead/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Administrative members can't be chosen by member type, so All members is selected\./)
+    ).toBeInTheDocument();
+    expect(screen.getByText('Choose member types instead if only some must attend.')).toBeInTheDocument();
   });
 
   it("does not overwrite the officer's own choice", async () => {

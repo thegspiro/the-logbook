@@ -58,7 +58,7 @@ import { CheckInSection } from '../event-form/sections/CheckInSection';
 import { NotificationsSection } from '../event-form/sections/NotificationsSection';
 import { AttachmentsSection } from '../event-form/sections/AttachmentsSection';
 import { TrainingInfoStep, type TrainingInfoAccess, type TrainingReadOnlyNotice } from './TrainingInfoStep';
-import { TrainingReviewStep, type ReviewTarget } from './TrainingReviewStep';
+import { TrainingReviewStep, type ReviewTarget, type SeriesOccurrence } from './TrainingReviewStep';
 import { MandatoryPrefillNote } from './MandatoryPrefillNote';
 import {
   TRAINING_FIELDS,
@@ -68,6 +68,7 @@ import {
   toAttachPayload,
   toUpdatePayload,
   validateTrainingDetails,
+  withCourseChoice,
   type InstructorOption,
   type TrainingDetailsForm,
   type TrainingField,
@@ -169,6 +170,8 @@ interface TrainingEventWizardProps {
   scopeChoice?: React.ReactNode;
   /** On an edit, who runs the event, for Review. */
   organizerNames?: { organizer?: string | null | undefined; alternate?: string | null | undefined } | undefined;
+  /** On a series edit, the occurrence's start and its series' (ISO instants), for Review. */
+  seriesOccurrence?: SeriesOccurrence | undefined;
 }
 
 export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
@@ -195,6 +198,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   initialStep = 'details',
   scopeChoice,
   organizerNames,
+  seriesOccurrence,
 }) => {
   const { formatRank } = useRanks();
   const { confirm } = useConfirm();
@@ -253,6 +257,8 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   );
 
   const linkageData = useTrainingLinkageData(training.program_id || undefined);
+  const selectedCourse =
+    training.course_mode === 'library' ? courses.find((c) => c.id === training.course_id) : undefined;
   const { formData, tz } = model;
   const durationHours = useMemo(
     () => scheduledHours(formData.start_datetime, formData.end_datetime, tz),
@@ -266,7 +272,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   );
 
   const updateTraining = (patch: Partial<TrainingDetailsForm>) => {
-    setTraining((prev) => ({ ...prev, ...patch }));
+    setTraining((prev) => withCourseChoice({ ...prev, ...patch }));
     // Only the officer's ticks: loading an event's links never pre-fills.
     if (patch.attendance_requirement_ids) prefill.requirementsChanged(patch.attendance_requirement_ids);
     const touched = Object.keys(patch).map((key) => (key === 'instructor' ? 'instructor_id' : key));
@@ -284,7 +290,14 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
       updateTraining({ course_id: '' });
       return;
     }
-    setTraining((prev) => applyLibraryCourse(prev, course, members));
+    setTraining((prev) =>
+      applyLibraryCourse(
+        prev,
+        course,
+        members,
+        linkageData.programs.map((p) => p.id)
+      )
+    );
     setTrainingErrors(({ course_id: _picked, ...rest }) => rest);
     if (course.max_participants) model.update({ max_attendees: course.max_participants });
   };
@@ -654,6 +667,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
             courses={courses}
             members={members}
             linkageData={linkageData}
+            membershipTypes={model.membershipTypes}
             isSeries={model.isRecurring}
             access={trainingAccess}
             readOnlyNotice={readOnlyNotice}
@@ -686,21 +700,30 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               scopeNotePlacement={prefill.note?.kind === 'not-filled' ? 'before' : 'after'}
             />
             <hr className="border-theme-surface-border" />
-            <RsvpSection model={model} />
+            <RsvpSection
+              model={model}
+              variant="steps"
+              maxAttendeesFromCourse={
+                Boolean(selectedCourse?.max_participants) && formData.max_attendees === selectedCourse?.max_participants
+              }
+            />
             <hr className="border-theme-surface-border" />
-            <div className="space-y-4">
-              <div className="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/10 p-4">
-                <QrCode className="mt-0.5 h-5 w-5 shrink-0 text-green-700" aria-hidden="true" />
-                <div>
-                  <p className="font-semibold text-green-800 dark:text-green-300">QR Code Check-In</p>
-                  <p className="text-theme-text-secondary text-sm">
-                    A QR code will be automatically generated for this training. Members can scan it to check in and
-                    verify their attendance.
-                  </p>
+            <CheckInSection
+              model={model}
+              variant="steps"
+              intro={
+                <div className="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/10 p-4">
+                  <QrCode className="mt-0.5 h-5 w-5 shrink-0 text-green-700" aria-hidden="true" />
+                  <div>
+                    <p className="font-semibold text-green-800 dark:text-green-300">QR Code Check-In</p>
+                    <p className="text-theme-text-secondary text-sm">
+                      A QR code will be automatically generated for this training. Members can scan it to check in and
+                      verify their attendance.
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <CheckInSection model={model} />
-            </div>
+              }
+            />
             <hr className="border-theme-surface-border" />
             <NotificationsSection model={model} />
           </>
@@ -723,8 +746,13 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               scopeChoice={scopeChoice}
               organizerNames={organizerNames}
               storedCourseName={storedCourseName}
+              unmapped={formData.is_mandatory && prefill.note ? prefill.note.unmapped : []}
+              seriesOccurrence={seriesOccurrence}
             />
             <AttachmentsSection existingAttachments={model.existingAttachments} />
+            {model.existingAttachments.length > 0 && (
+              <p className="text-theme-text-muted text-sm">Attachments are managed on the event page.</p>
+            )}
             <div>
               <label className="text-theme-text-secondary mobile-touch-target inline-flex cursor-pointer items-center justify-start gap-2 text-sm">
                 <input
