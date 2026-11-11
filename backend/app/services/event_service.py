@@ -1365,8 +1365,12 @@ class EventService:
         )
         locked = [plan for plan in plans if plan.locked_fields]
         if locked:
-            fields = sorted(set().union(*(plan.locked_fields for plan in locked)))
-            what = "changing " + ", ".join(f.replace("_", " ") for f in fields)
+            # Session column names: a fixed set, and the refusal is sent
+            # without safe_error_detail's length cap (attendance_locked_error).
+            locked_labels = sorted(
+                {f.replace("_", " ") for plan in locked for f in plan.locked_fields}
+            )
+            what = "changing " + ", ".join(locked_labels)
             if len(events) > 1:
                 finalized = sum(
                     1 for e in training_events if attendance_is_finalized(e)
