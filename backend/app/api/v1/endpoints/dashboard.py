@@ -1406,24 +1406,36 @@ async def get_admin_summary(
     overdue_action_items: int | None = None
     open_action_items: int | None = None
     if "minutes" in enabled:
+        # RPT6-29-6: `settings.manage` does not imply `meetings.manage` or
+        # `minutes.manage`, so this tile's counts need the same restriction
+        # the unified feed applies (MM-21) — otherwise a settings.manage
+        # holder with neither sees a draft or executive-session item counted
+        # here even though the Meetings/Minutes APIs withhold it from them.
+        meeting_restriction = meeting_visibility_filter(current_user)
+        meeting_conditions: list = [MeetingActionItem.organization_id == org_id]
+        if meeting_restriction is not None:
+            meeting_conditions.append(meeting_restriction)
+        minutes_restriction = minutes_visibility_filter(current_user)
+        minutes_conditions: list = [MeetingMinutes.organization_id == org_id]
+        if minutes_restriction is not None:
+            minutes_conditions.append(minutes_restriction)
+
         overdue_meeting = 0
         open_meeting = 0
         org_today: date | None = None
         try:
             org_today = await resolve_org_today(db, org_id)
             result = await db.execute(
-                select(func.count(MeetingActionItem.id)).where(
-                    MeetingActionItem.organization_id == org_id,
-                    meeting_action_item_overdue(org_today),
-                )
+                select(func.count(MeetingActionItem.id))
+                .join(Meeting, Meeting.id == MeetingActionItem.meeting_id)
+                .where(*meeting_conditions, meeting_action_item_overdue(org_today))
             )
             overdue_meeting = result.scalar() or 0
 
             result = await db.execute(
-                select(func.count(MeetingActionItem.id)).where(
-                    MeetingActionItem.organization_id == org_id,
-                    meeting_action_item_open(),
-                )
+                select(func.count(MeetingActionItem.id))
+                .join(Meeting, Meeting.id == MeetingActionItem.meeting_id)
+                .where(*meeting_conditions, meeting_action_item_open())
             )
             open_meeting = result.scalar() or 0
         except Exception as exc:
@@ -1437,7 +1449,7 @@ async def get_admin_summary(
                 select(func.count(ActionItem.id))
                 .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
                 .where(
-                    MeetingMinutes.organization_id == org_id,
+                    *minutes_conditions,
                     minutes_action_item_overdue(
                         org_today or await resolve_org_today(db, org_id)
                     ),
@@ -1448,10 +1460,7 @@ async def get_admin_summary(
             result = await db.execute(
                 select(func.count(ActionItem.id))
                 .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
-                .where(
-                    MeetingMinutes.organization_id == org_id,
-                    minutes_action_item_open(),
-                )
+                .where(*minutes_conditions, minutes_action_item_open())
             )
             open_minutes = result.scalar() or 0
         except Exception as exc:

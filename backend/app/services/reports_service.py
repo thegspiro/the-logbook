@@ -148,6 +148,7 @@ class ReportsService:
         end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
         hidden_prospect_ids: Optional[Set[str]] = None,
+        current_user: Optional[User] = None,
     ) -> Dict[str, Any]:
         """Generate a report based on type.
 
@@ -157,6 +158,10 @@ class ReportsService:
         lists individual prospect records. Every other generator ignores it;
         passing it unconditionally here (rather than threading it through all
         thirteen signatures) keeps that asymmetry in one place.
+
+        ``current_user`` is the acting member — or, for a scheduled send with
+        no live request, the saved report's owner — and only
+        ``department_overview`` consumes it (RPT6-29-5), the same asymmetry.
         """
         generators: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {
             "member_roster": self._generate_member_roster,
@@ -185,6 +190,14 @@ class ReportsService:
                 end_date,
                 filters,
                 hidden_prospect_ids=hidden_prospect_ids,
+            )
+        if report_type == "department_overview":
+            return await generator(
+                organization_id,
+                start_date,
+                end_date,
+                filters,
+                current_user=current_user,
             )
         return await generator(organization_id, start_date, end_date, filters)
 
@@ -1714,14 +1727,40 @@ class ReportsService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
         filters: Optional[Dict[str, Any]] = None,
+        current_user: Optional[User] = None,
     ) -> Dict[str, Any]:
         """
         Cross-module department overview report.
         Aggregates key metrics from members, training, events, and action items.
+
+        ``current_user`` decides which meeting/minutes action items the two
+        counts below may include (RPT6-29-5). This report is gated only at
+        ``reports.view`` — well below ``meetings.manage``/``minutes.manage`` —
+        so without a restriction it would count a draft or executive-session
+        item for anyone who can run it, re-opening what MM-21 (2026-11-10)
+        closed on the dashboard's unified action-items feed for the same two
+        models. ``current_user`` is ``None`` only for a call site with no live
+        actor to check (there should be none; every caller is expected to
+        pass its acting user or, for a scheduled send, the schedule's owner);
+        that case fails closed to the same filtered view a non-manage holder
+        with nothing assigned to them would get, never to the unrestricted
+        count.
         """
-        from app.models.meeting import ActionItemStatus, MeetingActionItem
+        from sqlalchemy import and_
+
+        from app.api.v1.endpoints.dashboard import (
+            meeting_visibility_filter,
+            minutes_visibility_filter,
+        )
+        from app.models.meeting import ActionItemStatus, Meeting, MeetingActionItem
         from app.models.minute import ActionItem as MinutesActionItem
-        from app.models.minute import MeetingMinutes, MinutesActionItemStatus
+        from app.models.minute import (
+            MeetingMinutes,
+            MinutesActionItemStatus,
+            MinutesMeetingType,
+            MinutesStatus,
+        )
+        from app.services.meetings_service import member_visible_meeting
 
         org_id = str(organization_id)
         today = await resolve_org_today(self.db, org_id)
@@ -1810,32 +1849,57 @@ class ReportsService:
         total_checkins = checkins_result.scalar() or 0
 
         # ── Action Items ──
-        open_meeting_items = await self.db.execute(
-            select(func.count(MeetingActionItem.id)).where(
-                MeetingActionItem.organization_id == org_id,
-                MeetingActionItem.status.in_(
-                    [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
-                ),
+        # RPT6-29-5: confine both counts to what current_user may see, the
+        # same rule the unified dashboard feed applies to the same two models
+        # (MM-21) — reused rather than re-derived (Pitfall #29). Each filter
+        # returns None for a meetings.manage/minutes.manage holder (no
+        # restriction); current_user=None (no live actor) is the one case
+        # that cannot ask a permission question, so it gets the same clause
+        # a non-manage holder with nothing assigned to them would.
+        if current_user is not None:
+            meeting_restriction = meeting_visibility_filter(current_user)
+            minutes_restriction = minutes_visibility_filter(current_user)
+        else:
+            meeting_restriction = member_visible_meeting()
+            minutes_restriction = and_(
+                MeetingMinutes.status == MinutesStatus.APPROVED.value,
+                MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
             )
+
+        meeting_conditions = [
+            MeetingActionItem.organization_id == org_id,
+            MeetingActionItem.status.in_(
+                [ActionItemStatus.OPEN.value, ActionItemStatus.IN_PROGRESS.value]
+            ),
+        ]
+        if meeting_restriction is not None:
+            meeting_conditions.append(meeting_restriction)
+        open_meeting_items = await self.db.execute(
+            select(func.count(MeetingActionItem.id))
+            .join(Meeting, Meeting.id == MeetingActionItem.meeting_id)
+            .where(*meeting_conditions)
         )
         # Minutes action items have no organization_id of their own — they are
         # org-scoped via minutes_id -> meeting_minutes. Join and filter the org,
         # otherwise this counts open action items across ALL organizations.
+        minutes_conditions = [
+            MeetingMinutes.organization_id == org_id,
+            MinutesActionItem.status.in_(
+                [
+                    MinutesActionItemStatus.PENDING.value,
+                    MinutesActionItemStatus.IN_PROGRESS.value,
+                ]
+            ),
+        ]
+        if minutes_restriction is not None:
+            minutes_conditions.append(minutes_restriction)
         open_minutes_items = await self.db.execute(
             select(func.count(MinutesActionItem.id))
             .join(
                 MeetingMinutes,
                 MinutesActionItem.minutes_id == MeetingMinutes.id,
             )
-            .where(
-                MeetingMinutes.organization_id == org_id,
-                MinutesActionItem.status.in_(
-                    [
-                        MinutesActionItemStatus.PENDING.value,
-                        MinutesActionItemStatus.IN_PROGRESS.value,
-                    ]
-                ),
-            )
+            .where(*minutes_conditions)
         )
 
         return {

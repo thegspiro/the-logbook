@@ -212,9 +212,15 @@ async def test_every_asset_module_off_queries_nothing_at_all():
 async def _summary(enabled: list[str], active_requirements: int = 1):
     db = MagicMock()
     db.execute = AsyncMock(return_value=SimpleNamespace(scalar=lambda: 0))
-    modules_patch, _ = _patches(enabled, [])
+    # RPT6-29-6's meeting/minutes visibility restriction reads
+    # `user_has_permission` too (it was previously only reached through the
+    # permission-gated widgets below), so this helper's `_user()` — a bare
+    # `SimpleNamespace` with no `.positions` — needs the mocked version, not
+    # the real one, or the admin-summary action-item tiles crash on it.
+    modules_patch, permission_patch = _patches(enabled, [])
     with (
         modules_patch,
+        permission_patch,
         patch(
             "app.api.v1.endpoints.dashboard.count_active_requirements",
             new=AsyncMock(return_value=active_requirements),

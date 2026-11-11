@@ -16,6 +16,58 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4238](https://github.com/thegspiro/the-logbook/pull/4238)**
+(branch `claude/security-review-reports-analytics-p15`):
+Feature 29 (Reports & analytics), pass 15. PR #4236 (Feature 28, Security,
+audit & IP, pass 13) had already merged clean. A fresh `list_pull_requests`
+(state `open`) found no PR with a `claude/security-review-*` head, and row 29
+was the next pending feature, confirmed on a freshly fetched `main`.
+
+Baseline `1cfde730f` (pass 14's own merge, PR #4001). Real delta since then
+was almost entirely other rotation/owner-decision work (DASH-37/38/39/40 on
+`dashboard.py`, a timezone fix on `platform_analytics.py`, a new org-scoped
+`outreach_event_clause` helper on `dashboard_widget_service.py`), but it
+carried MM-21's (Meetings & minutes, pass 13) own meeting-visibility fix into
+this feature's file without reaching this feature's two sibling reads of the
+same two action-item models — flagged by name in MM-21's own PROGRESS.md
+entry as belonging here. **2 fixed:** RPT6-29-5 (MEDIUM) —
+`reports_service.py`'s `department_overview` report counted every open
+meeting/minutes action item regardless of draft/executive-session state, at
+`reports.view` alone; RPT6-29-6 (MEDIUM) — found by re-enumerating
+`dashboard.py`'s own routes rather than trusting "unchanged,"
+`GET /dashboard/admin-summary` (gated at `settings.manage`, which does not
+imply `meetings.manage`/`minutes.manage`) had the identical gap on its own
+tile. Both fixed by reusing `meeting_visibility_filter`/
+`minutes_visibility_filter` (already defined and unit-tested in
+`dashboard.py` for MM-21) rather than re-deriving the rule (Pitfall #29). The
+four standing flagged items (LBL-29-2, LBL-29-4, RPT-5c/6/7, DASH-2)
+re-verified unchanged. Route surface re-enumerated by AST: 36, up from pass
+14's 35 (`GET /dashboard/action-items/page`, landed since via other
+owner-decision work, already correctly self-gated). See
+`docs/security-review/RPT6-29-reports-analytics.md`'s **Pass 15** section
+for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 756 revisions, single head `8b1cf6f55425`; `generate_schema_docs.py
+--check` — up to date; `check_route_permissions.py --strict` — 305 routes, 0
+errors/warnings; scoped backend suite (`-k "reports or label or analytics or
+dashboard or attendance_dashboard or pipeline or prospect_privacy or
+membership_pipeline or dues_overdue or saved_report or evaluation or meeting
+or minutes"`) — 3313 passed, 1 environment-only skip (`pywebpush`); `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors/warnings; `npx vitest run
+src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx
+src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx
+src/components/labels/barcodeGeometry.test.ts
+src/components/labels/printerDpi.test.ts
+src/pages/PlatformAnalyticsPage.test.tsx` — 359 passed (27 files).
+
+Row 29 → ✅ (pending this PR's merge). Next is Feature 30 (Onboarding) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 13, PR #4236, merged), preserved for history</summary>
+
 **PR [#4236](https://github.com/thegspiro/the-logbook/pull/4236)**
 (branch `claude/security-review-security-audit-ip-p13`):
 Feature 28 (Security, audit & IP), pass 13. PR #4235 (Feature 27,
@@ -58,6 +110,8 @@ src/pages/ErrorMonitoringPage.test.tsx` — 65 passed (5 files).
 Row 28 → ✅ (pending this PR's merge). Next is Feature 29 (Reports &
 analytics) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 13, PR #4235, merged), preserved for history</summary>
@@ -25812,7 +25866,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                      | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (31 routes, added pass 13), `historical_staffing_*.py`                                                                       | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                        | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                           | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                           | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                          | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                               | ⬜     |
@@ -25847,6 +25901,85 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-11 — Feature 28 (Security, audit & IP, pass 13) merged; Feature 29 (Reports & analytics, pass 15): 2 fixed (RPT6-29-5, RPT6-29-6, both MEDIUM), 0 new findings beyond those two
+
+PR #4236 merged. A fresh `list_pull_requests` (state `open`) found 0 PRs with
+a `claude/security-review-*` head, and row 29 (Reports & analytics) was the
+next `⬜` in the rotation table, confirmed on a freshly pulled `main`.
+
+Baseline `1cfde730f` (pass 14's own merge, PR #4001). Real delta since then,
+diffed file by file: `dashboard.py` (+480/-100), `platform_analytics.py`
+(+14/-14), `dashboard_widget_service.py` (+27/-0) — all from other
+rotation/owner-decision work (DASH-37 through DASH-40's dashboard tile
+fixes, a `platform_analytics.py` timezone correctness fix, a new org-scoped
+`outreach_event_clause` helper). `reports_service.py`,
+`saved_report_schedule.py`, `attendance_dashboard_service.py`,
+`label_service.py`, `label_printer_service.py`, `schemas/reports.py`,
+`analytics.py`, `labels.py` were all byte-identical to pass 14.
+
+Of that real delta, `dashboard.py`'s portion carried Meetings & minutes pass
+13's own `meeting_visibility_filter`/`minutes_visibility_filter` fix (MM-21)
+into the file, but MM-21's own writeup explicitly flagged — rather than
+fixed — that this feature's sibling reads of the same two models
+(`MeetingActionItem`, minutes `ActionItem`) had the identical gap. This pass
+found and fixed **two** such sibling instances, not the one flagged:
+
+**RPT6-29-5 (MEDIUM, fixed):** `reports_service.py`'s `department_overview`
+report counted every open/overdue meeting and minutes action item in the
+organization, filtered only by status — never by the owning meeting's or
+minutes' draft/executive-session state — at the `department_overview`
+report's own gate, `reports.view`, well below `meetings.manage`/
+`minutes.manage`. Fixed by threading an optional `current_user` through
+`ReportsService.generate_report` into `_generate_department_overview` and
+applying the same two filter functions MM-21 already built and unit-tested.
+The scheduled saved-report sender (`saved_report_schedule.py`), which has no
+live request, now has `_owner_may_run` return the verified schedule owner
+(instead of a bare bool) to use as that acting user; a missing
+`current_user` fails closed to the restricted view, never the unrestricted
+count.
+
+**RPT6-29-6 (MEDIUM, fixed):** found only because re-enumerating
+`dashboard.py`'s routes by AST (36, up from pass 14's 35) prompted a full
+re-read of the file rather than trusting the diff summary — `GET
+/dashboard/admin-summary`'s own action-items tile (gated at
+`settings.manage`, which does not imply `meetings.manage`/`minutes.manage`)
+had the exact same unrestricted shape, in this feature's own route, that
+RPT6-29-5 had just fixed one file over. Fixed identically.
+
+Both guard tests were verified to fail against the pre-fix code (a real
+`4 == 1`/`4 == 2` count mismatch, not just a missing-parameter `TypeError`)
+before being committed (Pitfall #37). Two pre-existing tests
+(`test_dashboard_module_gating.py`, `test_dashboard_action_items_paging.py`)
+needed their already-built `user_has_permission` mock activated for
+`get_admin_summary`, which had never previously called it.
+
+The four standing flagged items (LBL-29-2, LBL-29-4, RPT-5c/6/7, DASH-2)
+re-verified unchanged by direct grep against current source, not the doc.
+The frontend surface (a large Evaluations UI addition — backend already
+Feature 17's own reviewed scope — plus `AdminPageHeader` adoption and label
+print geometry constants) read in full, no new client-side risk.
+
+Full writeup: `docs/security-review/RPT6-29-reports-analytics.md`'s **Pass
+15** section.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 756 revisions, single head `8b1cf6f55425`; `generate_schema_docs.py
+--check` — up to date; `check_route_permissions.py --strict` — 305 routes, 0
+errors/warnings; scoped backend suite (`-k "reports or label or analytics or
+dashboard or attendance_dashboard or pipeline or prospect_privacy or
+membership_pipeline or dues_overdue or saved_report or evaluation or meeting
+or minutes"`) — 3313 passed, 1 environment-only skip (`pywebpush`); `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors/warnings; `npx vitest run
+src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx
+src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx
+src/components/labels/barcodeGeometry.test.ts
+src/components/labels/printerDpi.test.ts
+src/pages/PlatformAnalyticsPage.test.tsx` — 359 passed (27 files).
+
+Row 29 → ✅ (pending this PR's merge). Next is Feature 30 (Onboarding) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-11 — Features 24–26 merged (Meetings & minutes, Messaging & notifications, Forms, all pass 13); Feature 27 (Integrations, pass 13): watchdog pickup, claimed the Historical Data Import module `git log` had missed and a prior pass had flagged unclaimed, 0 fixed, 0 new findings
 

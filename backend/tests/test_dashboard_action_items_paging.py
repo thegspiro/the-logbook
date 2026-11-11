@@ -336,18 +336,124 @@ class TestOpenAndOverdue:
             )
         user = _caller(org, "minutes.manage", "minutes.view", "settings.manage")
 
+        # RPT6-29-6: the admin-summary tile now reads user_has_permission too
+        # (via meeting_visibility_filter/minutes_visibility_filter), so this
+        # fake caller's `.permissions` list needs the same mock `_call` uses
+        # for the other routes below, or it falls through to the real
+        # permission resolver, which this SimpleNamespace cannot satisfy.
         with patch(
             "app.api.v1.endpoints.dashboard.OrganizationService.get_enabled_modules",
             new=AsyncMock(return_value=SimpleNamespace(enabled_modules=["minutes"])),
         ), patch(
             "app.api.v1.endpoints.dashboard.resolve_org_today",
             new=AsyncMock(return_value=TODAY),
+        ), patch(
+            "app.api.v1.endpoints.dashboard.user_has_permission",
+            side_effect=lambda _user, permission: permission in set(user.permissions),
         ):
             summary = await get_admin_summary(db=db_session, current_user=user)
         listed = await _feed(db_session, user, open_only=True)
 
         assert summary.open_action_items == listed.total == 2
         assert summary.overdue_action_items == listed.overdue_total == 2
+
+
+class TestAdminSummaryRespectsVisibility:
+    """RPT6-29-6: the admin-summary tile and the feed it implicitly agrees
+    with (DASH-37/40's own invariant) must count the same rows for a caller
+    who holds neither ``meetings.manage`` nor ``minutes.manage`` — including
+    when that caller does hold the unrelated ``settings.manage`` the route
+    itself is gated on. Before this fix, the tile counted every item in the
+    organization regardless of the caller's meetings/minutes permissions."""
+
+    async def test_settings_manage_alone_gets_the_restricted_count(self, db_session):
+        org = await _org(db_session)
+        visible_meeting = await _meeting(db_session, org, "Visible meeting")
+        executive_meeting = Meeting(
+            organization_id=org.id,
+            title="Executive session",
+            meeting_date=_day(-30),
+            status=MeetingStatus.APPROVED,
+            meeting_type="executive",
+        )
+        db_session.add(executive_meeting)
+        minutes = await _minutes(db_session, org)
+        executive_minutes = MeetingMinutes(
+            organization_id=org.id,
+            title="Executive minutes",
+            meeting_date=datetime(2026, 10, 1, tzinfo=timezone.utc),
+            status=MinutesStatus.APPROVED,
+            meeting_type="executive",
+        )
+        db_session.add(executive_minutes)
+        await db_session.flush()
+
+        await _meeting_item(
+            db_session, visible_meeting, "visible meeting item", _day(-2)
+        )
+        await _meeting_item(
+            db_session, executive_meeting, "closed meeting item", _day(-2)
+        )
+        await _minutes_item(db_session, minutes, "visible minutes item", _day(-1))
+        await _minutes_item(
+            db_session, executive_minutes, "closed minutes item", _day(-1)
+        )
+
+        caller = _caller(org, "settings.manage")
+
+        with patch(
+            "app.api.v1.endpoints.dashboard.OrganizationService.get_enabled_modules",
+            new=AsyncMock(return_value=SimpleNamespace(enabled_modules=["minutes"])),
+        ), patch(
+            "app.api.v1.endpoints.dashboard.resolve_org_today",
+            new=AsyncMock(return_value=TODAY),
+        ), patch(
+            "app.api.v1.endpoints.dashboard.user_has_permission",
+            side_effect=lambda _user, permission: permission in set(caller.permissions),
+        ):
+            summary = await get_admin_summary(db=db_session, current_user=caller)
+        # Both items are due in the past, so a caller who could see every
+        # row would get 4 for each figure; restricted to the two visible
+        # ones, both counts are 2 — proving the restriction, not just that
+        # the closed items dropped out of one of the two tallies.
+        assert summary.open_action_items == 2
+        assert summary.overdue_action_items == 2
+
+    async def test_minutes_manage_still_gets_the_full_count(self, db_session):
+        """A manage holder's count is unchanged by this fix."""
+        org = await _org(db_session)
+        visible_meeting = await _meeting(db_session, org, "Visible meeting")
+        executive_meeting = Meeting(
+            organization_id=org.id,
+            title="Executive session",
+            meeting_date=_day(-30),
+            status=MeetingStatus.APPROVED,
+            meeting_type="executive",
+        )
+        db_session.add(executive_meeting)
+        await db_session.flush()
+        await _meeting_item(
+            db_session, visible_meeting, "visible meeting item", _day(-2)
+        )
+        await _meeting_item(
+            db_session, executive_meeting, "closed meeting item", _day(-2)
+        )
+
+        caller = _caller(org, "meetings.manage", "minutes.manage", "settings.manage")
+
+        with patch(
+            "app.api.v1.endpoints.dashboard.OrganizationService.get_enabled_modules",
+            new=AsyncMock(return_value=SimpleNamespace(enabled_modules=["minutes"])),
+        ), patch(
+            "app.api.v1.endpoints.dashboard.resolve_org_today",
+            new=AsyncMock(return_value=TODAY),
+        ), patch(
+            "app.api.v1.endpoints.dashboard.user_has_permission",
+            side_effect=lambda _user, permission: permission in set(caller.permissions),
+        ):
+            summary = await get_admin_summary(db=db_session, current_user=caller)
+
+        assert summary.open_action_items == 2
 
 
 class TestFilters:
