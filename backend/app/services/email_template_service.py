@@ -29,6 +29,7 @@ from app.models.email_template import (
     MessageHistory,
 )
 from app.services import email_footers as _footers
+from app.services import email_templates_attendance_waivers as _waiver_templates
 from app.services import email_templates_evaluations as _evaluation_templates
 from app.services import email_templates_storefront as _storefront_templates
 from app.services.branding_service import email_logo_src
@@ -1038,6 +1039,7 @@ def _sample(*dicts: Dict[str, str]) -> Dict[str, str]:
 # bury the rest.
 TEMPLATE_VARIABLES.update(_storefront_templates.TEMPLATE_VARIABLES)
 TEMPLATE_VARIABLES.update(_evaluation_templates.TEMPLATE_VARIABLES)
+TEMPLATE_VARIABLES.update(_waiver_templates.TEMPLATE_VARIABLES)
 
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     "welcome": _sample(
@@ -1761,6 +1763,9 @@ SAMPLE_CONTEXT.update(
 SAMPLE_CONTEXT.update(
     {key: _sample(value) for key, value in _evaluation_templates.SAMPLE_CONTEXT.items()}
 )
+SAMPLE_CONTEXT.update(
+    {key: _sample(value) for key, value in _waiver_templates.SAMPLE_CONTEXT.items()}
+)
 
 # The sample links' placeholder host. Only the host is replaced: each path is
 # the one the real sender builds (``/events/{id}``, ``/training/approve/…``),
@@ -1848,6 +1853,7 @@ TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     },
 }
 TEST_RECIPIENT_FIELDS.update(_evaluation_templates.TEST_RECIPIENT_FIELDS)
+TEST_RECIPIENT_FIELDS.update(_waiver_templates.TEST_RECIPIENT_FIELDS)
 
 _DATE_TIME = "%B %d, %Y at %I:%M %p"
 _DATE = "%B %d, %Y"
@@ -3954,6 +3960,61 @@ def is_always_sent(template_type: Any) -> bool:
         return False
 
 
+# Templates a department's default CC, BCC and CC positions never reach
+# (defect D1, owner decision 2026-11-10). Two reasons, both about what a copy
+# would hand to somebody else:
+#
+# * The credential-carrying templates (``ALWAYS_SENT_TYPES``): the welcome
+#   email's temporary password, a password reset or IT reset link, a ballot
+#   link (a copy is a second vote), and an applicant's private status and
+#   follow-up links. There is no MFA or sign-in-code template; those go out
+#   from ``security_notifications`` under types no template row carries.
+# * The attendance-waiver templates, which send their copies themselves: an
+#   approver's email carries Approve and Deny buttons and a copy must not, so
+#   ``AttendanceWaiverEmails`` mails each copy separately, without them.
+#
+# ``CUSTOM`` is not here because it is excluded more fundamentally: many
+# custom templates share the type, so "the template" is not one row.
+NO_TEMPLATE_COPY_TYPES: frozenset = ALWAYS_SENT_TYPES | frozenset(
+    {
+        EmailTemplateType.SESSION_WAIVER_REQUESTED,
+        EmailTemplateType.SESSION_WAIVER_DECIDED,
+        EmailTemplateType.SESSION_WAIVER_WITHDRAWN,
+        EmailTemplateType.MEETING_WAIVER_REQUESTED,
+        EmailTemplateType.MEETING_WAIVER_DECIDED,
+        EmailTemplateType.MEETING_WAIVER_WITHDRAWN,
+    }
+)
+
+
+def _unique_addresses(addresses: List[str]) -> List[str]:
+    """``addresses`` trimmed, blanks dropped, first spelling of each kept."""
+    seen: set = set()
+    out: List[str] = []
+    for address in addresses:
+        cleaned = str(address or "").strip()
+        if cleaned and cleaned.casefold() not in seen:
+            seen.add(cleaned.casefold())
+            out.append(cleaned)
+    return out
+
+
+def template_copies_apply(template_type: Any) -> bool:
+    """Whether a send of ``template_type`` takes its template's default copies.
+
+    Only a type that names exactly one stored template does: not ``CUSTOM``,
+    not a sender's own label (``"department_message"``), and nothing in
+    ``NO_TEMPLATE_COPY_TYPES``.
+    """
+    try:
+        resolved = EmailTemplateType(getattr(template_type, "value", template_type))
+    except ValueError:
+        return False
+    return resolved != EmailTemplateType.CUSTOM and (
+        resolved not in NO_TEMPLATE_COPY_TYPES
+    )
+
+
 # Attributes whose value a mail client fetches or follows. A credential
 # template that loads or links anything outside the department's own app is
 # how a rewritten body carries a temporary password or a reset token off-site:
@@ -4122,6 +4183,75 @@ class EmailTemplateService:
         )
         email_template: Optional[EmailTemplate] = result.scalar_one_or_none()
         return email_template
+
+    async def template_copy_recipients(
+        self, organization_id: str, template_type: Any
+    ) -> Tuple[List[str], List[str]]:
+        """The CC and BCC addresses a send of ``template_type`` copies.
+
+        The stored template's ``default_cc``, then the email of every current
+        member holding one of its ``default_cc_position_ids`` (resolved now,
+        so a CC follows whoever holds the post), and its ``default_bcc``.
+        Both lists are de-duplicated, ignoring case, in that order. Empty for
+        a type ``template_copies_apply`` rules out, and for a department with
+        no stored row: the code defaults copy nobody.
+        """
+        if not organization_id or not template_copies_apply(template_type):
+            return [], []
+        return await self.stored_copy_recipients(
+            str(organization_id),
+            EmailTemplateType(getattr(template_type, "value", template_type)),
+        )
+
+    async def stored_copy_recipients(
+        self, organization_id: str, template_type: EmailTemplateType
+    ) -> Tuple[List[str], List[str]]:
+        """The stored template's CC and BCC, whatever ``template_type`` is.
+
+        ``template_copy_recipients`` is the send layer's rule; this is for a
+        sender that mails copies itself (``AttendanceWaiverEmails``), whose
+        types that rule excludes so a copy is never a CC on the original.
+        """
+        template = await self.get_template(str(organization_id), template_type)
+        if template is None:
+            return [], []
+        cc = list(template.default_cc or [])
+        position_ids = [str(p) for p in (template.default_cc_position_ids or []) if p]
+        if position_ids:
+            cc.extend(
+                await self.position_holder_emails(str(organization_id), position_ids)
+            )
+        return _unique_addresses(cc), _unique_addresses(template.default_bcc or [])
+
+    async def position_holder_emails(
+        self, organization_id: str, position_ids: List[str]
+    ) -> List[str]:
+        """Emails of current members holding any of ``position_ids``.
+
+        Both the positions and the members are confined to the organization,
+        so a stored id from elsewhere copies nobody (pitfall #14).
+        """
+        from app.models.user import (
+            ACTIVE_ACCOUNT_STATUSES,
+            Position,
+            User,
+            user_positions,
+        )
+
+        rows = await self.db.execute(
+            select(User.email)
+            .join(user_positions, user_positions.c.user_id == User.id)
+            .join(Position, Position.id == user_positions.c.position_id)
+            .where(
+                Position.id.in_(position_ids),
+                Position.organization_id == str(organization_id),
+                User.organization_id == str(organization_id),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
+                User.deleted_at.is_(None),
+            )
+            .order_by(User.last_name, User.first_name)
+        )
+        return [email for (email,) in rows.all() if email]
 
     async def is_switched_off(
         self, organization_id: str, template_type: EmailTemplateType
@@ -4926,49 +5056,53 @@ class EmailTemplateService:
     # Variable names whose values contain pre-rendered, system-generated
     # HTML (e.g. item tables, logo <img> tags).  These are built by
     # trusted backend code and must NOT be HTML-escaped during rendering.
-    _RAW_HTML_VARIABLES: set = {
-        # render()'s appendix: built and escaped by the caller.
-        _APPENDIX_HTML_VAR,
-        "items_list_html",
-        # Fixed sentences the follow-up senders build; they never carry a
-        # value from a person.
-        "draft_note_html",
-        "contact_note_html",
-        "items_issued_html",
-        "items_returned_html",
-        "items_removed_html",
-        "organization_logo_img",
-        "organization_logo_cell",
-        "organization_logo_block",
-        # Hexes going into style attributes. Escaping a "#" is a no-op, but
-        # listing them keeps the set honest about what is markup-bearing.
-        "header_accent",
-        "chip_tint",
-        # The chip cell is markup, not text — it is built by
-        # colourway_context, which escapes the chip's own wording. The
-        # status line is built the same way.
-        "status_chip_cell",
-        "status_line",
-        "content_class",
-        "ballot_items_html",
-        "results_html",
-        "ballot_recipients_html",
-        "recipients_html",
-        "skipped_voters_html",
-        "custom_message_html",
-        "meeting_date_html",
-        "ballot_link_notice_html",
-        "footer_html",
-        "details_html",
-        # Built by external_course_mapping._course_lines, which escapes every
-        # course name and id it inserts.
-        "courses_html",
-        "message_html",
-        "notes_html",
-        "apparatus_html",
-        "roster_html",
-        "checklist_html",
-    } | _storefront_templates.RAW_HTML_VARIABLES
+    _RAW_HTML_VARIABLES: set = (
+        {
+            # render()'s appendix: built and escaped by the caller.
+            _APPENDIX_HTML_VAR,
+            "items_list_html",
+            # Fixed sentences the follow-up senders build; they never carry a
+            # value from a person.
+            "draft_note_html",
+            "contact_note_html",
+            "items_issued_html",
+            "items_returned_html",
+            "items_removed_html",
+            "organization_logo_img",
+            "organization_logo_cell",
+            "organization_logo_block",
+            # Hexes going into style attributes. Escaping a "#" is a no-op, but
+            # listing them keeps the set honest about what is markup-bearing.
+            "header_accent",
+            "chip_tint",
+            # The chip cell is markup, not text — it is built by
+            # colourway_context, which escapes the chip's own wording. The
+            # status line is built the same way.
+            "status_chip_cell",
+            "status_line",
+            "content_class",
+            "ballot_items_html",
+            "results_html",
+            "ballot_recipients_html",
+            "recipients_html",
+            "skipped_voters_html",
+            "custom_message_html",
+            "meeting_date_html",
+            "ballot_link_notice_html",
+            "footer_html",
+            "details_html",
+            # Built by external_course_mapping._course_lines, which escapes every
+            # course name and id it inserts.
+            "courses_html",
+            "message_html",
+            "notes_html",
+            "apparatus_html",
+            "roster_html",
+            "checklist_html",
+        }
+        | _storefront_templates.RAW_HTML_VARIABLES
+        | _waiver_templates.RAW_HTML_VARIABLES
+    )
 
     def _replace_variables(
         self, text: str, context: Dict[str, Any], escape_html: bool = True
@@ -5502,6 +5636,9 @@ class EmailTemplateService:
         # Performance evaluations' four notices; see
         # email_templates_evaluations.py.
         *_evaluation_templates.DEFAULT_TEMPLATE_DEFS,
+        # Attendance waiver requests, for training sessions and business
+        # meetings; see email_templates_attendance_waivers.py.
+        *_waiver_templates.DEFAULT_TEMPLATE_DEFS,
     ]
 
     # Stamp each definition with the colourway build_shell recorded for its

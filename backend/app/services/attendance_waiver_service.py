@@ -84,6 +84,7 @@ from app.schemas.attendance_waiver import (
     CapPeriod,
     policy_from_settings,
 )
+from app.services.attendance_waiver_email_service import AttendanceWaiverEmails
 from app.services.notifications_service import NotificationsService
 from app.services.requirement_override_service import holds_chief_position
 from app.services.training_compliance import (
@@ -638,11 +639,12 @@ class AttendanceWaiverService:
             # The durable guard for one live request per member and session.
             # A savepoint, so a lost race on live_key rolls back only this
             # insert and leaves the caller's session usable.
+            submitted = self._action(request, AttendanceWaiverAction.SUBMITTED, member)
+            # Read now: a failed notice below rolls back, expiring the row.
+            submitted_id = str(submitted.id)
             async with self.db.begin_nested():
                 self.db.add(request)
-                self.db.add(
-                    self._action(request, AttendanceWaiverAction.SUBMITTED, member)
-                )
+                self.db.add(submitted)
                 await self.db.flush()
         except IntegrityError:
             raise ValueError("You have already asked to be excused from this session.")
@@ -654,6 +656,7 @@ class AttendanceWaiverService:
         await self.db.commit()
         await self.db.refresh(request)
         await self._prompt_deciders(org_id, request, member, policy)
+        await self._email(org_id, request, submitted_id)
         return request
 
     @staticmethod
@@ -697,13 +700,16 @@ class AttendanceWaiverService:
             raise ValueError(self._settled_message(request))
         request.status = AttendanceWaiverStatus.WITHDRAWN
         request.live_key = None
-        self.db.add(self._action(request, AttendanceWaiverAction.WITHDRAWN, member))
+        withdrawn = self._action(request, AttendanceWaiverAction.WITHDRAWN, member)
+        withdrawn_id = str(withdrawn.id)
+        self.db.add(withdrawn)
         await self._audit(
             "attendance_waiver_request_withdrawn", member, self._ids(request)
         )
         await self.db.commit()
         await self.db.refresh(request)
         await self._archive_prompts(org_id, request)
+        await self._email(org_id, request, withdrawn_id)
         return request
 
     # ------------------------------------------------------------------
@@ -809,7 +815,9 @@ class AttendanceWaiverService:
             if status == AttendanceWaiverStatus.APPROVED
             else AttendanceWaiverAction.DENIED
         )
-        self.db.add(self._action(request, chosen, actor, note))
+        decision = self._action(request, chosen, actor, note)
+        decision_id = str(decision.id)
+        self.db.add(decision)
         await self._audit(
             f"attendance_waiver_request_{chosen.value}",
             actor,
@@ -822,6 +830,7 @@ class AttendanceWaiverService:
         await self.db.refresh(request)
         await self._archive_prompts(org_id, request)
         await self._notify_member(org_id, request, chosen)
+        await self._email(org_id, request, decision_id)
         return request
 
     async def _require_decider(
@@ -1392,6 +1401,23 @@ class AttendanceWaiverService:
                 "Failed to notify the member of waiver request {}", request.id
             )
             await self._recover(request)
+
+    async def _email(
+        self, org_id: str, request: AttendanceWaiverRequest, action_id: str
+    ) -> None:
+        """The emails a log row calls for, after the commit (see
+        ``AttendanceWaiverEmails``). Never fails the request; a failed send
+        rolls the session back, so ``request`` is reloaded for the caller."""
+        # Read before sending: a rollback there expires the request.
+        request_id = str(request.id)
+        sent = await AttendanceWaiverEmails(self.db).send_for_action(
+            org_id, str(action_id)
+        )
+        logger.info("Waiver request {}: {} email(s) sent", request_id, sent)
+        try:
+            await self.db.refresh(request)
+        except Exception:
+            logger.exception("Failed to reload waiver request {}", request_id)
 
     async def _recover(self, request: AttendanceWaiverRequest) -> None:
         """Reset the session after a failed notice, keeping ``request`` usable.

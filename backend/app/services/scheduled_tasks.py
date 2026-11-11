@@ -4490,8 +4490,28 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 template, item.context or {}, organization=org
             )
 
-            # Merge template default CC/BCC with per-email overrides
-            cc = list(set((template.default_cc or []) + (item.cc_emails or []))) or None
+            # Merge template default CC/BCC with per-email overrides. The
+            # template here is the one the email was scheduled with (a custom
+            # template included), so its copies are merged here and the send
+            # layer is told not to look them up again by type.
+            position_cc = (
+                await template_svc.position_holder_emails(
+                    str(item.organization_id),
+                    [str(p) for p in template.default_cc_position_ids or [] if p],
+                )
+                if template.default_cc_position_ids
+                else []
+            )
+            cc = (
+                list(
+                    set(
+                        (template.default_cc or [])
+                        + position_cc
+                        + (item.cc_emails or [])
+                    )
+                )
+                or None
+            )
             bcc = (
                 list(set((template.default_bcc or []) + (item.bcc_emails or [])))
                 or None
@@ -4529,6 +4549,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 template_type=(
                     item.template_type.value if item.template_type else "scheduled"
                 ),
+                apply_template_copies=False,
             )
 
             if success_count > 0:

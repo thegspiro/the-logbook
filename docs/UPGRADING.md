@@ -775,6 +775,41 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Email templates: saved CC and BCC addresses start being used, and waiver requests are emailed (2026-11-11)
+
+Nothing blocks a restart. Migration `1c6632035ccd` widens the template type
+list, adds `email_templates.default_cc_position_ids` (NULL on every existing
+row) and creates the empty `attendance_waiver_email_sends` table.
+
+- **Saved default CC and BCC addresses start being copied.** The Email
+  Templates editor has always said its CC addresses are "CC'd on every email
+  sent with this template", but until now only scheduled emails used them;
+  every email the application sends on its own dropped them. After the
+  upgrade they are copied on every email sent with that template. **Before
+  upgrading, open Communications → Email Templates and check each template's
+  Default CC / BCC**: an address saved long ago and forgotten starts receiving
+  mail. A template sent to many members at once (an event reminder, say)
+  copies the address on every member's message.
+- **Never copied:** the templates that carry a password, a sign-in or reset
+  link, a ballot link or an applicant's private link — Welcome, Password
+  Reset, IT Password Notification, Ballot Notification, Application Status
+  Link, Application Follow-Up Form and Application Contact Changed. A copy of
+  one would hand the credential to somebody else. Test sends are not copied
+  either.
+- **CC by position.** A template can now also copy whoever currently holds a
+  position (the Secretary, say). Nobody is copied this way until a department
+  picks a position.
+- **Training waiver requests are emailed.** Approvers are emailed when a
+  member asks to be excused (with Approve and Deny buttons that open the
+  request in the Logbook; opening one changes nothing), the member when it is
+  decided, and approvers when it is withdrawn. Six new templates —
+  _Session Waiver Requested / Decided / Withdrawn_ and the three meeting
+  equivalents, which nothing sends yet — appear under Communications → Email
+  Templates. People a waiver template CCs get a separate copy without the
+  buttons, the category or the decider's note.
+- **Downgrading** deletes the six waiver templates' rows (a department's edits
+  included), the position CC choices and the send log.
+
 ### Training: members can ask to be excused from a session (2026-11-10)
 
 Nothing blocks a restart. Migration `8b1cf6f55425` creates two empty tables,

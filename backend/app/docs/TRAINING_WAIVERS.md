@@ -258,6 +258,36 @@ included, and the decision log of each, notes included; it does not carry
 notes the member wrote as a decider on anyone else's request. Anonymizing a
 departed member clears the reason and the notes; the request itself is kept.
 
+**Email.** Each step is emailed, after it is saved, one message per person,
+using templates the department edits under Communications → Email Templates:
+
+| When                           | Template                    | To                                      |
+| ------------------------------ | --------------------------- | --------------------------------------- |
+| A member asks                  | _Training Waiver Requested_ | everyone the request is routed to       |
+| Approved, denied or overridden | _Training Waiver Decided_   | the member                              |
+| The member withdraws           | _Training Waiver Withdrawn_ | the approvers the request email reached |
+
+- The approvers' email names the member, the session, its date and the
+  category, and says whether a reason was given. **The reason is never in an
+  email**; the approver reads it in the Logbook.
+- Its **Approve** and **Deny** buttons open `/attendance-waivers/{id}?action=…`.
+  Opening one changes nothing — mail scanners such as Safe Links and
+  Proofpoint open every link in a message — because the page requires sign-in
+  and decides only when the approver confirms.
+- An approver may switch these off under _Training officer duties_. The
+  member's decision email is always sent: it changes how their attendance is
+  graded.
+- A template's **default CC**, **CC positions** (say, the Secretary) and
+  **BCC** each get their own copy, which has no buttons, no category and no
+  decider's note, and says it is a copy for the department's records.
+- A retried send is never sent twice: each one is recorded against the
+  decision-log entry and the recipient, which the database keeps unique.
+- No text message is sent. The in-app notifications are unchanged.
+
+The meeting templates (_Meeting Waiver Requested / Decided / Withdrawn_)
+exist so a department can word them ahead of time; the meeting workflow sends
+them once it is built.
+
 | Method | Endpoint                                          | Who                                           |
 | ------ | ------------------------------------------------- | --------------------------------------------- |
 | `GET`  | `/api/v1/training/waivers/requests/policy`        | Any authenticated user                        |
