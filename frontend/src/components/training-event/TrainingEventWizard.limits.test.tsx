@@ -46,7 +46,9 @@ type User = ReturnType<typeof userEvent.setup>;
 const onSubmit = vi.fn();
 
 const renderForm = () =>
-  renderWithRouter(<EventComposer lockedType={EventType.TRAINING} onSubmit={onSubmit} onCancel={vi.fn()} />);
+  renderWithRouter(
+    <EventComposer lockedType={EventType.TRAINING} onSubmit={onSubmit} onSubmitRecurring={vi.fn()} onCancel={vi.fn()} />
+  );
 
 const next = (user: User) => user.click(screen.getByRole('button', { name: 'Next' }));
 
@@ -124,5 +126,25 @@ describe('TrainingEventWizard › Days of the Week', () => {
     expect(tuesday).toHaveAttribute('aria-pressed', 'false');
     await user.click(tuesday);
     expect(tuesday).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // The group goes with the custom pattern; its refusal used to stay behind,
+  // still listed in the banner with nothing on screen to fix.
+  it('drops its refusal when another pattern is chosen', async () => {
+    const user = userEvent.setup();
+    renderForm();
+    await user.type(screen.getByLabelText(/^Title/), 'CPR recert night');
+    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
+    await user.click(screen.getByRole('checkbox', { name: /Make this a recurring event/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Rolling 12-month cycle' }));
+    await user.selectOptions(screen.getByLabelText(/^Repeats/), 'custom');
+    await next(user);
+    expect(screen.getByRole('alert')).toHaveTextContent('Select at least one day for custom recurrence.');
+
+    await user.selectOptions(screen.getByLabelText(/^Repeats/), 'weekly');
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await next(user);
+    expect(screen.getByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
   });
 });

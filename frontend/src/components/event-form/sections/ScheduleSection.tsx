@@ -32,7 +32,7 @@ interface ScheduleSectionProps {
     | 'isRecurring'
     | 'setIsRecurring'
     | 'recurrencePattern'
-    | 'setRecurrencePattern'
+    | 'handleRecurrencePatternChange'
     | 'isRolling'
     | 'setIsRolling'
     | 'recurrenceEndDate'
@@ -103,7 +103,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
     isRecurring,
     setIsRecurring,
     recurrencePattern,
-    setRecurrencePattern,
+    handleRecurrencePatternChange,
     isRolling,
     setIsRolling,
     recurrenceEndDate,
@@ -250,7 +250,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
                   <select
                     id="recurrence-pattern"
                     value={recurrencePattern}
-                    onChange={(e) => setRecurrencePattern(e.target.value as RecurrencePattern)}
+                    onChange={(e) => handleRecurrencePatternChange(e.target.value as RecurrencePattern)}
                     className={selectClass}
                   >
                     {RECURRENCE_PATTERNS.map((p) => (

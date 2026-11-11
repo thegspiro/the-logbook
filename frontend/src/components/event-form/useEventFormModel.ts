@@ -370,6 +370,13 @@ export const useEventFormModel = ({
     setFieldErrors(({ recurrence_custom_days: _cleared, ...rest }) => rest);
   };
 
+  // Only the custom pattern draws Days of the Week, so its refusal goes with it
+  // rather than staying in the banner with nothing on screen to fix.
+  const handleRecurrencePatternChange = (pattern: RecurrencePattern) => {
+    setRecurrencePattern(pattern);
+    setFieldErrors(({ recurrence_custom_days: _cleared, ...rest }) => rest);
+  };
+
   const handleRecurrenceEndDateChange = (value: string) => {
     setRecurrenceEndDate(value);
     setFieldErrors(({ recurrence_end_date: _cleared, ...rest }) => rest);
@@ -752,6 +759,7 @@ export const useEventFormModel = ({
     setIsRecurring,
     recurrencePattern,
     setRecurrencePattern,
+    handleRecurrencePatternChange,
     recurrenceEndDate,
     handleRecurrenceEndDateChange,
     isRolling,
