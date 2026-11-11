@@ -178,6 +178,9 @@ one member on a past drill), W80-9 (LOW — "0/0 sessions — Complete"), W80-10
 (LOW — an excused drill stays in "missed mandatory"). Open: W80-12 to W80-15
 (NIT/LOW). Gate: typecheck, lint (with the larger heap of the W77 lead),
 flake8, black, isort and the touched suites clean. Next: W80-11's pull request.
+Follow-ups, all merged by 2026-11-11 on the owner's decisions: W80-11 Postpone
+(#4179, list badge #4188), W80-16 (#4181), W80-10 (#4182), W80-9 (#4185),
+W80-12 to W80-15 (#4186), W80-8 (#4187). Nothing from W80 remains open.
 
 ### Leads — Duplicate skip link and the dashboard's Training call, confirmed fixed — 2026-11-10
 

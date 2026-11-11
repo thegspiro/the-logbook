@@ -73,7 +73,7 @@ channel (in-app notifications were read; email was read from code).
 
 ## Findings
 
-### W80-1 — HIGH — Moving an event kept its check-ins and would credit them for the new date — ✅ FIXED
+### W80-1 — HIGH — Moving an event kept its check-ins and would credit them for the new date — ✅ FIXED (#4169)
 
 **Did:** as `training_officer`, Edit on the live Ladder Drill (10:00–12:00, three
 check-ins at 10:04–10:06), start and end moved to the same times a week later.
@@ -93,7 +93,7 @@ correction that still contains every check-in goes through, and an unchanged
 schedule (the edit form resends every field) does not query at all.
 `tests/test_event_reschedule_check_ins.py`. Re-driven: refused, start unchanged.
 
-### W80-2 — MED — Approved minutes had no bound: 20 hours recorded for a 2-hour drill — ✅ FIXED
+### W80-2 — MED — Approved minutes had no bound: 20 hours recorded for a 2-hour drill — ✅ FIXED (#4169)
 
 **Did:** on the approval page, Blair's 120 minutes typed as 1200 (a slipped zero).
 **Saw:** no mark on the row; the confirmation said only "Records 3 members'
@@ -106,7 +106,7 @@ dashboard's "Hours this quarter" read 26.8 department-wide.
 `aria-describedby`), and the confirmation names each such member and switches to
 the warning variant. `TrainingApprovalPage.test.tsx`. Re-driven as `chief`.
 
-### W80-3 — MED — An attendance request's claimed times were approved as shown, 5¾ hours for a 2-hour drill — ✅ FIXED
+### W80-3 — MED — An attendance request's claimed times were approved as shown, 5¾ hours for a 2-hour drill — ✅ FIXED (#4169)
 
 **Did:** as `member`, "I was there" claiming 6:00–11:45 PM for a 7–9 PM drill;
 as `training_officer`, Approve.
@@ -118,7 +118,7 @@ ran 7:00 PM to 9:00 PM. The member is credited for every minute you confirm."
 Both callers already pass the event's actual-or-scheduled span.
 `AttendancePetitionDecisionDialogs.test.tsx` (new). Re-driven.
 
-### W80-4 — MED — A training officer approved their own training credit — ✅ FIXED
+### W80-4 — MED — A training officer approved their own training credit — ✅ FIXED (#4169)
 
 **Did:** as `training_officer`, checked themselves into their session, ended and
 finalized it, opened the approval link.
@@ -135,7 +135,7 @@ stranded). The page says so up front and disables Approve.
 (failed against the old service) and a page test. Re-driven: the page notice, a
 direct POST refused 400, and `chief` approving the same link.
 
-### W80-5 — MED — Excusing one missed drill cut the member's annual hours target — ✅ FIXED
+### W80-5 — MED — Excusing one missed drill cut the member's annual hours target — ✅ FIXED (#4169)
 
 **Did:** Members → Waivers → Create, Personal, Training only, 7 Nov–7 Nov.
 **Saw:** the form had no way to say which requirement; the waiver covered every
@@ -151,7 +151,7 @@ everything, so the picker is offered only without one.
 `WaiverManagementPage.test.tsx`. Re-driven: scoped to drill attendance, the
 hours target stayed 24.
 
-### W80-6 — LOW — The wizard accepted an end before the start until the last click — ✅ FIXED
+### W80-6 — LOW — The wizard accepted an end before the start until the last click — ✅ FIXED (#4169)
 
 **Did:** step 1 with 7:00 PM start, 6:00 PM end; Next through to Create.
 **Saw:** every step accepted it and the review showed "7:00 PM … End 6:00 PM";
@@ -162,7 +162,7 @@ start time"). Four existing tests typed a date with no time for both ends — a
 schedule the server refuses — and now end on the next day.
 `CreateTrainingSessionPage.test.tsx`. Re-driven.
 
-### W80-7 — LOW — A stray "0" after checking out within a minute — ✅ FIXED
+### W80-7 — LOW — A stray "0" after checking out within a minute — ✅ FIXED (#4169)
 
 **Did:** as `member` at 390×844, check in, re-scan, check out a minute later.
 **Saw:** a bare "0" between "Checked Out At" and the training-record note — the
@@ -171,7 +171,7 @@ duration tested for truthiness, and React prints a falsy number.
 **Fix:** `!= null`; the screen reads "Duration: 0h 0m". `EventSelfCheckInPage.test.tsx`.
 Re-driven.
 
-### W80-8 — MED — No way to put one named member on a past drill — FLAGGED
+### W80-8 — MED — No way to put one named member on a past drill — ✅ FIXED (#4187)
 
 **Did:** as `training_officer` (the event's organizer), Check In on three members
 the morning after the drill.
@@ -185,9 +185,17 @@ closed" message); `EventDetailPage` check-in dialog.
 **Options:** let an attendance manager record a check-in after the window, with
 times (the Edit Times dialog, opened for a member who has no RSVP); or wire
 `add-attendee` into the dialog. Either changes who may write attendance after
-the fact, so it is the owner's call. Mirrored in `docs/KNOWN_LIMITATIONS.md`.
+the fact, so it is the owner's call.
+**Owner decision (2026-11-08):** add the member, with times.
+**Fix (#4187):** once the check-in window has closed on an event that is
+neither finalized nor cancelled, the event page offers Add a member: pick the
+member, enter when they arrived and left, and it adds them and records the
+times, warning when those run outside the event. The officer's refusal now
+says to use it rather than "ask an event organizer". Tests:
+`EventLateAttendeeForm.test.tsx`, `EventDetailPage` cases,
+`test_check_in_closed_message.py`.
 
-### W80-9 — LOW — A session-attendance requirement with no held sessions reads "Complete" — FLAGGED
+### W80-9 — LOW — A session-attendance requirement with no held sessions reads "Complete" — ✅ FIXED (#4185)
 
 **Saw:** a member created today read "Monthly Drill Attendance 0/0 sessions —
 Complete", and the compliance matrix counted it met for every such member. The
@@ -196,8 +204,15 @@ which correctly excludes it; the display is what CLAUDE.md pitfall #29's
 corollary warns of — an empty denominator reported as success.
 **Why flagged:** reporting "not applicable" changes compliance percentages on
 every screen that counts the requirement, a department-wide number change.
+**Owner decision (2026-11-08):** not applicable.
+**Fix (#4185):** with no session held in a member's window the requirement is
+graded `not_applicable` (`NOT_YET_HELD_STATUS`), left out of the met and unmet
+counts and of catch-up, on the dashboard, matrix, member notices, competency
+and reports alike. My Training reads "No sessions held yet — not graded until a
+session is held", the matrix shows a "Not held yet" cell, and the print view
+"None held".
 
-### W80-10 — LOW — An excused drill stays under "missed mandatory" — FLAGGED
+### W80-10 — LOW — An excused drill stays under "missed mandatory" — ✅ FIXED (#4182)
 
 **Saw:** after the one-day training waiver, the no-show's `GET
 /events/missed-mandatory` still listed the drill. That list excludes leaves of
@@ -205,8 +220,13 @@ absence only, so a member excused by a training waiver keeps a "missed" item
 they cannot clear by responding.
 **Why flagged:** whether a training waiver should excuse event attendance as
 well as requirement grading is a policy question.
+**Owner decision (2026-11-08):** yes, when the waiver covers the event.
+**Fix (#4182):** `list_missed_mandatory_events` also drops an event covered by
+an active training waiver, by date and, when the waiver names requirements, by
+the event's linked requirements. Tests in
+`test_event_list_urgency_integration.py`.
 
-### W80-11 — MED — There is no Postpone — ✅ FIXED (follow-up pull request)
+### W80-11 — MED — There is no Postpone — ✅ FIXED (#4179)
 
 **Saw:** the only way to move a drill is Edit, which (before W80-1) kept the
 check-ins, records nothing about the move, and notifies "has been updated (end
@@ -239,7 +259,7 @@ send_notifications }`, with the same authorization as Edit (events.manage, or
 - The event page offers Postpone Event under More, with a dialog naming how
   many members are checked in; a postponed event carries a "Postponed" badge
   and "Postponed from <date> — <reason>" under its date. The W80-1 edit refusal
-  now points to Postpone. The events list does not yet mark a postponed event.
+  now points to Postpone. The events list marks a postponed event too (#4188).
 - Tests: `test_event_postpone.py` (11, against the database; three mutations of
   the service each caught), `test_event_postponement_migration.py` (rows
   present, twice, downgrade, missing table), the route's lock mapping in
@@ -248,7 +268,7 @@ send_notifications }`, with the same authorization as Edit (events.manage, or
   week through the dialog; RSVPs kept, check-ins cleared, the member's notice
   and phone view correct; a repeated POST changed nothing.
 
-### W80-16 — LOW — Editing an event's time does not reset its reminders — OPEN
+### W80-16 — LOW — Editing an event's time does not reset its reminders — ✅ FIXED (#4181)
 
 Seen while building W80-11. `reminders_sent` in `custom_fields` records which
 reminder intervals went out, and an edit of the schedule keeps it
@@ -257,28 +277,40 @@ never re-sends a reminder that already went out for its old time. Postpone
 clears the markers; Edit, for a correction that keeps the check-ins, does not.
 Whether a schedule edit should reset them is a judgement about small
 corrections versus real moves.
+**Owner decision (2026-11-08):** reset them when the start moves.
+**Fix (#4181):** `update_event` and `update_future_events` forget the sent
+reminders when an event's start changes, so they go out again for the new
+time; an edit that keeps the start keeps them.
+`test_event_edit_resets_reminders.py`.
 
-### W80-12 — NIT — The review step omits "Counts toward attendance" — OPEN
+### W80-12 — NIT — The review step omits "Counts toward attendance" — ✅ FIXED (#4186)
 
 The wizard's review lists the requirement link but not the attendance
 requirements ticked on step 2, which were saved (checked through the API).
+**Fix (#4186):** the review step lists the ticked attendance requirements.
 
-### W80-13 — NIT — "Credit Hours" says it is what attendees are credited — OPEN
+### W80-13 — NIT — "Credit Hours" says it is what attendees are credited — ✅ FIXED (#4186)
 
 The hint reads "The training hours each attendee is credited with", but credit
 follows measured attendance (`EventService.credited_minutes`); a member who left
 after a minute was credited nothing. The field is the session's planned length.
+**Fix (#4186):** the hint now says credit follows the time each attendee was
+there.
 
-### W80-14 — LOW — An officer's check-in starts no in-progress record — OPEN
+### W80-14 — LOW — An officer's check-in starts no in-progress record — ✅ FIXED (#4186)
 
 With "Start an in-progress training record when members check in" on, `member`'s
 self check-in created one; `training_officer` checking Blair in did not. Finalize
 writes the record either way, so only the in-between view differs.
+**Fix (#4186):** an officer's check-in and a manager's add-and-check-in start the
+record, as self check-in does.
 
-### W80-15 — NIT — Credit voided by Delete carries no reason — OPEN
+### W80-15 — NIT — Credit voided by Delete carries no reason — ✅ FIXED (#4186)
 
 The three records left by deleting the drill read "cancelled", 0 h, with
 `void_reason` empty, so a member sees a cancelled course with no explanation.
+**Fix (#4186):** the voided record reads "Credit withdrawn: removed from
+<event> attendance.", shown on My Training; a restore clears it.
 
 ## After the fixes
 
@@ -295,14 +327,14 @@ a 6:00–11:45 PM attendance request showed the outside-the-event warning (W80-3
 
 | Section                 | Result                                                                                 |
 | ----------------------- | -------------------------------------------------------------------------------------- |
-| 1. The job gets done    | Yes, after W80-6; past-drill attendance is awkward (W80-8)                             |
+| 1. The job gets done    | Yes, after W80-6; past-drill attendance added in #4187 (W80-8)                         |
 | 2. The right people     | Chief-only override held; self-approval closed (W80-4)                                 |
 | 3. Wrong input, failure | Bad schedule, over-credit and stranded check-ins now caught (W80-1, -2, -3, -6)        |
 | 4. Browser signals      | Only the expected 400s from refusals; none unexplained                                 |
 | 5. Coming back to it    | Reopen, re-finalize, delete and cancel kept records consistent                         |
 | 6. On a phone           | Member check-in/out, My Training and attendance request at 390×844; W80-7 fixed        |
 | 7. Everyone can use it  | New warnings are `role=status` and described by `aria-describedby`; picker is labelled |
-| 8. What happens around  | Notifications sent on a move; W80-10, W80-11 flagged                                   |
+| 8. What happens around  | Notifications sent on a move; W80-10 and W80-11 fixed in #4182 and #4179               |
 
 ## Completion gate
 

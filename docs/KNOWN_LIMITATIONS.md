@@ -9610,32 +9610,34 @@ edit only drafts; this governs `PUT /shift-reports/{id}`. Covered by
 `tests/test_shift_completion.py::TestAnEditedReportGoesBackToReview`; history
 in `docs/security-review/EC-14-equipment-check-shifts.md`.
 
-## W80 — Training Event Decisions Left Open (2026-11-08)
+## W80 — Training Event Decisions (2026-11-08, resolved 2026-11-11)
 
 From the training-event lifecycle pass
 ([`workflow-review/W80-training-event-lifecycle.md`](./workflow-review/W80-training-event-lifecycle.md)).
-Decided and fixed in the same pass: over-credit is warned, not capped; an
-approver on a roster cannot approve it; a schedule change that strands
-check-ins is refused; a training-only waiver can name its requirements. Open:
+Decided and fixed in the same pass (#4169): over-credit is warned, not capped;
+an approver on a roster cannot approve it; a schedule change that strands
+check-ins is refused; a training-only waiver can name its requirements. The
+items left open were decided by the owner on 2026-11-08 and are now fixed:
 
-- **W80-11 — Postpone.** Built in its own pull request: `POST
+- **W80-11 — Postpone** (#4179, list badge #4188). `POST
 /events/{id}/postpone`, three nullable columns on `events` (migration
-  `09f0171ccf5e`), and a Postpone Event action on the event page. Resolved.
-- **W80-16 — Editing an event's time keeps its reminder markers**, so a drill
-  moved through Edit never re-sends a reminder already sent for its old time.
-  Postpone resets them; whether Edit should is open.
-- **W80-8 — Recording one member on a past drill.** Check-in is refused once the
-  window closes, with a message telling the organizer to ask an organizer; the
-  only routes are adding the whole roster, or the member's own "I was there".
-  Whether an attendance manager may record a check-in after the window, with
-  times, needs a decision.
-- **W80-9 — "0/0 sessions — Complete".** A session-attendance requirement with no
-  held sessions in a member's window reads met, on My Training and the matrix.
-  Reporting "not applicable" (CLAUDE.md pitfall #29) changes compliance
-  percentages department-wide.
-- **W80-10 — Training waivers and "missed mandatory".** The missed-mandatory list
-  excludes leaves of absence only, so a drill excused by a training waiver stays
-  listed. Whether a training waiver also excuses the event is policy.
+  `09f0171ccf5e`), and a Postpone Event action on the event page. It clears
+  check-ins and the credit they produced, keeps RSVPs, and notifies Going and
+  Maybe with the old and new time.
+- **W80-16 — Editing an event's time and its reminders** (#4181). Decision:
+  reset them when the start moves. An edit that moves the start lets the
+  reminders go out again; one that keeps it does not.
+- **W80-8 — Recording one member on a past drill** (#4187). Decision: add the
+  member, with times. Once check-in has closed, an attendance manager can add a
+  member with arrival and departure times from the event page.
+- **W80-9 — "0/0 sessions — Complete"** (#4185). Decision: not applicable. A
+  session-attendance requirement with no session held in a member's window is
+  not graded, and is left out of every compliance count rather than counted
+  met. Departments with such members will see their percentages move.
+- **W80-10 — Training waivers and "missed mandatory"** (#4182). Decision: yes,
+  when the waiver covers the event. An active training waiver covering the
+  event's date, and its linked requirements when the waiver names any, takes it
+  off the list.
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
