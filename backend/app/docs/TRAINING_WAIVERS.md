@@ -340,6 +340,13 @@ Where:
 Any meeting whose `meeting_date` falls between a leave's `start_date` and
 `end_date` (inclusive) is excluded.
 
+**Check-in wins** (owner decision, 2026-11-10): a meeting the member was
+marked present at counts as attended even if they also hold a waiver for it.
+A per-meeting waiver excuses only a meeting the member missed. The rule lives
+in `tally_attendance`, which the voting check, the attendance dashboard and
+the annual evaluation all use, and the election attendee import copies the
+same present members.
+
 ### Where attendance is affected
 
 | View / Endpoint                                                 | Description                                          |
@@ -352,14 +359,52 @@ Any meeting whose `meeting_date` falls between a leave's `start_date` and
 There are two ways a meeting can be excluded from a member's attendance:
 
 1. **Per-meeting waiver**: An officer grants a waiver for a specific meeting
-   (via the meeting detail page or `POST /meetings/{id}/attendance-waiver`).
-   This sets `waiver_reason` on the `MeetingAttendee` record.
+   (via the meeting detail page or `POST /meetings/{id}/attendance-waiver`,
+   with `user_id` and `reason` in a JSON body; the reason is kept out of the
+   URL and the audit log). This sets `waiver_reason` on the `MeetingAttendee`
+   record. An approved member request (below) sets the same waiver.
 
 2. **Leave of Absence**: Created via Member Lifecycle. Automatically excludes
    all meetings whose date falls within the leave period — no need to grant
    individual per-meeting waivers.
 
 Both are subtracted from the denominator independently.
+
+### Business-meeting waiver requests
+
+A member can ask to be excused from a business meeting, in the same engine as
+session waiver requests (`AttendanceWaiverService` bound to the
+`business_meeting` workflow) and with the same rules: deadline presets, one
+request per meeting, withdraw, the cap (counting only approved **meeting**
+requests, Chief overrides included), one decision, and the Chief's override of
+a denial. What differs:
+
+- **Its own policy**, at `organizations.settings["meetings"]["waiver_policy"]`,
+  saved by the Secretary through `PUT /api/v1/meetings/waiver-requests/policy`
+  (`meetings.manage`). Off until saved; the generic settings save cannot write
+  it.
+- **It is about the business_meeting event**, since members cannot see a
+  minutes record until it is approved. Not when the member checked in (or is
+  marked present on the minutes record), when a leave of absence covers the
+  meeting, or when the Secretary has already waived it.
+- **Routing**: the chosen positions; failing them, the Secretary; failing the
+  Secretary, every holder of `meetings.manage`. A Chief may always decide.
+- **Approving writes the waiver** onto the meeting's minutes record: the
+  `MeetingAttendee` row gets `waiver_reason` "Excused: approved request" (plus
+  the category), `waiver_granted_by` the decider and `waiver_request_id` the
+  request; `present` is left alone (check-in wins). Never the member's reason:
+  `waiver_reason` is plain text shown on voting and ballot screens, and the
+  reason stays encrypted on the request. If the minutes record does not exist
+  yet, `MeetingsService.create_from_event` carries approved requests over when
+  it builds one (absent members get a row with `present=False`). A minutes
+  record created by hand, with no event, cannot be requested; the Secretary's
+  grant still works on it.
+- Cancelling or deleting the event voids pending requests (training ones too);
+  decided ones are kept.
+
+The routes mirror the training ones under `/api/v1/meetings/waiver-requests`
+(`policy`, `eligibility`, submit, `mine`, the decider queue, one request,
+`withdraw`, `approve`, `deny`, `override`).
 
 ---
 

@@ -934,7 +934,14 @@ class TestAdministration:
         no_meeting = MagicMock(scalar_one_or_none=MagicMock(return_value=None))
         db = MagicMock()
         db.execute = AsyncMock(
-            side_effect=[_one(event), no_meeting, _one(_org()), _scalars([])]
+            # ... the RSVPs, then the approved waiver requests carried over.
+            side_effect=[
+                _one(event),
+                no_meeting,
+                _one(_org()),
+                _scalars([]),
+                _scalars([]),
+            ]
         )
         db.add = MagicMock()
         db.flush = AsyncMock()

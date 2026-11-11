@@ -630,7 +630,6 @@ class EvaluationDataService:
                     select(MeetingAttendee.meeting_id).where(
                         MeetingAttendee.user_id == member.id,
                         MeetingAttendee.present.is_(True),
-                        MeetingAttendee.waiver_reason.is_(None),
                         MeetingAttendee.meeting_id.in_(in_window),
                     )
                 )

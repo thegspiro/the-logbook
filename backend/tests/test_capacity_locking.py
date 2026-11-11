@@ -1003,12 +1003,19 @@ class TestAttendanceWaiverCapLocking:
     def test_submitting_takes_no_locking_read_of_the_requests(self):
         from app.services.attendance_waiver_service import AttendanceWaiverService
 
+        # The one lock submitting takes besides the member's row: the event,
+        # shared and by primary key, so a cancellation cannot slip between the
+        # check and the insert. A record lock on one events row, not a range
+        # of attendance_waiver_requests, so it is no gap another member's
+        # insert needs (see test_the_event_lock_is_shared_and_by_id).
+        allowed = "await self._event(org_id, event_id, lock=True)"
+        assert allowed in _source_of(AttendanceWaiverService.submit)
         for method in (
             AttendanceWaiverService.submit,
             AttendanceWaiverService._assess,
             AttendanceWaiverService._live_request,
         ):
-            source = _source_of(method)
+            source = _source_of(method).replace(allowed, "")
             assert "with_for_update" not in source, method.__name__
             assert "lock=True" not in source, (
                 f"{method.__name__}: a locking read of a live_key that does "
@@ -1016,3 +1023,13 @@ class TestAttendanceWaiverCapLocking:
                 "keys, and two members' submissions deadlock. The unique "
                 "live_key is the guard."
             )
+
+    def test_the_event_lock_is_shared_and_by_id(self):
+        """Submitting's event lock is a shared lock on the event's own row:
+        two members submitting for one session both hold it at once."""
+        from app.services.attendance_waiver_service import AttendanceWaiverService
+
+        source = _source_of(AttendanceWaiverService._event)
+        assert "Event.id == str(event_id)" in source
+        assert "with_for_update(read=True)" in source
+        assert "with_for_update()" not in source
