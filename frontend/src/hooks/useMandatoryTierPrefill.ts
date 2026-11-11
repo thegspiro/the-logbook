@@ -48,7 +48,8 @@ type AttendanceModel = Pick<
  *
  * - It runs only when Counts toward attendance changes (`requirementsChanged`),
  *   never when an existing event loads, so an edit keeps its stored choice;
- *   ticks that end where the edit started (`storedIds`) are no change.
+ *   ticks that end where the edit started (`storedIds`) are no change, and
+ *   put back the Mandatory for a pre-fill on the way had replaced.
  * - Once the officer changes Mandatory for by hand, ticks no longer update it,
  *   the same rule as the reminder audience (`reminderAudienceEdited`). The
  *   model keeps that flag (`mandatoryForEdited`), so a choice made on the
@@ -85,7 +86,21 @@ export function useMandatoryTierPrefill(
 
   const { update, suggestMandatoryScope, handleMandatoryChange } = model;
 
+  // Mandatory for as it stood before the first pre-fill wrote into it, so
+  // ticks that come back to the stored set can put it back. Without it a
+  // round trip (tick, fill, untick) saved the fill though Counts toward
+  // attendance ended unchanged.
+  const beforeFill = useRef<{ scope: MandatoryScope; types: string[] } | null>(null);
+  const current = useRef({ scope: model.mandatoryScope, types: model.formData.mandatory_membership_types ?? [] });
+  useEffect(() => {
+    current.current = { scope: model.mandatoryScope, types: model.formData.mandatory_membership_types ?? [] };
+  });
+  const rememberBeforeFill = () => {
+    beforeFill.current ??= { scope: current.current.scope, types: [...current.current.types] };
+  };
+
   const writeInto = (s: Suggestion) => {
+    rememberBeforeFill();
     suggestMandatoryScope(s.scope);
     // All members keeps the member-type ticks apart, as the model does, so
     // choosing Only these member types again does not lose them.
@@ -97,6 +112,11 @@ export function useMandatoryTierPrefill(
     const seq = requestSeq.current;
     const unchanged =
       storedIds !== undefined && ids.length === storedIds.length && ids.every((id) => storedIds.includes(id));
+    if (unchanged && !touched.current && beforeFill.current) {
+      suggestMandatoryScope(beforeFill.current.scope);
+      update({ mandatory_membership_types: beforeFill.current.types });
+      beforeFill.current = null;
+    }
     if (ids.length === 0 || touched.current || unchanged) {
       // Nothing left to suggest from, or the officer has chosen: the fields
       // stay as they are, and the note no longer describes the ticks.
@@ -140,6 +160,7 @@ export function useMandatoryTierPrefill(
     ...model,
     handleMandatoryChange: (checked, scopeOnTick) => {
       if (checked && suggestion && !touched.current) {
+        rememberBeforeFill();
         handleMandatoryChange(true, suggestion.scope);
         if (suggestion.scope === 'some') update({ mandatory_membership_types: suggestion.tierIds });
         return;

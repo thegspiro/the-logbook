@@ -1145,6 +1145,32 @@ describe('EventEditPage', () => {
         ).toBeInTheDocument();
       });
 
+      // A tick filled Mandatory for; unticking it again left the fill in
+      // place, so the save changed Mandatory for though Counts toward
+      // attendance ended where it started.
+      it('puts the stored choice back when the ticks return after a fill', async () => {
+        linkageRequirements.value = [attendanceRequirement, officerAttendance];
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await next(user);
+        await user.click(screen.getByLabelText(/Officer Meeting Attendance/));
+        await waitFor(() => expect(trainingSessionService.getMandatoryTiers).toHaveBeenCalledTimes(1));
+        await next(user);
+        await waitFor(() => expect(screen.getByRole('radio', { name: 'All members' })).toBeChecked());
+        await user.click(screen.getByRole('button', { name: 'Previous' }));
+        await user.click(screen.getByLabelText(/Officer Meeting Attendance/));
+        await next(user);
+
+        expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+        expect(screen.getByRole('checkbox', { name: 'Active' })).toBeChecked();
+        await toReview(user);
+        await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+        await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+        expect(sent()).toEqual(expect.objectContaining({ is_mandatory: true, mandatory_membership_types: ['active'] }));
+      });
+
       // Unticked and ticked again, Counts toward attendance is what was
       // stored, so nothing changed and the stored Mandatory for stands.
       it('leaves the stored choice alone when the ticks end where they started', async () => {
