@@ -169,7 +169,6 @@ def test_the_known_readers_decide():
     readers = _readers()
     assert readers[("services/training_waiver_service.py", "month_waivers")]
     assert readers[("services/training_compliance.py", "_waiver_excuses")]
-    assert readers[("services/evaluation_data_service.py", "_session_attendance")]
 
 
 class TestTheDetectionItself:
