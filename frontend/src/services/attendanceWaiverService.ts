@@ -7,6 +7,7 @@
  */
 
 import api from './apiClient';
+import { asArray } from '../utils/asArray';
 import type { AttendanceWaiverStatus } from '../constants/enums';
 import type {
   AttendanceWaiverEligibility,
@@ -18,32 +19,57 @@ import type {
 
 const BASE = '/training/waivers/requests';
 
+// A body that is not the declared shape (a captive portal's HTML, an empty
+// object) must not take a page down on `.map` or `.length`: the lists inside
+// a request and a page are made arrays here, once, for every caller.
+const normalizeRequest = (request: AttendanceWaiverRequest): AttendanceWaiverRequest => ({
+  ...request,
+  actions: asArray(request.actions),
+});
+
+const normalizePolicy = (policy: AttendanceWaiverPolicy): AttendanceWaiverPolicy => ({
+  ...policy,
+  categories: asArray(policy.categories),
+  approver_position_ids: asArray(policy.approver_position_ids),
+});
+
+const normalizeEligibility = (answer: AttendanceWaiverEligibility): AttendanceWaiverEligibility => ({
+  ...answer,
+  categories: asArray(answer.categories),
+});
+
+const normalizePage = (page: AttendanceWaiverRequestPage): AttendanceWaiverRequestPage => ({
+  ...page,
+  items: asArray(page.items).map(normalizeRequest),
+  total: typeof page.total === 'number' ? page.total : 0,
+});
+
 export const attendanceWaiverService = {
   async getPolicy(): Promise<AttendanceWaiverPolicy> {
     const response = await api.get<AttendanceWaiverPolicy>(`${BASE}/policy`);
-    return response.data;
+    return normalizePolicy(response.data);
   },
 
   async savePolicy(policy: AttendanceWaiverPolicy): Promise<AttendanceWaiverPolicy> {
     const response = await api.put<AttendanceWaiverPolicy>(`${BASE}/policy`, policy);
-    return response.data;
+    return normalizePolicy(response.data);
   },
 
   async getEligibility(eventId: string): Promise<AttendanceWaiverEligibility> {
     const response = await api.get<AttendanceWaiverEligibility>(`${BASE}/eligibility`, {
       params: { event_id: eventId },
     });
-    return response.data;
+    return normalizeEligibility(response.data);
   },
 
   async submit(data: AttendanceWaiverSubmit): Promise<AttendanceWaiverRequest> {
     const response = await api.post<AttendanceWaiverRequest>(BASE, data);
-    return response.data;
+    return normalizeRequest(response.data);
   },
 
   async listMine(): Promise<AttendanceWaiverRequest[]> {
     const response = await api.get<AttendanceWaiverRequest[]>(`${BASE}/mine`);
-    return response.data;
+    return asArray(response.data).map(normalizeRequest);
   },
 
   /** The requests the caller may decide or has decided. */
@@ -51,37 +77,37 @@ export const attendanceWaiverService = {
     params: { status?: AttendanceWaiverStatus | undefined; skip?: number; limit?: number } = {}
   ): Promise<AttendanceWaiverRequestPage> {
     const response = await api.get<AttendanceWaiverRequestPage>(BASE, { params });
-    return response.data;
+    return normalizePage(response.data);
   },
 
   async get(requestId: string): Promise<AttendanceWaiverRequest> {
     const response = await api.get<AttendanceWaiverRequest>(`${BASE}/${encodeURIComponent(requestId)}`);
-    return response.data;
+    return normalizeRequest(response.data);
   },
 
   async withdraw(requestId: string): Promise<AttendanceWaiverRequest> {
     const response = await api.post<AttendanceWaiverRequest>(`${BASE}/${encodeURIComponent(requestId)}/withdraw`);
-    return response.data;
+    return normalizeRequest(response.data);
   },
 
   async approve(requestId: string, note?: string): Promise<AttendanceWaiverRequest> {
     const response = await api.post<AttendanceWaiverRequest>(`${BASE}/${encodeURIComponent(requestId)}/approve`, {
       note,
     });
-    return response.data;
+    return normalizeRequest(response.data);
   },
 
   async deny(requestId: string, note: string): Promise<AttendanceWaiverRequest> {
     const response = await api.post<AttendanceWaiverRequest>(`${BASE}/${encodeURIComponent(requestId)}/deny`, {
       note,
     });
-    return response.data;
+    return normalizeRequest(response.data);
   },
 
   async override(requestId: string, note: string): Promise<AttendanceWaiverRequest> {
     const response = await api.post<AttendanceWaiverRequest>(`${BASE}/${encodeURIComponent(requestId)}/override`, {
       note,
     });
-    return response.data;
+    return normalizeRequest(response.data);
   },
 };
