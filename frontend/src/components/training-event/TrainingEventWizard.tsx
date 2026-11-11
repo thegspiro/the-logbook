@@ -637,8 +637,16 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
         className="md:card space-y-8 max-md:pb-24 md:p-8"
       >
         <div className="max-md:card space-y-8 p-4 sm:p-8 md:p-0">
-          <div className="flex items-center justify-between gap-3">
-            <p id={STEP_HEADING_ID} tabIndex={-1} className="text-theme-text-muted text-sm focus:outline-hidden">
+          {/* The caption is the phone stepper's: from 768px the stepper names
+              the step itself, so the line is read to a screen reader only.
+              It stays the focus target after a step change at every width,
+              and `md:contents` keeps the emptied row from adding a gap. */}
+          <div className="flex items-center justify-between gap-3 md:contents">
+            <p
+              id={STEP_HEADING_ID}
+              tabIndex={-1}
+              className="text-theme-text-muted text-sm focus:outline-hidden md:sr-only"
+            >
               Step {step + 1} of {STEPS.length} · {stepTitle}
             </p>
             {/* The phone's Cancel: the fixed bar holds only Previous and Next. */}
