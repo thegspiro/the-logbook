@@ -16,6 +16,59 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4235](https://github.com/thegspiro/the-logbook/pull/4235)**
+(branch `claude/security-review-integrations-p13`):
+Feature 27 (Integrations), pass 13, a watchdog pickup. PR #4234 (Feature 26,
+Forms, pass 13) had already merged clean
+(`5a2c61836c7f6238d505d7d744931adcde96044b`, CI green 26/26, no conflicts,
+no open review threads bar the usual Codex quota-limit comment). A fresh
+`list_pull_requests` (state `open`) found no PR with a
+`claude/security-review-*` head, and row 27 was the next pending feature,
+confirmed on a freshly fetched `main`.
+
+Baseline `3bd09ed02` (pass 12's own merge, PR #3996). Real delta: three small
+commits `git log` found cleanly (an audit-trail IP/user-agent fix on
+connect/update/disconnect; the owner's 2026-11-01 catalog-reconciliation
+decision, `ensure_catalog` now rewriting `name`/`description`/`category`/
+availability `status` on every existing row via migration `7c41e9a2b6d8`; a
+cosmetic `AdminPageHeader` swap) — and one `git log` on a plain commit range
+missed entirely: a 31-route Historical Data Import + Historical Staffing
+sub-feature (`backend/app/api/v1/endpoints/historical_import.py` plus five
+`historical_staffing_*.py` services, six migrations, a new frontend module),
+found only because `IntegrationsPage.tsx`'s content diff showed code no
+`git log`-named commit introduced, and confirmed in scope via `git log --all`
+
+- `git merge-base --is-ancestor`. Reviewed in full against all seven
+  checklist dimensions: every route gated on `integrations.historical_import`
+  (no default role holds it), every by-id resolution org-scoped and row-locked
+  through the parent, idempotent against re-runs/races via the
+  `imported_source_records` unique-constraint ledger, uploads size-capped and
+  malware-scanned, former members created with no login and no permission
+  grant, and all six migrations safe on populated tables. **0 fixed, 0 newly
+  flagged.** See `docs/security-review/INT-27-integrations.md`'s **Pass 13**
+  section for the full trace, including the `git log` undercount writeup.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 756 revisions, single head `8b1cf6f55425`; `generate_schema_docs.py
+--check` — up to date; `check_route_permissions.py --strict` — 305 routes, 0
+errors/warnings (70 of them this feature's own, by AST, up from pass 12's 39);
+scoped backend suite (`-k "integration or salesforce or calcom or documenso or
+paypal or webhook or connector or mcp_key or google_calendar or
+google_workspace or ical or calendar or outlook or directory_account or
+microsoft_365 or directory or zeffy"`) — 11,359 passed, 24 environment-only
+skips, 0 failed; a second scoped run (`-k "historical_import or
+historical_staffing"`) — 133 passed, 1 environment-only skip (`pywebpush`), 0
+failed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors/warnings;
+`npx vitest run src/pages/IntegrationsPage.test.tsx src/pages/historicalImport
+src/pages/scheduling/admin/historyImport` — 135 passed (4 files).
+
+Row 27 → ✅ (pending this PR's merge). Next is Feature 28 (Security, audit &
+IP) — re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 26, Forms, pass 13, PR #4234, merged), preserved for history</summary>
+
 **PR [#4234](https://github.com/thegspiro/the-logbook/pull/4234)**
 (branch `claude/security-review-forms-p13`):
 Feature 26 (Forms), pass 13, a watchdog pickup. PR #4233 (Feature 25,
@@ -54,8 +107,9 @@ errors/warnings; `npx vitest run src/components/forms
 src/pages/FormsPage.*.test.tsx src/hooks/useRanks.test.ts` — 67 passed (13
 files).
 
-Row 26 → ✅ (pending this PR's merge). Next is Feature 27 (Integrations) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 26 → ✅ (merged). Next was Feature 27 (Integrations).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 13, PR #4233, merged), preserved for history</summary>
@@ -25709,7 +25763,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                                  | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                      | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                                                                      | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (31 routes, added pass 13), `historical_staffing_*.py`                                                                       | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                        | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                           | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                          | ⬜     |
@@ -25732,23 +25786,62 @@ absorbed `shift_evaluations.py` the same way; or Feature 07, Users &
 organizations, for `member_supervisors.py`/`history.py`) rather than leaving
 them to be re-discovered by SEC-00 every lap.
 
-**Another new unclaimed module, found by Feature 21's pass 14** (not SEC-00 —
-found because it writes into Admin Hours' own table): Historical Data Import
-(`endpoints/historical_import.py`, `historical_import_service.py`,
-`historical_staffing_{engine,commit,service}.py`,
-`models/historical_import.py`, `schemas/historical_import.py` — 5,454 lines,
-31 routes, all gated `integrations.historical_import`, a System-Owner-only
-grant). It did not exist as of Feature 21 pass 13's baseline. Only the one
-code path that writes an `AdminHoursEntry` (`commit_admin`) was traced, and
-found org-scoped and permission-gated; the module's CSV/upload handling and
-its training/staffing commit paths have had no seven-dimension pass. Its
-permission string and URL prefix both read `integrations`, so Feature 27
-(Integrations) is the natural owner for a future pass to claim it, the same
-way Feature 17 absorbed `shift_evaluations.py`.
+**Historical Data Import, flagged unclaimed by Feature 21's pass 14, claimed
+by Feature 27's pass 13:** the module Admin Hours' pass 14 found writing into
+its own table (`endpoints/historical_import.py`, `historical_import_service.py`,
+`historical_import_engine.py`, five `historical_staffing_*.py` files,
+`models/historical_import.py`, `schemas/historical_import.py`, six
+migrations, plus a new frontend module) got its own seven-dimension pass —
+`docs/security-review/INT-27-integrations.md`'s **Pass 13** section — rather
+than being re-discovered piecemeal by SEC-00 or another feature's table-write
+slice again. Folded into Feature 27's declared scope above (row 27) so a
+future pass's accumulated-scope diff covers it by default.
 
 ---
 
 ## Log
+
+### 2026-11-11 — Features 24–26 merged (Meetings & minutes, Messaging & notifications, Forms, all pass 13); Feature 27 (Integrations, pass 13): watchdog pickup, claimed the Historical Data Import module `git log` had missed and a prior pass had flagged unclaimed, 0 fixed, 0 new findings
+
+PR #4234 merged (`5a2c61836`). A fresh `list_pull_requests` (state `open`)
+found 0 PRs with a `claude/security-review-*` head, and row 27
+(Integrations) was the next `⬜` in the rotation table, confirmed on a
+freshly pulled `main`.
+
+Baseline `3bd09ed02` (pass 12's own merge, PR #3996). Real delta: three small,
+`git log`-visible commits (audit-trail IP/user-agent recording on
+connect/update/disconnect; the owner's 2026-11-01 catalog-reconciliation
+decision; a cosmetic `AdminPageHeader` swap) plus one `git log` on a plain
+commit range missed entirely — a 31-route Historical Data Import + Historical
+Staffing sub-feature, found only by reading `IntegrationsPage.tsx`'s content
+diff directly and confirming scope via `git log --all` +
+`git merge-base --is-ancestor`. This is the same module Feature 21's pass 14
+(2026-11-10) had already found writing into Admin Hours' table and flagged
+as unclaimed, naturally Feature 27's by permission string and URL prefix;
+this pass gave it the full seven-dimension review that flag asked for and
+removed the stale unclaimed-modules note. Every one of its 31 routes is
+gated on `integrations.historical_import` (System-Owner-only, no default
+role); every by-id resolution is org-scoped and row-locked through the
+parent; writes are idempotent against re-runs and races via a unique-
+constraint ledger; uploads are size-capped and malware-scanned; former
+members are created with no login and no permission grant; all six
+migrations are safe on populated tables. **0 fixed, 0 newly flagged.** See
+`docs/security-review/INT-27-integrations.md`'s **Pass 13** section for the
+full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 756 revisions, single head `8b1cf6f55425`; `generate_schema_docs.py
+--check` — up to date; `check_route_permissions.py --strict` — 305 routes, 0
+errors/warnings (70 this feature's own, up from pass 12's 39); scoped backend
+suite (integrations scope) — 11,359 passed, 24 environment-only skips, 0
+failed; a second scoped run (historical-import scope) — 133 passed, 1
+environment-only skip (`pywebpush`), 0 failed; `npm run typecheck` — 0
+errors; `npm run lint` — 0 errors/warnings; `npx vitest run` (Integrations +
+historical-import + staffing-review pages) — 135 passed (4 files).
+
+Row 27 → ✅ (pending this PR's merge). Next is Feature 28 (Security, audit &
+IP) — re-check `list_pull_requests` fresh rather than trusting this note.
 
 ### 2026-11-11 — Feature 23 (Medical supplies, pass 20) merged; Feature 24 (Meetings & minutes, pass 13): watchdog pickup, real delta (member-visibility fix on the Meetings API, owner-decision batch 7), 1 fixed (MM-21, MED), 1 flagged in a different feature's scope
 
