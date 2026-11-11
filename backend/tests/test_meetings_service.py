@@ -91,7 +91,9 @@ class TestCreateFromEvent:
             _rsvp("u2", False, RSVPStatus.NOT_GOING),  # absent, excused
             _rsvp("u3", False, RSVPStatus.GOING),  # absent, not excused
         ]
-        db = _db([_one(_event()), _one(None), _scalars(rsvps)])
+        # The event, the existing-meeting check, the RSVPs, then the approved
+        # waiver requests carried over (none).
+        db = _db([_one(_event()), _one(None), _scalars(rsvps), _scalars([])])
         meeting, err = await MeetingsService(db).create_from_event("e1", "org-1", "u1")
         assert err is None
 
@@ -169,13 +171,37 @@ class TestAddAttendee:
         assert err == "User not found in organization"
 
     async def test_success(self):
-        db = _db([_one(SimpleNamespace(id="m1")), _one(SimpleNamespace(id="u1"))])
+        # The meeting, the member, then the duplicate check (no row yet).
+        db = _db(
+            [
+                _one(SimpleNamespace(id="m1")),
+                _one(SimpleNamespace(id="u1")),
+                _one(None),
+            ]
+        )
         attendee, err = await MeetingsService(db).add_attendee(
             "m1", "org-1", {"user_id": "u1", "present": True}
         )
         assert err is None
         assert attendee.user_id == "u1"
         db.commit.assert_awaited()
+
+    async def test_a_member_already_on_the_meeting_is_refused(self):
+        """meeting_attendees is unique on (meeting, member): a second row is
+        refused with a sentence rather than an IntegrityError."""
+        db = _db(
+            [
+                _one(SimpleNamespace(id="m1")),
+                _one(SimpleNamespace(id="u1")),
+                _one("att-1"),
+            ]
+        )
+        attendee, err = await MeetingsService(db).add_attendee(
+            "m1", "org-1", {"user_id": "u1"}
+        )
+        assert attendee is None
+        assert err == "This member is already an attendee of this meeting"
+        db.add.assert_not_called()
 
 
 class TestRemoveAttendee:

@@ -15,9 +15,11 @@
  * check has to be reported, not dropped on the floor.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Modal } from '../Modal';
+import { useDiscardGuard } from '../../hooks/useDiscardGuard';
+import { FIELD_ERROR_CLASS } from './FormField';
 
 interface PromptDialogProps {
   isOpen: boolean;
@@ -44,6 +46,18 @@ interface PromptDialogProps {
   /** Amber for withdrawing something, matching the void dialogs elsewhere. */
   confirmVariant?: 'primary' | 'warning';
   loading?: boolean;
+  /**
+   * Ask "Keep editing" / "Discard changes" before Escape, the X or Cancel
+   * throws away a value that differs from `defaultValue` (forms review F-6).
+   * Opt-in, and then a ConfirmProvider is required; without it the dialog
+   * closes at once, as it always has.
+   */
+  askBeforeDiscard?: boolean;
+  /**
+   * The server's refusal of the value, shown on the field until the value is
+   * edited. The caller keeps the dialog open, so what was typed survives.
+   */
+  error?: string | null | undefined;
 }
 
 export const PromptDialog: React.FC<PromptDialogProps> = ({
@@ -63,9 +77,13 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
   cancelLabel = 'Cancel',
   confirmVariant = 'primary',
   loading = false,
+  askBeforeDiscard = false,
+  error,
 }) => {
   const [value, setValue] = useState(defaultValue);
   const [touched, setTouched] = useState(false);
+  const [serverErrorShown, setServerErrorShown] = useState(Boolean(error));
+  const fieldRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 
   // Reset on each open rather than on mount: pages render these permanently and
   // toggle `isOpen`, so a value left behind would be prefilled into the next
@@ -77,11 +95,30 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
     }
   }, [isOpen, defaultValue]);
 
+  // A new refusal is shown, and the field focused so the member is on it,
+  // until the value is edited.
+  useEffect(() => {
+    setServerErrorShown(Boolean(error));
+    if (error) fieldRef.current?.focus();
+  }, [error]);
+
+  const requestClose = useDiscardGuard({
+    isDirty: askBeforeDiscard ? value !== defaultValue : undefined,
+    onClose,
+  });
+
   const trimmed = value.trim();
   const missing = required && trimmed.length === 0;
   const tooShort = trimmed.length > 0 && trimmed.length < minLength;
   const invalid = missing || tooShort;
-  const showError = touched && invalid;
+  const localError = touched && invalid;
+  const serverError = !localError && serverErrorShown && error ? error : null;
+  const showError = localError || serverError !== null;
+
+  const change = (next: string) => {
+    setValue(next);
+    setServerErrorShown(false);
+  };
 
   const handleSubmit = () => {
     setTouched(true);
@@ -91,10 +128,12 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
 
   const fieldId = 'prompt-dialog-field';
   const errorId = 'prompt-dialog-error';
-  const errorText = missing ? `${label} is required.` : `Please write at least ${String(minLength)} characters.`;
+  const errorText =
+    serverError ?? (missing ? `${label} is required.` : `Please write at least ${String(minLength)} characters.`);
 
   const sharedFieldProps = {
     id: fieldId,
+    ref: fieldRef,
     value,
     placeholder: placeholder ?? '',
     'aria-invalid': showError,
@@ -105,13 +144,13 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={title}
       size="sm"
       footer={
         <div className="flex justify-end gap-2">
           <button
-            onClick={onClose}
+            onClick={requestClose}
             disabled={loading}
             className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors disabled:opacity-50"
           >
@@ -140,12 +179,12 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
             {!required && <span className="text-theme-text-muted font-normal"> (optional)</span>}
           </label>
           {multiline ? (
-            <textarea {...sharedFieldProps} rows={3} onChange={(e) => setValue(e.target.value)} />
+            <textarea {...sharedFieldProps} rows={3} onChange={(e) => change(e.target.value)} />
           ) : (
             <input
               {...sharedFieldProps}
               type="text"
-              onChange={(e) => setValue(e.target.value)}
+              onChange={(e) => change(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -155,7 +194,7 @@ export const PromptDialog: React.FC<PromptDialogProps> = ({
             />
           )}
           {showError ? (
-            <p id={errorId} role="alert" className="mt-1 text-xs text-red-600 dark:text-red-400">
+            <p id={errorId} role="alert" className={`mt-1 text-xs ${FIELD_ERROR_CLASS}`}>
               {errorText}
             </p>
           ) : (

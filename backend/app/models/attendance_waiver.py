@@ -3,8 +3,8 @@ Attendance Waiver Requests
 
 A member asks to be excused from one session that counts against them, and a
 routed approver decides (owner decisions, 2026-11-10). One table serves both
-workflows; ``workflow`` says which department policy governs a row. Only
-``training_session`` is written today.
+workflows; ``workflow`` says which department policy governs a row: a training
+session, or a business meeting.
 
 Writes go through ``AttendanceWaiverService``, which owns the rules the
 database cannot express: the deadline, the cap, who may decide, and the
@@ -28,7 +28,6 @@ class AttendanceWaiverWorkflow(str, enum.Enum):
     """Which kind of attendance a request excuses."""
 
     TRAINING_SESSION = "training_session"
-    # Reserved for the business-meeting workflow; nothing writes it yet.
     BUSINESS_MEETING = "business_meeting"
 
 

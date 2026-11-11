@@ -11,6 +11,9 @@
  * also asks for an override reason — the API refuses that decision without
  * one, and records it in the audit log.
  *
+ * Either way, Escape, the X and Cancel ask before discarding a typed reason,
+ * and a refused value is shown on its field with the dialog left open.
+ *
  * Approving an expense report with lines submitted after the department's
  * substantiation deadline (`lateLines`) first asks the approver to confirm
  * they have reviewed them; the API refuses the approval without that.
@@ -251,12 +254,18 @@ export const ApprovalDecisionDialog: React.FC<ApprovalDecisionDialogProps> = ({ 
       onDecided?.();
       onClose();
     } catch (err: unknown) {
-      // The override form shows a refusal on its field; nothing was recorded.
-      const mapped = decision.override ? refusalsOnFields(err, SERVER_FIELDS) : null;
+      // A refusal goes on its field and nothing was recorded. The override
+      // form has both fields; the prompt has only the notes, and focuses it
+      // itself when its `error` arrives.
+      const mapped = decision.override
+        ? refusalsOnFields(err, SERVER_FIELDS)
+        : refusalsOnFields(err, { notes: SERVER_FIELDS.notes });
       if (mapped) {
         setServerErrors(mapped.fieldErrors);
-        const first = mapped.fieldErrors.notes ? 'approval-decision-notes' : 'approval-decision-override';
-        document.getElementById(first)?.focus();
+        if (decision.override) {
+          const first = mapped.fieldErrors.notes ? 'approval-decision-notes' : 'approval-decision-override';
+          document.getElementById(first)?.focus();
+        }
         if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
         return;
       }
@@ -298,7 +307,9 @@ export const ApprovalDecisionDialog: React.FC<ApprovalDecisionDialogProps> = ({ 
     <PromptDialog
       isOpen={decision !== null}
       onClose={() => {
-        if (!busy) onClose();
+        if (busy) return;
+        setServerErrors({});
+        onClose();
       }}
       onSubmit={(value) => void handleSubmit(value)}
       title={isDeny ? 'Deny request' : 'Approve request'}
@@ -310,6 +321,10 @@ export const ApprovalDecisionDialog: React.FC<ApprovalDecisionDialogProps> = ({ 
       confirmLabel={isDeny ? 'Deny' : 'Approve'}
       confirmVariant={isDeny ? 'warning' : 'primary'}
       loading={busy}
+      // Escape, the X and Cancel ask before throwing away a typed reason
+      // (owner decision, 2026-11-11).
+      askBeforeDiscard
+      error={serverErrors.notes}
     />
   );
 };

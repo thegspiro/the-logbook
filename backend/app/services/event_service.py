@@ -1758,6 +1758,7 @@ class EventService:
         pending_reversals = await self._revoke_event_attendance_credit(
             event_id, organization_id, event=event
         )
+        await self._void_waiver_requests([event], organization_id, "cancelled")
 
         event.is_cancelled = True
         event.cancellation_reason = reason
@@ -2264,6 +2265,7 @@ class EventService:
         pending_reversals = await self._void_training_credit_before_removal(
             list(events), organization_id
         )
+        await self._void_waiver_requests(list(events), organization_id, "cancelled")
 
         now = datetime.now(dt_timezone.utc)
         cancelled_count = 0
@@ -2498,6 +2500,7 @@ class EventService:
         pending_reversals = await self._revoke_event_attendance_credit(
             event_id, organization_id, event=event
         )
+        await self._void_waiver_requests([event], organization_id, "deleted")
 
         await self.db.delete(event)
         try:
@@ -2600,6 +2603,7 @@ class EventService:
         pending_reversals = await self._void_training_credit_before_removal(
             list(events), organization_id
         )
+        await self._void_waiver_requests(list(events), organization_id, "deleted")
 
         for event in events:
             await self.db.delete(event)
@@ -3769,6 +3773,23 @@ class EventService:
             if session_ref:
                 pending.append((training, session_ref))
         return pending
+
+    async def _void_waiver_requests(
+        self, events: List[Event], organization_id: UUID | str, cause: str
+    ) -> None:
+        """Void the pending waiver requests of events being cancelled or deleted.
+
+        Inside the caller's transaction, while it holds the events: a pending
+        request is about a session that will no longer be held. Approved and
+        denied requests are kept (attendance_waiver_service).
+        """
+        # Local import: the waiver engine imports this module's models and
+        # services through the training compliance chain.
+        from app.services.attendance_waiver_service import void_pending_for_events
+
+        await void_pending_for_events(
+            self.db, str(organization_id), [str(e.id) for e in events], cause
+        )
 
     @staticmethod
     async def _reverse_pipeline_after_commit(

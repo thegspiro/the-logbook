@@ -87,6 +87,7 @@ import EventGuestsCard from '../components/event-detail/EventGuestsCard';
 import { GuestCheckInQRCard } from '../components/events/GuestCheckInQRCard';
 import EventAttendancePetitionPrompt from '../components/event-detail/EventAttendancePetitionPrompt';
 import EventAttendancePetitionsCard from '../components/event-detail/EventAttendancePetitionsCard';
+import AttendanceWaiverCard from '../components/event-detail/AttendanceWaiverCard';
 import EventTransferModal from '../components/event-detail/EventTransferModal';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { formatHoursExact } from '../utils/hoursFormatting';
@@ -1050,7 +1051,9 @@ export const EventDetailPage: React.FC = () => {
   // own eligibility (the 30-day window, already present) is the server's call;
   // the page only decides whether to ask.
   const attendancePetitionsOpen = checkInClosed && !event.is_cancelled && !event.is_draft;
-  const canReviewAttendancePetitions = canManageOrganizers;
+  // Adds a fallback position holder a request was sent to, who need not run
+  // the event; the server decides who that is, as for the pair above.
+  const canReviewAttendancePetitions = canManageOrganizers || Boolean(event.can_review_attendance_requests);
   const checkInMembersButton =
     canManageAttendance && !isAttendanceFinalized ? (
       <button
@@ -1757,6 +1760,10 @@ export const EventDetailPage: React.FC = () => {
             {/* The training details the credit is filed under, and the approval
                 it waits on. With no session it says what the credit falls back
                 to, to those who can change that or approve it. */}
+            {/* Whether the session counts against this member is the server's
+                answer; the card renders nothing when it does not. */}
+            {isTrainingEvent && <AttendanceWaiverCard eventId={event.id} eventTitle={event.title} timezone={tz} />}
+
             {attendancePetitionsOpen && <EventAttendancePetitionPrompt eventId={event.id} timezone={tz} />}
 
             {attendancePetitionsOpen && canReviewAttendancePetitions && (

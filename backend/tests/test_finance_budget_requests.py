@@ -799,13 +799,141 @@ class TestOwnerLifecycle:
             resp = await _call(db_session, dept["trainer"], method, path + suffix, body)
             assert resp.status_code == 400, (method, suffix)
 
-    async def test_blank_justification_is_refused(self, db_session, dept):
+
+# ============================================
+# Blank drafts (owner decision, 2026-11-11)
+# ============================================
+
+
+def _refused_fields(resp) -> dict:
+    assert resp.status_code == 422, resp.text
+    return {entry["field"]: entry["message"] for entry in resp.json()["detail"]}
+
+
+@pytest.mark.integration
+class TestBlankDrafts:
+    """A draft saves without an amount or a justification; submit needs both.
+
+    The owner's save rule (2026-11-05) is that a draft always saves. The two
+    fields are the Treasurer's to read, so they are required at the step
+    that hands the request to the Treasurer, and on a submitted request.
+    """
+
+    async def test_a_draft_saves_with_neither_field(self, db_session, dept, audit):
+        resp = await _create(
+            db_session,
+            dept["trainer"],
+            {"fiscalYearId": dept["draft"], "budgetId": dept["lines"]["training_next"]},
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["status"] == "draft"
+        assert body["requestedAmount"] is None
+        assert body["justification"] is None
+        # The audit records no amount, not the string "None".
+        assert audit.await_args_list[0].kwargs["event_data"]["requested_amount"] is None
+
+    async def test_a_blank_justification_is_stored_as_none(self, db_session, dept):
         resp = await _create(
             db_session,
             dept["trainer"],
             _line_body(dept, "training_next", justification="   "),
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["justification"] is None
+        assert Decimal(resp.json()["requestedAmount"]) == Decimal("2400.00")
+
+    async def test_a_blank_proposal_saves_too(self, db_session, dept):
+        resp = await _create(
+            db_session,
+            dept["chief"],
+            {
+                "fiscalYearId": dept["draft"],
+                "categoryId": dept["gear_cat"],
+                "stationId": dept["station"],
+                "ownerPositionId": dept["chief_pos"],
+            },
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["requestedAmount"] is None
+
+    async def test_submit_refuses_a_blank_draft_on_both_fields(self, db_session, dept):
+        created = await _create(
+            db_session,
+            dept["trainer"],
+            {"fiscalYearId": dept["draft"], "budgetId": dept["lines"]["training_next"]},
+        )
+        path = f"/finance/budget-requests/{created.json()['id']}"
+        resp = await _call(db_session, dept["trainer"], "POST", f"{path}/submit")
+        assert set(_refused_fields(resp)) == {"requested_amount", "justification"}
+        still = await _call(db_session, dept["trainer"], "GET", path)
+        assert still.json()["status"] == "draft"
+        assert still.json()["submittedAt"] is None
+
+    async def test_submit_names_only_the_missing_field(self, db_session, dept):
+        created = await _create(
+            db_session,
+            dept["trainer"],
+            _line_body(dept, "training_next", justification=""),
+        )
+        path = f"/finance/budget-requests/{created.json()['id']}"
+        resp = await _call(db_session, dept["trainer"], "POST", f"{path}/submit")
+        assert list(_refused_fields(resp)) == ["justification"]
+
+    async def test_a_completed_draft_submits(self, db_session, dept, audit):
+        created = await _create(
+            db_session,
+            dept["trainer"],
+            {"fiscalYearId": dept["draft"], "budgetId": dept["lines"]["training_next"]},
+        )
+        path = f"/finance/budget-requests/{created.json()['id']}"
+        edited = await _call(
+            db_session,
+            dept["trainer"],
+            "PUT",
+            path,
+            {"requestedAmount": "900.00", "justification": "One academy seat"},
+        )
+        assert edited.status_code == 200, edited.text
+        submitted = await _call(db_session, dept["trainer"], "POST", f"{path}/submit")
+        assert submitted.status_code == 200, submitted.text
+        assert submitted.json()["status"] == "submitted"
+        assert (
+            audit.await_args_list[-1].kwargs["event_data"]["requested_amount"]
+            == "900.00"
+        )
+
+    async def test_a_draft_edit_can_clear_both_fields(self, db_session, dept):
+        created = await _create(
+            db_session, dept["trainer"], _line_body(dept, "training_next")
+        )
+        path = f"/finance/budget-requests/{created.json()['id']}"
+        resp = await _call(
+            db_session,
+            dept["trainer"],
+            "PUT",
+            path,
+            {"requestedAmount": None, "justification": "  "},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["requestedAmount"] is None
+        assert resp.json()["justification"] is None
+
+    async def test_a_submitted_request_keeps_both_fields(self, db_session, dept):
+        request_id = await _submitted(db_session, dept)
+        path = f"/finance/budget-requests/{request_id}"
+        resp = await _call(
+            db_session,
+            dept["trainer"],
+            "PUT",
+            path,
+            {"requestedAmount": "2600.00", "justification": ""},
+        )
+        assert list(_refused_fields(resp)) == ["justification"]
+        # Refused as a whole: the amount sent beside it was not written.
+        after = await _call(db_session, dept["trainer"], "GET", path)
+        assert after.json()["justification"] == "Two more academy seats"
+        assert Decimal(after.json()["requestedAmount"]) == Decimal("2400.00")
 
 
 # ============================================
