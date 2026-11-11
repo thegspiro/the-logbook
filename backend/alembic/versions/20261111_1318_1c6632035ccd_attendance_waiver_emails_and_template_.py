@@ -1,13 +1,8 @@
 """Attendance waiver emails and template position CC
 
 Revision ID: 1c6632035ccd
-Revises: 0136dd6d4144, 7b6db9dd8e4f
+Revises: ccd374a66f82
 Create Date: 2026-11-11 13:18:00.000000
-
-It also merges main's two heads: ``0136dd6d4144`` (budget request drafts)
-and ``7b6db9dd8e4f`` (meeting attendee waiver link) both revise
-``09f0171ccf5e`` and landed together, and neither touches a table this
-revision does, so the order between them does not matter.
 
 Three changes, for the attendance-waiver emails (owner decisions 2026-11-10):
 
@@ -41,7 +36,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "1c6632035ccd"
-down_revision: Union[str, Sequence[str], None] = ("0136dd6d4144", "7b6db9dd8e4f")
+down_revision: Union[str, None] = "ccd374a66f82"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
