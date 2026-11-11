@@ -227,9 +227,13 @@ export const EventComposer: React.FC<EventComposerProps> = ({
             <p className="text-sm">
               Training events use the step-by-step training form. Everything you have entered carries over.
             </p>
+            {/* An edit draws no organizer pickers and no recurrence controls, so
+                naming them there would describe fields the officer cannot see. */}
             <p className="text-sm">
-              That includes the category, organizer and alternate, the recurrence and its skipped dates, and the
-              location. Any RSVP, check-in, mandatory or reminder settings you set are on the Settings step.
+              {editing
+                ? 'That includes the category and the location.'
+                : 'That includes the category, organizer and alternate, the recurrence and its skipped dates, and the location.'}{' '}
+              Any RSVP, check-in, mandatory or reminder settings you set are on the Settings step.
             </p>
             <button
               type="button"

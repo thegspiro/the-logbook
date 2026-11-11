@@ -35,6 +35,7 @@ vi.mock('../../stores/authStore', () => ({
 }));
 
 import { EventComposer } from './EventComposer';
+import { DEFAULT_TRAINING_DETAILS } from '../training-event/trainingDetailsModel';
 
 type User = ReturnType<typeof userEvent.setup>;
 
@@ -130,6 +131,40 @@ describe('EventComposer hand-off to the training form', () => {
     expect(screen.getByLabelText(/mandatory attendance/i)).toBeChecked();
     expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked();
     expect(screen.getByLabelText('Active Member')).toBeChecked();
+  });
+
+  // An edit draws no organizer pickers and no recurrence controls, so the
+  // notice must not say they carried over.
+  it('on an edit, names only what the edit form shows as carried over', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EventComposer
+        initialData={{
+          title: 'Monday Night Drill',
+          event_type: 'business_meeting',
+          start_datetime: '2030-05-06T19:00',
+          end_datetime: '2030-05-06T21:00',
+        }}
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+        trainingSubmitLabel="Save Changes"
+        editing={{
+          eventId: 'event-1',
+          attendanceLocked: false,
+          eventTypeLocked: false,
+          storedType: 'business_meeting',
+          initialTraining: DEFAULT_TRAINING_DETAILS,
+          trainingAccess: 'edit',
+          onSubmitUpdate: vi.fn(),
+        }}
+      />
+    );
+
+    await user.selectOptions(typePicker(), 'training');
+
+    const notice = screen.getByRole('status');
+    expect(notice).toHaveTextContent('That includes the category and the location.');
+    expect(notice).not.toHaveTextContent(/organizer|recurrence/);
   });
 
   it('goes back to the single-page form, values intact, from the notice or the picker', async () => {
