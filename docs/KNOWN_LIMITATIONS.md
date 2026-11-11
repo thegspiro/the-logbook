@@ -398,17 +398,25 @@ already converted a form (Create Election, Request Equipment, Add several items,
 Add / Edit Vendor, the suggestion box), it keeps main's `useFieldErrors`
 messages, with this batch's additions on top.
 
-**Budget request drafts still need an amount and a justification.** The owner
-rule says Save Draft always succeeds, but `BudgetRequestCreate` requires
-`requested_amount` and a non-blank `justification` on every request, draft or
-not, and the request has no separate draft endpoint. A blank one is therefore
-flagged on its field and nothing is saved, as with any create form. Letting a
-draft save blank would mean making both columns nullable and moving the check
-to Submit, which is a schema change and is not made here.
+**Owner decision (2026-11-11) — a budget request draft saves blank. Built.**
+The owner rule says Save Draft always succeeds, and `BudgetRequestCreate` used
+to require `requested_amount` and a non-blank `justification` on every request,
+so a blank draft was refused. Migration `0136dd6d4144` makes both columns
+nullable and the check moved to Submit: `submit_request` refuses an unfinished
+draft with a 422 naming the missing fields, and an edit of a submitted request
+may not clear either. On the owner's screen, Submit on an unfinished draft
+opens it with those fields flagged instead of sending it; the Treasurer's list
+shows a blank amount as _Not entered yet_. Downgrading fills a blank draft with
+0.00 and an empty justification (see `docs/UPGRADING.md`).
 
-**The approve / deny prompt in Approvals is not converted.** It is a
-`PromptDialog`, which has no discard question and no place for a server field
-error yet; the approvals-admin override form beside it is converted.
+**Owner decision (2026-11-11) — the Approvals approve / deny prompt asks
+before discarding. Built.** It is a `PromptDialog`, which had no discard
+question and no place for a server field error. Both are now opt-in props on
+the shared dialog: `askBeforeDiscard` asks "Keep editing" / "Discard changes"
+when the typed value differs from the one it opened with, and `error` shows the
+server's refusal on the field until it is edited, with the dialog left open.
+Approvals uses both; the approvals-admin override form beside it already did.
+The other `PromptDialog` callers are unchanged until they opt in.
 
 Still to come, module by module: the locations setup wizard, the other training
 builders and pipeline pages, the rest of Inventory (kits, storage areas,
