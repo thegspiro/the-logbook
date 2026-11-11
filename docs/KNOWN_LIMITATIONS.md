@@ -8409,6 +8409,23 @@ single-page form. What it changes, and what it leaves:
   the training details.** The rest of Training Info is drawn locked; reopen
   attendance to change it. The event's own fields keep the finalized-event
   rules under "Events — Edit Form Gaps" below.
+- **A Training template fills the event's own fields, not its training
+  details.** Training Admin's Create Session now offers the department's
+  Training templates, as the Events page does, but `EventTemplate` has no
+  training fields (course, type, hours, instructor, certification, links),
+  so Training Info opens on its defaults. Carrying them needs template
+  fields that do not exist yet: an owner decision, since it changes what a
+  saved template is.
+- **Under a library course, a blank Lead Instructor or Expiration is saved
+  as the course's.** The backend reads `null` for those two as "use the
+  course's value", on create and on edit, so an officer cannot clear either
+  while a course is chosen. The form says so under the field and on Review
+  rather than showing "None". Making them clearable would change the API's
+  meaning of `null`.
+- **Training Admin's header still offers Create Session to a training
+  manager without `events.manage`.** The approved design marks hiding it as
+  a proposal; the tab itself shows the notice. Left until the owner
+  confirms.
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
