@@ -278,7 +278,13 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   );
 
   const updateTraining = (patch: Partial<TrainingDetailsForm>) => {
-    setTraining((prev) => withCourseChoice({ ...prev, ...patch }));
+    setTraining((prev) => {
+      const next = { ...prev, ...patch };
+      return withCourseChoice(
+        next,
+        courses.find((c) => c.id === next.course_id)
+      );
+    });
     // Only the officer's ticks: loading an event's links never pre-fills.
     if (patch.attendance_requirement_ids) prefill.requirementsChanged(patch.attendance_requirement_ids);
     const touched = Object.keys(patch).map((key) => (key === 'instructor' ? 'instructor_id' : key));

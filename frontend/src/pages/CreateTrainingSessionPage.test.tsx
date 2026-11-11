@@ -542,6 +542,25 @@ describe('CreateTrainingSessionPage training info step', () => {
     expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(/^From the course \(4 hours\)\./);
   });
 
+  // The course stayed picked on the way back, but its hours had gone back to
+  // following the length and nothing re-applied them.
+  it('puts the course’s hours back after a detour through No course yet', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await screen.findByRole('option', { name: 'CPR - CPR / BLS' });
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-cpr');
+    await user.click(screen.getByRole('radio', { name: /No course yet/ }));
+    expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(2);
+
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    expect(screen.getByRole('combobox', { name: /^Course/ })).toHaveValue('course-cpr');
+    expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(4);
+    expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(/^From the course \(4 hours\)\./);
+  });
+
   // A course's instructor is free text; it is picked as a member only when a
   // member has that name, and otherwise kept as the name it is.
   it("keeps a course's instructor as text when no member has that name", async () => {

@@ -193,12 +193,27 @@ export const creditHoursFromCourse = (value: TrainingDetailsForm, course: Traini
 /**
  * A change of course choice. Hours that came from a library course no longer
  * describe the session once it has none, so they go back to following the
- * event's length, the default a course-less session starts on.
+ * event's length, the default a course-less session starts on. Coming back
+ * to the library with the course still chosen puts its hours back: the
+ * course reads as picked, and nothing else would re-apply it, since the
+ * course-mode choice does not pass through the course picker.
  */
-export const withCourseChoice = (value: TrainingDetailsForm): TrainingDetailsForm =>
-  value.credit_hours_source === 'course' && (value.course_mode !== 'library' || !value.course_id)
-    ? { ...value, credit_hours_source: 'duration' }
-    : value;
+export const withCourseChoice = (value: TrainingDetailsForm, course?: TrainingCourse): TrainingDetailsForm => {
+  if (value.credit_hours_source === 'course' && (value.course_mode !== 'library' || !value.course_id)) {
+    return { ...value, credit_hours_source: 'duration' };
+  }
+  const hours = courseCreditHours(course);
+  if (
+    value.credit_hours_source === 'duration' &&
+    value.course_mode === 'library' &&
+    course !== undefined &&
+    course.id === value.course_id &&
+    hours !== undefined
+  ) {
+    return { ...value, credit_hours: String(hours), credit_hours_source: 'course' };
+  }
+  return value;
+};
 
 /** The ISO instants' length in hours, for a stored event. */
 const storedHours = (startIso: string, endIso: string): number | null => {
@@ -310,7 +325,12 @@ export const toUpdatePayload = (
   phase_id: value.phase_id || null,
   requirement_id: value.requirement_id || null,
   training_type: value.training_type,
-  credit_hours: numberOrNull(effectiveCreditHours(value, durationHours)),
+  // Following the length is null, which the backend reads as each event's
+  // own scheduled length; a figure would be written to every later occurrence
+  // of a series whatever its length, and leave the session holding a typed-
+  // looking number. 'duration' never holds a library course's hours.
+  credit_hours:
+    value.credit_hours_source === 'duration' ? null : numberOrNull(effectiveCreditHours(value, durationHours)),
   instructor: blankToNull(value.instructor),
   instructor_id: value.instructor_id || null,
   issues_certification: value.issues_certification,
@@ -320,9 +340,13 @@ export const toUpdatePayload = (
   counts_toward_certification: value.counts_toward_certification,
   auto_create_records: value.auto_create_records,
   require_completion_confirmation: value.require_completion_confirmation,
-  // Not nullable: a box left empty keeps the backend's default rather than
-  // failing the save.
-  approval_deadline_days: toNumber(value.approval_deadline_days) ?? 7,
+  // Sent only with sign-off, the only time the box is shown and checked: a
+  // value left behind an unticked box would come back as a 422 on a field
+  // nobody can see. Left out, the stored deadline is untouched. Not nullable:
+  // a box left empty keeps the backend's default rather than failing the save.
+  ...(value.require_completion_confirmation
+    ? { approval_deadline_days: toNumber(value.approval_deadline_days) ?? 7 }
+    : {}),
   attendance_requirement_ids: value.attendance_requirement_ids,
 });
 

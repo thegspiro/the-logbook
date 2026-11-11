@@ -769,7 +769,12 @@ describe('EventEditPage', () => {
       required_attendance_pct: 75,
     };
 
-    /** Every training field the form owns, as an edit sends it: blanks as null (pitfall #1). */
+    /**
+     * Every training field the form owns, as an edit sends it: blanks as null
+     * (pitfall #1). The hours equal the length, so they follow it and travel as
+     * null — each event's own length, the backend's reading of null — and the
+     * approval deadline is left out while sign-off is off.
+     */
     const unchangedDetails = {
       course_id: null,
       course_name: null,
@@ -779,7 +784,7 @@ describe('EventEditPage', () => {
       phase_id: null,
       requirement_id: null,
       training_type: 'skills_practice',
-      credit_hours: 2,
+      credit_hours: null,
       instructor: 'Owen Kittredge',
       instructor_id: null,
       issues_certification: false,
@@ -789,7 +794,6 @@ describe('EventEditPage', () => {
       counts_toward_certification: true,
       auto_create_records: true,
       require_completion_confirmation: false,
-      approval_deadline_days: 7,
       attendance_requirement_ids: [],
     };
 

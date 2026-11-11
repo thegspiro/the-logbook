@@ -10,6 +10,7 @@ import {
   toAttachPayload,
   toUpdatePayload,
   validateTrainingDetails,
+  withCourseChoice,
   type TrainingDetailsForm,
 } from './trainingDetailsModel';
 
@@ -136,9 +137,34 @@ describe('toUpdatePayload', () => {
       counts_toward_certification: true,
       auto_create_records: true,
       require_completion_confirmation: false,
-      approval_deadline_days: 7,
       attendance_requirement_ids: [],
     });
+  });
+
+  // A deadline is checked only while sign-off is ticked, and its box is hidden
+  // otherwise: one left behind an unticked box came back as a 422 on a field
+  // nobody could see.
+  it('leaves out the approval deadline while sign-off is off', () => {
+    const payload = toUpdatePayload(form({ require_completion_confirmation: false, approval_deadline_days: '45' }), 2);
+    expect(payload).not.toHaveProperty('approval_deadline_days');
+    expect(
+      toUpdatePayload(form({ require_completion_confirmation: true, approval_deadline_days: '10' }), 2)
+    ).toMatchObject({ approval_deadline_days: 10 });
+  });
+
+  // Null is each event's own length to the backend; this occurrence's figure
+  // was written to every later one on "This and all future events".
+  it("sends hours that follow the event's length as null, and a figure otherwise", () => {
+    expect(toUpdatePayload(form({ credit_hours_source: 'duration' }), 3)).toMatchObject({ credit_hours: null });
+    expect(toUpdatePayload(form({ credit_hours_source: 'manual', credit_hours: '1.5' }), 3)).toMatchObject({
+      credit_hours: 1.5,
+    });
+    expect(
+      toUpdatePayload(
+        form({ course_mode: 'library', course_id: 'course-pump', credit_hours_source: 'course', credit_hours: '2' }),
+        3
+      )
+    ).toMatchObject({ credit_hours: 2 });
   });
 
   it('clears the fields of the course modes not chosen', () => {
@@ -147,6 +173,32 @@ describe('toUpdatePayload', () => {
       2
     );
     expect(payload).toMatchObject({ course_id: 'course-pump', course_name: null, course_code: null });
+  });
+});
+
+describe('withCourseChoice', () => {
+  // Library → No course yet → Library kept the course picked while its hours
+  // had gone back to following the length, and nothing re-applied them.
+  it("puts a held course's hours back on returning to the library", () => {
+    const picked = applyLibraryCourse(form(), COURSE, []);
+    const away = withCourseChoice({ ...picked, course_mode: 'none' }, undefined);
+    expect(away).toMatchObject({ course_id: 'course-pump', credit_hours_source: 'duration' });
+
+    expect(withCourseChoice({ ...away, course_mode: 'library' }, COURSE)).toMatchObject({
+      course_mode: 'library',
+      credit_hours: '2',
+      credit_hours_source: 'course',
+    });
+  });
+
+  it('leaves hours the officer typed alone', () => {
+    const typed = form({
+      course_mode: 'library',
+      course_id: 'course-pump',
+      credit_hours_source: 'manual',
+      credit_hours: '5',
+    });
+    expect(withCourseChoice(typed, COURSE)).toBe(typed);
   });
 });
 
