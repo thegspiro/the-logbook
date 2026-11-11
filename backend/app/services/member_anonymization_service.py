@@ -19,7 +19,9 @@ docs/COMPLIANCE.md):
 - screening_records: medical content (results, notes, provider) scrubbed;
   status and dates retained as compliance-history proof.
 - free-text reason fields on leaves, training waivers, shift time-off, and
-  meeting-attendance waivers (frequently medical/family detail).
+  meeting-attendance waivers (frequently medical/family detail); the reason
+  on the member's attendance waiver requests and the decision notes on them.
+  The requests and their decision log are kept, as the waivers are.
 - event_rsvps: dietary restrictions, accessibility needs, notes.
 - external_user_mappings: duplicated name/email/username copies.
 - candidates.photo_url (second copy of the member photo). Candidate names
@@ -54,6 +56,10 @@ from typing import Any
 from sqlalchemy import case, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.attendance_waiver import (
+    AttendanceWaiverRequest,
+    AttendanceWaiverRequestAction,
+)
 from app.models.event import EventRSVP
 from app.models.forms import FormSubmission
 from app.models.inventory import MemberSizePreferences
@@ -222,6 +228,32 @@ class MemberAnonymizationService:
             .values(waiver_reason=None)
         )
         counts["meeting_waiver_reasons_scrubbed"] = rows_affected(result) or 0
+
+        # A waiver request's reason, and the deciders' notes answering it,
+        # are about the member and may be medical. The rows stay: they are
+        # the record that a session was excused, and grading reads them.
+        result = await self.db.execute(
+            update(AttendanceWaiverRequest)
+            .where(
+                AttendanceWaiverRequest.user_id == user.id,
+                AttendanceWaiverRequest.organization_id == user.organization_id,
+            )
+            .values(reason=None)
+        )
+        counts["attendance_waiver_reasons_scrubbed"] = rows_affected(result) or 0
+        result = await self.db.execute(
+            update(AttendanceWaiverRequestAction)
+            .where(
+                AttendanceWaiverRequestAction.organization_id == user.organization_id,
+                AttendanceWaiverRequestAction.request_id.in_(
+                    select(AttendanceWaiverRequest.id).where(
+                        AttendanceWaiverRequest.user_id == user.id
+                    )
+                ),
+            )
+            .values(note=None)
+        )
+        counts["attendance_waiver_notes_scrubbed"] = rows_affected(result) or 0
 
         # --- RSVP quasi-health fields ----------------------------------
         result = await self.db.execute(

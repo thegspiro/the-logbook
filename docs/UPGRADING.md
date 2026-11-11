@@ -775,6 +775,35 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Training: members can ask to be excused from a session (2026-11-10)
+
+Nothing blocks a restart. Migration `8b1cf6f55425` creates two empty tables,
+`attendance_waiver_requests` and `attendance_waiver_request_actions`. No
+existing row changes.
+
+- **Off until a training officer saves a policy.** The policy is stored in the
+  organization's settings, so there is nothing to configure at upgrade time,
+  and until it is saved members cannot ask. The screens arrive in a later
+  release; until then the policy can only be saved through the API
+  (`PUT /api/v1/training/waivers/requests/policy`, `training.manage`).
+- **Compliance exports can change on upgrade, with no policy saved.** The
+  department compliance CSV, the compliance PDF and the compliance forecast now
+  apply the training waivers, leaves of absence and Chief overrides already on
+  file, the way the compliance screens always have. Before, they graded every
+  member as if none existed, so an export could print _Not Met_ for a member
+  the compliance matrix showed as met. A member with an active leave or waiver,
+  or a Chief override, can therefore move from _Not Met_ to _Met_ in an export
+  taken after the upgrade. The data did not change; the exports now agree with
+  the screens.
+- **Once requests are approved, attendance figures move.** An approved request
+  drops its session from the member's held and attended counts for every
+  session-attendance requirement it counts toward, and from their missed
+  mandatory events. Approved requests keep doing so if the policy is later
+  turned off; turning it off only stops new requests.
+- **Downgrading** drops both tables, and every approved request with them, so
+  the sessions they excused count against those members again. Take a backup
+  first (see above) once requests are in use.
+
 ### Evaluations: training-session attendance is graded by the attendance requirement (2026-11-10)
 
 Nothing blocks a restart, and no migration runs. The **Training session

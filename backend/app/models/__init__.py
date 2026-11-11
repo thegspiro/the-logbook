@@ -41,6 +41,13 @@ from app.models.apparatus import (
     MaintenanceCategory,
     MaintenanceIntervalUnit,
 )
+from app.models.attendance_waiver import (
+    AttendanceWaiverAction,
+    AttendanceWaiverRequest,
+    AttendanceWaiverRequestAction,
+    AttendanceWaiverStatus,
+    AttendanceWaiverWorkflow,
+)
 from app.models.audit import (
     AuditChainHead,
     AuditLog,
@@ -627,6 +634,12 @@ __all__ = [
     "McpOAuthAuthorization",
     # Analytics models
     "AnalyticsEvent",
+    # Attendance waiver requests
+    "AttendanceWaiverAction",
+    "AttendanceWaiverRequest",
+    "AttendanceWaiverRequestAction",
+    "AttendanceWaiverStatus",
+    "AttendanceWaiverWorkflow",
     # Error log models
     "ErrorLog",
     # Apparatus models

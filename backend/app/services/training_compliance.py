@@ -33,6 +33,7 @@ from app.services.training_period import (
 from app.services.training_waiver_service import (
     SOURCE_LEAVE,
     SOURCE_OVERRIDE,
+    SOURCE_SESSION_EXCUSAL,
     SOURCE_WAIVER,
     MonthWaiver,
     WaiverPeriod,
@@ -621,8 +622,9 @@ class AttendanceTally:
     """One member's standing on one SESSION_ATTENDANCE requirement.
 
     ``held`` counts the linked sessions held in the window since the member
-    joined; ``charged`` is those minus the ones a waiver or leave excused
-    (a session the member attended anyway stays charged, and counts);
+    joined; ``charged`` is those minus the ones a waiver, a leave or an
+    approved waiver request excused (a session the member attended anyway
+    stays charged, and counts);
     ``needed`` is how many of ``charged`` the percentage asks for, and
     ``base_needed`` what it would ask of ``held``.
     """
@@ -647,17 +649,24 @@ def _sessions_needed(pct: float, count: int) -> int:
     return max(0, math.ceil(pct * count / 100 - 1e-9))
 
 
-def _waiver_excuses(waiver: WaiverPeriod, req_id: str, day: date) -> bool:
+def _waiver_excuses(waiver: WaiverPeriod, req_id: str, session: HeldSession) -> bool:
     # An override excuses no session; it decides the result instead.
     if waiver.source == SOURCE_OVERRIDE:
         return False
+    # An approved waiver request excuses its own session and no other, for
+    # every requirement the session counts toward (owner decision,
+    # 2026-11-10). Matched on the event rather than the day, so another
+    # session that day stays charged and a requirement linked after the
+    # approval is covered too.
+    if waiver.source == SOURCE_SESSION_EXCUSAL:
+        return waiver.event_id is not None and waiver.event_id == session.event_id
     # The same reading of requirement_ids as excused_month_reasons: an
     # empty or missing list is a blanket waiver.
     if waiver.requirement_ids and req_id not in [
         str(r) for r in waiver.requirement_ids
     ]:
         return False
-    return waiver.start_date <= day <= waiver.end_date
+    return waiver.start_date <= session.held_on <= waiver.end_date
 
 
 def tally_session_attendance(
@@ -712,7 +721,7 @@ def tally_session_attendance(
         s
         for s in in_window
         if s.event_id in attended_events
-        or not any(_waiver_excuses(w, req_id, s.held_on) for w in waivers or [])
+        or not any(_waiver_excuses(w, req_id, s) for w in waivers or [])
     ]
     attended = [s for s in charged if s.event_id in attended_events]
     pct = float(req.required_attendance_pct or 0)

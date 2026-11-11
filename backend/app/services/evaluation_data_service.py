@@ -487,7 +487,8 @@ class EvaluationDataService:
         linked to the member's session-attendance requirement are counted, a
         member attended one when finalizing it wrote their record, and every
         waiver and leave the training screens apply excuses a session the
-        member missed, while one they came to anyway still counts. The
+        member missed, as does an approved request to be excused from that one
+        session, while one they came to anyway still counts. The
         requirement is the one for the member's membership type when several
         apply, and none is guessed at when that does not decide.
 
