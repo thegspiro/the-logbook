@@ -25,6 +25,8 @@ interface TrainingLinkageFieldsProps {
   onChange: (patch: Partial<TrainingLinkageValue>) => void;
   /** The course this session teaches, when known — drives the suggestion chips. */
   selectedCourse?: TrainingCourse | undefined;
+  /** The links cannot be changed here: the one-tap suggestions, which only add one, are left out. */
+  readOnly?: boolean | undefined;
 }
 
 /**
@@ -38,6 +40,7 @@ export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
   value,
   onChange,
   selectedCourse,
+  readOnly = false,
 }) => {
   const { categories, requirements, programs, phases } = data;
   // Both the create wizard and the edit card can mount this, so ids are
@@ -103,7 +106,7 @@ export const TrainingLinkageFields: React.FC<TrainingLinkageFieldsProps> = ({
 
   return (
     <div>
-      {suggestedRequirements.length > 0 && !value.requirement_id && (
+      {!readOnly && suggestedRequirements.length > 0 && !value.requirement_id && (
         <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 p-3">
           <p className="text-sm font-semibold text-green-700">
             {selectedCourse ? 'This course counts toward:' : 'Requirements in this category:'}

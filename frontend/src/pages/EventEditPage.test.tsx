@@ -1306,6 +1306,34 @@ describe('EventEditPage', () => {
       expect(sent()).not.toHaveProperty('training_details');
     });
 
+    // A read-only step offered one-tap requirement chips nobody could tap, and
+    // dropped the hint's "The event's length" though the hours were just that.
+    it('shows a training manager no requirement suggestions, and says the hours are the length', async () => {
+      mockPermissions.clear();
+      mockPermissions.add('training.manage');
+      linkageRequirements.value = [
+        attendanceRequirement,
+        {
+          ...attendanceRequirement,
+          id: 'req-hose',
+          name: 'Annual Hose Hours',
+          requirement_type: 'hours',
+          category_ids: ['cat-hose'],
+        },
+      ];
+      vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue({ ...session, category_id: 'cat-hose' });
+      window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+      renderWithRouter(<EventEditPage />);
+
+      expect(await screen.findByText('Training details are changed by an event manager.')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
+        /^The event's length \(2 hours\)\. Each attendee is credited/
+      );
+      expect(screen.queryByText('Requirements in this category:')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Annual Hose Hours/ })).not.toBeInTheDocument();
+      expect(screen.queryByText('Tap a requirement to link it to this session.')).not.toBeInTheDocument();
+    });
+
     // The save leaves the session's hours alone, so a locked step must show
     // them as stored, not as the event's new length.
     it("shows a training manager the stored credit hours after the event's times move", async () => {

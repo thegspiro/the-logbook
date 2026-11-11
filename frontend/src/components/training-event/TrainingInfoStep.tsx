@@ -149,8 +149,16 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
   const programName = linkageData.programs.find((p) => p.id === selectedCourse?.program_id)?.name;
 
   const creditHint = (() => {
-    if (value.credit_hours_source === 'duration' && locked) {
-      return durationHours === null ? CREDIT_NOTE : `The event's length (${hoursLabel(durationHours)}). ${CREDIT_NOTE}`;
+    // A locked step holds the stored figure ('manual', since the save leaves
+    // it alone); it still says when that figure is the event's length.
+    if (
+      locked &&
+      !creditHoursFromCourse(value, selectedCourse) &&
+      durationHours !== null &&
+      value.credit_hours.trim() !== '' &&
+      Number(value.credit_hours) === durationHours
+    ) {
+      return `The event's length (${hoursLabel(durationHours)}). ${CREDIT_NOTE}`;
     }
     if (value.credit_hours_source === 'duration') {
       return durationHours === null
@@ -452,6 +460,7 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
               onChange(next);
             }}
             selectedCourse={selectedCourse}
+            readOnly={locked}
           />
         </fieldset>
 
