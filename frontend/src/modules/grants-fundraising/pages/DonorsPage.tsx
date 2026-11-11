@@ -16,6 +16,10 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -92,6 +96,27 @@ const EMPTY_FORM: NewDonorForm = {
   postalCode: '',
 };
 
+type DonorField = keyof NewDonorForm;
+
+/**
+ * `DonorBase` / `DonorUpdate` in schemas/grant.py, which takes camelCase and
+ * snake_case both (mapServerFieldErrors reads either). Ordered as on screen,
+ * so the first refusal takes focus.
+ */
+const DONOR_FIELDS: Record<DonorField, ServerFieldSpec & { id: string }> = {
+  firstName: { label: 'First name', maxLength: 100, id: 'donor-firstName' },
+  lastName: { label: 'Last name', maxLength: 100, id: 'donor-lastName' },
+  email: { label: 'Email', maxLength: 255, id: 'donor-email' },
+  phone: { label: 'Phone', maxLength: 20, id: 'donor-phone' },
+  donorType: { label: 'Donor type', id: 'donor-donorType' },
+  companyName: { label: 'Organization name', maxLength: 255, id: 'donor-companyName' },
+  addressLine1: { label: 'Address', maxLength: 255, id: 'donor-addressLine1' },
+  city: { label: 'City', maxLength: 100, id: 'donor-city' },
+  state: { label: 'State', maxLength: 50, id: 'donor-state' },
+  postalCode: { label: 'Postal code', maxLength: 20, id: 'donor-postalCode' },
+};
+const DONOR_ORDER = Object.keys(DONOR_FIELDS) as DonorField[];
+
 // ---------------------------------------------------------------------------
 // Shared Tailwind class constants
 // ---------------------------------------------------------------------------
@@ -122,6 +147,9 @@ export const DonorsPage: React.FC = () => {
   const [form, setForm] = useState<NewDonorForm>({ ...EMPTY_FORM });
   // The donor being edited, or null when the form adds a new one.
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [baseline, setBaseline] = useState<NewDonorForm>({ ...EMPTY_FORM });
+  const [errors, setErrors] = useState<Partial<Record<DonorField, string>>>({});
+  const [formError, setFormError] = useState<string | null>(null);
 
   // -----------------------------------------------------------------------
   // Data fetching
@@ -168,16 +196,41 @@ export const DonorsPage: React.FC = () => {
 
   const updateField = <K extends keyof NewDonorForm>(field: K, value: NewDonorForm[K]) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setErrors((prev) => {
+      if (!(field in prev)) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
   };
 
   const resetForm = () => {
     setForm({ ...EMPTY_FORM });
+    setBaseline({ ...EMPTY_FORM });
+    setErrors({});
+    setFormError(null);
     setEditingId(null);
     setShowForm(false);
   };
+  // Cancel asks before throwing typed changes away (forms review F-6). With the
+  // form closed there is nothing to ask about, so the guard is not armed.
+  const requestCancel = useDiscardGuard({
+    isDirty: showForm ? JSON.stringify(form) !== JSON.stringify(baseline) : undefined,
+    onClose: resetForm,
+  });
+
+  const showErrors = (next: Partial<Record<DonorField, string>>) => {
+    setErrors(next);
+    const first = firstRefused(DONOR_ORDER, next);
+    if (first) window.setTimeout(() => document.getElementById(DONOR_FIELDS[first].id)?.focus(), 0);
+  };
 
   const startEdit = (donor: Donor) => {
-    setForm(formFromDonor(donor));
+    const seeded = formFromDonor(donor);
+    setForm(seeded);
+    setBaseline(seeded);
+    setErrors({});
+    setFormError(null);
     setEditingId(donor.id);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -190,12 +243,19 @@ export const DonorsPage: React.FC = () => {
     // government or other donor may be recorded by its organization name
     // alone. The server applies the same rule.
     const hasPerson = Boolean(form.firstName.trim() && form.lastName.trim());
+    const problems: Partial<Record<DonorField, string>> = {};
     if (isIndividual && !hasPerson) {
-      toast.error("Enter the donor's first and last name");
-      return;
+      if (!form.firstName.trim()) problems.firstName = "Enter the donor's first name.";
+      if (!form.lastName.trim()) problems.lastName = "Enter the donor's last name.";
     }
     if (!isIndividual && !hasPerson && !form.companyName.trim()) {
-      toast.error("Enter the organization's name, or a contact's first and last name");
+      problems.companyName = "Enter the organization's name, or a contact's first and last name.";
+    }
+    setFormError(null);
+    // A new donor is not added until every field is fixed; an edit saves the
+    // rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!editingId && Object.keys(problems).length > 0) {
+      showErrors(problems);
       return;
     }
 
@@ -205,18 +265,34 @@ export const DonorsPage: React.FC = () => {
         // An update leaves an omitted key alone, so every field this form
         // owns is sent, and a box the manager emptied goes as null to clear
         // it rather than keep the old value behind a success toast.
-        await fundraisingService.updateDonor(editingId, {
-          firstName: blankToNull(form.firstName),
-          lastName: blankToNull(form.lastName),
-          email: blankToNull(form.email),
-          phone: blankToNull(form.phone),
-          donorType: form.donorType,
-          companyName: blankToNull(form.companyName),
-          addressLine1: blankToNull(form.addressLine1),
-          city: blankToNull(form.city),
-          state: blankToNull(form.state),
-          postalCode: blankToNull(form.postalCode),
+        const { refused } = await saveExceptRefused<DonorField, unknown>({
+          payload: {
+            firstName: blankToNull(form.firstName),
+            lastName: blankToNull(form.lastName),
+            email: blankToNull(form.email),
+            phone: blankToNull(form.phone),
+            donorType: form.donorType,
+            companyName: blankToNull(form.companyName),
+            addressLine1: blankToNull(form.addressLine1),
+            city: blankToNull(form.city),
+            state: blankToNull(form.state),
+            postalCode: blankToNull(form.postalCode),
+          },
+          refused: problems,
+          send: (body) => fundraisingService.updateDonor(editingId, body),
+          place: (err) => mapServerFieldErrors(err, DONOR_FIELDS),
         });
+        const first = firstRefused(DONOR_ORDER, refused);
+        if (first) {
+          // The list refreshes below the form, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          void loadDonors();
+          showErrors(refused);
+          setFormError(`Donor saved, except ${DONOR_FIELDS[first].label.toLowerCase()}. Fix it and save again.`);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as DonorField]]));
+          setBaseline({ ...form, ...keep });
+          return;
+        }
         toast.success('Donor updated');
         resetForm();
         void loadDonors();
@@ -238,13 +314,69 @@ export const DonorsPage: React.FC = () => {
       resetForm();
       void loadDonors();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, editingId ? 'Failed to update donor' : 'Failed to add donor'));
+      // A refusal lands on its field (forms review F-2); anything no field
+      // answers for is said at the top of the form, which stays open.
+      const mapped = mapServerFieldErrors(err, DONOR_FIELDS);
+      if (mapped) showErrors(mapped.fieldErrors);
+      const placed = mapped ? Object.keys(mapped.fieldErrors).length > 0 : false;
+      setFormError(
+        mapped?.unmatched.join(' ') ||
+          (placed ? null : getErrorMessage(err, editingId ? 'Failed to update donor' : 'Failed to add donor'))
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const isIndividual = form.donorType === 'individual';
+
+  /** One text control through FormField, wired to its error, limit and counter. */
+  const textField = (
+    key: Exclude<DonorField, 'donorType'>,
+    label: string,
+    options: {
+      required?: boolean;
+      type?: 'text' | 'email' | 'tel';
+      placeholder?: string;
+      autoComplete?: string;
+      icon?: React.ReactNode;
+    } = {}
+  ) => {
+    const spec = DONOR_FIELDS[key];
+    const input = (field: React.InputHTMLAttributes<HTMLInputElement> & { id: string }) => (
+      <input
+        {...field}
+        type={options.type ?? 'text'}
+        value={form[key]}
+        onChange={(e) => updateField(key, e.target.value)}
+        placeholder={options.placeholder}
+        autoComplete={options.autoComplete}
+        className={options.icon ? `${inputClass} pl-10` : inputClass}
+      />
+    );
+    return (
+      <FormField
+        id={spec.id}
+        label={label}
+        required={options.required}
+        error={errors[key]}
+        maxLength={spec.maxLength}
+        count={form[key].length}
+        labelClassName={labelClass}
+      >
+        {(field) =>
+          options.icon ? (
+            <div className="relative">
+              {options.icon}
+              {input(field)}
+            </div>
+          ) : (
+            input(field)
+          )
+        }
+      </FormField>
+    );
+  };
 
   // -----------------------------------------------------------------------
   // Render
@@ -260,7 +392,7 @@ export const DonorsPage: React.FC = () => {
         </div>
         {canManage && (
           <button
-            onClick={() => (showForm ? resetForm() : setShowForm(true))}
+            onClick={() => (showForm ? requestCancel() : setShowForm(true))}
             className="touch:min-h-11 inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
           >
             {showForm ? (
@@ -280,182 +412,73 @@ export const DonorsPage: React.FC = () => {
 
       {/* Inline Add Donor Form */}
       {canManage && showForm && (
-        <form onSubmit={(e) => void handleSubmit(e)} className="card space-y-4 p-6">
+        <form onSubmit={(e) => void handleSubmit(e)} noValidate className="card space-y-4 p-6">
           <h2 className="text-theme-text-primary text-lg font-semibold">{editingId ? 'Edit Donor' : 'New Donor'}</h2>
 
+          {formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {formError}
+            </p>
+          )}
+
           <div className="field-grid gap-4">
-            {/* First Name */}
-            <div>
-              <label htmlFor="donor-firstName" className={labelClass}>
-                {isIndividual ? 'First Name' : 'Contact First Name'}
-                {isIndividual && <span className="text-red-500"> *</span>}
-              </label>
-              <input
-                id="donor-firstName"
-                type="text"
-                value={form.firstName}
-                onChange={(e) => updateField('firstName', e.target.value)}
-                placeholder="First name"
-                className={inputClass}
-                required={isIndividual}
-              />
-            </div>
+            {textField('firstName', isIndividual ? 'First Name' : 'Contact First Name', {
+              required: isIndividual,
+              placeholder: 'First name',
+              autoComplete: 'off',
+            })}
+            {textField('lastName', isIndividual ? 'Last Name' : 'Contact Last Name', {
+              required: isIndividual,
+              placeholder: 'Last name',
+              autoComplete: 'off',
+            })}
+            {textField('email', 'Email', {
+              type: 'email',
+              placeholder: 'email@example.com',
+              icon: <Mail className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />,
+            })}
+            {textField('phone', 'Phone', {
+              type: 'tel',
+              placeholder: '(555) 123-4567',
+              icon: <Phone className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />,
+            })}
 
-            {/* Last Name */}
-            <div>
-              <label htmlFor="donor-lastName" className={labelClass}>
-                {isIndividual ? 'Last Name' : 'Contact Last Name'}
-                {isIndividual && <span className="text-red-500"> *</span>}
-              </label>
-              <input
-                id="donor-lastName"
-                type="text"
-                value={form.lastName}
-                onChange={(e) => updateField('lastName', e.target.value)}
-                placeholder="Last name"
-                className={inputClass}
-                required={isIndividual}
-              />
-            </div>
-
-            {/* Email */}
-            <div>
-              <label htmlFor="donor-email" className={labelClass}>
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-                <input
-                  id="donor-email"
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => updateField('email', e.target.value)}
-                  placeholder="email@example.com"
-                  className={`${inputClass} pl-10`}
-                />
-              </div>
-            </div>
-
-            {/* Phone */}
-            <div>
-              <label htmlFor="donor-phone" className={labelClass}>
-                Phone
-              </label>
-              <div className="relative">
-                <Phone className="text-theme-text-secondary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-                <input
-                  id="donor-phone"
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => updateField('phone', e.target.value)}
-                  placeholder="(555) 123-4567"
-                  className={`${inputClass} pl-10`}
-                />
-              </div>
-            </div>
-
-            {/* Donor Type */}
-            <div>
-              <label htmlFor="donor-donorType" className={labelClass}>
-                Donor Type
-              </label>
-              <select
-                id="donor-donorType"
-                value={form.donorType}
-                onChange={(e) => updateField('donorType', e.target.value as DonorType)}
-                className={selectClass}
-              >
-                {DONOR_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <FormField
+              id={DONOR_FIELDS.donorType.id}
+              label="Donor Type"
+              error={errors.donorType}
+              labelClassName={labelClass}
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  value={form.donorType}
+                  onChange={(e) => updateField('donorType', e.target.value as DonorType)}
+                  className={selectClass}
+                >
+                  {DONOR_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
 
             {/* Organization name: every donor type but an individual */}
-            {!isIndividual && (
-              <div>
-                <label htmlFor="donor-companyName" className={labelClass}>
-                  Organization Name
-                </label>
-                <input
-                  id="donor-companyName"
-                  type="text"
-                  value={form.companyName}
-                  onChange={(e) => updateField('companyName', e.target.value)}
-                  placeholder="Business, foundation or agency name"
-                  className={inputClass}
-                />
-              </div>
-            )}
-
-            {/* Address Line 1 */}
-            <div>
-              <label htmlFor="donor-addressLine1" className={labelClass}>
-                Address
-              </label>
-              <input
-                id="donor-addressLine1"
-                type="text"
-                value={form.addressLine1}
-                onChange={(e) => updateField('addressLine1', e.target.value)}
-                placeholder="Street address"
-                className={inputClass}
-              />
-            </div>
-
-            {/* City */}
-            <div>
-              <label htmlFor="donor-city" className={labelClass}>
-                City
-              </label>
-              <input
-                id="donor-city"
-                type="text"
-                value={form.city}
-                onChange={(e) => updateField('city', e.target.value)}
-                placeholder="City"
-                className={inputClass}
-              />
-            </div>
-
-            {/* State */}
-            <div>
-              <label htmlFor="donor-state" className={labelClass}>
-                State
-              </label>
-              <input
-                id="donor-state"
-                type="text"
-                value={form.state}
-                onChange={(e) => updateField('state', e.target.value)}
-                placeholder="State"
-                className={inputClass}
-              />
-            </div>
-
-            {/* Postal Code */}
-            <div>
-              <label htmlFor="donor-postalCode" className={labelClass}>
-                Postal Code
-              </label>
-              <input
-                id="donor-postalCode"
-                type="text"
-                value={form.postalCode}
-                onChange={(e) => updateField('postalCode', e.target.value)}
-                placeholder="ZIP / Postal code"
-                className={inputClass}
-              />
-            </div>
+            {!isIndividual &&
+              textField('companyName', 'Organization Name', { placeholder: 'Business, foundation or agency name' })}
+            {textField('addressLine1', 'Address', { placeholder: 'Street address', autoComplete: 'off' })}
+            {textField('city', 'City', { placeholder: 'City', autoComplete: 'off' })}
+            {textField('state', 'State', { placeholder: 'State', autoComplete: 'off' })}
+            {textField('postalCode', 'Postal Code', { placeholder: 'ZIP / Postal code', autoComplete: 'off' })}
           </div>
 
           {/* Form Actions */}
           <div className="flex items-center justify-end gap-3 pt-2">
             <button
               type="button"
-              onClick={resetForm}
+              onClick={requestCancel}
               className="border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
             >
               Cancel
