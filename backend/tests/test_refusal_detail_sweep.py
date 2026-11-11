@@ -1526,6 +1526,10 @@ JOINS_NOT_SENT_THROUGH_SAFE_ERROR_DETAIL = ("app/schemas/",)
 #: with the reason. Keyed by file and the joined expression as written, so a
 #: moved line does not stale the entry and a changed expression does.
 BOUNDED_JOINS = {
+    ("app/services/finance_budget_request_service.py", "fields.values()"): (
+        "BudgetRequestIncompleteError: at most two fixed sentences, one each "
+        "for requested_amount and justification"
+    ),
     ("app/models/grant.py", "allowed"): (
         "allowed_next_statuses(): a subset of the ApplicationStatus enum"
     ),
