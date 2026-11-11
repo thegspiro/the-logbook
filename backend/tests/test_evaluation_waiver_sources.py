@@ -34,8 +34,11 @@ from app.models.attendance_waiver import (
 )
 from app.models.user import MemberServicePeriod, User
 from app.schemas.evaluation import DataBlock
+from app.services import attendance_waiver_service as engine
+from app.services.attendance_waiver_service import AttendanceWaiverService
 from app.services.evaluation_data_sources import DATA_SOURCES_BY_KEY
 from tests.test_evaluation_workflow import _org, _period, _template, _user
+from tests.waiver_request_support import load, make_meeting_event, set_meeting_policy
 
 pytestmark = [pytest.mark.integration]
 
@@ -115,7 +118,7 @@ async def dept(db_session: AsyncSession) -> _Dept:
     )
     evaluator = await _user(db_session, org, ["evaluations.conduct"])
     member = await _user(db_session, org, [])
-    officer = await _user(db_session, org, ["training.manage"])
+    officer = await _user(db_session, org, ["training.manage", "meetings.manage"])
     chief = await _user(db_session, org, [])
     period = await _period(db_session, org)
     return _Dept(db_session, org, manager, evaluator, member, officer, chief, period)
@@ -137,6 +140,7 @@ async def _request(
     title: str = "Pump drill",
     category: Optional[str] = None,
     event_key: Optional[str] = None,
+    asked_later_by: timedelta = timedelta(0),
 ) -> AttendanceWaiverRequest:
     """A request written as the request engine writes one: the submission
     and each later step in the log, the deciding step on the request, and
@@ -169,7 +173,7 @@ async def _request(
         ),
         category=category,
         reason=REASON,
-        submitted_at=_at(day, 8) - timedelta(days=2),
+        submitted_at=_at(day, 8) - timedelta(days=2) + asked_later_by,
         decided_by=decided[-1][1].id if decided and decided[-1][1] else None,
         decided_at=_at(day, 9) - timedelta(days=1) if decided else None,
         chief_override=any(
@@ -189,7 +193,7 @@ async def _request(
                 note=None if action == AttendanceWaiverAction.SUBMITTED else NOTE,
                 # Every step in the same second, so the order rests on the
                 # lifecycle rather than on the clock.
-                created_at=_at(day, 8) - timedelta(days=2),
+                created_at=_at(day, 8) - timedelta(days=2) + asked_later_by,
             )
         )
     await dept.db.flush()
@@ -321,6 +325,8 @@ class TestWaiverSources:
             steps=((AttendanceWaiverAction.APPROVED, dept.officer),),
             status=AttendanceWaiverStatus.APPROVED,
             category="Work",
+            # Asked again after withdrawing: a resubmission is always later.
+            asked_later_by=timedelta(hours=1),
         )
 
         summary, history = _training(await _figures(dept, make_client))
@@ -517,6 +523,48 @@ class TestWaiverSources:
             assert "cardiology" not in text
         # The category is the department's own label and is shown.
         assert "Medical" in json.dumps(detail["data"])
+
+
+class TestRequestsTheEngineWrites:
+    async def test_a_meeting_request_written_by_the_engine_is_read(
+        self, dept: _Dept, make_client: ClientFactory, monkeypatch
+    ):
+        """The meeting workflow's own writes, not hand-built rows: the
+        engine's submission and approval are what the sources read."""
+        meeting = await make_meeting_event(
+            dept.db,
+            dept.org,
+            _at(date(2025, 6, 10), 19),
+            title="June business meeting",
+        )
+        await set_meeting_policy(dept.db, dept.org)
+        monkeypatch.setattr(engine, "_now", lambda: _at(date(2025, 6, 1), 12))
+        service = AttendanceWaiverService(dept.db, MEETING)
+        request = await service.submit(
+            dept.org, await load(dept.db, dept.member.id), meeting, None, REASON
+        )
+        await service.approve(
+            dept.org, await load(dept.db, dept.officer.id), request.id, note=NOTE
+        )
+
+        detail = await _figures(dept, make_client)
+
+        summary = detail["data"]["meetings.waivers_summary"]
+        assert summary["value"] == 1
+        assert summary["approved"] == 1
+        (line,) = detail["data"]["meetings.waiver_history"]["value"]
+        assert line["event_title"] == "June business meeting"
+        assert line["session_date"] == "2025-06-10"
+        assert line["outcome"] == f"approved by {dept.officer.display_name}"
+        assert [step["action"] for step in line["history"]] == [
+            "submitted",
+            "approved",
+        ]
+        # The training figures do not see the meeting workflow's request.
+        assert detail["data"]["training.session_waivers_summary"]["value"] == 0
+        text = json.dumps(detail)
+        assert "SECRET-REASON" not in text
+        assert "SECRET-NOTE" not in text
 
 
 class TestThePreview:
