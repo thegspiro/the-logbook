@@ -1770,7 +1770,10 @@ SAMPLE_CONTEXT.update(
 # The sample links' placeholder host. Only the host is replaced: each path is
 # the one the real sender builds (``/events/{id}``, ``/training/approve/…``),
 # so a test link lands on the right screen of this deployment.
-_SAMPLE_LINK_HOST = re.compile(r"^https://example\.(?:com|org)(?=/|$)")
+# Matched wherever a link starts, not only at the start of a value: the
+# waiver request's buttons and plain-text links carry two links each inside
+# markup or prose. The lookbehind keeps it from matching inside a longer URL.
+_SAMPLE_LINK_HOST = re.compile(r"(?<![\w./:@-])https://example\.(?:com|org)(?=/|$)")
 
 
 # Who a test email is addressed to, per template type: {variable: form}.
@@ -1948,6 +1951,12 @@ TEST_SAMPLE_DATES.update(
         for key, days in _evaluation_templates.SAMPLE_DUE_DAYS.items()
     }
 )
+TEST_SAMPLE_DATES.update(
+    {
+        key: {"session_date": (days, None, _strf(_DATE))}
+        for key, days in _waiver_templates.SAMPLE_SESSION_DAYS.items()
+    }
+)
 
 
 # Dates that sit inside a prose value rather than a variable of their own:
@@ -1960,6 +1969,11 @@ TEST_SAMPLE_PROSE_DATES: Dict[str, Dict[str, int]] = {
     "storefront_vendor_order_placed": {"window_extra_html": 30},
     # The completion date of the record that was voided.
     "training_record_voided": {"details_html": -30, "details_text": -30},
+    # The waiver notices' summary quotes the session's date.
+    **{
+        key: {"summary": days}
+        for key, days in _waiver_templates.SAMPLE_SESSION_DAYS.items()
+    },
 }
 
 _PROSE_DATE = re.compile(

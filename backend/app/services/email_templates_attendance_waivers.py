@@ -331,6 +331,18 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
     EmailTemplateType.MEETING_WAIVER_WITHDRAWN.value: _MEETING_SAMPLES["withdrawn"],
 }
 
+# Days from today a test send places the session at, as the real notice
+# would: ahead for a request or a withdrawal, a week ago for a decision made
+# within the after-the-session deadlines. The summary quotes the same date.
+SAMPLE_SESSION_DAYS: Dict[str, int] = {
+    EmailTemplateType.SESSION_WAIVER_REQUESTED.value: 9,
+    EmailTemplateType.SESSION_WAIVER_DECIDED.value: -3,
+    EmailTemplateType.SESSION_WAIVER_WITHDRAWN.value: 9,
+    EmailTemplateType.MEETING_WAIVER_REQUESTED.value: 9,
+    EmailTemplateType.MEETING_WAIVER_DECIDED.value: -3,
+    EmailTemplateType.MEETING_WAIVER_WITHDRAWN.value: 9,
+}
+
 # The test send greets the admin it goes to.
 TEST_RECIPIENT_FIELDS: Dict[str, Dict[str, str]] = {
     key: {"recipient_name": "full"} for key in SAMPLE_CONTEXT

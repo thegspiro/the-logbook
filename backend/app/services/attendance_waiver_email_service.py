@@ -151,7 +151,9 @@ def review_buttons_html(request_id: str) -> str:
 
 
 def _day(value: date) -> str:
-    return f"{value:%B} {value.day}, {value.year}"
+    # The format every other notice prints a date in (email_template_service
+    # _DATE), which is also what a test send of these templates fills in.
+    return value.strftime("%B %d, %Y")
 
 
 @dataclass
