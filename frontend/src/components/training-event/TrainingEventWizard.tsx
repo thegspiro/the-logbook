@@ -618,9 +618,14 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
         </ol>
       </nav>
 
-      {/* Under 768px the navigation is a bar fixed above the bottom nav, so
-          the card leaves room for it to scroll clear. A real form: Enter in a
-          field is Next, checked as Next is, and on Review it saves. */}
+      {/* A real form: Enter in a field is Next, checked as Next is, and on
+          Review it saves. Under 768px the navigation is a bar fixed above the
+          bottom nav, and the card is the steps alone: `.card`'s backdrop
+          filter makes it the containing block of anything fixed inside it,
+          which pinned the bar to the card's bottom edge, over the step's last
+          control, instead of to the viewport. The form's own bottom padding
+          lets that control scroll clear of the bar. From 768px the form is
+          the card and the navigation sits at its foot. */}
       <form
         noValidate
         onSubmit={(e) => {
@@ -628,192 +633,196 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
           if (step < REVIEW) handleNext();
           else void handleSubmit();
         }}
-        className="card space-y-8 p-4 max-md:pb-24 sm:p-8"
+        className="md:card space-y-8 max-md:pb-24 md:p-8"
       >
-        <div className="flex items-center justify-between gap-3">
-          <p id={STEP_HEADING_ID} tabIndex={-1} className="text-theme-text-muted text-sm focus:outline-hidden">
-            Step {step + 1} of {STEPS.length} · {stepTitle}
-          </p>
-          {/* The phone's Cancel: the fixed bar holds only Previous and Next. */}
-          <button
-            type="button"
-            onClick={() => {
-              void requestCancel();
-            }}
-            className="touch-target-phone text-theme-text-secondary text-sm font-medium underline md:hidden"
-          >
-            Cancel
-          </button>
-        </div>
+        <div className="max-md:card space-y-8 p-4 sm:p-8 md:p-0">
+          <div className="flex items-center justify-between gap-3">
+            <p id={STEP_HEADING_ID} tabIndex={-1} className="text-theme-text-muted text-sm focus:outline-hidden">
+              Step {step + 1} of {STEPS.length} · {stepTitle}
+            </p>
+            {/* The phone's Cancel: the fixed bar holds only Previous and Next. */}
+            <button
+              type="button"
+              onClick={() => {
+                void requestCancel();
+              }}
+              className="touch-target-phone text-theme-text-secondary text-sm font-medium underline md:hidden"
+            >
+              Cancel
+            </button>
+          </div>
 
-        <NoticesSection model={model} show="error" />
+          <NoticesSection model={model} show="error" />
 
-        {step === DETAILS && (
-          <>
-            <DetailsSection
-              model={model}
-              hideTypePicker={typeLocked}
-              typeFirst
-              typeHintId={TYPE_HINT_ID}
-              typeHint={
-                typeHint !== undefined ? (
-                  typeHint
-                ) : (
-                  <p id={TYPE_HINT_ID} className="text-theme-text-muted mt-2 text-sm">
-                    Training uses this step-by-step form. Pick another type to go back to the single-page form; your
-                    entries carry over.
-                  </p>
-                )
-              }
-              beforeTitle={
-                typeLocked && (
-                  <div>
-                    <span className="form-label">Event Type</span>
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${getEventTypeBadgeColor(formData.event_type)}`}
-                    >
-                      Training
-                    </span>
-                    <p className="text-theme-text-muted mt-1 text-sm">{typeNote}</p>
-                  </div>
-                )
-              }
-              titlePlaceholder="e.g., CPR/AED Renewal Training"
-              titleHint="Becomes the event title, and the course name when no course is chosen."
-              categoryLabel="Event Category"
-              categoryHint="The department's own event categories."
-              markOptional
-            />
-            <hr className="border-theme-surface-border" />
-            <ScheduleSection
-              model={model}
-              showRecurrence={!editing}
-              rollingHint="Each new occurrence copies the training details and attendance links (set on the next step) from the latest one."
-            />
-            <hr className="border-theme-surface-border" />
-            <LocationSection model={model} variant="training" />
-          </>
-        )}
-
-        {step === TRAINING && (
-          <TrainingInfoStep
-            value={training}
-            onChange={updateTraining}
-            onPickCourse={pickCourse}
-            errors={trainingErrors}
-            eventTitle={formData.title}
-            durationHours={durationHours}
-            courses={courses}
-            members={members}
-            linkageData={linkageData}
-            membershipTypes={model.membershipTypes}
-            isSeries={model.isRecurring}
-            access={trainingAccess}
-            readOnlyNotice={readOnlyNotice}
-            storedCourseName={storedCourseName}
-            coursesLoaded={coursesLoaded}
-          />
-        )}
-
-        {step === SETTINGS && (
-          <>
-            <h2 className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
-              <SlidersHorizontal className="h-5 w-5 text-red-700" aria-hidden="true" />
-              <span>Settings</span>
-            </h2>
-            {/* Opens on All members: ticking Mandatory with nothing narrower
-                chosen means everyone, said on screen rather than refused,
-                unless Counts toward attendance suggests who. */}
-            <AttendanceSection
-              model={prefill.attendanceModel}
-              scopeOnTick="all"
-              typesInRow
-              scopeNote={
-                prefill.note && (
-                  <MandatoryPrefillNote
-                    note={prefill.note}
-                    membershipTypes={model.membershipTypes}
-                    mandatoryScope={model.mandatoryScope}
-                  />
-                )
-              }
-              scopeNotePlacement={prefill.note?.kind === 'not-filled' ? 'before' : 'after'}
-            />
-            <hr className="border-theme-surface-border" />
-            <RsvpSection
-              model={model}
-              variant="steps"
-              maxAttendeesFromCourse={
-                Boolean(selectedCourse?.max_participants) && formData.max_attendees === selectedCourse?.max_participants
-              }
-            />
-            <hr className="border-theme-surface-border" />
-            <CheckInSection
-              model={model}
-              variant="steps"
-              intro={
-                <div className="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/10 p-4">
-                  <QrCode className="mt-0.5 h-5 w-5 shrink-0 text-green-700" aria-hidden="true" />
-                  <div>
-                    <p className="font-semibold text-green-800 dark:text-green-300">QR Code Check-In</p>
-                    <p className="text-theme-text-secondary text-sm">
-                      A QR code will be automatically generated for this training. Members can scan it to check in and
-                      verify their attendance.
+          {step === DETAILS && (
+            <>
+              <DetailsSection
+                model={model}
+                hideTypePicker={typeLocked}
+                typeFirst
+                typeHintId={TYPE_HINT_ID}
+                typeHint={
+                  typeHint !== undefined ? (
+                    typeHint
+                  ) : (
+                    <p id={TYPE_HINT_ID} className="text-theme-text-muted mt-2 text-sm">
+                      Training uses this step-by-step form. Pick another type to go back to the single-page form; your
+                      entries carry over.
                     </p>
-                  </div>
-                </div>
-              }
-            />
-            <hr className="border-theme-surface-border" />
-            <NotificationsSection model={model} variant="steps" />
-          </>
-        )}
+                  )
+                }
+                beforeTitle={
+                  typeLocked && (
+                    <div>
+                      <span className="form-label">Event Type</span>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${getEventTypeBadgeColor(formData.event_type)}`}
+                      >
+                        Training
+                      </span>
+                      <p className="text-theme-text-muted mt-1 text-sm">{typeNote}</p>
+                    </div>
+                  )
+                }
+                titlePlaceholder="e.g., CPR/AED Renewal Training"
+                titleHint="Becomes the event title, and the course name when no course is chosen."
+                categoryLabel="Event Category"
+                categoryHint="The department's own event categories."
+                markOptional
+              />
+              <hr className="border-theme-surface-border" />
+              <ScheduleSection
+                model={model}
+                showRecurrence={!editing}
+                rollingHint="Each new occurrence copies the training details and attendance links (set on the next step) from the latest one."
+              />
+              <hr className="border-theme-surface-border" />
+              <LocationSection model={model} variant="training" />
+            </>
+          )}
 
-        {step === REVIEW && (
-          <>
-            <TrainingReviewStep
-              model={model}
-              training={training}
+          {step === TRAINING && (
+            <TrainingInfoStep
+              value={training}
+              onChange={updateTraining}
+              onPickCourse={pickCourse}
+              errors={trainingErrors}
+              eventTitle={formData.title}
               durationHours={durationHours}
               courses={courses}
+              members={members}
               linkageData={linkageData}
-              onEdit={(target) => {
-                clearAllErrors();
-                goTo(REVIEW_TARGET_STEP[target]);
-              }}
-              editing={editing}
-              original={originalTraining}
-              scopeChoice={scopeChoice}
-              organizerNames={organizerNames}
+              membershipTypes={model.membershipTypes}
+              isSeries={model.isRecurring}
+              access={trainingAccess}
+              readOnlyNotice={readOnlyNotice}
               storedCourseName={storedCourseName}
-              unmapped={formData.is_mandatory && prefill.note ? prefill.note.unmapped : []}
-              seriesOccurrence={seriesOccurrence}
+              coursesLoaded={coursesLoaded}
             />
-            <AttachmentsSection existingAttachments={model.existingAttachments} />
-            {model.existingAttachments.length > 0 && (
-              <p className="text-theme-text-muted text-sm">Attachments are managed on the event page.</p>
-            )}
-            <div>
-              <label className="text-theme-text-secondary mobile-touch-target inline-flex cursor-pointer items-center justify-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={formData.is_draft || false}
-                  onChange={(e) => model.setIsDraft(e.target.checked)}
-                  aria-describedby="training-draft-hint"
-                  className="form-checkbox"
-                />
-                Save as Draft
-              </label>
-              <p id="training-draft-hint" className="text-theme-text-muted text-sm">
-                Members don&apos;t see a draft. Publish it later from the event page.
-              </p>
-            </div>
-          </>
-        )}
+          )}
+
+          {step === SETTINGS && (
+            <>
+              <h2 className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
+                <SlidersHorizontal className="h-5 w-5 text-red-700" aria-hidden="true" />
+                <span>Settings</span>
+              </h2>
+              {/* Opens on All members: ticking Mandatory with nothing narrower
+                chosen means everyone, said on screen rather than refused,
+                unless Counts toward attendance suggests who. */}
+              <AttendanceSection
+                model={prefill.attendanceModel}
+                scopeOnTick="all"
+                typesInRow
+                scopeNote={
+                  prefill.note && (
+                    <MandatoryPrefillNote
+                      note={prefill.note}
+                      membershipTypes={model.membershipTypes}
+                      mandatoryScope={model.mandatoryScope}
+                    />
+                  )
+                }
+                scopeNotePlacement={prefill.note?.kind === 'not-filled' ? 'before' : 'after'}
+              />
+              <hr className="border-theme-surface-border" />
+              <RsvpSection
+                model={model}
+                variant="steps"
+                maxAttendeesFromCourse={
+                  Boolean(selectedCourse?.max_participants) &&
+                  formData.max_attendees === selectedCourse?.max_participants
+                }
+              />
+              <hr className="border-theme-surface-border" />
+              <CheckInSection
+                model={model}
+                variant="steps"
+                intro={
+                  <div className="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/10 p-4">
+                    <QrCode className="mt-0.5 h-5 w-5 shrink-0 text-green-700" aria-hidden="true" />
+                    <div>
+                      <p className="font-semibold text-green-800 dark:text-green-300">QR Code Check-In</p>
+                      <p className="text-theme-text-secondary text-sm">
+                        A QR code will be automatically generated for this training. Members can scan it to check in and
+                        verify their attendance.
+                      </p>
+                    </div>
+                  </div>
+                }
+              />
+              <hr className="border-theme-surface-border" />
+              <NotificationsSection model={model} variant="steps" />
+            </>
+          )}
+
+          {step === REVIEW && (
+            <>
+              <TrainingReviewStep
+                model={model}
+                training={training}
+                durationHours={durationHours}
+                courses={courses}
+                linkageData={linkageData}
+                onEdit={(target) => {
+                  clearAllErrors();
+                  goTo(REVIEW_TARGET_STEP[target]);
+                }}
+                editing={editing}
+                original={originalTraining}
+                scopeChoice={scopeChoice}
+                organizerNames={organizerNames}
+                storedCourseName={storedCourseName}
+                unmapped={formData.is_mandatory && prefill.note ? prefill.note.unmapped : []}
+                seriesOccurrence={seriesOccurrence}
+              />
+              <AttachmentsSection existingAttachments={model.existingAttachments} />
+              {model.existingAttachments.length > 0 && (
+                <p className="text-theme-text-muted text-sm">Attachments are managed on the event page.</p>
+              )}
+              <div>
+                <label className="text-theme-text-secondary mobile-touch-target inline-flex cursor-pointer items-center justify-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_draft || false}
+                    onChange={(e) => model.setIsDraft(e.target.checked)}
+                    aria-describedby="training-draft-hint"
+                    className="form-checkbox"
+                  />
+                  Save as Draft
+                </label>
+                <p id="training-draft-hint" className="text-theme-text-muted text-sm">
+                  Members don&apos;t see a draft. Publish it later from the event page.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* === Navigation === inside the card from 768px; under it, a bar
             fixed above the bottom nav (action-bar-safe clears it and the
-            home indicator, pitfall #21), Previous one share and Next two. */}
+            home indicator, pitfall #21), Previous one share and Next two.
+            Outside the phone card, so `fixed` resolves to the viewport. */}
         <div
           role="group"
           aria-label="Step navigation"
