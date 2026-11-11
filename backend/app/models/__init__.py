@@ -43,6 +43,7 @@ from app.models.apparatus import (
 )
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
+    AttendanceWaiverAttachment,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
     AttendanceWaiverStatus,
@@ -636,6 +637,7 @@ __all__ = [
     "AnalyticsEvent",
     # Attendance waiver requests
     "AttendanceWaiverAction",
+    "AttendanceWaiverAttachment",
     "AttendanceWaiverRequest",
     "AttendanceWaiverRequestAction",
     "AttendanceWaiverStatus",

@@ -39,6 +39,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from app.models.attendance_waiver import AttendanceWaiverAttachment
 from app.models.document import Document
 from app.models.email_template import EmailAttachment, EmailTemplate
 from app.models.evaluation import EvaluationDocument
@@ -402,6 +403,30 @@ async def collect_references(
                 row.file_path,
             )
         )
+    # Waiver request documents, born org-first like the two above.
+    for row in (
+        await db.execute(
+            scoped(
+                select(
+                    AttendanceWaiverAttachment.id,
+                    AttendanceWaiverAttachment.organization_id,
+                    AttendanceWaiverAttachment.request_id,
+                    AttendanceWaiverAttachment.file_path,
+                ),
+                AttendanceWaiverAttachment.organization_id,
+            )
+        )
+    ).all():
+        refs.append(
+            Reference(
+                "attendance_waiver_attachments",
+                str(row.id),
+                str(row.organization_id),
+                StorageArea.ATTENDANCE_WAIVERS,
+                str(row.request_id),
+                row.file_path,
+            )
+        )
     return refs
 
 
@@ -490,6 +515,7 @@ _SCALAR_TABLES: dict[str, tuple[type[Any], str]] = {
     "email_attachments": (EmailAttachment, "storage_path"),
     "minutes_attachments": (MinutesAttachment, "file_path"),
     "evaluation_documents": (EvaluationDocument, "file_path"),
+    "attendance_waiver_attachments": (AttendanceWaiverAttachment, "file_path"),
 }
 
 

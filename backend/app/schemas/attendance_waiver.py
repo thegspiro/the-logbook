@@ -40,6 +40,16 @@ MAX_TEXT_LENGTH = 2000
 DeadlinePreset = Literal["before_start", "24h_after_end", "7d_after_end"]
 CapPeriod = Literal["calendar_year", "rolling_12_months"]
 ReasonTextMode = Literal["off", "optional", "required"]
+AttachmentMode = Literal["off", "optional", "required"]
+
+# Owner decisions, 2026-11-10: PDF, JPEG, PNG or HEIC; 10 MB each; at most
+# three per request; kept 365 days after the decision unless the department
+# sets otherwise. The upload rules themselves are in
+# app/services/attendance_waiver_attachments.py.
+MAX_ATTACHMENTS = 3
+MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024
+DEFAULT_ATTACHMENT_RETENTION_DAYS = 365
+MAX_ATTACHMENT_RETENTION_DAYS = 3650
 
 
 class AttendanceWaiverPolicy(BaseModel):
@@ -47,8 +57,13 @@ class AttendanceWaiverPolicy(BaseModel):
 
     ``cap`` None means no cap. ``approver_position_ids`` empty means requests
     go straight to the fallback chain (the Chief, then training managers).
-    There is deliberately no attachment setting yet: nothing would read it
-    (pitfall #19).
+
+    ``attachment`` says whether a member may, or must, file a document with
+    the request. ``attachment_retention_days`` is how long the files are kept
+    after a request is closed; the retention task reads it whatever
+    ``attachment`` says now, so turning attachments off does not keep the
+    files already filed. A policy stored before these fields existed reads
+    them at their defaults: attachments off, a year's retention.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -60,6 +75,12 @@ class AttendanceWaiverPolicy(BaseModel):
     categories: List[str] = Field(default_factory=list)
     category_required: bool = False
     reason_text: ReasonTextMode = "optional"
+    attachment: AttachmentMode = "off"
+    attachment_retention_days: int = Field(
+        default=DEFAULT_ATTACHMENT_RETENTION_DAYS,
+        ge=1,
+        le=MAX_ATTACHMENT_RETENTION_DAYS,
+    )
     approver_position_ids: List[str] = Field(default_factory=list)
 
     @field_validator("categories")
@@ -166,6 +187,9 @@ class AttendanceWaiverEligibilityResponse(UTCResponseBase):
     categories: List[str]
     category_required: bool
     reason_text: ReasonTextMode
+    attachment: AttachmentMode
+    attachment_max_count: int = MAX_ATTACHMENTS
+    attachment_max_bytes: int = MAX_ATTACHMENT_BYTES
     existing_request_id: Optional[str] = None
     existing_request_status: Optional[str] = None
 
@@ -177,6 +201,18 @@ class AttendanceWaiverActionResponse(UTCResponseBase):
     actor_name: Optional[str] = None
     note: Optional[str] = None
     created_at: datetime
+
+
+class AttendanceWaiverAttachmentResponse(UTCResponseBase):
+    """One filed document. ``filename`` is the neutral download name; the
+    uploader's own filename is never kept."""
+
+    id: str
+    ordinal: int
+    filename: str
+    mime_type: str
+    file_size: int
+    uploaded_at: datetime
 
 
 class AttendanceWaiverRequestResponse(UTCResponseBase):
@@ -205,6 +241,11 @@ class AttendanceWaiverRequestResponse(UTCResponseBase):
     can_withdraw: bool = False
     can_decide: bool = False
     can_override: bool = False
+    # Whether the viewer may file another document now: the member, while the
+    # request is pending, the policy takes attachments and fewer than the
+    # limit are filed.
+    can_attach: bool = False
+    attachments: List[AttendanceWaiverAttachmentResponse] = Field(default_factory=list)
     actions: List[AttendanceWaiverActionResponse] = Field(default_factory=list)
 
 

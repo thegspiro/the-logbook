@@ -154,6 +154,8 @@ class TestPolicySchema:
             "categories": [],
             "category_required": False,
             "reason_text": "optional",
+            "attachment": "off",
+            "attachment_retention_days": 365,
             "approver_position_ids": [],
         }
 

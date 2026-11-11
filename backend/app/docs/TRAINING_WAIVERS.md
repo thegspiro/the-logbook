@@ -215,13 +215,15 @@ shipped first; the screens follow.
 policy saved, or one that cannot be read, members cannot ask and nothing else
 changes. The policy chooses:
 
-| Setting                 | Choices                                                                 |
-| ----------------------- | ----------------------------------------------------------------------- |
-| `deadline`              | before the session starts; 24 hours after it ends; 7 days after it ends |
-| `cap` / `cap_period`    | no cap, or 1–365 approved requests per calendar year or any 12 months   |
-| `categories`            | up to 20 labels a member picks from, optionally required                |
-| `reason_text`           | off, optional or required                                               |
-| `approver_position_ids` | the positions whose holders decide                                      |
+| Setting                     | Choices                                                                 |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `deadline`                  | before the session starts; 24 hours after it ends; 7 days after it ends |
+| `cap` / `cap_period`        | no cap, or 1–365 approved requests per calendar year or any 12 months   |
+| `categories`                | up to 20 labels a member picks from, optionally required                |
+| `reason_text`               | off, optional or required                                               |
+| `attachment`                | supporting documents off, optional or required (default off)            |
+| `attachment_retention_days` | days a request's documents are kept once it is closed (default 365)     |
+| `approver_position_ids`     | the positions whose holders decide                                      |
 
 **Who may ask.** A member may ask about a training session that is not
 cancelled and is linked to a session-attendance requirement that applies to
@@ -258,19 +260,41 @@ included, and the decision log of each, notes included; it does not carry
 notes the member wrote as a decider on anyone else's request. Anonymizing a
 departed member clears the reason and the notes; the request itself is kept.
 
-| Method | Endpoint                                          | Who                                           |
-| ------ | ------------------------------------------------- | --------------------------------------------- |
-| `GET`  | `/api/v1/training/waivers/requests/policy`        | Any authenticated user                        |
-| `PUT`  | `/api/v1/training/waivers/requests/policy`        | `training.manage`                             |
-| `GET`  | `/api/v1/training/waivers/requests/eligibility`   | Any authenticated user, about themselves      |
-| `POST` | `/api/v1/training/waivers/requests`               | Any authenticated user, for themselves        |
-| `GET`  | `/api/v1/training/waivers/requests/mine`          | Any authenticated user                        |
-| `GET`  | `/api/v1/training/waivers/requests`               | The requests the caller may decide or decided |
-| `GET`  | `/api/v1/training/waivers/requests/{id}`          | The member, or someone who may decide         |
-| `POST` | `/api/v1/training/waivers/requests/{id}/withdraw` | The member, while pending                     |
-| `POST` | `/api/v1/training/waivers/requests/{id}/approve`  | Someone who may decide, while pending         |
-| `POST` | `/api/v1/training/waivers/requests/{id}/deny`     | Someone who may decide, while pending         |
-| `POST` | `/api/v1/training/waivers/requests/{id}/override` | A Chief, on a denied request                  |
+**Supporting documents.** When the policy's `attachment` is `optional` or
+`required`, a member may file up to three documents with a request: PDF,
+JPEG, PNG or HEIC, 10 MB each, judged by the file's contents, not its name.
+They can be filed with the request (`POST .../with-attachments`, multipart)
+or added while it is pending; nothing is added once it is decided or
+withdrawn. Under `required`, a request without one is refused. Only the
+member and the people who may decide the request can open a document; a
+former decider who no longer holds the position cannot. Each download is
+audited (`attendance_waiver_attachment_downloaded`, ids only), is sent
+uncacheable, and is named `waiver-attachment-1.pdf` and so on: the uploader's
+filename is never kept, because a doctor's note's name can say what it is
+about. The daily `attendance_waiver_attachment_retention` task deletes a
+request's documents `attachment_retention_days` after it was decided (or, for
+one withdrawn or voided, after it closed) and audits the ids it removed; the
+request and its decision log are kept. Anonymizing the member deletes them at
+once. The data export lists each document's record (type, size, checksum,
+date) but not the file. Documents never appear in the annual review or in a
+notification.
+
+| Method | Endpoint                                                             | Who                                           |
+| ------ | -------------------------------------------------------------------- | --------------------------------------------- |
+| `GET`  | `/api/v1/training/waivers/requests/policy`                           | Any authenticated user                        |
+| `PUT`  | `/api/v1/training/waivers/requests/policy`                           | `training.manage`                             |
+| `GET`  | `/api/v1/training/waivers/requests/eligibility`                      | Any authenticated user, about themselves      |
+| `POST` | `/api/v1/training/waivers/requests`                                  | Any authenticated user, for themselves        |
+| `GET`  | `/api/v1/training/waivers/requests/mine`                             | Any authenticated user                        |
+| `GET`  | `/api/v1/training/waivers/requests`                                  | The requests the caller may decide or decided |
+| `GET`  | `/api/v1/training/waivers/requests/{id}`                             | The member, or someone who may decide         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/withdraw`                    | The member, while pending                     |
+| `POST` | `/api/v1/training/waivers/requests/{id}/approve`                     | Someone who may decide, while pending         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/deny`                        | Someone who may decide, while pending         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/override`                    | A Chief, on a denied request                  |
+| `POST` | `/api/v1/training/waivers/requests/with-attachments`                 | Any authenticated user, for themselves        |
+| `POST` | `/api/v1/training/waivers/requests/{id}/attachments`                 | The member, while pending                     |
+| `GET`  | `/api/v1/training/waivers/requests/{id}/attachments/{attachment_id}` | The member, or someone who may decide         |
 
 ---
 

@@ -13,6 +13,7 @@ GET    /training/waivers/requests/policy             - The department's policy
 PUT    /training/waivers/requests/policy             - Save it (training.manage)
 GET    /training/waivers/requests/eligibility        - May I ask about this session?
 POST   /training/waivers/requests                    - Ask to be excused
+POST   /training/waivers/requests/with-attachments   - Ask, filing documents
 GET    /training/waivers/requests/mine               - My requests
 GET    /training/waivers/requests                    - Requests I decide or decided
 GET    /training/waivers/requests/{id}               - One request
@@ -20,6 +21,8 @@ POST   /training/waivers/requests/{id}/withdraw      - Withdraw my pending reque
 POST   /training/waivers/requests/{id}/approve       - Approve a pending request
 POST   /training/waivers/requests/{id}/deny          - Deny a pending request
 POST   /training/waivers/requests/{id}/override      - The Chief approves a denial
+POST   /training/waivers/requests/{id}/attachments   - File documents (pending)
+GET    /training/waivers/requests/{id}/attachments/{attachment_id} - Download one
 
 Who may decide is a matter of holding a position, not a permission (the
 department picks the positions; the Chief and training managers are the
@@ -31,7 +34,16 @@ someone who may decide it.
 from contextlib import contextmanager
 from typing import Iterator, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -43,6 +55,8 @@ from app.models.attendance_waiver import (
 )
 from app.models.user import User
 from app.schemas.attendance_waiver import (
+    MAX_CATEGORY_LENGTH,
+    MAX_TEXT_LENGTH,
     AttendanceWaiverDecision,
     AttendanceWaiverEligibilityResponse,
     AttendanceWaiverOverride,
@@ -50,6 +64,9 @@ from app.schemas.attendance_waiver import (
     AttendanceWaiverRequestPage,
     AttendanceWaiverRequestResponse,
     AttendanceWaiverSubmit,
+)
+from app.services.attendance_waiver_attachments import (
+    AttendanceWaiverAttachmentService,
 )
 from app.services.attendance_waiver_service import (
     AttendanceWaiverNotFound,
@@ -170,6 +187,40 @@ async def submit_attendance_waiver_request(
             body.reason,
         )
     return await _one(service, current_user, request)
+
+
+@router.post(
+    "/with-attachments",
+    response_model=AttendanceWaiverRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_attendance_waiver_request_with_attachments(
+    event_id: str = Form(..., min_length=1, max_length=36),
+    category: Optional[str] = Form(None, max_length=MAX_CATEGORY_LENGTH),
+    reason: Optional[str] = Form(None, max_length=MAX_TEXT_LENGTH),
+    files: List[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Ask to be excused, filing up to three documents (PDF, JPEG, PNG or HEIC,
+    10 MB each) with the request, as multipart form data. The request and its
+    documents are saved together or not at all. 400 when the department does
+    not take documents, for too many, or for a file of the wrong type or size;
+    otherwise as ``POST /training/waivers/requests``.
+
+    **Authentication required**
+    """
+    with _refusals():
+        request = await AttendanceWaiverAttachmentService(db).submit(
+            str(current_user.organization_id),
+            current_user,
+            event_id,
+            category,
+            reason,
+            files,
+        )
+    return await _one(AttendanceWaiverService(db), current_user, request)
 
 
 @router.get("/mine", response_model=List[AttendanceWaiverRequestResponse])
@@ -325,3 +376,50 @@ async def override_attendance_waiver_request(
             str(current_user.organization_id), current_user, request_id, body.note
         )
     return await _one(service, current_user, request)
+
+
+@router.post(
+    "/{request_id}/attachments", response_model=AttendanceWaiverRequestResponse
+)
+async def add_attendance_waiver_attachments(
+    request_id: str,
+    files: List[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    File more documents with the caller's own pending request, up to three in
+    all. 400 once it is decided or withdrawn, or when the department does not
+    take documents; 403 for a decider, 404 for anyone else.
+
+    **Authentication required**
+    """
+    with _refusals():
+        request = await AttendanceWaiverAttachmentService(db).add(
+            str(current_user.organization_id), current_user, request_id, files
+        )
+    return await _one(AttendanceWaiverService(db), current_user, request)
+
+
+@router.get("/{request_id}/attachments/{attachment_id}")
+async def download_attendance_waiver_attachment(
+    request_id: str,
+    attachment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    One filed document, for the request's member or someone who may decide
+    it; 403 for someone who may see the request but no longer decides it, 404
+    for anyone else. Named ``waiver-attachment-<n>.<ext>``, never by the
+    uploader's filename, and sent uncacheable. Each download is audited.
+
+    **Authentication required**
+    """
+    with _refusals():
+        return await AttendanceWaiverAttachmentService(db).download(
+            str(current_user.organization_id),
+            current_user,
+            request_id,
+            attachment_id,
+        )

@@ -115,6 +115,8 @@ class StorageArea(str, Enum):
     MINUTES_ATTACHMENTS = "minutes-attachments"
     # Finalized evaluation PDFs, written by the application, never uploaded.
     EVALUATIONS = "evaluations"
+    # Documents filed with attendance waiver requests (often medical).
+    ATTENDANCE_WAIVERS = "attendance-waivers"
 
 
 # Where each area wrote files before the org-first layout, relative to
@@ -130,6 +132,7 @@ _LEGACY_ROOTS: Mapping[StorageArea, tuple[str, ...]] = {
     # Born under the org-first layout, so there is no older root to honour.
     StorageArea.MINUTES_ATTACHMENTS: (),
     StorageArea.EVALUATIONS: (),
+    StorageArea.ATTENDANCE_WAIVERS: (),
 }
 
 

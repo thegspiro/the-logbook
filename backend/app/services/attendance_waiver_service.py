@@ -61,6 +61,7 @@ from app.core.constants import CHIEF_POSITION_SLUGS
 from app.core.utils import generate_uuid
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
+    AttendanceWaiverAttachment,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
     AttendanceWaiverStatus,
@@ -78,12 +79,14 @@ from app.models.training import (
 )
 from app.models.user import Organization, Position, User, user_positions
 from app.schemas.attendance_waiver import (
+    MAX_ATTACHMENTS,
     POLICY_KEY,
     POLICY_SECTION,
     AttendanceWaiverPolicy,
     CapPeriod,
     policy_from_settings,
 )
+from app.services.file_storage_service import StoredFile
 from app.services.notifications_service import NotificationsService
 from app.services.requirement_override_service import holds_chief_position
 from app.services.training_compliance import (
@@ -255,6 +258,7 @@ class Eligibility:
             "categories": list(self.policy.categories),
             "category_required": self.policy.category_required,
             "reason_text": self.policy.reason_text,
+            "attachment": self.policy.attachment,
             "existing_request_id": str(self.existing.id) if self.existing else None,
             "existing_request_status": (
                 self.existing.status.value if self.existing else None
@@ -339,6 +343,8 @@ class AttendanceWaiverService:
                 "category_count": len(policy.categories),
                 "category_required": policy.category_required,
                 "reason_text": policy.reason_text,
+                "attachment": policy.attachment,
+                "attachment_retention_days": policy.attachment_retention_days,
                 "approver_position_ids": list(policy.approver_position_ids),
             },
         )
@@ -606,7 +612,17 @@ class AttendanceWaiverService:
         event_id: str,
         category: Optional[str],
         reason: Optional[str],
+        *,
+        request_id: Optional[str] = None,
+        stored: Sequence[StoredFile] = (),
     ) -> AttendanceWaiverRequest:
+        """File the member's request, with any documents already stored.
+
+        ``stored`` are files ``AttendanceWaiverAttachmentService`` has checked
+        and written under ``request_id``; their rows are inserted with the
+        request, so a request the policy requires a document for is never
+        committed without one. The caller removes the files if this raises.
+        """
         org_id = str(organization_id)
         policy = await self.get_policy(org_id)
         event = await self._event(org_id, event_id)
@@ -618,9 +634,10 @@ class AttendanceWaiverService:
         if not assessment.allowed:
             raise ValueError(assessment.refusal)
         category, reason = self._answers(policy, category, reason)
+        self.check_attachments(policy, len(stored), submitting=True)
 
         request = AttendanceWaiverRequest(
-            id=generate_uuid(),
+            id=request_id or generate_uuid(),
             organization_id=org_id,
             workflow=TRAINING_WORKFLOW,
             user_id=str(member.id),
@@ -643,18 +660,44 @@ class AttendanceWaiverService:
                 self.db.add(
                     self._action(request, AttendanceWaiverAction.SUBMITTED, member)
                 )
+                # The request first: the attachments' key points at it.
+                await self.db.flush()
+                for ordinal, file in enumerate(stored, start=1):
+                    self.db.add(attachment_row(request, ordinal, file, str(member.id)))
                 await self.db.flush()
         except IntegrityError:
             raise ValueError("You have already asked to be excused from this session.")
         await self._audit(
             "attendance_waiver_request_submitted",
             member,
-            self._ids(request),
+            {**self._ids(request), "attachment_count": len(stored)},
         )
         await self.db.commit()
         await self.db.refresh(request)
         await self._prompt_deciders(org_id, request, member, policy)
         return request
+
+    @staticmethod
+    def check_attachments(
+        policy: AttendanceWaiverPolicy,
+        adding: int,
+        *,
+        existing: int = 0,
+        submitting: bool = False,
+    ) -> None:
+        """Refuse documents the policy does not take, or too many of them.
+
+        A submission with none is refused only when the policy requires one;
+        a later upload is checked against what the request already holds.
+        """
+        if adding and policy.attachment == "off":
+            raise ValueError("This department does not take documents with a request.")
+        if existing + adding > MAX_ATTACHMENTS:
+            raise ValueError(
+                f"At most {MAX_ATTACHMENTS} documents can be filed with a request."
+            )
+        if submitting and policy.attachment == "required" and not adding:
+            raise ValueError("Attach a document to this request.")
 
     @staticmethod
     def _answers(
@@ -1100,6 +1143,19 @@ class AttendanceWaiverService:
             # the same second tie; the lifecycle's own order breaks it.
             for log in actions.values():
                 log.sort(key=lambda a: (_utc(a.created_at), _ACTION_ORDER[a.action]))
+        files: Dict[str, List[AttendanceWaiverAttachment]] = {}
+        file_rows = await self.db.execute(
+            select(AttendanceWaiverAttachment)
+            .where(
+                AttendanceWaiverAttachment.organization_id == org_id,
+                AttendanceWaiverAttachment.request_id.in_(
+                    [str(r.id) for r in requests]
+                ),
+            )
+            .order_by(AttendanceWaiverAttachment.ordinal)
+        )
+        for file in file_rows.scalars().all():
+            files.setdefault(str(file.request_id), []).append(file)
         names = await self._names(
             org_id,
             [r.user_id for r in requests]
@@ -1136,6 +1192,21 @@ class AttendanceWaiverService:
                     "can_override": is_chief
                     and not own
                     and r.status == AttendanceWaiverStatus.DENIED,
+                    "can_attach": own
+                    and r.status == AttendanceWaiverStatus.PENDING
+                    and policy.attachment != "off"
+                    and len(files.get(str(r.id), [])) < MAX_ATTACHMENTS,
+                    "attachments": [
+                        {
+                            "id": str(f.id),
+                            "ordinal": f.ordinal,
+                            "filename": f.download_name,
+                            "mime_type": f.mime_type,
+                            "file_size": f.file_size,
+                            "uploaded_at": f.uploaded_at,
+                        }
+                        for f in files.get(str(r.id), [])
+                    ],
                     "actions": [
                         {
                             "id": str(a.id),
@@ -1405,6 +1476,25 @@ class AttendanceWaiverService:
             await self.db.refresh(request)
         except Exception:
             logger.exception("Failed to reload waiver request {}", request.id)
+
+
+def attachment_row(
+    request: AttendanceWaiverRequest, ordinal: int, file: StoredFile, uploader_id: str
+) -> AttendanceWaiverAttachment:
+    """The row for a document stored under ``request``. The uploader's
+    filename is deliberately not copied from ``file`` (see the model)."""
+    return AttendanceWaiverAttachment(
+        id=generate_uuid(),
+        organization_id=str(request.organization_id),
+        request_id=str(request.id),
+        ordinal=ordinal,
+        file_path=file.path,
+        mime_type=file.mime_type,
+        file_size=file.size,
+        sha256=file.sha256,
+        uploaded_by=uploader_id,
+        uploaded_at=_now(),
+    )
 
 
 def decider_action_url(request: AttendanceWaiverRequest) -> str:
