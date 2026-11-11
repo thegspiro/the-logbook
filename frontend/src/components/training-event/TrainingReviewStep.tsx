@@ -25,7 +25,7 @@ import { SimpleMarkdown } from '../../utils/simpleMarkdown';
 import type { MandatoryTiersUnmapped, TrainingCourse } from '../../types/training';
 import type { TrainingLinkageData } from '../../hooks/useTrainingLinkageData';
 import { TRAINING_TYPE_LABELS } from '../../constants/enums';
-import { getEventTypeLabel } from '../../utils/eventHelpers';
+import { getEventTypeBadgeColor, getEventTypeLabel } from '../../utils/eventHelpers';
 import { formatCalendarDate, formatDateCustom, localToUTC } from '../../utils/dateFormatting';
 import type { EventFormModel } from '../event-form/useEventFormModel';
 import { MONTHS, ORDINALS, RECURRENCE_PATTERNS, WEEKDAYS } from '../event-form/eventFormConstants';
@@ -321,7 +321,11 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
 
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <Section title="Event Details" icon={CalendarDays} target="details" onEdit={onEdit}>
-          <Row label="Event Type">{getEventTypeLabel(formData.event_type)}</Row>
+          <Row label="Event Type">
+            <span className={`badge ${getEventTypeBadgeColor(formData.event_type)}`}>
+              {getEventTypeLabel(formData.event_type)}
+            </span>
+          </Row>
           <Row label="Title">{formData.title.trim() || '—'}</Row>
           {/* Rendered as the event page renders it, so **bold** reads as bold. */}
           {formData.description?.trim() && (
@@ -443,7 +447,22 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
                 : 'Any phase'}
             </Row>
           )}
-          <Row label="Counts toward attendance">{attendanceNames.length ? attendanceNames.join('\n') : 'None'}</Row>
+          <Row label="Counts toward attendance">
+            {attendanceNames.length ? (
+              <ul className="flex flex-wrap gap-1.5">
+                {attendanceNames.map((name, index) => (
+                  <li
+                    key={training.attendance_requirement_ids[index] ?? name}
+                    className="badge bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300"
+                  >
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              'None'
+            )}
+          </Row>
         </Section>
 
         <Section title="Training completion" icon={Award} target="training" onEdit={onEdit}>

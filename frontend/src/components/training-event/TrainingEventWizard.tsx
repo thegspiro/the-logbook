@@ -32,6 +32,7 @@ import {
   ChevronRight,
   ClipboardCheck,
   GraduationCap,
+  Loader2,
   QrCode,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -800,8 +801,8 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               {model.existingAttachments.length > 0 && (
                 <p className="text-theme-text-muted text-sm">Attachments are managed on the event page.</p>
               )}
-              <div>
-                <label className="text-theme-text-secondary mobile-touch-target inline-flex cursor-pointer items-center justify-start gap-2 text-sm">
+              <div className="border-theme-surface-border rounded-lg border p-4">
+                <label className="text-theme-text-primary mobile-touch-target inline-flex cursor-pointer items-center justify-start gap-2 text-sm font-semibold">
                   <input
                     type="checkbox"
                     checked={formData.is_draft || false}
@@ -811,7 +812,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
                   />
                   Save as Draft
                 </label>
-                <p id="training-draft-hint" className="text-theme-text-muted text-sm">
+                <p id="training-draft-hint" className="text-theme-text-muted ml-6 text-sm">
                   Members don&apos;t see a draft. Publish it later from the event page.
                 </p>
               </div>
@@ -864,8 +865,13 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
                 type="submit"
                 disabled={isSubmitting}
                 aria-label={isSubmitting ? submittingLabel : fullSubmitLabel}
-                className="btn-primary flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium disabled:cursor-not-allowed max-md:w-full max-md:px-3"
+                className="btn-success flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium disabled:cursor-not-allowed max-md:w-full max-md:px-3"
               >
+                {isSubmitting ? (
+                  <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden="true" />
+                ) : (
+                  <CheckCircle className="h-5 w-5 shrink-0" aria-hidden="true" />
+                )}
                 {isSubmitting ? (
                   submittingLabel
                 ) : creatingSeries ? (
