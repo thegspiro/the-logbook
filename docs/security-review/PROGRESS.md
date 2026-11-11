@@ -16,11 +16,43 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None right now. PR #4232 (Feature 24, Meetings & minutes, pass 13) merged
-clean (`47d68bce90d62e782d0fcc8998180e9e36f60b21`), CI green (26/26 checks),
-no conflicts, no open review threads. Row 24 is ✅. This iteration picked up
-Feature 25 (Messaging & notifications) next — see its PR once opened below,
-or re-check `list_pull_requests` fresh rather than trusting this note.
+**PR [#4233](https://github.com/thegspiro/the-logbook/pull/4233)**
+(branch `claude/security-review-messaging-notifications-p13`):
+Feature 25 (Messaging & notifications), pass 13, a watchdog pickup. PR #4232
+(Feature 24, Meetings & minutes, pass 13) had already merged clean
+(`47d68bce90d62e782d0fcc8998180e9e36f60b21`, CI green 26/26, no conflicts,
+no open review threads). A fresh `list_pull_requests` (state `open`) found
+no PR with a `claude/security-review-*` head, and row 25 was the next
+pending feature, confirmed on a freshly fetched `main`.
+
+Baseline `7127d632f` (pass 12's own merge, PR #3980). Real delta: 11
+non-merge commits in scope since then, most notably the credential-template
+link policy (`20749935b`/`ca89f7492`, protecting the welcome/reset/ballot/
+applicant-link email templates — each carrying a password or a token — from
+being rewritten to beacon it off-site), three new member-email-policy/
+opt-outs routes (`26b2e202d`), and a new email sender reviewed for this
+feature's own plumbing (the medical screening expiry reminder,
+`3e478316d`'s messaging-scoped slice) — all reviewed against the seven
+checklist dimensions, no finding. Route inventory re-enumerated by AST: 52
+routes, up from pass 12's 51 (the three new `email_templates.py` routes).
+**0 fixed, 0 newly flagged.** See
+`docs/security-review/MSG-25-messaging-notifications.md`'s **Pass 13**
+section for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 756 revisions, single head `8b1cf6f55425`; `check_route_permissions.py
+--strict` — 305 routes, 0 errors/warnings; scoped backend suite (`-k "messag
+or notification or email_template or email_theme or push_service or
+push_dispatch or screening_reminder or medical_screening"`) — 2,342 passed, 1
+environment-only skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm run
+lint` — 0 errors/warnings; `npx vitest run src/modules/communications
+src/modules/notifications src/pages/NotificationsPage.test.tsx
+src/hooks/usePushNotifications.test.ts src/utils/devicePushSubscription.test.ts`
+— 302 passed (41 files).
+
+Row 25 → ✅ (pending this PR's merge). Next is Feature 26 (Forms) —
+re-check `list_pull_requests` fresh rather than trusting this note.
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 13, PR #4232, merged), preserved for history</summary>
