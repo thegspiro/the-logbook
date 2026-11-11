@@ -601,8 +601,17 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
       </nav>
 
       {/* Under 768px the navigation is a bar fixed above the bottom nav, so
-          the card leaves room for it to scroll clear. */}
-      <div className="card space-y-8 p-4 max-md:pb-24 sm:p-8">
+          the card leaves room for it to scroll clear. A real form: Enter in a
+          field is Next, checked as Next is, and on Review it saves. */}
+      <form
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (step < REVIEW) handleNext();
+          else void handleSubmit();
+        }}
+        className="card space-y-8 p-4 max-md:pb-24 sm:p-8"
+      >
         <div className="flex items-center justify-between gap-3">
           <p id={STEP_HEADING_ID} tabIndex={-1} className="text-theme-text-muted text-sm focus:outline-hidden">
             Step {step + 1} of {STEPS.length} · {stepTitle}
@@ -812,9 +821,11 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               Cancel
             </button>
             {step < REVIEW ? (
+              // Keyed apart from the save button, so the press that reaches
+              // Review is never taken for a press of the button drawn there.
               <button
-                type="button"
-                onClick={handleNext}
+                key="next"
+                type="submit"
                 className="btn-primary flex items-center justify-center gap-1 px-6 py-3 text-sm font-medium max-md:w-full max-md:px-3"
               >
                 Next
@@ -822,10 +833,8 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               </button>
             ) : (
               <button
-                type="button"
-                onClick={() => {
-                  void handleSubmit();
-                }}
+                key="save"
+                type="submit"
                 disabled={isSubmitting}
                 aria-label={isSubmitting ? submittingLabel : fullSubmitLabel}
                 className="btn-primary flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium disabled:cursor-not-allowed max-md:w-full max-md:px-3"
@@ -844,7 +853,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
             )}
           </div>
         </div>
-      </div>
+      </form>
     </div>
   );
 };
