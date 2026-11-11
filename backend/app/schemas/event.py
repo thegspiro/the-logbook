@@ -589,6 +589,10 @@ class EventResponse(EventBase, UTCResponseBase):
     # Decided here, not in the client (CLAUDE.md #29): may this caller decide
     # the event's attendance requests and transfer it. Detail endpoint only.
     can_manage_organizers: bool = False
+    # May this caller see and decide the event's attendance requests: the
+    # above, plus a fallback position holder a request was sent to, who may
+    # hold no events.manage. Detail endpoint only.
+    can_review_attendance_requests: bool = False
     # How this caller may use the attendance tools, or None: "events_manager"
     # (any event), "training_manager" (a Training event) or "organizer" (the
     # organizer pair, who may not write their own row). Detail endpoint only.
