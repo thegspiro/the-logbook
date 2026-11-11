@@ -485,10 +485,10 @@ Approvals uses both; the approvals-admin override form beside it already did.
 The other `PromptDialog` callers are unchanged until they opt in.
 
 Still to come, module by module: the locations setup wizard, the other training
-builders and pipeline pages, the rest of Inventory (settings, stock lots and
-seals, the checklist builder and the smaller dialogs), the full apparatus form,
-the facility detail sections other than emergency contacts, medical supply lots
-and imports, store checkout, the finance cards and settings, the minutes editor,
+builders and pipeline pages, the rest of Inventory (settings, stock lots, the
+checklist builder and the smaller dialogs), the full apparatus form, the
+facility overview, files and settings, medical supply lots and imports, store
+checkout, the finance cards and settings, the minutes editor,
 the remaining report dialogs, communications templates and intake, scheduling
 templates and settings, applicant conversion and stage settings, the org chart
 node and IP security admin, and onboarding, history, membership and the public
@@ -505,6 +505,17 @@ link, an officer assignment and the footer library (a refusal there names the
 card and field it belongs to). The write-off review is an approve-type step:
 Deny and Approve stay pressable and say what is missing (the note, the
 acknowledgement) on its field rather than sitting greyed out.
+
+**Rolled out further on 2026-11-11** (batch 19): a facility's systems,
+rooms and compliance checklists; the maintenance and inspection dialogs, on a
+facility's own sections and on the cross-facility Maintenance and Inspections
+pages; the medical supply category dialog; and the medical create panel the
+checklist builder and the item picker open. The same rules apply. The
+maintenance and inspection dialogs had been written out twice each, once per
+screen, and are now one component each, so a change lands on both. A save that
+failed with a reason no field answers for ("due date cannot be before the
+scheduled date", a room nesting rule, a duplicate name) is said in the form,
+where it stays until the next save, rather than in a toast.
 
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
