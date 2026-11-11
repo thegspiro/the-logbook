@@ -7,12 +7,14 @@
  * The backend decides who may do which and refuses the rest; its message is
  * what the toast shows. The checks here only spare a round trip.
  *
- * Create payloads leave a blank station out (`|| undefined`); an edit sends
- * both fields the form owns (CLAUDE.md pitfall #1) — neither may be blank, so
- * there is nothing to clear.
+ * A draft saves without an amount or a justification (owner decision,
+ * 2026-11-11); submitting needs both, and so does a submitted request's edit.
+ * Create payloads leave a blank out (`|| undefined`); an edit sends both
+ * fields the form owns, a blank one as `null` so clearing a draft's field
+ * persists (CLAUDE.md pitfall #1).
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { FormField } from '../../../components/ux/FormField';
@@ -22,12 +24,13 @@ import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { budgetRequestService } from '../services/api';
 import type { BudgetRequest, BudgetRequestProposalOptions, BudgetRequestUpdatePayload } from '../types';
-import { MAX_REQUEST_AMOUNT, MAX_REQUEST_TEXT } from '../utils/budgetRequests';
+import { MAX_REQUEST_AMOUNT, MAX_REQUEST_TEXT, type RequestContentField } from '../utils/budgetRequests';
 import { firstErrorField, refusalsOnFields, updateExceptRefused, useDialogFieldErrors } from '../utils/fieldRefusals';
 
 export type BudgetRequestDialogTarget =
   | { kind: 'line'; budgetId: string; lineLabel: string; lastYearBudgeted?: string | null | undefined }
-  | { kind: 'edit'; request: BudgetRequest }
+  /** `flagged`: the fields a refused Submit named, shown as the dialog opens. */
+  | { kind: 'edit'; request: BudgetRequest; flagged?: Partial<Record<RequestContentField, string>> | undefined }
   | { kind: 'proposal'; options: BudgetRequestProposalOptions };
 
 interface BudgetRequestDialogProps {
@@ -71,12 +74,16 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
 }) => {
   const existing = target.kind === 'edit' ? target.request : null;
   const options = target.kind === 'proposal' ? target.options : null;
-  const [amount, setAmount] = useState(existing ? String(existing.requestedAmount) : '');
+  const [amount, setAmount] = useState(existing?.requestedAmount ?? '');
   const [justification, setJustification] = useState(existing?.justification ?? '');
   const [categoryId, setCategoryId] = useState('');
   const [stationId, setStationId] = useState('');
   const [positionId, setPositionId] = useState(options?.positions.length === 1 ? (options.positions[0]?.id ?? '') : '');
-  const { errors, setErrors, clearError } = useDialogFieldErrors<RequestField>();
+  const flagged = target.kind === 'edit' ? target.flagged : undefined;
+  const { errors, setErrors, clearError } = useDialogFieldErrors<RequestField>(flagged ?? {});
+  // A draft may be saved with either left blank; the Treasurer reads a
+  // submitted one, which needs both.
+  const draftable = existing === null || existing.status === 'draft';
   const [saving, setSaving] = useState(false);
   // An edit that saved all but a refused field stays open on that field;
   // closing then still tells the page to reload.
@@ -99,6 +106,15 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
     return first === undefined;
   };
 
+  // Opened from a refused Submit: start on the first field it named. Once, on
+  // open — the flags then clear field by field as they are edited.
+  const flaggedOnOpen = useRef<Partial<Record<RequestField, string>> | undefined>(flagged);
+  useEffect(() => {
+    const opened = flaggedOnOpen.current;
+    const first = opened ? firstErrorField(opened, FIELD_ORDER) : undefined;
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+  }, []);
+
   const title =
     target.kind === 'proposal'
       ? 'Propose a new line'
@@ -110,14 +126,18 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
 
   const validate = (): { amount: string; justification: string } | null => {
     const next: Partial<Record<RequestField, string>> = {};
+    const blankAmount = amount.trim() === '';
     const parsed = Number(amount);
-    if (amount.trim() === '' || !Number.isFinite(parsed) || parsed < 0) {
+    if (blankAmount) {
+      if (!draftable) next.amount = 'A submitted request needs the amount requested.';
+    } else if (!Number.isFinite(parsed) || parsed < 0) {
       next.amount = 'Enter an amount of zero or more.';
     } else if (parsed > MAX_REQUEST_AMOUNT) {
       next.amount = 'That amount is too large.';
     }
-    if (!justification.trim()) next.justification = 'Say what the money is for.';
-    else if (justification.trim().length > MAX_REQUEST_TEXT) {
+    if (!justification.trim()) {
+      if (!draftable) next.justification = 'A submitted request needs to say what the money is for.';
+    } else if (justification.trim().length > MAX_REQUEST_TEXT) {
       next.justification = `Keep this under ${String(MAX_REQUEST_TEXT)} characters.`;
     }
     if (target.kind === 'proposal') {
@@ -125,7 +145,8 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
       if (!positionId) next.position = 'Choose the position the line is for.';
     }
     if (!flag(next)) return null;
-    return { amount: parsed.toFixed(2), justification: justification.trim() };
+    // '' stands for "not entered yet" in both: omitted on a create, null on an edit.
+    return { amount: blankAmount ? '' : parsed.toFixed(2), justification: justification.trim() };
   };
 
   const save = async (values: { amount: string; justification: string }) => {
@@ -136,7 +157,7 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
         // not written, the rest saves, and the field stays flagged.
         const { refused } = await updateExceptRefused(
           (body: BudgetRequestUpdatePayload) => budgetRequestService.update(target.request.id, body),
-          { requestedAmount: values.amount, justification: values.justification },
+          { requestedAmount: values.amount || null, justification: values.justification || null },
           SERVER_FIELDS,
           UPDATE_KEYS
         );
@@ -154,8 +175,8 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
         await budgetRequestService.create({
           fiscalYearId,
           budgetId: target.budgetId,
-          requestedAmount: values.amount,
-          justification: values.justification,
+          requestedAmount: values.amount || undefined,
+          justification: values.justification || undefined,
         });
         toast.success('Draft request saved. Submit it when it is ready.');
       } else {
@@ -164,8 +185,8 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
           categoryId: categoryId || undefined,
           stationId: stationId || undefined,
           ownerPositionId: positionId || undefined,
-          requestedAmount: values.amount,
-          justification: values.justification,
+          requestedAmount: values.amount || undefined,
+          justification: values.justification || undefined,
         });
         toast.success('Draft proposal saved. Submit it when it is ready.');
       }
@@ -218,6 +239,7 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
             ? `What ${lineLabel} needs in ${fiscalYearName}. `
             : `A budget line that does not exist yet in ${fiscalYearName}. `}
           It is saved as a draft; the Treasurer sees it once you submit it.
+          {draftable ? ' The amount and justification can wait until then; submitting needs both.' : ''}
           {target.kind === 'line' && target.lastYearBudgeted != null
             ? ` This year's budget is ${formatCurrency(target.lastYearBudgeted)}.`
             : ''}

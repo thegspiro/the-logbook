@@ -1,17 +1,25 @@
 """
-Attendance waiver requests: the request engine, and the training workflow.
+Attendance waiver requests: the request engine, and its two workflows.
 
-A member asks to be excused from one training session that counts against
-them; an approver decides (owner decisions, 2026-11-10). The rules:
+A member asks to be excused from one session that counts against them; an
+approver decides (owner decisions, 2026-11-10). There is one engine and two
+policies: ``WorkflowSpec`` says what differs between the training workflow
+and the business-meeting one (where the policy is stored, which events can be
+asked about, who the routing falls back to), and everything else below is
+written once for both (CLAUDE.md pitfall #29). The rules:
 
-- **Off until a training officer saves a policy.** The policy lives in
-  ``organizations.settings["training"]["session_waiver_policy"]`` and is read
-  through ``policy_from_settings``, so a missing or malformed value is the
-  disabled default (CLAUDE.md pitfall #19).
-- **Only a session that counts against the member.** A TRAINING event, not
-  cancelled, whose training session is linked to a SESSION_ATTENDANCE
-  requirement that grades this member (``ComplianceGrading.for_member``). A
-  member who checked in, or is exempt from compliance, has nothing to excuse.
+- **Off until an officer saves a policy.** The training policy lives in
+  ``organizations.settings["training"]["session_waiver_policy"]`` and the
+  meeting one in ``organizations.settings["meetings"]["waiver_policy"]``; both
+  are read through ``policy_from_settings``, so a missing or malformed value
+  is the disabled default (CLAUDE.md pitfall #19).
+- **Only a session that counts against the member.** For training, a
+  TRAINING event, not cancelled, whose training session is linked to a
+  SESSION_ATTENDANCE requirement that grades this member
+  (``ComplianceGrading.for_member``); a member exempt from compliance has
+  nothing to excuse. For meetings, a BUSINESS_MEETING event, not cancelled,
+  that no leave of absence already excuses and the Secretary has not already
+  waived. Either way a member who checked in has nothing to excuse.
 - **One live request per member and session**, enforced by the unique
   ``live_key``. Withdrawing frees it; a denial does not.
 - **A deadline the department chooses**, compared in UTC.
@@ -19,16 +27,25 @@ them; an approver decides (owner decisions, 2026-11-10). The rules:
   approved requests by session date. Pending requests do not count, so the cap
   is enforced when a request is approved, under a lock (pitfall #27). A
   Chief's override is not blocked by it, but counts toward it.
-- **Routing**: the holders of the chosen positions; failing them, the Chief;
-  failing the Chief, training managers. Never the requester. ``_route_ids`` is
-  the one definition, read by both the recipients and ``may_decide``.
+- **Routing**: the holders of the chosen positions; failing them, the
+  workflow's fallback office (the Chief for training, the Secretary for
+  meetings); failing that, the holders of the workflow's manage permission.
+  A Chief may always decide. Never the requester. ``_route_ids`` is the one
+  definition, read by both the recipients and ``may_decide``.
 - **The first decision is final**, except that a Chief may override a denial,
   with a reason, and never on their own request.
 
 **Lock order.** Every write locks the requester's ``users`` row before the
 request row. Submitting has to take the member's row first (there is no request
 row yet), so the decisions do the same; taking them in the other order would
-let an approval and a submission by the same member deadlock.
+let an approval and a submission by the same member deadlock. Where a write
+also needs the event, it takes it between the two, shared: submitting (so a
+cancellation cannot slip between the check and the insert) and approving a
+meeting request (so ``MeetingsService.create_from_event``, which holds the
+event exclusively while it builds the minutes record, either sees the approval
+or is seen by it). The writers that lock the event exclusively (cancelling,
+deleting, building the minutes record) never take a ``users`` row, so the
+order cannot cycle.
 
 **No gap lock another member's write needs.** The member's row serializes only
 that member's writes, so any range a write locks must be that member's alone:
@@ -37,9 +54,13 @@ InnoDB kills one with a 1213. Submitting therefore takes no locking read of the
 requests at all (``_assess``), and the approval's cap count is pinned to the
 member's own index range (``_approved_dates``).
 
-Approved requests reach grading through the waiver loaders as
+Approved training requests reach grading through the waiver loaders as
 ``SOURCE_SESSION_EXCUSAL`` (``training_waiver_service``); nothing here touches
-a grader.
+a grader. An approved meeting request is written onto the minutes record as
+the ``MeetingAttendee`` waiver the Secretary grants by hand
+(``grant_meeting_waiver``), with a standard text rather than the member's
+words, and carried onto a minutes record created later by
+``MeetingsService.create_from_event``.
 """
 
 import calendar
@@ -57,7 +78,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import user_has_permission
 from app.core.audit import log_audit_event
-from app.core.constants import CHIEF_POSITION_SLUGS
+from app.core.constants import CHIEF_POSITION_SLUGS, SECRETARY_POSITION_SLUGS
 from app.core.utils import generate_uuid
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
@@ -68,6 +89,7 @@ from app.models.attendance_waiver import (
     live_key_for,
 )
 from app.models.event import Event, EventRSVP, EventType
+from app.models.meeting import Meeting, MeetingAttendee
 from app.models.notification import NotificationChannel, NotificationLog
 from app.models.training import (
     TrainingRecord,
@@ -76,8 +98,16 @@ from app.models.training import (
     TrainingSessionRequirement,
     TrainingStatus,
 )
-from app.models.user import Organization, Position, User, user_positions
+from app.models.user import (
+    MemberLeaveOfAbsence,
+    Organization,
+    Position,
+    User,
+    user_positions,
+)
 from app.schemas.attendance_waiver import (
+    MEETING_POLICY_KEY,
+    MEETING_POLICY_SECTION,
     POLICY_KEY,
     POLICY_SECTION,
     AttendanceWaiverPolicy,
@@ -96,11 +126,19 @@ from app.utils.org_scoping import assert_all_in_org
 from app.utils.org_timezone import local_date, resolve_scheduling_timezone
 
 TRAINING_WORKFLOW = AttendanceWaiverWorkflow.TRAINING_SESSION
+MEETING_WORKFLOW = AttendanceWaiverWorkflow.BUSINESS_MEETING
 # The (organization, member, date) index; the cap's locking read is pinned to
 # it (see _approved_dates).
 MEMBER_INDEX = "ix_attendance_waiver_requests_org_user_date"
-# The last step of the training routing chain.
+# The last step of each routing chain.
 TRAINING_MANAGE = "training.manage"
+MEETINGS_MANAGE = "meetings.manage"
+
+# What an approved meeting request writes into ``meeting_attendees``. Never
+# the member's own words: that column is plain text and is shown on the
+# voting and ballot screens, while the member's reason stays encrypted on the
+# request.
+MEETING_WAIVER_TEXT = "Excused: approved request"
 
 # In-app categories. Metadata carries waiver_request_id so every decider's
 # prompt can be archived once any one of them decides.
@@ -127,6 +165,69 @@ _ACTION_ORDER = {
 
 class AttendanceWaiverNotFound(LookupError):
     """The event or request does not exist for this caller in their organization."""
+
+
+@dataclass(frozen=True)
+class WorkflowSpec:
+    """What differs between the two workflows; everything else is shared."""
+
+    workflow: AttendanceWaiverWorkflow
+    # Where the policy is stored: settings[policy_section][policy_key].
+    policy_section: str
+    policy_key: str
+    # The only kind of event a request can be about.
+    event_type: EventType
+    # The routing chain's step after the chosen positions, and its last step.
+    fallback_slugs: Tuple[str, ...]
+    manage_permission: str
+    audit_category: str
+    # Words for the refusals and notices.
+    session_noun: str
+    default_title: str
+    # Where a decider's prompt leads, before the request id.
+    decider_path: str
+    # Where the member's notice leads once the event is gone.
+    member_fallback_url: str
+
+
+TRAINING_SPEC = WorkflowSpec(
+    workflow=TRAINING_WORKFLOW,
+    policy_section=POLICY_SECTION,
+    policy_key=POLICY_KEY,
+    event_type=EventType.TRAINING,
+    fallback_slugs=tuple(CHIEF_POSITION_SLUGS),
+    manage_permission=TRAINING_MANAGE,
+    audit_category="training",
+    session_noun="training session",
+    default_title="Training session",
+    decider_path="/attendance-waivers",
+    member_fallback_url="/training/my-training",
+)
+
+MEETING_SPEC = WorkflowSpec(
+    workflow=MEETING_WORKFLOW,
+    policy_section=MEETING_POLICY_SECTION,
+    policy_key=MEETING_POLICY_KEY,
+    event_type=EventType.BUSINESS_MEETING,
+    fallback_slugs=tuple(SECRETARY_POSITION_SLUGS),
+    manage_permission=MEETINGS_MANAGE,
+    audit_category="meetings",
+    session_noun="business meeting",
+    default_title="Business meeting",
+    decider_path="/meetings/waiver-requests",
+    member_fallback_url="/events",
+)
+
+SPECS: Dict[AttendanceWaiverWorkflow, WorkflowSpec] = {
+    TRAINING_WORKFLOW: TRAINING_SPEC,
+    MEETING_WORKFLOW: MEETING_SPEC,
+}
+
+
+def meeting_waiver_text(category: Optional[str]) -> str:
+    """The waiver reason an approved meeting request writes: standard words
+    and the department's own category label, never the member's reason."""
+    return f"{MEETING_WAIVER_TEXT} ({category})" if category else MEETING_WAIVER_TEXT
 
 
 def _now() -> datetime:
@@ -213,10 +314,10 @@ def deadline_for(preset: str, event: Event) -> datetime:
     return _utc(event.start_datetime)
 
 
-def _cap_period_label(period: CapPeriod, day: date) -> str:
+def _cap_period_label(period: CapPeriod, day: date, noun: str = "session") -> str:
     """Where the cap is counted for a session on ``day``, for a sentence."""
     if period == "rolling_12_months":
-        return "in a 12-month span that includes this session"
+        return f"in a 12-month span that includes this {noun}"
     return f"in {day.year}"
 
 
@@ -267,12 +368,14 @@ class Eligibility:
 class _DeciderPool:
     """Who the routing chain can reach in one organization, by member id.
 
-    ``configured`` and ``chiefs`` are current active holders; ``managers``
-    (holders of training.manage) is loaded only when the chain falls through
-    to it.
+    ``configured``, ``fallback`` (the workflow's fallback office: the Chief
+    for training, the Secretary for meetings) and ``chiefs`` are current
+    active holders; ``managers`` (holders of the workflow's manage
+    permission) is loaded only when the chain falls through to it.
     """
 
     configured: Set[str]
+    fallback: Set[str]
     chiefs: Set[str]
     managers: Optional[Set[str]] = None
     # The routed set per requester, so a page of requests routes each
@@ -281,8 +384,20 @@ class _DeciderPool:
 
 
 class AttendanceWaiverService:
-    def __init__(self, db: AsyncSession):
+    """The engine, bound to one workflow.
+
+    Every read and write is confined to ``workflow``: a request of the other
+    workflow is not found, and the cap counts only this workflow's approvals.
+    """
+
+    def __init__(
+        self,
+        db: AsyncSession,
+        workflow: AttendanceWaiverWorkflow = TRAINING_WORKFLOW,
+    ):
         self.db = db
+        self.spec = SPECS[workflow]
+        self.workflow = workflow
 
     # ------------------------------------------------------------------
     # Policy
@@ -296,8 +411,12 @@ class AttendanceWaiverService:
                 )
             )
         ).scalar_one_or_none()
-        section = settings.get(POLICY_SECTION) if isinstance(settings, dict) else None
-        raw = section.get(POLICY_KEY) if isinstance(section, dict) else None
+        section = (
+            settings.get(self.spec.policy_section)
+            if isinstance(settings, dict)
+            else None
+        )
+        raw = section.get(self.spec.policy_key) if isinstance(section, dict) else None
         return policy_from_settings(raw)
 
     async def save_policy(
@@ -322,17 +441,17 @@ class AttendanceWaiverService:
         # Deep copy: a shallow one shares the nested section with the
         # committed state, and the reassignment would be skipped (#12).
         settings = copy.deepcopy(organization.settings or {})
-        section = settings.get(POLICY_SECTION)
+        section = settings.get(self.spec.policy_section)
         if not isinstance(section, dict):
             section = {}
-        section[POLICY_KEY] = policy.model_dump(mode="json")
-        settings[POLICY_SECTION] = section
+        section[self.spec.policy_key] = policy.model_dump(mode="json")
+        settings[self.spec.policy_section] = section
         organization.settings = settings
         await self._audit(
             "attendance_waiver_policy_updated",
             actor,
             {
-                "workflow": TRAINING_WORKFLOW.value,
+                "workflow": self.workflow.value,
                 "enabled": policy.enabled,
                 "deadline": policy.deadline,
                 "cap": policy.cap,
@@ -404,47 +523,69 @@ class AttendanceWaiverService:
             result.refusal = message
             return result
 
+        noun = self.spec.session_noun
         if not policy.enabled:
             return refuse(
                 "disabled",
-                "This department does not take requests to be excused from "
-                "training sessions.",
+                f"This department does not take requests to be excused from "
+                f"{noun}s.",
             )
-        if event.event_type != EventType.TRAINING:
-            return refuse("not_training", "Only a training session can be excused.")
+        if event.event_type != self.spec.event_type:
+            code = (
+                "not_training"
+                if self.workflow == TRAINING_WORKFLOW
+                else ("not_meeting")
+            )
+            return refuse(code, f"Only a {noun} can be excused.")
         if event.is_cancelled:
-            return refuse("cancelled", "This session was cancelled.")
-        if member.compliance_exempt:
-            return refuse(
-                "exempt",
-                "You are exempt from training requirements, so this session "
-                "does not count against you.",
-            )
-        if not await self._counting_requirements(org_id, member, event):
-            return refuse(
-                "not_counted",
-                "This session does not count toward an attendance requirement "
-                "that applies to you.",
-            )
+            return refuse("cancelled", f"This {noun} was cancelled.")
+        if self.workflow == TRAINING_WORKFLOW:
+            if member.compliance_exempt:
+                return refuse(
+                    "exempt",
+                    "You are exempt from training requirements, so this session "
+                    "does not count against you.",
+                )
+            if not await self._counting_requirements(org_id, member, event):
+                return refuse(
+                    "not_counted",
+                    "This session does not count toward an attendance "
+                    "requirement that applies to you.",
+                )
+        else:
+            if await self._on_leave(org_id, member.id, session_day):
+                return refuse(
+                    "on_leave",
+                    "You are on a leave of absence that covers this meeting, so "
+                    "it does not count against you.",
+                )
         if existing is not None:
             return refuse(
                 "already_requested",
-                "You have already asked to be excused from this session.",
+                f"You have already asked to be excused from this {noun}.",
             )
         if await self._checked_in(org_id, member.id, event.id):
             return refuse(
                 "checked_in",
-                "You checked in to this session, so it already counts as attended.",
+                f"You checked in to this {noun}, so it already counts as attended.",
+            )
+        if self.workflow == MEETING_WORKFLOW and await self._meeting_waived(
+            org_id, member.id, event.id
+        ):
+            return refuse(
+                "already_excused",
+                "The Secretary has already excused you from this meeting.",
             )
         if _now() >= deadline:
             return refuse(
-                "deadline_passed", "The deadline to ask about this session has passed."
+                "deadline_passed",
+                f"The deadline to ask about this {noun} has passed.",
             )
         if result.cap_remaining == 0:
             return refuse(
                 "no_waivers_left",
                 f"You have used all {policy.cap} of your waivers "
-                f"{_cap_period_label(policy.cap_period, session_day)}.",
+                f"{_cap_period_label(policy.cap_period, session_day, noun)}.",
             )
         result.allowed = True
         return result
@@ -498,7 +639,9 @@ class AttendanceWaiverService:
         ]
 
     async def _checked_in(self, org_id: str, user_id: str, event_id: str) -> bool:
-        """A check-in, an officer's attendance override, or a credited record."""
+        """A check-in or an officer's attendance override; for training also a
+        credited record, for a meeting also being marked present on its
+        minutes record."""
         rsvp = (
             await self.db.execute(
                 select(EventRSVP.id)
@@ -516,6 +659,22 @@ class AttendanceWaiverService:
         ).scalar_one_or_none()
         if rsvp is not None:
             return True
+        if self.workflow == MEETING_WORKFLOW:
+            present = (
+                await self.db.execute(
+                    select(MeetingAttendee.id)
+                    .join(Meeting, Meeting.id == MeetingAttendee.meeting_id)
+                    .where(
+                        Meeting.organization_id == org_id,
+                        Meeting.event_id == str(event_id),
+                        MeetingAttendee.organization_id == org_id,
+                        MeetingAttendee.user_id == str(user_id),
+                        MeetingAttendee.present.is_(True),
+                    )
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            return present is not None
         record = (
             await self.db.execute(
                 select(TrainingRecord.id)
@@ -530,6 +689,48 @@ class AttendanceWaiverService:
         ).scalar_one_or_none()
         return record is not None
 
+    async def _on_leave(self, org_id: str, user_id: str, day: date) -> bool:
+        """Whether an active leave of absence covers ``day``.
+
+        The same rule ``tally_attendance`` excludes a meeting by: such a
+        meeting already does not count against the member.
+        """
+        leave = (
+            await self.db.execute(
+                select(MemberLeaveOfAbsence.id)
+                .where(
+                    MemberLeaveOfAbsence.organization_id == org_id,
+                    MemberLeaveOfAbsence.user_id == str(user_id),
+                    MemberLeaveOfAbsence.active.is_(True),
+                    MemberLeaveOfAbsence.start_date <= day,
+                    or_(
+                        MemberLeaveOfAbsence.end_date.is_(None),
+                        MemberLeaveOfAbsence.end_date >= day,
+                    ),
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        return leave is not None
+
+    async def _meeting_waived(self, org_id: str, user_id: str, event_id: str) -> bool:
+        """Whether the meeting's minutes record already carries a waiver."""
+        waived = (
+            await self.db.execute(
+                select(MeetingAttendee.id)
+                .join(Meeting, Meeting.id == MeetingAttendee.meeting_id)
+                .where(
+                    Meeting.organization_id == org_id,
+                    Meeting.event_id == str(event_id),
+                    MeetingAttendee.organization_id == org_id,
+                    MeetingAttendee.user_id == str(user_id),
+                    MeetingAttendee.waiver_reason.is_not(None),
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        return waived is not None
+
     async def _live_request(
         self, org_id: str, user_id: str, event_id: str
     ) -> Optional[AttendanceWaiverRequest]:
@@ -542,9 +743,7 @@ class AttendanceWaiverService:
                 select(AttendanceWaiverRequest).where(
                     AttendanceWaiverRequest.organization_id == org_id,
                     AttendanceWaiverRequest.live_key
-                    == live_key_for(
-                        TRAINING_WORKFLOW.value, str(event_id), str(user_id)
-                    ),
+                    == live_key_for(self.workflow.value, str(event_id), str(user_id)),
                 )
             )
         ).scalar_one_or_none()
@@ -591,7 +790,7 @@ class AttendanceWaiverService:
         return [
             row.session_date
             for row in (await self.db.execute(query)).all()
-            if row.workflow == TRAINING_WORKFLOW
+            if row.workflow == self.workflow
             and row.status == AttendanceWaiverStatus.APPROVED
             and str(row.id) != str(exclude_id)
         ]
@@ -610,11 +809,15 @@ class AttendanceWaiverService:
     ) -> AttendanceWaiverRequest:
         org_id = str(organization_id)
         policy = await self.get_policy(org_id)
-        event = await self._event(org_id, event_id)
+        await self._event(org_id, event_id)
         # Two submissions by one member queue here. The second's plain reads
         # may still miss the first's request (a snapshot from before the
         # lock); the unique live_key then refuses its insert below.
         locked = await self._lock_member(org_id, member.id)
+        # Shared, after the member's row (see the lock order): a cancellation
+        # holds the event exclusively, so it either lands before this read,
+        # which then refuses, or waits for this insert and voids it.
+        event = await self._event(org_id, event_id, lock=True)
         assessment = await self._assess(org_id, locked, event, policy)
         if not assessment.allowed:
             raise ValueError(assessment.refusal)
@@ -623,14 +826,14 @@ class AttendanceWaiverService:
         request = AttendanceWaiverRequest(
             id=generate_uuid(),
             organization_id=org_id,
-            workflow=TRAINING_WORKFLOW,
+            workflow=self.workflow,
             user_id=str(member.id),
             event_id=str(event.id),
-            event_title_snapshot=(event.title or "Training session")[:255],
+            event_title_snapshot=(event.title or self.spec.default_title)[:255],
             event_start_snapshot=_utc(event.start_datetime),
             session_date=assessment.session_date,
             status=AttendanceWaiverStatus.PENDING,
-            live_key=live_key_for(TRAINING_WORKFLOW.value, str(event.id), member.id),
+            live_key=live_key_for(self.workflow.value, str(event.id), member.id),
             category=category,
             reason=reason,
             submitted_at=_now(),
@@ -647,7 +850,10 @@ class AttendanceWaiverService:
                 self.db.add(submitted)
                 await self.db.flush()
         except IntegrityError:
-            raise ValueError("You have already asked to be excused from this session.")
+            raise ValueError(
+                f"You have already asked to be excused from this "
+                f"{self.spec.session_noun}."
+            )
         await self._audit(
             "attendance_waiver_request_submitted",
             member,
@@ -725,7 +931,7 @@ class AttendanceWaiverService:
     ) -> AttendanceWaiverRequest:
         org_id = str(organization_id)
         policy = await self.get_policy(org_id)
-        request = await self._locked_request(org_id, request_id)
+        request = await self._locked_request(org_id, request_id, grant=True)
         await self._require_decider(org_id, actor, request, policy)
         if request.status != AttendanceWaiverStatus.PENDING:
             raise ValueError(self._settled_message(request))
@@ -776,7 +982,7 @@ class AttendanceWaiverService:
         toward it from then on. The denial stays in the log beside it.
         """
         org_id = str(organization_id)
-        request = await self._locked_request(org_id, request_id)
+        request = await self._locked_request(org_id, request_id, grant=True)
         if not await self._may_view(org_id, actor, request):
             raise AttendanceWaiverNotFound("Request not found")
         if not holds_chief_position(actor):
@@ -818,6 +1024,11 @@ class AttendanceWaiverService:
         decision = self._action(request, chosen, actor, note)
         decision_id = str(decision.id)
         self.db.add(decision)
+        if (
+            self.workflow == MEETING_WORKFLOW
+            and status == AttendanceWaiverStatus.APPROVED
+        ):
+            await grant_meeting_waiver(self.db, org_id, request, actor_id=str(actor.id))
         await self._audit(
             f"attendance_waiver_request_{chosen.value}",
             actor,
@@ -866,7 +1077,10 @@ class AttendanceWaiverService:
                 org_id, Position.id.in_(list(policy.approver_position_ids))
             )
         chiefs = await self._holder_ids(org_id, Position.slug.in_(CHIEF_POSITION_SLUGS))
-        return _DeciderPool(configured=configured, chiefs=chiefs)
+        fallback = await self._holder_ids(
+            org_id, Position.slug.in_(list(self.spec.fallback_slugs))
+        )
+        return _DeciderPool(configured=configured, fallback=fallback, chiefs=chiefs)
 
     async def _holder_ids(self, org_id: str, position_filter) -> Set[str]:
         """Current active members holding a position matching ``position_filter``."""
@@ -892,8 +1106,9 @@ class AttendanceWaiverService:
                     .where(User.organization_id == org_id, User.is_active)
                 )
             ).scalars()
+            permission = self.spec.manage_permission
             pool.managers = {
-                str(u.id) for u in members if user_has_permission(u, TRAINING_MANAGE)
+                str(u.id) for u in members if user_has_permission(u, permission)
             }
         return pool.managers
 
@@ -903,8 +1118,9 @@ class AttendanceWaiverService:
         """Who a request from ``requester_id`` is routed to: the one definition.
 
         The chosen positions' holders; when that leaves nobody (vacant, no
-        positions chosen, or only the requester), the Chief's; then every
-        holder of training.manage. The requester is never routed their own
+        positions chosen, or only the requester), the fallback office's (the
+        Chief for training, the Secretary for meetings); then every holder of
+        the workflow's manage permission. The requester is never routed their own
         request, and a request always reaches someone while anyone else holds
         one of those. ``recipients`` and ``may_decide`` both read this, so who
         is asked and who may answer cannot drift apart.
@@ -912,7 +1128,7 @@ class AttendanceWaiverService:
         requester = str(requester_id)
         if requester not in pool.routed:
             routed: Set[str] = set()
-            for step in (pool.configured, pool.chiefs):
+            for step in (pool.configured, pool.fallback):
                 routed = step - {requester}
                 if routed:
                     break
@@ -940,8 +1156,8 @@ class AttendanceWaiverService:
         """Whether ``user`` may approve or deny ``request``.
 
         Never its requester. Otherwise a current holder of a chosen position,
-        a Chief, or anyone the routing chain reached because the chosen
-        positions left nobody (see ``_route_ids``).
+        a Chief (in either workflow), or anyone the routing chain reached
+        because the chosen positions left nobody (see ``_route_ids``).
         """
         org_id = str(request.organization_id)
         pool = await self._pool(org_id, policy)
@@ -977,22 +1193,28 @@ class AttendanceWaiverService:
 
         The set form of ``_may_decide_in`` over every requester, so the queue
         can be filtered and paged in SQL. A configured holder or a Chief
-        decides everyone's; anyone else only where the chain falls through to
-        training managers, which happens for every requester when the chosen
-        positions and the Chief's are all vacant, and for the one member who
-        holds all of them when that member is the requester.
+        decides everyone's. A fallback holder decides where the chosen
+        positions leave nobody: every requester when they are vacant, and
+        their one holder's own request. A manager decides where the fallback
+        leaves nobody too: every requester when both are vacant, and the one
+        member who holds all of them when that member is the requester.
         """
         uid = str(actor.id)
         if uid in pool.configured or uid in pool.chiefs:
             return None
-        if uid not in await self._managers(org_id, pool):
-            return set()
-        upstream = pool.configured | pool.chiefs
-        if not upstream:
-            return None
-        if len(upstream) == 1:
-            return set(upstream)
-        return set()
+        requesters: Set[str] = set()
+        if uid in pool.fallback:
+            if not pool.configured:
+                return None
+            if len(pool.configured) == 1:
+                requesters |= pool.configured
+        if uid in await self._managers(org_id, pool):
+            upstream = pool.configured | pool.fallback
+            if not upstream:
+                return None
+            if len(upstream) == 1:
+                requesters |= upstream
+        return requesters - {uid}
 
     # ------------------------------------------------------------------
     # Reads
@@ -1016,7 +1238,7 @@ class AttendanceWaiverService:
             .where(
                 AttendanceWaiverRequest.organization_id == str(organization_id),
                 AttendanceWaiverRequest.user_id == str(member.id),
-                AttendanceWaiverRequest.workflow == TRAINING_WORKFLOW,
+                AttendanceWaiverRequest.workflow == self.workflow,
             )
             .order_by(
                 AttendanceWaiverRequest.submitted_at.desc(),
@@ -1046,7 +1268,7 @@ class AttendanceWaiverService:
             decidable = false()
         conditions = [
             AttendanceWaiverRequest.organization_id == org_id,
-            AttendanceWaiverRequest.workflow == TRAINING_WORKFLOW,
+            AttendanceWaiverRequest.workflow == self.workflow,
             or_(decidable, AttendanceWaiverRequest.decided_by == str(actor.id)),
         ]
         if status is not None:
@@ -1175,14 +1397,15 @@ class AttendanceWaiverService:
     # Loading and locking
     # ------------------------------------------------------------------
 
-    async def _event(self, org_id: str, event_id: str) -> Event:
-        event: Optional[Event] = (
-            await self.db.execute(
-                select(Event).where(
-                    Event.id == str(event_id), Event.organization_id == org_id
-                )
+    async def _event(self, org_id: str, event_id: str, *, lock: bool = False) -> Event:
+        query = select(Event).where(
+            Event.id == str(event_id), Event.organization_id == org_id
+        )
+        if lock:
+            query = query.with_for_update(read=True).execution_options(
+                populate_existing=True
             )
-        ).scalar_one_or_none()
+        event: Optional[Event] = (await self.db.execute(query)).scalar_one_or_none()
         # A draft is not shown to members, so it is not there to ask about.
         if event is None or event.is_draft:
             raise AttendanceWaiverNotFound("Session not found")
@@ -1223,25 +1446,38 @@ class AttendanceWaiverService:
                 select(AttendanceWaiverRequest).where(
                     AttendanceWaiverRequest.id == str(request_id),
                     AttendanceWaiverRequest.organization_id == org_id,
+                    AttendanceWaiverRequest.workflow == self.workflow,
                 )
             )
         ).scalar_one_or_none()
         return found
 
     async def _locked_request(
-        self, org_id: str, request_id: str
+        self, org_id: str, request_id: str, *, grant: bool = False
     ) -> AttendanceWaiverRequest:
-        """The request, locked, after its requester's row (see the lock order)."""
+        """The request, locked, after its requester's row (see the lock order).
+
+        ``grant`` is for a decision that may approve: a meeting request's
+        event is then locked, shared, between the two, so the approval and a
+        minutes record being built from the event cannot miss each other.
+        """
         peek = await self._find(org_id, request_id)
         if peek is None:
             raise AttendanceWaiverNotFound("Request not found")
         await self._lock_member(org_id, peek.user_id)
+        if grant and self.workflow == MEETING_WORKFLOW and peek.event_id:
+            await self.db.execute(
+                select(Event.id)
+                .where(Event.id == str(peek.event_id), Event.organization_id == org_id)
+                .with_for_update(read=True)
+            )
         locked: Optional[AttendanceWaiverRequest] = (
             await self.db.execute(
                 select(AttendanceWaiverRequest)
                 .where(
                     AttendanceWaiverRequest.id == str(request_id),
                     AttendanceWaiverRequest.organization_id == org_id,
+                    AttendanceWaiverRequest.workflow == self.workflow,
                 )
                 .with_for_update()
                 .execution_options(populate_existing=True)
@@ -1259,7 +1495,7 @@ class AttendanceWaiverService:
     def _action(
         request: AttendanceWaiverRequest,
         action: AttendanceWaiverAction,
-        actor: User,
+        actor: Optional[User],
         note: Optional[str] = None,
     ) -> AttendanceWaiverRequestAction:
         return AttendanceWaiverRequestAction(
@@ -1267,7 +1503,7 @@ class AttendanceWaiverService:
             organization_id=str(request.organization_id),
             request_id=str(request.id),
             action=action,
-            actor_id=str(actor.id),
+            actor_id=str(actor.id) if actor is not None else None,
             note=_clean(note),
             created_at=_now(),
         )
@@ -1290,7 +1526,7 @@ class AttendanceWaiverService:
         await log_audit_event(
             db=self.db,
             event_type=event_type,
-            event_category="training",
+            event_category=self.spec.audit_category,
             severity=severity,
             event_data=data,
             user_id=str(actor.id),
@@ -1407,7 +1643,13 @@ class AttendanceWaiverService:
     ) -> None:
         """The emails a log row calls for, after the commit (see
         ``AttendanceWaiverEmails``). Never fails the request; a failed send
-        rolls the session back, so ``request`` is reloaded for the caller."""
+        rolls the session back, so ``request`` is reloaded for the caller.
+
+        Training only, for now: the meeting templates are catalogued, and the
+        meetings frontend PR turns their sends on with the screens that
+        decide meeting requests (``_TEMPLATES`` in the email service)."""
+        if self.workflow != TRAINING_WORKFLOW:
+            return
         # Read before sending: a rollback there expires the request.
         request_id = str(request.id)
         sent = await AttendanceWaiverEmails(self.db).send_for_action(
@@ -1435,7 +1677,7 @@ class AttendanceWaiverService:
 
 def decider_action_url(request: AttendanceWaiverRequest) -> str:
     """Where a decider's prompt leads: the request's own page."""
-    return f"/attendance-waivers/{request.id}"
+    return f"{SPECS[request.workflow].decider_path}/{request.id}"
 
 
 def member_action_url(request: AttendanceWaiverRequest) -> str:
@@ -1443,8 +1685,239 @@ def member_action_url(request: AttendanceWaiverRequest) -> str:
     event is gone."""
     if request.event_id:
         return f"/events/{request.event_id}"
-    return "/training/my-training"
+    return SPECS[request.workflow].member_fallback_url
 
 
 def _day_label(day: date) -> str:
     return f"{calendar.month_name[day.month]} {day.day}, {day.year}"
+
+
+# ---------------------------------------------------------------------------
+# The meeting workflow's grant, and what the event's lifecycle does to requests
+# ---------------------------------------------------------------------------
+
+
+def _apply_meeting_waiver(
+    attendee: MeetingAttendee, request: AttendanceWaiverRequest, granted_by
+) -> bool:
+    """Write ``request``'s waiver onto ``attendee``; False when it has one.
+
+    A waiver already there (the Secretary granted one by hand) is left as it
+    is: the member is excused either way, and the Secretary's words are not
+    overwritten. ``present`` is never touched: if the member checked in,
+    check-in wins (``tally_attendance``).
+    """
+    if attendee.waiver_reason:
+        return False
+    attendee.excused = True
+    attendee.waiver_reason = meeting_waiver_text(request.category)
+    attendee.waiver_granted_by = str(granted_by) if granted_by else None
+    attendee.waiver_granted_at = request.decided_at or _now()
+    attendee.waiver_request_id = str(request.id)
+    return True
+
+
+def _absent_waived_attendee(
+    org_id: str, meeting_id: str, request: AttendanceWaiverRequest, granted_by
+) -> MeetingAttendee:
+    attendee = MeetingAttendee(
+        id=generate_uuid(),
+        organization_id=org_id,
+        meeting_id=str(meeting_id),
+        user_id=str(request.user_id),
+        # Explicit: the column defaults to True, which would record a member
+        # who asked to be excused as having attended.
+        present=False,
+        excused=False,
+    )
+    _apply_meeting_waiver(attendee, request, granted_by)
+    return attendee
+
+
+async def grant_meeting_waiver(
+    db: AsyncSession,
+    org_id: str,
+    request: AttendanceWaiverRequest,
+    *,
+    actor_id: Optional[str],
+) -> int:
+    """Write an approved meeting request onto its event's minutes record.
+
+    Does not commit. Nothing to write when no minutes record exists yet:
+    ``MeetingsService.create_from_event`` carries the approval over when it
+    builds one. The caller holds the event shared (``_locked_request``), and
+    each minutes record is locked here before its attendee is read, the
+    parent the Secretary's own grant locks too (pitfall #27), so the unique
+    (meeting, member) row is found rather than inserted twice. Returns the
+    number of minutes records written to.
+    """
+    if not request.event_id:
+        return 0
+    meetings = (
+        (
+            await db.execute(
+                select(Meeting)
+                .where(
+                    Meeting.organization_id == org_id,
+                    Meeting.event_id == str(request.event_id),
+                )
+                .with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    written = 0
+    for meeting in meetings:
+        attendee = (
+            await db.execute(
+                select(MeetingAttendee)
+                .where(
+                    MeetingAttendee.organization_id == org_id,
+                    MeetingAttendee.meeting_id == str(meeting.id),
+                    MeetingAttendee.user_id == str(request.user_id),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if attendee is None:
+            db.add(_absent_waived_attendee(org_id, meeting.id, request, actor_id))
+            written += 1
+        elif _apply_meeting_waiver(attendee, request, actor_id):
+            written += 1
+    return written
+
+
+async def carry_over_meeting_waivers(
+    db: AsyncSession,
+    org_id: str,
+    event_id: str,
+    meeting_id: str,
+    attendees: Dict[str, MeetingAttendee],
+) -> int:
+    """Approved meeting requests for ``event_id``, onto a new minutes record.
+
+    For ``MeetingsService.create_from_event``, inside its lock on the event
+    and before its commit. ``attendees`` are the rows it is about to insert,
+    by member; a member with no row gets one, absent. A locking read: the
+    caller's snapshot may predate an approval that committed while it waited
+    for the event (pitfall #27). Returns how many were carried over.
+    """
+    approved = (
+        (
+            await db.execute(
+                select(AttendanceWaiverRequest)
+                .where(
+                    AttendanceWaiverRequest.organization_id == org_id,
+                    AttendanceWaiverRequest.event_id == str(event_id),
+                    AttendanceWaiverRequest.workflow == MEETING_WORKFLOW,
+                    AttendanceWaiverRequest.status == AttendanceWaiverStatus.APPROVED,
+                )
+                .with_for_update(read=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    carried = 0
+    for request in approved:
+        attendee = attendees.get(str(request.user_id))
+        if attendee is None:
+            attendee = _absent_waived_attendee(
+                org_id, meeting_id, request, request.decided_by
+            )
+            attendees[str(request.user_id)] = attendee
+            db.add(attendee)
+            carried += 1
+        elif _apply_meeting_waiver(attendee, request, request.decided_by):
+            carried += 1
+    return carried
+
+
+async def void_pending_for_events(
+    db: AsyncSession, org_id: str, event_ids: Sequence[str], cause: str
+) -> int:
+    """Void every pending request, of either workflow, for these events.
+
+    For the event's cancellation or deletion, inside the caller's
+    transaction (it commits) while it holds the events exclusively. A pending
+    request is about a session that will not now be held, so there is nothing
+    left to decide: it is voided, which frees its slot, its deciders' prompts
+    are archived and the member is told. An approved or denied request is the
+    member's record and is kept (the row outlives the event, see the model).
+    ``cause`` is "cancelled" or "deleted", for the log and the notice.
+    """
+    ids = [str(e) for e in event_ids if e]
+    if not ids:
+        return 0
+    pending = list(
+        (
+            await db.execute(
+                select(AttendanceWaiverRequest)
+                .where(
+                    AttendanceWaiverRequest.organization_id == org_id,
+                    AttendanceWaiverRequest.event_id.in_(ids),
+                    AttendanceWaiverRequest.status == AttendanceWaiverStatus.PENDING,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for request in pending:
+        spec = SPECS[request.workflow]
+        request.status = AttendanceWaiverStatus.VOIDED
+        request.live_key = None
+        db.add(
+            AttendanceWaiverService._action(
+                request,
+                AttendanceWaiverAction.VOIDED,
+                None,
+                f"The {spec.session_noun} was {cause}.",
+            )
+        )
+        db.add(
+            NotificationLog(
+                id=generate_uuid(),
+                organization_id=org_id,
+                recipient_id=str(request.user_id),
+                channel=NotificationChannel.IN_APP,
+                category=MEMBER_UPDATE_CATEGORY,
+                subject=f"Waiver request closed — {request.event_title_snapshot}",
+                message=(
+                    f"Your request to be excused from "
+                    f'"{request.event_title_snapshot}" on '
+                    f"{_day_label(request.session_date)} was closed: the "
+                    f"{spec.session_noun} was {cause}."
+                ),
+                # Not the event: it may be about to be deleted.
+                action_url=spec.member_fallback_url,
+                notification_metadata={PROMPT_METADATA_KEY: str(request.id)},
+                delivered=True,
+            )
+        )
+        await log_audit_event(
+            db=db,
+            event_type="attendance_waiver_request_voided",
+            event_category=spec.audit_category,
+            severity="info",
+            event_data={
+                **AttendanceWaiverService._ids(request),
+                "cause": cause,
+            },
+        )
+    if pending:
+        await db.flush()
+        notifications = NotificationsService(db)
+        for request in pending:
+            await notifications.archive_related_notifications(
+                org_id,
+                REVIEW_PROMPT_CATEGORY,
+                PROMPT_METADATA_KEY,
+                str(request.id),
+                commit=False,
+            )
+    return len(pending)

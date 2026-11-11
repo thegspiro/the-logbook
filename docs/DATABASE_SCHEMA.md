@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**368 tables · 5952 columns · 1232 foreign keys**
+**368 tables · 5953 columns · 1233 foreign keys**
 
 ---
 
@@ -520,7 +520,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 15 | Meeting Action Item model |
-| [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 10 | Meeting Attendee model |
+| [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 11 | Meeting Attendee model |
 | [`meetings`](#meetings) | `Meeting` | 21 | Meeting model |
 
 ### Member Supervisors
@@ -4530,8 +4530,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `category_id` | VARCHAR(36) | yes | FK |  | → `budget_categories.id` ON DELETE SET NULL |
 | `station_id` | VARCHAR(36) | yes | FK |  | → `facilities.id` ON DELETE SET NULL |
 | `owner_position_id` | VARCHAR(36) | yes | FK, IDX |  | → `positions.id` ON DELETE SET NULL |
-| `requested_amount` | NUMERIC(12, 2) | no |  |  |  |
-| `justification` | TEXT | no |  |  |  |
+| `requested_amount` | NUMERIC(12, 2) | yes |  |  |  |
+| `justification` | TEXT | yes |  |  |  |
 | `status` | ENUM(`draft`, `submitted`, `approved`, `adjusted`, `declined`) | no |  | `'draft'` |  |
 | `approved_amount` | NUMERIC(12, 2) | yes |  |  |  |
 | `decision_note` | TEXT | yes |  |  |  |
@@ -8139,13 +8139,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `meeting_id` | VARCHAR(36) | no | FK, IDX |  | → `meetings.id` ON DELETE CASCADE |
+| `meeting_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `meetings.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
 | `present` | BOOL | yes |  | `True` |  |
 | `excused` | BOOL | yes |  | `False` |  |
 | `waiver_reason` | TEXT | yes |  |  |  |
 | `waiver_granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `waiver_granted_at` | DATETIME | yes |  |  |  |
+| `waiver_request_id` | VARCHAR(36) | yes | FK, IDX |  | → `attendance_waiver_requests.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 
 **Indexes**
@@ -8153,6 +8154,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_meeting_attendees_meeting` (`meeting_id`)
 - `idx_meeting_attendees_organization` (`organization_id`)
 - `idx_meeting_attendees_user` (`user_id`)
+- `idx_meeting_attendees_waiver_request` (`waiver_request_id`)
+- UNIQUE `uq_meeting_attendees_meeting_user` (`meeting_id`, `user_id`)
 
 ### `meetings`
 
@@ -14030,6 +14033,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestions` | `box_id` | CASCADE | no |
 | `suggestions` | `routed_from_box_id` | SET NULL | yes |
 
+### → `attendance_waiver_requests` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `attendance_waiver_email_sends` | `request_id` | CASCADE | no |
+| `attendance_waiver_request_actions` | `request_id` | CASCADE | no |
+| `meeting_attendees` | `waiver_request_id` | SET NULL | yes |
+
 ### → `check_requests` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -14160,13 +14171,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `approval_chain_steps` | `chain_id` | CASCADE | no |
 | `approval_step_records` | `chain_id` | CASCADE | no |
-
-### → `attendance_waiver_requests` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `attendance_waiver_email_sends` | `request_id` | CASCADE | no |
-| `attendance_waiver_request_actions` | `request_id` | CASCADE | no |
 
 ### → `check_template_items` (2 references)
 

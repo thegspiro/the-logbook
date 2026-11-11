@@ -16,8 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.onboarding import OnboardingStatus
 from app.models.user import Organization, Position, User
-from app.schemas.attendance_waiver import POLICY_KEY as WAIVER_POLICY_KEY
-from app.schemas.attendance_waiver import POLICY_SECTION as WAIVER_POLICY_SECTION
+from app.schemas.attendance_waiver import POLICY_LOCATIONS as WAIVER_POLICY_LOCATIONS
 from app.schemas.organization import (
     _LEGACY_EMAIL_OAUTH_FIELDS,
     ContactInfoSettings,
@@ -523,17 +522,19 @@ class OrganizationService:
             for k, v in settings_update.items()
             if k not in ("email_link_domain", FILE_STORAGE_ACTIVATION_KEY)
         }
-        # Likewise the session waiver policy: its own endpoint requires
-        # training.manage, validates it and checks its positions are this
-        # department's. Written here it would skip all three, and a value the
-        # policy model cannot read turns the feature off for every member
+        # Likewise the waiver policies, training and business meeting: each
+        # has its own endpoint, which requires training.manage or
+        # meetings.manage, validates the policy and checks its positions are
+        # this department's. Written here it would skip all three, and a value
+        # the policy model cannot read turns the feature off for every member
         # without a word (policy_from_settings reads it as the disabled
         # default).
-        training_update = settings_update.get(WAIVER_POLICY_SECTION)
-        if isinstance(training_update, dict) and WAIVER_POLICY_KEY in training_update:
-            settings_update[WAIVER_POLICY_SECTION] = {
-                k: v for k, v in training_update.items() if k != WAIVER_POLICY_KEY
-            }
+        for policy_section, policy_key in WAIVER_POLICY_LOCATIONS:
+            section_update = settings_update.get(policy_section)
+            if isinstance(section_update, dict) and policy_key in section_update:
+                settings_update[policy_section] = {
+                    k: v for k, v in section_update.items() if k != policy_key
+                }
 
         # Deep copy to avoid mutating SQLAlchemy's committed state
         current_settings = copy.deepcopy(org.settings or {})

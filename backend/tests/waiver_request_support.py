@@ -197,3 +197,61 @@ async def make_session(
         )
     await db.flush()
     return str(event.id)
+
+
+async def set_meeting_policy(db, org_id: str, **fields) -> None:
+    """Store the business-meeting policy as the Secretary's save would."""
+    org = (
+        await db.execute(select(Organization).where(Organization.id == org_id))
+    ).scalar_one()
+    settings = copy.deepcopy(org.settings or {})
+    settings.setdefault("meetings", {})["waiver_policy"] = {"enabled": True, **fields}
+    org.settings = settings
+    await db.flush()
+
+
+async def make_meeting_event(
+    db,
+    org_id: str,
+    start: datetime,
+    *,
+    hours: int = 2,
+    cancelled: bool = False,
+    title: str = "Monthly Business Meeting",
+) -> str:
+    """A business_meeting event, with no minutes record; the event id."""
+    event = Event(
+        id=uid(),
+        organization_id=org_id,
+        title=title,
+        event_type=EventType.BUSINESS_MEETING,
+        start_datetime=start,
+        end_datetime=start + timedelta(hours=hours),
+        is_cancelled=cancelled,
+    )
+    db.add(event)
+    await db.flush()
+    return str(event.id)
+
+
+async def make_minutes_record(
+    db, org_id: str, created_by: str, *, event_id: Optional[str] = None, day=None
+) -> str:
+    """A minutes record (``Meeting``), linked to ``event_id`` when given."""
+    from datetime import date
+
+    from app.models.meeting import Meeting, MeetingStatus, MeetingType
+
+    meeting = Meeting(
+        id=uid(),
+        organization_id=org_id,
+        title="Business Meeting",
+        meeting_type=MeetingType.BUSINESS,
+        meeting_date=day or date(2026, 11, 20),
+        event_id=event_id,
+        status=MeetingStatus.DRAFT,
+        created_by=created_by,
+    )
+    db.add(meeting)
+    await db.flush()
+    return str(meeting.id)

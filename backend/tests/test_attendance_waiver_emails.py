@@ -23,7 +23,7 @@ shipped defaults.
 from datetime import date
 from types import SimpleNamespace
 from typing import Any, Dict, List
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy import select, text
@@ -42,7 +42,10 @@ from app.services.attendance_waiver_email_service import (
     review_buttons_html,
     user_key,
 )
-from app.services.attendance_waiver_service import AttendanceWaiverService
+from app.services.attendance_waiver_service import (
+    MEETING_WORKFLOW,
+    AttendanceWaiverService,
+)
 from app.services.email_service import EmailService
 from app.services.email_templates_attendance_waivers import DEFAULT_TEMPLATE_DEFS
 from tests.waiver_request_support import (
@@ -619,3 +622,31 @@ class TestTheRenderedEmail:
 
         assert "<script>" not in markup
         assert "&quot;" in markup
+
+
+@pytest.mark.unit
+class TestOnlyTheTrainingWorkflowSends:
+    """The meeting templates are catalogued; their sends come with the
+    meetings frontend, so the meeting workflow mails nothing yet."""
+
+    async def test_the_meeting_workflow_sends_no_email(self):
+        send = AsyncMock(return_value=1)
+        db = MagicMock()
+        db.refresh = AsyncMock()
+        with patch.object(AttendanceWaiverEmails, "send_for_action", send):
+            await AttendanceWaiverService(db, MEETING_WORKFLOW)._email(
+                "org-1", SimpleNamespace(id="req-1"), "act-1"
+            )
+
+        send.assert_not_awaited()
+
+    async def test_the_training_workflow_does(self):
+        send = AsyncMock(return_value=1)
+        db = MagicMock()
+        db.refresh = AsyncMock()
+        with patch.object(AttendanceWaiverEmails, "send_for_action", send):
+            await AttendanceWaiverService(db)._email(
+                "org-1", SimpleNamespace(id="req-1"), "act-1"
+            )
+
+        send.assert_awaited_once_with("org-1", "act-1")

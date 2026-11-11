@@ -1125,6 +1125,11 @@ jobs:
   # image, a Playwright bump that changes the dependency list) still goes to
   # the network: a stall fails this job in minutes rather than hanging it.
   #
+  # Until 2026-11-11 that cache had never once been saved, so every run went to
+  # the mirror. See the step that hands the archive directory back after the
+  # install. Without a saved cache, the Ubuntu mirrors' DNS outage of that day
+  # failed every leg of this job, run after run, before any test started.
+  #
   # 45, raised from 30 on 2026-11-05. The table-fit specs merged that day
   # (#4068-#4077) check each table at the six TABLE_FIT_VIEWPORTS, and this
   # project runs them too: main's whole-job time went from 16-26 min on
@@ -1197,9 +1202,11 @@ jobs:
         run: npx playwright install webkit
 
       # /var/cache/apt/archives is root-owned on this image, so a non-root
-      # cache restore/save can't write into it without this. apt itself still
+      # cache restore can't write into it without this. apt itself still
       # installs via sudo (as root) regardless of who owns the directory, so
-      # the chown only has to satisfy actions/cache, not apt.
+      # the chown only has to satisfy actions/cache, not apt. It covers the
+      # restore only: the install takes part of it back, which the step after
+      # the install undoes for the save.
       - name: Allow apt cache restore/save to write the archive directory
         run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
 
@@ -1219,6 +1226,18 @@ jobs:
       - name: Install WebKit system libraries
         timeout-minutes: 20
         run: npx playwright install-deps webkit
+
+      # apt hands archives/partial back to its own `_apt` user, mode 0700,
+      # while it installs, and leaves root's `lock` file at 0640. The cache's
+      # post-job save runs tar as the runner user, which then cannot read
+      # partial/. The save is dropped with a warning that does not fail the job
+      # ("tar: .../archives/partial: Cannot open: Permission denied", "Failed to
+      # save"), so the cache above had never been written and every run fetched
+      # all ~114 MB from the mirror. Taking the directory back once apt is done
+      # with it lets the save read everything under it. The next install has
+      # apt reclaim partial/ as before.
+      - name: Let the post-job cache save read the apt archive directory
+        run: sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
 
       - name: Run Mobile Safari E2E tests
         run: npx playwright test --project="Mobile Safari" --grep-invert '@screenshots|@sweep' --shard=${{ matrix.shard }}/3

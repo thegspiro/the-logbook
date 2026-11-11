@@ -251,7 +251,8 @@ class AttendanceWaiverEmails:
                 AttendanceWaiverService,
             )
 
-            waivers = AttendanceWaiverService(self.db)
+            # Routed by the request's own workflow's positions and fallbacks.
+            waivers = AttendanceWaiverService(self.db, request.workflow)
             policy = await waivers.get_policy(org_id)
             users = await waivers.recipients(org_id, request, policy)
             kind = APPROVER_KIND
