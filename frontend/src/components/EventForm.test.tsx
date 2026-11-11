@@ -466,7 +466,7 @@ describe('EventForm', () => {
 
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
-      const locationSelect = await screen.findByLabelText(/location/i);
+      const locationSelect = await screen.findByLabelText(/location/i, { selector: 'select' });
       const labels = Array.from((locationSelect as HTMLSelectElement).options).map((option) => option.text);
       expect(labels).toContain('Quartermaster Storage');
       expect(labels).toContain('Conference Room');
@@ -493,7 +493,7 @@ describe('EventForm', () => {
 
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
-      const locationSelect = await screen.findByLabelText(/location/i);
+      const locationSelect = await screen.findByLabelText(/location/i, { selector: 'select' });
       expect(locationSelect).toHaveTextContent('Storage — Office — Station 1');
       expect(locationSelect).toHaveTextContent('Storage — Office — Station 2');
     });
@@ -523,7 +523,7 @@ describe('EventForm', () => {
 
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
-      const locationSelect = await screen.findByLabelText(/location/i);
+      const locationSelect = await screen.findByLabelText(/location/i, { selector: 'select' });
       await waitFor(() => expect((locationSelect as HTMLSelectElement).options.length).toBeGreaterThan(3));
       const labels = Array.from((locationSelect as HTMLSelectElement).options).map((option) => option.text);
       expect(labels).toContain('Volunteer Office — Station 1 - Headquarters');

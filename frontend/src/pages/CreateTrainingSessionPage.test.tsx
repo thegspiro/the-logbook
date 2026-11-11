@@ -6,21 +6,21 @@ import { renderWithRouter } from '../test/utils';
 const getUsers = vi.fn();
 const getCourses = vi.fn();
 const getLocations = vi.fn();
-const createSession = vi.fn();
-const getBasicApparatus = vi.fn();
+const getEvents = vi.fn();
+const getVisibleEventTypesWithCategories = vi.fn();
+const createEvent = vi.fn();
+const createRecurringEvent = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: { getUsers: (...args: unknown[]) => getUsers(...args) as unknown },
   trainingService: { getCourses: (...args: unknown[]) => getCourses(...args) as unknown },
   locationsService: { getLocations: (...args: unknown[]) => getLocations(...args) as unknown },
-  trainingSessionService: {
-    createSession: (...args: unknown[]) => createSession(...args) as unknown,
-    createRecurringSessions: vi.fn(),
+  eventService: {
+    getEvents: (...args: unknown[]) => getEvents(...args) as unknown,
+    getVisibleEventTypesWithCategories: (...args: unknown[]) => getVisibleEventTypesWithCategories(...args) as unknown,
+    createEvent: (...args: unknown[]) => createEvent(...args) as unknown,
+    createRecurringEvent: (...args: unknown[]) => createRecurringEvent(...args) as unknown,
   },
-}));
-
-vi.mock('../modules/scheduling/services/api', () => ({
-  schedulingService: { getBasicApparatus: (...args: unknown[]) => getBasicApparatus(...args) as unknown },
 }));
 
 const linkageRequirements = vi.hoisted(() => ({ value: [] as unknown[] }));
@@ -33,12 +33,23 @@ vi.mock('../hooks/useTrainingLinkageData', () => ({
   }),
 }));
 
-vi.mock('../components/training/TrainingLinkageFields', () => ({ TrainingLinkageFields: () => null }));
-
 vi.mock('../hooks/useRanks', () => ({ useRanks: () => ({ formatRank: (rank: string) => rank }) }));
 
 const tzState = vi.hoisted(() => ({ value: 'UTC' }));
 vi.mock('../hooks/useTimezone', () => ({ useTimezone: () => tzState.value }));
+
+const permissions = vi.hoisted(() => ({ value: new Set<string>() }));
+vi.mock('../stores/authStore', () => ({
+  useAuthStore: (
+    selector: (state: { user: { id: string }; checkPermission: (permission: string) => boolean }) => unknown
+  ) => selector({ user: { id: 'me' }, checkPermission: (permission: string) => permissions.value.has(permission) }),
+}));
+
+const navigate = vi.hoisted(() => vi.fn());
+vi.mock('react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-router')>()),
+  useNavigate: () => navigate,
+}));
 
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock('react-hot-toast', () => ({
@@ -47,87 +58,10 @@ vi.mock('react-hot-toast', () => ({
 
 import CreateTrainingSessionPage from './CreateTrainingSessionPage';
 
+type User = ReturnType<typeof userEvent.setup>;
+
 const INSTRUCTOR_ID = '7d4c1f0e-0000-4000-8000-0000000000aa';
-
-describe('CreateTrainingSessionPage lead instructor', () => {
-  beforeEach(() => {
-    getUsers.mockReset();
-    getUsers.mockResolvedValue([
-      { id: INSTRUCTOR_ID, username: 'rcole', first_name: 'Rita', last_name: 'Cole', status: 'active' },
-    ]);
-    getCourses.mockReset();
-    getCourses.mockResolvedValue([]);
-    getLocations.mockReset();
-    getLocations.mockResolvedValue([]);
-    getBasicApparatus.mockReset();
-    getBasicApparatus.mockResolvedValue([]);
-    createSession.mockReset();
-    createSession.mockResolvedValue({ id: 'session-1', event_id: 'event-1' });
-    linkageRequirements.value = [];
-  });
-
-  // The page kept the picked member's id locally and sent only their name,
-  // so the backend's instructor qualification checks never had a member to check.
-  it('sends the picked member as instructor_id alongside the name', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<CreateTrainingSessionPage />);
-
-    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Ladder Drill');
-    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-
-    await user.type(screen.getByPlaceholderText('e.g., CPR/AED for Healthcare Providers'), 'Ladder Operations');
-    const instructor = screen.getByDisplayValue('Select instructor...');
-    await waitFor(() => expect(within(instructor).getByRole('option', { name: 'Rita Cole' })).toBeInTheDocument());
-    await user.selectOptions(instructor, 'Rita Cole');
-
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: /Create Training Session/ }));
-
-    await waitFor(() => expect(createSession).toHaveBeenCalledTimes(1));
-    expect(createSession).toHaveBeenCalledWith(
-      expect.objectContaining({ instructor: 'Rita Cole', instructor_id: INSTRUCTOR_ID })
-    );
-  });
-
-  it('omits instructor_id when no lead instructor is picked', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<CreateTrainingSessionPage />);
-
-    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Ladder Drill');
-    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.type(screen.getByPlaceholderText('e.g., CPR/AED for Healthcare Providers'), 'Ladder Operations');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: /Create Training Session/ }));
-
-    await waitFor(() => expect(createSession).toHaveBeenCalledTimes(1));
-    const payload = createSession.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(payload.instructor_id).toBeUndefined();
-    expect(payload.instructor).toBeUndefined();
-  });
-
-  // The apparatus picker was never sent, so a choice made there was silently
-  // dropped; it was removed rather than left to imply something is recorded.
-  it('offers no apparatus picker and does not load the apparatus list', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<CreateTrainingSessionPage />);
-
-    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Ladder Drill');
-    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-
-    expect(await screen.findByDisplayValue('Select instructor...')).toBeInTheDocument();
-    expect(screen.queryByText('No apparatus')).not.toBeInTheDocument();
-    expect(screen.queryByText(/^Apparatus/)).not.toBeInTheDocument();
-    expect(getBasicApparatus).not.toHaveBeenCalled();
-  });
-});
+const RITA = { id: INSTRUCTOR_ID, username: 'rcole', first_name: 'Rita', last_name: 'Cole', status: 'active' };
 
 // A course saved the way the setup guide's first step leaves it: a duration,
 // and Credit Hours left blank.
@@ -135,191 +69,153 @@ const CPR = {
   id: 'course-cpr',
   organization_id: 'org',
   name: 'CPR / BLS',
+  code: 'CPR',
   training_type: 'continuing_education',
   duration_hours: 4,
   is_active: true,
 };
 
-describe('CreateTrainingSessionPage with a course from the library', () => {
-  beforeEach(() => {
-    tzState.value = 'UTC';
-    toastError.mockReset();
-    getUsers.mockReset();
-    getUsers.mockResolvedValue([]);
-    getCourses.mockReset();
-    getCourses.mockResolvedValue([CPR]);
-    getLocations.mockReset();
-    getLocations.mockResolvedValue([]);
-    getBasicApparatus.mockReset();
-    getBasicApparatus.mockResolvedValue([]);
-    createSession.mockReset();
-    createSession.mockResolvedValue({ id: 'session-1', event_id: 'event-1' });
-  });
-
-  async function fillEventDetails(user: ReturnType<typeof userEvent.setup>) {
-    await user.type(screen.getByLabelText(/Training Title/), 'CPR recert night');
-    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.selectOptions(screen.getByLabelText('Start time hour'), '7');
-    await user.selectOptions(screen.getByLabelText('Start time minute'), '00');
-    await user.selectOptions(screen.getByLabelText('Start time AM/PM'), 'PM');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
-    await user.selectOptions(screen.getByLabelText('End time hour'), '11');
-    await user.selectOptions(screen.getByLabelText('End time minute'), '00');
-    await user.selectOptions(screen.getByLabelText('End time AM/PM'), 'PM');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
+/** The API defaults every block starts from; each block resets and installs them (pitfall #28). */
+function resetApi() {
+  tzState.value = 'UTC';
+  permissions.value = new Set(['events.manage', 'training.manage']);
+  linkageRequirements.value = [];
+  for (const mock of [
+    getUsers,
+    getCourses,
+    getLocations,
+    getEvents,
+    getVisibleEventTypesWithCategories,
+    createEvent,
+    createRecurringEvent,
+    navigate,
+    toastError,
+  ]) {
+    mock.mockReset();
   }
+  getUsers.mockResolvedValue([]);
+  getCourses.mockResolvedValue([]);
+  getLocations.mockResolvedValue([]);
+  getEvents.mockResolvedValue([]);
+  getVisibleEventTypesWithCategories.mockResolvedValue({
+    visible_event_types: ['training'],
+    custom_event_categories: [],
+    visible_custom_categories: [],
+    membership_types: [{ value: 'active', label: 'Active Member' }],
+  });
+  createEvent.mockResolvedValue({ id: 'event-1' });
+  createRecurringEvent.mockResolvedValue([{ id: 'event-1' }, { id: 'event-2' }]);
+}
 
-  it('starts on the library choice when the department has courses', async () => {
-    const user = userEvent.setup();
+/** Title and a start date; the end follows two hours later. */
+async function fillEventDetails(user: User, title = 'Ladder Drill') {
+  await user.type(screen.getByLabelText(/^Title/), title);
+  await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
+}
+
+const next = (user: User) => user.click(screen.getByRole('button', { name: 'Next' }));
+
+/** From the Training Info step to the Review step. */
+async function toReview(user: User) {
+  await next(user); // to Settings
+  await next(user); // to Review
+}
+
+const submit = (user: User) =>
+  user.click(screen.getByRole('button', { name: /^Create (Training Session|Recurring Sessions)$/ }));
+
+const sentEvent = () =>
+  createEvent.mock.calls[0]?.[0] as Record<string, unknown> & { training_details: Record<string, unknown> };
+
+describe('CreateTrainingSessionPage permission', () => {
+  beforeEach(resetApi);
+
+  // The hub opens for training.manage, but every save goes through the events
+  // endpoints, which need events.manage: the old form opened and then 403'd.
+  it('tells a training manager without events.manage who creates sessions, instead of the form', () => {
+    permissions.value = new Set(['training.manage']);
     renderWithRouter(<CreateTrainingSessionPage />);
-    await fillEventDetails(user);
 
-    expect(screen.getByRole('radio', { name: 'Use a course from the Course Library' })).toBeChecked();
-    expect(screen.getByLabelText(/Select Course/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Create Training Session' })).toBeInTheDocument();
+    expect(screen.getByText('Creating a training session needs the Manage all events permission')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Title/)).not.toBeInTheDocument();
+    expect(getEvents).not.toHaveBeenCalled();
   });
 
-  it("credits the course's duration when it has no credit hours, and shows it", async () => {
-    const user = userEvent.setup();
+  it('opens the form for an event manager', async () => {
     renderWithRouter(<CreateTrainingSessionPage />);
-    await fillEventDetails(user);
 
-    await screen.findByRole('option', { name: 'CPR / BLS' });
-    await user.selectOptions(screen.getByLabelText(/Select Course/), 'course-cpr');
-    expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(4);
+    expect(screen.getByRole('heading', { name: 'Create Training Session' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Title/)).toBeInTheDocument();
+    expect(screen.getByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(1));
+  });
+});
 
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    expect(screen.getByText('4 hours')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /Create Training Session/ }));
+describe('CreateTrainingSessionPage event details step', () => {
+  beforeEach(resetApi);
 
-    await waitFor(() => expect(createSession).toHaveBeenCalledTimes(1));
-    expect(createSession).toHaveBeenCalledWith(
-      expect.objectContaining({ course_id: 'course-cpr', credit_hours: 4, use_existing_course: true })
+  it('fixes the type to Training and names the event fields', async () => {
+    getLocations.mockResolvedValue([{ id: 'loc-1', name: 'Station 1', is_active: true }]);
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    expect(screen.queryByRole('combobox', { name: /Event Type/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Set by Training Admin. Other event types use the Events page.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Title/)).toHaveAccessibleDescription(
+      'Becomes the event title, and the course name when no course is chosen.'
+    );
+    expect(screen.getByLabelText(/^Description/)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/^Location/, { selector: 'select' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Additional Directions/)).toBeInTheDocument();
+  });
+
+  // The location label pointed at the select's id, so with no saved locations
+  // the text box drawn in its place had no name.
+  it('names the location box when the department has no saved locations', async () => {
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    expect(await screen.findByLabelText(/^Location/, { selector: 'input' })).toHaveAttribute(
+      'id',
+      'location-text-fallback'
     );
   });
 
-  it('lets the officer change the hours for a library course', async () => {
+  // The Training Admin wizard had none of these; the Events form had them all.
+  it('offers the organizer, a rolling series and dates to skip', async () => {
     const user = userEvent.setup();
     renderWithRouter(<CreateTrainingSessionPage />);
-    await fillEventDetails(user);
 
-    await screen.findByRole('option', { name: 'CPR / BLS' });
-    await user.selectOptions(screen.getByLabelText(/Select Course/), 'course-cpr');
-    const hours = screen.getByLabelText(/Credit Hours/);
-    await user.clear(hours);
-    await user.type(hours, '3');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: /Create Training Session/ }));
-
-    await waitFor(() => expect(createSession).toHaveBeenCalledTimes(1));
-    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ credit_hours: 3 }));
-  });
-
-  it('refuses to create from the library with no course chosen', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<CreateTrainingSessionPage />);
-    await fillEventDetails(user);
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: /Create Training Session/ }));
-
-    expect(toastError).toHaveBeenCalledWith('Back to Training Info: fix the flagged field');
-    expect(await screen.findByText('Choose a course from the Course Library')).toBeInTheDocument();
-    expect(createSession).not.toHaveBeenCalled();
-  });
-
-  // The review used to format the form's local wall-clock string as UTC, so in
-  // Chicago a 7 PM class read as 2 PM while the save itself was right.
-  it('reviews the times as entered, in the department timezone, with readable values', async () => {
-    tzState.value = 'America/Chicago';
-    const user = userEvent.setup();
-    renderWithRouter(<CreateTrainingSessionPage />);
-    await fillEventDetails(user);
-    await screen.findByRole('option', { name: 'CPR / BLS' });
-    await user.selectOptions(screen.getByLabelText(/Select Course/), 'course-cpr');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-
-    // Each value sits beside its label; the times are unique on the review.
-    expect(screen.getByText(/7:00\s?PM/)).toBeInTheDocument();
-    expect(screen.getByText(/11:00\s?PM/)).toBeInTheDocument();
-    expect(screen.queryByText(/2:00\s?PM/)).not.toBeInTheDocument();
-    expect(screen.getByText('CPR / BLS', { selector: 'span' })).toBeInTheDocument();
-    expect(screen.getByText('Continuing Education')).toBeInTheDocument();
-    expect(screen.getByText('CPR recert night')).toBeInTheDocument();
-  });
-});
-
-describe('CreateTrainingSessionPage field names', () => {
-  beforeEach(() => {
-    tzState.value = 'UTC';
-    getUsers.mockReset();
-    getUsers.mockResolvedValue([]);
-    getCourses.mockReset();
-    getCourses.mockResolvedValue([]);
-    getLocations.mockReset();
-    getLocations.mockResolvedValue([{ id: 'loc-1', name: 'Station 1', is_active: true }]);
-    getBasicApparatus.mockReset();
-    getBasicApparatus.mockResolvedValue([]);
-  });
-
-  it('names the event fields a screen reader announced as unnamed', async () => {
-    renderWithRouter(<CreateTrainingSessionPage />);
-
-    expect(screen.getByLabelText(/Training Title/)).toHaveAttribute('type', 'text');
-    expect(screen.getByLabelText(/Description/)).toBeInTheDocument();
-    expect(await screen.findByLabelText(/^Location/, { selector: 'select' })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Location Details/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Max Participants/)).toBeInTheDocument();
-  });
-});
-
-describe('CreateTrainingSessionPage schedule check', () => {
-  beforeEach(() => {
-    tzState.value = 'UTC';
-    getUsers.mockReset();
-    getUsers.mockResolvedValue([]);
-    getCourses.mockReset();
-    getCourses.mockResolvedValue([]);
-    getLocations.mockReset();
-    getLocations.mockResolvedValue([]);
-    getBasicApparatus.mockReset();
-    getBasicApparatus.mockResolvedValue([]);
-    toastError.mockReset();
+    expect(await screen.findByLabelText(/^Organizer/)).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: /Make this a recurring event/ }));
+    expect(screen.getByLabelText('Date to skip')).toBeInTheDocument();
+    await user.click(screen.getByRole('checkbox', { name: 'Rolling 12-month cycle' }));
+    expect(
+      screen.getByText(/Each new occurrence copies the training details and attendance links/)
+    ).toBeInTheDocument();
   });
 
   // Workflow review, training events: a 7 PM start with a 6 PM end went through
-  // all four steps and was refused only by the server on the last click.
+  // all four steps and was refused only by the server on the last click. The
+  // refusal is now under the field, not a toast.
   it('keeps the officer on the first step when the end is before the start', async () => {
     const user = userEvent.setup();
     renderWithRouter(<CreateTrainingSessionPage />);
 
-    await user.type(screen.getByLabelText(/Training Title/), 'Ladder Drill');
+    await user.type(screen.getByLabelText(/^Title/), 'Ladder Drill');
     await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
     await user.selectOptions(screen.getByLabelText('Start time hour'), '7');
     await user.selectOptions(screen.getByLabelText('Start time AM/PM'), 'PM');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
     await user.selectOptions(screen.getByLabelText('End time hour'), '6');
     await user.selectOptions(screen.getByLabelText('End time AM/PM'), 'PM');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await next(user);
 
-    expect(toastError).toHaveBeenCalledWith('End time must be after the start time');
-    expect(screen.getByLabelText(/Training Title/)).toBeInTheDocument();
-    expect(screen.queryByText('Course Selection')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/End Date & Time/)).toHaveAccessibleDescription('End must be after the start.');
+    expect(screen.getByLabelText(/End Date & Time/)).toHaveFocus();
+    expect(screen.getByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+    expect(toastError).not.toHaveBeenCalled();
   });
-});
 
-describe('CreateTrainingSessionPage location picker', () => {
-  beforeEach(() => {
-    tzState.value = 'UTC';
-    getUsers.mockReset();
-    getUsers.mockResolvedValue([]);
-    getCourses.mockReset();
-    getCourses.mockResolvedValue([]);
-    getBasicApparatus.mockReset();
-    getBasicApparatus.mockResolvedValue([]);
-    getLocations.mockReset();
+  it('names the building once in the location list', async () => {
     // A facility room's location is named "Room — Facility" by the backend
     // and carries that facility as its building.
     getLocations.mockResolvedValue([
@@ -332,100 +228,412 @@ describe('CreateTrainingSessionPage location picker', () => {
       },
       { id: 'loc-2', name: 'Training Room', building: 'Annex', is_active: true },
     ]);
-  });
-
-  it('names the building once', async () => {
     renderWithRouter(<CreateTrainingSessionPage />);
 
     const select = await screen.findByLabelText(/^Location/, { selector: 'select' });
     await waitFor(() => expect((select as HTMLSelectElement).options.length).toBeGreaterThan(2));
     const labels = Array.from((select as HTMLSelectElement).options).map((option) => option.text);
-    expect(labels).toContain('Volunteer Office — Station 1 - Headquarters #107');
+    expect(labels).toContain('Volunteer Office — Station 1 - Headquarters');
     expect(labels).toContain('Training Room (Annex)');
   });
 });
 
-describe('CreateTrainingSessionPage attendance requirements', () => {
+describe('CreateTrainingSessionPage training info step', () => {
   beforeEach(() => {
-    getUsers.mockReset();
-    getUsers.mockResolvedValue([]);
-    getCourses.mockReset();
-    getCourses.mockResolvedValue([]);
-    getLocations.mockReset();
-    getLocations.mockResolvedValue([]);
-    getBasicApparatus.mockReset();
-    getBasicApparatus.mockResolvedValue([]);
-    createSession.mockReset();
-    createSession.mockResolvedValue({ id: 'session-1', event_id: 'event-1' });
-    linkageRequirements.value = [
-      { id: 'req-drills', name: 'Company drills', requirement_type: 'session_attendance', required_attendance_pct: 60 },
-      { id: 'req-hours', name: 'Annual hours', requirement_type: 'hours' },
-    ];
+    resetApi();
+    getCourses.mockResolvedValue([CPR]);
+    getUsers.mockResolvedValue([RITA]);
   });
 
-  const fillAndCreate = async (user: ReturnType<typeof userEvent.setup>, tick: boolean) => {
-    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Company Drill');
-    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.type(screen.getByPlaceholderText('e.g., CPR/AED for Healthcare Providers'), 'Company Drill');
-    if (tick) await user.click(await screen.findByRole('checkbox', { name: /Company drills/ }));
-    expect(screen.queryByRole('checkbox', { name: /Annual hours/ })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: /Create Training Session/ }));
-    await waitFor(() => expect(createSession).toHaveBeenCalledTimes(1));
-  };
-
-  it('sends the ticked attendance requirements with the new session', async () => {
+  // The course is optional (owner decision, 2026-11-10). The wizard used to
+  // open on the library choice whenever the department had courses.
+  it('starts on No course yet, with type, instructor and hours offered', async () => {
     const user = userEvent.setup();
     renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
 
-    await fillAndCreate(user, true);
-
-    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ attendance_requirement_ids: ['req-drills'] }));
-  });
-
-  // Workflow review W80-12: the ticked requirements were saved but the review
-  // step did not list them, so the officer confirmed without seeing them.
-  it('lists the ticked attendance requirements on the review step', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<CreateTrainingSessionPage />);
-
-    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Company Drill');
-    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.type(screen.getByPlaceholderText('e.g., CPR/AED for Healthcare Providers'), 'Company Drill');
-    await user.click(await screen.findByRole('checkbox', { name: /Company drills/ }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-
-    expect(screen.getByText('Counts toward attendance:')).toBeInTheDocument();
-    expect(screen.getByText('Company drills')).toBeInTheDocument();
+    expect(screen.getByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /No course yet \(filed under the event title\)/ })).toBeChecked();
+    expect(screen.getByText(/filed under “Ladder Drill”/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Training Type/)).toHaveValue('continuing_education');
+    expect(screen.getByLabelText(/Lead Instructor/)).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /^Course/ })).not.toBeInTheDocument();
   });
 
   // Workflow review W80-13: the hint said attendees are credited these hours;
   // finalize credits the time each one actually attended.
-  it('explains that credit follows the time attended, not the credit hours', async () => {
+  it('follows the event length until the hours are typed, and says what credit is', async () => {
     const user = userEvent.setup();
     renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
 
-    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Company Drill');
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-
-    expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
-      /planned length\. Each attendee is credited with the time they actually attended/
+    const hours = screen.getByLabelText(/Credit Hours/);
+    expect(hours).toHaveValue(2);
+    expect(hours).toHaveAccessibleDescription(
+      /Follows the event's length \(2 hours\) until you change it\. Each attendee is credited with the time they actually attended/
     );
-    expect(screen.queryByText('The training hours each attendee is credited with.')).not.toBeInTheDocument();
+    await user.clear(hours);
+    await user.type(hours, '1.5');
+    expect(hours).toHaveValue(1.5);
+    expect(hours).not.toHaveAccessibleDescription(/Follows the event's length/);
   });
 
-  it('leaves the session optional when nothing is ticked', async () => {
+  it('refuses Next from the library with no course chosen, under the course field', async () => {
     const user = userEvent.setup();
     renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await next(user);
 
-    await fillAndCreate(user, false);
+    const course = screen.getByRole('combobox', { name: /^Course/ });
+    expect(course).toHaveAccessibleDescription('Choose a course from the Course Library.');
+    expect(course).toHaveFocus();
+    expect(screen.getByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    expect(toastError).not.toHaveBeenCalled();
+  });
 
-    expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ attendance_requirement_ids: [] }));
+  it('refuses a one-off course with no name', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /One-off course name/ }));
+    await next(user);
+
+    expect(screen.getByLabelText(/Course Name/)).toHaveAccessibleDescription('Enter a course name.');
+  });
+
+  it('fills from a library course, crediting its duration when it has no credit hours', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await screen.findByRole('option', { name: 'CPR - CPR / BLS' });
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-cpr');
+
+    expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(4);
+    expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(/^From the course \(4 hours\)\./);
+  });
+
+  // A course's instructor is free text; it is picked as a member only when a
+  // member has that name, and otherwise kept as the name it is.
+  it("keeps a course's instructor as text when no member has that name", async () => {
+    getCourses.mockResolvedValue([{ ...CPR, instructor: 'AHA Regional Faculty' }]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await screen.findByRole('option', { name: 'CPR - CPR / BLS' });
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-cpr');
+
+    const instructor = screen.getByLabelText(/Lead Instructor/);
+    expect(instructor).toHaveValue('');
+    expect(instructor).toHaveAccessibleDescription('From the course: AHA Regional Faculty, not a member');
+  });
+
+  it("picks the member a course's instructor names", async () => {
+    getCourses.mockResolvedValue([{ ...CPR, instructor: 'Rita Cole' }]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await screen.findByRole('option', { name: 'CPR - CPR / BLS' });
+    await waitFor(() =>
+      expect(within(screen.getByLabelText(/Lead Instructor/)).getByRole('option', { name: 'Rita Cole' })).toBeVisible()
+    );
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-cpr');
+
+    expect(screen.getByLabelText(/Lead Instructor/)).toHaveValue(INSTRUCTOR_ID);
+  });
+
+  it('offers only session-attendance requirements under Counts toward attendance', async () => {
+    linkageRequirements.value = [
+      { id: 'req-drills', name: 'Company drills', requirement_type: 'session_attendance', required_attendance_pct: 60 },
+      { id: 'req-hours', name: 'Annual hours', requirement_type: 'hours' },
+    ];
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+
+    const group = screen.getByRole('group', { name: 'Counts toward attendance' });
+    expect(within(group).getByRole('checkbox', { name: /Company drills/ })).toBeInTheDocument();
+    expect(within(group).queryByRole('checkbox', { name: /Annual hours/ })).not.toBeInTheDocument();
+    expect(group).toHaveAccessibleDescription(/It does not make attending mandatory/);
+  });
+});
+
+describe('CreateTrainingSessionPage saving', () => {
+  beforeEach(() => {
+    resetApi();
+    getUsers.mockResolvedValue([RITA]);
+    getCourses.mockResolvedValue([CPR]);
+  });
+
+  // The wizard used to post to /training/sessions with RSVP on, a 15-minute
+  // check-in window and manual check-out; it now saves through /events with the
+  // Events form's defaults, and always attaches the session.
+  it('creates a Training event with no course, filed under its title, and opens it', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await toReview(user);
+    await submit(user);
+
+    await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
+    const payload = sentEvent();
+    expect(payload).toMatchObject({
+      title: 'Ladder Drill',
+      event_type: 'training',
+      start_datetime: '2030-05-01T09:00:00.000Z',
+      end_datetime: '2030-05-01T11:00:00.000Z',
+      requires_rsvp: false,
+      check_in_minutes_before: 60,
+      require_checkout: false,
+    });
+    expect(payload.training_details).toEqual({
+      training_type: 'continuing_education',
+      credit_hours: 2,
+      issues_certification: false,
+      counts_toward_certification: true,
+      auto_create_records: true,
+      require_completion_confirmation: false,
+      attendance_requirement_ids: [],
+    });
+    expect(navigate).toHaveBeenCalledWith('/events/event-1');
+  });
+
+  // The page kept the picked member's id locally and sent only their name,
+  // so the backend's instructor qualification checks never had a member to check.
+  it('sends the picked member as instructor_id alongside the name', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    const instructor = screen.getByLabelText(/Lead Instructor/);
+    await waitFor(() => expect(within(instructor).getByRole('option', { name: 'Rita Cole' })).toBeInTheDocument());
+    await user.selectOptions(instructor, 'Rita Cole');
+    await toReview(user);
+    expect(screen.getByText('Rita Cole', { selector: 'dd' })).toBeInTheDocument();
+    await submit(user);
+
+    await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
+    expect(sentEvent().training_details).toMatchObject({ instructor: 'Rita Cole', instructor_id: INSTRUCTOR_ID });
+  });
+
+  it('omits the instructor when none is picked', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await toReview(user);
+    await submit(user);
+
+    await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
+    expect(sentEvent().training_details.instructor_id).toBeUndefined();
+    expect(sentEvent().training_details.instructor).toBeUndefined();
+  });
+
+  it("files under a library course, crediting the course's hours", async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await screen.findByRole('option', { name: 'CPR - CPR / BLS' });
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-cpr');
+    await toReview(user);
+    expect(screen.getByText('4 hours (from the course)')).toBeInTheDocument();
+    await submit(user);
+
+    await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
+    expect(sentEvent().training_details).toMatchObject({ course_id: 'course-cpr', credit_hours: 4 });
+    // A library course and a one-off name are refused together.
+    expect(sentEvent().training_details.course_name).toBeUndefined();
+  });
+
+  it('lets the officer change the hours for a library course', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await screen.findByRole('option', { name: 'CPR - CPR / BLS' });
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-cpr');
+    const hours = screen.getByLabelText(/Credit Hours/);
+    await user.clear(hours);
+    await user.type(hours, '3');
+    await toReview(user);
+    await submit(user);
+
+    await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
+    expect(sentEvent().training_details).toMatchObject({ course_id: 'course-cpr', credit_hours: 3 });
+  });
+
+  it('files under a one-off course name, leaving the library out', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /One-off course name/ }));
+    await user.type(screen.getByLabelText(/Course Name/), 'Ladder Operations');
+    await user.type(screen.getByLabelText(/Course Code/), 'LAD-1');
+    await toReview(user);
+    await submit(user);
+
+    await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
+    expect(sentEvent().training_details).toMatchObject({ course_name: 'Ladder Operations', course_code: 'LAD-1' });
+    expect(sentEvent().training_details.course_id).toBeUndefined();
+  });
+
+  it('sends the ticked attendance requirements with the new session', async () => {
+    linkageRequirements.value = [
+      { id: 'req-drills', name: 'Company drills', requirement_type: 'session_attendance', required_attendance_pct: 60 },
+    ];
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('checkbox', { name: /Company drills/ }));
+    await toReview(user);
+    await submit(user);
+
+    await waitFor(() => expect(createEvent).toHaveBeenCalledTimes(1));
+    expect(sentEvent().training_details).toMatchObject({ attendance_requirement_ids: ['req-drills'] });
+  });
+
+  // Training details on a rolling series were refused until #4231, and the
+  // wizard offered no rolling series at all.
+  it('creates a rolling series with the session on every occurrence, and opens the first', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await user.click(screen.getByRole('checkbox', { name: /Make this a recurring event/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Rolling 12-month cycle' }));
+    await next(user);
+    await toReview(user);
+    expect(screen.getByText('Rolling 12-month cycle', { selector: 'dd' })).toBeInTheDocument();
+    await submit(user);
+
+    await waitFor(() => expect(createRecurringEvent).toHaveBeenCalledTimes(1));
+    const series = createRecurringEvent.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(series).toMatchObject({
+      event_type: 'training',
+      recurrence_pattern: 'weekly',
+      rolling_recurrence: true,
+      training_details: { training_type: 'continuing_education', credit_hours: 2 },
+    });
+    expect(createEvent).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith('/events/event-1');
+  });
+
+  // A 422 lands under the field it names, on that field's step, not in a toast.
+  it('puts a refused training field under its field, back on Training Info', async () => {
+    createEvent.mockRejectedValue({
+      response: {
+        status: 422,
+        data: {
+          detail: [{ field: 'training_details.course_name', message: 'String should have at most 255 characters' }],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /One-off course name/ }));
+    await user.type(screen.getByLabelText(/Course Name/), 'Ladder Operations');
+    await toReview(user);
+    await submit(user);
+
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Course Name/)).toHaveAccessibleDescription(
+      /Course name is too long — keep it to 255 characters\./
+    );
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('shows a failure that names no field on the Review step', async () => {
+    createEvent.mockRejectedValue(new Error('Network Error'));
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await toReview(user);
+    await submit(user);
+
+    expect(await screen.findByText('Failed to create event. Try again.')).toBeInTheDocument();
+    expect(screen.getByText('Step 4 of 4 · Review')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create Training Session' })).toBeEnabled();
+  });
+});
+
+describe('CreateTrainingSessionPage review step', () => {
+  beforeEach(() => {
+    resetApi();
+    getCourses.mockResolvedValue([CPR]);
+  });
+
+  // The review used to format the form's local wall-clock string as UTC, so in
+  // Chicago a 7 PM class read as 2 PM while the save itself was right.
+  it('reviews the times as entered, in the department timezone, with readable values', async () => {
+    tzState.value = 'America/Chicago';
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await user.type(screen.getByLabelText(/^Title/), 'CPR recert night');
+    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
+    await user.selectOptions(screen.getByLabelText('Start time hour'), '7');
+    await user.selectOptions(screen.getByLabelText('Start time minute'), '00');
+    await user.selectOptions(screen.getByLabelText('Start time AM/PM'), 'PM');
+    await user.selectOptions(screen.getByLabelText('End time hour'), '11');
+    await user.selectOptions(screen.getByLabelText('End time minute'), '00');
+    await user.selectOptions(screen.getByLabelText('End time AM/PM'), 'PM');
+    await next(user);
+    await user.click(screen.getByRole('radio', { name: /From the Course Library/ }));
+    await screen.findByRole('option', { name: 'CPR - CPR / BLS' });
+    await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-cpr');
+    await toReview(user);
+
+    expect(screen.getByText(/7:00\s?PM/)).toBeInTheDocument();
+    expect(screen.getByText(/11:00\s?PM/)).toBeInTheDocument();
+    expect(screen.queryByText(/2:00\s?PM/)).not.toBeInTheDocument();
+    expect(screen.getByText('CPR - CPR / BLS (Course Library)')).toBeInTheDocument();
+    expect(screen.getByText('Continuing Education')).toBeInTheDocument();
+    expect(screen.getByText('CPR recert night')).toBeInTheDocument();
+  });
+
+  // Workflow review W80-12: the ticked requirements were saved but the review
+  // step did not list them, so the officer confirmed without seeing them.
+  it('lists the ticked attendance requirements', async () => {
+    linkageRequirements.value = [
+      { id: 'req-drills', name: 'Company drills', requirement_type: 'session_attendance', required_attendance_pct: 60 },
+    ];
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user, 'Company Drill');
+    await next(user);
+    await user.click(screen.getByRole('checkbox', { name: /Company drills/ }));
+    await toReview(user);
+
+    expect(screen.getByText('Counts toward attendance', { selector: 'dt' })).toBeInTheDocument();
+    expect(screen.getByText('Company drills (60%)')).toBeInTheDocument();
+  });
+
+  it('goes back to the step a section is set on', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await toReview(user);
+    await user.click(screen.getByRole('button', { name: 'Edit Training Details' }));
+
+    expect(screen.getByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
   });
 });

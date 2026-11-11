@@ -21,6 +21,7 @@ import type {
 import type { IntegrationConfig } from './trainingServices';
 import type { LeaveOfAbsenceResponse, TrainingWaiverResponse } from './facilitiesServices';
 import type { PlatformAnalytics } from '../types/platformAnalytics';
+import type { EventTrainingDetails } from '../types/event';
 import { asArray } from '../utils/asArray';
 
 /**
@@ -152,15 +153,11 @@ export interface TrainingSessionLinkageUpdate {
   training_type?: string;
 }
 
-/** Training details attached to an existing Training event (a create payload: omit blanks). */
-export interface TrainingSessionAttach {
-  course_id?: string | undefined;
-  category_id?: string | undefined;
-  program_id?: string | undefined;
-  phase_id?: string | undefined;
-  requirement_id?: string | undefined;
-  training_type?: string | undefined;
-}
+/**
+ * Training details attached to an existing Training event: the same shape a
+ * Training event is created with (a create payload: omit blanks).
+ */
+export type TrainingSessionAttach = EventTrainingDetails;
 
 /** Where an event's training approval stands. `token` only for approvers, only while live. */
 export interface TrainingApprovalSummary {
@@ -210,52 +207,6 @@ export interface TrainingApprovalData {
 export interface TrainingApprovalSubmit {
   attendees: TrainingApprovalAttendee[];
   approval_notes?: string | undefined;
-}
-
-export interface TrainingSessionCreate {
-  title: string;
-  description?: string | undefined;
-  location_id?: string | undefined;
-  location?: string | undefined;
-  location_details?: string | undefined;
-  start_datetime: string;
-  end_datetime: string;
-  requires_rsvp?: boolean | undefined;
-  rsvp_deadline?: string | undefined;
-  max_attendees?: number | undefined;
-  is_mandatory?: boolean | undefined;
-  check_in_window_type?: string | undefined;
-  check_in_minutes_before?: number | undefined;
-  check_in_minutes_after?: number | undefined;
-  require_checkout?: boolean | undefined;
-  use_existing_course?: boolean | undefined;
-  course_id?: string | undefined;
-  category_id?: string | undefined;
-  program_id?: string | undefined;
-  phase_id?: string | undefined;
-  requirement_id?: string | undefined;
-  course_name?: string | undefined;
-  course_code?: string | undefined;
-  training_type: string;
-  credit_hours: number;
-  instructor?: string | undefined;
-  issues_certification?: boolean | undefined;
-  certification_number_prefix?: string | undefined;
-  issuing_agency?: string | undefined;
-  expiration_months?: number | undefined;
-  auto_create_records?: boolean | undefined;
-  require_completion_confirmation?: boolean | undefined;
-  approval_deadline_days?: number | undefined;
-}
-
-export interface RecurringTrainingSessionCreate extends TrainingSessionCreate {
-  recurrence_pattern: string;
-  recurrence_end_date: string;
-  recurrence_custom_days?: number[] | undefined;
-  recurrence_weekday?: number | undefined;
-  recurrence_week_ordinal?: number | undefined;
-  recurrence_month?: number | undefined;
-  recurrence_exceptions?: string[] | undefined;
 }
 
 export const analyticsApiService = {

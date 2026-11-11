@@ -1,0 +1,354 @@
+/**
+ * The training-event wizard's Review step: every value the save will send,
+ * section by section, each with a way back to the step that sets it. Values
+ * are read from the same model and training value the payload is built from,
+ * so what is reviewed is what is saved.
+ */
+
+import React from 'react';
+import { ClipboardCheck } from 'lucide-react';
+import type { TrainingCourse } from '../../types/training';
+import type { TrainingLinkageData } from '../../hooks/useTrainingLinkageData';
+import { TRAINING_TYPE_LABELS } from '../../constants/enums';
+import { getEventTypeLabel } from '../../utils/eventHelpers';
+import { formatCalendarDate, formatDateTime, localToUTC } from '../../utils/dateFormatting';
+import type { EventFormModel } from '../event-form/useEventFormModel';
+import { MONTHS, ORDINALS, RECURRENCE_PATTERNS, WEEKDAYS } from '../event-form/eventFormConstants';
+import type { TrainingDetailsForm } from './trainingDetailsModel';
+import { effectiveCreditHours } from './trainingDetailsModel';
+
+type ReviewModel = Pick<
+  EventFormModel,
+  | 'tz'
+  | 'formData'
+  | 'showOrganizerPickers'
+  | 'organizerOptions'
+  | 'organizerId'
+  | 'alternateId'
+  | 'customCategories'
+  | 'membershipTypes'
+  | 'storedMandatoryForEveryone'
+  | 'isRecurring'
+  | 'recurrencePattern'
+  | 'isRolling'
+  | 'recurrenceEndDate'
+  | 'recurrenceCustomDays'
+  | 'recurrenceWeekOrdinal'
+  | 'recurrenceWeekday'
+  | 'recurrenceMonth'
+  | 'recurrenceExceptions'
+  | 'selectedLocation'
+  | 'locationMode'
+  | 'formatLocationLabel'
+>;
+
+/** The wizard's steps a section's Edit link can go back to. */
+export type ReviewTarget = 'details' | 'training' | 'settings';
+
+interface TrainingReviewStepProps {
+  model: ReviewModel;
+  training: TrainingDetailsForm;
+  durationHours: number | null;
+  courses: TrainingCourse[];
+  linkageData: TrainingLinkageData;
+  onEdit: (target: ReviewTarget) => void;
+}
+
+const hoursLabel = (hours: number | string) => `${hours} ${Number(hours) === 1 ? 'hour' : 'hours'}`;
+
+const DATE_ONLY: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+
+const reminderLabel = (hours: number) =>
+  hours >= 168
+    ? `${Math.floor(hours / 168)} week${hours >= 336 ? 's' : ''} before`
+    : hours >= 24
+      ? `${Math.floor(hours / 24)} day${hours >= 48 ? 's' : ''} before`
+      : `${hours} hour${hours !== 1 ? 's' : ''} before`;
+
+const Section: React.FC<{
+  title: string;
+  target: ReviewTarget;
+  onEdit: (target: ReviewTarget) => void;
+  children: React.ReactNode;
+}> = ({ title, target, onEdit, children }) => (
+  <section className="border-theme-surface-border border-t pt-4 first:border-t-0 first:pt-0">
+    <div className="mb-2 flex items-center justify-between gap-3">
+      <h3 className="text-theme-text-primary font-semibold">{title}</h3>
+      <button
+        type="button"
+        onClick={() => onEdit(target)}
+        aria-label={`Edit ${title}`}
+        className="touch-target-phone text-sm font-medium text-red-700 underline hover:text-red-800 dark:text-red-400"
+      >
+        Edit
+      </button>
+    </div>
+    <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[minmax(10rem,auto)_1fr]">{children}</dl>
+  </section>
+);
+
+const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <>
+    <dt className="text-theme-text-muted">{label}</dt>
+    <dd className="text-theme-text-primary font-medium break-words whitespace-pre-line">{children}</dd>
+  </>
+);
+
+export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
+  model,
+  training,
+  durationHours,
+  courses,
+  linkageData,
+  onEdit,
+}) => {
+  const { tz, formData } = model;
+  const nameOf = (id: string) => model.organizerOptions.options.find((o) => o.id === id)?.name ?? 'Selected member';
+  const course = training.course_mode === 'library' ? courses.find((c) => c.id === training.course_id) : undefined;
+  const creditHours = effectiveCreditHours(training, durationHours);
+  const { categories, requirements, programs, phases } = linkageData;
+  const nameIn = (list: { id: string; name: string }[], id: string) =>
+    id ? (list.find((item) => item.id === id)?.name ?? 'Selected') : 'None';
+
+  const recurrenceLabel = (() => {
+    const base = RECURRENCE_PATTERNS.find((p) => p.value === model.recurrencePattern)?.label ?? model.recurrencePattern;
+    if (model.recurrencePattern === 'custom') {
+      const days = [...model.recurrenceCustomDays].sort((a, b) => a - b).map((d) => WEEKDAYS[d] ?? '');
+      return days.length ? `${base}: ${days.join(', ')}` : base;
+    }
+    if (model.recurrencePattern === 'monthly_weekday' || model.recurrencePattern === 'annually_weekday') {
+      const ordinal = ORDINALS.find((o) => o.value === model.recurrenceWeekOrdinal)?.label ?? '';
+      const weekday = WEEKDAYS[model.recurrenceWeekday] ?? '';
+      const month =
+        model.recurrencePattern === 'annually_weekday' ? ` of ${MONTHS[model.recurrenceMonth - 1] ?? ''}` : '';
+      return `${base}: ${ordinal} ${weekday}${month}`;
+    }
+    return base;
+  })();
+
+  const courseLabel = (() => {
+    if (training.course_mode === 'library') {
+      return course ? `${course.code ? `${course.code} - ` : ''}${course.name} (Course Library)` : 'None chosen';
+    }
+    if (training.course_mode === 'oneoff') {
+      const code = training.course_code.trim();
+      return `${training.course_name.trim() || 'None entered'}${code ? ` (${code})` : ''} (one-off)`;
+    }
+    return `No course yet: filed under “${formData.title.trim() || 'the event title'}”`;
+  })();
+
+  const instructorLabel = training.instructor_id
+    ? training.instructor || 'Selected member'
+    : training.instructor.trim()
+      ? `${training.instructor.trim()} (from the course, not a member)`
+      : 'None';
+
+  const creditLabel = creditHours
+    ? `${hoursLabel(creditHours)}${
+        training.credit_hours_source === 'course'
+          ? ' (from the course)'
+          : training.credit_hours_source === 'duration'
+            ? " (the event's length)"
+            : ''
+      }`
+    : '—';
+
+  const attendanceNames = training.attendance_requirement_ids.map((id) => {
+    const req = requirements.find((r) => r.id === id);
+    if (!req) return 'Selected requirement';
+    return req.required_attendance_pct ? `${req.name} (${req.required_attendance_pct}%)` : req.name;
+  });
+
+  const mandatoryFor = (() => {
+    const types = formData.mandatory_membership_types ?? [];
+    if (!types.length) return model.storedMandatoryForEveryone ? 'All members' : 'None chosen';
+    return types.map((value) => model.membershipTypes.find((t) => t.value === value)?.label ?? value).join(', ');
+  })();
+
+  const locationLabel =
+    model.locationMode === 'select'
+      ? model.selectedLocation
+        ? model.formatLocationLabel(model.selectedLocation)
+        : 'None'
+      : formData.location?.trim() || 'None';
+
+  const checkInWindow = (() => {
+    const before = formData.check_in_minutes_before ?? 60;
+    if (formData.check_in_window_type === 'strict') return 'Strict, open only while the event runs';
+    if (formData.check_in_window_type === 'window') {
+      return `Custom window, opens ${before} minutes before the start and closes ${formData.check_in_minutes_after ?? 15} minutes after the end`;
+    }
+    return `Flexible, opens ${before} minutes before the start`;
+  })();
+
+  const reminderTarget = !formData.send_reminders
+    ? 'No reminders'
+    : formData.reminder_target === 'all'
+      ? 'All active members'
+      : formData.reminder_target === 'none'
+        ? 'No reminders'
+        : 'Members who sign up';
+
+  const statusNames: Record<string, string> = { going: 'Going', not_going: 'Not Going', maybe: 'Maybe' };
+
+  return (
+    <section className="space-y-6">
+      <h2 className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
+        <ClipboardCheck className="h-5 w-5 text-red-700" aria-hidden="true" />
+        <span>Review</span>
+      </h2>
+
+      <div className="bg-theme-surface-secondary space-y-4 rounded-lg p-4 sm:p-6">
+        <Section title="Event Details" target="details" onEdit={onEdit}>
+          <Row label="Event Type">{getEventTypeLabel(formData.event_type)}</Row>
+          <Row label="Title">{formData.title.trim() || '—'}</Row>
+          {formData.description?.trim() && <Row label="Description">{formData.description.trim()}</Row>}
+          {(model.customCategories.length > 0 || formData.custom_category) && (
+            <Row label="Event category">
+              {formData.custom_category
+                ? (model.customCategories.find((c) => c.value === formData.custom_category)?.label ??
+                  formData.custom_category)
+                : 'None'}
+            </Row>
+          )}
+          {model.showOrganizerPickers && (
+            <>
+              <Row label="Organizer">{model.organizerId ? nameOf(model.organizerId) : 'You'}</Row>
+              <Row label="Alternate">{model.alternateId ? nameOf(model.alternateId) : 'None'}</Row>
+            </>
+          )}
+          {/* The form holds local wall-clock strings; formatDateTime reads its
+              input as UTC, so they are converted first, as the save does. */}
+          <Row label="Starts">{formatDateTime(localToUTC(formData.start_datetime, tz), tz)}</Row>
+          <Row label="Ends">{formatDateTime(localToUTC(formData.end_datetime, tz), tz)}</Row>
+        </Section>
+
+        {model.isRecurring && (
+          <Section title="Recurrence" target="details" onEdit={onEdit}>
+            <Row label="Pattern">{recurrenceLabel}</Row>
+            <Row label="Duration">
+              {model.isRolling
+                ? 'Rolling 12-month cycle'
+                : model.recurrenceEndDate
+                  ? `Until ${formatCalendarDate(model.recurrenceEndDate, DATE_ONLY)}`
+                  : '—'}
+            </Row>
+            <Row label="Skipped dates">
+              {model.recurrenceExceptions.length
+                ? [...model.recurrenceExceptions]
+                    .sort()
+                    .map((d) => formatCalendarDate(d, DATE_ONLY))
+                    .join('\n')
+                : 'None'}
+            </Row>
+          </Section>
+        )}
+
+        <Section title="Location" target="details" onEdit={onEdit}>
+          <Row label="Location">{locationLabel}</Row>
+          <Row label="Additional directions">{formData.location_details?.trim() || '—'}</Row>
+        </Section>
+
+        <Section title="Training Details" target="training" onEdit={onEdit}>
+          <Row label="Course">{courseLabel}</Row>
+          <Row label="Training Type">{TRAINING_TYPE_LABELS[training.training_type] ?? training.training_type}</Row>
+          <Row label="Lead Instructor">{instructorLabel}</Row>
+          <Row label="Credit Hours">{creditLabel}</Row>
+          <Row label="Certification">
+            {training.issues_certification
+              ? training.issuing_agency.trim()
+                ? `Issued by ${training.issuing_agency.trim()}`
+                : 'Issued'
+              : 'None'}
+          </Row>
+          {training.issues_certification && (
+            <>
+              <Row label="Cert number prefix">{training.certification_number_prefix.trim() || '—'}</Row>
+              <Row label="Expires after">
+                {training.expiration_months.trim() ? `${training.expiration_months.trim()} months` : '—'}
+              </Row>
+            </>
+          )}
+        </Section>
+
+        <Section title="Requirement & Program Links" target="training" onEdit={onEdit}>
+          <Row label="Training category">{nameIn(categories, training.category_id)}</Row>
+          <Row label="Requirement">{nameIn(requirements, training.requirement_id)}</Row>
+          <Row label="Program">{nameIn(programs, training.program_id)}</Row>
+          {training.program_id && (
+            <Row label="Phase">
+              {training.phase_id
+                ? (() => {
+                    const phase = phases.find((p) => p.id === training.phase_id);
+                    return phase ? `Phase ${phase.phase_number}: ${phase.name}` : 'Selected';
+                  })()
+                : 'Any phase'}
+            </Row>
+          )}
+          <Row label="Counts toward attendance">{attendanceNames.length ? attendanceNames.join('\n') : 'None'}</Row>
+        </Section>
+
+        <Section title="Training completion" target="training" onEdit={onEdit}>
+          <Row label="Counts toward certification">{training.counts_toward_certification ? 'Yes' : 'No'}</Row>
+          <Row label="Auto-create records">{training.auto_create_records ? 'Yes, at check-in' : 'No'}</Row>
+          <Row label="Sign-off">
+            {training.require_completion_confirmation
+              ? `Required: the instructor or a training officer, within ${training.approval_deadline_days.trim() || '7'} days`
+              : 'Not required'}
+          </Row>
+        </Section>
+
+        <Section title="Attendance" target="settings" onEdit={onEdit}>
+          <Row label="Mandatory">{formData.is_mandatory ? 'Yes' : 'No'}</Row>
+          {formData.is_mandatory && <Row label="Mandatory for">{mandatoryFor}</Row>}
+        </Section>
+
+        <Section title="RSVP" target="settings" onEdit={onEdit}>
+          <Row label="Require RSVP">{formData.requires_rsvp ? 'Yes' : 'No'}</Row>
+          <Row label="RSVP deadline">
+            {formData.requires_rsvp && formData.rsvp_deadline
+              ? formatDateTime(localToUTC(formData.rsvp_deadline, tz), tz)
+              : '—'}
+          </Row>
+          <Row label="Max attendees">{formData.max_attendees ? String(formData.max_attendees) : 'Unlimited'}</Row>
+          <Row label="Guests">{formData.allow_guests ? 'Allowed' : 'Not allowed'}</Row>
+          <Row label="Status options">
+            {(formData.allowed_rsvp_statuses ?? []).map((s) => statusNames[s] ?? s).join(', ') || '—'}
+          </Row>
+          <Row label="Who can see who's going">
+            {formData.attendee_visibility === 'members'
+              ? 'Everyone in the department'
+              : formData.attendee_visibility === 'managers'
+                ? 'Only event managers'
+                : 'Organization default'}
+          </Row>
+        </Section>
+
+        <Section title="Check-In" target="settings" onEdit={onEdit}>
+          <Row label="QR Code Check-In">Enabled</Row>
+          <Row label="Window">{checkInWindow}</Row>
+          <Row label="Manual check-out">{formData.require_checkout ? 'Required' : 'Not required'}</Row>
+          <Row label="Guest sign-in">
+            {formData.allow_guest_check_in
+              ? formData.guest_check_in_creates_prospect
+                ? 'On, adding guests to the prospective members pipeline'
+                : 'On'
+              : 'Off'}
+          </Row>
+        </Section>
+
+        <Section title="Notifications" target="settings" onEdit={onEdit}>
+          <Row label="Reminders to">{reminderTarget}</Row>
+          {formData.send_reminders && (
+            <Row label="Schedule">
+              {[...(formData.reminder_schedule ?? [24])]
+                .sort((a, b) => b - a)
+                .map(reminderLabel)
+                .join(', ') || 'None'}
+            </Row>
+          )}
+        </Section>
+      </div>
+    </section>
+  );
+};

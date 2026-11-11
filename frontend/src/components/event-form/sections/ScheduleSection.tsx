@@ -51,10 +51,12 @@ interface ScheduleSectionProps {
   >;
   /** Offer the recurring-series controls under the schedule. */
   showRecurrence: boolean;
+  /** Said after how a rolling series extends itself, for what else it copies. */
+  rollingHint?: React.ReactNode;
 }
 
 /** Start and end, conflicts, quick durations and, when offered, recurrence. */
-export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRecurrence }) => {
+export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRecurrence, rollingHint }) => {
   const {
     tz,
     formData,
@@ -231,6 +233,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
                     {isRolling ? (
                       <p className="text-theme-text-muted text-xs">
                         New occurrences are added automatically so the series always runs 12 months ahead.
+                        {rollingHint && <> {rollingHint}</>}
                       </p>
                     ) : (
                       <>

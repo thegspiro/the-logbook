@@ -316,18 +316,74 @@ export interface EventListItem {
 }
 
 /**
- * Training details picked for a Training-type event. Picking any attaches a
- * training session to the event, which files attendance credit under them;
- * a Training event without any is still credited, as its title and
- * Continuing Education. Every id is validated server-side against the org.
+ * The training details a Training event is created with: its training
+ * session, which files attendance credit under a course and category, feeds a
+ * program requirement and decides which session-attendance requirements the
+ * event counts toward. Mirrors `TrainingSessionAttach`
+ * (backend/app/schemas/training_session.py), which refuses unknown keys.
+ *
+ * A create payload, so a blank is omitted rather than sent (CLAUDE.md pitfall
+ * #1). With no course and no one-off name the session is filed under the
+ * event's title; with no type it is Continuing Education; with no hours it
+ * credits the scheduled length. `course_id` and `course_name`/`course_code`
+ * are exclusive. Every id is validated server-side against the org.
  */
 export interface EventTrainingDetails {
   course_id?: string | undefined;
+  /** A one-off course name, not added to the Course Library. */
+  course_name?: string | undefined;
+  course_code?: string | undefined;
   category_id?: string | undefined;
   program_id?: string | undefined;
   phase_id?: string | undefined;
   requirement_id?: string | undefined;
   training_type?: string | undefined;
+  credit_hours?: number | undefined;
+  instructor?: string | undefined;
+  instructor_id?: string | undefined;
+  issues_certification?: boolean | undefined;
+  certification_number_prefix?: string | undefined;
+  issuing_agency?: string | undefined;
+  expiration_months?: number | undefined;
+  counts_toward_certification?: boolean | undefined;
+  auto_create_records?: boolean | undefined;
+  require_completion_confirmation?: boolean | undefined;
+  approval_deadline_days?: number | undefined;
+  attendance_requirement_ids?: string[] | undefined;
+}
+
+/**
+ * The training details an event edit changes, as `TrainingSessionDetailsUpdate`
+ * on `EventUpdate.training_details`. Three-state like every update payload: a
+ * key left out is untouched, `null` clears it, a value sets it. A null
+ * `credit_hours`, `instructor` or `expiration_months` falls back to the
+ * library course's value (the scheduled length, for hours with no course).
+ * `training_type` and the completion settings cannot be null.
+ * `attendance_requirement_ids` replaces the whole set. On a finalized event
+ * only `attendance_requirement_ids` may differ from what is stored (409
+ * otherwise), and a caller let in only as training manager is refused (403).
+ */
+export interface EventTrainingDetailsUpdate {
+  course_id?: string | null | undefined;
+  course_name?: string | null | undefined;
+  course_code?: string | null | undefined;
+  category_id?: string | null | undefined;
+  program_id?: string | null | undefined;
+  phase_id?: string | null | undefined;
+  requirement_id?: string | null | undefined;
+  training_type?: string | undefined;
+  credit_hours?: number | null | undefined;
+  instructor?: string | null | undefined;
+  instructor_id?: string | null | undefined;
+  issues_certification?: boolean | undefined;
+  certification_number_prefix?: string | null | undefined;
+  issuing_agency?: string | null | undefined;
+  expiration_months?: number | null | undefined;
+  counts_toward_certification?: boolean | undefined;
+  auto_create_records?: boolean | undefined;
+  require_completion_confirmation?: boolean | undefined;
+  approval_deadline_days?: number | undefined;
+  attendance_requirement_ids?: string[] | undefined;
 }
 
 /**
@@ -396,7 +452,7 @@ export interface EventCreate {
   custom_fields?: Record<string, string | number | boolean | null> | undefined;
   attachments?: EventAttachment[] | undefined;
   is_draft?: boolean | undefined;
-  /** Only for event_type "training"; omit unless a detail was picked. */
+  /** Only for event_type "training"; attaches the event's training session. */
   training_details?: EventTrainingDetails | undefined;
 }
 
@@ -434,6 +490,8 @@ export interface EventUpdate {
   guest_check_in_creates_prospect?: boolean | undefined;
   custom_fields?: Record<string, string | number | boolean | null> | undefined;
   attachments?: EventAttachment[] | undefined;
+  /** Only on a Training event; see EventTrainingDetailsUpdate. On a series edit it reaches every occurrence the scope covers. */
+  training_details?: EventTrainingDetailsUpdate | undefined;
 }
 
 export interface EventCancel {

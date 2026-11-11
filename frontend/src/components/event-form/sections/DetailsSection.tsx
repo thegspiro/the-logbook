@@ -45,6 +45,11 @@ interface DetailsSectionProps {
   typeHint?: React.ReactNode;
   /** Rendered between the Event Type block and the category picker. */
   afterType?: React.ReactNode;
+  /** Rendered under the heading, above Title: a form with a fixed type says so here. */
+  beforeTitle?: React.ReactNode;
+  /** Shown under Title, tied to it as its description. */
+  titleHint?: React.ReactNode;
+  titlePlaceholder?: string | undefined;
 }
 
 /** Title, description, type, category and (on create) who organizes the event. */
@@ -53,6 +58,9 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
   hideTypePicker = false,
   typeHint,
   afterType,
+  beforeTitle,
+  titleHint,
+  titlePlaceholder = 'e.g., Monthly Business Meeting',
 }) => {
   const {
     formData,
@@ -85,12 +93,15 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
         <span>Event Details</span>
       </h2>
 
+      {beforeTitle}
+
       {/* Title */}
       <FormField
         id="event-title"
         label="Title"
         required
         error={fieldErrors.title}
+        hint={titleHint}
         maxLength={EVENT_FIELDS.title.maxLength}
         count={formData.title.length}
       >
@@ -102,7 +113,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
             value={formData.title}
             onChange={(e) => update({ title: e.target.value })}
             className={inputClass}
-            placeholder="e.g., Monthly Business Meeting"
+            placeholder={titlePlaceholder}
           />
         )}
       </FormField>

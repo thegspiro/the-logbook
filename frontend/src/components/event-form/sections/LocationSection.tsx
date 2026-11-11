@@ -40,7 +40,9 @@ export const LocationSection: React.FC<LocationSectionProps> = ({ model }) => {
       </h2>
 
       <div>
-        <label htmlFor="location-select" className={labelClass}>
+        {/* Names whichever control is drawn: with no saved locations the
+            select gives way to a text box, which went unnamed. */}
+        <label htmlFor={locations.length > 0 ? 'location-select' : 'location-text-fallback'} className={labelClass}>
           Location
         </label>
         {locations.length > 0 ? (

@@ -787,6 +787,8 @@ export const useEventFormModel = ({
     validate,
     checkMandatory,
     showFieldErrors,
+    // For a form that places and focuses errors itself, across steps.
+    setFieldErrors,
     showFormError: setError,
     clearErrors,
     buildSinglePayload,

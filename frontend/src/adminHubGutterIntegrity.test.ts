@@ -35,6 +35,7 @@ const HUB_SURFACES = [
   'pages/TrainingWaiversTab.tsx',
   'pages/ReviewSubmissionsPage.tsx',
   'pages/CreateTrainingSessionPage.tsx',
+  'components/training-event/TrainingEventWizard.tsx',
   'pages/ShiftReportPage.tsx',
   'pages/TrainingRequirementsPage.tsx',
 ];
