@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**(recorded after this pass's PR opens — see the next commit on this
-feature's branch.)** Feature 33 (Core infrastructure), pass 14. PR #4252
+**PR [#4256](https://github.com/thegspiro/the-logbook/pull/4256)**
+(branch `claude/security-review-core-infrastructure-p14`):
+Feature 33 (Core infrastructure), pass 14. PR #4252
 (Feature 32, Locations & kiosk, pass 13) had already merged clean
 (`b29782324`). A fresh `list_pull_requests` (state `open`) found nine open
 PRs, none with a `claude/security-review-*` head, and row 33 was the next
