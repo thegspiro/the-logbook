@@ -8236,7 +8236,8 @@ ones skipped.
 - **No backfill.** Events finalized before this change keep whatever they
   wrote — for Events-created Training events, nothing. The fix is per event:
   somebody with `events.reopen_attendance` reopens it (optionally adding
-  training details on the Requirements & Programs card) and it is finalized
+  training details with **Add training details** on the event page's
+  Training details card, which opens the training-event form) and it is finalized
   again. Training officers do not hold that permission by default, so a chief
   has to do the reopen.
 - **Training events no longer credit admin hours**, even where a department
@@ -8318,7 +8319,8 @@ take every training field, including "Counts toward attendance"; an event
 edit carries `training_details`, for one event or "this and all future"; a
 rolling series and a duplicate keep their session and links; and
 `POST /training/sessions/mandatory-tiers` pre-fills "Mandatory for". The form
-itself follows in later pull requests.
+itself followed on 2026-11-11: see "Training — One Form for Training Events,
+the Form" below.
 
 **Defaults assumed on the owner's "Yes" (2026-11-11), and what they cost:**
 
@@ -8352,12 +8354,61 @@ itself follows in later pull requests.
   links** from the event edit. Attaching a session to a finalized event is
   refused, as it always was; reopen attendance first. An event with a
   session takes new links at any time.
-- **The Events form still hides training details on a rolling series** until
-  the single form replaces that block.
+- ~~**The Events form still hides training details on a rolling series**
+  until the single form replaces that block.~~ **✅ Resolved 2026-11-11.**
+  Events → Create Event now hands a Training event to the training-event
+  form, which offers the rolling 12-month cycle with every training field;
+  the single-page form no longer has a training block to hide.
 - **`TrainingSessionAttach` and `TrainingSessionDetailsUpdate` refuse unknown
   keys** (422). Before, an unknown key was dropped and the request still
   answered 201. Nothing in this repository sends one; an outside API client
   that does will now see the refusal.
+
+## Training — One Form for Training Events, the Form (2026-11-11)
+
+The owner's one training-event form (2026-11-10) is built: a step-by-step
+form (Event Details, Training Info, Settings, Review) opened by Training
+Admin's **Create Session**, by Events → **Create Event** when the type is
+Training, and by **Edit** on a Training event. Every other type keeps the
+single-page form. What it changes, and what it leaves:
+
+- **Training Admin's defaults changed to the Events form's** (owner decision,
+  Q5): RSVP off, check-in from 60 minutes before, manual check-out off. The
+  old Create Session form started with RSVP on, 15 minutes and check-out on.
+  All three are on the Settings step and can be changed; an officer used to
+  the old form who saves without looking gets the new values.
+- **A training manager without `events.manage` cannot create a Training
+  event, or change an existing one's training details** (owner decision,
+  Q1). Create Session shows a notice naming the permission instead of a form
+  the API would refuse; in an edit, Training Info is read-only with "Training
+  details are changed by an event manager." The event's own fields stay
+  theirs to edit, as before. TR14-2 below is unchanged.
+- **Every Training event the form creates has a session**, with or without a
+  course. With no course, members' records are filed under the event title as
+  the chosen training type. Credit Hours follow the event's length until
+  typed; a value typed once stays, so lengthening the event later does not
+  raise it.
+- **"Mandatory for" is suggested from "Counts toward attendance", not
+  decided by it.** Ticking requirements never ticks Mandatory attendance: a
+  requirement's percentage and a mandatory event are different things. The
+  suggestion stops once the officer changes "Mandatory for" by hand, and is
+  never re-run when an event is opened for editing, only when its ticks
+  change. The backend's approximation gaps are listed under the backend
+  section above.
+- **A mandatory event's reminders go to every active member**, not only the
+  member types it is mandatory for: ticking Mandatory attendance switches the
+  reminder audience to all active members unless the officer has chosen one.
+  This is the Events form's existing rule, now also applied to sessions
+  created from Training Admin. The audience is on the Settings step.
+- **A single session created from Training Admin is announced to chat
+  integrations.** It is created through `POST /events`, which tells connected
+  chat integrations (Slack, Discord, Teams) about a new event; the old
+  `POST /training/sessions` path did not. A series, through
+  `/events/recurring`, is not announced, from either screen.
+- **On a finalized event, only "Counts toward attendance" can change among
+  the training details.** The rest of Training Info is drawn locked; reopen
+  attendance to change it. The event's own fields keep the finalized-event
+  rules under "Events — Edit Form Gaps" below.
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
@@ -10017,6 +10068,17 @@ was flagged rather than changed. The options are to keep it, to require
 `training.manage` for the link (an organizer could still schedule and finalize
 the drill, and a training officer would link it), or to require both grants.
 Found by `docs/security-review/TR-17-training-core.md` pass 14.
+
+**Where the decision is made since 2026-11-11.** The training-event form sends
+the links as `training_details.attendance_requirement_ids` on `POST /events`,
+`/events/recurring`, `PATCH /events/{id}` and `/events/{id}/update-future`,
+still behind `events.manage`, and each change is audited the same way
+(`training_session_created` on a create, `training_session_updated` with
+`action: attendance_requirements_set`, the ids, the scope and the count on an
+edit). A caller admitted to an event edit only as a training manager is
+refused `training_details` (403), so the event edit does not widen who decides.
+`PUT /training/sessions/{id}/attendance-requirements` remains for API callers;
+the app no longer calls it.
 
 ## Training — Records the Older CSV Importers Wrote Before 2026-11-15 Read "The Logbook" (2026-11-10)
 
