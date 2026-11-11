@@ -251,10 +251,15 @@ skipped, 0 failed** in 8:58.
 
 ### Re-verified, still open
 
-- **CRON-31-7** — `run_end_of_shift_summary` still appends to `newly_sent`
-  unconditionally after a per-member send failure (`scheduled_tasks.py:2972`,
-  directly below the `email_err` log), so a member can be marked "sent" with
-  nothing delivered.
+- **CRON-31-7 is fixed, not open — this bullet was stale.** It had been
+  re-asserted here (pass 6) and in the security-review track's passes 7-12
+  despite being fixed on 2026-10-05 (`6e59402af`) and correctly recorded as
+  fixed in this file's own Pass 6 section above and in
+  `docs/KNOWN_LIMITATIONS.md`'s `CRON-31-7/8` entry. Corrected by
+  `docs/security-review/CRON13-31-scheduled-tasks.md` (pass 13, 2026-11-11)
+  after a direct re-read of `run_end_of_shift_summary` found the "send, then
+  stamp" gating already in place. Left here as a correction, not restated as
+  a finding, so a future pass does not inherit "still open" again.
 - **CRON-31-8** — `run_event_reminders` still stamps a due interval as sent with
   zero recipients, by explicit design comment.
 - **The Redis-down fallback still fails open** — `_try_claim_background_task`
