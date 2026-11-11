@@ -1,6 +1,6 @@
-# Security Review — Feature 29: Reports & Analytics (pass 8)
+# Security Review — Feature 29: Reports & Analytics (pass 8; see later `## Pass N` sections for subsequent passes, most recently pass 15)
 
-**Prefix:** `RPT6` · **Rotation pass:** 8 · **Reviewed:** 2026-10-08 · **PR:** (this PR)
+**Prefix:** `RPT6` · **Rotation pass:** 15 (this file also carries passes 8–14) · **Reviewed:** 2026-11-11 · **PR:** (this PR)
 
 **Backend:** `api/v1/endpoints/reports.py` (7 routes), `analytics.py` (3),
 `platform_analytics.py` (1), `dashboard.py` (7), `labels.py` (12) — 30 routes
@@ -1389,6 +1389,218 @@ correct, neither introduced by or requiring a fix from this pass. No
 | `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                           | ✅ 0 errors                                       |
 | `cd frontend && npm run lint`                                                                                                                                                                                                                                                                | ✅ 0 errors/warnings                              |
 | `npx vitest run src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx src/components/labels/barcodeGeometry.test.ts src/components/labels/printerDpi.test.ts src/modules/testing/testingRegistry.test.ts` | ✅ 338 passed (25 files)                          |
+
+Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
+bootstrap routes).
+
+## Pass 15 (2026-11-11) — real delta carried over from Meetings & minutes pass 13, a sibling gap found by re-enumeration, 2 fixed (RPT6-29-5 MEDIUM, RPT6-29-6 MEDIUM), 0 new findings beyond those two
+
+**Step 0/1.** `list_pull_requests` (state `open`) returned zero PRs with a
+`claude/security-review-*` head, both before starting and again before this
+push — PR #4236 (Feature 28, Security, audit & IP, pass 13) had already
+merged (`7fb61d324`). Row 29 (Reports & analytics) was confirmed the next `⬜`
+row on a freshly fetched `main`.
+
+**Baseline:** pass 14's merge, `1cfde730f` (PR #4001).
+
+**Real delta, diffed file by file against that baseline:** `dashboard.py`
+(+480/-100 before this pass's own edits — the large diff is almost entirely
+DASH-37/38/39/40 UX/correctness fixes and the MM-21 meetings-visibility fix,
+all landed by other rotation/owner-decision work, not this pass);
+`platform_analytics.py` (timezone-correctness only, +14/-14); `reports.py`
+(a cosmetic `AdminPageHeader`-era header swap on the already-reviewed
+frontend, no backend change before this pass's own two added lines);
+`dashboard_widget_service.py` (a new `outreach_event_clause` shared helper,
++27/-0); `saved_report_schedule.py` and `attendance_dashboard_service.py`,
+`label_service.py`, `label_printer_service.py`, `schemas/reports.py`,
+`analytics.py`, `labels.py` — all byte-identical to pass 14 before this
+pass's own edit to the first.
+
+### RPT6-29-5 — MEDIUM — `department_overview`'s open-action-item counts read every meeting/minutes action item in the org, with no meetings/minutes visibility restriction — ✅ FIXED
+
+**What:** `ReportsService._generate_department_overview`'s two counts
+(`action_items.open_from_meetings`/`open_from_minutes`) counted every
+`MeetingActionItem`/minutes `ActionItem` in the organization filtered only by
+status — never by the owning meeting's or minutes' approval/executive state.
+MM-21 (Meetings & minutes, pass 13, merged 2026-11-08) closed the identical
+gap on the dashboard's unified action-items feed (`dashboard.py`'s
+`meeting_visibility_filter`/`minutes_visibility_filter`, confining a
+non-`meetings.manage`/`minutes.manage` holder to approved, non-executive
+items plus their own assignments) but did not reach this report, which lives
+in this feature's own declared scope (`reports_service.py`). That pass's own
+PROGRESS.md entry flagged the gap here by name rather than fixing it, since
+it is outside Meetings & minutes' file scope.
+
+**Where:** `backend/app/services/reports_service.py` — the `open_meeting_items`/
+`open_minutes_items` queries inside `_generate_department_overview` (around
+what was line 1813 before this fix).
+
+**Failure scenario:** a member holding only `reports.view` — the department
+overview report's own gate, well below `meetings.manage`/`minutes.manage` —
+runs `POST /reports/generate` with `report_type=department_overview`, or
+opens a saved report of that type, and the response's `action_items` block
+counts every open/overdue action item from draft and executive-session
+meetings and minutes in the department, not only the ones the Meetings and
+Minutes APIs themselves would show that caller. Only a count, never a
+description, reaches them — the same lesser severity MM-21's own writeup
+gave its sibling instance.
+
+**Impact:** a department-overview reader who should not know an executive
+session even has open action items learns, at minimum, that it does and how
+many — a confidentiality leak scoped to a number, not the content MM-3/MM-24
+protect.
+
+**Fix:** `_generate_department_overview` now takes an optional `current_user`
+and applies `meeting_visibility_filter`/`minutes_visibility_filter` — the
+same functions MM-21 already added and unit-tested in `dashboard.py` —
+reused rather than re-derived (Pitfall #29). `generate_report` threads it
+through for exactly this one generator, mirroring the existing
+`hidden_prospect_ids`-for-`pipeline_overview` asymmetry. All three real
+callers now pass an acting user: the two `reports.py` endpoints pass
+`current_user`, and the scheduled sender (`saved_report_schedule.py`, which
+has no live request) now has `_owner_may_run` return the verified schedule
+owner instead of a bare bool, and passes that owner through as the acting
+user. A `current_user=None` call (none exists in production; the pre-existing
+`test_report_range_timezone.py` test is the only caller that omits it) fails
+closed to the same restricted view a non-manage holder with nothing assigned
+to them would get, never to the unrestricted count — matching CLAUDE.md's
+"Attack Protection" fail-closed principle for access-control helpers.
+
+### RPT6-29-6 — MEDIUM — `GET /dashboard/admin-summary`'s same two counts have the identical gap, found by re-enumerating the route's own query shape rather than trusting "unchanged" — ✅ FIXED
+
+**What:** while implementing RPT6-29-5, re-reading `dashboard.py` end to end
+(not just its diff) for every place the two action-item models are counted
+turned up a second, sibling instance in this feature's **own** file:
+`get_admin_summary`'s `overdue_meeting`/`open_meeting`/`overdue_minutes`/
+`open_minutes` counts had the same unrestricted shape MM-21 fixed on the
+unified feed and RPT6-29-5 just fixed on the department-overview report.
+`get_admin_summary` is gated at `require_permission("settings.manage")` —
+a permission that does not imply `meetings.manage` or `minutes.manage` — so
+a chief or officer holding `settings.manage` without either sees the
+unrestricted department-wide total on this tile, the same count class
+RPT6-29-5 describes, in this feature's own route.
+
+**Where:** `backend/app/api/v1/endpoints/dashboard.py`, `get_admin_summary`'s
+action-items block (around what was line 1408 before this fix).
+
+**Failure scenario:** identical in shape to RPT6-29-5 — `GET
+/dashboard/admin-summary` for a `settings.manage`-only caller returns
+`open_action_items`/`overdue_action_items` inclusive of draft and
+executive-session items, where the tile's own linked drill-down
+(`GET /dashboard/action-items/page`) already withholds those same rows from
+that caller — so the tile and the list it is supposed to agree with
+(DASH-37/40's own invariant) silently disagreed, and the number itself
+disclosed what the drill-down correctly hid.
+
+**Fix:** built `meeting_restriction`/`minutes_restriction` once per request
+from `meeting_visibility_filter(current_user)`/
+`minutes_visibility_filter(current_user)` — already defined in this same
+file for MM-21 — and added them (plus the `Meeting` join the meeting-side
+restriction needs, matching the unified feed's own join shape) to both the
+overdue and the open query on each side. `current_user` is always a real,
+request-scoped user here (no scheduled-job caller exists for this route), so
+no fail-closed default was needed. Two pre-existing tests
+(`test_dashboard_module_gating.py`'s `_summary()` helper,
+`test_dashboard_action_items_paging.py`'s
+`test_the_dashboard_tile_counts_what_the_open_filter_lists`) called
+`get_admin_summary` with a fake caller that had no `.positions` and relied on
+`get_admin_summary` never calling `user_has_permission`; both now also patch
+it (the first by activating the `permission_patch` its own `_patches()`
+helper already built and had been discarding, the second by adding the same
+patch inline), which was necessary to keep them passing against the fix
+rather than to make them pass superficially.
+
+### Route inventory — re-enumerated by AST from source, 36 routes, up from pass 14's 35
+
+7 (`reports.py`) + 3 (`analytics.py`) + 1 (`platform_analytics.py`) + 13
+(`dashboard.py`) + 12 (`labels.py`) = **36**. The one new route,
+`GET /dashboard/action-items/page` (`get_action_items_page`), landed between
+pass 14 and this pass as part of DASH-40 ("page or cap," owner decision
+2026-11-01) — the bare-list route it sits beside is now capped at 200 instead
+of answering every matching row, and this route pages the same merged feed
+with totals. It carries no bare `Depends` of its own: like its sibling, it is
+gated only at `get_current_active_user` and self-gates per module/permission
+inside the shared `_read_action_items` helper, exactly as the already-reviewed
+bare-list route does — re-read in full and confirmed the same
+`can_view_meetings`/`can_view_minutes` + `meeting_visibility_filter`/
+`minutes_visibility_filter` shape applies to both routes identically, since
+they are now one function with two thin wrappers. Every other route's gate
+re-checked individually by grep against source: unchanged from the pass 13/14
+table.
+
+### Verified good ✅ (this pass's own checks, beyond the two findings above)
+
+- **`outreach_event_clause`** (`dashboard_widget_service.py`, new this pass)
+  org-scopes both halves of its `or_()` — the public-event-type branch and the
+  `EventRequest`-linked-event subquery both filter `organization_id ==
+organization_id` — and is consumed identically by the dashboard pulse card
+  and `community_engagement_service`, closing a Pitfall #29 risk before it
+  could open (one definition, not two independently drifting ones).
+- **`platform_analytics.py`'s timezone fix** (`month_since` replacing a mixed
+  `thirty_days_ago - timedelta`/local-midnight pair) touches no org filter;
+  every query it feeds still anchors on `organization_id == org_id`.
+- **The four facilities/apparatus asset-widget tile changes** (DASH-38,
+  DASH-39) reuse `FacilitiesService.maintenance_overdue_conditions`/
+  `maintenance_due_soon_conditions` (Feature 12's own org-scoped helpers,
+  called with this feature's `org_id`) rather than hand-rolling a new query —
+  verified both helpers filter `organization_id` directly.
+- **No new injection, CSV, upload, or secrets-exposure surface** anywhere in
+  the real delta: every new/changed query above is parameterized SQLAlchemy
+  construction: no `.like()`/`.ilike()`, no `csv.writer`, no raw SQL.
+- **Frontend:** `modules/reports`' large Evaluations surface and the labels
+  tree's DPI/geometry changes are unchanged since pass 14's own full read of
+  them; the new diff since then (`Dashboard.tsx`'s layout/notification-preview
+  tweaks, `AnalyticsDashboardPage.tsx`/`PlatformAnalyticsPage.tsx`'s
+  `AdminPageHeader` adoption, `LabelPrintPage.tsx`'s Avery-5160 geometry
+  constants) is cosmetic/correctness-only — read in full, no new
+  `dangerouslySetInnerHTML`, `localStorage`/`sessionStorage` of anything
+  sensitive, `window.confirm`/`alert`/`prompt`, or raw `innerHTML` beyond the
+  pre-existing print-iframe clone of already-React-escaped DOM content
+  (`LabelPrintPage.tsx`'s `printViaBrowser`, unchanged in shape this pass).
+
+### Still flagged — every open item re-checked against current code, not the doc
+
+- **LBL-29-2 (LOW/policy)** — `list_label_printers` still carries only
+  `get_current_user`; `labels.py` has zero diff since pass 14. Unchanged.
+- **LBL-29-4 (Informational)** — `LabelService.generate()` still has no
+  count cap of its own. Unchanged.
+- **RPT-5c / RPT-6 / RPT-7** — re-grepped directly rather than trusted from
+  the doc: `_generate_inventory_status`'s `float(item.current_value)` and
+  `_generate_apparatus_status`'s hardcoded `"last_inspection_date": None` are
+  both still present verbatim. Unchanged.
+- **DASH-2 (LOW)** — `grep -rn "dashboardService\.getStats" frontend/src/` —
+  0 hits, re-checked this pass. Still zero callers.
+
+### Guard tests added
+
+- `backend/tests/test_department_overview_action_item_visibility.py` (new) —
+  asserts a baseline `reports.view`-only caller's counts exclude draft/
+  executive items except their own assignments, a `meetings.manage`+
+  `minutes.manage` holder sees every item, and a `current_user=None` call
+  fails closed to the restricted view, never the unrestricted one. Verified
+  to fail against the pre-fix code (two `TypeError`s for the missing
+  parameter, and `4 == 1` on the no-caller case) before the fix, and pass
+  after (Pitfall #37).
+- `backend/tests/test_dashboard_action_items_paging.py::TestAdminSummaryRespectsVisibility`
+  (new) — asserts a `settings.manage`-only caller's `/admin-summary` counts
+  match only the visible items (restricted) while a `meetings.manage`+
+  `minutes.manage` holder still gets the full count. Verified to fail against
+  the pre-fix code (`4 == 2`) before the fix, and pass after.
+
+### Completion gate (Pass 15)
+
+| Check                                                                                                                                                                                                                                                                                     | Result                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`, via `python3.13 -m`, CI's pin)                                                                                                                                                                                                            | ✅ 0 violations                                         |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`, via `python3.13 -m`, CI's pin)                                                                                                                                                                                                    | ✅ clean (one test file auto-formatted and re-verified) |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`, via `python3.13 -m`, CI's pin)                                                                                                                                                                                                 | ✅ clean                                                |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                                                                                                      | ✅ 756 revisions, single head `8b1cf6f55425`            |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                                                                                                                                                                                      | ✅ up to date                                           |
+| `python3.13 scripts/check_route_permissions.py --strict` (repo root)                                                                                                                                                                                                                      | ✅ 305 routes, 0 errors, 0 warnings                     |
+| `pytest tests/ -q -k "reports or label or analytics or dashboard or attendance_dashboard or pipeline or prospect_privacy or membership_pipeline or dues_overdue or saved_report or evaluation or meeting or minutes"`                                                                     | ✅ 3313 passed, 1 pre-existing skip (`pywebpush`)       |
+| `cd frontend && npm run typecheck`                                                                                                                                                                                                                                                        | ✅ 0 errors                                             |
+| `cd frontend && npm run lint`                                                                                                                                                                                                                                                             | ✅ 0 errors/warnings                                    |
+| `npx vitest run src/modules/reports src/pages/AnalyticsDashboardPage.test.tsx src/pages/Dashboard.test.tsx src/components/labels/LabelPrintPage.test.tsx src/components/labels/barcodeGeometry.test.ts src/components/labels/printerDpi.test.ts src/pages/PlatformAnalyticsPage.test.tsx` | ✅ 359 passed (27 files)                                |
 
 Next in rotation: Feature 30 (Onboarding — `api/v1/onboarding.py`, 26 unauth
 bootstrap routes).
