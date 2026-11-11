@@ -6853,10 +6853,13 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
 
 
 # What a new occurrence of a rolling series copies from the latest one.
-# Not attachments: their metadata points at files owned by that occurrence,
-# and each occurrence exposes an independent delete action that would
-# otherwise remove the shared file. Not the recurrence settings, which stay on
-# the series parent, nor anything an occurrence's own lifecycle writes.
+# Not attachments: their metadata points at files owned by that occurrence.
+# (Sharing would not lose a file — delete_event_attachment removes a stored
+# file only once no event in the organization still names it, and
+# EventService.duplicate_event does copy attachments; see
+# test_event_duplicate_attachment_ownership.py.) Not the recurrence settings,
+# which stay on the series parent, nor anything an occurrence's own lifecycle
+# writes.
 ROLLING_OCCURRENCE_FIELDS = (
     "title",
     "description",

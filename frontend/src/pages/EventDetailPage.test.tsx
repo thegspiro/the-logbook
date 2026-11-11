@@ -2290,6 +2290,32 @@ describe('EventDetailPage', () => {
       expect(await screen.findByRole('heading', { name: 'Attendance Requests' })).toBeInTheDocument();
       expect(screen.getByText('Phone died at the door')).toBeInTheDocument();
     });
+    it('shows a fallback holder the request they were sent', async () => {
+      mockAuthState.user = { id: 'secretary-1', permissions: [] } as unknown as CurrentUser;
+      // The Secretary was sent the request because the organizer has left.
+      // They do not run the event, but the server says they may decide it.
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...pastEvent,
+        can_manage_organizers: false,
+        can_review_attendance_requests: true,
+      });
+      vi.mocked(eventService.getAttendancePetitions).mockResolvedValue([
+        {
+          id: 'pet-1',
+          event_id: 'evt-1',
+          user_id: 'user-2',
+          user_name: 'Sam Member',
+          status: 'pending',
+          reason: 'Phone died at the door',
+          created_at: '2020-04-15T21:00:00Z',
+        },
+      ]);
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('heading', { name: 'Attendance Requests' })).toBeInTheDocument();
+      expect(screen.getByText('Phone died at the door')).toBeInTheDocument();
+    });
   });
 
   // Workflow review W80-8: once check-in has closed, the officer can record
