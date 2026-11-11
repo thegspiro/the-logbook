@@ -69,6 +69,7 @@ from app.schemas.event import (
     EventListItem,
     EventNotificationRequest,
     EventNotificationResponse,
+    EventPostpone,
     EventResponse,
     EventSettingsUpdate,
     EventStats,
@@ -440,6 +441,9 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         is_cancelled=event.is_cancelled,
         cancellation_reason=event.cancellation_reason,
         cancelled_at=event.cancelled_at,
+        postponed_at=event.postponed_at,
+        postponed_from_start=event.postponed_from_start,
+        postponement_reason=event.postponement_reason,
         attendance_finalized_at=event.attendance_finalized_at,
         attendance_finalized_by=event.attendance_finalized_by,
         created_by=event.created_by,
@@ -624,6 +628,7 @@ def _to_list_item(row: dict, counts_toward_attendance: bool = False) -> EventLis
         mandatory_membership_types=event.mandatory_membership_types,
         is_draft=event.is_draft or False,
         is_cancelled=event.is_cancelled,
+        postponed_from_start=event.postponed_from_start,
         is_recurring=event.is_recurring or False,
         recurrence_parent_id=event.recurrence_parent_id,
         rsvp_count=row["rsvp_count"],
@@ -1938,6 +1943,67 @@ async def cancel_event(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=safe_error_detail(e),
         )
+
+
+@router.post("/{event_id}/postpone", response_model=EventResponse)
+async def postpone_event(
+    event_id: UUID,
+    postpone_data: EventPostpone,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Postpone an event to a new time
+
+    Moves the event, clears its check-ins and attendance corrections (and the
+    admin hours and training credit they produced), keeps its RSVPs, records
+    when and from what start it was postponed, and tells members who RSVP'd
+    Going or Maybe. Refused on a cancelled or finalized event, for a new
+    start in the past, and while attendance requests are pending. Sending the
+    same postponement twice changes nothing the second time.
+
+    **Authentication required**
+    **Allowed: events.manage, or training.manage on a Training event**
+    """
+    await _authorize_event_admin(db, event_id, current_user, EVENT_MANAGER_PERMISSION)
+    service = EventService(db)
+    try:
+        event = await service.postpone_event(
+            event_id=event_id,
+            organization_id=current_user.organization_id,
+            new_start=postpone_data.new_start_datetime,
+            new_end=postpone_data.new_end_datetime,
+            reason=postpone_data.reason,
+            send_notifications=postpone_data.send_notifications,
+            postponed_by=current_user.id,
+        )
+    except ValueError as e:
+        raise attendance_lock_http_error(e) or HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    if not event:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Event not found"
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="event.postponed",
+        event_category="events",
+        severity="info",
+        event_data={
+            "event_id": str(event_id),
+            "postponed_from_start": (
+                event.postponed_from_start.isoformat()
+                if event.postponed_from_start
+                else None
+            ),
+            "new_start": event.start_datetime.isoformat(),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return _build_event_response(event)
 
 
 @router.post("/{event_id}/transfer", response_model=EventTransferResponse)

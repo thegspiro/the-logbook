@@ -461,6 +461,35 @@ class EventCancel(BaseModel):
     )
 
 
+class EventPostpone(BaseModel):
+    """Schema for postponing an event to a new time (workflow review W80-11).
+
+    Unlike an edit of the schedule, a postponement clears the check-ins the
+    event already holds: a tap at the original slot must never be credited as
+    attendance at the new one.
+    """
+
+    new_start_datetime: datetime
+    new_end_datetime: datetime
+    reason: str = Field(..., min_length=10, max_length=500)
+    send_notifications: bool = Field(
+        default=True,
+        description="Tell members who RSVP'd Going or Maybe, in-app and by email",
+    )
+
+    @field_validator("new_start_datetime", "new_end_datetime")
+    @classmethod
+    def _normalize_utc(cls, v: datetime) -> datetime:
+        # Stored in DATETIME columns and compared by the service; see as_utc.
+        return as_utc(v)
+
+    @model_validator(mode="after")
+    def _ends_after_start(self) -> "EventPostpone":
+        if self.new_end_datetime <= self.new_start_datetime:
+            raise ValueError("The new end must be after the new start")
+        return self
+
+
 class EventTransferRequest(BaseModel):
     """Hand an event to a new organizer and alternate.
 
@@ -525,6 +554,9 @@ class EventResponse(EventBase, UTCResponseBase):
     counts_toward_attendance: bool = False
     cancellation_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
+    postponed_at: Optional[datetime] = None
+    postponed_from_start: Optional[datetime] = None
+    postponement_reason: Optional[str] = None
     # Attendance lock. The UI reads attendance_finalized_at to decide which
     # actions to offer at all; the name is resolved for display because rows
     # backfilled from the pre-column marker have no actor recorded.
@@ -649,6 +681,9 @@ class EventListItem(UTCResponseBase):
     mandatory_membership_types: Optional[List[str]] = None
     is_draft: bool = False
     is_cancelled: bool
+    # The start before the first postponement, for the list's "Postponed"
+    # badge; None for an event never postponed.
+    postponed_from_start: Optional[datetime] = None
     is_recurring: bool = False
     recurrence_parent_id: Optional[UUID] = None
     rsvp_count: Optional[int] = None

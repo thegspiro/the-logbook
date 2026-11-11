@@ -33,9 +33,12 @@ from app.models.attendance_waiver import (
 )
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
+    AttendancePetitionStatus,
     AttendeeVisibility,
     CheckInWindowType,
     Event,
+    EventAttendancePetition,
+    EventExternalAttendee,
     EventRSVP,
     EventTemplate,
     EventType,
@@ -1377,8 +1380,8 @@ class EventService:
             raise ValueError(
                 f"{stranded} {members} already checked in at a time outside "
                 "the new schedule, and would be credited for the new date. "
-                "Remove or correct those check-ins first, or cancel this "
-                "event and schedule a new one."
+                "Postpone the event instead, which starts its attendance "
+                "afresh, or remove or correct those check-ins first."
             )
 
     async def complete_deferred_writes(self, organization_id: UUID | str) -> None:
@@ -1721,6 +1724,228 @@ class EventService:
 
         return event
 
+    async def postpone_event(
+        self,
+        event_id: UUID | str,
+        organization_id: UUID | str,
+        new_start: datetime,
+        new_end: datetime,
+        reason: str,
+        send_notifications: bool = True,
+        postponed_by: UUID | str | None = None,
+    ) -> Optional[Event]:
+        """Move an event to a new time and start its attendance afresh.
+
+        The difference from an edit of the schedule (workflow review W80-11):
+        an edit keeps the event's attendance, and is refused when that would
+        leave check-ins outside the new times (``_refuse_orphaning_check_ins``).
+        A postponement says the event did not happen at its old time, so it
+        clears every check-in and correction — member and guest — removes the
+        admin hours and training credit they produced, and resets the reminder
+        markers so reminders go out again for the new time. RSVPs are kept:
+        who meant to come is still the best guess at who will.
+
+        ``postponed_from_start`` is written once, at the first postponement,
+        so a drill moved twice still says where it was originally scheduled.
+
+        Safe to run twice: a request naming the times the event already has,
+        on an event already postponed, is the same postponement delivered again
+        (a double tap, a retried request) and returns the event unchanged
+        without a second round of notices (CLAUDE.md pitfall #36).
+        """
+        now = datetime.now(dt_timezone.utc)
+        new_start = self._as_utc(new_start) or new_start
+        new_end = self._as_utc(new_end) or new_end
+        if new_end <= new_start:
+            raise ValueError("The new end must be after the new start")
+
+        # Room bookings before the event row, the order update_event uses
+        # (EV-26), so a postponement and an edit of an event in the same room
+        # cannot each hold a lock the other waits on.
+        await LocationService(self.db).lock_room_bookings(str(organization_id))
+        result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+            .options(selectinload(Event.location_obj), selectinload(Event.rsvps))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        event: Optional[Event] = result.scalar_one_or_none()
+        if not event:
+            return None
+
+        if (
+            event.postponed_at is not None
+            and self._as_utc(event.start_datetime) == new_start
+            and self._as_utc(event.end_datetime) == new_end
+        ):
+            return event
+
+        if event.is_cancelled:
+            raise ValueError("A cancelled event cannot be postponed")
+        if attendance_is_finalized(event):
+            raise ValueError(attendance_locked_error("postponing the event"))
+        if new_start <= now:
+            raise ValueError("A postponed event must start in the future")
+        if (
+            self._as_utc(event.start_datetime) == new_start
+            and self._as_utc(event.end_datetime) == new_end
+        ):
+            raise ValueError("Choose a new time to postpone the event to")
+
+        # A pending "I was there" request is about the old time; deciding it
+        # after the move would credit attendance at a time the event no
+        # longer has. The officer settles them first.
+        pending = (
+            await self.db.execute(
+                select(func.count())
+                .select_from(EventAttendancePetition)
+                .where(
+                    EventAttendancePetition.event_id == str(event.id),
+                    EventAttendancePetition.status == AttendancePetitionStatus.PENDING,
+                )
+            )
+        ).scalar_one()
+        if pending:
+            requests = "request is" if pending == 1 else "requests are"
+            raise ValueError(
+                f"{pending} attendance {requests} waiting on this event. "
+                "Approve or decline them before postponing it."
+            )
+
+        if event.location_id:
+            overlapping = await LocationService(self.db).check_overlapping_events(
+                location_id=event.location_id,
+                organization_id=str(organization_id),
+                start_datetime=new_start,
+                end_datetime=new_end,
+                exclude_event_id=str(event.id),
+            )
+            if overlapping:
+                titles = ", ".join(f'"{e.title}"' for e in overlapping[:3])
+                raise ValueError(
+                    f"Location is already booked during the new time. "
+                    f"Conflicting event(s): {titles}"
+                )
+
+        old_start = event.start_datetime
+        pending_reversals = await self._revoke_event_attendance_credit(
+            event.id, organization_id, event=event
+        )
+
+        for rsvp in event.rsvps:
+            rsvp.checked_in = False
+            rsvp.checked_in_at = None
+            rsvp.checked_out_at = None
+            rsvp.attendance_duration_minutes = None
+            rsvp.early_check_in_minutes = None
+            rsvp.override_check_in_at = None
+            rsvp.override_check_out_at = None
+            rsvp.override_duration_minutes = None
+            rsvp.overridden_by = None
+            rsvp.overridden_at = None
+        guests = (
+            (
+                await self.db.execute(
+                    select(EventExternalAttendee).where(
+                        EventExternalAttendee.event_id == str(event.id),
+                        EventExternalAttendee.organization_id == str(organization_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for guest in guests:
+            guest.checked_in = False
+            guest.checked_in_at = None
+
+        event.start_datetime = new_start
+        event.end_datetime = new_end
+        event.actual_start_time = None
+        event.actual_end_time = None
+        if event.postponed_from_start is None:
+            event.postponed_from_start = old_start
+        event.postponed_at = now
+        event.postponement_reason = reason
+        # Deep copy before reassigning (CLAUDE.md pitfall #12). Only the
+        # markers that describe the old time go: series_end_reminder_sent is
+        # about the series, and attendance_finalized cannot be set here.
+        custom = copy.deepcopy(event.custom_fields or {})
+        for marker in ("reminders_sent", "validation_notification_sent"):
+            custom.pop(marker, None)
+        event.custom_fields = custom
+        if postponed_by:
+            event.updated_by = str(postponed_by)
+        event.updated_at = now
+
+        notify_ids = [
+            str(rsvp.user_id)
+            for rsvp in event.rsvps
+            if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
+        ]
+
+        await self.db.commit()
+        await self.db.refresh(event)
+        await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
+
+        if send_notifications and notify_ids:
+            await self._notify_postponement(
+                event, notify_ids, organization_id, old_start, reason
+            )
+        return event
+
+    async def _notify_postponement(
+        self,
+        event: Event,
+        user_ids: List[str],
+        organization_id: UUID | str,
+        old_start: datetime,
+        reason: str,
+    ) -> None:
+        """Bell, then email, each non-fatal: the postponement is committed,
+        and a failed notice must not turn it into an error response."""
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        was = format_in_org_timezone(old_start, org)
+        now_at = format_in_org_timezone(event.start_datetime, org)
+        try:
+            notifications_service = NotificationsService(self.db)
+            for uid in user_ids:
+                await notifications_service.log_notification(
+                    organization_id=organization_id,
+                    log_data={
+                        "channel": NotificationChannel.IN_APP,
+                        "category": "event_update",
+                        "recipient_id": uid,
+                        "subject": f"Event Postponed: {event.title}",
+                        "message": (
+                            f'"{event.title}" has been postponed from {was} '
+                            f"to {now_at}. Reason: {reason}"
+                        ),
+                        "action_url": f"/events/{event.id}",
+                    },
+                )
+        except Exception as e:
+            logger.error("Failed to notify postponement of event {}: {}", event.id, e)
+        # Email is the channel of record (CLAUDE.md pitfall 18), gated by the
+        # member's "Event changes and cancellations" switch like any change.
+        try:
+            await self.email_event_change(
+                event,
+                user_ids,
+                organization_id,
+                "postponed",
+                postponed_from=old_start,
+                postponement_reason=reason,
+            )
+        except Exception as e:
+            logger.error("Failed to email postponement of event {}: {}", event.id, e)
+
     async def _event_email_recipients(
         self,
         user_ids: List[str],
@@ -1820,9 +2045,15 @@ class EventService:
         user_ids: List[str],
         organization_id: UUID | str,
         changes_desc: str,
+        *,
+        postponed_from: Optional[datetime] = None,
+        postponement_reason: Optional[str] = None,
     ) -> int:
         """Email the members in *user_ids* that *event*'s title, time or
         location changed, showing the details as they now stand.
+
+        With *postponed_from*, the notice says the event was postponed, from
+        when and why, rather than asking the member to spot what changed.
 
         There is no template for this notice: it is built inline through
         ``wrap_email_body``. Gated by the member's "Event changes and
@@ -1850,11 +2081,19 @@ class EventService:
             else:
                 when += " to " + format_in_org_timezone(event.end_datetime, org)
         url = f"{settings.FRONTEND_URL}/events/{event.id}"
-        intro = (
-            f'The event "{event.title}" has been updated ({changes_desc}). '
-            f"Please review the latest details."
-        )
+        if postponed_from is not None:
+            intro = (
+                f'The event "{event.title}" has been postponed. It was '
+                f"scheduled for {format_in_org_timezone(postponed_from, org)}."
+            )
+        else:
+            intro = (
+                f'The event "{event.title}" has been updated ({changes_desc}). '
+                f"Please review the latest details."
+            )
         facts = [("When", when)]
+        if postponement_reason:
+            facts.append(("Reason", postponement_reason))
         if location_name:
             facts.append(("Where", location_name))
 

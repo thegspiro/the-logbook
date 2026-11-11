@@ -9618,10 +9618,12 @@ Decided and fixed in the same pass: over-credit is warned, not capped; an
 approver on a roster cannot approve it; a schedule change that strands
 check-ins is refused; a training-only waiver can name its requirements. Open:
 
-- **W80-11 — Postpone (decided, not built).** The owner chose a real Postpone
-  action with `postponed_at` / `postponed_from_start` / `postponement_reason`
-  columns. Its design is in the findings file and goes in its own pull request:
-  it adds a migration and a public endpoint.
+- **W80-11 — Postpone.** Built in its own pull request: `POST
+/events/{id}/postpone`, three nullable columns on `events` (migration
+  `09f0171ccf5e`), and a Postpone Event action on the event page. Resolved.
+- **W80-16 — Editing an event's time keeps its reminder markers**, so a drill
+  moved through Edit never re-sends a reminder already sent for its old time.
+  Postpone resets them; whether Edit should is open.
 - **W80-8 — Recording one member on a past drill.** Check-in is refused once the
   window closes, with a message telling the organizer to ask an organizer; the
   only routes are adding the whole roster, or the member's own "I was there".

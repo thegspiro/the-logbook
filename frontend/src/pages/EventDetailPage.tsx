@@ -72,6 +72,7 @@ import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
 import { EventAttendeesCard } from '../components/event-detail/EventAttendeesCard';
 import EventRSVPModal from '../components/event-detail/EventRSVPModal';
 import EventCancelModal from '../components/event-detail/EventCancelModal';
+import EventPostponeModal, { type PostponeEventPayload } from '../components/event-detail/EventPostponeModal';
 import EventLateAttendeeForm from '../components/event-detail/EventLateAttendeeForm';
 import EventCancelSeriesModal from '../components/event-detail/EventCancelSeriesModal';
 import EventCheckInModal from '../components/event-detail/EventCheckInModal';
@@ -231,6 +232,7 @@ export const EventDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showPostponeModal, setShowPostponeModal] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showRecordTimesModal, setShowRecordTimesModal] = useState(false);
   const [showCancelSeriesModal, setShowCancelSeriesModal] = useState(false);
@@ -661,6 +663,30 @@ export const EventDetailPage: React.FC = () => {
       await fetchEvent();
     } catch (err) {
       setSubmitError(getErrorDetail(err) || 'Failed to cancel event');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handlePostponeEvent = async (payload: PostponeEventPayload) => {
+    if (!eventId) return;
+
+    try {
+      setSubmitting(true);
+      setSubmitError(null);
+
+      await eventService.postponeEvent(eventId, {
+        new_start_datetime: payload.newStart,
+        new_end_datetime: payload.newEnd,
+        reason: payload.reason,
+        send_notifications: payload.sendNotifications,
+      });
+
+      setShowPostponeModal(false);
+      toast.success('Event postponed');
+      await fetchEvent();
+    } catch (err) {
+      setSubmitError(getErrorDetail(err) || 'Failed to postpone event');
     } finally {
       setSubmitting(false);
     }
@@ -1147,6 +1173,11 @@ export const EventDetailPage: React.FC = () => {
                     Cancelled
                   </span>
                 )}
+                {event.postponed_at && !event.is_cancelled && (
+                  <span className="bg-theme-alert-warning-bg inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+                    Postponed
+                  </span>
+                )}
                 {event.is_mandatory && (
                   <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-500/20 dark:text-orange-400">
                     Mandatory
@@ -1416,6 +1447,18 @@ export const EventDetailPage: React.FC = () => {
                             {!isAttendanceFinalized && (
                               <>
                                 <div className="border-theme-surface-border my-1 border-t" />
+                                {!event.is_cancelled && (
+                                  <button
+                                    onClick={() => {
+                                      setShowActionsMenu(false);
+                                      setSubmitError(null);
+                                      setShowPostponeModal(true);
+                                    }}
+                                    className="text-theme-text-secondary hover:bg-theme-surface-hover w-full px-4 py-2.5 text-left text-sm"
+                                  >
+                                    Postpone Event
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => {
                                     setShowActionsMenu(false);
@@ -1517,6 +1560,12 @@ export const EventDetailPage: React.FC = () => {
                     <p className="text-theme-text-secondary text-sm font-medium">Date & Time</p>
                     <p className="text-theme-text-secondary text-sm">{formatDateTime(event.start_datetime, tz)}</p>
                     <p className="text-theme-text-secondary text-sm">to {formatTime(event.end_datetime, tz)}</p>
+                    {event.postponed_from_start && (
+                      <p className="text-theme-text-muted mt-1 text-xs">
+                        Postponed from {formatDateTime(event.postponed_from_start, tz)}
+                        {event.postponement_reason ? ` — ${event.postponement_reason}` : ''}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -2080,6 +2129,24 @@ export const EventDetailPage: React.FC = () => {
             }}
             onClose={() => {
               setShowCancelModal(false);
+              setSubmitError(null);
+            }}
+          />
+        )}
+
+        {showPostponeModal && (
+          <EventPostponeModal
+            currentStart={event.start_datetime}
+            currentEnd={event.end_datetime}
+            timezone={tz}
+            checkedInCount={rsvps.filter((r) => r.checked_in).length}
+            submitting={submitting}
+            submitError={submitError}
+            onSubmit={(payload) => {
+              void handlePostponeEvent(payload);
+            }}
+            onClose={() => {
+              setShowPostponeModal(false);
               setSubmitError(null);
             }}
           />

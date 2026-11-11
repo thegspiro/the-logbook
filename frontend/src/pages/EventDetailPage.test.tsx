@@ -306,6 +306,20 @@ describe('EventDetailPage', () => {
       });
     });
 
+    it('says a postponed event was postponed, from when and why', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        postponed_at: '2026-11-08T16:15:00Z',
+        postponed_from_start: '2026-11-08T16:00:00Z',
+        postponement_reason: 'Ladder truck out of service',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText('Postponed')).toBeInTheDocument();
+      expect(screen.getByText(/^Postponed from .* — Ladder truck out of service$/)).toBeInTheDocument();
+    });
+
     it('should display mandatory badge for mandatory events', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue({
         ...mockEvent,

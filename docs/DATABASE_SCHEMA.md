@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**367 tables · 5940 columns · 1229 foreign keys**
+**367 tables · 5943 columns · 1229 foreign keys**
 
 ---
 
@@ -240,7 +240,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 18 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
 | [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
-| [`events`](#events) | `Event` | 56 | Event model for managing department events |
+| [`events`](#events) | `Event` | 59 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 9 | RSVP History model for tracking RSVP status changes. |
 
 ### External_Shift_Hours
@@ -3477,6 +3477,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `is_cancelled` | BOOL | no |  | `0` |  |
 | `cancellation_reason` | TEXT | yes |  |  |  |
 | `cancelled_at` | DATETIME | yes |  |  |  |
+| `postponed_at` | DATETIME | yes |  |  |  |
+| `postponed_from_start` | DATETIME | yes |  |  |  |
+| `postponement_reason` | TEXT | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `organizer_id` | VARCHAR(36) | yes | FK, IDX | generated | → `users.id` ON DELETE SET NULL |
