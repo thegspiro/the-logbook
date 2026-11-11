@@ -49,7 +49,8 @@ describe('ambiguousAttendanceRequirements', () => {
   });
 
   it('treats a missing type list as naming none', () => {
-    const saved = req('a', [], { required_membership_types: undefined });
+    // The key is absent, not undefined: that is how an older row arrives.
+    const saved: Shape = { id: 'a', name: 'Req a', requirement_type: 'session_attendance', active: true };
     expect(ids(saved, [req('b', [])])).toEqual(['b']);
   });
 });
