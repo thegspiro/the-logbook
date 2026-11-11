@@ -1,6 +1,6 @@
 import React from 'react';
 import { MapPin } from 'lucide-react';
-import { FormField } from '../../ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../../ux/FormField';
 import { EVENT_FIELDS, inputClass, labelClass, selectClass } from '../eventFormConstants';
 import type { EventFormModel } from '../useEventFormModel';
 
@@ -81,7 +81,7 @@ export const LocationSection: React.FC<LocationSectionProps> = ({ model, variant
               placeholder="e.g., Station 1 Conference Room"
             />
             {fieldErrors.location && (
-              <p id="location-text-fallback-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+              <p id="location-text-fallback-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
                 {fieldErrors.location}
               </p>
             )}

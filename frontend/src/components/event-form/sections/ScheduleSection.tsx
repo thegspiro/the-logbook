@@ -242,7 +242,10 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label htmlFor="recurrence-pattern" className={labelClass}>
-                    Repeats <span className="text-red-700 dark:text-red-500">*</span>
+                    Repeats{' '}
+                    <span className={FIELD_ERROR_CLASS} aria-hidden="true">
+                      *
+                    </span>
                   </label>
                   <select
                     id="recurrence-pattern"
@@ -259,7 +262,12 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
                 </div>
                 <div>
                   <label className={labelClass}>
-                    Duration {!isRolling && <span className="text-red-700 dark:text-red-500">*</span>}
+                    Duration{' '}
+                    {!isRolling && (
+                      <span className={FIELD_ERROR_CLASS} aria-hidden="true">
+                        *
+                      </span>
+                    )}
                   </label>
                   <div className="space-y-3">
                     <label className="mobile-touch-target flex cursor-pointer items-center justify-start gap-2 text-sm">
@@ -289,7 +297,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
                           className={inputClass}
                         />
                         {fieldErrors.recurrence_end_date && (
-                          <p id="recurrence-end-date-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+                          <p id="recurrence-end-date-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
                             {fieldErrors.recurrence_end_date}
                           </p>
                         )}
@@ -302,7 +310,10 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
               {recurrencePattern === 'custom' && (
                 <div role="group" aria-labelledby="recurrence-days-label">
                   <span id="recurrence-days-label" className={labelClass}>
-                    Days of the Week <span className="text-red-700 dark:text-red-500">*</span>
+                    Days of the Week{' '}
+                    <span className={FIELD_ERROR_CLASS} aria-hidden="true">
+                      *
+                    </span>
                   </span>
                   <div className="flex flex-wrap gap-2">
                     {WEEKDAYS.map((day, index) => (
@@ -429,7 +440,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
                           type="button"
                           onClick={() => setRecurrenceExceptions((prev) => prev.filter((d) => d !== date))}
                           aria-label={`Remove ${date}`}
-                          className="text-xs font-medium text-red-500 hover:text-red-700"
+                          className="text-xs font-medium text-red-800 hover:text-red-900 dark:text-red-300 dark:hover:text-red-200"
                         >
                           Remove
                         </button>

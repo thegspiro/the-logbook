@@ -4,7 +4,7 @@ import type { EventType } from '../../../types/event';
 import { EventType as EventTypeEnum } from '../../../constants/enums';
 import { getEventTypeLabel } from '../../../utils/eventHelpers';
 import { EventOrganizerPickers } from '../../EventOrganizerPickers';
-import { FormField } from '../../ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../../ux/FormField';
 import { EVENT_FIELDS, EVENT_TYPES, inputClass, labelClass, selectClass } from '../eventFormConstants';
 import type { EventFormModel } from '../useEventFormModel';
 
@@ -118,7 +118,10 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
   const typePicker = !hideTypePicker && (
     <div>
       <label htmlFor="event-type" className={labelClass}>
-        Event Type <span className="text-red-700 dark:text-red-500">*</span>
+        Event Type{' '}
+        <span className={FIELD_ERROR_CLASS} aria-hidden="true">
+          *
+        </span>
       </label>
       <select
         id="event-type"
@@ -283,7 +286,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
           placeholder="What is this event about? Use **bold**, *italic*, - lists, or [links](url)"
         />
         {fieldErrors.description && (
-          <p id="event-description-error" className="mt-1 text-sm text-red-700 dark:text-red-400">
+          <p id="event-description-error" className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
             {fieldErrors.description}
           </p>
         )}
@@ -354,7 +357,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
       {showOrganizerPickers && (
         <div>
           {organizerOptions.error ? (
-            <p className="text-sm text-red-700 dark:text-red-400" role="alert">
+            <p className={`text-sm ${FIELD_ERROR_CLASS}`} role="alert">
               {organizerOptions.error} You will be the organizer; you can transfer the event once it is created.
             </p>
           ) : (

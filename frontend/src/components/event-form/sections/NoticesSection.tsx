@@ -1,5 +1,6 @@
 import React from 'react';
 import { Lock } from 'lucide-react';
+import { FIELD_ERROR_CLASS } from '../../ux/FormField';
 import type { EventFormModel } from '../useEventFormModel';
 
 interface NoticesSectionProps {
@@ -25,7 +26,7 @@ export const NoticesSection: React.FC<NoticesSectionProps> = ({ model, show = 'a
       {show !== 'lock' && error && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
           {/* A summary may run to a second line, listing each refusal. */}
-          <p className="text-sm whitespace-pre-line text-red-700 dark:text-red-300">{error}</p>
+          <p className={`text-sm whitespace-pre-line ${FIELD_ERROR_CLASS}`}>{error}</p>
         </div>
       )}
 
