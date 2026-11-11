@@ -1332,6 +1332,40 @@ class EvaluationService:
             }
         if key == "positions.held":
             return {"available": True, "value": [{"label": "Engine Company"}]}
+        if key in ("training.session_waiver_history", "meetings.waiver_history"):
+            day = date(period_end.year, period_end.month, 1).isoformat()
+            outcome = "denied by A. Officer, then approved on the Chief's override"
+            return {
+                "available": True,
+                "value": [
+                    {
+                        "label": f"{day} Sample session: {outcome}",
+                        "session_date": day,
+                        "event_title": "Sample session",
+                        "status": "approved",
+                        "outcome": outcome,
+                        "category": None,
+                        "decided_by": "A. Chief",
+                        "chief_override": True,
+                        "attachment_on_file": False,
+                        "history": [],
+                    }
+                ],
+            }
+        if key in ("training.session_waivers_summary", "meetings.waivers_summary"):
+            return {
+                "available": True,
+                "value": 3,
+                "requested": 3,
+                "approved": 2,
+                "overridden": 1,
+                "denied": 1,
+                "withdrawn": 0,
+                "pending": 0,
+                "voided": 0,
+                "breakdown": "2 approved (1 on the Chief's override), 1 denied, "
+                "0 withdrawn",
+            }
         sample: Dict[str, Any] = {
             "hours": 36.0,
             "percent": 88.0,

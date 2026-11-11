@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -33,6 +33,13 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.attendance_waiver import (
+    AttendanceWaiverAction,
+    AttendanceWaiverRequest,
+    AttendanceWaiverRequestAction,
+    AttendanceWaiverStatus,
+    AttendanceWaiverWorkflow,
+)
 from app.models.call_tracking import CallTrackingMode
 from app.models.event import Event, EventRSVP
 from app.models.meeting import Meeting, MeetingAttendee, MeetingType
@@ -99,6 +106,57 @@ _SHIFT_SOURCES = frozenset(
 #: platform's own (the baseline member position, the rank mirrors) and say
 #: nothing about what the member did.
 _LISTED_POSITION_KINDS = ("office", "committee")
+
+#: The waiver-request sources, each to the workflow whose requests it reads.
+#: A summary and a history of the same workflow read the same rows, once.
+_WAIVER_SUMMARY_SOURCES = {
+    "training.session_waivers_summary": AttendanceWaiverWorkflow.TRAINING_SESSION,
+    "meetings.waivers_summary": AttendanceWaiverWorkflow.BUSINESS_MEETING,
+}
+_WAIVER_HISTORY_SOURCES = {
+    "training.session_waiver_history": AttendanceWaiverWorkflow.TRAINING_SESSION,
+    "meetings.waiver_history": AttendanceWaiverWorkflow.BUSINESS_MEETING,
+}
+
+#: How each logged action reads in a request's outcome history.
+_WAIVER_ACTION_TEXT = {
+    AttendanceWaiverAction.WITHDRAWN: "withdrawn",
+    AttendanceWaiverAction.APPROVED: "approved",
+    AttendanceWaiverAction.DENIED: "denied",
+    AttendanceWaiverAction.CHIEF_OVERRIDE: "approved on the Chief's override",
+    AttendanceWaiverAction.VOIDED: "voided",
+}
+
+#: Where each action falls in a request's life, to order a log whose times
+#: tie (DATETIME keeps whole seconds). The request screens order it the same
+#: way (``attendance_waiver_service._ACTION_ORDER``).
+_WAIVER_ACTION_ORDER = {
+    AttendanceWaiverAction.SUBMITTED: 0,
+    AttendanceWaiverAction.WITHDRAWN: 1,
+    AttendanceWaiverAction.APPROVED: 1,
+    AttendanceWaiverAction.DENIED: 1,
+    AttendanceWaiverAction.CHIEF_OVERRIDE: 2,
+    AttendanceWaiverAction.VOIDED: 3,
+}
+
+
+@dataclass(frozen=True)
+class _WaiverRow:
+    """One waiver request as the evaluation may show it.
+
+    Deliberately has no reason and no decider's note: an evaluation is
+    permanent and the member reads it, and either may be medical (owner
+    decision, 2026-11-10). The rows are loaded column by column so neither
+    is ever read from the database here.
+    """
+
+    id: str
+    session_date: date
+    event_title: str
+    status: AttendanceWaiverStatus
+    category: Optional[str]
+    decided_by: Optional[str]
+    chief_override: bool
 
 
 # ------------------------------------------------------------------ coverage
@@ -322,11 +380,18 @@ class EvaluationDataService:
         values: Dict[str, Dict[str, Any]] = {}
         # Four sources read the same month totals; load them once.
         shift_cache: Dict[str, Dict[str, float]] = {}
+        waiver_cache: Dict[AttendanceWaiverWorkflow, List[_WaiverRow]] = {}
         for key in keys:
-            if key in DATA_SOURCES_BY_KEY:
-                values[key] = await self._compute_one(
-                    key, organization_id, member, coverage, tz, shift_cache
+            if key not in DATA_SOURCES_BY_KEY:
+                continue
+            if key in _WAIVER_SUMMARY_SOURCES or key in _WAIVER_HISTORY_SOURCES:
+                values[key] = await self._compute_waiver_source(
+                    key, organization_id, member, coverage, tz, waiver_cache
                 )
+                continue
+            values[key] = await self._compute_one(
+                key, organization_id, member, coverage, tz, shift_cache
+            )
         return values
 
     async def _compute_one(
@@ -837,6 +902,248 @@ class EvaluationDataService:
             [{"label": label} for label in names],
             note="Positions held at any time during the period.",
         )
+
+    # ------------------------------------------------------- waiver requests
+
+    async def _compute_waiver_source(
+        self,
+        key: str,
+        org_id: str,
+        member: User,
+        coverage: Coverage,
+        tz: ZoneInfo,
+        cache: Dict[AttendanceWaiverWorkflow, List[_WaiverRow]],
+    ) -> Dict[str, Any]:
+        workflow = _WAIVER_SUMMARY_SOURCES.get(key) or _WAIVER_HISTORY_SOURCES[key]
+        if workflow not in cache:
+            cache[workflow] = await self._waiver_rows(
+                org_id, member, coverage, workflow
+            )
+        rows = cache[workflow]
+        if key in _WAIVER_SUMMARY_SOURCES:
+            return _waiver_summary(rows)
+        return await self._waiver_history(org_id, rows, tz)
+
+    async def _waiver_rows(
+        self,
+        org_id: str,
+        member: User,
+        coverage: Coverage,
+        workflow: AttendanceWaiverWorkflow,
+    ) -> List[_WaiverRow]:
+        """The member's requests in ``workflow`` for sessions held in the
+        review period, oldest session first.
+
+        Measured by the session's date, not by when the member asked (owner
+        decision, 2026-11-10: "use the evaluation period"), so a request made
+        in December for a January drill belongs to January's review. Sessions
+        held between stints of membership are dropped, as the attendance
+        figure drops them; a session during a leave is kept, because the
+        member still asked and someone still decided.
+        """
+        result = await self.db.execute(
+            select(
+                AttendanceWaiverRequest.id,
+                AttendanceWaiverRequest.session_date,
+                AttendanceWaiverRequest.event_title_snapshot,
+                AttendanceWaiverRequest.status,
+                AttendanceWaiverRequest.category,
+                AttendanceWaiverRequest.decided_by,
+                AttendanceWaiverRequest.chief_override,
+            )
+            .where(
+                AttendanceWaiverRequest.organization_id == org_id,
+                AttendanceWaiverRequest.user_id == member.id,
+                AttendanceWaiverRequest.workflow == workflow,
+                AttendanceWaiverRequest.session_date >= coverage.start,
+                AttendanceWaiverRequest.session_date <= coverage.end,
+            )
+            .order_by(
+                AttendanceWaiverRequest.session_date,
+                AttendanceWaiverRequest.submitted_at,
+                AttendanceWaiverRequest.id,
+            )
+        )
+        return [
+            _WaiverRow(
+                id=str(row.id),
+                session_date=row.session_date,
+                event_title=row.event_title_snapshot,
+                status=row.status,
+                category=row.category,
+                decided_by=str(row.decided_by) if row.decided_by else None,
+                chief_override=bool(row.chief_override),
+            )
+            for row in result.all()
+            if not coverage.separated_on(row.session_date)
+        ]
+
+    async def _waiver_history(
+        self, org_id: str, rows: Sequence[_WaiverRow], tz: ZoneInfo
+    ) -> Dict[str, Any]:
+        """One line per request, with each step of its decision log.
+
+        The log's notes are not read: they are the deciders' own words and
+        may repeat the member's reason.
+        """
+        log: Dict[str, List[Tuple[AttendanceWaiverAction, Optional[str], datetime]]]
+        log = {row.id: [] for row in rows}
+        if rows:
+            result = await self.db.execute(
+                select(
+                    AttendanceWaiverRequestAction.request_id,
+                    AttendanceWaiverRequestAction.action,
+                    AttendanceWaiverRequestAction.actor_id,
+                    AttendanceWaiverRequestAction.created_at,
+                ).where(
+                    AttendanceWaiverRequestAction.organization_id == org_id,
+                    AttendanceWaiverRequestAction.request_id.in_(list(log)),
+                )
+            )
+            for request_id, action, actor_id, at in result.all():
+                log[str(request_id)].append(
+                    (action, str(actor_id) if actor_id else None, at)
+                )
+            for steps in log.values():
+                steps.sort(key=lambda s: (_as_utc(s[2]), _WAIVER_ACTION_ORDER[s[0]]))
+        names = await self._member_names(
+            org_id,
+            [row.decided_by for row in rows if row.decided_by]
+            + [actor for steps in log.values() for _, actor, _ in steps if actor],
+        )
+        attached = await self._waiver_attachments_on_file(
+            org_id, [row.id for row in rows]
+        )
+
+        def name_of(user_id: Optional[str]) -> Optional[str]:
+            # An actor whose account is gone (the FK is SET NULL) or who is
+            # not in this department reads as such rather than as nobody.
+            if user_id is None:
+                return None
+            return names.get(user_id, "a former member")
+
+        items: List[Dict[str, Any]] = []
+        for row in rows:
+            history = [
+                {
+                    "action": action.value,
+                    "on": local_date(at, tz).isoformat(),
+                    "by": name_of(actor),
+                }
+                for action, actor, at in log[row.id]
+            ]
+            outcome = _waiver_outcome(row, log[row.id], name_of)
+            on_file = row.id in attached
+            label = f"{row.session_date.isoformat()} {row.event_title}: {outcome}"
+            if row.category:
+                label += f" (category: {row.category})"
+            if on_file:
+                label += "; attachment on file"
+            items.append(
+                {
+                    "label": label,
+                    "session_date": row.session_date.isoformat(),
+                    "event_title": row.event_title,
+                    "status": row.status.value,
+                    "outcome": outcome,
+                    "category": row.category,
+                    "decided_by": name_of(row.decided_by),
+                    "chief_override": row.chief_override,
+                    "attachment_on_file": on_file,
+                    "history": history,
+                }
+            )
+        return _value(items)
+
+    async def _member_names(
+        self, org_id: str, user_ids: Iterable[str]
+    ) -> Dict[str, str]:
+        ids = sorted({u for u in user_ids if u})
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(User).where(User.id.in_(ids), User.organization_id == org_id)
+        )
+        return {str(u.id): u.display_name for u in result.scalars().all()}
+
+    async def _waiver_attachments_on_file(
+        self, org_id: str, request_ids: Sequence[str]
+    ) -> set:
+        """The requests with at least one attachment on file.
+
+        Attachments are being added by a separate change and have no table on
+        this branch, so nothing is on file yet and every line reads no. When
+        that table lands, return the ids of ``request_ids`` with a row in it
+        for ``org_id``. Only the fact is reported, never the file or its
+        name: an attachment is the member's evidence, often medical.
+        """
+        return set()
+
+
+def _as_utc(value: datetime) -> datetime:
+    """MySQL hands back naive DATETIMEs; they are stored in UTC."""
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def _waiver_summary(rows: Sequence[_WaiverRow]) -> Dict[str, Any]:
+    """How many requests were made in the period, and what became of them.
+
+    ``approved`` is what counts toward the department's cap: approved
+    requests, a Chief's override of a denial included (owner decision,
+    2026-11-10). ``overridden`` is the part of ``approved`` that came by the
+    override, and ``denied`` is denials still standing.
+    """
+    statuses = [row.status for row in rows]
+    approved = statuses.count(AttendanceWaiverStatus.APPROVED)
+    overridden = sum(
+        1
+        for row in rows
+        if row.chief_override and row.status == AttendanceWaiverStatus.APPROVED
+    )
+    counts = {
+        "requested": len(rows),
+        "approved": approved,
+        "overridden": overridden,
+        "denied": statuses.count(AttendanceWaiverStatus.DENIED),
+        "withdrawn": statuses.count(AttendanceWaiverStatus.WITHDRAWN),
+        "pending": statuses.count(AttendanceWaiverStatus.PENDING),
+        "voided": statuses.count(AttendanceWaiverStatus.VOIDED),
+    }
+    approved_text = f"{approved} approved"
+    if overridden:
+        approved_text += f" ({overridden} on the Chief's override)"
+    parts = [approved_text] + [
+        f"{counts[field]} {field}"
+        for field in ("denied", "withdrawn", "pending", "voided")
+        if counts[field] or field in ("denied", "withdrawn")
+    ]
+    return _value(len(rows), **counts, breakdown=", ".join(parts))
+
+
+def _waiver_outcome(
+    row: _WaiverRow,
+    steps: Sequence[Tuple[AttendanceWaiverAction, Optional[str], datetime]],
+    name_of: Callable[[Optional[str]], Optional[str]],
+) -> str:
+    """What happened to a request, in order: "denied by A, then approved on
+    the Chief's override by B"."""
+    parts = []
+    for action, actor, _ in steps:
+        text = _WAIVER_ACTION_TEXT.get(action)
+        if text is None:
+            continue
+        # A withdrawal is always the member's own; naming them adds nothing.
+        who = name_of(actor) if action != AttendanceWaiverAction.WITHDRAWN else None
+        parts.append(f"{text} by {who}" if who else text)
+    if not parts:
+        return (
+            "pending"
+            if row.status == AttendanceWaiverStatus.PENDING
+            else row.status.value
+        )
+    if row.status == AttendanceWaiverStatus.PENDING:
+        parts.append("pending")
+    return ", then ".join(parts)
 
 
 @dataclass(frozen=True)

@@ -258,6 +258,14 @@ included, and the decision log of each, notes included; it does not carry
 notes the member wrote as a decider on anyone else's request. Anonymizing a
 departed member clears the reason and the notes; the request itself is kept.
 
+**In the annual review.** An evaluation template can show a member's requests
+for the review period, by session date: `training.session_waivers_summary`
+(how many were made, approved, overridden, denied, withdrawn, pending and
+voided) and `training.session_waiver_history` (one line per request: session,
+outcome with who decided, category). Neither shows the reason, a decider's
+note or an attachment, and neither can be scored. See
+`docs/EVALUATIONS_MODULE.md`, "Figures".
+
 | Method | Endpoint                                          | Who                                           |
 | ------ | ------------------------------------------------- | --------------------------------------------- |
 | `GET`  | `/api/v1/training/waivers/requests/policy`        | Any authenticated user                        |
