@@ -23,6 +23,10 @@ import { EmptyState } from '../../../components/ux/EmptyState';
 import { SkeletonCard } from '../../../components/ux/Skeleton';
 import { OperationsPageHeader } from '../../../components/operations/OperationsPageHeader';
 import { DuplicateCategoryNameBadge } from '../../inventory/components/DuplicateCategoryNameBadge';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 
 interface FormState {
   name: string;
@@ -31,6 +35,17 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = { name: '', description: '', low_stock_threshold: '' };
+
+type CategoryField = keyof FormState;
+// Ordered as on screen, so the first refusal takes focus. Limits mirror
+// InventoryCategoryBase (EntityName 255, FreeText 2000).
+const CATEGORY_FIELDS: FieldSpecs<CategoryField> = {
+  name: { id: 'mc-name', label: 'Name' },
+  description: { id: 'mc-description', label: 'Description' },
+  low_stock_threshold: { id: 'mc-threshold', label: 'Low stock threshold' },
+};
+const CATEGORY_ORDER = Object.keys(CATEGORY_FIELDS) as CategoryField[];
+const CATEGORY_LIMITS = { name: 255, description: 2000 } as const;
 
 // One page of the list API. A category holding more than this is told so and
 // pointed at Medical Supplies, which pages through all of them.
@@ -127,6 +142,18 @@ const MedicalCategoriesPage: React.FC = () => {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<InventoryCategory | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  // What the dialog held when it opened (or last saved), so Escape, the X and
+  // Cancel ask before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<FormState>(EMPTY_FORM);
+  const categoryErrors = useFieldErrors(CATEGORY_FIELDS);
+  const set = (patch: Partial<FormState>) => {
+    setForm((f) => ({ ...f, ...patch }));
+    for (const key of Object.keys(patch)) categoryErrors.setError(key as CategoryField, null);
+  };
+  const requestClose = useDiscardGuard({
+    isDirty: showModal && JSON.stringify(form) !== JSON.stringify(baseline),
+    onClose: () => setShowModal(false),
+  });
   const [isSaving, setIsSaving] = useState(false);
 
   const [deleting, setDeleting] = useState<InventoryCategory | null>(null);
@@ -164,23 +191,38 @@ const MedicalCategoriesPage: React.FC = () => {
   const openCreate = () => {
     setEditing(null);
     setForm(EMPTY_FORM);
+    setBaseline(EMPTY_FORM);
+    categoryErrors.clear();
     setShowModal(true);
   };
 
   const openEdit = (category: InventoryCategory) => {
     setEditing(category);
-    setForm({
+    const seeded: FormState = {
       name: category.name,
       description: category.description ?? '',
       low_stock_threshold: category.low_stock_threshold != null ? String(category.low_stock_threshold) : '',
-    });
+    };
+    setForm(seeded);
+    setBaseline(seeded);
+    categoryErrors.clear();
     setShowModal(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.name.trim()) {
-      toast.error('Give the category a name');
+    // Named on the field rather than in a toast that vanished (forms review F-3).
+    const problems: FieldErrors<CategoryField> = {};
+    if (!form.name.trim()) problems.name = 'Give the category a name.';
+    const threshold = form.low_stock_threshold.trim();
+    if (threshold && !(Number.isInteger(Number(threshold)) && Number(threshold) >= 0))
+      problems.low_stock_threshold = 'Enter a whole number, 0 or more, or leave it empty.';
+    categoryErrors.setFormError(null);
+    categoryErrors.setErrors(problems);
+    // A new category is not created until every field is fixed; an edit saves
+    // the rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!editing && Object.keys(problems).length > 0) {
+      categoryErrors.focusFirst(problems);
       return;
     }
 
@@ -188,11 +230,30 @@ const MedicalCategoriesPage: React.FC = () => {
     try {
       if (editing) {
         // Update path: a cleared box travels as null so it is actually cleared.
-        await medicalSuppliesService.updateCategory(editing.id, {
-          name: form.name.trim(),
-          description: blankToNull(form.description),
-          low_stock_threshold: numberOrNull(form.low_stock_threshold),
+        const { refused } = await saveExceptRefused<CategoryField, unknown>({
+          payload: {
+            name: form.name.trim(),
+            description: blankToNull(form.description),
+            low_stock_threshold: numberOrNull(form.low_stock_threshold),
+          },
+          refused: problems,
+          send: (body) => medicalSuppliesService.updateCategory(editing.id, body),
+          place: (err) => placeApiError(CATEGORY_FIELDS, err),
         });
+        const first = firstRefused(CATEGORY_ORDER, refused);
+        if (first) {
+          // The list refreshes behind the dialog, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          void load();
+          categoryErrors.setErrors(refused);
+          categoryErrors.setFormError(
+            `Category saved, except ${CATEGORY_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+          );
+          categoryErrors.focusFirst(refused);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as CategoryField]]));
+          setBaseline({ ...form, ...keep });
+          return;
+        }
         toast.success('Category updated');
       } else {
         // Create path: blanks are omitted rather than sent as empty strings.
@@ -208,7 +269,10 @@ const MedicalCategoriesPage: React.FC = () => {
       setShowModal(false);
       void load();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save the category'));
+      // A refused field is flagged on that field (forms review F-2); anything
+      // no field answers for (a duplicate name, say) is said in the dialog.
+      const placed = categoryErrors.setFromApiError(err, 'Failed to save the category');
+      categoryErrors.focusFirst(placed);
     } finally {
       setIsSaving(false);
     }
@@ -382,9 +446,10 @@ const MedicalCategoriesPage: React.FC = () => {
 
       <Modal
         isOpen={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={requestClose}
         title={editing ? 'Edit medical supply category' : 'New medical supply category'}
         onSubmit={(e) => void handleSubmit(e)}
+        noValidate
         footer={
           <>
             <button type="submit" className="btn-primary" disabled={isSaving}>
@@ -392,7 +457,7 @@ const MedicalCategoriesPage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setShowModal(false)}
+              onClick={requestClose}
               className="mobile-touch-target border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-md border px-4 py-2 text-sm font-medium"
             >
               Cancel
@@ -401,46 +466,65 @@ const MedicalCategoriesPage: React.FC = () => {
         }
       >
         <div className="space-y-4">
-          <div>
-            <label htmlFor="mc-name" className="form-label">
-              Name <span aria-hidden="true">*</span>
-            </label>
-            <input
-              id="mc-name"
-              className="form-input w-full"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="e.g. Airway"
-              required
-            />
-          </div>
+          {categoryErrors.formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {categoryErrors.formError}
+            </p>
+          )}
+          <FormField
+            id={CATEGORY_FIELDS.name.id}
+            label="Name"
+            required
+            error={categoryErrors.errors.name}
+            maxLength={CATEGORY_LIMITS.name}
+            count={form.name.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                className="form-input w-full"
+                value={form.name}
+                onChange={(e) => set({ name: e.target.value })}
+                placeholder="e.g. Airway"
+              />
+            )}
+          </FormField>
 
-          <div>
-            <label htmlFor="mc-description" className="form-label">
-              Description
-            </label>
-            <textarea
-              id="mc-description"
-              className="form-input w-full"
-              rows={2}
-              value={form.description}
-              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-            />
-          </div>
+          <FormField
+            id={CATEGORY_FIELDS.description.id}
+            label="Description"
+            error={categoryErrors.errors.description}
+            maxLength={CATEGORY_LIMITS.description}
+            count={form.description.length}
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                className="form-input w-full"
+                rows={2}
+                value={form.description}
+                onChange={(e) => set({ description: e.target.value })}
+              />
+            )}
+          </FormField>
 
-          <div>
-            <label htmlFor="mc-threshold" className="form-label">
-              Low stock threshold
-            </label>
-            <input
-              id="mc-threshold"
-              type="number"
-              min="0"
-              className="form-input w-full"
-              value={form.low_stock_threshold}
-              onChange={(e) => setForm((f) => ({ ...f, low_stock_threshold: e.target.value }))}
-            />
-          </div>
+          <FormField
+            id={CATEGORY_FIELDS.low_stock_threshold.id}
+            label="Low stock threshold"
+            error={categoryErrors.errors.low_stock_threshold}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                min="0"
+                step="1"
+                className="form-input w-full"
+                value={form.low_stock_threshold}
+                onChange={(e) => set({ low_stock_threshold: e.target.value })}
+              />
+            )}
+          </FormField>
         </div>
       </Modal>
 
