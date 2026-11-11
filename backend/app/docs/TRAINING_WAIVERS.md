@@ -207,8 +207,7 @@ These are more granular waivers that can target specific requirements.
 
 A waiver above is something a training officer grants. A **session waiver
 request** is something a member asks for: to be excused from one training
-session that counts against them (owner decisions, 2026-11-10). The backend
-shipped first; the screens follow.
+session that counts against them (owner decisions, 2026-11-10).
 
 **Off until the department turns it on.** A training officer saves the policy
 (`PUT /api/v1/training/waivers/requests/policy`, `training.manage`). With no
@@ -257,6 +256,20 @@ and the audit log. The member's data export carries their requests, reasons
 included, and the decision log of each, notes included; it does not carry
 notes the member wrote as a decider on anyone else's request. Anonymizing a
 departed member clears the reason and the notes; the request itself is kept.
+
+**Where it is in the app.**
+
+| Who              | Where                                                                                                                                                                                                           |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Training officer | **Training Admin > Settings & Data > Session Waivers** turns requests on and sets the policy above                                                                                                              |
+| Member           | A training session's page offers **Request to be excused** when the session counts against them, shows how many waivers are left, then the request's state; **My Training > My Waiver Requests** lists them all |
+| Approver         | **Training Admin > Records > Waiver Requests**, or `/attendance-waivers`, lists what they decide; `/attendance-waivers/{id}` is the page their email opens                                                      |
+
+The email's approve and deny buttons only pre-select a choice
+(`?action=approve|deny`). The page never decides on load, because mail scanners
+open every link; the approver presses the button and confirms. A denial needs a
+note to the member. The Chief's override appears only on a denied request and
+only to a Chief.
 
 | Method | Endpoint                                          | Who                                           |
 | ------ | ------------------------------------------------- | --------------------------------------------- |
