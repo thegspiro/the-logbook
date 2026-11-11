@@ -330,6 +330,15 @@ plain-text phone fields below are on other forms and are **pending**.
 
 ### F-10 — LOW — A must-change-password sign-in renders the dashboard first
 
+**Status: fixed**, 2026-11-08. The login page decides where a sign-in lands
+from the user record the login response carries (`signInLanding` in
+`utils/postLoginRedirect.ts`): a member who must change their password, or
+whose password has expired, lands on `/account` with the forced-change state,
+and one who must enrol in MFA lands there with the MFA state, without passing
+through the dashboard. ProtectedRoute still enforces both, in the same order;
+the landing only removes the detour, and with it the seed script's
+intermittent "landed on /dashboard".
+
 **Driven:** four accounts with `must_change_password = 1` signed in. Each went
 `/login → /dashboard → /account`: the dashboard mounts and fires its requests,
 then the redirect lands once the user record loads. The change is enforced —
@@ -340,6 +349,13 @@ read the path during the detour and stopped at `review_scheduling_officer`
 landing from the login response's `must_change_password` would remove both.
 
 ### F-11 — NIT
+
+**Status: two of three fixed**, 2026-11-08. A failed sign-in now returns focus
+to the password with its text selected, so it can be retyped at once. On
+Training › Requirements (`/training/requirements`), each registry card's
+"Source" link sits beside its import button instead of inside it, and the
+link's target is at least 24px tall. Add Member's example placeholders are
+left for the change that is rewriting that page's fields.
 
 - **Add Member's example placeholders read as filled values.** "Bob Doe",
   "bob.doe@example.com" and "(555) 987-6543" in the optional secondary-contact

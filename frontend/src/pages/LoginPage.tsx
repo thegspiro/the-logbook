@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router';
 import { lockedUntilFor, useAuthStore } from '../stores/authStore';
-import { postLoginRedirect } from '../utils/postLoginRedirect';
+import { signInLanding } from '../utils/postLoginRedirect';
 import { authService } from '../services/api';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -44,6 +44,18 @@ export const LoginPage: React.FC = () => {
     lastLogoutPurge,
     clearLogoutPurgeNotice,
   } = useAuthStore();
+
+  // After a refused sign-in, focus goes back to the password with its text
+  // selected, so the member can retype it at once (forms review F-11). The
+  // field is disabled while the request runs, so this waits for isLoading.
+  const passwordRef = useRef<HTMLInputElement>(null);
+  const [refocusPassword, setRefocusPassword] = useState(false);
+  useEffect(() => {
+    if (!refocusPassword || isLoading) return;
+    passwordRef.current?.focus();
+    passwordRef.current?.select();
+    setRefocusPassword(false);
+  }, [refocusPassword, isLoading]);
 
   const [formData, setFormData] = useState({
     username: '',
@@ -89,10 +101,12 @@ export const LoginPage: React.FC = () => {
     }
   }, [lastLogoutPurge, clearLogoutPurgeNotice]);
 
-  // If user is already authenticated, redirect to dashboard
+  // If user is already authenticated, redirect to dashboard — or straight to
+  // /account when their password must change or MFA must be set up first.
   useEffect(() => {
     if (isAuthenticated) {
-      void navigate('/dashboard', { replace: true });
+      const landing = signInLanding(useAuthStore.getState().user, null);
+      void navigate(landing.to, landing.state ? { replace: true, state: landing.state } : { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -219,6 +233,11 @@ export const LoginPage: React.FC = () => {
     return Object.keys(errors).length === 0;
   };
 
+  const redirectAfterAuth = () => {
+    const landing = signInLanding(useAuthStore.getState().user, location.state, location.search);
+    void navigate(landing.to, landing.state ? { replace: true, state: landing.state } : { replace: true });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -238,15 +257,13 @@ export const LoginPage: React.FC = () => {
       }
       // Back to the page ProtectedRoute stopped them at, or the one an expired
       // session sent them from by full page load (`?from=`) — see
-      // postLoginRedirect for the open-redirect guard.
-      void navigate(postLoginRedirect(location.state, location.search), { replace: true });
+      // postLoginRedirect for the open-redirect guard. A forced password change
+      // or MFA setup lands on /account directly (forms review F-10).
+      redirectAfterAuth();
     } catch (_err) {
       // Error is handled by the store and displayed via error state
+      setRefocusPassword(true);
     }
-  };
-
-  const redirectAfterAuth = () => {
-    void navigate(postLoginRedirect(location.state, location.search), { replace: true });
   };
 
   // Each passkey challenge is single-use, so a fresh one is fetched up front
@@ -632,6 +649,7 @@ export const LoginPage: React.FC = () => {
                 Password
               </label>
               <input
+                ref={passwordRef}
                 id="password"
                 name="password"
                 type="password"

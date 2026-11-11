@@ -53,6 +53,13 @@ const mockReports = async (page: Page) => {
   await fulfil('**/api/v1/training/shift-reports/drafts**', []);
 };
 
+// The first look at a lazily loaded route waits as long as the other specs'
+// first-load checks do. On CI the dev server compiles /scheduling and this tab
+// on first request; a cold Mobile Safari shard took past the 5s default to
+// render the tab at all ("element(s) not found", not a wrong class), while
+// WebKit was drawing frames throughout, so this is load time, not a stall.
+const FIRST_LOAD = { timeout: 10_000 };
+
 test.describe('Shift Reports — deep links', () => {
   test.use({ viewport: DESKTOP });
 
@@ -63,7 +70,7 @@ test.describe('Shift Reports — deep links', () => {
     await mockReports(page);
     await page.goto('/scheduling?tab=shift-reports&view=pending-review');
 
-    await expect(page.getByRole('button', { name: 'Review Queue' })).toHaveClass(/bg-violet-700/);
+    await expect(page.getByRole('button', { name: 'Review Queue' })).toHaveClass(/bg-violet-700/, FIRST_LOAD);
     await expect(page.getByText('Jordan Park', { exact: false })).toBeVisible();
     await expect(page).toHaveURL(/view=pending-review/);
   });
@@ -72,6 +79,7 @@ test.describe('Shift Reports — deep links', () => {
     await mockReports(page);
     await page.goto('/scheduling?tab=shift-reports');
 
+    await expect(page.getByRole('button', { name: 'Drafts' })).toBeVisible(FIRST_LOAD);
     await page.getByRole('button', { name: 'Drafts' }).click();
     await expect(page).toHaveURL(/view=drafts/);
   });
