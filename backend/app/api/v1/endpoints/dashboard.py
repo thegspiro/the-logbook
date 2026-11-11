@@ -70,6 +70,7 @@ from app.services.facilities_service import (
     FacilitiesService,
 )
 from app.services.inventory_service import InventoryService, overdue_checkout_clause
+from app.services.meetings_service import member_visible_meeting
 from app.services.minutes_record_service import OPEN_ITEM_STATUSES
 from app.services.organization_service import OrganizationService
 from app.services.training_compliance import (
@@ -107,6 +108,32 @@ def minutes_visibility_filter(current_user: User):
             MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
         ),
         ActionItem.assignee_id == current_user.id,
+    )
+
+
+def meeting_visibility_filter(current_user: User):
+    """WHERE clause confining meeting action items to what *user* may see.
+
+    The meeting-side counterpart of ``minutes_visibility_filter`` above, for
+    ``member_visible_meeting()`` (``meetings.py`` / ``meetings_service.py``):
+    a draft meeting's notes are unratified and an executive session's are the
+    disciplinary and personnel deliberations it was closed to hold, and a
+    meeting action item carries that meeting's own ``description``. Returns
+    ``None`` for a ``meetings.manage`` or ``minutes.manage`` holder (no
+    restriction) — the same pair ``meetings.py``'s own ``_member_view_only``
+    checks, so this unified feed can't read more than the Meetings API itself
+    serves the same caller.
+
+    The assignee carve-out mirrors ``minutes_visibility_filter``'s: an item
+    assigned *to* the caller is work they are expected to do, and without it
+    ``assigned_to_me`` would hide a member's own tasks from them.
+    """
+    if user_has_permission(current_user, "meetings.manage") or user_has_permission(
+        current_user, "minutes.manage"
+    ):
+        return None
+    return or_(
+        member_visible_meeting(), MeetingActionItem.assigned_to == current_user.id
     )
 
 
@@ -1687,9 +1714,13 @@ async def _read_action_items(
             conditions.append(MeetingActionItem.meeting_id == source_id)
         if local_today is not None and overdue:
             conditions.append(meeting_action_item_overdue(local_today))
+        meeting_restriction = meeting_visibility_filter(current_user)
+        if meeting_restriction is not None:
+            conditions.append(meeting_restriction)
 
         result = await db.execute(
             select(MeetingActionItem)
+            .join(Meeting, Meeting.id == MeetingActionItem.meeting_id)
             .where(*conditions)
             .order_by(
                 MeetingActionItem.due_date.is_(None),
@@ -1708,6 +1739,7 @@ async def _read_action_items(
                 conditions,
                 meeting_action_item_open(),
                 meeting_action_item_overdue(local_today),
+                join=(Meeting, Meeting.id == MeetingActionItem.meeting_id),
             )
         names, titles = await _meeting_item_labels(db, org_id, rows)
         for item in rows:
