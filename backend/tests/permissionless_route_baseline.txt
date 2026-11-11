@@ -309,6 +309,27 @@ app/api/v1/endpoints/mcp_oauth.py::revoke_my_connection
 
 app/api/v1/endpoints/medical_screening.py::get_my_compliance
 
+# Business-meeting waiver requests (2026-11-11): the same engine and the same
+# scoping as attendance_waiver_requests.py above, bound to the meeting
+# workflow. Deciders are the chosen positions, then the Secretary, then
+# meetings.manage holders, with a Chief always able to decide, so no
+# route-level permission can express it and AttendanceWaiverService decides in
+# the body. Every query filters the caller's organization and the workflow.
+# The policy carries settings and position ids, no member data (its save
+# requires meetings.manage). Eligibility, submit and /mine act only on
+# current_user; the queue and a request by id follow may_decide or ownership,
+# 404 otherwise; withdraw is the member's alone; override needs a Chief.
+app/api/v1/endpoints/meeting_waiver_requests.py::approve_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::deny_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_eligibility
+app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_policy
+app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::list_meeting_waiver_requests
+app/api/v1/endpoints/meeting_waiver_requests.py::list_my_meeting_waiver_requests
+app/api/v1/endpoints/meeting_waiver_requests.py::override_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::submit_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::withdraw_meeting_waiver_request
+
 app/api/v1/endpoints/member_badges.py::get_member_badge
 
 app/api/v1/endpoints/member_leaves.py::get_member_leaves

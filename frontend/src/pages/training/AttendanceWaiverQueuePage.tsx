@@ -1,0 +1,210 @@
+/**
+ * Attendance waiver requests — the approver's queue.
+ *
+ * Lists what `GET /training/waivers/requests` returns for the caller: the
+ * requests they may decide or have decided. Who that is depends on the
+ * positions the department routes requests to, the Chief and the training
+ * managers fallback, so the page asks the server rather than gating on a
+ * permission; a member who decides nothing sees an empty queue.
+ *
+ * Pending requests come first, every one of them; decided ones follow, a page
+ * at a time. Each row opens the decision page the approver's email links to.
+ *
+ * Also rendered inside the Training Admin hub (`embedded`), without its own
+ * page header.
+ */
+
+import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router';
+import { CalendarX, ChevronRight } from 'lucide-react';
+import { attendanceWaiverService } from '../../services/attendanceWaiverService';
+import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
+import { EmptyState } from '../../components/ux';
+import { SkeletonCard } from '../../components/ux/Skeleton';
+import {
+  ATTENDANCE_WAIVER_STATUS_COLORS,
+  ATTENDANCE_WAIVER_STATUS_LABELS,
+  AttendanceWaiverStatus,
+} from '../../constants/enums';
+import type { AttendanceWaiverRequest } from '../../types/attendanceWaiver';
+import { useTimezone } from '../../hooks/useTimezone';
+import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
+import { getErrorMessage } from '../../utils/errorHandling';
+import { attendanceWaiverPath } from '../../utils/attendanceWaivers';
+
+/** The backend's largest page (`MAX_PAGE`): every pending request in one call. */
+const PENDING_LIMIT = 200;
+const DECIDED_PAGE = 50;
+
+const RequestRow: React.FC<{ request: AttendanceWaiverRequest; timezone: string }> = ({ request, timezone }) => (
+  <li>
+    <Link
+      to={attendanceWaiverPath(request.id)}
+      className="hover:bg-theme-surface-hover flex items-center gap-3 rounded-lg p-4 transition-colors"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="text-theme-text-primary block font-medium">{request.member_name ?? 'A member'}</span>
+        <span className="text-theme-text-secondary block text-sm">
+          {request.event_title} ·{' '}
+          {formatCalendarDate(request.session_date, { month: 'short', day: 'numeric', year: 'numeric' })}
+          {request.category ? ` · ${request.category}` : ''}
+        </span>
+        <span className="text-theme-text-muted block text-xs">
+          Asked {formatDateTime(request.submitted_at, timezone)}
+          {request.decided_by_name ? ` · decided by ${request.decided_by_name}` : ''}
+        </span>
+      </span>
+      <span className={`badge border ${ATTENDANCE_WAIVER_STATUS_COLORS[request.status] ?? ''}`}>
+        {ATTENDANCE_WAIVER_STATUS_LABELS[request.status] ?? request.status}
+      </span>
+      <ChevronRight className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
+    </Link>
+  </li>
+);
+
+interface AttendanceWaiverQueuePageProps {
+  embedded?: boolean;
+}
+
+export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps> = ({ embedded = false }) => {
+  const tz = useTimezone();
+  const [pending, setPending] = useState<AttendanceWaiverRequest[]>([]);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const [decided, setDecided] = useState<AttendanceWaiverRequest[]>([]);
+  const [nextSkip, setNextSkip] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // The decided list is the unfiltered list with the pending rows left out:
+  // the API filters by one status at a time, and decided means several.
+  const loadDecided = useCallback(async (skip: number) => {
+    const page = await attendanceWaiverService.list({ skip, limit: DECIDED_PAGE });
+    const rows = page.items.filter((r) => r.status !== AttendanceWaiverStatus.PENDING);
+    setDecided((current) => (skip === 0 ? rows : [...current, ...rows]));
+    setNextSkip(skip + page.items.length);
+    setHasMore(skip + page.items.length < page.total);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const page = await attendanceWaiverService.list({
+          status: AttendanceWaiverStatus.PENDING,
+          limit: PENDING_LIMIT,
+        });
+        if (cancelled) return;
+        setPending(page.items);
+        setPendingTotal(page.total);
+        await loadDecided(0);
+      } catch (err: unknown) {
+        if (!cancelled) setError(getErrorMessage(err, 'Waiver requests could not be loaded.'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadDecided]);
+
+  const showMore = async () => {
+    setLoadingMore(true);
+    try {
+      await loadDecided(nextSkip);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'More requests could not be loaded.'));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  let body: React.ReactNode;
+  if (loading) {
+    body = (
+      <div className="space-y-4" role="status" aria-live="polite">
+        <span className="sr-only">Loading waiver requests…</span>
+        <SkeletonCard />
+      </div>
+    );
+  } else if (error) {
+    body = (
+      <div className="alert-danger rounded-lg p-4 text-sm" role="alert">
+        {error}
+      </div>
+    );
+  } else if (pending.length === 0 && decided.length === 0) {
+    body = (
+      <EmptyState
+        icon={CalendarX}
+        title="No waiver requests for you"
+        description="When a member asks to be excused from a training session and you are one of the people who decide, the request appears here."
+      />
+    );
+  } else {
+    body = (
+      <div className="space-y-6">
+        <section aria-labelledby="waiver-queue-pending">
+          <h2 id="waiver-queue-pending" className="text-theme-text-primary mb-2 text-lg font-semibold">
+            Waiting for a decision ({pendingTotal})
+          </h2>
+          {pending.length === 0 ? (
+            <p className="text-theme-text-secondary text-sm">Nothing is waiting for you.</p>
+          ) : (
+            <ul className="card divide-theme-surface-border divide-y">
+              {pending.map((request) => (
+                <RequestRow key={request.id} request={request} timezone={tz} />
+              ))}
+            </ul>
+          )}
+          {pendingTotal > pending.length && (
+            <p className="text-theme-text-muted mt-2 text-sm">
+              Showing the newest {pending.length} of {pendingTotal}. Decide these to see the rest.
+            </p>
+          )}
+        </section>
+
+        {decided.length > 0 && (
+          <section aria-labelledby="waiver-queue-decided">
+            <h2 id="waiver-queue-decided" className="text-theme-text-primary mb-2 text-lg font-semibold">
+              Decided
+            </h2>
+            <ul className="card divide-theme-surface-border divide-y">
+              {decided.map((request) => (
+                <RequestRow key={request.id} request={request} timezone={tz} />
+              ))}
+            </ul>
+          </section>
+        )}
+        {hasMore && (
+          <button
+            type="button"
+            onClick={() => void showMore()}
+            disabled={loadingMore}
+            className="btn-secondary text-sm font-medium disabled:opacity-50"
+          >
+            {loadingMore ? 'Loading...' : 'Show more'}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (embedded) return <div className="py-6">{body}</div>;
+
+  return (
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+      <TrainingPageHeader
+        icon={CalendarX}
+        title="Attendance waiver requests"
+        subtitle="Members asking to be excused from a training session"
+      />
+      <div className="mt-6">{body}</div>
+    </div>
+  );
+};
+
+export default AttendanceWaiverQueuePage;

@@ -206,6 +206,9 @@ class TestCancelEventSendsIt:
                 EventService, "_reverse_pipeline_after_commit", new=AsyncMock()
             ),
             patch.object(EventService, "_email_event_cancellation", new=email),
+            # Voiding waiver requests has its own tests
+            # (test_meeting_waiver_requests.py); these are about the notices.
+            patch.object(EventService, "_void_waiver_requests", new=AsyncMock()),
         ):
             return await svc.cancel_event(
                 "e1", "org-1", "Weather", send_notifications=True
@@ -244,6 +247,7 @@ class TestCancelEventSendsIt:
                 EventService, "_reverse_pipeline_after_commit", new=AsyncMock()
             ),
             patch.object(EventService, "_email_event_cancellation", new=email),
+            patch.object(EventService, "_void_waiver_requests", new=AsyncMock()),
         ):
             await EventService(db).cancel_event("e1", "org-1", "Weather")
         email.assert_not_awaited()

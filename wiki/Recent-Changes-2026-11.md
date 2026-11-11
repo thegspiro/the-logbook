@@ -5,6 +5,28 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 8 – 10, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-8--10-2026).
+
+The November 8 – 9 notes below overlap this pass; where both mention a change, it is the same one.
+
+- **My Shifts**: Upcoming sits under month headers; Past is grouped by year and
+  month with a Year dropdown and an hours chart.
+- **End-of-shift summary** lists call types as counts.
+- **Events**: an officer can record one member, with times, after check-in
+  closes. Moving an event's start lets its reminders go out again, and a drill
+  excused by a training waiver no longer reads as missed.
+- **Training**: a session-attendance requirement with no session held is not
+  graded; each record shows whether it came from a provider, the import or The
+  Logbook.
+- **Members**: the roster is a table again on desktop, and a placeholder email
+  no longer breaks the member list.
+- **Historical import**: members to be created show their real names.
+- **Printing**: PDFs keep ink inside the printable area and leave a binding
+  margin; Avery 5160 labels line up.
+
 ## Recent changes: November 8 – 9, 2026
 
 The engineering audit is

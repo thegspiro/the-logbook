@@ -27,6 +27,7 @@ import {
   Building2,
   CalendarClock,
   CalendarDays,
+  CalendarX,
   ClipboardCheck,
   ClipboardList,
   FileBarChart,
@@ -119,6 +120,13 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
     icon: ClipboardList,
     destinations: [
       { id: 'submissions', label: 'Submissions to Review', hint: 'Member-submitted training to approve', icon: Inbox },
+      {
+        id: 'waiver-requests',
+        label: 'Waiver Requests',
+        hint: 'Members asking to be excused from a session',
+        icon: CalendarX,
+        keywords: ['attendance waiver requests', 'excused'],
+      },
       { id: 'sessions', label: 'Sessions', hint: 'Scheduled classes and their attendance', icon: CalendarDays },
       { id: 'cohorts', label: 'Course Cohorts', hint: 'Groups taking a course together', icon: Users },
       { id: 'shift-reports', label: 'Shift Reports', hint: 'Training logged on shift', icon: FileText },
@@ -206,6 +214,13 @@ export const TRAINING_ADMIN_AREAS: TrainingAdminArea[] = [
         label: 'Practical Skills',
         hint: 'Skills Testing, or sign-offs on shift reports',
         icon: Award,
+      },
+      {
+        id: 'session-waivers',
+        label: 'Session Waivers',
+        hint: 'Whether members may ask to be excused from a session',
+        icon: CalendarX,
+        keywords: ['session waiver requests', 'attendance waiver policy'],
       },
       {
         id: 'shift-evaluations',

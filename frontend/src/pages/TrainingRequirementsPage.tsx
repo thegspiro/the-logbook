@@ -38,6 +38,7 @@ import type {
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { grandfatheringSummary } from '@/utils/requirementGrandfathering';
+import { ambiguousAttendanceWarning } from '@/utils/attendanceRequirementOverlap';
 
 type FilterSource = 'all' | 'department' | 'state' | 'national';
 
@@ -218,6 +219,20 @@ const TrainingRequirementsPage: React.FC = () => {
     }
   };
 
+  // Non-blocking: the save has already gone through. Two session-attendance
+  // requirements over the same membership types leave the backend unable to
+  // pick the one that governs a member (governing_attendance_requirement), so
+  // the officer is told which ones collide.
+  // On a new-members-only save the original row (`replacedId`) was narrowed
+  // to existing members, so it is not a rival to its own copy.
+  const warnIfAmbiguous = (saved: TrainingRequirement, replacedId?: string) => {
+    const warning = ambiguousAttendanceWarning(
+      saved,
+      requirements.filter((r) => r.id !== replacedId)
+    );
+    if (warning) toast(warning, { icon: '⚠️', duration: 10000 });
+  };
+
   const handleSave = async (
     data: TrainingRequirementCreate | TrainingRequirementUpdate,
     isEdit: boolean,
@@ -235,10 +250,12 @@ const TrainingRequirementsPage: React.FC = () => {
           setRequirements(requirements.map((r) => (r.id === id ? updated : r)));
           toast.success('Requirement updated');
         }
+        warnIfAmbiguous(updated, id);
       } else {
         const created = await trainingService.createRequirement(data as TrainingRequirementCreate);
         setRequirements([...requirements, created]);
         toast.success('Requirement created');
+        warnIfAmbiguous(created);
       }
       setShowCreateModal(false);
       setSelectedRequirement(null);

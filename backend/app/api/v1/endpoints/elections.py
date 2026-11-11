@@ -4318,10 +4318,15 @@ async def import_meeting_attendees(
     source_label = "meeting"
 
     if election.meeting_id:
+        # Present, whether or not the member also holds a waiver for the
+        # meeting: check-in wins (owner decision, 2026-11-10), the rule the
+        # voting tally applies too (membership_tier_service.tally_attendance),
+        # so a member this copies is one that tally counts as attending.
         meeting_attendees_result = await db.execute(
             select(MeetingAttendee)
             .options(selectinload(MeetingAttendee.user))
             .where(MeetingAttendee.meeting_id == election.meeting_id)
+            .where(MeetingAttendee.organization_id == str(election.organization_id))
             .where(MeetingAttendee.present.is_(True))
         )
         for ma in meeting_attendees_result.scalars().all():

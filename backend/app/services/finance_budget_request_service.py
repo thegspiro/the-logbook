@@ -79,6 +79,34 @@ class BudgetRequestForbiddenError(PermissionError):
     """The caller may see the request but is not its line's owner."""
 
 
+class BudgetRequestIncompleteError(ValueError):
+    """A request handed to the Treasurer without an amount or a justification.
+
+    ``fields`` maps each missing field to what to tell the member, so the
+    endpoint can answer a 422 the form puts on those fields.
+    """
+
+    def __init__(self, fields: dict[str, str]):
+        super().__init__(" ".join(fields.values()))
+        self.fields = fields
+
+
+def _missing_for_the_treasurer(
+    requested_amount: Optional[Decimal], justification: Optional[str], step: str
+) -> dict[str, str]:
+    """What a request lacks that the Treasurer needs to decide it.
+
+    A draft may lack both (owner decision, 2026-11-11: a draft always saves);
+    a request being submitted, or already submitted, may lack neither.
+    """
+    missing: dict[str, str] = {}
+    if requested_amount is None:
+        missing["requested_amount"] = f"Enter the amount you are requesting {step}."
+    if not (justification or "").strip():
+        missing["justification"] = f"Say what the money is for {step}."
+    return missing
+
+
 # The order a draft year's budget moves through on its way to adoption. A
 # move is one step forward or back. ADOPTED is not in it: only recording the
 # board's vote reaches it, and nothing moves a year back out of it.
@@ -581,8 +609,12 @@ class FinanceBudgetRequestService:
             category_id=None if budget_id else category_id,
             station_id=None if budget_id else (station_id or None),
             owner_position_id=owner_position_id or None,
-            requested_amount=Decimal(data["requested_amount"]),
-            justification=data["justification"],
+            requested_amount=(
+                Decimal(data["requested_amount"])
+                if data.get("requested_amount") is not None
+                else None
+            ),
+            justification=data.get("justification") or None,
             status=BudgetRequestStatus.DRAFT,
         )
         self.db.add(request)
@@ -604,6 +636,17 @@ class FinanceBudgetRequestService:
         await self._authorize_owner_change(request, fy, org_id, user_id, is_manager)
         if request.status not in _OWNER_EDITABLE:
             raise ValueError("A decided request can no longer be edited.")
+        if request.status == BudgetRequestStatus.SUBMITTED:
+            # Refused as a whole, before anything is written: the form sends
+            # the rest again without the refused field (owner save rule,
+            # 2026-11-05), so nothing is lost.
+            missing = _missing_for_the_treasurer(
+                data.get("requested_amount", request.requested_amount),
+                data.get("justification", request.justification),
+                "on a submitted request",
+            )
+            if missing:
+                raise BudgetRequestIncompleteError(missing)
         apply_updates(request, data)
         await self.db.flush()
         await self.db.refresh(request, ["updated_at"])
@@ -617,6 +660,11 @@ class FinanceBudgetRequestService:
         await self._authorize_owner_change(request, fy, org_id, user_id, is_manager)
         if request.status != BudgetRequestStatus.DRAFT:
             raise ValueError("Only a draft request can be submitted.")
+        missing = _missing_for_the_treasurer(
+            request.requested_amount, request.justification, "before you submit"
+        )
+        if missing:
+            raise BudgetRequestIncompleteError(missing)
         request.status = BudgetRequestStatus.SUBMITTED
         request.submitted_by = user_id
         request.submitted_at = datetime.now(timezone.utc)
@@ -716,6 +764,13 @@ class FinanceBudgetRequestService:
             )
 
         if new_status == BudgetRequestStatus.APPROVED:
+            # Submitting needs an amount and a submitted request cannot lose
+            # it, so this holds for any request that reached the Treasurer;
+            # checked rather than assumed because a null would approve $0.
+            if request.requested_amount is None:
+                raise ValueError(
+                    "This request has no amount to approve. Adjust it instead."
+                )
             amount = Decimal(request.requested_amount)
         elif new_status == BudgetRequestStatus.ADJUSTED:
             if approved_amount is None:
