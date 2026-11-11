@@ -117,7 +117,10 @@ function availableCards(data: MainDashboardWidgets, period: WidgetPeriod): Parti
 
 export default function DashboardOrganizationWidgets() {
   const { confirm } = useConfirm();
-  const canSetDepartmentDefault = useAuthStore((state) => state.checkPermission('settings.manage'));
+  // The same pair the server accepts on /dashboard/pulse-layout/default.
+  const canSetDepartmentDefault = useAuthStore(
+    (state) => state.checkPermission('settings.manage') || state.checkPermission('organization.update_settings')
+  );
   const [period, setPeriod] = useState<WidgetPeriod>('month');
   const [data, setData] = useState<MainDashboardWidgets | null>(null);
   const [pulse, setPulse] = useState<DashboardPulseResponse | null>(null);

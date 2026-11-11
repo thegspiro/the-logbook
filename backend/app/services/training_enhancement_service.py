@@ -58,6 +58,7 @@ from app.services.training_compliance import (
     tally_standing,
 )
 from app.services.training_record_source import RecordSource, record_sources
+from app.services.training_waiver_service import WaiverPeriod, fetch_org_waivers
 from app.utils.csv_export import SafeCsvChunks, collect_csv
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
@@ -135,6 +136,7 @@ def _requirement_cells(
     today: date,
     shift_dates: List[date],
     held_sessions: Mapping[str, Sequence[HeldSession]],
+    waivers: Sequence[WaiverPeriod],
 ) -> List[str]:
     """One export cell per requirement column for ``user``.
 
@@ -155,6 +157,7 @@ def _requirement_cells(
             req,
             records,
             today,
+            waivers=list(waivers),
             join_date=join_date,
             shift_dates=shift_dates,
             held_sessions=held_sessions,
@@ -1226,6 +1229,10 @@ class ReportExportService:
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
         )
+        # The waivers, leaves, overrides and excused sessions the compliance
+        # screens grade with, so an export cannot print "Not Met" for a member
+        # the matrix shows as met (Pitfall #29).
+        waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
         # Written and sent one member at a time (AH-16).
         async def chunks() -> AsyncIterator[str]:
@@ -1264,6 +1271,7 @@ class ReportExportService:
                         today,
                         shifts_by_user.get(str(user.id), []),
                         held_sessions,
+                        waivers_by_user.get(str(user.id), []),
                     )
                 )
 
@@ -1419,6 +1427,7 @@ class ReportExportService:
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), all_requirements
         )
+        waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
         for user in users:
             # Only what grades this member — by type, role, and grandfathering.
@@ -1449,6 +1458,7 @@ class ReportExportService:
                     req,
                     records,
                     today,
+                    waivers=waivers_by_user.get(str(user.id), []),
                     join_date=join_date,
                     shift_dates=shifts_by_user.get(str(user.id), []),
                     held_sessions=held_sessions,
@@ -1581,6 +1591,7 @@ class ReportExportService:
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
         )
+        waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
         # One query for the whole window, grouped here, instead of one query
         # per member inside the layout loop.
@@ -1611,6 +1622,7 @@ class ReportExportService:
                         generated_on,
                         shifts_by_user.get(str(user.id), []),
                         held_sessions,
+                        waivers_by_user.get(str(user.id), []),
                     ),
                 )
             )

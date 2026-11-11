@@ -1,7 +1,7 @@
 """Events: postponement columns
 
 Revision ID: 09f0171ccf5e
-Revises: 67ad01c43434
+Revises: 8b1cf6f55425
 Create Date: 2026-11-08 23:12:36.290544
 
 Adds the record of a postponement to ``events`` (workflow review W80-11, owner
@@ -27,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "09f0171ccf5e"
-down_revision: Union[str, None] = "67ad01c43434"
+down_revision: Union[str, None] = "8b1cf6f55425"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

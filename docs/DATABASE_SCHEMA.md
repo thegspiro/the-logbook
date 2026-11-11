@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**365 tables · 5918 columns · 1222 foreign keys**
+**367 tables · 5943 columns · 1229 foreign keys**
 
 ---
 
@@ -103,6 +103,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`equipment_check_templates`](#equipment_check_templates) | `EquipmentCheckTemplate` | 15 | Master template for an equipment checklist. |
 | [`evoc_levels`](#evoc_levels) | `EvocLevel` | 13 | Organization-configurable EVOC (Emergency Vehicle Operator Course) levels. |
 | [`template_change_logs`](#template_change_logs) | `TemplateChangeLog` | 11 | Granular audit trail for equipment check template edits. |
+
+### Attendance Waiver Requests
+
+<sub>`app/models/attendance_waiver.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`attendance_waiver_request_actions`](#attendance_waiver_request_actions) | `AttendanceWaiverRequestAction` | 7 | The decision log: one row per thing that happened to a request. |
+| [`attendance_waiver_requests`](#attendance_waiver_requests) | `AttendanceWaiverRequest` | 18 | One member's request to be excused from one session. |
 
 ### Audit & Compliance Logging
 
@@ -1964,6 +1973,66 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_tmpl_changelog_created` (`created_at`)
 - `idx_tmpl_changelog_org` (`organization_id`)
 - `idx_tmpl_changelog_template` (`template_id`)
+
+## Attendance Waiver Requests
+
+### `attendance_waiver_request_actions`
+
+**AttendanceWaiverRequestAction** · `app/models/attendance_waiver.py`
+
+> The decision log: one row per thing that happened to a request. A Chief's override does not replace the denial it overturns; both rows stay, so who denied and who overrode are both on record. ``note`` is the decider's words and is encrypted for the same reason the request's reason is.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `request_id` | VARCHAR(36) | no | FK, IDX |  | → `attendance_waiver_requests.id` ON DELETE CASCADE |
+| `action` | ENUM(`submitted`, `withdrawn`, `approved`, `denied`, `chief_override`, `voided`) | no |  |  |  |
+| `actor_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `note` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_attendance_waiver_request_actions_org_request` (`organization_id`, `request_id`)
+- `ix_attendance_waiver_request_actions_request_id` (`request_id`)
+
+### `attendance_waiver_requests`
+
+**AttendanceWaiverRequest** · `app/models/attendance_waiver.py`
+
+> One member's request to be excused from one session. **One live request per member and session, enforced by the database.** MySQL has no partial unique index, so ``live_key`` carries the ``workflow:event:user`` triple while the request is pending, approved or denied, and NULL once it is withdrawn or voided; the unique key then admits one live row and any number of closed ones, because MySQL treats NULLs as distinct. A withdrawn request therefore stays in the history and the member may ask again as a new row. **``event_id`` is SET NULL, not CASCADE.** The request is the member's record of having been excused; deleting the event must not erase it, so the title, start and local date are snapshotted when the request is made and the row survives the event. ``session_date`` is that local date, the one the cap counts by. ``reason`` is encrypted at rest for the reason ``TrainingWaiver.reason`` is: a member asking to be excused often says why in medical terms.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `workflow` | ENUM(`training_session`, `business_meeting`) | no |  |  |  |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `event_id` | VARCHAR(36) | yes | FK, IDX |  | → `events.id` ON DELETE SET NULL |
+| `event_title_snapshot` | VARCHAR(255) | no |  |  |  |
+| `event_start_snapshot` | DATETIME | no |  |  |  |
+| `session_date` | DATE | no |  |  |  |
+| `status` | ENUM(`pending`, `approved`, `denied`, `withdrawn`, `voided`) | no |  | `pending` |  |
+| `live_key` | VARCHAR(100) | yes | UQ |  |  |
+| `category` | VARCHAR(100) | yes |  |  |  |
+| `reason` | TEXT | yes |  |  |  |
+| `submitted_at` | DATETIME | no |  | `now()` |  |
+| `decided_at` | DATETIME | yes |  |  |  |
+| `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `chief_override` | BOOL | no |  | `0` |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `ix_attendance_waiver_requests_event` (`event_id`)
+- `ix_attendance_waiver_requests_org_user_date` (`organization_id`, `user_id`, `session_date`)
+- `ix_attendance_waiver_requests_org_workflow_status` (`organization_id`, `workflow`, `status`)
+
+**Constraints**
+
+- UNIQUE `uq_attendance_waiver_requests_live_key` (`live_key`)
 
 ## Audit & Compliance Logging
 
@@ -12637,7 +12706,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (447 references)
+### → `users` (450 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12674,6 +12743,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `approval_chains` | `created_by` | RESTRICT | no |
 | `approval_step_records` | `acted_by` | SET NULL | yes |
 | `approval_step_records` | `assigned_to` | SET NULL | yes |
+| `attendance_waiver_request_actions` | `actor_id` | SET NULL | yes |
+| `attendance_waiver_requests` | `decided_by` | SET NULL | yes |
+| `attendance_waiver_requests` | `user_id` | CASCADE | no |
 | `ballot_send_jobs` | `requested_by` | SET NULL | yes |
 | `blocked_access_attempts` | `user_id` | RESTRICT | yes |
 | `budget_amendments` | `created_by` | SET NULL | yes |
@@ -13089,7 +13161,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (300 references)
+### → `organizations` (302 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13117,6 +13189,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_statuses` | `organization_id` | CASCADE | yes |
 | `apparatus_types` | `organization_id` | CASCADE | yes |
 | `approval_chains` | `organization_id` | CASCADE | no |
+| `attendance_waiver_request_actions` | `organization_id` | CASCADE | no |
+| `attendance_waiver_requests` | `organization_id` | CASCADE | no |
 | `ballot_send_jobs` | `organization_id` | CASCADE | no |
 | `basic_apparatus` | `organization_id` | CASCADE | no |
 | `budget_amendments` | `organization_id` | CASCADE | no |
@@ -13466,11 +13540,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `training_records` | `apparatus_id` | SET NULL | yes |
 | `training_sessions` | `apparatus_id` | SET NULL | yes |
 
-### → `events` (16 references)
+### → `events` (17 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `admin_hours_entries` | `source_event_id` | SET NULL | yes |
+| `attendance_waiver_requests` | `event_id` | SET NULL | yes |
 | `course_cohort_classes` | `event_id` | SET NULL | yes |
 | `elections` | `event_id` | SET NULL | yes |
 | `event_attendance_petitions` | `event_id` | CASCADE | no |
@@ -14214,6 +14289,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `approval_step_records` | `step_id` | CASCADE | no |
+
+### → `attendance_waiver_requests` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `attendance_waiver_request_actions` | `request_id` | CASCADE | no |
 
 ### → `budget_amendments` (1 references)
 

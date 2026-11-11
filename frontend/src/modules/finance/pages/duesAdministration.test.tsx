@@ -175,10 +175,10 @@ describe('schedules', () => {
 
     await user.click(screen.getByRole('button', { name: /new schedule/i }));
     const dialog = screen.getByRole('dialog');
-    await user.type(within(dialog).getByLabelText('Name'), '2028 annual dues');
-    await user.type(within(dialog).getByLabelText('Amount per member'), '150');
-    await user.selectOptions(within(dialog).getByLabelText('Frequency'), 'quarterly');
-    await user.type(within(dialog).getByLabelText('Due date'), '2028-03-01');
+    await user.type(within(dialog).getByLabelText(/^Name/), '2028 annual dues');
+    await user.type(within(dialog).getByLabelText(/^Amount per member/), '150');
+    await user.selectOptions(within(dialog).getByLabelText(/^Frequency/), 'quarterly');
+    await user.type(within(dialog).getByLabelText(/^Due date/), '2028-03-01');
     await user.click(within(dialog).getByRole('button', { name: 'Create schedule' }));
 
     await waitFor(() => expect(createSchedule).toHaveBeenCalledTimes(1));
@@ -217,7 +217,7 @@ describe('schedules', () => {
     await user.click(screen.getByRole('button', { name: /2027 annual dues/ }));
     await user.click(screen.getByRole('button', { name: /edit schedule/i }));
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByLabelText('Due date')).toHaveValue('2027-03-01');
+    expect(within(dialog).getByLabelText(/^Due date/)).toHaveValue('2027-03-01');
     await user.clear(within(dialog).getByLabelText(/notes/i));
     await user.click(within(dialog).getByRole('checkbox'));
     await user.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
@@ -248,9 +248,9 @@ describe('schedules', () => {
 
     await user.click(screen.getByRole('button', { name: /new schedule/i }));
     const dialog = screen.getByRole('dialog');
-    await user.type(within(dialog).getByLabelText('Name'), 'Fines');
-    await user.type(within(dialog).getByLabelText('Amount per member'), '10');
-    await user.type(within(dialog).getByLabelText('Due date'), '2028-03-01');
+    await user.type(within(dialog).getByLabelText(/^Name/), 'Fines');
+    await user.type(within(dialog).getByLabelText(/^Amount per member/), '10');
+    await user.type(within(dialog).getByLabelText(/^Due date/), '2028-03-01');
     await user.type(within(dialog).getByLabelText(/Income account/), ' Fines Income ');
     await user.click(within(dialog).getByRole('button', { name: 'Create schedule' }));
 

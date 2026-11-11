@@ -42,6 +42,7 @@ DOMAIN_TITLES = {
     "admin_hours": "Administrative Hours",
     "analytics": "Analytics",
     "apparatus": "Apparatus",
+    "attendance_waiver": "Attendance Waiver Requests",
     "audit": "Audit & Compliance Logging",
     "compliance_config": "Compliance Configuration",
     "consent": "Consent",
@@ -91,7 +92,7 @@ def summarize(model) -> str:
         # Many models lead with a title line repeating the class name; the
         # sentence after it is the useful description.
         if line and line.lower().replace(" ", "") != model.__name__.lower():
-            return line[:110]
+            return str(line[:110])
     return ""
 
 
@@ -107,9 +108,9 @@ def render_type(col) -> str:
         # Compile against MySQL rather than str(): a column declared as
         # Text().with_variant(LONGTEXT, "mysql") renders as plain TEXT
         # otherwise, hiding the width the database is actually given.
-        return col.type.compile(dialect=MYSQL_DIALECT)
+        return str(col.type.compile(dialect=MYSQL_DIALECT))
     except Exception:  # pragma: no cover - types with no MySQL rendering
-        return col.type.__class__.__name__
+        return str(col.type.__class__.__name__)
 
 
 def render_default(col) -> str:
@@ -202,7 +203,7 @@ def build(metadata) -> str:
         domains.items(), key=lambda kv: DOMAIN_TITLES.get(kv[0], kv[0].title())
     )
 
-    out = []
+    out: list[str] = []
     w = out.append
 
     w("# Database Schema Reference")

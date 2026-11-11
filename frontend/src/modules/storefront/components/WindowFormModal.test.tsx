@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithRouter } from '../../../test/utils';
@@ -92,7 +92,7 @@ describe('WindowFormModal save payload', () => {
   it('still omits blank optional fields on create', async () => {
     const user = userEvent.setup();
     renderModal(null);
-    await user.type(screen.getByLabelText('Name'), 'Spring order');
+    await user.type(screen.getByLabelText(/^Name/), 'Spring order');
     await user.click(screen.getByRole('button', { name: 'Save window' }));
 
     await waitFor(() => expect(createWindow).toHaveBeenCalledTimes(1));
@@ -105,5 +105,62 @@ describe('WindowFormModal save payload', () => {
       notifyOnOpen: true,
       offerings: [],
     });
+  });
+});
+
+describe('WindowFormModal errors and discarding', () => {
+  const tooLong = (field: string) => ({
+    response: { status: 422, data: { detail: [{ field, message: 'Value is too long.' }] } },
+  });
+
+  beforeEach(() => {
+    createWindow.mockReset();
+    updateWindow.mockReset();
+    createWindow.mockResolvedValue(fallOrder);
+    updateWindow.mockResolvedValue(fallOrder);
+  });
+
+  it('puts a refusal of a new window on its field, announced, and creates nothing', async () => {
+    createWindow.mockRejectedValueOnce(tooLong('name'));
+    const user = userEvent.setup();
+    renderModal(null);
+    await user.type(screen.getByLabelText(/^Name/), 'Spring order');
+    await user.click(screen.getByRole('button', { name: 'Save window' }));
+
+    const name = screen.getByLabelText(/^Name/);
+    await waitFor(() => expect(name).toHaveAccessibleDescription('Name is too long — keep it to 200 characters.'));
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(createWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves the rest of an edit, keeps the stored name the server refused and flags it', async () => {
+    updateWindow.mockRejectedValueOnce(tooLong('name'));
+    const user = userEvent.setup();
+    renderModal(fallOrder);
+    await screen.findByDisplayValue('Fall 2026 apparel order');
+    await user.type(screen.getByLabelText(/^Name/), ' (extended)');
+    await user.clear(screen.getByLabelText('Internal notes'));
+    await user.click(screen.getByRole('button', { name: 'Save window' }));
+
+    await waitFor(() => expect(updateWindow).toHaveBeenCalledTimes(2));
+    const retry = updateWindow.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(retry).not.toHaveProperty('name');
+    expect(retry).toMatchObject({ notes: null });
+    expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Name is too long — keep it to 200 characters.');
+  });
+
+  it('asks before Escape or Cancel discards what was typed', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderWithRouter(<WindowFormModal isOpen window={null} products={[]} onClose={onClose} onSaved={vi.fn()} />);
+    await user.type(screen.getByLabelText(/^Name/), 'Spring order');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

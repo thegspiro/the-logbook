@@ -8,7 +8,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ApparatusEquipment } from '../types';
 
@@ -27,7 +27,11 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import { EquipmentModal } from './EquipmentModal';
+
+// The app shell mounts ConfirmProvider; the dialog needs it to ask before discarding.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 const equipment = (overrides: Partial<ApparatusEquipment> = {}): ApparatusEquipment => ({
   id: 'eq-1',
@@ -87,16 +91,21 @@ describe('EquipmentModal payloads', () => {
     });
   });
 
-  it('refuses a blank quantity on edit instead of overwriting the stored count', async () => {
-    // quantity is NOT NULL; a blank box used to save as 1.
+  it('keeps the stored count when quantity is blanked on edit, saves the rest and flags the field', async () => {
+    // quantity is NOT NULL; a blank box used to save as 1. Under the owner's
+    // single-save rule the rest of the edit is written without it.
     const user = userEvent.setup();
     renderModal(equipment());
 
     await user.clear(screen.getByDisplayValue('2'));
+    await user.clear(screen.getByDisplayValue('Check tip for burrs'));
     await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
-    expect(mockUpdateEquipment).not.toHaveBeenCalled();
-    expect(mockToastError).toHaveBeenCalledWith('Enter a quantity of at least 1');
+    await waitFor(() => expect(mockUpdateEquipment).toHaveBeenCalledTimes(1));
+    const payload = mockUpdateEquipment.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('quantity');
+    expect(payload).toMatchObject({ notes: null });
+    expect(screen.getByLabelText('Quantity')).toHaveAccessibleDescription('Enter a quantity of at least 1.');
   });
 
   it('still omits blank fields on create', async () => {
@@ -114,5 +123,47 @@ describe('EquipmentModal payloads', () => {
       isRequired: false,
       isPresent: true,
     });
+  });
+});
+
+describe('EquipmentModal errors and discarding', () => {
+  beforeEach(() => {
+    mockCreateEquipment.mockReset();
+    mockCreateEquipment.mockResolvedValue({});
+    mockUpdateEquipment.mockReset();
+    mockUpdateEquipment.mockResolvedValue({});
+    mockToastError.mockReset();
+  });
+
+  it('puts a server refusal on the field it names, announced, and creates nothing', async () => {
+    mockCreateEquipment.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'asset_tag', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.type(screen.getByPlaceholderText('Equipment name'), 'Axe');
+    await user.type(screen.getByLabelText('Asset Tag'), 'AT-1');
+    await user.click(screen.getByRole('button', { name: 'Add Equipment' }));
+
+    const tag = screen.getByLabelText('Asset Tag');
+    await waitFor(() => expect(tag).toHaveAccessibleDescription('Asset tag is too long — keep it to 50 characters.'));
+    expect(tag).toHaveAttribute('aria-invalid', 'true');
+    expect(mockToastError).toHaveBeenCalledWith('Fix the fields marked below, then save again.');
+  });
+
+  it('asks before Escape or Cancel discards what was typed', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<EquipmentModal isOpen onClose={onClose} onSaved={vi.fn()} apparatusId="app-1" />);
+    await user.type(screen.getByPlaceholderText('Equipment name'), 'Axe');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

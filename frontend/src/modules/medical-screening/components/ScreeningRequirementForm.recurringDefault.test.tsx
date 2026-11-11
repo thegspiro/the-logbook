@@ -5,7 +5,8 @@
  * keeps whatever it was saved as.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithRouter } from '../../../test/utils';
 import userEvent from '@testing-library/user-event';
 
 import { ScreeningRequirementForm } from './ScreeningRequirementForm';
@@ -29,7 +30,7 @@ describe('ScreeningRequirementForm recurrence default', () => {
   it('starts a new requirement recurring every 12 months', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<ScreeningRequirementForm requirement={null} onSave={onSave} onClose={vi.fn()} />);
+    renderWithRouter(<ScreeningRequirementForm requirement={null} onSave={onSave} onClose={vi.fn()} />);
 
     expect(oneTimeBox()).not.toBeChecked();
     await user.type(screen.getByLabelText('Name *'), 'Annual Physical');
@@ -41,7 +42,7 @@ describe('ScreeningRequirementForm recurrence default', () => {
   it('keeps an existing one-time requirement one-time', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<ScreeningRequirementForm requirement={oneTime} onSave={onSave} onClose={vi.fn()} />);
+    renderWithRouter(<ScreeningRequirementForm requirement={oneTime} onSave={onSave} onClose={vi.fn()} />);
 
     expect(oneTimeBox()).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Save Changes' }));

@@ -192,12 +192,15 @@ export const ShiftTemplatesPage: React.FC = () => {
     void loadPatterns();
   };
 
-  const handleUpdatePattern = async (data: Record<string, unknown>) => {
+  const handleUpdatePattern = async (data: Record<string, unknown>, options?: { keepOpen?: boolean }) => {
     if (!editingPattern) return;
     await schedulingService.updatePattern(editingPattern.id, data);
+    void loadPatterns();
+    // A save that kept a refused field back leaves the dialog open with that
+    // field flagged (owner rule, 2026-11-05); the list behind it still refreshes.
+    if (options?.keepOpen) return;
     toast.success('Pattern updated');
     setEditingPattern(null);
-    void loadPatterns();
   };
 
   const handleDeletePattern = async (id: string) => {

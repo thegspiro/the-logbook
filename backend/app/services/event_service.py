@@ -26,6 +26,11 @@ from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.config import settings
 from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS
+from app.models.attendance_waiver import (
+    AttendanceWaiverRequest,
+    AttendanceWaiverStatus,
+    AttendanceWaiverWorkflow,
+)
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
     AttendancePetitionStatus,
@@ -877,6 +882,12 @@ class EventService:
             for item in candidates
             if self._was_expected_at(item["event"], user, leaves, tz)
         ]
+        # An approved request to be excused from the session takes it off the
+        # list for the same reason a waiver does: the member was excused.
+        excused = await self._excused_event_ids(
+            organization_id, user_id, [str(item["event"].id) for item in expected]
+        )
+        expected = [item for item in expected if str(item["event"].id) not in excused]
         waivers = await self._active_training_waivers(organization_id, user_id)
         if not expected or not waivers:
             return expected
@@ -892,6 +903,31 @@ class EventService:
                 waivers,
             )
         ]
+
+    async def _excused_event_ids(
+        self,
+        organization_id: UUID | str,
+        user_id: UUID | str,
+        event_ids: List[str],
+    ) -> Set[str]:
+        """The events among ``event_ids`` an approved waiver request excuses.
+
+        Approved includes a denial the Chief overrode. The grading rule is the
+        same: the excusal names the event (training_compliance._waiver_excuses).
+        """
+        if not event_ids:
+            return set()
+        result = await self.db.execute(
+            select(AttendanceWaiverRequest.event_id).where(
+                AttendanceWaiverRequest.organization_id == str(organization_id),
+                AttendanceWaiverRequest.user_id == str(user_id),
+                AttendanceWaiverRequest.workflow
+                == AttendanceWaiverWorkflow.TRAINING_SESSION,
+                AttendanceWaiverRequest.status == AttendanceWaiverStatus.APPROVED,
+                AttendanceWaiverRequest.event_id.in_(event_ids),
+            )
+        )
+        return {str(event_id) for (event_id,) in result.all()}
 
     async def _active_training_waivers(
         self, organization_id: UUID | str, user_id: UUID | str

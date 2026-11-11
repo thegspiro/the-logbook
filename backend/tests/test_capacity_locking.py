@@ -934,3 +934,85 @@ class TestTrainingModuleConfigRace:
         assert source.index("except IntegrityError") < source.index(
             "with_for_update()"
         ), "the locking re-read must happen in the exception handler, not before."
+
+
+class TestAttendanceWaiverCapLocking:
+    """A department's cap on approved session waivers is enforced when a
+    request is approved: a count of the member's approved requests, then a
+    write. Two deciders approving two of one member's requests at once both
+    counted one fewer than there were and both approved. The member's ``users``
+    row is the parent they contend for (there is no other row both share), and
+    the count must be a locking read for the reason above.
+
+    The parent is one member, so every range a waiver write locks must be that
+    member's alone: a gap shared with another member deadlocked two members'
+    submissions, and two members' approvals under a cap (1213, a 500).
+    ``tests/test_attendance_waiver_races.py`` drives all of these races."""
+
+    def test_every_decision_locks_the_member_before_the_request(self):
+        from app.services.attendance_waiver_service import AttendanceWaiverService
+
+        source = _source_of(AttendanceWaiverService._locked_request)
+        assert "_lock_member(" in source
+        assert source.index("_lock_member(") < source.index("with_for_update()"), (
+            "The member's row is locked before the request's: submitting takes "
+            "the member's row first, so the other order deadlocks."
+        )
+        lock = _source_of(AttendanceWaiverService._lock_member)
+        assert "with_for_update()" in lock
+
+    def test_approval_counts_with_a_locking_read(self):
+        from app.services.attendance_waiver_service import AttendanceWaiverService
+
+        approve = _source_of(AttendanceWaiverService.approve)
+        assert "_locked_request(" in approve
+        assert re.search(r"_approved_dates\([^)]*lock=True", approve), (
+            "The cap's count of approved requests must be a locking read: "
+            "under REPEATABLE READ the second decider would otherwise count "
+            "from the snapshot taken before the first approval committed."
+        )
+        assert approve.index("_locked_request(") < approve.index("_approved_dates(")
+        dates = _source_of(AttendanceWaiverService._approved_dates)
+        assert "with_for_update()" in dates
+
+    def test_the_cap_count_locks_only_the_members_own_range(self):
+        from app.models.attendance_waiver import AttendanceWaiverRequest
+        from app.services.attendance_waiver_service import (
+            MEMBER_INDEX,
+            AttendanceWaiverService,
+        )
+
+        dates = _source_of(AttendanceWaiverService._approved_dates)
+        assert 'f"FORCE INDEX ({MEMBER_INDEX})"' in dates, (
+            "The locking count is pinned to the member's index. Left to the "
+            "optimizer, MariaDB walked the organization-wide status index, "
+            "whose gap every approval's status UPDATE inserts into, and two "
+            "members' approvals deadlocked."
+        )
+        assert "AttendanceWaiverRequest.status ==" not in dates, (
+            "Filter the status in Python: a status predicate in SQL invites a "
+            "plan (or a rowid filter) through the status index."
+        )
+        index = next(
+            i
+            for i in AttendanceWaiverRequest.__table__.indexes
+            if i.name == MEMBER_INDEX
+        )
+        assert [c.name for c in index.columns][:2] == ["organization_id", "user_id"]
+
+    def test_submitting_takes_no_locking_read_of_the_requests(self):
+        from app.services.attendance_waiver_service import AttendanceWaiverService
+
+        for method in (
+            AttendanceWaiverService.submit,
+            AttendanceWaiverService._assess,
+            AttendanceWaiverService._live_request,
+        ):
+            source = _source_of(method)
+            assert "with_for_update" not in source, method.__name__
+            assert "lock=True" not in source, (
+                f"{method.__name__}: a locking read of a live_key that does "
+                "not exist yet takes a gap lock that spans other members' "
+                "keys, and two members' submissions deadlock. The unique "
+                "live_key is the guard."
+            )

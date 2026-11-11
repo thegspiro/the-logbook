@@ -217,6 +217,7 @@ describe('LocationsPage create validation', () => {
     const address = within(dialog).getByLabelText('Street Address *');
     expect(address).toHaveAccessibleDescription('A station needs a street address.');
     expect(address).toHaveFocus();
+    expect(address).toHaveAttribute('aria-invalid', 'true');
     expect(createLocation).not.toHaveBeenCalled();
 
     await user.type(address, '200 Oak Avenue');
@@ -276,6 +277,45 @@ describe('LocationsPage create validation', () => {
     expect(updateLocation).not.toHaveBeenCalled();
   });
 
+  it('puts a server refusal on a new station field and creates nothing', async () => {
+    createLocation.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<LocationsPage />);
+    await user.click(await screen.findByRole('button', { name: /Add Station/ }));
+
+    const dialog = screen.getByRole('dialog', { name: 'Add Station' });
+    await user.type(within(dialog).getByLabelText('Station Name / Number *'), 'Station 2');
+    // Enter submits: the dialog is a real form (forms review F-7).
+    await user.type(within(dialog).getByLabelText('Street Address *'), '200 Oak Avenue{Enter}');
+
+    const name = within(dialog).getByLabelText('Station Name / Number *');
+    await waitFor(() => expect(name).toHaveAccessibleDescription('Value is too long.'));
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAttribute('maxLength', '200');
+    expect(createLocation).toHaveBeenCalledTimes(1);
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('saves the rest of an edited room and keeps the refused field flagged', async () => {
+    updateLocation.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'floor', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<LocationsPage />);
+    await openStation();
+    await user.click(screen.getByRole('button', { name: 'Edit room' }));
+
+    await user.type(screen.getByLabelText('Floor'), 'X');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    const floor = await screen.findByLabelText('Floor');
+    await waitFor(() => expect(floor).toHaveAccessibleDescription('Value is too long.'));
+    expect(updateLocation).toHaveBeenCalledTimes(2);
+    expect(updateLocation.mock.calls[1]?.[1]).not.toHaveProperty('floor');
+  });
+
   it('puts a refused field from the server on that field, and other refusals in the dialog', async () => {
     createLocation
       .mockRejectedValueOnce({
@@ -295,6 +335,18 @@ describe('LocationsPage create validation', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Add Station' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('A location named "Station 2" already exists');
+  });
+
+  it('asks before Escape discards a half-typed station', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<LocationsPage />);
+    await user.click(await screen.findByRole('button', { name: /Add Station/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Add Station' });
+    await user.type(within(dialog).getByLabelText('Station Name / Number *'), 'Station 2');
+
+    await user.keyboard('{Escape}');
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByLabelText('Station Name / Number *')).toHaveValue('Station 2');
   });
 });
 
