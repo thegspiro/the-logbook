@@ -9832,3 +9832,39 @@ was not among the questions the owner answered on 2026-11-01. Options:
    onboarding checklist the Organization Setup widget already reads.
 3. **Remove only the three made-up fields**, keeping the counts that are real.
    This changes the response shape for any caller.
+
+## Meetings — Business-Meeting Waiver Requests: Choices Made Without An Owner Ruling (2026-11-11)
+
+The business-meeting waiver workflow (owner decisions, 2026-11-10) shares the
+training workflow's engine. Where the decisions left a gap, the conservative
+option was taken; each is open for the owner to revisit.
+
+- **Cancelling or deleting an event closes only pending requests.** The brief
+  asked for requests to be voided "as the training workflow does", but the
+  training workflow voided nothing. A pending request is now voided (its slot
+  freed, the deciders' prompts archived, the member told in the app), for both
+  workflows. An **approved** request is kept: the model already keeps an
+  approved request as the member's record when its event is deleted. So an
+  approval for a meeting that was then cancelled still counts toward the
+  member's cap. Voiding approved requests as well would give the waiver back.
+- **A member on a leave of absence that covers the meeting cannot ask**
+  ("on_leave"): the voting tally already excludes such a meeting, so there is
+  nothing to excuse.
+- **A Chief may decide any meeting request**, as in training, although the
+  meeting routing's fallback is the Secretary, then `meetings.manage` holders.
+  The Secretary decides only when the chosen positions leave nobody, like the
+  Chief in training.
+- **An approval does not overwrite a waiver the Secretary already granted by
+  hand** for that member and meeting; the request is approved, the Secretary's
+  wording stands, and the attendee row is not linked to the request. A
+  Secretary's grant over a waiver an approval wrote replaces the standard text
+  and drops the link, so the waiver is the Secretary's.
+- **The meeting screens are not built yet.** A decider's in-app prompt links
+  to `/meetings/waiver-requests/{id}`, which the frontend does not have until
+  the meeting screens land; the member's notice links to the event. Until then
+  the policy can be saved only through the API, so no prompt is sent.
+- **Postponing an event does not touch its waiver requests.** A request keeps
+  the session date it was made for (training and meetings alike).
+- **`idx_meeting_attendees_meeting` is now a prefix of the new unique
+  `(meeting_id, user_id)` index** and could be dropped; it was left to keep
+  the migration to what the feature needs.

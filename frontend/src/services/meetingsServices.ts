@@ -131,6 +131,9 @@ export const meetingsService = {
     meetingId: string,
     data: { user_id: string; reason: string }
   ): Promise<Record<string, unknown>> {
+    // The body, never params: the reason may be medical, and a query string
+    // is written to access logs and URL history. The endpoint reads only the
+    // body.
     const response = await api.post<Record<string, unknown>>(`/meetings/${meetingId}/attendance-waiver`, data);
     return response.data;
   },

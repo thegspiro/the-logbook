@@ -243,9 +243,11 @@ class TestVotingEligibility:
 class TestWaivers:
     async def test_grant_creates_record_when_absent(self):
         db = MagicMock()
-        # assert_in_org(Meeting), assert_in_org(User), then the existing-
-        # attendee lookup (no existing attendee).
-        db.execute = AsyncMock(side_effect=[_one("m1"), _one("u1"), _one(None)])
+        # assert_in_org(Meeting), assert_in_org(User), the meeting row lock,
+        # then the existing-attendee lookup (no existing attendee).
+        db.execute = AsyncMock(
+            side_effect=[_one("m1"), _one("u1"), _one("m1"), _one(None)]
+        )
         db.add = MagicMock()
         db.commit = AsyncMock()
         out = await AttendanceDashboardService(db).grant_waiver(
@@ -262,9 +264,13 @@ class TestWaivers:
             waiver_reason=None,
             waiver_granted_by=None,
             waiver_granted_at=None,
+            waiver_request_id="req-1",
+            present=True,
         )
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_one("m1"), _one("u1"), _one(existing)])
+        db.execute = AsyncMock(
+            side_effect=[_one("m1"), _one("u1"), _one("m1"), _one(existing)]
+        )
         db.add = MagicMock()
         db.commit = AsyncMock()
         await AttendanceDashboardService(db).grant_waiver(
@@ -272,6 +278,10 @@ class TestWaivers:
         )
         assert existing.waiver_reason == "Sick"
         assert existing.excused is True
+        # The Secretary's words now stand for the waiver, not the request's
+        # standard text; and a member who attended still attended.
+        assert existing.waiver_request_id is None
+        assert existing.present is True
         db.add.assert_not_called()
 
     async def test_grant_rejects_meeting_outside_org(self):
