@@ -428,9 +428,14 @@ suggestion-box edits, and Add several items naming a refused line by its place
 in the list. The training wizard keeps main's end-after-start check on leaving
 the first step, now also written on the End field.
 
-Two departures are recorded in `docs/KNOWN_LIMITATIONS.md`: a budget request
-draft still needs its amount and justification, and the Approvals approve /
-deny prompt (a `PromptDialog`) is not converted.
+Two departures were recorded in `docs/KNOWN_LIMITATIONS.md`, and both were
+closed by owner decisions of 2026-11-11. A budget request draft now saves
+without an amount or a justification: both columns are nullable (migration
+`0136dd6d4144`) and Submit, not Save Draft, requires them, refusing on the
+missing fields. The shared `PromptDialog` gained two opt-ins, a discard
+question (`askBeforeDiscard`) and a server refusal shown on its field
+(`error`); the Approvals approve / deny prompt uses both, and every other
+`PromptDialog` behaves as before until it opts in.
 
 **Not yet converted** (F-2 to F-9 still apply to them):
 

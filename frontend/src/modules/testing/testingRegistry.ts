@@ -379,6 +379,18 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'training',
       },
       { path: '/training/admin', label: 'Training administration', permission: 'training.manage', module: 'training' },
+      {
+        path: '/attendance-waivers',
+        label: 'Attendance waiver requests',
+        module: 'training',
+        note: 'Only requests the viewer may decide or has decided',
+      },
+      {
+        path: '/attendance-waivers/:id',
+        label: 'Attendance waiver decision',
+        module: 'training',
+        note: 'Opened from the approver email; ?action=approve|deny pre-selects only',
+      },
       { path: '/training/cohorts', label: 'Cohorts', permission: 'training.manage', module: 'training' },
       { path: '/training/cohorts/:cohortId', label: 'Cohort detail', module: 'training' },
       { path: '/training/log-shift', label: 'Manual shift report', permission: 'training.manage', module: 'training' },

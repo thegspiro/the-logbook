@@ -710,10 +710,12 @@ export interface BudgetRequest {
   isProposedLine: boolean;
   ownerPositionId?: string | null;
   ownerPositionName?: string | null;
-  requestedAmount: MonetaryAmount;
+  /** Null only on a draft not filled in yet (owner decision, 2026-11-11). */
+  requestedAmount: MonetaryAmount | null;
   approvedAmount?: MonetaryAmount | null;
   status: BudgetRequestStatus;
-  justification: string;
+  /** Null only on a draft not filled in yet; submitting needs both. */
+  justification: string | null;
   decisionNote?: string | null;
   submittedBy?: string | null;
   submittedByName?: string | null;
@@ -742,13 +744,15 @@ export interface BudgetRequestCreatePayload {
   categoryId?: string | undefined;
   stationId?: string | undefined;
   ownerPositionId?: string | undefined;
-  requestedAmount: MonetaryAmount;
-  justification: string;
+  /** A draft may leave both out; submitting needs both. */
+  requestedAmount?: MonetaryAmount | undefined;
+  justification?: string | undefined;
 }
 
+/** An omitted key leaves the field alone; `null` clears it (a draft's alone). */
 export interface BudgetRequestUpdatePayload {
-  requestedAmount?: MonetaryAmount;
-  justification?: string;
+  requestedAmount?: MonetaryAmount | null;
+  justification?: string | null;
 }
 
 /** `adjust` needs `approvedAmount` and `decisionNote`; `decline` needs `decisionNote`. */

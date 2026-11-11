@@ -176,6 +176,7 @@ from app.services.finance_budget_request_notifications import (
 from app.services.finance_budget_request_service import (
     BudgetRequestConflictError,
     BudgetRequestForbiddenError,
+    BudgetRequestIncompleteError,
     FinanceBudgetRequestService,
 )
 from app.services.finance_report_service import (
@@ -1434,11 +1435,26 @@ def _budget_request_error(e: Exception) -> HTTPException:
         return HTTPException(status_code=403, detail=str(e))
     if isinstance(e, BudgetRequestConflictError):
         return HTTPException(status_code=409, detail=str(e))
+    if isinstance(e, BudgetRequestIncompleteError):
+        # The validation handler's shape (main.py), so the form puts each
+        # message on its field rather than in a toast.
+        return HTTPException(
+            status_code=422,
+            detail=[
+                {"field": field, "message": message}
+                for field, message in e.fields.items()
+            ],
+        )
     if isinstance(e, BudgetLimitExceededError):
         return HTTPException(status_code=409, detail=str(e))
     if isinstance(e, ValueError):
         return HTTPException(status_code=400, detail=safe_error_detail(e))
     return HTTPException(status_code=500, detail=safe_error_detail(e))
+
+
+def _amount_or_none(amount) -> Optional[str]:
+    # A draft may have no amount yet; the audit records none rather than "None".
+    return str(amount) if amount is not None else None
 
 
 async def _audit_budget_request(
@@ -1563,7 +1579,7 @@ async def create_budget_request(
             current_user,
             "finance.budget_request_created",
             request,
-            requested_amount=str(request.requested_amount),
+            requested_amount=_amount_or_none(request.requested_amount),
         )
         return (await service.describe([request], str(current_user.organization_id)))[0]
     except Exception as e:
@@ -1644,7 +1660,7 @@ async def submit_budget_request(
             current_user,
             "finance.budget_request_submitted",
             request,
-            requested_amount=str(request.requested_amount),
+            requested_amount=_amount_or_none(request.requested_amount),
         )
         await notify_request_submitted(db, org_id, request.id, str(current_user.id))
         return (await service.describe([request], org_id))[0]
@@ -1731,7 +1747,7 @@ async def decide_budget_request(
             "finance.budget_request_decided",
             request,
             decision=data.decision,
-            requested_amount=str(request.requested_amount),
+            requested_amount=_amount_or_none(request.requested_amount),
             approved_amount=(
                 str(request.approved_amount)
                 if request.approved_amount is not None

@@ -47,12 +47,13 @@ export const BudgetRequestLeadershipDialog: React.FC<BudgetRequestLeadershipDial
   onClose,
   onReviewed,
 }) => {
-  const current = request.reviewAmount ?? request.approvedAmount ?? request.requestedAmount;
-  const [amount, setAmount] = useState(String(current));
+  // Only a decided request reaches this dialog, so one of the three is set.
+  const current = request.reviewAmount ?? request.approvedAmount ?? request.requestedAmount ?? '';
+  const [amount, setAmount] = useState(current);
   const [note, setNote] = useState(request.reviewNote ?? '');
   const { errors, setErrors, clearError } = useDialogFieldErrors<ReviewField>();
   const [saving, setSaving] = useState(false);
-  const isDirty = amount !== String(current) || note !== (request.reviewNote ?? '');
+  const isDirty = amount !== current || note !== (request.reviewNote ?? '');
   // Escape, the X and Cancel all ask before throwing away a typed change.
   const requestClose = useDiscardGuard({ isDirty, onClose });
 

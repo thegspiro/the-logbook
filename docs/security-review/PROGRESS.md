@@ -16,6 +16,53 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4245](https://github.com/thegspiro/the-logbook/pull/4245)**
+(branch `claude/security-review-scheduled-tasks-p13`):
+Feature 31 (Scheduled tasks), pass 13. PR #4240 (Feature 30, Onboarding,
+pass 13) had already merged clean (`deb9601f3`). A fresh `list_pull_requests`
+(state `open`) returned three open PRs, none with a `claude/security-review-*`
+head (#4214 docs pass, #4204 CI sharding, #4129 workflow-review), and row 31
+was the next pending feature, confirmed on a freshly fetched `main`.
+
+**0 new code findings; 7 new tasks verified wired correctly; 1 stale finding
+corrected.** `SCHEDULE`/`TASK_RUNNERS` re-enumerated by AST at 80/80 (up from
+73 at this window's start) — 7 new registered tasks since pass 12
+(`quickbooks_sync`, `fiscal_year_due_reminders`, `advance_statements`,
+`dues_late_fees`, `dues_reminders`, `medical_screening_expiry_reminders`,
+`program_milestones`), each a thin, correctly org-scoped, correctly-idempotent
+delegate into another already-built feature's own service (Finance, Medical
+screening, Training core), plus one existing task (`action_item_reminders`)
+gaining email delivery via a new, idempotent, org-scoped, HTML-escaped
+service. **Correction, not a code fix:** CRON-31-7 (`run_end_of_shift_summary`
+marking a member "sent" after a failed email) was actually fixed back on
+2026-10-05 (`6e59402af`) and correctly recorded as fixed in that pass's own
+findings file and in `KNOWN_LIMITATIONS.md` — but passes 7 through 12 of this
+track, and app-review's pass 6, kept re-asserting it as "still open" without
+re-reading the code. Corrected in `docs/app-review/scheduled-tasks.md`. The
+two routes (`GET /scheduled/tasks`, `POST /scheduled/run-task`) are unchanged
+since pass 4. CRON4-31-2 (no per-task lock on manual trigger), CRON-4 (raw
+`str(e)` in the trigger response), CRON-31-8 (an event reminder interval
+stamped sent with zero recipients) and the Redis-down claim fallback all
+re-confirmed OPEN/unchanged by direct read. See
+`docs/security-review/CRON13-31-scheduled-tasks.md` for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 757 revisions, single head `09f0171ccf5e`; `check_route_permissions.py
+--strict` — 305 routes, 0 errors/warnings; `test_scheduled_task_coverage.py` —
+5 passed; scoped backend suite (`-k "scheduled_task or cron or scheduler or
+quickbooks or dues_late_fee or dues_reminder or fiscal_year_due or
+advance_statement or medical_screening_expiry or program_milestone or
+meeting_action_item or action_item_reminder"`) — 351 passed, 1 environment-only
+skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings.
+
+Row 31 → ✅ (pending this PR's merge). Next is Feature 32 (Locations & kiosk)
+— re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 13, PR #4240, merged), preserved for history</summary>
+
 **PR [#4240](https://github.com/thegspiro/the-logbook/pull/4240)**
 (branch `claude/security-review-onboarding-p13`):
 Feature 30 (Onboarding), pass 13, a dedicated rotation session (not a
@@ -52,6 +99,8 @@ src/modules/onboarding` — 509 passed (44 files).
 
 Row 30 → ✅ (pending this PR's merge). Next is Feature 31 (Scheduled tasks) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 15, PR #4238, merged), preserved for history</summary>
@@ -25910,7 +25959,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                        | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                           | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                          | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                | ⬜     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                               | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                          | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                 | ⬜     |
@@ -25943,6 +25992,49 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-11 — Feature 30 (Onboarding, pass 13) merged; Feature 31 (Scheduled tasks, pass 13): 0 new code findings, 7 new tasks verified wired correctly, 1 stale finding corrected
+
+PR #4240 merged (`deb9601f3`). `list_pull_requests` (state `open`) returned
+three open PRs (#4214 docs, #4204 CI sharding, #4129 workflow-review), none
+with a `claude/security-review-*` head, and row 31 (Scheduled tasks) was the
+next `⬜` in the rotation table, confirmed on a freshly pulled `main`.
+
+`SCHEDULE`/`TASK_RUNNERS`/`TASK_INTERVALS_SECONDS` re-verified by AST at
+80/80/79+1 (all four registries consistent). Seven tasks registered since
+pass 12's baseline — `quickbooks_sync`, `fiscal_year_due_reminders`,
+`advance_statements`, `dues_late_fees`, `dues_reminders`,
+`medical_screening_expiry_reminders`, `program_milestones` — each identified
+by reading every commit touching `scheduled_tasks.py`/`scheduled.py` since
+2026-11-01 in full, then verified (not re-derived) for the two things this
+feature owns: idempotency and org-scoping. All seven are thin, correctly
+org-scoped delegates into another feature's own already-built service
+(Finance for five of them, Medical screening and Training core for the
+other two), each with its own documented and verified sent-log/unique-key/
+lease mechanism. An eighth change (`action_item_reminders` gaining email
+delivery via a new `meeting_action_item_reminder_service`) was reviewed in
+full since it is new code inside this feature's own file: idempotent via a
+`reminder_emailed_on` marker, org-scoped by id-plus-organization_id on every
+query, HTML-escaped, send-then-stamp.
+
+**Correction, not a new defect:** re-verifying CRON-31-7 against the current
+code (rather than trusting "still open" from the last pass) found it had
+actually been fixed on 2026-10-05 (`6e59402af`) and was already correctly
+recorded as fixed in that pass's own file and in `KNOWN_LIMITATIONS.md` — but
+passes 7 through 12 of this track, and app-review's pass 6 (2026-11-02), kept
+carrying the stale "still open" claim forward without re-reading the line in
+question. Corrected in `docs/app-review/scheduled-tasks.md`;
+`KNOWN_LIMITATIONS.md` needed no change. CRON4-31-2, CRON-4, CRON-31-8 and the
+Redis-down claim fallback were each re-confirmed open/unchanged by direct
+read, not carried forward unread. Full trace:
+`docs/security-review/CRON13-31-scheduled-tasks.md`.
+
+Gate: flake8/black/isort clean on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` 757 revisions/1 head; `check_route_permissions.py --strict` 305
+routes/0 errors; `test_scheduled_task_coverage.py` 5 passed; scoped backend
+suite 351 passed/1 environment-only skip/177s; frontend `typecheck`/`lint`
+both 0 (no frontend files touched; `npm run lint` needed a longer timeout
+than its default invocation, not a code issue).
 
 ### 2026-11-11 — Feature 29 (Reports & analytics, pass 15) merged; Feature 30 (Onboarding, pass 13): 0 fixed, 0 new findings
 

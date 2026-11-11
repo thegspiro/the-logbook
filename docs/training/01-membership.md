@@ -102,6 +102,12 @@ includes archived members, because those are the records officers look after.
 
 ![The Members roster: the member count tiles, the search with status, class and membership-status filters, and each member's name, rank, member number, status and hire date](./images/01-01-member-directory.png)
 
+_Updated 2026-11-10._ On a desktop screen the roster is a table again. Where the
+table would not fit (a phone, a tablet, a laptop with the sidebar open) each
+member is a card instead. Members whose email is a placeholder (`…@import.invalid`
+or `…@anonymized.invalid`, written for archived or anonymized former members) no
+longer make **Member Management** answer "Unable to load members and roles".
+
 ![The Member Directory as an ordinary member: name, rank, member number and status only, with no usernames, no hire-date column, no Actions column and no selection checkboxes](./images/01-40-member-directory-member.png)
 
 ![The Members table filtered to Archived: a former member's row with the green Reactivate icon beside Edit and Delete](./images/01-42-archived-member-row.png)

@@ -27,6 +27,7 @@ import {
   BUDGET_REQUEST_STATUS_BADGES,
   BUDGET_REQUEST_STATUS_LABELS,
   BUDGET_REQUEST_STATUS_ORDER,
+  requestedAmountText,
   requestWindowText,
   sumAmounts,
 } from '../utils/budgetRequests';
@@ -292,7 +293,7 @@ const BudgetRequestReviewPage: React.FC = () => {
                       {formatCurrency(r.lastYearSpent ?? null)}
                     </td>
                     <td data-label="Requested" className={`${MONEY_CELL} font-semibold`}>
-                      {formatCurrency(r.requestedAmount)}
+                      {requestedAmountText(r.requestedAmount)}
                     </td>
                     <td data-label="Approved" className={MONEY_CELL}>
                       {formatCurrency(r.approvedAmount ?? null)}

@@ -28,6 +28,7 @@ import {
   ClipboardCheck,
   CalendarClock,
   CalendarRange,
+  CalendarX,
 } from 'lucide-react';
 import {
   courseCohortService,
@@ -36,6 +37,7 @@ import {
   trainingModuleConfigService,
 } from '../services/api';
 import { MyShiftEvaluationsList } from '../components/training/MyShiftEvaluationsList';
+import { MyAttendanceWaiverRequests } from '../components/training/MyAttendanceWaiverRequests';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
 import { RequirementDetailCard } from '../components/training/RequirementDetailCard';
@@ -1192,6 +1194,16 @@ const MyTrainingPage: React.FC = () => {
               <MyShiftEvaluationsList evaluations={shiftEvaluations} />
             </Section>
           )}
+
+          {/* Requests to be excused from a training session; nothing until
+              the member has made one. */}
+          <MyAttendanceWaiverRequests
+            wrap={(list) => (
+              <Section title="My Waiver Requests" icon={CalendarX} defaultOpen={false}>
+                {list}
+              </Section>
+            )}
+          />
 
           {/* Submission History */}
           {v?.show_submission_history && data.submissions && data.submissions.length > 0 && (
