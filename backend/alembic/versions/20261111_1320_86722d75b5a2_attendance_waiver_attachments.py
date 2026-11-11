@@ -1,7 +1,7 @@
 """Attendance waiver attachments
 
 Revision ID: 86722d75b5a2
-Revises: 0136dd6d4144, 7b6db9dd8e4f
+Revises: ccd374a66f82
 Create Date: 2026-11-11 13:20:00.000000
 
 Adds ``attendance_waiver_attachments``: the documents a member files with an
@@ -9,11 +9,6 @@ attendance waiver request when the department's policy takes them (owner
 decisions, 2026-11-10). See ``app/models/attendance_waiver.py``, notably why
 ``(request_id, ordinal)`` is unique: it is the database's half of the
 three-document limit.
-
-It is also the merge point of the two heads main carried on 2026-11-11,
-``0136dd6d4144`` (budget request drafts) and ``7b6db9dd8e4f`` (meeting waiver
-requests), which both revised ``09f0171ccf5e``. Neither touches this table, so
-the order between them does not matter here.
 
 One new table, so no existing row is touched and nothing needs settling
 (CLAUDE.md pitfall #35). It is created only when absent, so a database whose
@@ -36,7 +31,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "86722d75b5a2"
-down_revision: Union[str, Sequence[str], None] = ("0136dd6d4144", "7b6db9dd8e4f")
+down_revision: Union[str, None] = "ccd374a66f82"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
