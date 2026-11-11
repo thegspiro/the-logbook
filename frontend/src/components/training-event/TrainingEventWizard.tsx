@@ -721,7 +721,6 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               courses={courses}
               members={members}
               linkageData={linkageData}
-              membershipTypes={model.membershipTypes}
               isSeries={model.isRecurring}
               access={trainingAccess}
               readOnlyNotice={readOnlyNotice}

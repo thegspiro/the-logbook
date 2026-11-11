@@ -61,8 +61,6 @@ interface TrainingInfoStepProps {
   courses: TrainingCourse[];
   members: InstructorOption[];
   linkageData: TrainingLinkageData;
-  /** The department's member types, to say whom each attendance requirement applies to. */
-  membershipTypes?: readonly { value: string; label: string }[] | undefined;
   /** A series: the attendance note speaks of every session in it. */
   isSeries: boolean;
   access?: TrainingInfoAccess | undefined;
@@ -125,7 +123,6 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
   courses,
   members,
   linkageData,
-  membershipTypes = [],
   isSeries,
   access = 'edit',
   readOnlyNotice,
@@ -475,7 +472,6 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
               no attendance requirement.
             </p>
             <AttendanceRequirementChecklist
-              membershipTypes={membershipTypes}
               requirements={linkageData.requirements}
               value={value.attendance_requirement_ids}
               onChange={(next) => onChange({ attendance_requirement_ids: next })}

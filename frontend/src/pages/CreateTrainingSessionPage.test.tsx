@@ -709,6 +709,9 @@ describe('CreateTrainingSessionPage as approved', () => {
     expect(screen.getByText('Add a reminder', { selector: 'label' })).toBeInTheDocument();
   });
 
+  // The requirement's member categories are its own legacy words, not tier
+  // ids, so they are named as the requirement editor names them rather than
+  // looked up among the department's tiers (pitfall #29).
   it('draws each attendance requirement as an option saying whom it applies to', async () => {
     linkageRequirements.value = [
       {
@@ -727,7 +730,7 @@ describe('CreateTrainingSessionPage as approved', () => {
     await next(user);
 
     expect(screen.getByRole('checkbox', { name: 'Company Drill Attendance (60%)' })).toHaveAccessibleDescription(
-      'Applies to Probationary, Active Member'
+      'Member categories: Probationary, Active'
     );
     expect(screen.getByRole('checkbox', { name: /Annual Drill Attendance/ })).toHaveAccessibleDescription(
       'Applies to all members'

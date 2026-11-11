@@ -1,6 +1,7 @@
 import React, { useId } from 'react';
 import type { TrainingRequirement } from '../../types/training';
 import { attendanceRequirements } from '../../utils/attendanceRequirements';
+import { MEMBERSHIP_TYPE_LABELS } from '../../constants/enums';
 
 interface AttendanceRequirementChecklistProps {
   /** Every active requirement; only session-attendance ones are offered. */
@@ -8,19 +9,17 @@ interface AttendanceRequirementChecklistProps {
   value: string[];
   onChange: (next: string[]) => void;
   disabled?: boolean | undefined;
-  /** The department's member types, to name whom a requirement applies to. */
-  membershipTypes?: readonly { value: string; label: string }[] | undefined;
 }
 
 /**
- * Whom a requirement applies to, as configured on it. A description of the
- * requirement's own fields, not a decision: who it grades is the backend's
- * (requirement_applies_to_member), and Mandatory for's pre-fill asks it.
+ * Whom a requirement applies to, as configured on it: its own fields, in the
+ * requirement editor's words ("Member Categories"). A requirement stores
+ * legacy membership words while the department's tiers are ids of another
+ * vocabulary, so the words are never looked up as tiers here; which tiers a
+ * requirement stands for is the backend's projection
+ * (mandatory_tiers_for_requirements), which Mandatory for's pre-fill shows.
  */
-const appliesTo = (
-  requirement: TrainingRequirement,
-  membershipTypes: readonly { value: string; label: string }[]
-): string => {
+const appliesTo = (requirement: TrainingRequirement): string => {
   const types = requirement.required_membership_types ?? [];
   if (
     requirement.applies_to_all ||
@@ -29,9 +28,8 @@ const appliesTo = (
     return 'Applies to all members';
   }
   if (types.length) {
-    const label = (type: string) =>
-      membershipTypes.find((t) => t.value === type)?.label ?? type.charAt(0).toUpperCase() + type.slice(1);
-    return `Applies to ${types.map(label).join(', ')}`;
+    const label = (type: string) => MEMBERSHIP_TYPE_LABELS[type] ?? type.replace(/_/g, ' ');
+    return `Member categories: ${types.map(label).join(', ')}`;
   }
   return 'Applies to members by rank or position';
 };
@@ -48,7 +46,6 @@ const AttendanceRequirementChecklist: React.FC<AttendanceRequirementChecklistPro
   value,
   onChange,
   disabled = false,
-  membershipTypes = [],
 }) => {
   const idPrefix = useId();
   const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
@@ -80,7 +77,7 @@ const AttendanceRequirementChecklist: React.FC<AttendanceRequirementChecklistPro
               {/* Its description, not part of its name: aria-describedby still
                   reads it, and the name stays the requirement's alone. */}
               <span id={descriptionId} aria-hidden="true" className="text-theme-text-muted block">
-                {appliesTo(r, membershipTypes)}
+                {appliesTo(r)}
               </span>
             </span>
           </label>
