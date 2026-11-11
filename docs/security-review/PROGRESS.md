@@ -16,6 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4256](https://github.com/thegspiro/the-logbook/pull/4256)**
+(branch `claude/security-review-core-infrastructure-p14`):
+Feature 33 (Core infrastructure), pass 14. PR #4252
+(Feature 32, Locations & kiosk, pass 13) had already merged clean
+(`b29782324`). A fresh `list_pull_requests` (state `open`) found nine open
+PRs, none with a `claude/security-review-*` head, and row 33 was the next
+pending feature, confirmed on a freshly fetched `main`.
+
+**0 fixed, 0 new findings.** `security_middleware.py` and `database.py` are
+byte-identical to pass 13's merge (`f67f45259`, PR #4017); `config.py` carries
+one real, already-merged, verified-correct delta — four new operator-only
+QuickBooks Online settings (`QBO_CLIENT_ID`/`QBO_CLIENT_SECRET`/
+`QBO_REDIRECT_URI`/`QBO_ENVIRONMENT`), none department-settable, none
+leaked through the file's hardcoded secrets-masking `__repr__`, `QBO_ENVIRONMENT`
+defaulting to `"sandbox"` so pasted keys cannot post to live books by
+accident. Pure-ASGI (Pitfall #4) and bounded-in-memory-cache (Pitfall #9)
+invariants re-confirmed unchanged. One pre-existing, out-of-scope defect
+encountered: the Alembic chain is forked on `main` itself (two heads,
+`0136dd6d4144` and `7b6db9dd8e4f`, from two unrelated already-merged PRs,
+neither touching this feature's files) — flagged, not fixed, since a
+dedicated open PR (#4255) already exists to reconcile exactly this fork and a
+second, competing merge migration would risk making it worse. See
+`docs/security-review/CI14-33-core-infra.md` for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — **FAILS**
+(759 revisions, 2 heads — pre-existing fork, see above, tracked by #4255);
+feature-scoped backend suite (20 files) — 681 passed, 1 pre-existing skip;
+cross-cutting guard tests — 249 passed, 2 failed (both the same pre-existing
+migration-fork assertions, not this feature's code); `npm run typecheck` — 0
+errors; `npm run lint` — 0 errors/warnings (no frontend file in this feature's
+scope changed).
+
+Row 33 → ✅ (pending this PR's merge). Next is Feature 34 (Frontend shared) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 13, PR #4252, merged), preserved for history</summary>
+
 **PR [#4252](https://github.com/thegspiro/the-logbook/pull/4252)**
 (branch `claude/security-review-locations-kiosk-p13`):
 Feature 32 (Locations & kiosk), pass 13, a dedicated rotation session (not a
@@ -63,9 +102,7 @@ typecheck` — 0 errors; `npm run lint` — 0 errors/warnings; relevant vitest
 (`LocationsPage`, `AdminHubFrame`, `RoomCheckInPage`, `RoomQRCodesPage`) — 73
 passed across 4 files.
 
-Row 32 → ✅ (pending this PR's merge). Next is Feature 33 (Core
-infrastructure) — re-check `list_pull_requests` fresh rather than trusting
-this note.
+Row 32 → ✅ (merged). Next was Feature 33 (Core infrastructure).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 13, PR #4245, merged), preserved for history</summary>
@@ -26014,7 +26051,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                          | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                               | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                          | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                          | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                 | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
@@ -26045,6 +26082,53 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-11 — Feature 32 (Locations & kiosk, pass 13) merged; Feature 33 (Core infrastructure, pass 14): 0 fixed, 0 new findings; one pre-existing out-of-scope migration fork flagged
+
+PR #4252 merged (`b29782324`). `list_pull_requests` (state `open`) returned
+nine open PRs, none with a `claude/security-review-*` head, and row 33 (Core
+infrastructure) was the next `⬜` in the rotation table, confirmed on a
+freshly fetched `main`.
+
+Path-scoped diff against the feature's three declared files
+(`security_middleware.py`, `database.py`, `config.py`) against pass 13's
+merge (`f67f45259`, PR #4017) found `security_middleware.py` (1982 lines) and
+`database.py` (293 lines) byte-identical, both re-read in full regardless.
+`config.py` carries one real, already-merged delta: four new operator-only
+QuickBooks Online settings (`QBO_CLIENT_ID`/`QBO_CLIENT_SECRET`/
+`QBO_REDIRECT_URI`/`QBO_ENVIRONMENT`) for Finance's (Feature 05) live-posting
+connector — verified not department-settable (no write path in
+`organizations.py`/`organization.py` schema), never leaked through the
+file's hardcoded secrets-masking `__repr__` (an eleven-field allowlist that
+by construction cannot emit a field it doesn't name), and `QBO_ENVIRONMENT`
+defaulting to `"sandbox"` so pasted keys cannot post to live books by
+accident. Pitfall #4 (pure ASGI, no `BaseHTTPMiddleware`) and Pitfall #9
+(bounded in-memory caches: `RateLimiter._MAX_KEYS`/`_MAX_LOCKOUTS`/
+`_MAX_SATURATION_SCOPES`, all still enforced in `_sweep()`) re-confirmed
+unchanged by direct re-read. Prior owner-accepted items (Redis/DB TLS
+`CERT_NONE`, cache tenant namespacing) re-confirmed unchanged and out of this
+pass's diff.
+
+**Encountered, not fixed:** `validate_migrations.py --strict` and
+`test_alembic_migrations.py` both fail — the chain is forked on `main` itself
+(heads `0136dd6d4144` and `7b6db9dd8e4f`, from two unrelated, already-merged
+PRs — Finance's budget-request-drafts migration and Meetings' waiver-
+request-link migration — landing with independent heads off the same
+parent). Neither revision touches this feature's models (it has none), so
+this is not Feature 33's defect, and a dedicated open PR
+([#4255](https://github.com/thegspiro/the-logbook/pull/4255)) already exists
+to reconcile exactly this fork — flagged per CLAUDE.md's "Hard Stop"
+escalation path rather than fixed with a second, competing merge migration
+that could make the fork worse once #4255 lands. See
+`docs/security-review/CI14-33-core-infra.md` for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — FAILS
+(759 revisions, 2 heads, pre-existing, tracked by #4255); feature-scoped
+backend suite (20 files) — 681 passed, 1 pre-existing skip; cross-cutting
+guard tests — 249 passed, 2 failed (same pre-existing migration fork); `npm
+run typecheck` — 0 errors; `npm run lint` — 0 errors/warnings (no frontend
+file in this feature's scope changed).
 
 ### 2026-11-11 — Feature 31 (Scheduled tasks, pass 13) merged; Feature 32 (Locations & kiosk, pass 13): 0 fixed beyond a stale docstring, 3 owner-decision fixes and 1 standalone fix re-verified, 1 five-pass-old stale finding corrected
 
