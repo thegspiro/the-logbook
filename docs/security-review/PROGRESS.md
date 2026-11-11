@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR #TBD** (branch `claude/security-review-medical-supplies-p20`):
+**PR [#4228](https://github.com/thegspiro/the-logbook/pull/4228)**
+(branch `claude/security-review-medical-supplies-p20`):
 Feature 23 (Medical supplies), pass 20, a watchdog pickup. PR #4226
 (Feature 22, Grants & fundraising, pass 14) had already merged
 (`43aec40f3b1db32507cf40b8ff00fbd0a27a29af`). A fresh `list_pull_requests`
