@@ -16,8 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Branch `claude/security-review-frontend-shared-p15`** (PR number to follow
-in a second commit on this same branch, per Step 8): Feature 34 (Frontend
+**PR [#4259](https://github.com/thegspiro/the-logbook/pull/4259)**
+(branch `claude/security-review-frontend-shared-p15`): Feature 34 (Frontend
 shared), pass 15, closing out this rotation lap. PR #4256 (Feature 33, Core
 infrastructure, pass 14) had already merged (`a649ff685`). A fresh
 `list_pull_requests` (state `open`) returned six open PRs, none with a head
