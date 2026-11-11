@@ -69,6 +69,16 @@ from app.utils.org_timezone import local_and_utc_dates, resolve_scheduling_timez
 # is unique; the endpoint answers this with a 409, not a 400.
 TRAINING_DETAILS_EXIST = "This event already has training details"
 
+# A session's requirement_id feeds a program requirement's progress; a
+# session-attendance requirement is graded from training_session_requirements
+# instead, so linking one here does nothing. Refused as a new or changed value
+# only: a session stored with one before this rule keeps saving when an
+# every-field form re-sends it.
+ATTENDANCE_REQUIREMENT_NOT_LINKABLE = (
+    "That requirement is graded by session attendance. "
+    'Choose it under "Counts toward attendance" instead.'
+)
+
 # How far out an approval link stays usable, from when it is issued.
 APPROVAL_TOKEN_TTL = timedelta(days=30)
 
@@ -125,6 +135,7 @@ class TrainingSessionService:
         self,
         session_data: "TrainingSessionCreate | TrainingSessionLinkageUpdate | TrainingSessionAttach",
         organization_id: UUID | str,
+        stored_requirement_id: UUID | str | None = None,
     ) -> Optional[str]:
         """Verify client-supplied linkage FKs belong to the caller's org (XC-1).
 
@@ -132,6 +143,10 @@ class TrainingSessionService:
         deliberately generic so they cannot be used as a cross-tenant existence
         oracle. ProgramPhase has no organization_id of its own, so it is scoped
         through its (already-validated) program instead.
+
+        ``stored_requirement_id`` is the requirement the session already
+        carries, if any: re-sending it unchanged is accepted even when its type
+        would be refused as a new link.
         """
         if session_data.category_id and not await is_in_org(
             self.db, TrainingCategory, session_data.category_id, organization_id
@@ -143,10 +158,12 @@ class TrainingSessionService:
         ):
             return "Invalid training program"
 
-        if session_data.requirement_id and not await is_in_org(
-            self.db, TrainingRequirement, session_data.requirement_id, organization_id
-        ):
-            return "Invalid training requirement"
+        if session_data.requirement_id:
+            requirement_error = await self._requirement_link_error(
+                session_data.requirement_id, organization_id, stored_requirement_id
+            )
+            if requirement_error:
+                return requirement_error
 
         if session_data.phase_id:
             # ProgramPhase carries no organization_id, so scope it through its
@@ -188,6 +205,28 @@ class TrainingSessionService:
         ):
             return "Invalid location"
 
+        return None
+
+    async def _requirement_link_error(
+        self,
+        requirement_id: UUID | str,
+        organization_id: UUID | str,
+        stored_requirement_id: UUID | str | None,
+    ) -> Optional[str]:
+        result = await self.db.execute(
+            select(TrainingRequirement.requirement_type).where(
+                TrainingRequirement.id == str(requirement_id),
+                TrainingRequirement.organization_id == str(organization_id),
+            )
+        )
+        requirement_type = result.scalar_one_or_none()
+        if requirement_type is None:
+            return "Invalid training requirement"
+        unchanged = stored_requirement_id is not None and str(requirement_id) == str(
+            stored_requirement_id
+        )
+        if requirement_type == RequirementType.SESSION_ATTENDANCE and not unchanged:
+            return ATTENDANCE_REQUIREMENT_NOT_LINKABLE
         return None
 
     async def _attendance_requirements_valid(
@@ -363,7 +402,9 @@ class TrainingSessionService:
         if attendance_is_finalized(event):
             return None, attendance_locked_error("changing its training details")
 
-        linkage_error = await self._validate_linkage_ids(updates, organization_id)
+        linkage_error = await self._validate_linkage_ids(
+            updates, organization_id, training_session.requirement_id
+        )
         if linkage_error:
             return None, linkage_error
 
@@ -547,6 +588,7 @@ class TrainingSessionService:
         organization_id: UUID | str,
         created_by: UUID | str,
         commit: bool = True,
+        stored_requirement_id: UUID | str | None = None,
     ) -> Tuple[Optional[TrainingSession], Optional[str]]:
         """
         Create a training session (Event + TrainingSession link)
@@ -556,6 +598,9 @@ class TrainingSessionService:
                 caller creating several sessions (course cohort generation)
                 can wrap them all in one transaction and roll the whole batch
                 back on failure rather than leaving a half-built cohort.
+            stored_requirement_id: a requirement the caller already holds on
+                record and is copying across (a cohort class's own link), so
+                it is accepted as unchanged rather than judged as a new link.
 
         Returns: (training_session, error_message)
         """
@@ -567,7 +612,9 @@ class TrainingSessionService:
             if session_data.rsvp_deadline >= session_data.start_datetime:
                 return None, "RSVP deadline must be before event start"
 
-        linkage_error = await self._validate_linkage_ids(session_data, organization_id)
+        linkage_error = await self._validate_linkage_ids(
+            session_data, organization_id, stored_requirement_id
+        )
         if linkage_error:
             return None, linkage_error
 
