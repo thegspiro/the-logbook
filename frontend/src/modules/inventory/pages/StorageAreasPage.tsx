@@ -46,6 +46,9 @@ import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
 import { ScanCodeField } from '../components/ScanCodeField';
 import { PutAwayPanel } from '../components/PutAwayPanel';
 import { ContentsCheckPanel } from '../components/ContentsCheckPanel';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { placeApiError } from '../../../hooks/useFieldErrors';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
@@ -61,6 +64,7 @@ const AREA_FIELDS: FieldSpecs<AreaField> = {
   parent_id: { id: 'sa-parent', label: 'Parent Area' },
   location_id: { id: 'sa-room', label: 'Room' },
 };
+const AREA_ORDER = Object.keys(AREA_FIELDS) as AreaField[];
 // Limits mirror StorageAreaCreate (description is FreeText, capped at 2000).
 const AREA_LIMITS = { name: 255, label: 100, description: 2000 } as const;
 
@@ -426,6 +430,9 @@ const StorageAreasPage: React.FC = () => {
   const [formData, setFormData] = useState<AreaFormData>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const areaErrors = useFieldErrors(AREA_FIELDS);
+  // What the dialog held when it opened (or last saved), so Escape, the X and
+  // Cancel ask before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<AreaFormData>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<StorageAreaResponse | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [itemsVisible, setItemsVisible] = useState<Set<string>>(new Set());
@@ -705,13 +712,15 @@ const StorageAreasPage: React.FC = () => {
 
   const openCreateModal = () => {
     setEditingArea(null);
-    setFormData({ ...EMPTY_FORM, location_id: selectedRoomId });
+    const seeded = { ...EMPTY_FORM, location_id: selectedRoomId };
+    setFormData(seeded);
+    setBaseline(seeded);
     areaErrors.clear();
     setShowModal(true);
   };
   const openEditModal = (area: StorageAreaResponse) => {
     setEditingArea(area);
-    setFormData({
+    const seeded: AreaFormData = {
       name: area.name,
       label: area.label ?? '',
       description: area.description ?? '',
@@ -719,7 +728,9 @@ const StorageAreasPage: React.FC = () => {
       parent_id: area.parent_id ?? '',
       location_id: area.location_id ?? selectedRoomId,
       sort_order: String(area.sort_order),
-    });
+    };
+    setFormData(seeded);
+    setBaseline(seeded);
     areaErrors.clear();
     setShowModal(true);
   };
@@ -727,7 +738,12 @@ const StorageAreasPage: React.FC = () => {
     setShowModal(false);
     setEditingArea(null);
     setFormData(EMPTY_FORM);
+    setBaseline(EMPTY_FORM);
   };
+  const requestClose = useDiscardGuard({
+    isDirty: showModal && JSON.stringify(formData) !== JSON.stringify(baseline),
+    onClose: closeModal,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -735,9 +751,14 @@ const StorageAreasPage: React.FC = () => {
     // vanished after a few seconds and named nothing (forms review F-3).
     const problems: FieldErrors<AreaField> = {};
     if (!formData.name.trim()) problems.name = 'Enter a name for the storage area.';
+    const sortText = formData.sort_order.trim();
+    if (sortText && !Number.isInteger(Number(sortText)))
+      problems.sort_order = 'Enter a whole number, or leave it empty.';
     areaErrors.setFormError(null);
     areaErrors.setErrors(problems);
-    if (Object.keys(problems).length > 0) {
+    // A new area is not created until every field is fixed; an edit saves the
+    // rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!editingArea && Object.keys(problems).length > 0) {
       areaErrors.focusFirst(problems);
       return;
     }
@@ -760,7 +781,26 @@ const StorageAreasPage: React.FC = () => {
         sort_order: isNaN(sortNum) ? num('') : sortNum,
       };
       if (editingArea) {
-        await inventoryService.updateStorageArea(editingArea.id, payload);
+        const { refused } = await saveExceptRefused<AreaField, unknown>({
+          payload: { ...payload },
+          refused: problems,
+          send: (body) => inventoryService.updateStorageArea(editingArea.id, body),
+          place: (err) => placeApiError(AREA_FIELDS, err),
+        });
+        const first = firstRefused(AREA_ORDER, refused);
+        if (first) {
+          // The tree refreshes behind the dialog, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          void loadStorageAreas();
+          areaErrors.setErrors(refused);
+          areaErrors.setFormError(
+            `Storage area saved, except ${AREA_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+          );
+          areaErrors.focusFirst(refused);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as keyof AreaFormData]]));
+          setBaseline({ ...formData, ...keep });
+          return;
+        }
         toast.success('Storage area updated');
       } else {
         // The backend assigns the barcode, so the new row has to come back
@@ -1060,7 +1100,7 @@ const StorageAreasPage: React.FC = () => {
       {/* Add / Edit Modal */}
       <Modal
         isOpen={showModal}
-        onClose={closeModal}
+        onClose={requestClose}
         title={editingArea ? 'Edit Storage Area' : 'Add Storage Area'}
         footer={
           <>
@@ -1075,7 +1115,7 @@ const StorageAreasPage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={closeModal}
+              onClick={requestClose}
               className="text-theme-text-secondary hover:text-theme-text-primary mr-2 inline-flex items-center px-4 py-2 text-sm font-medium sm:mr-3"
             >
               Cancel
@@ -1084,7 +1124,7 @@ const StorageAreasPage: React.FC = () => {
         }
         size="md"
       >
-        <form id="sa-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        <form id="sa-form" onSubmit={(e) => void handleSubmit(e)} noValidate className="space-y-4">
           {areaErrors.formError && (
             <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
               {areaErrors.formError}
@@ -1096,12 +1136,13 @@ const StorageAreasPage: React.FC = () => {
             required
             error={areaErrors.errors.name}
             labelClassName={labelClass}
+            maxLength={AREA_LIMITS.name}
+            count={formData.name.length}
           >
             {(field) => (
               <input
                 {...field}
                 type="text"
-                maxLength={AREA_LIMITS.name}
                 value={formData.name}
                 onChange={(e) => set({ name: e.target.value })}
                 className={inputClass}
@@ -1114,12 +1155,13 @@ const StorageAreasPage: React.FC = () => {
             label="Label"
             error={areaErrors.errors.label}
             labelClassName={labelClass}
+            maxLength={AREA_LIMITS.label}
+            count={formData.label.length}
           >
             {(field) => (
               <input
                 {...field}
                 type="text"
-                maxLength={AREA_LIMITS.label}
                 value={formData.label}
                 onChange={(e) => set({ label: e.target.value })}
                 className={inputClass}
@@ -1132,12 +1174,13 @@ const StorageAreasPage: React.FC = () => {
             label="Description"
             error={areaErrors.errors.description}
             labelClassName={labelClass}
+            maxLength={AREA_LIMITS.description}
+            count={formData.description.length}
           >
             {(field) => (
               <textarea
                 {...field}
                 rows={2}
-                maxLength={AREA_LIMITS.description}
                 value={formData.description}
                 onChange={(e) => set({ description: e.target.value })}
                 className={inputClass}

@@ -30,6 +30,9 @@ import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { placeApiError } from '../../../hooks/useFieldErrors';
 
 interface LineItemFormData {
   item_id: string;
@@ -71,6 +74,8 @@ const KIT_FIELDS: FieldSpecs<KitField> = {
   description: { id: 'kit-desc', label: 'Description' },
   line_items: { id: 'kit-line-items', label: 'Line Items' },
 };
+
+const KIT_ORDER = Object.keys(KIT_FIELDS) as KitField[];
 
 const inputClass = 'form-input w-full';
 const labelClass = 'form-label';
@@ -115,6 +120,9 @@ const EquipmentKitsPage: React.FC = () => {
   const [formData, setFormData] = useState<KitFormData>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const kitErrors = useFieldErrors(KIT_FIELDS);
+  // What the dialog held when it opened (or last saved), so Escape, the X and
+  // Cancel ask before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<KitFormData>(EMPTY_FORM);
   const [detailKit, setDetailKit] = useState<EquipmentKit | null>(null);
   const [issueKit, setIssueKit] = useState<EquipmentKit | null>(null);
   const [showDetail, setShowDetail] = useState(false);
@@ -159,6 +167,7 @@ const EquipmentKitsPage: React.FC = () => {
   const openCreateModal = () => {
     setEditingKit(null);
     setFormData(EMPTY_FORM);
+    setBaseline(EMPTY_FORM);
     kitErrors.clear();
     setShowModal(true);
   };
@@ -167,7 +176,7 @@ const EquipmentKitsPage: React.FC = () => {
     try {
       const full = await inventoryService.getEquipmentKit(kit.id);
       setEditingKit(full);
-      setFormData({
+      const seeded: KitFormData = {
         name: full.name,
         description: full.description ?? '',
         line_items:
@@ -181,7 +190,9 @@ const EquipmentKitsPage: React.FC = () => {
                 optional: li.optional ?? false,
               }))
             : [{ ...EMPTY_LINE_ITEM }],
-      });
+      };
+      setFormData(seeded);
+      setBaseline(seeded);
       kitErrors.clear();
       setShowModal(true);
     } catch (err: unknown) {
@@ -203,7 +214,12 @@ const EquipmentKitsPage: React.FC = () => {
     setShowModal(false);
     setEditingKit(null);
     setFormData(EMPTY_FORM);
+    setBaseline(EMPTY_FORM);
   };
+  const requestClose = useDiscardGuard({
+    isDirty: showModal && JSON.stringify(formData) !== JSON.stringify(baseline),
+    onClose: closeModal,
+  });
 
   const addLineItem = () => {
     kitErrors.setError('line_items', null);
@@ -278,7 +294,9 @@ const EquipmentKitsPage: React.FC = () => {
     if (validItems.length === 0) problems.line_items = 'Add at least one item to the kit.';
     kitErrors.setFormError(null);
     kitErrors.setErrors(problems);
-    if (Object.keys(problems).length > 0) {
+    // A new kit is not created until every field is fixed; an edit saves the
+    // rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!editingKit && Object.keys(problems).length > 0) {
       kitErrors.focusFirst(problems);
       return;
     }
@@ -302,7 +320,25 @@ const EquipmentKitsPage: React.FC = () => {
         })),
       };
       if (editingKit) {
-        await inventoryService.updateEquipmentKit(editingKit.id, payload);
+        // The line items are one value: when they are refused the key is left
+        // out, so the kit keeps its stored lines while its name and
+        // description save.
+        const { refused } = await saveExceptRefused<KitField, unknown>({
+          payload: { ...payload },
+          refused: problems,
+          send: (body) => inventoryService.updateEquipmentKit(editingKit.id, body),
+          place: (err) => placeApiError(KIT_FIELDS, err),
+        });
+        const first = firstRefused(KIT_ORDER, refused);
+        if (first) {
+          void loadKits();
+          kitErrors.setErrors(refused);
+          kitErrors.setFormError(`Kit saved, except ${KIT_FIELDS[first].label.toLowerCase()}. Fix it and save again.`);
+          kitErrors.focusFirst(refused);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as keyof KitFormData]]));
+          setBaseline({ ...formData, ...keep });
+          return;
+        }
         toast.success('Kit updated');
       } else {
         await inventoryService.createEquipmentKit(payload);
@@ -387,7 +423,7 @@ const EquipmentKitsPage: React.FC = () => {
       </button>
       <button
         type="button"
-        onClick={closeModal}
+        onClick={requestClose}
         className="text-theme-text-secondary hover:text-theme-text-primary mr-2 inline-flex items-center px-4 py-2 text-sm font-medium sm:mr-3"
       >
         Cancel
@@ -513,12 +549,12 @@ const EquipmentKitsPage: React.FC = () => {
       {/* Create/Edit Modal */}
       <Modal
         isOpen={showModal}
-        onClose={closeModal}
+        onClose={requestClose}
         title={editingKit ? 'Edit Kit' : 'Add Equipment Kit'}
         footer={modalFooter}
         size="lg"
       >
-        <form id="kit-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-5">
+        <form id="kit-form" onSubmit={(e) => void handleSubmit(e)} noValidate className="space-y-5">
           {kitErrors.formError && (
             <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
               {kitErrors.formError}
@@ -530,12 +566,14 @@ const EquipmentKitsPage: React.FC = () => {
             required
             error={kitErrors.errors.name}
             labelClassName={labelClass}
+            maxLength={255}
+            count={formData.name.length}
           >
             {(field) => (
               <input
                 {...field}
                 type="text"
-                maxLength={255}
+                autoComplete="off"
                 value={formData.name}
                 onChange={(e) => {
                   setFormData((prev) => ({ ...prev, name: e.target.value }));
@@ -551,12 +589,13 @@ const EquipmentKitsPage: React.FC = () => {
             label="Description"
             error={kitErrors.errors.description}
             labelClassName={labelClass}
+            maxLength={2000}
+            count={formData.description.length}
           >
             {(field) => (
               <textarea
                 {...field}
                 rows={2}
-                maxLength={2000}
                 value={formData.description}
                 onChange={(e) => {
                   setFormData((prev) => ({ ...prev, description: e.target.value }));
