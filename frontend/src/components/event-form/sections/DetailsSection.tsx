@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileText, Bold, Italic, List, Link } from 'lucide-react';
+import { FileText, Bold, Italic, List, Link, Lock } from 'lucide-react';
 import type { EventType } from '../../../types/event';
 import { EventType as EventTypeEnum } from '../../../constants/enums';
 import { getEventTypeLabel } from '../../../utils/eventHelpers';
@@ -57,7 +57,23 @@ interface DetailsSectionProps {
   /** Shown under Title, tied to it as its description. */
   titleHint?: React.ReactNode;
   titlePlaceholder?: string | undefined;
+  /** The category picker's label; the single-page form's is "Category". */
+  categoryLabel?: string | undefined;
+  /** Said under the category picker. */
+  categoryHint?: string | undefined;
+  /** Mark Description "(optional)", as the training form marks every optional field. */
+  markOptional?: boolean | undefined;
 }
+
+const CATEGORY_HINT_ID = 'custom-category-hint';
+
+/** Under a control the finalized attendance locks. */
+const LockLine: React.FC<{ id?: string | undefined }> = ({ id }) => (
+  <p id={id} className="text-theme-text-muted mt-2 flex items-center gap-1.5 text-sm">
+    <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
+    Locked while attendance is finalized.
+  </p>
+);
 
 /** Title, description, type, category and (on create) who organizes the event. */
 export const DetailsSection: React.FC<DetailsSectionProps> = ({
@@ -70,6 +86,9 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
   beforeTitle,
   titleHint,
   titlePlaceholder = 'e.g., Monthly Business Meeting',
+  categoryLabel = 'Category',
+  categoryHint,
+  markOptional = false,
 }) => {
   const {
     formData,
@@ -127,6 +146,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
           </optgroup>
         )}
       </select>
+      {attendanceLocked && <LockLine />}
       {eventTypeLocked && !attendanceLocked && (
         <p id={typeLockHintId} className="text-theme-text-muted mt-2 text-sm">
           Only an event manager can change a training event&apos;s type.
@@ -209,6 +229,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
       <div>
         <label htmlFor="event-description" className={labelClass}>
           Description
+          {markOptional && <span className="text-theme-text-muted font-normal"> (optional)</span>}
         </label>
         {/* Formatting toolbar */}
         <div className="mb-1 flex items-center gap-1">
@@ -276,7 +297,7 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
       {(customCategories.length > 0 || unlistedCategories.length > 0) && (
         <div>
           <label htmlFor="custom-category" className={labelClass}>
-            Category
+            {categoryLabel}
           </label>
           <select
             id="custom-category"
@@ -285,13 +306,15 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
               update(e.target.value ? { custom_category: e.target.value } : { custom_category: undefined })
             }
             disabled={attendanceLocked}
-            aria-describedby={attendanceLocked ? lockNoticeId : undefined}
+            aria-describedby={attendanceLocked ? lockNoticeId : categoryHint ? CATEGORY_HINT_ID : undefined}
             className={`${selectClass} disabled:cursor-not-allowed disabled:opacity-60`}
           >
             <option value="">None</option>
             {unlistedCategories.map((saved) => (
               <option key={saved} value={saved}>
-                {saved}
+                {/* Only once the department's list has loaded: with none
+                    loaded, nothing says the category is gone. */}
+                {customCategories.length > 0 ? `${saved} (no longer an event category)` : saved}
               </option>
             ))}
             {customCategories
@@ -313,6 +336,19 @@ export const DetailsSection: React.FC<DetailsSectionProps> = ({
               </optgroup>
             )}
           </select>
+          {customCategories.length > 0 &&
+            formData.custom_category &&
+            unlistedCategories.includes(formData.custom_category) && (
+              <p className="text-theme-text-secondary mt-2 text-sm">
+                No longer an event category. It stays on this event until someone picks another.
+              </p>
+            )}
+          {categoryHint && !attendanceLocked && (
+            <p id={CATEGORY_HINT_ID} className="text-theme-text-muted mt-2 text-sm">
+              {categoryHint}
+            </p>
+          )}
+          {attendanceLocked && <LockLine />}
         </div>
       )}
       {showOrganizerPickers && (

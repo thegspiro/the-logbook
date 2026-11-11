@@ -315,6 +315,136 @@ describe('CreateTrainingSessionPage event details step', () => {
   });
 });
 
+describe('CreateTrainingSessionPage leaving and refusals', () => {
+  beforeEach(resetApi);
+
+  // Every step draws a Cancel, and a phone a second one by the step line.
+  const cancel = () => screen.getAllByRole('button', { name: 'Cancel' })[0] as HTMLElement;
+
+  it('leaves at once when nothing was entered', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.click(cancel());
+
+    expect(navigate).toHaveBeenCalledWith('/training/admin');
+    expect(screen.queryByText('Discard this event?')).not.toBeInTheDocument();
+  });
+
+  it('asks before throwing away what was entered', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+
+    await user.click(cancel());
+    expect(await screen.findByText('Discard this event?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect(navigate).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^Title/)).toHaveValue('Ladder Drill');
+
+    await user.click(cancel());
+    await user.click(await screen.findByRole('button', { name: 'Discard' }));
+    expect(navigate).toHaveBeenCalledWith('/training/admin');
+  });
+
+  it('lists the refusals in the banner, in field order, and clears it once they are fixed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await next(user);
+    const banner = screen.getByRole('alert');
+    expect(banner).toHaveTextContent('Fix the 3 fields marked below.');
+    expect(banner).toHaveTextContent(
+      'Enter a title for the event. · Choose when the event starts. · Choose when the event ends.'
+    );
+
+    await fillEventDetails(user);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  // It was a banner only, with focus on the step line.
+  it('puts a custom series with no day picked under Days of the Week, focused on Mon', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await user.click(screen.getByRole('checkbox', { name: /Make this a recurring event/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Rolling 12-month cycle' }));
+    await user.selectOptions(screen.getByLabelText(/^Repeats/), 'custom');
+
+    await next(user);
+
+    const monday = screen.getByRole('button', { name: 'Mon' });
+    await waitFor(() => expect(monday).toHaveFocus());
+    expect(monday).toHaveAccessibleDescription('Select at least one day for custom recurrence.');
+    expect(screen.getByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+
+    await user.click(monday);
+    expect(screen.queryByText('Select at least one day for custom recurrence.')).not.toBeInTheDocument();
+  });
+
+  it('offers the quick durations only once a start is set, and says why', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    const fourHours = screen.getByRole('button', { name: '4 hours' });
+    expect(fourHours).toBeDisabled();
+    expect(fourHours).toHaveAccessibleDescription('Set a start date and time to use these.');
+    await fillEventDetails(user);
+    expect(fourHours).toBeEnabled();
+    expect(fourHours).toHaveAccessibleDescription(
+      "Sets the end from the start. Times are in the department's time zone (UTC)."
+    );
+  });
+
+  it('names an overlapping event with its times as a member reads them', async () => {
+    getEvents.mockResolvedValue([
+      {
+        id: 'evt-officers',
+        title: 'Officers Meeting',
+        start_datetime: '2030-04-30T18:30:00Z',
+        end_datetime: '2030-05-02T19:30:00Z',
+        event_type: 'business_meeting',
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await waitFor(() => expect(getEvents).toHaveBeenCalled());
+    await fillEventDetails(user);
+
+    expect(await screen.findByText('Schedule conflict')).toBeInTheDocument();
+    expect(screen.getByText('This time overlaps with another event:')).toBeInTheDocument();
+    expect(screen.getByText('Officers Meeting (Tue, Apr 30, 6:30 PM – Thu, May 2, 7:30 PM)')).toBeInTheDocument();
+    expect(screen.getByText('Advisory only: you can still save.')).toBeInTheDocument();
+  });
+
+  // Under 768px the mockup fixes the navigation above the bottom nav, with
+  // Cancel moved beside the step line.
+  it('fixes the navigation above the bottom nav on a phone, without its Cancel', () => {
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    const bar = screen.getByRole('group', { name: 'Step navigation' });
+    expect(bar).toHaveClass('max-md:fixed', 'max-md:bottom-0', 'max-md:action-bar-safe');
+    expect(within(bar).getByRole('button', { name: 'Cancel' })).toHaveClass('max-md:hidden');
+    const [stepLineCancel] = screen.getAllByRole('button', { name: 'Cancel' }).filter((b) => !bar.contains(b));
+    expect(stepLineCancel).toHaveClass('md:hidden');
+  });
+
+  it('labels the category and the optional description as the training form draws them', async () => {
+    getVisibleEventTypesWithCategories.mockResolvedValue({
+      visible_event_types: ['training'],
+      custom_event_categories: [{ value: 'drill', label: 'Company Drill', color: '#991b1b' }],
+      visible_custom_categories: ['drill'],
+      membership_types: [{ value: 'active', label: 'Active Member' }],
+    });
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    expect(await screen.findByRole('combobox', { name: 'Event Category' })).toHaveAccessibleDescription(
+      "The department's own event categories."
+    );
+    expect(screen.getByLabelText('Description (optional)')).toBeInTheDocument();
+  });
+});
+
 describe('CreateTrainingSessionPage training info step', () => {
   beforeEach(() => {
     resetApi();

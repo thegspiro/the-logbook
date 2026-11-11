@@ -1,10 +1,11 @@
 import React from 'react';
 import { Clock, Repeat, AlertTriangle, Lock } from 'lucide-react';
 import type { RecurrencePattern } from '../../../types/event';
-import { formatForDateTimeInput } from '../../../utils/dateFormatting';
+import { formatDateCustom, formatTime } from '../../../utils/dateFormatting';
 import DateTimeQuarterHour from '../../ux/DateTimeQuarterHour';
-import { FormField } from '../../ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../../ux/FormField';
 import {
+  EVENT_FIELD_IDS,
   MONTHS,
   ORDINALS,
   RECURRENCE_PATTERNS,
@@ -37,7 +38,7 @@ interface ScheduleSectionProps {
     | 'recurrenceEndDate'
     | 'handleRecurrenceEndDateChange'
     | 'recurrenceCustomDays'
-    | 'setRecurrenceCustomDays'
+    | 'toggleRecurrenceCustomDay'
     | 'recurrenceWeekOrdinal'
     | 'setRecurrenceWeekOrdinal'
     | 'recurrenceWeekday'
@@ -54,6 +55,38 @@ interface ScheduleSectionProps {
   /** Said after how a rolling series extends itself, for what else it copies. */
   rollingHint?: React.ReactNode;
 }
+
+const QUICK_DURATION_HINT_ID = 'quick-duration-hint';
+const CUSTOM_DAYS_ERROR_ID = 'recurrence-custom-days-error';
+
+/** The time zone as a member names it ("Eastern"), or its id when it has no such name. */
+const zoneName = (tz: string): string => {
+  try {
+    const name = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longGeneric' })
+      .formatToParts(new Date())
+      .find((part) => part.type === 'timeZoneName')?.value;
+    return name && !name.startsWith('GMT') ? name.replace(/ Time$/, '') : tz;
+  } catch {
+    return tz;
+  }
+};
+
+const CONFLICT_START: Intl.DateTimeFormatOptions = {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+};
+
+/** "Mon, Nov 16, 6:30 PM – 7:30 PM", naming the end's day only when it differs. */
+const conflictWhen = (startIso: string, endIso: string, tz: string): string => {
+  const sameDay =
+    formatDateCustom(startIso, { year: 'numeric', month: 'numeric', day: 'numeric' }, tz) ===
+    formatDateCustom(endIso, { year: 'numeric', month: 'numeric', day: 'numeric' }, tz);
+  const end = sameDay ? formatTime(endIso, tz) : formatDateCustom(endIso, CONFLICT_START, tz);
+  return `${formatDateCustom(startIso, CONFLICT_START, tz)} – ${end}`;
+};
 
 /** Start and end, conflicts, quick durations and, when offered, recurrence. */
 export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRecurrence, rollingHint }) => {
@@ -76,7 +109,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
     recurrenceEndDate,
     handleRecurrenceEndDateChange,
     recurrenceCustomDays,
-    setRecurrenceCustomDays,
+    toggleRecurrenceCustomDay,
     recurrenceWeekOrdinal,
     setRecurrenceWeekOrdinal,
     recurrenceWeekday,
@@ -144,18 +177,18 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
             <div className="flex items-start gap-3">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-700 dark:text-yellow-400" />
               <div>
-                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Schedule Conflict</p>
+                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-200">Schedule conflict</p>
                 <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
-                  This time overlaps with {conflicts.length === 1 ? 'an event' : 'events'} you have RSVP&apos;d to:
+                  This time overlaps with {conflicts.length === 1 ? 'another event' : 'other events'}:
                 </p>
-                <ul className="mt-2 space-y-1">
+                <ul className="mt-2 list-disc space-y-1 pl-5">
                   {conflicts.map((evt) => (
                     <li key={evt.id} className="text-sm text-yellow-700 dark:text-yellow-300">
-                      &bull; {evt.title} ({formatForDateTimeInput(evt.start_datetime, tz)} &ndash;{' '}
-                      {formatForDateTimeInput(evt.end_datetime, tz)})
+                      {`${evt.title} (${conflictWhen(evt.start_datetime, evt.end_datetime, tz)})`}
                     </li>
                   ))}
                 </ul>
+                <p className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">Advisory only: you can still save.</p>
               </div>
             </div>
           </div>
@@ -170,12 +203,20 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
                 key={h}
                 type="button"
                 onClick={() => setDuration(h)}
-                className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring touch-target-phone rounded-lg border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden"
+                // Each sets the end from the start, so none can act before there is one.
+                disabled={!formData.start_datetime}
+                aria-describedby={QUICK_DURATION_HINT_ID}
+                className="text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring touch-target-phone rounded-lg border px-4 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {h} {h === 1 ? 'hour' : 'hours'}
               </button>
             ))}
           </div>
+          <p id={QUICK_DURATION_HINT_ID} className="text-theme-text-muted mt-2 text-sm">
+            {formData.start_datetime
+              ? `Sets the end from the start. Times are in the department's time zone (${zoneName(tz)}).`
+              : 'Set a start date and time to use these.'}
+          </p>
         </div>
       </fieldset>
 
@@ -259,19 +300,22 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
               </div>
 
               {recurrencePattern === 'custom' && (
-                <div>
-                  <label className={labelClass}>Days of the Week</label>
+                <div role="group" aria-labelledby="recurrence-days-label">
+                  <span id="recurrence-days-label" className={labelClass}>
+                    Days of the Week <span className="text-red-700 dark:text-red-500">*</span>
+                  </span>
                   <div className="flex flex-wrap gap-2">
                     {WEEKDAYS.map((day, index) => (
                       <button
                         key={day}
                         type="button"
-                        onClick={() => {
-                          setRecurrenceCustomDays((prev) =>
-                            prev.includes(index) ? prev.filter((d) => d !== index) : [...prev, index]
-                          );
-                        }}
-                        className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                        // Mon takes the field's id, so a refusal can focus it.
+                        id={index === 0 ? EVENT_FIELD_IDS.recurrence_custom_days : undefined}
+                        aria-pressed={recurrenceCustomDays.includes(index)}
+                        aria-invalid={fieldErrors.recurrence_custom_days ? true : undefined}
+                        aria-describedby={fieldErrors.recurrence_custom_days ? CUSTOM_DAYS_ERROR_ID : undefined}
+                        onClick={() => toggleRecurrenceCustomDay(index)}
+                        className={`touch-target-phone rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                           recurrenceCustomDays.includes(index)
                             ? 'border-red-700 bg-red-700 text-white'
                             : 'text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary'
@@ -281,6 +325,11 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
                       </button>
                     ))}
                   </div>
+                  {fieldErrors.recurrence_custom_days && (
+                    <p id={CUSTOM_DAYS_ERROR_ID} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                      {fieldErrors.recurrence_custom_days}
+                    </p>
+                  )}
                 </div>
               )}
 

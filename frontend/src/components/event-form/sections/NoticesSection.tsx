@@ -24,7 +24,8 @@ export const NoticesSection: React.FC<NoticesSectionProps> = ({ model, show = 'a
     <>
       {show !== 'lock' && error && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
-          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          {/* A summary may run to a second line, listing each refusal. */}
+          <p className="text-sm whitespace-pre-line text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
 

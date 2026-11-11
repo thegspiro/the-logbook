@@ -23,7 +23,16 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { Calendar, CheckCircle, ClipboardCheck, GraduationCap, QrCode, SlidersHorizontal } from 'lucide-react';
+import {
+  Calendar,
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardCheck,
+  GraduationCap,
+  QrCode,
+  SlidersHorizontal,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { EventCreate, EventUpdate, RecurringEventCreate } from '../../types/event';
 import type { TrainingCourse } from '../../types/training';
@@ -35,6 +44,8 @@ import { useMandatoryTierPrefill } from '../../hooks/useMandatoryTierPrefill';
 import { getErrorDetail } from '../../utils/errorHandling';
 import { mapServerFieldErrors } from '../../utils/serverFieldErrors';
 import { displayNameOf } from '../../utils/memberName';
+import { getEventTypeBadgeColor } from '../../utils/eventHelpers';
+import { useConfirm } from '../../contexts/ConfirmContext';
 import type { EventFormModel } from '../event-form/useEventFormModel';
 import { EVENT_FIELDS, EVENT_FIELD_IDS, type EventField } from '../event-form/eventFormConstants';
 import { NoticesSection } from '../event-form/sections/NoticesSection';
@@ -90,6 +101,7 @@ const EVENT_FIELD_STEP: Record<EventField, number> = {
   start_datetime: DETAILS,
   end_datetime: DETAILS,
   recurrence_end_date: DETAILS,
+  recurrence_custom_days: DETAILS,
   location: DETAILS,
   location_details: DETAILS,
   mandatory_membership_types: SETTINGS,
@@ -123,6 +135,8 @@ interface TrainingEventWizardProps {
   /** Save a series. Throw on failure: the wizard shows why. */
   onSubmitRecurring?: ((data: RecurringEventCreate) => Promise<void>) | undefined;
   onCancel: () => void;
+  /** Whether anything was entered or changed: Cancel then asks before discarding it. */
+  isDirty?: boolean | undefined;
   /**
    * Training Admin fixes the type and says so; the Events page offers the type
    * picker, where choosing another type returns to the single-page form.
@@ -164,6 +178,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   onSubmit,
   onSubmitRecurring,
   onCancel,
+  isDirty = false,
   typeLocked = true,
   typeNote = 'Set by Training Admin. Other event types use the Events page.',
   typeHint,
@@ -182,6 +197,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   organizerNames,
 }) => {
   const { formatRank } = useRanks();
+  const { confirm } = useConfirm();
   const editing = Boolean(model.editingEventId);
   // A series is created as one; an edit changes one occurrence or the rest of
   // its series through the scope choice, never the recurrence itself.
@@ -196,6 +212,10 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   // refused field, or to the step's heading when the step changes.
   const [focusRequest, setFocusRequest] = useState<{ id: string; seq: number } | null>(null);
   const focusSeq = useRef(0);
+  // Whether the banner lists field refusals and nothing else, so that it goes
+  // once every one of them has been corrected rather than still asking for
+  // fixes with nothing left marked.
+  const fieldBanner = useRef(false);
   const requestFocus = (id: string) => {
     focusSeq.current += 1;
     setFocusRequest({ id, seq: focusSeq.current });
@@ -275,11 +295,9 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     for (const [field, message] of Object.entries(model.validate()) as [EventField, string][]) {
       if (onStep === undefined || EVENT_FIELD_STEP[field] === onStep) event[field] = message;
     }
+    // Every series refusal is a field's now (a custom pattern with no day
+    // is refused under Days of the Week), so nothing here is step-wide.
     const messages: StepMessage[] = [];
-    if ((onStep === undefined || onStep === DETAILS) && creatingSeries) {
-      const series = model.buildRecurringPayload(model.buildSinglePayload());
-      if ('error' in series) messages.push({ step: DETAILS, message: series.error });
-    }
     // Locked fields are sent as stored or not at all, so a check the officer
     // could not act on would only block the save.
     const trainingInvalid =
@@ -315,14 +333,21 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
 
     model.setFieldErrors(fieldErrors);
     setTrainingErrors(trainingErrorsToShow);
-    const fieldMessages = [...Object.values(fieldErrors), ...Object.values(trainingErrorsToShow)];
+    // In the order the fields are drawn, so the list reads as the form does.
+    const fieldMessages = [
+      ...(Object.keys(EVENT_FIELD_IDS) as EventField[]).map((f) => fieldErrors[f]),
+      ...(Object.keys(TRAINING_FIELDS) as TrainingField[]).map((f) => trainingErrorsToShow[f]),
+    ].filter((message): message is string => Boolean(message));
     const summary =
       fieldMessages.length === 0
         ? ''
         : fieldMessages.length === 1
           ? (fieldMessages[0] ?? '')
-          : `Fix the ${fieldMessages.length} fields marked below.`;
-    model.showFormError([summary, ...allMessages.map((m) => m.message), ...extra].filter(Boolean).join(' ') || null);
+          : `Fix the ${fieldMessages.length} fields marked below.\n${fieldMessages.join(' · ')}`;
+    const others = [...allMessages.map((m) => m.message), ...extra];
+    model.showFormError([summary, others.join(' ')].filter(Boolean).join('\n') || null);
+    // A banner of field refusals only is cleared once the last is fixed.
+    fieldBanner.current = others.length === 0 && fieldMessages.length > 0;
     setStep(target);
 
     const firstField =
@@ -344,8 +369,34 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   };
 
   const clearAllErrors = () => {
+    fieldBanner.current = false;
     model.clearErrors();
     setTrainingErrors({});
+  };
+
+  const { fieldErrors: eventFieldErrors, showFormError } = model;
+  useEffect(() => {
+    if (!fieldBanner.current) return;
+    if (Object.keys(eventFieldErrors).length === 0 && Object.keys(trainingErrors).length === 0) {
+      fieldBanner.current = false;
+      showFormError(null);
+    }
+  }, [eventFieldErrors, trainingErrors, showFormError]);
+
+  /** Cancel, asking first when something would be lost. */
+  const requestCancel = async () => {
+    if (!isDirty) {
+      onCancel();
+      return;
+    }
+    const discard = await confirm({
+      title: editing ? 'Discard your changes?' : 'Discard this event?',
+      message: editing ? 'Your changes to this event have not been saved.' : 'Nothing you entered has been saved.',
+      confirmLabel: editing ? 'Discard changes' : 'Discard',
+      cancelLabel: 'Keep editing',
+      variant: 'warning',
+    });
+    if (discard) onCancel();
   };
 
   const goTo = (next: number) => {
@@ -378,6 +429,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
       showErrors(eventErrors, trainingErrorsFromServer, [], mapped.unmatched);
       return;
     }
+    fieldBanner.current = false;
     model.showFormError(
       mapped?.unmatched.join(' ') ||
         getErrorDetail(err) ||
@@ -523,10 +575,24 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
         </ol>
       </nav>
 
-      <div className="card space-y-8 p-4 sm:p-8">
-        <p id={STEP_HEADING_ID} tabIndex={-1} className="text-theme-text-muted text-sm focus:outline-hidden">
-          Step {step + 1} of {STEPS.length} · {stepTitle}
-        </p>
+      {/* Under 768px the navigation is a bar fixed above the bottom nav, so
+          the card leaves room for it to scroll clear. */}
+      <div className="card space-y-8 p-4 max-md:pb-24 sm:p-8">
+        <div className="flex items-center justify-between gap-3">
+          <p id={STEP_HEADING_ID} tabIndex={-1} className="text-theme-text-muted text-sm focus:outline-hidden">
+            Step {step + 1} of {STEPS.length} · {stepTitle}
+          </p>
+          {/* The phone's Cancel: the fixed bar holds only Previous and Next. */}
+          <button
+            type="button"
+            onClick={() => {
+              void requestCancel();
+            }}
+            className="touch-target-phone text-theme-text-secondary text-sm font-medium underline md:hidden"
+          >
+            Cancel
+          </button>
+        </div>
 
         <NoticesSection model={model} show="error" />
 
@@ -551,13 +617,20 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
                 typeLocked && (
                   <div>
                     <span className="form-label">Event Type</span>
-                    <p className="text-theme-text-primary font-medium">Training</p>
-                    <p className="text-theme-text-muted text-sm">{typeNote}</p>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-sm font-medium ${getEventTypeBadgeColor(formData.event_type)}`}
+                    >
+                      Training
+                    </span>
+                    <p className="text-theme-text-muted mt-1 text-sm">{typeNote}</p>
                   </div>
                 )
               }
               titlePlaceholder="e.g., CPR/AED Renewal Training"
               titleHint="Becomes the event title, and the course name when no course is chosen."
+              categoryLabel="Event Category"
+              categoryHint="The department's own event categories."
+              markOptional
             />
             <hr className="border-theme-surface-border" />
             <ScheduleSection
@@ -670,23 +743,41 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
           </>
         )}
 
-        {/* === Navigation === */}
-        <div className="border-theme-surface-border flex flex-wrap items-center justify-between gap-3 border-t pt-6">
+        {/* === Navigation === inside the card from 768px; under it, a bar
+            fixed above the bottom nav (action-bar-safe clears it and the
+            home indicator, pitfall #21), Previous one share and Next two. */}
+        <div
+          role="group"
+          aria-label="Step navigation"
+          className="border-theme-surface-border max-md:bg-theme-nav-bg max-md:action-bar-safe flex items-center gap-3 border-t pt-6 max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:gap-2 max-md:px-4 max-md:shadow-[0_-4px_12px_rgb(0_0_0/0.08)]"
+        >
           <button
             type="button"
             onClick={handlePrevious}
             disabled={step === DETAILS}
-            className="btn-secondary px-5 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-secondary flex items-center justify-center gap-1 px-5 py-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 max-md:min-w-0 max-md:flex-1 max-md:px-3"
           >
+            <ChevronLeft className="h-5 w-5 shrink-0" aria-hidden="true" />
             Previous
           </button>
-          <div className="ml-auto flex flex-wrap gap-3">
-            <button type="button" onClick={onCancel} className="btn-secondary px-5 py-3 text-sm font-medium">
+          <div className="ml-auto flex gap-3 max-md:ml-0 max-md:min-w-0 max-md:flex-[2]">
+            <button
+              type="button"
+              onClick={() => {
+                void requestCancel();
+              }}
+              className="btn-secondary px-5 py-3 text-sm font-medium max-md:hidden"
+            >
               Cancel
             </button>
             {step < REVIEW ? (
-              <button type="button" onClick={handleNext} className="btn-primary px-6 py-3 text-sm font-medium">
+              <button
+                type="button"
+                onClick={handleNext}
+                className="btn-primary flex items-center justify-center gap-1 px-6 py-3 text-sm font-medium max-md:w-full max-md:px-3"
+              >
                 Next
+                <ChevronRight className="h-5 w-5 shrink-0" aria-hidden="true" />
               </button>
             ) : (
               <button
@@ -696,7 +787,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
                 }}
                 disabled={isSubmitting}
                 aria-label={isSubmitting ? submittingLabel : fullSubmitLabel}
-                className="btn-primary flex items-center gap-2 px-6 py-3 text-sm font-medium disabled:cursor-not-allowed"
+                className="btn-primary flex items-center justify-center gap-2 px-6 py-3 text-sm font-medium disabled:cursor-not-allowed max-md:w-full max-md:px-3"
               >
                 {isSubmitting ? (
                   submittingLabel

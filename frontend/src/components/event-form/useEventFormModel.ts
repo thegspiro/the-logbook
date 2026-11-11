@@ -40,6 +40,8 @@ import {
 } from './eventFormConstants';
 import type { EventFormModelOptions, MandatoryScope } from './eventFormTypes';
 
+const CUSTOM_DAYS_REQUIRED = 'Select at least one day for custom recurrence.';
+
 export const useEventFormModel = ({
   initialData,
   onSubmit,
@@ -363,6 +365,11 @@ export const useEventFormModel = ({
     update({ end_datetime: formatForDateTimeInput(end, tz) });
   };
 
+  const toggleRecurrenceCustomDay = (day: number) => {
+    setRecurrenceCustomDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+    setFieldErrors(({ recurrence_custom_days: _cleared, ...rest }) => rest);
+  };
+
   const handleRecurrenceEndDateChange = (value: string) => {
     setRecurrenceEndDate(value);
     setFieldErrors(({ recurrence_end_date: _cleared, ...rest }) => rest);
@@ -530,6 +537,9 @@ export const useEventFormModel = ({
     if (isRecurring && onSubmitRecurring && !isRolling && !recurrenceEndDate) {
       invalid.recurrence_end_date = 'Choose the date the series ends.';
     }
+    if (isRecurring && onSubmitRecurring && recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
+      invalid.recurrence_custom_days = CUSTOM_DAYS_REQUIRED;
+    }
     // "Only these member types" with none ticked. Saved as is, the server
     // would read the empty list as every member, which is All members' job.
     if (formData.is_mandatory && mandatoryScope === 'some' && !formData.mandatory_membership_types?.length) {
@@ -608,8 +618,10 @@ export const useEventFormModel = ({
 
   /** The series payload built on a single-event one, or the refusal that stops it. */
   const buildRecurringPayload = (submitData: EventCreate): { recurring: RecurringEventCreate } | { error: string } => {
+    // validate() refuses this under Days of the Week first; kept for a
+    // caller that builds the series without validating.
     if (recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
-      return { error: 'Select at least one day for custom recurrence' };
+      return { error: CUSTOM_DAYS_REQUIRED };
     }
     const needsWeekday = recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday';
     return {
@@ -739,6 +751,7 @@ export const useEventFormModel = ({
     setIsRolling,
     recurrenceCustomDays,
     setRecurrenceCustomDays,
+    toggleRecurrenceCustomDay,
     recurrenceWeekday,
     setRecurrenceWeekday,
     recurrenceWeekOrdinal,

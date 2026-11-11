@@ -65,6 +65,7 @@ export const EVENT_FIELDS = {
   rsvp_deadline: { label: 'RSVP deadline' },
   max_attendees: { label: 'Max attendees' },
   recurrence_end_date: { label: 'Recurrence end date' },
+  recurrence_custom_days: { label: 'Days of the week' },
 } satisfies Record<string, ServerFieldSpec>;
 export type EventField = keyof typeof EVENT_FIELDS;
 
@@ -76,6 +77,8 @@ export const EVENT_FIELD_IDS: Record<EventField, string> = {
   start_datetime: 'start-datetime',
   end_datetime: 'end-datetime',
   recurrence_end_date: 'recurrence-end-date',
+  // The first day button, Mon.
+  recurrence_custom_days: 'recurrence-day-0',
   location: 'location-text',
   location_details: 'location-details',
   // The first member-type box under "Only these member types".

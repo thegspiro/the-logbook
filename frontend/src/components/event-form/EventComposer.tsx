@@ -111,6 +111,27 @@ export const EventComposer: React.FC<EventComposerProps> = ({
     eventTypeLocked: editing?.eventTypeLocked ?? false,
   });
   const [training, setTraining] = useState<TrainingDetailsForm>(editing?.initialTraining ?? DEFAULT_TRAINING_DETAILS);
+  // What the form opened with, so the training form's Cancel asks only when
+  // there is something to lose. Recurrence and Mandatory for live outside
+  // formData, so they are part of it too.
+  const snapshot = () =>
+    JSON.stringify([
+      model.formData,
+      training,
+      model.organizerId,
+      model.alternateId,
+      model.mandatoryScope,
+      model.isRecurring,
+      model.recurrencePattern,
+      model.recurrenceEndDate,
+      model.isRolling,
+      model.recurrenceCustomDays,
+      model.recurrenceWeekday,
+      model.recurrenceWeekOrdinal,
+      model.recurrenceMonth,
+      model.recurrenceExceptions,
+    ]);
+  const [openedWith] = useState(snapshot);
   // The type the officer left when picking Training, for the way back. Null
   // when the form opened on Training (a Training template, or Training Admin).
   const [switchedFrom, setSwitchedFrom] = useState<EventType | null>(null);
@@ -210,6 +231,7 @@ export const EventComposer: React.FC<EventComposerProps> = ({
         onSubmit={onSubmit}
         onSubmitRecurring={onSubmitRecurring}
         onCancel={onCancel}
+        isDirty={snapshot() !== openedWith}
         typeLocked={Boolean(lockedType)}
         typeNote={typeNote}
         typeHint={editing ? editTypeHint : undefined}

@@ -118,7 +118,7 @@ describe('EventComposer hand-off to the training form', () => {
     await waitFor(() => expect(typePicker()).toHaveFocus());
     expect(screen.getByLabelText(/^Title/)).toHaveValue('Monday Night Drill');
     expect(screen.getByLabelText(/^Description/)).toHaveValue('Hose deployment');
-    expect(screen.getByRole('combobox', { name: 'Category' })).toHaveValue('drill');
+    expect(screen.getByRole('combobox', { name: 'Event Category' })).toHaveValue('drill');
     expect(screen.getByRole('checkbox', { name: /Make this a recurring event/ })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Rolling 12-month cycle' })).toBeChecked();
     expect(screen.getByText('2030-05-27')).toBeInTheDocument();

@@ -613,6 +613,24 @@ describe('EventEditPage', () => {
       // A listed category is offered once, not again as an unlisted value.
       expect(screen.getAllByRole('option', { name: /outreach/i })).toHaveLength(1);
     });
+
+    // It showed the stored value alone, as if it were still on the list.
+    it('names a stored category the department no longer lists, and says so', async () => {
+      vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue(
+        visibleTypesWith([{ value: 'drills', label: 'Drills', color: '#991b1b' }])
+      );
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, custom_category: 'Night Drill' });
+
+      renderWithRouter(<EventEditPage />);
+
+      expect(
+        await screen.findByRole('option', { name: 'Night Drill (no longer an event category)' })
+      ).toBeInTheDocument();
+      expect(screen.getByLabelText(/^category$/i)).toHaveValue('Night Drill');
+      expect(
+        screen.getByText('No longer an event category. It stays on this event until someone picks another.')
+      ).toBeInTheDocument();
+    });
   });
 
   describe('Cancel Action', () => {
@@ -1075,6 +1093,17 @@ describe('EventEditPage', () => {
           ...trainingEvent,
           attendance_finalized_at: '2026-03-15T21:00:00Z',
         });
+      });
+
+      it('says under the type and the category that they are locked', async () => {
+        vi.mocked(eventService.getVisibleEventTypesWithCategories).mockResolvedValue(
+          visibleTypesWith([{ value: 'drill', label: 'Company Drill', color: '#991b1b' }])
+        );
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByRole('combobox', { name: 'Event Category' });
+        // The type, the category and the schedule.
+        expect(screen.getAllByText('Locked while attendance is finalized.')).toHaveLength(3);
       });
 
       it('locks every training field but Counts toward attendance', async () => {
