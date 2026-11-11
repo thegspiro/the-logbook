@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
@@ -435,7 +435,7 @@ describe('CreateTrainingSessionPage leaving and refusals', () => {
 
   // Under 768px the mockup fixes the navigation above the bottom nav, with
   // Cancel moved beside the step line.
-  it('fixes the navigation above the bottom nav on a phone, without its Cancel', () => {
+  it('fixes the navigation above the bottom nav on a phone, without its Cancel', async () => {
     renderWithRouter(<CreateTrainingSessionPage />);
 
     const bar = screen.getByRole('group', { name: 'Step navigation' });
@@ -443,6 +443,11 @@ describe('CreateTrainingSessionPage leaving and refusals', () => {
     expect(within(bar).getByRole('button', { name: 'Cancel' })).toHaveClass('max-md:hidden');
     const [stepLineCancel] = screen.getAllByRole('button', { name: 'Cancel' }).filter((b) => !bar.contains(b));
     expect(stepLineCancel).toHaveClass('md:hidden');
+    // The page's and the form's loads resolve inside act, not after the test.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(getTemplates).toHaveBeenCalled();
   });
 
   it('labels the category and the optional description as the training form draws them', async () => {

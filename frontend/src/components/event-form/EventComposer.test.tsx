@@ -4,7 +4,7 @@
  * either way carries everything typed (owner decision, 2026-11-10).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 
@@ -276,12 +276,23 @@ describe('EventComposer keeps a hand-set Mandatory for', () => {
   });
 });
 
+/**
+ * Lets the form's mount-time loads (visible types, courses, members,
+ * locations) resolve inside act. A test that asserts only what draws at once
+ * otherwise ends with those updates still pending, and React warns about an
+ * update outside act when they land.
+ */
+const settleLoads = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
 describe('EventComposer opening on Training', () => {
   beforeEach(resetMocks);
 
   // A Training template opens the training form directly: nothing was
   // switched, so there is nothing to change back to.
-  it('draws the training form without the switch notice', () => {
+  it('draws the training form without the switch notice', async () => {
     renderWithRouter(
       <EventComposer
         initialData={{ title: 'Monday Night Drill', event_type: 'training' }}
@@ -295,9 +306,11 @@ describe('EventComposer opening on Training', () => {
     expect(typePicker()).toHaveValue('training');
     expect(screen.getByLabelText(/^Title/)).toHaveValue('Monday Night Drill');
     expect(screen.queryByText('Switched to the training form')).not.toBeInTheDocument();
+    await settleLoads();
+    expect(getVisibleEventTypesWithCategories).toHaveBeenCalled();
   });
 
-  it('fixes the type for Training Admin and offers no picker', () => {
+  it('fixes the type for Training Admin and offers no picker', async () => {
     renderWithRouter(
       <EventComposer
         lockedType="training"
@@ -309,6 +322,8 @@ describe('EventComposer opening on Training', () => {
 
     expect(screen.queryByRole('combobox', { name: /Event Type/ })).not.toBeInTheDocument();
     expect(screen.getByText('Set by Training Admin. Other event types use the Events page.')).toBeInTheDocument();
+    await settleLoads();
+    expect(getVisibleEventTypesWithCategories).toHaveBeenCalled();
   });
 
   // Ticking Mandatory on the training form with nothing narrower chosen means
