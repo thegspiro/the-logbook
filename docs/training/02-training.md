@@ -2520,6 +2520,17 @@ This one page covers:
 - **Meeting and shift waivers** — leave meetings out of attendance figures,
   and keep members off the schedule, during leave.
 
+> **Coming next: members asking to be excused** _(2026-11-10)_. The Logbook
+> can now take a member's request to be excused from one training session that
+> counts toward a session-attendance requirement, and route it to the positions
+> your department chooses (falling back to the Chief). An approved request
+> takes that one session out of the member's held and attended counts. **There
+> is no screen for it yet**, and it is off until a training officer saves a
+> request policy (deadline, yearly cap, categories, whether a reason is
+> required, who decides). Until the screens ship, nothing changes for members.
+> The rules are in `backend/app/docs/TRAINING_WAIVERS.md`, under "Session
+> Waiver Requests".
+
 ### Creating a Waiver
 
 1. Select the **Create Waiver** tab.
@@ -4797,7 +4808,13 @@ neither includes an officer-only section, since that needs your own ranks.
 2. **Self-evaluation, evaluator, calibration.** Each part is filled in on the
    evaluation page. Every item shows the member's figure and a suggested rating;
    a rating that departs from the suggestion needs a reason, and some levels need
-   an example. At calibration the reviewer may **tick the evaluator's items to
+   an example. _Updated 2026-11-10:_ the **Training session attendance** figure
+   now counts only the sessions linked to the member's session-attendance
+   requirement, uses finalized attendance, and leaves out every session a
+   waiver or leave excuses (a member who came anyway is credited). It is a
+   percentage for the review period, no longer a met / not met verdict, and
+   reads "unavailable" when no single requirement applies to the member. Evaluations opened before the change keep
+   the old figure until someone selects **Update figures**. At calibration the reviewer may **tick the evaluator's items to
    revisit** (ticks only, no notes). The evaluator is told items are flagged;
    the member sees the ticks once the evaluation is released to them.
 3. **Approvals and signing.** The approving position signs; the member

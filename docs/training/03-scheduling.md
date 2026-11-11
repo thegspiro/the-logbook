@@ -4783,6 +4783,12 @@ rather than starting from zero. It needs `scheduling.manage`.
    **Positions**, **Shifts** (the shifts the import proposes, each with a
    confidence score), joined entries and duplicates, and **Rows** (edit, revert
    or exclude any row).
+   _Added 2026-11-10._ A row flagged for **overlapping times** shows its start
+   and end as boxes right in the **Times** cell, with **Save times**. An overlap
+   is nearly always one mistyped time, so you can fix it without opening the
+   row's edit dialog. Only the changed time is sent, and it is saved as an
+   ordinary row edit, so **Revert** still brings back the file's value. An
+   excluded row keeps its plain text.
 4. Choose **Commit**. The dialog says plainly that a commit **cannot be undone**.
 
 How it reads your file: an end time at or before the start time means the shift

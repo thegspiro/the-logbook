@@ -1,5 +1,20 @@
 # Screenshot currency
 
+## Queued by the November 10 – 11 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-10--11-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 01 | Members Administration hub, Roster strip with **Member Management** and **Former Members**; roster without the Status column | Replace `01-22-member-lifecycle` |
+| 01 | Former Members page with its "moved back" line | Create |
+| 01 | Member Management row with the **More actions** menu open | Create |
+| 01 | A row reading **No other positions** | Create |
+| 04 | **Postpone Event** dialog | Create |
+| 04 | Event card with the **Postponed** badge; event page "Postponed from" line | Create |
+| 03 | Shift History Import **Rows** tab: an overlap row with **Save times** | Create |
+
 ## Queued by the November 8 – 10 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--10-2026).

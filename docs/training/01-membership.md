@@ -999,6 +999,36 @@ name or relationship is pointed out on the page before you save.
 
 ### Member Management Row Actions
 
+_Updated 2026-11-10._ **Former members have their own page.** In Members
+Administration, the **Roster** strip now holds **Member Management** and
+**Former Members** (`?tab=former`). Archived, **Dropped (Voluntary)** and
+**Dropped (Involuntary)** members are listed only on **Former Members**, with
+the same views and actions. Retired and on-leave members stay on Member
+Management. The page reads "Archived and dropped members. A member is moved
+back to the roster by changing their account status on their profile." Each
+page says so when it has nobody: "No current members." or "No archived or
+dropped members."
+
+**A row says each thing once.**
+
+- **Positions** leaves out the base **Member** chip (it stays ticked and locked
+  in **Manage Positions**) and any chip that repeats the member's membership
+  status or class: "Life Member" on a life member, or a department's own
+  "Administrative Member" position on an administrative member. A member with
+  nothing else reads **No other positions**. On an archived member the Member
+  chip stays, because its **×** is how baseline access is removed.
+- The separate **Status** column is gone. The **Membership** cell shows an
+  account-status badge (for example **On Leave** or **Retired**) only when the
+  account is not Active and the badge would not repeat the membership status.
+  The sign-in lock note sits there too. On a phone the cell stacks.
+- **Edit** and **Manage Positions** stay on the row. **Reset Password**,
+  **Unlock**, **Reset MFA** and **Delete** move into a **⋯** menu, named "More
+  actions for _name_". Your own row has no menu. It closes on Escape, a click
+  elsewhere, scrolling or a choice; the arrow keys move between items.
+
+> **Screenshots needed:** the Roster strip with **Former Members**; a member row
+> with the **More actions** menu open; a row reading **No other positions**.
+
 - **Reset Password** lists the password rules as you type. If the password
   breaks a rule, it says "Password does not meet every rule listed below". On
   success it confirms, for example "Password reset for Casey Newhire".
@@ -1072,8 +1102,9 @@ To permanently delete a member:
 1. Open **Members** and find the member's row. (The Member Management tab
    opens the same dialog.)
 2. Select the **trash icon** in the row's Actions column. On the Member
-   Management tab it is a **Delete** button. You cannot delete yourself, so
-   your own row has no delete control.
+   Management and Former Members pages it is **Delete** in the row's **⋯**
+   (More actions) menu. You cannot delete yourself, so your own row has no
+   delete control.
 3. The **Remove Member** dialog opens on its **Deactivate** tab, which keeps
    the member's records. Switch to **Permanently Delete**.
 4. Read the two lists. **Permanently deleted** names every kind of record
@@ -1130,7 +1161,8 @@ audit event. Past and in-progress shifts are untouched.
 
 **To reactivate an archived member:** on **Members**, choose **Archived** in
 the status filter and select **Reactivate** on the row. Or open the member's
-profile and select their status.
+profile and select their status. In Members Administration, archived and
+dropped members are on the **Former Members** page, not Member Management.
 
 > **What if a dropped member never becomes archived?** If they held
 > department property, a departure clearance is opened for them. At present
@@ -2419,7 +2451,7 @@ chosen area's pages with a line naming the open one.
 
 | Area             | Pages                                                         |
 | ---------------- | ------------------------------------------------------------- |
-| **Roster**       | **Member Management**                                         |
+| **Roster**       | **Member Management**, **Former Members**                     |
 | **Add & Import** | **Add Member**, **Import Members**, **Import Qualifications** |
 | **Settings**     | **Settings**                                                  |
 
