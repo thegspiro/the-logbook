@@ -13,13 +13,19 @@
  * Each step is checked before Next; a refused save, or a 422, puts every
  * message under its field and goes to the earliest step holding one, never a
  * toast (forms review F-3/F-4).
+ *
+ * The same steps edit an existing Training event. An edit sends every training
+ * field the form owns, blanks as null (pitfall #1), except where the session's
+ * fields are not this editor's to change: on a finalized event only Counts
+ * toward attendance goes, and a training manager without events.manage, whom
+ * the API refuses training details from (403), sends none.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { Calendar, CheckCircle, ClipboardCheck, GraduationCap, QrCode, SlidersHorizontal } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { EventCreate, RecurringEventCreate } from '../../types/event';
+import type { EventCreate, EventUpdate, RecurringEventCreate } from '../../types/event';
 import type { TrainingCourse } from '../../types/training';
 import type { User } from '../../types/user';
 import { trainingService, userService } from '../../services/api';
@@ -39,13 +45,15 @@ import { RsvpSection } from '../event-form/sections/RsvpSection';
 import { CheckInSection } from '../event-form/sections/CheckInSection';
 import { NotificationsSection } from '../event-form/sections/NotificationsSection';
 import { AttachmentsSection } from '../event-form/sections/AttachmentsSection';
-import { TrainingInfoStep } from './TrainingInfoStep';
+import { TrainingInfoStep, type TrainingInfoAccess, type TrainingReadOnlyNotice } from './TrainingInfoStep';
 import { TrainingReviewStep, type ReviewTarget } from './TrainingReviewStep';
 import {
   TRAINING_FIELDS,
   applyLibraryCourse,
   scheduledHours,
+  strippedForFinalized,
   toAttachPayload,
+  toUpdatePayload,
   validateTrainingDetails,
   type InstructorOption,
   type TrainingDetailsForm,
@@ -111,7 +119,7 @@ interface TrainingEventWizardProps {
   /** Save a single event. Throw on failure: the wizard shows why. */
   onSubmit: (data: EventCreate) => Promise<void>;
   /** Save a series. Throw on failure: the wizard shows why. */
-  onSubmitRecurring: (data: RecurringEventCreate) => Promise<void>;
+  onSubmitRecurring?: ((data: RecurringEventCreate) => Promise<void>) | undefined;
   onCancel: () => void;
   /**
    * Training Admin fixes the type and says so; the Events page offers the type
@@ -120,10 +128,31 @@ interface TrainingEventWizardProps {
   typeLocked?: boolean | undefined;
   /** Says where the fixed event type comes from. */
   typeNote?: string | undefined;
+  /** Replaces the hint under the type picker (null for none); must carry the id `training-wizard-type-hint`. */
+  typeHint?: React.ReactNode;
   submitLabel?: string | undefined;
   recurringSubmitLabel?: string | undefined;
   /** The recurring label for a phone under 480px, where the full one wraps. */
   recurringSubmitShortLabel?: string | undefined;
+  /** The submit button while the save runs. */
+  submittingLabel?: string | undefined;
+  /** The banner's message for a refused save that names no reason. */
+  failureMessage?: string | undefined;
+  /** An edit's save (the model has an editing event id). Throw on failure: the wizard shows why. */
+  onSubmitUpdate?: ((data: EventUpdate) => Promise<void>) | undefined;
+  /** What an edit may change on Training Info; a create is always `edit`. */
+  trainingAccess?: TrainingInfoAccess | undefined;
+  readOnlyNotice?: TrainingReadOnlyNotice | undefined;
+  /** The training details as stored, for the Review step's "was" notes. */
+  originalTraining?: TrainingDetailsForm | undefined;
+  /** The stored session's course name, for a course the library no longer lists. */
+  storedCourseName?: string | undefined;
+  /** The step to open on: the event page's "Edit training details" opens Training Info. */
+  initialStep?: 'details' | 'training' | undefined;
+  /** On a series edit, the "This event only / This and all future events" choice, drawn on Review. */
+  scopeChoice?: React.ReactNode;
+  /** On an edit, who runs the event, for Review. */
+  organizerNames?: { organizer?: string | null | undefined; alternate?: string | null | undefined } | undefined;
 }
 
 export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
@@ -135,14 +164,30 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   onCancel,
   typeLocked = true,
   typeNote = 'Set by Training Admin. Other event types use the Events page.',
+  typeHint,
   submitLabel = 'Create Training Session',
   recurringSubmitLabel = 'Create Recurring Sessions',
   recurringSubmitShortLabel = 'Create sessions',
+  submittingLabel = 'Creating...',
+  failureMessage,
+  onSubmitUpdate,
+  trainingAccess = 'edit',
+  readOnlyNotice,
+  originalTraining,
+  storedCourseName,
+  initialStep = 'details',
+  scopeChoice,
+  organizerNames,
 }) => {
   const { formatRank } = useRanks();
-  const [step, setStep] = useState(DETAILS);
+  const editing = Boolean(model.editingEventId);
+  // A series is created as one; an edit changes one occurrence or the rest of
+  // its series through the scope choice, never the recurrence itself.
+  const creatingSeries = model.isRecurring && !editing;
+  const [step, setStep] = useState(initialStep === 'training' ? TRAINING : DETAILS);
   const [trainingErrors, setTrainingErrors] = useState<TrainingErrors>({});
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Focus is moved after the step it targets has rendered: to the first
@@ -160,7 +205,10 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   useEffect(() => {
     trainingService
       .getCourses()
-      .then(setCourses)
+      .then((list) => {
+        setCourses(list);
+        setCoursesLoaded(true);
+      })
       .catch(() => {
         /* non-critical: the library choice offers nothing */
       });
@@ -218,12 +266,16 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
       if (onStep === undefined || EVENT_FIELD_STEP[field] === onStep) event[field] = message;
     }
     const messages: StepMessage[] = [];
-    if ((onStep === undefined || onStep === DETAILS) && model.isRecurring) {
+    if ((onStep === undefined || onStep === DETAILS) && creatingSeries) {
       const series = model.buildRecurringPayload(model.buildSinglePayload());
       if ('error' in series) messages.push({ step: DETAILS, message: series.error });
     }
+    // Locked fields are sent as stored or not at all, so a check the officer
+    // could not act on would only block the save.
     const trainingInvalid =
-      onStep === undefined || onStep === TRAINING ? validateTrainingDetails(training, durationHours) : {};
+      trainingAccess === 'edit' && (onStep === undefined || onStep === TRAINING)
+        ? validateTrainingDetails(training, durationHours)
+        : {};
     return { event, training: trainingInvalid, messages };
   };
 
@@ -319,15 +371,45 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     model.showFormError(
       mapped?.unmatched.join(' ') ||
         getErrorDetail(err) ||
+        failureMessage ||
         (recurring ? 'Failed to create recurring events. Try again.' : 'Failed to create event. Try again.')
     );
     requestFocus(STEP_HEADING_ID);
+  };
+
+  /**
+   * An edit's `training_details`: every field (pitfall #1), only the
+   * attendance links on a finalized event, nothing for a reader.
+   */
+  const trainingUpdate = () => {
+    if (trainingAccess === 'readonly') return undefined;
+    const full = toUpdatePayload(training, durationHours);
+    return trainingAccess === 'finalized' ? strippedForFinalized(full) : full;
+  };
+
+  const handleUpdate = async () => {
+    if (!onSubmitUpdate) return;
+    // The model's update payload: a blank sent as null, as the event form's.
+    const { training_details: _none, ...eventFields } = model.buildSinglePayload();
+    const details = trainingUpdate();
+    const payload: EventUpdate = details ? { ...eventFields, training_details: details } : eventFields;
+    setIsSubmitting(true);
+    try {
+      await onSubmitUpdate(payload);
+    } catch (err: unknown) {
+      showSubmitError(err, false);
+      setIsSubmitting(false);
+    }
   };
 
   const handleSubmit = async () => {
     const { event, training: trainingInvalid, messages } = collect();
     if (showErrors(event, trainingInvalid, messages)) return;
     clearAllErrors();
+    if (editing) {
+      await handleUpdate();
+      return;
+    }
 
     // Creates leave a blank out (pitfall #1). Always sent: the session is
     // what files the event's credit, under the title when there is no course.
@@ -335,10 +417,10 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
       ...model.buildSinglePayload(),
       training_details: toAttachPayload(training, durationHours),
     };
-    const recurring = model.isRecurring;
+    const recurring = creatingSeries && Boolean(onSubmitRecurring);
     setIsSubmitting(true);
     try {
-      if (recurring) {
+      if (recurring && onSubmitRecurring) {
         const series = model.buildRecurringPayload(single);
         if ('error' in series) {
           showErrors({}, {}, [{ step: DETAILS, message: series.error }]);
@@ -355,11 +437,35 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     }
   };
 
-  const fullSubmitLabel = model.isRecurring ? recurringSubmitLabel : submitLabel;
+  const fullSubmitLabel = creatingSeries ? recurringSubmitLabel : submitLabel;
   const stepTitle = STEPS[step]?.title ?? '';
+
+  // The session's fields are locked with the rest once attendance is
+  // finalized, apart from Counts toward attendance; a training manager, who
+  // cannot change it either, is not told they can.
+  const lockBody = (
+    <>
+      <p id={model.lockNoticeId} className="text-theme-alert-warning-text text-sm">
+        Its type, category, schedule, check-in rules and training details are locked because members&apos; credited
+        hours were calculated from them.
+        {trainingAccess === 'finalized' &&
+          ' Counts toward attendance can still be changed: it changes how the session is graded, not members’ records.'}{' '}
+        Title, description, location and directions, and the attendance, RSVP and notification settings, can still be
+        edited.
+      </p>
+      <p className="text-theme-alert-warning-text text-sm">
+        To change a locked setting, someone who can reopen attendance reopens it from the event page first.
+        {model.initialRecurrence?.is_recurring &&
+          ' To change these for later events in the series, edit one whose attendance is still open.'}
+      </p>
+    </>
+  );
 
   return (
     <div className="space-y-8">
+      {/* Above the steps, so every step opens under it. */}
+      <NoticesSection model={model} show="lock" lockBody={lockBody} />
+
       {/* === Progress === */}
       <nav aria-label="Progress" className="card p-4 sm:p-6">
         <ol className="flex items-center justify-between">
@@ -412,7 +518,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
           Step {step + 1} of {STEPS.length} · {stepTitle}
         </p>
 
-        <NoticesSection model={model} />
+        <NoticesSection model={model} show="error" />
 
         {step === DETAILS && (
           <>
@@ -422,10 +528,14 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               typeFirst
               typeHintId={TYPE_HINT_ID}
               typeHint={
-                <p id={TYPE_HINT_ID} className="text-theme-text-muted mt-2 text-sm">
-                  Training uses this step-by-step form. Pick another type to go back to the single-page form; your
-                  entries carry over.
-                </p>
+                typeHint !== undefined ? (
+                  typeHint
+                ) : (
+                  <p id={TYPE_HINT_ID} className="text-theme-text-muted mt-2 text-sm">
+                    Training uses this step-by-step form. Pick another type to go back to the single-page form; your
+                    entries carry over.
+                  </p>
+                )
               }
               beforeTitle={
                 typeLocked && (
@@ -442,7 +552,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
             <hr className="border-theme-surface-border" />
             <ScheduleSection
               model={model}
-              showRecurrence
+              showRecurrence={!editing}
               rollingHint="Each new occurrence copies the training details and attendance links (set on the next step) from the latest one."
             />
             <hr className="border-theme-surface-border" />
@@ -462,6 +572,10 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
             members={members}
             linkageData={linkageData}
             isSeries={model.isRecurring}
+            access={trainingAccess}
+            readOnlyNotice={readOnlyNotice}
+            storedCourseName={storedCourseName}
+            coursesLoaded={coursesLoaded}
           />
         )}
 
@@ -507,6 +621,11 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
                 clearAllErrors();
                 goTo(REVIEW_TARGET_STEP[target]);
               }}
+              editing={editing}
+              original={originalTraining}
+              scopeChoice={scopeChoice}
+              organizerNames={organizerNames}
+              storedCourseName={storedCourseName}
             />
             <AttachmentsSection existingAttachments={model.existingAttachments} />
             <div>
@@ -552,12 +671,12 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
                   void handleSubmit();
                 }}
                 disabled={isSubmitting}
-                aria-label={isSubmitting ? 'Creating...' : fullSubmitLabel}
+                aria-label={isSubmitting ? submittingLabel : fullSubmitLabel}
                 className="btn-primary flex items-center gap-2 px-6 py-3 text-sm font-medium disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
-                  'Creating...'
-                ) : model.isRecurring ? (
+                  submittingLabel
+                ) : creatingSeries ? (
                   <>
                     <span className="hidden min-[480px]:inline">{recurringSubmitLabel}</span>
                     <span className="min-[480px]:hidden">{recurringSubmitShortLabel}</span>

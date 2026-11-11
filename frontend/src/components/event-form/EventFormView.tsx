@@ -27,6 +27,9 @@ export interface EventFormViewProps {
   submitLabel: string;
   isSubmitting: boolean;
   showRecurrence: boolean;
+  /** Shown under the Event Type picker, which it describes. */
+  typeHint?: React.ReactNode;
+  typeHintId?: string | undefined;
 }
 
 export const EventFormView: React.FC<EventFormViewProps> = ({
@@ -35,6 +38,8 @@ export const EventFormView: React.FC<EventFormViewProps> = ({
   submitLabel,
   isSubmitting,
   showRecurrence,
+  typeHint,
+  typeHintId,
 }) => (
   <form
     noValidate
@@ -46,7 +51,7 @@ export const EventFormView: React.FC<EventFormViewProps> = ({
     <NoticesSection model={model} />
 
     {/* === Event Details === */}
-    <DetailsSection model={model} />
+    <DetailsSection model={model} typeHint={typeHint} typeHintId={typeHintId} />
 
     <hr className="border-theme-surface-border" />
 

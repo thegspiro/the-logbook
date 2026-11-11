@@ -7,7 +7,7 @@
  */
 
 import React from 'react';
-import { GraduationCap, Link2 } from 'lucide-react';
+import { GraduationCap, Link2, Lock } from 'lucide-react';
 import type { TrainingCourse, TrainingType } from '../../types/training';
 import type { TrainingLinkageData } from '../../hooks/useTrainingLinkageData';
 import { TRAINING_TYPE_LABELS } from '../../constants/enums';
@@ -29,6 +29,20 @@ const hoursLabel = (hours: number | string) => `${hours} ${Number(hours) === 1 ?
 
 const optional = <span className="text-theme-text-muted font-normal">(optional)</span>;
 
+/**
+ * Who may change what on this step of an edit. `finalized`: only Counts
+ * toward attendance, which changes how the session is graded and no record it
+ * wrote; the backend refuses (409) any other changed training field once
+ * attendance is finalized. `readonly`: nothing, with the host's reason.
+ */
+export type TrainingInfoAccess = 'edit' | 'finalized' | 'readonly';
+
+/** Why the step is read-only, shown above it. */
+export interface TrainingReadOnlyNotice {
+  title: string;
+  detail: string;
+}
+
 interface TrainingInfoStepProps {
   value: TrainingDetailsForm;
   onChange: (patch: Partial<TrainingDetailsForm>) => void;
@@ -44,6 +58,13 @@ interface TrainingInfoStepProps {
   linkageData: TrainingLinkageData;
   /** A series: the attendance note speaks of every session in it. */
   isSeries: boolean;
+  access?: TrainingInfoAccess | undefined;
+  /** Required with `readonly` access. */
+  readOnlyNotice?: TrainingReadOnlyNotice | undefined;
+  /** The stored session's course name, for a course the library no longer lists. */
+  storedCourseName?: string | undefined;
+  /** Whether `courses` has loaded, so a course missing from it is really gone. */
+  coursesLoaded?: boolean | undefined;
 }
 
 interface CourseOptionProps {
@@ -98,7 +119,19 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
   members,
   linkageData,
   isSeries,
+  access = 'edit',
+  readOnlyNotice,
+  storedCourseName,
+  coursesLoaded = false,
 }) => {
+  const locked = access !== 'edit';
+  const checklistLocked = access === 'readonly';
+  // A stored course the library no longer lists (archived, or inactive) stays
+  // selected, named and marked, rather than reading as no choice at all.
+  const unlistedCourse =
+    coursesLoaded && value.course_mode === 'library' && value.course_id
+      ? !courses.some((c) => c.id === value.course_id)
+      : false;
   const selectedCourse = value.course_mode === 'library' ? courses.find((c) => c.id === value.course_id) : undefined;
   const courseHours = selectedCourse ? (selectedCourse.credit_hours ?? selectedCourse.duration_hours) : undefined;
   const creditHours = effectiveCreditHours(value, durationHours);
@@ -108,6 +141,9 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
   const programName = linkageData.programs.find((p) => p.id === selectedCourse?.program_id)?.name;
 
   const creditHint = (() => {
+    if (value.credit_hours_source === 'duration' && locked) {
+      return durationHours === null ? CREDIT_NOTE : `The event's length (${hoursLabel(durationHours)}). ${CREDIT_NOTE}`;
+    }
     if (value.credit_hours_source === 'duration') {
       return durationHours === null
         ? `Follows the event's length until you change it. ${CREDIT_NOTE}`
@@ -119,8 +155,11 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
     return CREDIT_NOTE;
   })();
 
+  // A stored session can hold a name typed elsewhere, not from any course.
   const instructorHint = freeTextInstructor
-    ? `From the course: ${freeTextInstructor}, not a member`
+    ? selectedCourse
+      ? `From the course: ${freeTextInstructor}, not a member`
+      : `${freeTextInstructor}, not a member`
     : selectedCourse?.instructor && instructorIsMember && value.instructor === selectedCourse.instructor.trim()
       ? 'From the course.'
       : undefined;
@@ -134,13 +173,36 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
 
   return (
     <section className="space-y-6">
-      <h2 className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
-        <GraduationCap className="h-5 w-5 text-red-700" aria-hidden="true" />
-        <span>Training Information</span>
-      </h2>
+      <div>
+        <h2 className="text-theme-text-primary flex flex-wrap items-center gap-2 text-xl font-bold">
+          <GraduationCap className="h-5 w-5 text-red-700" aria-hidden="true" />
+          <span>Training Information</span>
+          {locked && (
+            <span className="badge bg-theme-surface-secondary text-theme-text-secondary inline-flex items-center gap-1 text-xs font-medium">
+              <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+              {access === 'finalized' ? 'Locked except Counts toward attendance' : 'Read-only'}
+            </span>
+          )}
+        </h2>
+        {locked && (
+          <p className="text-theme-text-muted mt-1 text-sm">
+            Members&apos; training records are written with these details each time attendance is finalized.
+          </p>
+        )}
+      </div>
+
+      {access === 'readonly' && readOnlyNotice && (
+        <div className="alert-info flex items-start gap-3" role="note">
+          <Lock className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="font-semibold">{readOnlyNotice.title}</p>
+            <p className="text-sm">{readOnlyNotice.detail}</p>
+          </div>
+        </div>
+      )}
 
       {/* === Course === */}
-      <fieldset className="space-y-3">
+      <fieldset className="space-y-3" disabled={locked}>
         <legend className="form-label">Course</legend>
         <CourseOption
           mode="none"
@@ -171,6 +233,11 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
                 className="form-input py-3"
               >
                 <option value="">Select a course...</option>
+                {unlistedCourse && (
+                  <option value={value.course_id}>
+                    {storedCourseName || 'Current course'} (no longer in the Course Library)
+                  </option>
+                )}
                 {courses.map((course) => (
                   <option key={course.id} value={course.id}>
                     {course.code ? `${course.code} - ` : ''}
@@ -180,6 +247,11 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
               </select>
             )}
           </FormField>
+          {unlistedCourse && (
+            <p className="text-theme-text-secondary text-sm">
+              No longer in the Course Library. It stays on this session until someone picks another course.
+            </p>
+          )}
           {selectedCourse && (
             <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3">
               <p className="text-theme-text-primary text-sm font-medium">{selectedCourse.name}</p>
@@ -200,9 +272,11 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
                   .filter(Boolean)
                   .join(' · ')}
               </p>
-              <p className="text-theme-text-secondary mt-2 text-sm">
-                Type, hours, instructor and expiry are filled from the course; change them below.
-              </p>
+              {!locked && (
+                <p className="text-theme-text-secondary mt-2 text-sm">
+                  Type, hours, instructor and expiry are filled from the course; change them below.
+                </p>
+              )}
             </div>
           )}
         </CourseOption>
@@ -259,7 +333,7 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
       </fieldset>
 
       {/* === Type, instructor and hours: offered in every course mode === */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <fieldset disabled={locked} className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
         <FormField
           id={TRAINING_FIELDS.training_type.id}
           label="Training Type"
@@ -335,7 +409,7 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
             />
           )}
         </FormField>
-      </div>
+      </fieldset>
 
       {/* === Requirement & Program Linkage === */}
       <div className="border-theme-surface-border space-y-4 border-t pt-6">
@@ -350,19 +424,21 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
           </p>
         </div>
 
-        <TrainingLinkageFields
-          data={linkageData}
-          value={linkageValue}
-          onChange={(patch) => {
-            const next: Partial<TrainingDetailsForm> = {};
-            if ('category_id' in patch) next.category_id = patch.category_id ?? '';
-            if ('program_id' in patch) next.program_id = patch.program_id ?? '';
-            if ('phase_id' in patch) next.phase_id = patch.phase_id ?? '';
-            if ('requirement_id' in patch) next.requirement_id = patch.requirement_id ?? '';
-            onChange(next);
-          }}
-          selectedCourse={selectedCourse}
-        />
+        <fieldset disabled={locked} className="min-w-0">
+          <TrainingLinkageFields
+            data={linkageData}
+            value={linkageValue}
+            onChange={(patch) => {
+              const next: Partial<TrainingDetailsForm> = {};
+              if ('category_id' in patch) next.category_id = patch.category_id ?? '';
+              if ('program_id' in patch) next.program_id = patch.program_id ?? '';
+              if ('phase_id' in patch) next.phase_id = patch.phase_id ?? '';
+              if ('requirement_id' in patch) next.requirement_id = patch.requirement_id ?? '';
+              onChange(next);
+            }}
+            selectedCourse={selectedCourse}
+          />
+        </fieldset>
 
         {attendanceRequirements(linkageData.requirements).length > 0 && (
           <fieldset aria-describedby="training-attendance-note">
@@ -377,13 +453,23 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
               requirements={linkageData.requirements}
               value={value.attendance_requirement_ids}
               onChange={(next) => onChange({ attendance_requirement_ids: next })}
+              disabled={checklistLocked}
             />
+            {access === 'finalized' && (
+              <p className="text-theme-text-muted mt-3 text-sm">
+                Saving re-grades this session against the ticked requirements. Members&apos; training records and hours
+                do not change.
+              </p>
+            )}
+            {checklistLocked && value.attendance_requirement_ids.length > 0 && (
+              <p className="text-theme-text-muted mt-3 text-sm">Linked by an event manager.</p>
+            )}
           </fieldset>
         )}
       </div>
 
       {/* === Certification === */}
-      <div className="border-theme-surface-border space-y-4 border-t pt-6">
+      <fieldset disabled={locked} className="border-theme-surface-border min-w-0 space-y-4 border-t pt-6">
         <label className="mobile-touch-target flex cursor-pointer items-center justify-start gap-3">
           <input
             type="checkbox"
@@ -465,18 +551,18 @@ export const TrainingInfoStep: React.FC<TrainingInfoStepProps> = ({
             </FormField>
           </div>
         )}
-      </div>
+      </fieldset>
 
       {/* === Training completion === */}
-      <div className="border-theme-surface-border space-y-4 border-t pt-6">
+      <fieldset disabled={locked} className="border-theme-surface-border min-w-0 space-y-4 border-t pt-6">
         <div>
           <h3 className="text-theme-text-primary font-semibold">Training completion</h3>
           <p className="text-theme-text-muted mt-1 text-sm">
             How members&apos; training records are created and signed off.
           </p>
         </div>
-        <TrainingSettingsFields value={value} onChange={onChange} errors={errors} />
-      </div>
+        <TrainingSettingsFields value={value} onChange={onChange} errors={errors} disabled={locked} />
+      </fieldset>
     </section>
   );
 };

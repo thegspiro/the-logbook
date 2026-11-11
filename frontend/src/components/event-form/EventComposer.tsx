@@ -11,17 +11,23 @@
  *
  * Training Admin mounts it with the type fixed, where only the training form
  * is drawn.
+ *
+ * The edit page mounts it too, with the event's id, so a Training event is
+ * edited in the training form and any other event in the single-page one, and
+ * a type change swaps the form in either direction as it does on create.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
 import { ArrowLeftRight } from 'lucide-react';
-import type { EventCreate, EventType, RecurringEventCreate } from '../../types/event';
+import type { EventCreate, EventType, EventUpdate, RecurringEventCreate } from '../../types/event';
 import { EventType as EventTypeEnum } from '../../constants/enums';
 import { getEventTypeLabel } from '../../utils/eventHelpers';
 import { TrainingEventWizard } from '../training-event/TrainingEventWizard';
 import { DEFAULT_TRAINING_DETAILS, type TrainingDetailsForm } from '../training-event/trainingDetailsModel';
+import type { TrainingInfoAccess, TrainingReadOnlyNotice } from '../training-event/TrainingInfoStep';
 import { EventFormView } from './EventFormView';
-import type { ConflictEvent } from './eventFormTypes';
+import type { ConflictEvent, InitialRecurrence } from './eventFormTypes';
+import { SeriesScopeBanner, SeriesScopeReview, type SeriesScopeChoiceProps } from './SeriesScopeChoice';
 import { EVENT_FIELD_IDS } from './eventFormConstants';
 import { useEventFormModel } from './useEventFormModel';
 
@@ -29,8 +35,8 @@ interface EventComposerProps {
   initialData?: Partial<EventCreate> | undefined;
   /** Save a single event. Throw on failure: the form shows why. */
   onSubmit: (data: EventCreate) => Promise<void>;
-  /** Save a series. Throw on failure: the form shows why. */
-  onSubmitRecurring: (data: RecurringEventCreate) => Promise<void>;
+  /** Save a series. Throw on failure: the form shows why. Create only. */
+  onSubmitRecurring?: ((data: RecurringEventCreate) => Promise<void>) | undefined;
   onCancel: () => void;
   /** Events the user is going to, for the schedule conflict warning. */
   userEvents?: ConflictEvent[] | undefined;
@@ -46,7 +52,35 @@ interface EventComposerProps {
   trainingRecurringSubmitShortLabel?: string | undefined;
   /** Says where a fixed type comes from. */
   typeNote?: string | undefined;
+  /**
+   * The event being edited. The single-page form saves through `onSubmit`, as
+   * it always has on the edit page; the training form through
+   * `onSubmitUpdate`, with the training details.
+   */
+  editing?: EditOptions | undefined;
 }
+
+/** What the edit page knows about the event, for whichever form draws it. */
+export interface EditOptions {
+  eventId: string;
+  initialRecurrence?: InitialRecurrence | undefined;
+  attendanceLocked: boolean;
+  eventTypeLocked: boolean;
+  /** The event's type as stored: a change away from or to Training is said so under the picker. */
+  storedType: EventType;
+  /** The session's fields as stored, or the defaults when it has none. */
+  initialTraining: TrainingDetailsForm;
+  trainingAccess: TrainingInfoAccess;
+  readOnlyNotice?: TrainingReadOnlyNotice | undefined;
+  storedCourseName?: string | undefined;
+  initialStep?: 'details' | 'training' | undefined;
+  /** On an occurrence of a series: which occurrences the save reaches. */
+  seriesScope?: SeriesScopeChoiceProps | undefined;
+  organizerNames?: { organizer?: string | null | undefined; alternate?: string | null | undefined } | undefined;
+  onSubmitUpdate: (data: EventUpdate) => Promise<void>;
+}
+
+const EDIT_TYPE_HINT_ID = 'event-type-edit-hint';
 
 export const EventComposer: React.FC<EventComposerProps> = ({
   initialData,
@@ -61,19 +95,22 @@ export const EventComposer: React.FC<EventComposerProps> = ({
   trainingRecurringSubmitLabel,
   trainingRecurringSubmitShortLabel,
   typeNote,
+  editing,
 }) => {
   const model = useEventFormModel({
     initialData: lockedType ? { ...initialData, event_type: lockedType } : initialData,
     onSubmit,
-    onSubmitRecurring,
+    onSubmitRecurring: editing ? undefined : onSubmitRecurring,
     userEvents,
-    editingEventId: undefined,
-    initialRecurrence: undefined,
-    showOrganizerPickers: true,
-    attendanceLocked: false,
-    eventTypeLocked: false,
+    editingEventId: editing?.eventId,
+    initialRecurrence: editing?.initialRecurrence,
+    // Create only: once an event exists, who runs it changes by a transfer
+    // from the event page.
+    showOrganizerPickers: !editing,
+    attendanceLocked: editing?.attendanceLocked ?? false,
+    eventTypeLocked: editing?.eventTypeLocked ?? false,
   });
-  const [training, setTraining] = useState<TrainingDetailsForm>(DEFAULT_TRAINING_DETAILS);
+  const [training, setTraining] = useState<TrainingDetailsForm>(editing?.initialTraining ?? DEFAULT_TRAINING_DETAILS);
   // The type the officer left when picking Training, for the way back. Null
   // when the form opened on Training (a Training template, or Training Admin).
   const [switchedFrom, setSwitchedFrom] = useState<EventType | null>(null);
@@ -101,19 +138,46 @@ export const EventComposer: React.FC<EventComposerProps> = ({
   };
   const composed = { ...model, handleEventTypeChange: changeType };
 
+  const storedTraining = editing?.storedType === EventTypeEnum.TRAINING;
+  const scope = editing?.seriesScope;
+
   if (!isTraining) {
     return (
-      <div className="card p-8">
-        <EventFormView
-          model={composed}
-          onCancel={onCancel}
-          submitLabel={submitLabel}
-          isSubmitting={isSubmitting}
-          showRecurrence
-        />
-      </div>
+      <>
+        {scope && <SeriesScopeBanner {...scope} />}
+        <div className="card p-8">
+          <EventFormView
+            model={composed}
+            onCancel={onCancel}
+            submitLabel={submitLabel}
+            isSubmitting={isSubmitting}
+            showRecurrence={!editing}
+            typeHintId={storedTraining ? EDIT_TYPE_HINT_ID : undefined}
+            typeHint={
+              storedTraining && (
+                <p id={EDIT_TYPE_HINT_ID} className="text-theme-text-muted mt-2 text-sm">
+                  The single-page form replaces the training steps, with your changes. Saving takes the event out of
+                  training: the training credit its attendance gave is taken back.
+                </p>
+              )
+            }
+          />
+        </div>
+      </>
     );
   }
+
+  // On an edit the type picker is the event's own; what it says depends on
+  // which way the type is going.
+  // A locked picker says why it is locked instead.
+  const typeChangeable = editing && !editing.attendanceLocked && !editing.eventTypeLocked;
+  const editTypeHint = typeChangeable ? (
+    <p id="training-wizard-type-hint" className="text-theme-text-muted mt-2 text-sm">
+      {storedTraining
+        ? 'Training uses this step-by-step form. Pick another type to use the single-page form; your changes carry over.'
+        : 'Training uses the step-by-step form. Your changes carry over, and Training Info opens with No course yet; saving adds the training details.'}
+    </p>
+  ) : null;
 
   return (
     <div className="space-y-6">
@@ -148,9 +212,26 @@ export const EventComposer: React.FC<EventComposerProps> = ({
         onCancel={onCancel}
         typeLocked={Boolean(lockedType)}
         typeNote={typeNote}
+        typeHint={editing ? editTypeHint : undefined}
         submitLabel={trainingSubmitLabel}
         recurringSubmitLabel={trainingRecurringSubmitLabel}
         recurringSubmitShortLabel={trainingRecurringSubmitShortLabel}
+        {...(editing
+          ? {
+              submittingLabel: 'Saving...',
+              failureMessage: 'Failed to update event. Try again.',
+              onSubmitUpdate: editing.onSubmitUpdate,
+              // A non-Training event changed to Training has no session yet:
+              // its details are new, and the edit page has no reason to lock them.
+              trainingAccess: storedTraining ? editing.trainingAccess : 'edit',
+              readOnlyNotice: storedTraining ? editing.readOnlyNotice : undefined,
+              originalTraining: storedTraining ? editing.initialTraining : undefined,
+              storedCourseName: editing.storedCourseName,
+              initialStep: storedTraining ? editing.initialStep : undefined,
+              organizerNames: editing.organizerNames,
+              scopeChoice: scope && <SeriesScopeReview {...scope} />,
+            }
+          : {})}
       />
     </div>
   );

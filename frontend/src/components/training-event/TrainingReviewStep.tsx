@@ -52,6 +52,16 @@ interface TrainingReviewStepProps {
   courses: TrainingCourse[];
   linkageData: TrainingLinkageData;
   onEdit: (target: ReviewTarget) => void;
+  /** An edit: the heading says so, and the recurrence is shown for reference only. */
+  editing?: boolean | undefined;
+  /** The training details as stored, so a changed value can say what it was. */
+  original?: TrainingDetailsForm | undefined;
+  /** Drawn first: on a series edit, which occurrences the save reaches. */
+  scopeChoice?: React.ReactNode;
+  /** On an edit, who runs the event; changed with Transfer on the event page. */
+  organizerNames?: { organizer?: string | null | undefined; alternate?: string | null | undefined } | undefined;
+  /** The stored session's course name, for a course the library no longer lists. */
+  storedCourseName?: string | undefined;
 }
 
 const hoursLabel = (hours: number | string) => `${hours} ${Number(hours) === 1 ? 'hour' : 'hours'}`;
@@ -68,29 +78,45 @@ const reminderLabel = (hours: number) =>
 const Section: React.FC<{
   title: string;
   target: ReviewTarget;
-  onEdit: (target: ReviewTarget) => void;
+  /** Absent for a section the form cannot change. */
+  onEdit?: ((target: ReviewTarget) => void) | undefined;
   children: React.ReactNode;
 }> = ({ title, target, onEdit, children }) => (
   <section className="border-theme-surface-border border-t pt-4 first:border-t-0 first:pt-0">
     <div className="mb-2 flex items-center justify-between gap-3">
       <h3 className="text-theme-text-primary font-semibold">{title}</h3>
-      <button
-        type="button"
-        onClick={() => onEdit(target)}
-        aria-label={`Edit ${title}`}
-        className="touch-target-phone text-sm font-medium text-red-700 underline hover:text-red-800 dark:text-red-400"
-      >
-        Edit
-      </button>
+      {onEdit && (
+        <button
+          type="button"
+          onClick={() => onEdit(target)}
+          aria-label={`Edit ${title}`}
+          className="touch-target-phone text-sm font-medium text-red-700 underline hover:text-red-800 dark:text-red-400"
+        >
+          Edit
+        </button>
+      )}
     </div>
     <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[minmax(10rem,auto)_1fr]">{children}</dl>
   </section>
 );
 
-const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+const Row: React.FC<{ label: string; children: React.ReactNode; was?: string | undefined }> = ({
+  label,
+  children,
+  was,
+}) => (
   <>
     <dt className="text-theme-text-muted">{label}</dt>
-    <dd className="text-theme-text-primary font-medium break-words whitespace-pre-line">{children}</dd>
+    <dd className="text-theme-text-primary font-medium break-words whitespace-pre-line">
+      {children}
+      {was !== undefined && (
+        <>
+          {' '}
+          <span className="badge bg-amber-500/15 text-xs text-amber-800 dark:text-amber-300">Changed</span>
+          <span className="text-theme-text-muted block text-xs font-normal">was {was}</span>
+        </>
+      )}
+    </dd>
   </>
 );
 
@@ -101,11 +127,14 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
   courses,
   linkageData,
   onEdit,
+  editing = false,
+  original,
+  scopeChoice,
+  organizerNames,
+  storedCourseName,
 }) => {
   const { tz, formData } = model;
   const nameOf = (id: string) => model.organizerOptions.options.find((o) => o.id === id)?.name ?? 'Selected member';
-  const course = training.course_mode === 'library' ? courses.find((c) => c.id === training.course_id) : undefined;
-  const creditHours = effectiveCreditHours(training, durationHours);
   const { categories, requirements, programs, phases } = linkageData;
   const nameIn = (list: { id: string; name: string }[], id: string) =>
     id ? (list.find((item) => item.id === id)?.name ?? 'Selected') : 'None';
@@ -126,32 +155,49 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
     return base;
   })();
 
-  const courseLabel = (() => {
-    if (training.course_mode === 'library') {
-      return course ? `${course.code ? `${course.code} - ` : ''}${course.name} (Course Library)` : 'None chosen';
+  const courseLabel = (value: TrainingDetailsForm): string => {
+    if (value.course_mode === 'library') {
+      const course = courses.find((c) => c.id === value.course_id);
+      if (course) return `${course.code ? `${course.code} - ` : ''}${course.name} (Course Library)`;
+      return value.course_id && storedCourseName
+        ? `${storedCourseName} (no longer in the Course Library)`
+        : 'None chosen';
     }
-    if (training.course_mode === 'oneoff') {
-      const code = training.course_code.trim();
-      return `${training.course_name.trim() || 'None entered'}${code ? ` (${code})` : ''} (one-off)`;
+    if (value.course_mode === 'oneoff') {
+      const code = value.course_code.trim();
+      return `${value.course_name.trim() || 'None entered'}${code ? ` (${code})` : ''} (one-off)`;
     }
     return `No course yet: filed under “${formData.title.trim() || 'the event title'}”`;
-  })();
+  };
 
-  const instructorLabel = training.instructor_id
-    ? training.instructor || 'Selected member'
-    : training.instructor.trim()
-      ? `${training.instructor.trim()} (from the course, not a member)`
-      : 'None';
+  const instructorLabel = (value: TrainingDetailsForm): string =>
+    value.instructor_id
+      ? value.instructor || 'Selected member'
+      : value.instructor.trim()
+        ? `${value.instructor.trim()} (${value.course_mode === 'library' ? 'from the course, ' : ''}not a member)`
+        : 'None';
 
-  const creditLabel = creditHours
-    ? `${hoursLabel(creditHours)}${
-        training.credit_hours_source === 'course'
-          ? ' (from the course)'
-          : training.credit_hours_source === 'duration'
-            ? " (the event's length)"
-            : ''
-      }`
-    : '—';
+  const creditLabel = (value: TrainingDetailsForm): string => {
+    const hours = effectiveCreditHours(value, durationHours);
+    if (!hours) return '—';
+    return `${hoursLabel(hours)}${
+      value.credit_hours_source === 'course'
+        ? ' (from the course)'
+        : value.credit_hours_source === 'duration'
+          ? " (the event's length)"
+          : ''
+    }`;
+  };
+
+  const typeLabel = (value: TrainingDetailsForm): string =>
+    TRAINING_TYPE_LABELS[value.training_type] ?? value.training_type;
+
+  /** What a training row read before this edit, when the edit changed it. */
+  const was = (label: (value: TrainingDetailsForm) => string): string | undefined => {
+    if (!original) return undefined;
+    const before = label(original);
+    return before === label(training) ? undefined : before;
+  };
 
   const attendanceNames = training.attendance_requirement_ids.map((id) => {
     const req = requirements.find((r) => r.id === id);
@@ -196,8 +242,10 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
     <section className="space-y-6">
       <h2 className="text-theme-text-primary flex items-center space-x-2 text-xl font-bold">
         <ClipboardCheck className="h-5 w-5 text-red-700" aria-hidden="true" />
-        <span>Review</span>
+        <span>{editing ? 'Review changes' : 'Review'}</span>
       </h2>
+
+      {scopeChoice}
 
       <div className="bg-theme-surface-secondary space-y-4 rounded-lg p-4 sm:p-6">
         <Section title="Event Details" target="details" onEdit={onEdit}>
@@ -218,6 +266,12 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
               <Row label="Alternate">{model.alternateId ? nameOf(model.alternateId) : 'None'}</Row>
             </>
           )}
+          {organizerNames?.organizer && (
+            <Row label="Organizer">{`${organizerNames.organizer} · change it with Transfer on the event page`}</Row>
+          )}
+          {organizerNames?.alternate && (
+            <Row label="Alternate">{`${organizerNames.alternate} · change it with Transfer on the event page`}</Row>
+          )}
           {/* The form holds local wall-clock strings; formatDateTime reads its
               input as UTC, so they are converted first, as the save does. */}
           <Row label="Starts">{formatDateTime(localToUTC(formData.start_datetime, tz), tz)}</Row>
@@ -225,7 +279,7 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
         </Section>
 
         {model.isRecurring && (
-          <Section title="Recurrence" target="details" onEdit={onEdit}>
+          <Section title="Recurrence" target="details" onEdit={editing ? undefined : onEdit}>
             <Row label="Pattern">{recurrenceLabel}</Row>
             <Row label="Duration">
               {model.isRolling
@@ -242,6 +296,12 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
                     .join('\n')
                 : 'None'}
             </Row>
+            {editing && (
+              <Row label="Changing the recurrence">
+                Can&apos;t be changed when editing; create a new series to change the pattern, duration or skipped
+                dates.
+              </Row>
+            )}
           </Section>
         )}
 
@@ -251,10 +311,18 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
         </Section>
 
         <Section title="Training Details" target="training" onEdit={onEdit}>
-          <Row label="Course">{courseLabel}</Row>
-          <Row label="Training Type">{TRAINING_TYPE_LABELS[training.training_type] ?? training.training_type}</Row>
-          <Row label="Lead Instructor">{instructorLabel}</Row>
-          <Row label="Credit Hours">{creditLabel}</Row>
+          <Row label="Course" was={was(courseLabel)}>
+            {courseLabel(training)}
+          </Row>
+          <Row label="Training Type" was={was(typeLabel)}>
+            {typeLabel(training)}
+          </Row>
+          <Row label="Lead Instructor" was={was(instructorLabel)}>
+            {instructorLabel(training)}
+          </Row>
+          <Row label="Credit Hours" was={was(creditLabel)}>
+            {creditLabel(training)}
+          </Row>
           <Row label="Certification">
             {training.issues_certification
               ? training.issuing_agency.trim()
