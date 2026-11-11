@@ -28,7 +28,12 @@ from app.api.v1.endpoints.dashboard import (
     get_unified_action_items,
     router,
 )
-from app.models.meeting import ActionItemStatus, Meeting, MeetingActionItem
+from app.models.meeting import (
+    ActionItemStatus,
+    Meeting,
+    MeetingActionItem,
+    MeetingStatus,
+)
 from app.models.minute import (
     ActionItem,
     MeetingMinutes,
@@ -67,7 +72,17 @@ async def _member(db, org, first="Alice"):
 
 
 async def _meeting(db, org, title="October business meeting"):
-    meeting = Meeting(organization_id=org.id, title=title, meeting_date=_day(-30))
+    # Approved, not the DRAFT default: MM-21 (security-review pass 13) confines
+    # a meetings.view-only caller to approved, non-executive meetings here too,
+    # and what this file's tests check (paging, caps, labeling) does not
+    # depend on meeting status — the same reasoning 9e5e8b7d8 already applied
+    # to the Meetings API's own test fixtures.
+    meeting = Meeting(
+        organization_id=org.id,
+        title=title,
+        meeting_date=_day(-30),
+        status=MeetingStatus.APPROVED,
+    )
     db.add(meeting)
     await db.flush()
     return meeting

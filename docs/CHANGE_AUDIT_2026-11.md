@@ -12,6 +12,7 @@ through `69d32dc1` (2026-11-10 13:56 UTC). The plain-language, phone-width and
 forms-review sweeps (#4131–#4178) and the security-review and app-review passes
 are recorded by their own PRs, `docs/FORMS_REVIEW_2026-11-05.md`, and
 `docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+The November 8 – 9 pass below started from the same commit and covers part of this window; rows that appear in both describe the same changes.
 
 | Change                                                                                                                                                                                                           | Guide | Disposition                                            |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------ |
@@ -36,6 +37,39 @@ section. **Replace:** `01-01` (roster as a table on a desktop width), `03-04`.
 Queued in `docs/training/SCREENSHOT_CURRENCY.md`.
 
 **Not covered:** YouTube scripts, flagged in
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`, not edited.
+
+## Change audit: November 8 – 9, 2026
+
+Merged to `main` after `51e6e1b5` (2026-11-08 08:59 UTC, the previous pass)
+through `1c15d907` (2026-11-09 07:26 UTC), about 48 merges. Security-review
+pass 14 (training core) and the adversarial exfiltration pass (`ADV-01`) are in
+`docs/security-review/`. `CHANGELOG.md` stays closed. The training-requirement
+delete, milestone, Requests-tab triage and history-import changes were written
+into their guides with the code (see the 2026-11-08 notes in guides 02, 03 and
+04 and `TRAINING_PROGRAMS`).
+
+| Change                                                                                                                                                                                                  | Guide | Disposition                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------ |
+| **Past** shifts grouped by year and month, Year dropdown, hours-by-month chart                                                                                                                          | 03    | Added under My Shifts. Replace the Past view image                                                                 |
+| End-of-shift summary rolls call types up into counts; no longer truncated                                                                                                                               | 03    | Added                                                                                                              |
+| Scheduling notification CC boxes refuse non-addresses and duplicates; labelled remove buttons                                                                                                           | 03    | Added                                                                                                              |
+| History import: pick an existing agency, new outside units start hidden, catch-all Other                                                                                                                | 03    | Already in the guide                                                                                               |
+| Training program wizard keeps a browser draft; **Save draft**, **Start over**                                                                                                                           | 02    | Added after the wizard steps                                                                                       |
+| Milestones wait on courses and tests, and choose who is told                                                                                                                                            | 02    | In `TRAINING_PROGRAMS`; pointer added to 02                                                                        |
+| Training requirements: usage list, permanent delete, inactive hidden                                                                                                                                    | 02    | Already in the guide                                                                                               |
+| Phone and narrow-card reflow of ~20 tables; page-header buttons share rows on a phone; compact empty states                                                                                             | 10    | Added to the mobile guide. No per-screen guide edits                                                               |
+| Members see only approved, non-executive meetings (list, detail, MCP tools); draft events hidden server-side                                                                                            | 04    | Added beside the minutes rule                                                                                      |
+| Cannot name yourself a supervisor; another member's email change needs step-up and notifies the old address                                                                                             | 01    | Added                                                                                                              |
+| Platform analytics: every 30-day figure counts whole local days (W78-4); training waiver takes an excused drill off "missed" (W80-10); moving an event's start lets reminders resend (W80-16)           | none  | Corrections to numbers and reminders; no screen or wording changes                                                 |
+| Security: guest lookup answers a member's email as not found; refused sign-ins take one Argon2 verification; inventory socket token no longer accepted in the URL; credential email templates protected | none  | Internal; recorded in the security-review files. Operators using `?token=` on `/inventory/ws` must send the cookie |
+
+**Screenshots to create:** training program wizard with the draft notice; a
+phone-width card for one reflowed table (audit log). **Replace:** My Shifts
+**Past** view (year dropdown, chart, month headings); Dashboard/Members roster at
+narrow width if shown as a table.
+
+**Not covered:** YouTube scripts. They are flagged in
 `docs/youtube-scripts/SCRIPT_CURRENCY.md`, not edited.
 
 ## Change audit: November 6 – 8, 2026

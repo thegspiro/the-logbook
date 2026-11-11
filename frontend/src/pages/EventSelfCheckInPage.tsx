@@ -319,7 +319,7 @@ const EventSelfCheckInPage: React.FC = () => {
                   </p>
                 )}
 
-                {isCheckOut && checkInData.attendance_duration_minutes && (
+                {isCheckOut && checkInData.attendance_duration_minutes != null && (
                   <p>
                     <span className="font-medium">Duration:</span>{' '}
                     {Math.floor(checkInData.attendance_duration_minutes / 60)}h{' '}

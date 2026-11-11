@@ -6,7 +6,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ApparatusMaintenance } from '../types';
 
@@ -24,7 +24,14 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+
+import toast from 'react-hot-toast';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import { MaintenanceRecordModal } from './MaintenanceRecordModal';
+
+// The app shell mounts ConfirmProvider; the dialog needs it to ask before discarding.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 describe('MaintenanceRecordModal guidance', () => {
   beforeEach(() => {
@@ -155,5 +162,78 @@ describe('MaintenanceRecordModal payloads', () => {
       maintenanceTypeId: 'type-1',
       isCompleted: false,
     });
+  });
+});
+
+describe('MaintenanceRecordModal errors and discarding', () => {
+  beforeEach(() => {
+    mockGetMaintenanceTypes.mockReset();
+    mockGetMaintenanceTypes.mockResolvedValue([{ id: 'type-1', name: 'Pump test' }]);
+    mockCreateRecord.mockReset();
+    mockCreateRecord.mockResolvedValue({});
+    mockUpdateRecord.mockReset();
+    mockUpdateRecord.mockResolvedValue({});
+    vi.mocked(toast.error).mockClear();
+  });
+
+  const tooLong = (field: string) => ({
+    response: { status: 422, data: { detail: [{ field, message: 'Value is too long.' }] } },
+  });
+
+  it('puts a refusal of a new record on its field, announced, and creates nothing', async () => {
+    mockCreateRecord.mockRejectedValueOnce(tooLong('invoice_number'));
+    const user = userEvent.setup();
+    renderModal();
+
+    await screen.findByRole('option', { name: 'Pump test' });
+    await user.selectOptions(screen.getByRole('combobox'), 'type-1');
+    await user.type(screen.getByLabelText('Invoice Number'), 'INV-1');
+    await user.click(screen.getByRole('button', { name: 'Add Record' }));
+
+    const invoice = screen.getByLabelText('Invoice Number');
+    await waitFor(() =>
+      expect(invoice).toHaveAccessibleDescription('Invoice number is too long — keep it to 100 characters.')
+    );
+    expect(invoice).toHaveAttribute('aria-invalid', 'true');
+    expect(mockCreateRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('saves the rest of an edit, keeps the stored value of a refused field and flags it', async () => {
+    mockUpdateRecord.mockRejectedValueOnce(tooLong('vendor'));
+    const onSaved = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <MaintenanceRecordModal isOpen onClose={vi.fn()} onSaved={onSaved} apparatusId="a-1" editRecord={record()} />
+    );
+
+    await screen.findByRole('option', { name: 'Pump test' });
+    await user.clear(screen.getByDisplayValue('County Fleet'));
+    await user.type(screen.getByLabelText('Vendor'), 'Too long vendor');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(mockUpdateRecord).toHaveBeenCalledTimes(2));
+    const retry = mockUpdateRecord.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(retry).not.toHaveProperty('vendor');
+    expect(retry).toMatchObject({ performedBy: 'Jo Rivera', notes: 'Order new packing' });
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Vendor')).toHaveAccessibleDescription(
+      'Vendor is too long — keep it to 200 characters.'
+    );
+  });
+
+  it('asks before Escape or Cancel discards what was typed', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<MaintenanceRecordModal isOpen onClose={onClose} onSaved={vi.fn()} apparatusId="a-1" />);
+    await screen.findByRole('option', { name: 'Pump test' });
+    await user.type(screen.getByLabelText('Notes'), 'Leak');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

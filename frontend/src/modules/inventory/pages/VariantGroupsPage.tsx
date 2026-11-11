@@ -6,6 +6,8 @@ import { STANDARD_SIZES, styleAttributesLabel } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import toast from 'react-hot-toast';
@@ -27,6 +29,16 @@ const EMPTY_FORM: GroupFormData = {
   base_price: '',
   base_replacement_cost: '',
   unit_of_measure: '',
+};
+
+type GroupField = 'name' | 'description' | 'unit_of_measure';
+
+// snake_case keys: schemas/inventory.py carries no alias generator, so a 422
+// names the request body's own keys.
+const GROUP_FIELDS: FieldSpecs<GroupField> = {
+  name: { id: 'vg-name', label: 'Name' },
+  description: { id: 'vg-desc', label: 'Description' },
+  unit_of_measure: { id: 'vg-uom', label: 'Unit of Measure' },
 };
 
 const inputClass = 'form-input w-full';
@@ -188,6 +200,7 @@ const VariantGroupsPage: React.FC = () => {
   const [editingGroup, setEditingGroup] = useState<ItemVariantGroup | null>(null);
   const [formData, setFormData] = useState<GroupFormData>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
+  const groupErrors = useFieldErrors(GROUP_FIELDS);
   const [detailGroup, setDetailGroup] = useState<ItemVariantGroup | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
@@ -223,6 +236,7 @@ const VariantGroupsPage: React.FC = () => {
   const openCreateModal = () => {
     setEditingGroup(null);
     setFormData(EMPTY_FORM);
+    groupErrors.clear();
     setShowModal(true);
   };
 
@@ -236,6 +250,7 @@ const VariantGroupsPage: React.FC = () => {
       base_replacement_cost: group.base_replacement_cost != null ? String(group.base_replacement_cost) : '',
       unit_of_measure: group.unit_of_measure ?? '',
     });
+    groupErrors.clear();
     setShowModal(true);
   };
 
@@ -257,8 +272,15 @@ const VariantGroupsPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      toast.error('Group name is required');
+    // Checked here rather than by the browser's required bubble, which
+    // vanished after a few seconds and was tied to nothing a screen reader
+    // could find again (forms review F-3).
+    const problems: FieldErrors<GroupField> = {};
+    if (!formData.name.trim()) problems.name = 'Enter a name for the group.';
+    groupErrors.setFormError(null);
+    groupErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      groupErrors.focusFirst(problems);
       return;
     }
     setIsSaving(true);
@@ -289,7 +311,7 @@ const VariantGroupsPage: React.FC = () => {
       closeModal();
       void loadGroups();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save variant group'));
+      groupErrors.focusFirst(groupErrors.setFromApiError(err, 'Failed to save variant group'));
     } finally {
       setIsSaving(false);
     }
@@ -471,39 +493,59 @@ const VariantGroupsPage: React.FC = () => {
         size="md"
       >
         <form id="variant-group-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-          <div>
-            <label htmlFor="vg-name" className={labelClass}>
-              Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="vg-name"
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-              className={inputClass}
-              placeholder="e.g. Class A Dress Uniform"
-              {...(editingGroup ? { 'aria-describedby': 'vg-name-hint' } : {})}
-            />
-            {editingGroup && (
-              <p id="vg-name-hint" className="text-theme-text-muted mt-1 text-xs">
-                Renaming also renames every item in this group. Each item keeps its size, colour and style.
-              </p>
+          {groupErrors.formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {groupErrors.formError}
+            </p>
+          )}
+          <FormField
+            id={GROUP_FIELDS.name.id}
+            label="Name"
+            required
+            error={groupErrors.errors.name}
+            labelClassName={labelClass}
+            hint={
+              editingGroup
+                ? 'Renaming also renames every item in this group. Each item keeps its size, colour and style.'
+                : undefined
+            }
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                maxLength={255}
+                value={formData.name}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, name: e.target.value }));
+                  groupErrors.setError('name', null);
+                }}
+                className={inputClass}
+                placeholder="e.g. Class A Dress Uniform"
+              />
             )}
-          </div>
-          <div>
-            <label htmlFor="vg-desc" className={labelClass}>
-              Description
-            </label>
-            <textarea
-              id="vg-desc"
-              rows={2}
-              value={formData.description}
-              onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-              className={inputClass}
-              placeholder="Optional description"
-            />
-          </div>
+          </FormField>
+          <FormField
+            id={GROUP_FIELDS.description.id}
+            label="Description"
+            error={groupErrors.errors.description}
+            labelClassName={labelClass}
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                rows={2}
+                maxLength={2000}
+                value={formData.description}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, description: e.target.value }));
+                  groupErrors.setError('description', null);
+                }}
+                className={inputClass}
+                placeholder="Optional description"
+              />
+            )}
+          </FormField>
           <div>
             <label htmlFor="vg-category" className={labelClass}>
               Category
@@ -554,19 +596,27 @@ const VariantGroupsPage: React.FC = () => {
               />
             </div>
           </div>
-          <div>
-            <label htmlFor="vg-uom" className={labelClass}>
-              Unit of Measure
-            </label>
-            <input
-              id="vg-uom"
-              type="text"
-              value={formData.unit_of_measure}
-              onChange={(e) => setFormData((prev) => ({ ...prev, unit_of_measure: e.target.value }))}
-              className={inputClass}
-              placeholder="e.g. each, pair, set"
-            />
-          </div>
+          <FormField
+            id={GROUP_FIELDS.unit_of_measure.id}
+            label="Unit of Measure"
+            error={groupErrors.errors.unit_of_measure}
+            labelClassName={labelClass}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                maxLength={50}
+                value={formData.unit_of_measure}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, unit_of_measure: e.target.value }));
+                  groupErrors.setError('unit_of_measure', null);
+                }}
+                className={inputClass}
+                placeholder="e.g. each, pair, set"
+              />
+            )}
+          </FormField>
         </form>
       </Modal>
 

@@ -120,9 +120,15 @@ test.describe('Search fields stay readable on a phone', () => {
           const ctx = document.createElement('canvas').getContext('2d');
           if (!ctx) return { text: 0, room: Infinity };
           ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+          // From the rendered box, not clientWidth: Chromium 158 reports an
+          // input's clientWidth without its padding (166 where 153 gave 222,
+          // for the same 224px box), so subtracting the padding from it again
+          // undercounted the room by the padding on that engine alone.
+          const box =
+            input.getBoundingClientRect().width - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth);
           return {
             text: ctx.measureText(input.placeholder).width,
-            room: input.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+            room: box - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
           };
         });
         expect(room, `"${placeholder}" shows ${Math.round(room)}px of ${Math.round(text)}px`).toBeGreaterThanOrEqual(

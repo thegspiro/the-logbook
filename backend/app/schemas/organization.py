@@ -968,6 +968,23 @@ class MembershipTierSettings(BaseModel):
     )
 
 
+def mandatory_for_tiers(org_settings: Any) -> List[MembershipTier]:
+    """The tiers an event's "Mandatory for" offers, in ladder order.
+
+    The ladder the department saved, else the default ladder (unlike
+    ``configured_tiers``, which reads only a saved one): the event forms'
+    chips and the mandatory-tier pre-fill read this one definition, so the
+    pre-fill can only ever pick ids the chips show.
+    """
+    section = (
+        org_settings.get("membership_tiers", {})
+        if isinstance(org_settings, dict)
+        else {}
+    )
+    tier_settings = MembershipTierSettings.model_validate(section)
+    return sorted(tier_settings.tiers, key=lambda tier: tier.sort_order)
+
+
 class MembershipYearBasis(str, Enum):
     """Which year a membership number's ``{YYYY}`` and yearly reset follow"""
 

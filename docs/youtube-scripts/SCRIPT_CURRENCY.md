@@ -1,5 +1,13 @@
 # Script currency
 
+## Flagged 2026-11-09 (not edited)
+
+Worth a beat or a re-record note when next touched: 03 and 06 (My Shifts Past
+by year and month); 05, 09 and 16 (pipeline wizard browser draft, milestones on
+courses and tests); 06 (end-of-shift summary call-type counts); 10 mobile
+segments (table cards, header buttons). See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--9-2026).
+
 ## Written into the scripts 2026-11-05
 
 Every row below this one, from **2026-10-24 → 10-25 through 2026-11-04 → 11-05**,

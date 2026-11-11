@@ -156,6 +156,7 @@ Before committing any changes, mentally verify these items (the most frequent so
 - [ ] **Migration handles existing rows** — a tightened column, new unique or foreign key, or required column settles the rows already there, and a test proves it with rows present (see Pitfall #35)
 - [ ] **Safe to run twice** — a new webhook handler, scheduled task or retried write names the id that makes a second run a no-op, constrains it, and tests a double delivery (see Pitfall #36)
 - [ ] **The test was seen to fail** — a bug fix's test went red against the unfixed code; a test and the code it checks are not changed in one commit without a stated reason (see Pitfall #37)
+- [ ] **E2E passes on the first attempt** — a new or changed spec was run with `--repeat-each` on every project CI runs it on, Mobile Safari included; a pass on retry fails CI (see Pitfall #38)
 
 ## Project Overview
 
@@ -355,7 +356,7 @@ Consequences worth knowing:
 
 - **Runner:** Vitest 5.0 with jsdom environment (jsdom held at 30.0.1 — see "jsdom held at 30.0.1" in `docs/KNOWN_LIMITATIONS.md`)
 - **Libraries:** @testing-library/react, @testing-library/jest-dom, @testing-library/user-event
-- **E2E:** Playwright
+- **E2E:** Playwright. CI retries a failed test twice, and a test that passes only on a retry fails the job (Pitfall #38)
 - **Coverage:** @vitest/coverage-v8. Thresholds are a **ratchet floor** set a couple of points under current measured coverage (see `frontend/vitest.config.ts`) — they block regressions rather than demanding an aspirational number. Raise them as coverage grows; don't lower them
 - **Run:** `npm run test:frontend` or `cd frontend && npm test`
 - Test files are co-located with source: `src/**/*.test.ts(x)`
@@ -1850,6 +1851,61 @@ reason.
 **Rule:** a test counts as evidence for a change only once it has been seen to
 fail without that change. Nothing enforces this; it is review discipline,
 including when you are reviewing your own diff.
+
+### 38. A Test That Passed Only on Retry Has Failed _(2026-11-10)_
+
+Playwright retries a failed test twice on CI, and until 2026-11-10 a test that
+passed on a retry was reported "flaky" while its job went green. So a test
+that failed on some runs could merge, and three did. None of them was random:
+
+- `side-navigation-full-height.spec.ts` passed only on retry on #4148, the PR
+  that added it, then failed every branch: the page it used stopped WebKit
+  drawing frames.
+- `report-generate-shapes.spec.ts` counted WebKit's notice for a request
+  cancelled by navigation as a page error.
+- `finance-purchase-request-draft.spec.ts` had found a real bug: entries typed
+  before the fiscal years loaded did not count as changes.
+
+`failOnFlakyTests` is now on for CI in both Playwright configs. Retries still
+run, so the failing attempt's trace is recorded, but a pass on retry fails the
+job.
+
+- **Fix the cause.** Do not re-run the job until it goes green, raise
+  `retries`, add `test.fixme` / `test.skip`, or loosen the assertion. A re-run
+  is for a job that died before any test ran.
+- **A race with a mocked response is the usual cause.** A test that acts before
+  the page has what it depends on passes or fails on timing. Fix the order:
+  hold the response on a promise that is released after the action, as the
+  purchase-request draft spec does, so the test fails every time the bug is
+  there.
+- **Reproduce a Mobile Safari failure in WebKit; do not reason it out.** The
+  side-navigation spec went through two rounds of changes made from CI logs
+  alone before one probe in WebKit found the cause. A cloud session needs `cdn.playwright.dev` allowed by its
+  environment (the `the-logbook` environment allows it). Then, from
+  `frontend/`:
+
+  ```bash
+  export PLAYWRIGHT_BROWSERS_PATH="$HOME/.cache/pw-webkit"
+  npx --no-install playwright install webkit
+  npx --no-install playwright install-deps webkit
+  npx --no-install playwright test src/e2e/<file>.spec.ts --project="Mobile Safari" --trace off --workers=1 --repeat-each=5
+  ```
+
+  Keep the browsers in a writable directory of your own, not the session's
+  preinstalled `/opt/pw-browsers`. `install-deps` needs root, for apt. To run
+  the chromium project in the same shell, point `PLAYWRIGHT_CHROMIUM_PATH` at
+  the preinstalled `chrome` binary: the escape hatch in `playwright.config.ts`.
+
+- **In WebKit, count frames before raising a timeout.** Playwright's Linux
+  WebKit composites `backdrop-filter` in software. On a page dense with blurred
+  `.card`s it can draw no frame for seconds: none in twelve on `/scheduling` at
+  1280px. A CSS transition then never starts, and a click waits forever on
+  Playwright's stability check. Count `requestAnimationFrame` callbacks in
+  `page.evaluate` to tell a stalled page from a slow one.
+
+**Rule:** a test that passed only on retry has failed. Fix its cause before
+merging. `failOnFlakyTests` in `frontend/playwright.config.ts` and
+`frontend/playwright.pwa.config.ts` enforces this on CI.
 
 ## Environment Variables
 

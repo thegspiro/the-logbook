@@ -28,7 +28,10 @@ from app.models.event import (
 from app.schemas.base import UTCDateTime, UTCResponseBase, as_utc
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.schemas.reminder_limits import ReminderLeadDays, ReminderLeadHours
-from app.schemas.training_session import TrainingSessionAttach
+from app.schemas.training_session import (
+    TrainingSessionAttach,
+    TrainingSessionDetailsUpdate,
+)
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -437,6 +440,11 @@ class EventUpdate(BaseModel):
     # GET returned would 422 on the narrower type.
     attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: Optional[bool] = None
+    # The event's training session, edited with the event in one save. Left
+    # out, the session is untouched; see TrainingSessionDetailsUpdate for what
+    # each field's null means. A Training event with no session gets one only
+    # when something here differs from what a session-less event credits.
+    training_details: Optional[TrainingSessionDetailsUpdate] = None
 
     @field_validator("start_datetime", "end_datetime", "rsvp_deadline")
     @classmethod
@@ -459,6 +467,35 @@ class EventCancel(BaseModel):
     send_notifications: bool = Field(
         default=False, description="Send cancellation notifications to RSVPs"
     )
+
+
+class EventPostpone(BaseModel):
+    """Schema for postponing an event to a new time (workflow review W80-11).
+
+    Unlike an edit of the schedule, a postponement clears the check-ins the
+    event already holds: a tap at the original slot must never be credited as
+    attendance at the new one.
+    """
+
+    new_start_datetime: datetime
+    new_end_datetime: datetime
+    reason: str = Field(..., min_length=10, max_length=500)
+    send_notifications: bool = Field(
+        default=True,
+        description="Tell members who RSVP'd Going or Maybe, in-app and by email",
+    )
+
+    @field_validator("new_start_datetime", "new_end_datetime")
+    @classmethod
+    def _normalize_utc(cls, v: datetime) -> datetime:
+        # Stored in DATETIME columns and compared by the service; see as_utc.
+        return as_utc(v)
+
+    @model_validator(mode="after")
+    def _ends_after_start(self) -> "EventPostpone":
+        if self.new_end_datetime <= self.new_start_datetime:
+            raise ValueError("The new end must be after the new start")
+        return self
 
 
 class EventTransferRequest(BaseModel):
@@ -525,6 +562,9 @@ class EventResponse(EventBase, UTCResponseBase):
     counts_toward_attendance: bool = False
     cancellation_reason: Optional[str] = None
     cancelled_at: Optional[datetime] = None
+    postponed_at: Optional[datetime] = None
+    postponed_from_start: Optional[datetime] = None
+    postponement_reason: Optional[str] = None
     # Attendance lock. The UI reads attendance_finalized_at to decide which
     # actions to offer at all; the name is resolved for display because rows
     # backfilled from the pre-column marker have no actor recorded.
@@ -649,6 +689,9 @@ class EventListItem(UTCResponseBase):
     mandatory_membership_types: Optional[List[str]] = None
     is_draft: bool = False
     is_cancelled: bool
+    # The start before the first postponement, for the list's "Postponed"
+    # badge; None for an event never postponed.
+    postponed_from_start: Optional[datetime] = None
     is_recurring: bool = False
     recurrence_parent_id: Optional[UUID] = None
     rsvp_count: Optional[int] = None
@@ -1439,11 +1482,6 @@ class RecurringEventCreate(BaseModel):
             raise ValueError(
                 "recurrence_end_date is required unless rolling_recurrence is true"
             )
-        # The nightly job that extends a rolling series copies the event, not
-        # a session attached to it, so later occurrences would silently lose
-        # the details the first ones carry.
-        if self.rolling_recurrence and self.training_details is not None:
-            raise ValueError("Training details can't be added to a rolling series")
         if self.recurrence_pattern == "custom" and not self.recurrence_custom_days:
             raise ValueError(
                 "recurrence_custom_days is required when recurrence_pattern is 'custom'"

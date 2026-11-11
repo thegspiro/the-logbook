@@ -105,6 +105,57 @@ class TestActionItemsGating:
         assert f"OR {_OWN_ITEMS}" in sql
 
 
+class TestMeetingActionItemVisibility:
+    """MM-21 (security-review pass 13): the meeting half of this feed read
+    ``MeetingActionItem`` with no equivalent to the minutes half's
+    ``minutes_visibility_filter``, so a baseline ``meetings.view``/
+    ``minutes.view`` holder read every meeting's action items — drafts and
+    executive sessions included — through this unified feed even though
+    ``member_visible_meeting()`` (meetings.py / meetings_service.py) already
+    withholds those same meetings from the Meetings API itself. Asserted
+    against the compiled SQL, matching ``TestActionItemsGating``'s own
+    minutes-side assertions above."""
+
+    async def test_a_plain_viewer_is_restricted_to_approved_non_executive(self):
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_empty_result())
+        with _minutes_on(), patch(
+            "app.api.v1.endpoints.dashboard.user_has_permission",
+            side_effect=_perms("meetings.view"),
+        ):
+            await get_unified_action_items(None, False, db, _user())
+        meeting_sql = _sql(db.execute.await_args_list[0].args[0])
+        assert "'approved'" in meeting_sql
+        assert "'executive'" in meeting_sql
+
+    async def test_a_plain_viewer_still_sees_items_assigned_to_them(self):
+        # Without this carve-out, a member's own task from a draft or
+        # executive-session meeting would disappear from the feed entirely.
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_empty_result())
+        with _minutes_on(), patch(
+            "app.api.v1.endpoints.dashboard.user_has_permission",
+            side_effect=_perms("meetings.view"),
+        ):
+            await get_unified_action_items(None, False, db, _user())
+        meeting_sql = _sql(db.execute.await_args_list[0].args[0])
+        assert "meeting_action_items.assigned_to = 'u1'" in meeting_sql
+        assert " OR " in meeting_sql
+
+    @pytest.mark.parametrize("grant", ["meetings.manage", "minutes.manage"])
+    async def test_a_manage_holder_reads_without_restriction(self, grant):
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_empty_result())
+        with _minutes_on(), patch(
+            "app.api.v1.endpoints.dashboard.user_has_permission",
+            side_effect=_perms(grant, "meetings.view"),
+        ):
+            await get_unified_action_items(None, False, db, _user())
+        meeting_sql = _sql(db.execute.await_args_list[0].args[0])
+        assert "'approved'" not in meeting_sql
+        assert "'executive'" not in meeting_sql
+
+
 class TestPagedRouteGating:
     async def test_the_page_and_its_totals_are_gated_like_the_list(self):
         """DASH-40: ``/action-items/page`` adds totals queries. They must be

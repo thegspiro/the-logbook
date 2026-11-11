@@ -203,6 +203,77 @@ These are more granular waivers that can target specific requirements.
 
 ---
 
+## Session Waiver Requests
+
+A waiver above is something a training officer grants. A **session waiver
+request** is something a member asks for: to be excused from one training
+session that counts against them (owner decisions, 2026-11-10). The backend
+shipped first; the screens follow.
+
+**Off until the department turns it on.** A training officer saves the policy
+(`PUT /api/v1/training/waivers/requests/policy`, `training.manage`). With no
+policy saved, or one that cannot be read, members cannot ask and nothing else
+changes. The policy chooses:
+
+| Setting                 | Choices                                                                 |
+| ----------------------- | ----------------------------------------------------------------------- |
+| `deadline`              | before the session starts; 24 hours after it ends; 7 days after it ends |
+| `cap` / `cap_period`    | no cap, or 1–365 approved requests per calendar year or any 12 months   |
+| `categories`            | up to 20 labels a member picks from, optionally required                |
+| `reason_text`           | off, optional or required                                               |
+| `approver_position_ids` | the positions whose holders decide                                      |
+
+**Who may ask.** A member may ask about a training session that is not
+cancelled and is linked to a session-attendance requirement that applies to
+them, before the deadline, once per session. Not a member who is exempt from
+compliance, who checked in (or was recorded as attending), or who has no
+waivers left under the cap. Withdrawing a pending request frees the session to
+ask again; a denied request does not.
+
+**Who decides.** The current holders of the chosen positions are asked. If
+that leaves nobody (no positions chosen, the positions are vacant, or the only
+holder is the member asking), the Chief is asked, and failing a Chief, every
+holder of `training.manage`. A Chief may always decide. Nobody decides their
+own request. The first decision is final, except that the Chief may approve a
+denied request, with a reason, never on their own request; the denial stays on
+record beside the override.
+
+**The cap** counts approved requests, by the session's date, including denials
+the Chief overrode. It is checked when a request is approved, not when it is
+made, so several may be pending at once. Under `rolling_12_months` no 12-month
+span may hold more approved requests than the cap. A Chief's override is not
+blocked by the cap, but counts toward it.
+
+**What an approval does.** The session drops out of the member's held and
+attended counts for every attendance requirement it counts toward, including
+one linked after the approval, and off their missed-mandatory list. It is
+matched on the session, never on the day: another session that day is still
+owed, and no month of an hours, shifts or calls requirement is reduced. A
+member who attended anyway is still credited with attending.
+
+**Privacy.** The reason and the deciders' notes are encrypted at rest, shown
+only to the member and to those who may decide, and kept out of notifications
+and the audit log. The member's data export carries their requests, reasons
+included, and the decision log of each, notes included; it does not carry
+notes the member wrote as a decider on anyone else's request. Anonymizing a
+departed member clears the reason and the notes; the request itself is kept.
+
+| Method | Endpoint                                          | Who                                           |
+| ------ | ------------------------------------------------- | --------------------------------------------- |
+| `GET`  | `/api/v1/training/waivers/requests/policy`        | Any authenticated user                        |
+| `PUT`  | `/api/v1/training/waivers/requests/policy`        | `training.manage`                             |
+| `GET`  | `/api/v1/training/waivers/requests/eligibility`   | Any authenticated user, about themselves      |
+| `POST` | `/api/v1/training/waivers/requests`               | Any authenticated user, for themselves        |
+| `GET`  | `/api/v1/training/waivers/requests/mine`          | Any authenticated user                        |
+| `GET`  | `/api/v1/training/waivers/requests`               | The requests the caller may decide or decided |
+| `GET`  | `/api/v1/training/waivers/requests/{id}`          | The member, or someone who may decide         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/withdraw` | The member, while pending                     |
+| `POST` | `/api/v1/training/waivers/requests/{id}/approve`  | Someone who may decide, while pending         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/deny`     | Someone who may decide, while pending         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/override` | A Chief, on a denied request                  |
+
+---
+
 ## Example Scenario
 
 **Situation**: Firefighter Smith takes a 3-month medical leave from March 1

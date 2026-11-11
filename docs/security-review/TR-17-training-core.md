@@ -2804,7 +2804,11 @@ against the unfixed code** and pass now (Pitfall #37). The existing
 `tests/test_requirement_override.py` still passes, including its DB-backed
 `test_overlapping_dates_are_refused`.
 
-#### TR14-2: LOW (authorization / role fit): `events.manage` alone decides which sessions count toward a compliance requirement. **OPEN, FLAGGED**
+#### TR14-2: LOW (authorization / role fit): `events.manage` alone decides which sessions count toward a compliance requirement. **ACCEPTED (owner decision 2026-11-10)**
+
+**Owner decision (2026-11-10):** the event creator keeps choosing which
+sessions count, and linking after the fact stays allowed. No code change; the
+audit entry is the control. Recorded in `docs/KNOWN_LIMITATIONS.md`.
 
 **Where:** `backend/app/api/v1/endpoints/training_sessions.py:385-429`
 (`set_session_attendance_requirements`, `require_permission("events.manage")`),

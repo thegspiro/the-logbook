@@ -238,7 +238,7 @@ describe('ItemFormModal', () => {
     expect(mockUpdateItem.mock.calls[0]?.[1]).not.toHaveProperty('status');
   });
 
-  it('shows an error toast when saving fails', async () => {
+  it('shows a failed save inside the dialog rather than as a toast', async () => {
     mockCreateItem.mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
     render(<ItemFormModal {...baseProps} isOpen />);
@@ -246,7 +246,8 @@ describe('ItemFormModal', () => {
     await user.type(nameInput(), 'X');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('alert')).toHaveTextContent('boom');
+    expect(mockToastError).not.toHaveBeenCalled();
   });
 
   // Owner decision 2026-11-01: the server refuses an implausible date pair.
@@ -278,7 +279,7 @@ describe('ItemFormModal', () => {
     expect(warranty).not.toHaveAttribute('aria-invalid');
   });
 
-  it('keeps an unrelated save error in the toast only', async () => {
+  it('keeps an unrelated save error at the top of the dialog, not beside the dates', async () => {
     mockCreateItem.mockRejectedValue(createMockApiError('Serial number already in use'));
     const user = userEvent.setup();
     render(<ItemFormModal {...baseProps} isOpen />);
@@ -286,8 +287,11 @@ describe('ItemFormModal', () => {
     await user.type(nameInput(), 'X');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Serial number already in use'));
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Serial number already in use');
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(mockToastError).not.toHaveBeenCalled();
+    // Financial stays collapsed: only a date refusal opens it.
+    expect(screen.queryByLabelText('Warranty Expiration')).not.toBeInTheDocument();
   });
 
   // The Size control writes both size columns. It used to be a free-text box
@@ -1019,5 +1023,192 @@ describe('ItemFormModal', () => {
 
     expect(await screen.findByLabelText('Serial #')).not.toBeRequired();
     expect(screen.getByLabelText('Inspection Interval (days)')).not.toBeRequired();
+  });
+
+  describe('refusing a save with a problem on its field', () => {
+    beforeEach(() => {
+      mockCreateItem.mockReset();
+      mockCreateItem.mockResolvedValue({ id: 'new-1' });
+      mockUpdateItem.mockReset();
+      mockUpdateItem.mockResolvedValue({});
+      mockCreateSizeVariants.mockReset();
+      mockCreateSizeVariants.mockResolvedValue({ created_count: 1, items: [] });
+      mockGetVendors.mockReset();
+      mockGetVendors.mockResolvedValue([]);
+      mockToastError.mockReset();
+    });
+
+    it('names a missing name under its field and sends nothing', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+
+      const name = screen.getByRole('textbox', { name: 'Name' });
+      expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toHaveAccessibleDescription('Enter a name for the item.');
+      expect(name).toHaveFocus();
+      expect(mockCreateItem).not.toHaveBeenCalled();
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+
+    it('names a variant run with no size under the sizes and focuses them', async () => {
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.type(nameInput(), 'Dept Polo');
+      await user.click(screen.getByRole('switch', { name: /Generate Sizes & Styles/i }));
+      await user.click(screen.getByRole('button', { name: /Create 0 Items/ }));
+
+      const sizes = screen.getByRole('group', { name: 'Sizes' });
+      expect(sizes).toHaveAccessibleDescription('Select at least one size.');
+      expect(sizes).toHaveFocus();
+      expect(mockCreateSizeVariants).not.toHaveBeenCalled();
+      expect(mockToastError).not.toHaveBeenCalled();
+
+      // Picking a size answers it.
+      await user.click(screen.getByRole('button', { name: 'M' }));
+      expect(screen.queryByText('Select at least one size.')).not.toBeInTheDocument();
+    });
+
+    it('names the serial number and interval a category requires, as the server would', async () => {
+      const strictCategory = { ...ppeCategory, requires_serial_number: true, requires_maintenance: true };
+      const user = userEvent.setup();
+      render(
+        <ItemFormModal
+          {...baseProps}
+          categories={[strictCategory]}
+          isOpen
+          editItem={makeItem({ category_id: 'cat-ppe' })}
+        />
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Update' }));
+
+      const serial = await screen.findByRole('textbox', {
+        name: 'Serial #',
+        description: 'This category requires a serial number.',
+      });
+      await waitFor(() => expect(serial).toHaveFocus());
+      expect(screen.getByRole('spinbutton', { name: 'Inspection Interval (days)' })).toHaveAccessibleDescription(
+        'This category requires an inspection interval.'
+      );
+      // An edit saves the rest and leaves the two out, so their stored values
+      // are kept (the owner's single-save rule of 2026-11-05).
+      expect(mockUpdateItem).toHaveBeenCalledTimes(1);
+      const sent = mockUpdateItem.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(sent).not.toHaveProperty('serial_number');
+      expect(sent).not.toHaveProperty('inspection_interval_days');
+      expect(sent).toHaveProperty('name');
+    });
+
+    it('puts a 422 on the field it names', async () => {
+      mockCreateItem.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'barcode', message: 'Value is too long.' }] } },
+      });
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.type(nameInput(), 'Radio');
+      await user.click(screen.getByRole('button', { name: 'Create' }));
+
+      expect(await screen.findByRole('textbox', { name: 'Barcode', description: 'Value is too long.' })).toHaveFocus();
+    });
+
+    it("puts the variant builder's base_name 422 on the Name field", async () => {
+      mockCreateSizeVariants.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'base_name', message: 'Value is too long.' }] } },
+      });
+      const user = userEvent.setup();
+      render(<ItemFormModal {...baseProps} isOpen />);
+
+      await user.type(nameInput(), 'Dept Polo');
+      await user.click(screen.getByRole('switch', { name: /Generate Sizes & Styles/i }));
+      await user.click(screen.getByRole('button', { name: 'M' }));
+      await user.click(screen.getByRole('button', { name: /Create 1 Item/ }));
+
+      expect(await screen.findByRole('textbox', { name: 'Name', description: 'Value is too long.' })).toHaveFocus();
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('ItemFormModal server errors on their fields', () => {
+  const tooLong = (field: string) => ({
+    response: { status: 422, data: { detail: [{ field, message: 'Value is too long.' }] } },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCreateItem.mockReset();
+    mockCreateItem.mockResolvedValue({ id: 'new-1' });
+    mockUpdateItem.mockReset();
+    mockUpdateItem.mockResolvedValue({});
+    mockGetVendors.mockResolvedValue([]);
+    mockGetVariantGroups.mockReset();
+    mockGetVariantGroups.mockResolvedValue([]);
+  });
+
+  it('puts a refusal of a new item on its field, announced, and creates nothing', async () => {
+    mockCreateItem.mockRejectedValueOnce(tooLong('barcode'));
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<ItemFormModal {...baseProps} isOpen onClose={onClose} />);
+    await user.type(screen.getByLabelText(/^Name/), 'Halligan');
+    await user.type(screen.getByLabelText('Barcode'), '0123456789');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    const barcode = screen.getByLabelText('Barcode');
+    await waitFor(() => expect(barcode).toHaveAccessibleDescription('Value is too long.'));
+    expect(barcode).toHaveAttribute('aria-invalid', 'true');
+    expect(mockToastError).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('flags a missing name on the field rather than in a toast', async () => {
+    const user = userEvent.setup();
+    render(<ItemFormModal {...baseProps} isOpen />);
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Enter a name for the item.');
+    expect(mockCreateItem).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('saves the rest of an edit, keeps the stored value of a refused field and tells the page on close', async () => {
+    mockUpdateItem.mockRejectedValueOnce(tooLong('barcode'));
+    const onSaved = vi.fn();
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ItemFormModal
+        {...baseProps}
+        isOpen
+        onSaved={onSaved}
+        onClose={onClose}
+        editItem={makeItem({ barcode: 'OLD-1', notes: 'Keep oiled' })}
+      />
+    );
+    await user.type(screen.getByLabelText('Barcode'), '-EXTENDED');
+    await user.clear(screen.getByLabelText('Notes'));
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(2));
+    const retry = mockUpdateItem.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(retry).not.toHaveProperty('barcode');
+    expect(retry).toMatchObject({ notes: null });
+    expect(screen.getByLabelText('Barcode')).toHaveAccessibleDescription('Value is too long.');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Item saved, except barcode: Value is too long. Fix it and save again.'
+    );
+    expect(mockToastError).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Only the refused barcode is unsaved now, so closing still asks.
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

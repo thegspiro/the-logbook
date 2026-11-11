@@ -237,11 +237,75 @@ export interface ActionItemPage {
   offset: number;
 }
 
+export type CommunityPeriod = 'month' | 'quarter' | 'year' | 'rolling_12' | 'all';
+
+/** One period's outreach totals; see community_engagement_service.py for the rules. */
+export interface CommunityReachTotals {
+  events_held: number;
+  /** Signed-in guests, or the requester's expected audience where nobody signed in. */
+  people_reached: number;
+  signed_in: number;
+  estimated: number;
+  member_hours: number;
+  members_involved: number;
+  requests_received: number;
+  requests_completed: number;
+}
+
+/** Events that recorded both an expected audience and sign-ins. */
+export interface CommunityTurnout {
+  events: number;
+  signed_in: number;
+  expected: number;
+}
+
+export interface CommunityReachBucket {
+  /** "YYYY-MM", or "YYYY" when the report's granularity is year. */
+  period: string;
+  events: number;
+  signed_in: number;
+  estimated: number;
+}
+
+export interface CommunityTypeBucket {
+  label: string;
+  events: number;
+  people_reached: number;
+}
+
+export interface CommunityEventReach {
+  event_id: string;
+  title: string;
+  start_datetime: string;
+  type_label: string;
+  organization_name: string | null;
+  request_id: string | null;
+  signed_in: number;
+  expected: number | null;
+  people_reached: number;
+  reach_is_estimate: boolean;
+  crew: number;
+  member_hours: number;
+}
+
 export interface CommunityEngagement {
+  /** The first four are all-time; everything after them follows `period`. */
   total_public_events: number;
   total_member_attendees: number;
   total_external_attendees: number;
   upcoming_public_events: number;
+  period: CommunityPeriod;
+  period_start: string | null;
+  period_end: string;
+  current: CommunityReachTotals;
+  /** The same elapsed span one period earlier; null for all time. */
+  previous: CommunityReachTotals | null;
+  upcoming_events: number;
+  turnout: CommunityTurnout;
+  granularity: 'month' | 'year';
+  by_period: CommunityReachBucket[];
+  by_type: CommunityTypeBucket[];
+  recent_events: CommunityEventReach[];
 }
 
 export type WidgetPeriod = 'month' | 'quarter' | 'year' | 'rolling_30';

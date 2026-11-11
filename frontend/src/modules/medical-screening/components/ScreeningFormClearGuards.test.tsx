@@ -15,7 +15,8 @@
  * (`undefined`), never sent as `""`.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithRouter } from '../../../test/utils';
 import userEvent from '@testing-library/user-event';
 
 // The create dialog loads its member/prospect picker on mount (MS-13).
@@ -63,7 +64,7 @@ describe('ScreeningRecordForm — edit clears as null, not omitted', () => {
   it('sends explicit null for blanked PHI fields and dates', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<ScreeningRecordForm record={baseRecord} requirements={[]} onSave={onSave} onClose={vi.fn()} />);
+    renderWithRouter(<ScreeningRecordForm record={baseRecord} requirements={[]} onSave={onSave} onClose={vi.fn()} />);
 
     await user.clear(screen.getByLabelText('Provider / Facility'));
     await user.clear(screen.getByLabelText('Result Summary'));
@@ -86,7 +87,7 @@ describe('ScreeningRecordForm — edit clears as null, not omitted', () => {
   it('keeps an untouched value unchanged and does not null it', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<ScreeningRecordForm record={baseRecord} requirements={[]} onSave={onSave} onClose={vi.fn()} />);
+    renderWithRouter(<ScreeningRecordForm record={baseRecord} requirements={[]} onSave={onSave} onClose={vi.fn()} />);
 
     await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
@@ -97,7 +98,7 @@ describe('ScreeningRecordForm — edit clears as null, not omitted', () => {
   it('create path still omits (undefined) a blank optional field, never null', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<ScreeningRecordForm record={null} requirements={[]} onSave={onSave} onClose={vi.fn()} />);
+    renderWithRouter(<ScreeningRecordForm record={null} requirements={[]} onSave={onSave} onClose={vi.fn()} />);
 
     // A subject is required before the dialog will submit (MS-13).
     await screen.findByRole('option', { name: 'Jake Thompson' }, { timeout: 5000 });
@@ -114,7 +115,7 @@ describe('ScreeningRequirementForm — edit clears as null, not omitted', () => 
   it('sends explicit null for a cleared description and role list', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<ScreeningRequirementForm requirement={baseRequirement} onSave={onSave} onClose={vi.fn()} />);
+    renderWithRouter(<ScreeningRequirementForm requirement={baseRequirement} onSave={onSave} onClose={vi.fn()} />);
 
     await user.clear(screen.getByLabelText('Description'));
     await user.clear(screen.getByLabelText('Applies to Positions (comma-separated)'));
@@ -128,7 +129,7 @@ describe('ScreeningRequirementForm — edit clears as null, not omitted', () => 
   it('clears frequency_months when switching an existing requirement to one-time', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<ScreeningRequirementForm requirement={baseRequirement} onSave={onSave} onClose={vi.fn()} />);
+    renderWithRouter(<ScreeningRequirementForm requirement={baseRequirement} onSave={onSave} onClose={vi.fn()} />);
 
     await user.click(screen.getByLabelText('One-time requirement (not recurring)'));
     await user.click(screen.getByRole('button', { name: 'Save Changes' }));
@@ -140,7 +141,7 @@ describe('ScreeningRequirementForm — edit clears as null, not omitted', () => 
   it('create path still omits an unset description, never null', async () => {
     const user = userEvent.setup();
     const onSave = vi.fn().mockResolvedValue(undefined);
-    render(<ScreeningRequirementForm requirement={null} onSave={onSave} onClose={vi.fn()} />);
+    renderWithRouter(<ScreeningRequirementForm requirement={null} onSave={onSave} onClose={vi.fn()} />);
 
     await user.type(screen.getByLabelText('Name *'), 'Vision Exam');
     await user.click(screen.getByRole('button', { name: 'Add Requirement' }));
@@ -152,7 +153,7 @@ describe('ScreeningRequirementForm — edit clears as null, not omitted', () => 
 
 describe('ScreeningRequirementForm — position scoping', () => {
   it('explains that listed positions and the grace period are both enforced', () => {
-    render(<ScreeningRequirementForm requirement={baseRequirement} onSave={vi.fn()} onClose={vi.fn()} />);
+    renderWithRouter(<ScreeningRequirementForm requirement={baseRequirement} onSave={vi.fn()} onClose={vi.fn()} />);
 
     expect(screen.getByLabelText('Applies to Positions (comma-separated)')).toHaveAccessibleDescription(
       /Leave blank to apply to every member\. Otherwise only members who hold one of these positions/

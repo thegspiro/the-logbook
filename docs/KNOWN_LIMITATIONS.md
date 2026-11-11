@@ -13,12 +13,19 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   HTML-to-PDF engine with PDF/UA output, such as WeasyPrint, would mean
   rewriting every renderer and bringing that engine's SSRF hardening with it
   (CVE-2025-68616, CVE-2026-55073).
-- **Latin-1 only, fonts not embedded, no PDF/A.** Every PDF uses the built-in
-  Helvetica family. A member's name in Cyrillic, Greek or CJK script does not
-  render, and minutes, certified results and evaluations cannot be archived as
-  PDF/A. **Decided, to build (owner, 2026-11-09):** bundle Noto Sans (SIL OFL)
-  in the kit, then add XMP metadata and an ICC output intent for the record
-  documents.
+- ~~**Latin-1 only, fonts not embedded, no PDF/A.**~~ **Resolved
+  2026-11-10:** documents embed Noto Sans, and certified results,
+  evaluations and minutes are PDF/A-2b. What remains:
+  - **Scripts outside Latin, Greek and Cyrillic** (CJK, Arabic, Hebrew,
+    emoji) still print as empty boxes; Noto Sans CJK is CFF-based and
+    ReportLab cannot embed it. **Accepted** until a member needs it.
+  - **Label sheets and ID cards stay on Helvetica** by owner decision
+    (2026-11-09): their text is fitted to physical stock.
+  - **Minutes that append attachment PDFs make no PDF/A claim** (owner
+    decision, 2026-11-09): outside pages cannot be vouched for.
+  - **CI does not run veraPDF.** Conformance was confirmed with veraPDF 1.28
+    on 2026-11-10; `tests/test_pdfa.py` guards the structure it checked, not
+    every rule.
 - **The Reports page prints from the browser.** "Print / PDF" has no page
   numbers, no repeated header, the browser's own time zone and no audit row.
   **Decided, to build (owner, 2026-11-09):** a server-side PDF on the kit,
@@ -327,6 +334,10 @@ Also on the shared pieces since: every create dialog the review found with a
 button greyed out until valid (Locations, Facilities, Documents' New Folder,
 Forms' Create Form, Medical Supplies' Add supply, Inventory's Add several
 items and Request Equipment, the suggestion box form, Apparatus (basic)).
+Then the dialogs that relied on the browser's `required` bubble: Create
+Election, event templates, custom roles, Create Pipeline, Inventory's item,
+kit, category, variant group, vendor, storage area and reorder dialogs, and
+notification rules.
 
 Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
 needs a course name and a completion date, because both are NOT NULL
@@ -340,6 +351,46 @@ the flag on a form that has already navigated away. An event saved as a draft
 is still refused for the rules the server enforces on every event (an end after
 the start, an RSVP deadline before it).
 
+**Rolled out further on 2026-11-08** (batch 16). The shared field, 422s on
+their fields, schema `maxLength`, `<form>` with Enter, and discard protection
+now also cover:
+
+- **Top-level pages:** Action Items › Update, Locations › Station and Room,
+  basic Apparatus, Role Management, Documents › Create Folder and Upload, and
+  Scheduling's outside-shift form.
+- **Inventory and assets:** Inventory › Add / Edit Item, Apparatus › Fuel Log,
+  Maintenance Record, Equipment and Operator, Facilities › Add Facility,
+  Medical Supplies › Add / Edit, and the Store's item and order-window dialogs.
+- **Finance and grants:** purchase, check and expense requests (the server
+  draft and the expense session draft still work), the budget line and dues
+  schedule dialogs, pledges, fundraising events, donations, grant
+  opportunities and applications, and Admin Hours' category, manual entry and
+  entry editor.
+- **Minutes, communications and the smaller modules:** medical screening
+  records and requirements, messages, shift patterns and Generate Shifts,
+  Record Meeting Minutes, IP exception requests, meeting action items, legal
+  revisions and Add Applicant.
+
+Edits on these follow the single-save rule above, including Edit Pattern and
+the meeting action item, whose pages now refresh behind a dialog left open on a
+refused field. **One exception: Admin Hours' entry editor does not partially
+save.** It resubmits the whole entry and checks the start and end together, so
+saving one time without the other could leave an entry whose duration makes no
+sense; it saves nothing until every refusal is fixed. Dialogs that check their
+own fields turn off the browser's validation bubbles (`noValidate`), so the
+reason appears on the field instead of a native popup.
+
+Still to come, module by module: Create Election, the member admin edit page
+(its uppercase label style needs a `FormField` option first), the training
+builders and pipeline pages, the rest of Inventory (vendors, receiving, kits,
+storage areas, settings), the full apparatus form, the facility detail
+sections, medical supply deliveries and imports, store checkout, the remaining
+finance dialogs and settings cards, the minutes editor and its dialogs, report
+and evaluation dialogs, communications templates, scheduling templates and
+settings, applicant conversion and stage settings, and onboarding, history,
+membership and the public portal. Each is listed in
+`docs/FORMS_REVIEW_2026-11-05.md`.
+
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
 
@@ -347,9 +398,10 @@ Two of the three options, and not the third:
   changed asks "Keep editing" / "Discard changes" before Escape, its X or its
   Cancel throws them away; a clean dialog closes at once, so Escape stays the
   way out (Pitfall #31). It is opt-in per dialog (`isDirty` on `Modal` /
-  `DialogPanel`, or `useDiscardGuard`), and adopted so far on Inventory › Add /
-  Edit Item and Scheduling › Create Shift; other dialogs still close without
-  asking until they pass the flag.
+  `DialogPanel`, or `useDiscardGuard`), adopted on Inventory › Add / Edit Item
+  and Scheduling › Create Shift on 2026-11-06 and on every dialog the 2026-11-08
+  rollout converted (above); other dialogs still close without asking until
+  they pass the flag.
 - **Local drafts — built** for training submission (new ones; an edit is
   already stored on the server), the manual shift report (Scheduling's shift
   reports already kept their own draft), the expense report and Add Member.
@@ -7724,9 +7776,60 @@ ones skipped.
   scheduled or started.
 - **The NFPA completeness report flags a missing instructor** on records from
   events without a course.
-- **A rolling recurring series cannot carry training details** — the nightly
-  job that extends it copies events, not sessions. Its occurrences are still
-  credited, as their titles.
+- **A rolling recurring series cannot carry training details — ✅ resolved
+  2026-11-11** (owner decision 2026-11-10: rolling series inherit training
+  details and links). The nightly job now copies the latest occurrence, its
+  training session and the session's attendance links on to each new
+  occurrence. See "Training — One Form for Training Events, Backend" below.
+
+## Training — One Form for Training Events, Backend (2026-11-11)
+
+The owner chose one training-event form for both Training Admin and Events
+(2026-11-10). This is its backend: `POST /events` and `/events/recurring`
+take every training field, including "Counts toward attendance"; an event
+edit carries `training_details`, for one event or "this and all future"; a
+rolling series and a duplicate keep their session and links; and
+`POST /training/sessions/mandatory-tiers` pre-fills "Mandatory for". The form
+itself follows in later pull requests.
+
+**Defaults assumed on the owner's "Yes" (2026-11-11), and what they cost:**
+
+- **A rolling series copies its latest occurrence, not its parent.** This
+  fixed a "this and all future events" edit being lost: it never reached the
+  parent, so every occurrence the job added reverted to the old values. The
+  cost is that a "this event only" edit to the very last generated
+  occurrence, about twelve months out, now carries forward too.
+- **A training manager cannot change training details through an event
+  edit** (403). Every session write already needs `events.manage`. A training
+  manager still edits the event's own fields. TR14-2 is unchanged.
+- **A requirement no membership tier stands for is named, not guessed**, when
+  "Mandatory for" is pre-filled. That means administrative and honorary
+  (member classes, not rungs), a membership word with no tier on the ladder
+  (Retired, on the default ladder), and a requirement scoped only by rank or
+  position. If nothing maps, "Mandatory for" is left as it was rather than
+  falling back to everyone.
+
+**Known gaps, not fixed here:**
+
+- **The pre-fill is an approximation.**
+  - A requirement grades by legacy membership type; an event's "Mandatory
+    for" matches by membership tier.
+  - An administrative or social member on a mapped tier is listed as missing
+    a session the requirement never graded them on.
+  - A requirement cannot name the default ladder's Senior tier, so no
+    pre-fill ever selects it.
+  - Grandfathering and compliance profiles are ignored.
+  - The officer can edit the result.
+- **A finalized Training event with no session cannot be given attendance
+  links** from the event edit. Attaching a session to a finalized event is
+  refused, as it always was; reopen attendance first. An event with a
+  session takes new links at any time.
+- **The Events form still hides training details on a rolling series** until
+  the single form replaces that block.
+- **`TrainingSessionAttach` and `TrainingSessionDetailsUpdate` refuse unknown
+  keys** (422). Before, an unknown key was dropped and the request still
+  answered 201. Nothing in this repository sends one; an outside API client
+  that does will now see the refusal.
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
@@ -9356,7 +9459,13 @@ recorded yet.
 
 ## Training — Event Organizers Decide Which Sessions Count Toward a Session-Attendance Requirement (2026-11-08, security review TR14-2)
 
-**Open, awaiting an owner decision.** A training officer (`training.manage`)
+**Accepted by the owner (2026-11-10): keep it.** Whoever creates the session
+(`events.manage`) decides which sessions count toward a session-attendance
+requirement, and linking past sessions after the fact stays allowed. The audit
+entry described below remains the control. The text below is the finding as
+it was raised.
+
+~~**Open, awaiting an owner decision.**~~ A training officer (`training.manage`)
 creates a session-attendance requirement, for example "attend 60% of the
 company drills this year". The decision about _which_ sessions count toward it
 is made with `events.manage` alone:
@@ -9552,6 +9661,33 @@ edit only drafts; this governs `PUT /shift-reports/{id}`. Covered by
 `tests/test_shift_completion.py::TestAnEditedReportGoesBackToReview`; history
 in `docs/security-review/EC-14-equipment-check-shifts.md`.
 
+## W80 — Training Event Decisions Left Open (2026-11-08)
+
+From the training-event lifecycle pass
+([`workflow-review/W80-training-event-lifecycle.md`](./workflow-review/W80-training-event-lifecycle.md)).
+Decided and fixed in the same pass: over-credit is warned, not capped; an
+approver on a roster cannot approve it; a schedule change that strands
+check-ins is refused; a training-only waiver can name its requirements. Open:
+
+- **W80-11 — Postpone.** Built in its own pull request: `POST
+/events/{id}/postpone`, three nullable columns on `events` (migration
+  `09f0171ccf5e`), and a Postpone Event action on the event page. Resolved.
+- **W80-16 — Editing an event's time keeps its reminder markers**, so a drill
+  moved through Edit never re-sends a reminder already sent for its old time.
+  Postpone resets them; whether Edit should is open.
+- **W80-8 — Recording one member on a past drill.** Check-in is refused once the
+  window closes, with a message telling the organizer to ask an organizer; the
+  only routes are adding the whole roster, or the member's own "I was there".
+  Whether an attendance manager may record a check-in after the window, with
+  times, needs a decision.
+- **W80-9 — "0/0 sessions — Complete".** A session-attendance requirement with no
+  held sessions in a member's window reads met, on My Training and the matrix.
+  Reporting "not applicable" (CLAUDE.md pitfall #29) changes compliance
+  percentages department-wide.
+- **W80-10 — Training waivers and "missed mandatory".** The missed-mandatory list
+  excludes leaves of absence only, so a drill excused by a training waiver stays
+  listed. Whether a training waiver also excuses the event is policy.
+
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
 mirrored here so they're visible outside the log. The parallel module-by-module
@@ -9602,3 +9738,24 @@ clearance and the letter should both use it; the clearance's current formula
 is wrong under either. Existing clearances store their line values, so a
 change applies to new clearances unless the owner also wants open ones
 recomputed.
+
+## DASH-2 — `GET /dashboard/stats` Returns Three Made-Up Figures, and Nothing Calls It (2026-08-05, recorded here 2026-11-10, app review A7)
+
+`GET /api/v1/dashboard/stats` counts members, active members and events created
+in the last 30 days, and returns three more fields as constants:
+`total_documents` is always `0`, `pending_tasks_count` always `0`, and
+`setup_percentage` always `100`. The last is the risk: it tells any client that
+the department's setup is complete whatever its state. The frontend's
+`dashboardService.getStats` has no caller, so no screen shows these figures
+today; an external client or a future screen could.
+
+Flagged in every app-review pass since the first, but never recorded here, so it
+was not among the questions the owner answered on 2026-11-01. Options:
+
+1. **Remove the route** and `dashboardService.getStats`. Nothing in the app
+   uses them; a third-party client that does would get 404.
+2. **Compute the three figures** — documents from the Documents module,
+   pending tasks from the action-item feed's open count, and setup from the
+   onboarding checklist the Organization Setup widget already reads.
+3. **Remove only the three made-up fields**, keeping the counts that are real.
+   This changes the response shape for any caller.

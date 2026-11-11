@@ -15,6 +15,19 @@ Nothing was captured by this pass.
 | 01 | Members roster as a table at a desktop width | Replace `01-01` |
 | 16 | Historical import members list with the collapsed "to be created" section | Create |
 
+The November 8 – 9 queue below also lists the My Shifts **Past** view; one capture covers both.
+
+## Queued by the November 8 – 9 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--9-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | My Shifts **Past** view with the Year dropdown, hours chart and month headings | Replace |
+| 02 | Pipeline wizard with the resume-draft notice and **Save draft** | Create |
+| 10 | A reflowed table (audit log) as cards at 390px | Create |
+
 ## Captured 2026-11-08 — Requests tab triage list and drawer (#4141)
 
 Taken on the demo department seeded from this branch, with malware scanning on.

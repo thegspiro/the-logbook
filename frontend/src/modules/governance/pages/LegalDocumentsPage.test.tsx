@@ -135,7 +135,7 @@ describe('LegalDocumentsPage', () => {
     await screen.findByRole('heading', { name: 'Legal Documents' });
     await user.click(screen.getByRole('button', { name: /Propose a revision/ }));
 
-    const body = await screen.findByLabelText<HTMLTextAreaElement>('Document text');
+    const body = await screen.findByLabelText<HTMLTextAreaElement>(/^Document text/);
     // The department-control language is the part a replacement most often
     // drops; it has to arrive in the editor for the drafter to keep it.
     expect(body.value).toContain('holds full control of this application');
@@ -156,8 +156,49 @@ describe('LegalDocumentsPage', () => {
     await user.click(screen.getByRole('button', { name: /Propose a revision/ }));
     await user.click(await screen.findByRole('button', { name: 'Save draft' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/what this revision changes and why/i);
+    // The reason is on the field it belongs to, and announced with it.
+    expect(await screen.findByLabelText(/What does this change/)).toHaveAccessibleDescription(
+      /^Say what this revision changes and why\./
+    );
     expect(mockCreateRevision).not.toHaveBeenCalled();
+  });
+
+  it('puts a server refusal on the field it names, not the API key in a toast', async () => {
+    const user = userEvent.setup();
+    mockCreateRevision.mockReset();
+    mockCreateRevision.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'effectiveDate', message: 'String should have at most 64 characters' }] },
+      },
+    });
+    renderWithRouter(<LegalDocumentsPage />);
+    await screen.findByRole('heading', { name: 'Legal Documents' });
+    await user.click(screen.getByRole('button', { name: /Propose a revision/ }));
+
+    await user.type(await screen.findByLabelText(/What does this change/), 'Matches Article IV.');
+    // Enter in the one-line field submits: the editor is a real form (forms review F-7).
+    await user.type(screen.getByLabelText(/Effective date/), 'March 3, 2026{Enter}');
+
+    const date = screen.getByLabelText(/Effective date/);
+    await waitFor(() =>
+      expect(date).toHaveAccessibleDescription(/^Effective date is too long — keep it to 64 characters\./)
+    );
+    expect(date).toHaveAttribute('aria-invalid', 'true');
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('asks before Escape discards a changed proposal', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<LegalDocumentsPage />);
+    await screen.findByRole('heading', { name: 'Legal Documents' });
+    await user.click(screen.getByRole('button', { name: /Propose a revision/ }));
+
+    await user.type(await screen.findByLabelText(/What does this change/), 'Matches Article IV.');
+    await user.keyboard('{Escape}');
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText(/What does this change/)).toHaveValue('Matches Article IV.');
   });
 
   it('saves a proposal as a draft, not to the public page', async () => {

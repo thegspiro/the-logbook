@@ -10,7 +10,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithRouter } from '../../../test/utils';
 import type { ScreeningSubjects } from '../types';
 
 const listSubjects = vi.fn<() => Promise<ScreeningSubjects>>();
@@ -30,7 +31,7 @@ describe('medical screening dialogs — footer touch targets', () => {
   });
 
   it('sizes the record dialog buttons for touch', async () => {
-    render(<ScreeningRecordForm record={null} requirements={[]} onSave={vi.fn()} onClose={vi.fn()} />);
+    renderWithRouter(<ScreeningRecordForm record={null} requirements={[]} onSave={vi.fn()} onClose={vi.fn()} />);
     await screen.findByText('Select a member');
 
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('touch:min-h-11');
@@ -38,7 +39,7 @@ describe('medical screening dialogs — footer touch targets', () => {
   });
 
   it('sizes the requirement dialog buttons for touch', () => {
-    render(<ScreeningRequirementForm requirement={null} onSave={vi.fn()} onClose={vi.fn()} />);
+    renderWithRouter(<ScreeningRequirementForm requirement={null} onSave={vi.fn()} onClose={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('touch:min-h-11');
     expect(screen.getByRole('button', { name: 'Add Requirement' })).toHaveClass('touch:min-h-11');

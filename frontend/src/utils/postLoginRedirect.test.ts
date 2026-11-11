@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DEFAULT_POST_LOGIN_PATH, loginPathReturningTo, postLoginRedirect } from './postLoginRedirect';
+import { DEFAULT_POST_LOGIN_PATH, loginPathReturningTo, postLoginRedirect, signInLanding } from './postLoginRedirect';
 
 describe('postLoginRedirect', () => {
   it('returns to the page, its query and its anchor', () => {
@@ -84,5 +84,39 @@ describe('loginPathReturningTo', () => {
   it('adds nothing for the login page itself or the bare root', () => {
     expect(loginPathReturningTo({ pathname: '/login', search: '?from=%2Fevents' })).toBe('/login');
     expect(loginPathReturningTo({ pathname: '/' })).toBe('/login');
+  });
+});
+
+describe('signInLanding', () => {
+  const ordinary = { must_change_password: false, password_expired: false, mfa_enrollment_required: false };
+
+  it('sends a member who must change their password straight to /account (forms review F-10)', () => {
+    expect(signInLanding({ ...ordinary, must_change_password: true }, { from: { pathname: '/events' } })).toEqual({
+      to: '/account',
+      state: { forcePasswordChange: true },
+    });
+  });
+
+  it('treats an expired password the same way', () => {
+    expect(signInLanding({ ...ordinary, password_expired: true }, null)).toEqual({
+      to: '/account',
+      state: { forcePasswordChange: true },
+    });
+  });
+
+  it('sends a member who must enrol in MFA to /account, after any password change', () => {
+    expect(signInLanding({ ...ordinary, mfa_enrollment_required: true }, null)).toEqual({
+      to: '/account',
+      state: { forceMfaSetup: true },
+    });
+    expect(signInLanding({ ...ordinary, must_change_password: true, mfa_enrollment_required: true }, null)).toEqual({
+      to: '/account',
+      state: { forcePasswordChange: true },
+    });
+  });
+
+  it('otherwise returns where the member was going', () => {
+    expect(signInLanding(ordinary, { from: { pathname: '/events' } })).toEqual({ to: '/events' });
+    expect(signInLanding(null, null)).toEqual({ to: DEFAULT_POST_LOGIN_PATH });
   });
 });

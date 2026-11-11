@@ -6827,22 +6827,67 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+# What a new occurrence of a rolling series copies from the latest one.
+# Not attachments: their metadata points at files owned by that occurrence,
+# and each occurrence exposes an independent delete action that would
+# otherwise remove the shared file. Not the recurrence settings, which stay on
+# the series parent, nor anything an occurrence's own lifecycle writes.
+ROLLING_OCCURRENCE_FIELDS = (
+    "title",
+    "description",
+    "event_type",
+    "custom_category",
+    "location_id",
+    "location",
+    "location_details",
+    "requires_rsvp",
+    "max_attendees",
+    "is_mandatory",
+    "mandatory_membership_types",
+    "allow_guests",
+    "attendee_visibility",
+    "send_reminders",
+    "reminder_schedule",
+    "reminder_target",
+    "check_in_window_type",
+    "check_in_minutes_before",
+    "check_in_minutes_after",
+    "require_checkout",
+    "allow_guest_check_in",
+    "guest_check_in_creates_prospect",
+    "allowed_rsvp_statuses",
+    "template_id",
+    "is_draft",
+    "organizer_id",
+    "alternate_organizer_id",
+)
+
+
+def _as_naive_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
     """
     Extend rolling recurring event series to maintain a 12-month horizon.
 
     For each parent event with rolling_recurrence=True, check the latest
     child occurrence. If the horizon is less than 12 months away, generate
-    new occurrences to fill the gap.
+    new occurrences to fill the gap, each a copy of that latest occurrence
+    (and, for a Training series, of its training session and attendance
+    links).
     """
     from datetime import timezone as dt_timezone
 
-    from app.models.event import Event, RecurrencePattern
+    from app.models.event import Event, EventType, RecurrencePattern
     from app.services.event_service import (
         EventService,
         rsvp_deadline_at,
         rsvp_deadline_lead,
     )
+    from app.services.training_session_service import TrainingSessionService
 
     # Naive-but-UTC, not naive-local-time: `latest_start`/`latest_end` below
     # come from DateTime(timezone=True) columns, which aiomysql returns
@@ -6912,9 +6957,14 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             # aborting this exception handler before it reaches its own
             # db.rollback() and crashing the whole batch.
             parent_id = getattr(parent, "id", "?")
-            # Find the latest occurrence in this series
+            # The latest occurrence in this series is the template for the
+            # next ones. Not the parent: a "this and all future" edit reaches
+            # only the occurrences from the one edited onward, so an edit made
+            # anywhere after the first night never reaches the parent, and
+            # copying the parent reverted every new occurrence to the old
+            # values. The latest occurrence is the one every such edit reached.
             latest_result = await db.execute(
-                select(Event.start_datetime, Event.end_datetime, Event.rsvp_deadline)
+                select(Event)
                 .where(
                     (Event.id == parent.id) | (Event.recurrence_parent_id == parent.id),
                     Event.is_cancelled.is_(False),
@@ -6922,13 +6972,20 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 .order_by(Event.start_datetime.desc())
                 .limit(1)
             )
-            latest = latest_result.first()
-            if not latest:
+            latest = latest_result.scalars().first()
+            if latest is None:
                 continue
 
-            latest_start = latest[0]
-            latest_end = latest[1]
-            latest_deadline = latest[2]
+            # Naive UTC, as `now` is above. A column select used to hand
+            # these back raw (naive); an ORM row already in the session
+            # carries the aware values it was written with.
+            latest_start = _as_naive_utc(latest.start_datetime)
+            latest_end = _as_naive_utc(latest.end_datetime)
+            latest_deadline = (
+                None
+                if latest.rsvp_deadline is None
+                else _as_naive_utc(latest.rsvp_deadline)
+            )
 
             # If the latest occurrence is already 12+ months out, skip
             if latest_start >= twelve_months:
@@ -6966,54 +7023,20 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             if not new_occurrences:
                 continue
 
-            # Build a set of field values from the parent for child events.  Do
-            # not propagate attachments: their metadata points at files owned
-            # by the parent event, and each occurrence exposes an independent
-            # delete action that would otherwise remove the shared file.
             child_fields = {}
-            for field in (
-                "title",
-                "description",
-                "event_type",
-                "custom_category",
-                "location_id",
-                "location",
-                "location_details",
-                "requires_rsvp",
-                "max_attendees",
-                "is_mandatory",
-                "allow_guests",
-                "send_reminders",
-                "reminder_schedule",
-                "reminder_target",
-                "check_in_window_type",
-                "check_in_minutes_before",
-                "check_in_minutes_after",
-                "require_checkout",
-                "allow_guest_check_in",
-                "guest_check_in_creates_prospect",
-                "allowed_rsvp_statuses",
-                "template_id",
-                "is_draft",
-                # A handover with "this and future" lands on the parent, so a
-                # new occurrence carries whoever runs the series now rather
-                # than reverting to its creator.
-                "organizer_id",
-                "alternate_organizer_id",
-            ):
-                val = getattr(parent, field, None)
+            for field in ROLLING_OCCURRENCE_FIELDS:
+                val = getattr(latest, field, None)
                 if val is not None:
                     child_fields[field] = copy.deepcopy(val)
 
-            custom_fields = copy.deepcopy(parent.custom_fields)
+            custom_fields = copy.deepcopy(latest.custom_fields)
             if custom_fields:
                 for lifecycle_key in EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS:
                     custom_fields.pop(lifecycle_key, None)
                 child_fields["custom_fields"] = custom_fields
 
             # Each new occurrence keeps the RSVP deadline lead of the latest
-            # one, the occurrence a "this and all future" edit last reached,
-            # rather than having none at all.
+            # one rather than having none at all.
             tz = org_zones[org_key]
             deadline_lead = (
                 None
@@ -7025,6 +7048,18 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                 )
             )
 
+            # A Training series carries its training session and the
+            # session's attendance links on to each new occurrence; without
+            # them a new drill would credit no course and count toward no
+            # attendance requirement.
+            training = None
+            source_session = None
+            link_ids: List[str] = []
+            if getattr(latest, "event_type", None) == EventType.TRAINING:
+                training = TrainingSessionService(db)
+                source_session, link_ids = await training.source_for_cloning(latest)
+
+            children = []
             for start, end in new_occurrences:
                 child = Event(
                     organization_id=parent.organization_id,
@@ -7042,6 +7077,19 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                     **child_fields,
                 )
                 db.add(child)
+                children.append(child)
+
+            # Idempotent across runs: only occurrences after the latest are
+            # generated, these sessions commit with their events below, and
+            # training_sessions.event_id is unique.
+            if training is not None and source_session is not None:
+                await training.clone_sessions_for_events(
+                    source_session,
+                    link_ids,
+                    latest.title,
+                    children,
+                    parent.created_by,
+                )
 
             # Update the parent's recurrence_end_date to the new horizon
             parent.recurrence_end_date = twelve_months

@@ -51,6 +51,12 @@ vi.mock('../hooks/useTimezone', () => ({
 import { locationsService } from '../services/api';
 import MembersAdminPage from './MembersAdminPage';
 
+/** The row's less frequent actions sit behind its "⋯" menu. */
+async function rowMenuItem(user: ReturnType<typeof userEvent.setup>, memberName: string, itemName: string) {
+  await user.click(await screen.findByRole('button', { name: `More actions for ${memberName}` }));
+  return screen.findByRole('menuitem', { name: itemName });
+}
+
 const memberRole = {
   id: 'role-member',
   organization_id: 'org-1',
@@ -211,7 +217,7 @@ describe('MembersAdminPage — Reset Password (workflow review W11)', () => {
     const user = userEvent.setup();
     renderWithRouter(<MembersAdminPage />);
 
-    await user.click(await screen.findByRole('button', { name: 'Reset password for Jordan Avery' }));
+    await user.click(await rowMenuItem(user, 'Jordan Avery', 'Reset password for Jordan Avery'));
     const dialog = screen.getByRole('dialog');
     await user.type(within(dialog).getByLabelText('New Password'), 'Abcdefgh1234!');
     await user.type(within(dialog).getByLabelText('Confirm Password'), 'Abcdefgh1234!');
@@ -230,7 +236,7 @@ describe('MembersAdminPage — Reset Password (workflow review W11)', () => {
     const user = userEvent.setup();
     renderWithRouter(<MembersAdminPage />);
 
-    await user.click(await screen.findByRole('button', { name: 'Reset password for Jordan Avery' }));
+    await user.click(await rowMenuItem(user, 'Jordan Avery', 'Reset password for Jordan Avery'));
     const dialog = screen.getByRole('dialog');
     await user.type(within(dialog).getByLabelText('New Password'), 'Tanker$Maple947');
     await user.type(within(dialog).getByLabelText('Confirm Password'), 'Tanker$Maple947');
@@ -368,7 +374,7 @@ describe('MembersAdminPage — sign-in lockout (workflow review W02-4)', () => {
 
     expect(await screen.findByText(/Sign-in locked until 6:15/)).toBeInTheDocument();
     vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member] as never);
-    await user.click(screen.getByRole('button', { name: 'Unlock Jordan Avery' }));
+    await user.click(await rowMenuItem(user, 'Jordan Avery', 'Unlock Jordan Avery'));
 
     expect(userService.adminUnlockAccount).toHaveBeenCalledWith('user-1');
     await vi.waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Jordan Avery can sign in again'));
@@ -376,11 +382,12 @@ describe('MembersAdminPage — sign-in lockout (workflow review W02-4)', () => {
   });
 
   it('offers no Unlock for an account that is not locked', async () => {
+    const user = userEvent.setup();
     vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member] as never);
     renderWithRouter(<MembersAdminPage />);
 
-    expect(await screen.findByRole('button', { name: 'Reset password for Jordan Avery' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Unlock/ })).not.toBeInTheDocument();
+    expect(await rowMenuItem(user, 'Jordan Avery', 'Reset password for Jordan Avery')).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /^Unlock/ })).not.toBeInTheDocument();
   });
 });
 
@@ -423,7 +430,8 @@ describe('MembersAdminPage — the base Member position (workflow review W11-9)'
 
   it('still offers removal from an archived member', async () => {
     vi.mocked(userService.getUsersWithRoles).mockResolvedValue([{ ...member, status: 'archived' }] as never);
-    renderWithRouter(<MembersAdminPage />);
+    // An archived member is listed on the Former Members page.
+    renderWithRouter(<MembersAdminPage population="former" />);
 
     expect(await screen.findByRole('button', { name: 'Remove Member position from Jordan Avery' })).toBeInTheDocument();
   });
@@ -461,7 +469,8 @@ describe('MembersAdminPage — positions that mirror a rank', () => {
 
     const row = await screen.findByRole('row', { name: /Jordan Avery/ });
     expect(within(row).getAllByText('Firefighter')).toHaveLength(1);
-    expect(within(row).getByText('Member')).toBeInTheDocument();
+    // The base Member chip is left off the row too; what remains says so.
+    expect(within(row).getByText('No other positions')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Remove Firefighter position/ })).not.toBeInTheDocument();
   });
 
@@ -566,17 +575,15 @@ describe('MembersAdminPage — reaching and naming a member (members review)', (
   });
 
   it('names every row action after the member it acts on', async () => {
+    const user = userEvent.setup();
     renderWithRouter(<MembersAdminPage />);
 
-    for (const name of [
-      'Edit Jordan Avery',
-      'Manage positions for Jordan Avery',
-      'Reset password for Jordan Avery',
-      'Unlock Jordan Avery',
-      'Reset MFA for Jordan Avery',
-      'Delete Jordan Avery',
-    ]) {
+    for (const name of ['Edit Jordan Avery', 'Manage positions for Jordan Avery']) {
       expect(await screen.findByRole('button', { name })).toBeInTheDocument();
+    }
+    expect(await rowMenuItem(user, 'Jordan Avery', 'Reset password for Jordan Avery')).toBeInTheDocument();
+    for (const name of ['Unlock Jordan Avery', 'Reset MFA for Jordan Avery', 'Delete Jordan Avery']) {
+      expect(screen.getByRole('menuitem', { name })).toBeInTheDocument();
     }
   });
 });
@@ -608,15 +615,16 @@ describe("MembersAdminPage — removing a lost phone's passkey", () => {
   });
 
   it('offers the two-factor action for a member whose only factor is a passkey', async () => {
+    const user = userEvent.setup();
     renderWithRouter(<MembersAdminPage />);
-    expect(await screen.findByRole('button', { name: 'Reset MFA for Jordan Avery' })).toBeInTheDocument();
+    expect(await rowMenuItem(user, 'Jordan Avery', 'Reset MFA for Jordan Avery')).toBeInTheDocument();
   });
 
   it('removes just the one passkey after confirmation', async () => {
     const user = userEvent.setup();
     renderWithRouter(<MembersAdminPage />);
 
-    await user.click(await screen.findByRole('button', { name: 'Reset MFA for Jordan Avery' }));
+    await user.click(await rowMenuItem(user, 'Jordan Avery', 'Reset MFA for Jordan Avery'));
     expect(userService.adminListPasskeys).toHaveBeenCalledWith('user-1');
     await user.click(await screen.findByRole('button', { name: 'Remove passkey Lost phone' }));
     await user.click(await screen.findByRole('button', { name: 'Remove passkey' }));
@@ -624,5 +632,281 @@ describe("MembersAdminPage — removing a lost phone's passkey", () => {
     expect(userService.adminRemovePasskey).toHaveBeenCalledWith('user-1', 'pk-1');
     expect(await screen.findByText(/removes the member's authenticator, every passkey/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove passkey Lost phone' })).not.toBeInTheDocument();
+  });
+});
+
+describe('MembersAdminPage — Member Management and Former Members split the roster', () => {
+  const current = [
+    member,
+    {
+      ...member,
+      id: 'user-prob',
+      first_name: 'Pia',
+      last_name: 'Probie',
+      full_name: 'Pia Probie',
+      status: 'probationary',
+    },
+    {
+      ...member,
+      id: 'user-retired',
+      first_name: 'Rex',
+      last_name: 'Retired',
+      full_name: 'Rex Retired',
+      status: 'retired',
+    },
+    { ...member, id: 'user-leave', first_name: 'Lee', last_name: 'Leave', full_name: 'Lee Leave', status: 'leave' },
+  ];
+  const former = [
+    {
+      ...member,
+      id: 'user-arch',
+      first_name: 'Former',
+      last_name: 'Archived',
+      full_name: 'Former Archived',
+      status: 'archived',
+    },
+    {
+      ...member,
+      id: 'user-dv',
+      first_name: 'Dana',
+      last_name: 'Quit',
+      full_name: 'Dana Quit',
+      status: 'dropped_voluntary',
+    },
+    {
+      ...member,
+      id: 'user-di',
+      first_name: 'Drew',
+      last_name: 'Removed',
+      full_name: 'Drew Removed',
+      status: 'dropped_involuntary',
+    },
+  ];
+  const currentNames = [/Jordan Avery/, /Pia Probie/, /Rex Retired/, /Lee Leave/];
+  const formerNames = [/Former Archived/, /Dana Quit/, /Drew Removed/];
+
+  beforeEach(() => {
+    vi.mocked(userService.getUsersWithRoles).mockReset();
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([...current, ...former] as never);
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole, chiefRole] as never);
+    vi.mocked(locationsService.getLocations).mockReset();
+    vi.mocked(locationsService.getLocations).mockResolvedValue([] as never);
+    vi.mocked(userService.assignUserRoles).mockReset();
+  });
+
+  it('lists current, retired and on-leave members on Member Management, and no former ones', async () => {
+    renderWithRouter(<MembersAdminPage />);
+
+    await screen.findByRole('row', { name: /Jordan Avery/ });
+    for (const name of currentNames) expect(screen.getByRole('row', { name })).toBeInTheDocument();
+    for (const name of formerNames) expect(screen.queryByRole('row', { name })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /former members/i })).not.toBeInTheDocument();
+  });
+
+  it('lists only archived and dropped members on Former Members', async () => {
+    renderWithRouter(<MembersAdminPage population="former" />);
+
+    await screen.findByRole('row', { name: /Former Archived/ });
+    for (const name of formerNames) expect(screen.getByRole('row', { name })).toBeInTheDocument();
+    for (const name of currentNames) expect(screen.queryByRole('row', { name })).not.toBeInTheDocument();
+    // The same actions as Member Management.
+    const row = screen.getByRole('row', { name: /Dana Quit/ });
+    expect(within(row).getByRole('button', { name: /Manage positions for Dana Quit/ })).toBeInTheDocument();
+  });
+
+  it('says so when there are no former members', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue(current as never);
+    renderWithRouter(<MembersAdminPage population="former" />);
+
+    expect(await screen.findByText('No archived or dropped members.')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('keeps each population to its own page in View by Position and the member picker', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MembersAdminPage />);
+
+    await user.click(await screen.findByRole('button', { name: /view by position/i }));
+    expect(screen.queryByRole('link', { name: 'Former Archived' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Jordan Avery' })).toBeInTheDocument();
+
+    await user.click((await screen.findAllByRole('button', { name: 'Manage Members' }))[0] ?? document.body);
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByRole('checkbox', { name: /Former Archived/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('checkbox', { name: /Jordan Avery/ })).toBeInTheDocument();
+  });
+
+  // The picker lists one page's members, but the save diffs against the whole
+  // roster: a member on the other page who holds the position must keep it.
+  it('does not take a position from a former member when it is saved from Member Management', async () => {
+    const user = userEvent.setup();
+    const chiefHolder = { ...current[1], roles: [memberRole] };
+    const formerChief = { ...former[0], roles: [memberRole, chiefRole] };
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([member, chiefHolder, formerChief] as never);
+    vi.mocked(userService.assignUserRoles).mockResolvedValue({} as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    await user.click(await screen.findByRole('button', { name: /view by position/i }));
+    await user.click((await screen.findAllByRole('button', { name: 'Manage Members' }))[1] ?? document.body);
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('checkbox', { name: /Pia Probie/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Save Changes' }));
+
+    await vi.waitFor(() => expect(userService.assignUserRoles).toHaveBeenCalledTimes(1));
+    expect(userService.assignUserRoles).toHaveBeenCalledWith('user-prob', ['role-member', 'role-chief']);
+  });
+});
+
+describe('MembersAdminPage — a row says each thing once', () => {
+  const officeRole = {
+    ...memberRole,
+    id: 'role-to',
+    name: 'Training Officer',
+    slug: 'training_officer',
+    is_system: false,
+  };
+  const lifeRole = { ...memberRole, id: 'role-life', name: 'Life Member', slug: 'life_member', is_system: false };
+  const probRole = {
+    ...memberRole,
+    id: 'role-prob',
+    name: 'Probationary Member',
+    slug: 'probationary_member',
+    is_system: false,
+  };
+
+  beforeEach(() => {
+    vi.mocked(userService.getUsersWithRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockReset();
+    vi.mocked(roleService.getRoles).mockResolvedValue([memberRole, officeRole, lifeRole, probRole] as never);
+    vi.mocked(locationsService.getLocations).mockReset();
+    vi.mocked(locationsService.getLocations).mockResolvedValue([] as never);
+  });
+
+  it('leaves the base Member chip and a chip naming the membership status off the row', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      { ...member, member_class: 'administrative', member_status: 'life', roles: [memberRole, lifeRole, officeRole] },
+    ] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    const row = await screen.findByRole('row', { name: /Jordan Avery/ });
+    expect(within(row).getByText('Training Officer')).toBeInTheDocument();
+    expect(within(row).queryByText('Member')).not.toBeInTheDocument();
+    expect(within(row).queryByText('Life Member')).not.toBeInTheDocument();
+    expect(within(row).getByText('Administrative · Life member')).toBeInTheDocument();
+  });
+
+  it('leaves off a chip naming the member class, and keeps it on a member of another class', async () => {
+    const adminRole = {
+      ...memberRole,
+      id: 'role-admin-member',
+      name: 'Administrative Member',
+      slug: 'administrative_member',
+      is_system: false,
+    };
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      {
+        ...member,
+        member_class: 'administrative',
+        member_status: 'regular',
+        roles: [memberRole, adminRole, officeRole],
+      },
+      {
+        ...member,
+        id: 'u-op',
+        first_name: 'Opal',
+        last_name: 'Ops',
+        full_name: 'Opal Ops',
+        member_class: 'operational',
+        member_status: 'regular',
+        roles: [memberRole, adminRole],
+      },
+    ] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    const admin = await screen.findByRole('row', { name: /Jordan Avery/ });
+    expect(within(admin).queryByText('Administrative Member')).not.toBeInTheDocument();
+    expect(within(admin).getByText('Training Officer')).toBeInTheDocument();
+    expect(within(admin).getByText('Administrative · Regular member')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('row', { name: /Opal Ops/ })).getByText('Administrative Member')
+    ).toBeInTheDocument();
+  });
+
+  it('still shows a status-named chip on a member whose status differs', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      { ...member, member_class: 'operational', member_status: 'regular', roles: [memberRole, lifeRole] },
+    ] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    const row = await screen.findByRole('row', { name: /Jordan Avery/ });
+    expect(within(row).getByText('Life Member')).toBeInTheDocument();
+  });
+
+  it('reads "No other positions" when the hidden chips are all a member holds', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      { ...member, member_status: 'probationary', status: 'probationary', roles: [memberRole, probRole] },
+    ] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    const row = await screen.findByRole('row', { name: /Jordan Avery/ });
+    expect(within(row).getByText('No other positions')).toBeInTheDocument();
+  });
+
+  it('folds the account status into Membership, shown only when it is news', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      { ...member, member_class: 'operational', member_status: 'regular', status: 'active' },
+      {
+        ...member,
+        id: 'u-leave',
+        first_name: 'Lee',
+        last_name: 'Leave',
+        full_name: 'Lee Leave',
+        member_status: 'regular',
+        status: 'leave',
+      },
+      {
+        ...member,
+        id: 'u-prob',
+        first_name: 'Pia',
+        last_name: 'Probie',
+        full_name: 'Pia Probie',
+        member_status: 'probationary',
+        status: 'probationary',
+      },
+      {
+        ...member,
+        id: 'u-prob-reg',
+        first_name: 'Rae',
+        last_name: 'Regular',
+        full_name: 'Rae Regular',
+        member_status: 'regular',
+        status: 'probationary',
+      },
+    ] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    await screen.findByRole('row', { name: /Jordan Avery/ });
+    expect(screen.queryByRole('columnheader', { name: 'Status' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('row', { name: /Jordan Avery/ })).queryByText('Active')).not.toBeInTheDocument();
+    expect(within(screen.getByRole('row', { name: /Lee Leave/ })).getByText('On Leave')).toBeInTheDocument();
+    // "Probationary" beside "Probationary member" would say it twice.
+    const probie = screen.getByRole('row', { name: /Pia Probie/ });
+    expect(within(probie).getAllByText(/Probationary/)).toHaveLength(1);
+    expect(within(screen.getByRole('row', { name: /Rae Regular/ })).getByText('Probationary')).toBeInTheDocument();
+  });
+
+  it('keeps Edit and Manage Positions on the row and offers no menu on the caller’s own row', async () => {
+    vi.mocked(userService.getUsersWithRoles).mockResolvedValue([
+      member,
+      { ...member, id: 'coordinator-1', first_name: 'Cory', last_name: 'Self', full_name: 'Cory Self' },
+    ] as never);
+    renderWithRouter(<MembersAdminPage />);
+
+    await screen.findByRole('row', { name: /Jordan Avery/ });
+    expect(screen.getByRole('button', { name: 'More actions for Jordan Avery' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reset password for Jordan Avery' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit Cory Self' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More actions for Cory Self' })).not.toBeInTheDocument();
   });
 });
