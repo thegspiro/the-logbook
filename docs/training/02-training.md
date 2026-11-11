@@ -4257,8 +4257,8 @@ Details**; the course is on **Training Info**.
 ![The start date/time control — a date field beside hour, minute and AM/PM dropdowns](./images/02-81-session-quarter-hour.png)
 
 3. Use one of the **Quick Duration** buttons (1 hour, 2 hours, 4 hours, 8
-   hours) to fill in the end time, or set the End Date & Time yourself. The
-   row appears only once a start time is set.
+   hours) to fill in the end time, or set the End Date & Time yourself. With
+   no start time set, a button says "Set a start date first" instead.
 
 ![The Quick Duration row — 1 hour, 2 hours, 4 hours and 8 hours](./images/02-82-session-quick-duration.png)
 
@@ -4307,7 +4307,7 @@ details from the form.
 | You delete the parent event                        | The linked training session is not deleted with it.               |
 | A time from imported data is not on a quarter hour | It is rounded to the nearest quarter hour.                        |
 | The form fills in details from a course            | Nothing is locked. You can change any filled-in value.            |
-| No start date is chosen                            | The Quick Duration buttons are not available yet.                 |
+| No start date is chosen                            | A Quick Duration button says "Set a start date first".            |
 | An occurrence falls after **Repeat Until**         | It is not created.                                                |
 | The course is changed later                        | Sessions already created keep the details they were created with. |
 | No course is chosen                                | Records are filed under the event's title.                        |

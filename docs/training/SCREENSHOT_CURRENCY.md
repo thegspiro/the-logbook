@@ -32,6 +32,35 @@ Nothing was captured by this pass.
 
 The November 8 – 9 queue below also lists the My Shifts **Past** view; one capture covers both.
 
+## Made stale by the one training-event form (2026-11-11)
+
+The training-event form replaced Training Admin's Create Session wizard and the
+Events form's "Training details (optional)" group, and the event page's
+Requirements & Programs card became the read-only **Training details** card
+with **Edit training details**. Nothing was captured. The manifest entries
+marked "Rewritten 2026-11-11" drive the new form but have not been run; run
+each with `--only <id>` and rewrite the guide's alt text from the new frame
+when it is applied, since the alt in the guide still describes the old one.
+
+| Image | Disposition | Notes |
+| --- | --- | --- |
+| `04-61-training-details-create` | **REPLACE** | The pictured group no longer exists: choosing Training on Create Event opens the training-event form. The entry now pictures its Training Info step after the hand-off, under "Switched to the training form". The guide's alt and the Training Credit from Events placeholder text describe the old group |
+| `02-91-session-confirmation-toggle` | **REPLACE** | Require instructor confirmation is now **Require sign-off**, on Training Info under _Training completion_, not on step 3. The entry now clips to that fieldset; the guide's alt names step 3 |
+| `02-80-session-course-autopopulate` | **REPLACE** | The course is three radios (No course yet, From the Course Library, One-off course name) and No course yet is selected first; the entry picks From the Course Library |
+| `19-29-training-session-linkage` | **REPLACE** | Same radios; Training Info also carries Counts toward attendance, certification and Training completion, and the Requirement list leaves out session-attendance requirements |
+| `02-83-session-recurrence` | **REPLACE** | The recurrence is the event form's: "Make this a recurring event", a series end date or **Rolling 12-month cycle**, Exception Dates. "Repeat Until" is gone |
+| `02-81-session-quarter-hour`, `02-82-session-quick-duration` | **CHECK** | The same controls, now the event form's Schedule section; likely unchanged in frame. The Quick Duration row is drawn before a start is set |
+| `04-02-event-detail` | **REPLACE** | On a Training event the Requirements & Programs card is now **Training details**, a read-only summary; the alt names the old card |
+| `04-10-event-attendance` | **CHECK** | Replace if the Training details card is in frame |
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 02 | Training Admin → Records → Sessions as a training manager without Manage all events: the "Creating a training session needs the Manage all events permission" notice | Create |
+| 02 | Settings step with Mandatory for pre-filled from Counts toward attendance, its note naming a requirement no member type stands for | Create |
+| 02, 04 | Review step of an edit to a Training series: Review changes, the This event only / This and all future events choice | Create |
+| 02, 04 | Edit of a finalized Training event: Training Info badged Locked except Counts toward attendance | Create |
+| 04 | Event page's Training details card for an events manager, with Edit training details | Create |
+
 ## Queued by the November 8 – 9 documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--9-2026).
@@ -72,12 +101,12 @@ Nothing was captured by this pass.
 | 02, 08 | Training Admin **Settings & Data** with the Compliance Settings card | Replace |
 | 00 | Dashboard Department pulse and Today's Staffing | Replace |
 | 13 | Medical Screening requirement with **Not linked to a requirement** | Replace |
-| 02 | Create-session step 2 with the attendance checklist; event card **Counts toward attendance** badge | Create |
+| 02 | Create-session step 2 with the attendance checklist; event card **Counts toward attendance** badge (2026-11-11: step 2 is now the training-event form's Training Info) | Create |
 | 02 | Compliance Matrix cell: Chief override control and **Met by the Chief's override** | Create |
 | 02 | Evaluation builder **Graded by section** with grade ranges; evaluation page with a regraded section | Create |
 | 02 | `02-92` and any capture of the Requirements tab showing Import from Registry (now below the list) | Replace |
 | 05 | `05-127-items-not-seen` (items added today no longer first as Never) | Replace |
-| 04 | Event form location picker and Create Training Session picker (no repeated building); Public Requests Overview with an amber Handling step | Replace / Create |
+| 04 | Event form location picker and Create Training Session picker (no repeated building; 2026-11-11: both are now the same Location section); Public Requests Overview with an amber Handling step | Replace / Create |
 | Any | Every capture showing a toggle switch: the track is now a true pill and the accent is red, not purple | Replace |
 | 01, 10 | Wide tables at tablet width (roster, inventory items, dues, finance approvals) as cards | Replace |
 | 15 | Applicant board with selection on, card content inset | Replace (`15-46` was re-shot) |
@@ -1001,7 +1030,7 @@ below; its docstring says how each one survives a re-seed.
 | `04-57-organized-by-row`, `04-58-transfer-event-series` | **CURRENT** 2026-10-17 | New. The seeder transfers the monthly series to Dana Ruiz with Lila Nakamura as alternate. The dialog is left on "This and all future events in the series" and never submitted. One placeholder asked for both, so `04-58` was placed by hand |
 | `04-59-attendance-request-routing` | **CURRENT** 2026-10-17 | New. Every event type on Default (Secretary), the demo's untouched setting |
 | `04-60-finalized-event-edit` | **CURRENT** 2026-10-17 | New. The seeded Apparatus Committee Meeting, finalized four days back; a business meeting, so finalizing it writes no training records. Never saved |
-| `04-61-training-details-create` | **CURRENT** 2026-10-17 | New. Event type Training, the first course (Aerial Operations) picked; Training Type and Category filled from it. Not submitted |
+| `04-61-training-details-create` | **REPLACE** (was **CURRENT** 2026-10-17) | New. Event type Training, the first course (Aerial Operations) picked; Training Type and Category filled from it. Not submitted. Stale since 2026-11-11: the group is gone, see the top of this file |
 | `04-62-finalize-training-confirm` | **CURRENT** 2026-10-17 | New. On Pump Panel Practice; closed with Keep it open |
 | `04-63-recurring-edit-scope` | **CURRENT** 2026-10-17 | New. The demo's series is monthly rather than weekly; the panel reads the same for any pattern. Never saved |
 | `04-02`, `04-05`, `04-08`, `04-09`, `04-15`, `04-38`, `04-39`, `04-45`, `04-49` (re-shot) | **CURRENT** 2026-10-17 | Current copy throughout: the Organized by row and bordered cards on the detail page, the Organizer and Alternate pickers on Create Event, the Attendance Trends subtitle, the templates description, "soonest due first" with word priorities, the rolling note, **Keep Event**, the Flexible wording and "You're Checked In" with the Training Record panel. The analytics page's "Members check in on average 504 min after event start" comes from manager-added check-ins on past demo events, which are stamped when they are added |
@@ -1752,7 +1781,7 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | 03-scheduling.md | August 19–23, 2026 update — request review and pagination | _[Member at /scheduling?tab=requests on the default Pending filter, after their only swap request was approved. It shows 'No swap requests', 'Your swap requests will appear here…' and the line 'Showing pending requests only. Choose All Statuses to see the rest.']_ **CURRENT** 2026-10-17 as `03-115-requests-nothing-pending`, signed in as a second ordinary member |
 | 04-events-meetings.md | For Members (Checking In) | _[Member at /events/:id/check-in on a Training-type demo event inside its check-in window, after tapping Check In to This Event: the "You're Checked In" heading, the event name, and the green Training Record panel reading "Your attendance will be added to your training record when the event's attendance is finalized." Creates a check-in (mutates seed data). Do not capture the member's email or the URL bar.]_ (**CURRENT** 2026-10-17: `04-54-training-check-in-confirmation`) |
 | 04-events-meetings.md | Post-Event Notifications | _[Event organizer (events.manage) at /events/:eventId on an ended Training event with attendance still open: the "Finalize attendance?" confirmation, listing how each member's time is decided, that members with no credited time get no record, and that earlier admin-hours entries are removed, with Finalize and close / Keep it open. Press Keep it open; never confirm.]_ (**CURRENT** 2026-10-17: `04-62-finalize-training-confirm`) |
-| 04-events-meetings.md | Training Credit from Events _(2026-09-29)_ | _[Admin with events.manage and training.manage at /events/admin?tab=create: Create Event with Event Type set to Training, scrolled to the "Training details (optional)" group, a course picked (so Training Type and Category fill), and the Create Training Session link line visible. Do not submit.]_ (**CURRENT** 2026-10-17: `04-61-training-details-create`) |
+| 04-events-meetings.md | Training Credit from Events _(2026-09-29)_ | _[Admin with events.manage and training.manage at /events/admin?tab=create: Create Event with Event Type set to Training, scrolled to the "Training details (optional)" group, a course picked (so Training Type and Category fill), and the Create Training Session link line visible. Do not submit.]_ (**CURRENT** 2026-10-17: `04-61-training-details-create`; **REPLACE** since 2026-11-11, when Create Event began handing Training to the training-event form) |
 | 04-events-meetings.md | Managing Recurring Event Series | _[Event organizer (events.manage) at /events/:id/edit on an occurrence of a weekly recurring demo event: the indigo "This event is part of a recurring series." panel above the form with "This and all future events" selected. Do not save.]_ (**CURRENT** 2026-10-17: `04-63-recurring-edit-scope`) |
 | 05-inventory.md | First-Run Setup | _[Quartermaster (inventory.manage) on a department with no inventory items, at /inventory/admin/items: the empty state "Your department has no inventory items yet" with the Open the Setup Guide and Add Item buttons. Capture outside the seeded demo department, the way 05-72 is captured by scripts/screenshots/inventory-setup.mjs.]_ — **CURRENT** 2026-10-17 as `05-93` |
 | 05-inventory.md | Step 2 — Storage areas | _[Quartermaster at /inventory/storage-areas: the "Delete <area>?" dialog for an area that holds items and has a shelf nested inside it, showing both red reasons and the disabled Delete button. Do not delete.]_ — **CURRENT** 2026-10-17 as `05-104` |
@@ -2004,7 +2033,7 @@ A second reading of PRs #2651–#2846 checked each guide's screens against the c
 | `04-03-election-eligibility` | **CHECK** | Eligibility roster stat label changed from Secretary Overrides to Voter Overrides, if it is in frame (#2787) | |
 | `04-06-check-in-monitoring` | **CHECK** | Status column now shows 'Going' label; empty state 'No one has checked in yet.' (#2778/#2779) | |
 | `04-09-rsvp-modal` | **CHECK** | RSVP radio rows are taller on phones only; a desktop capture is likely unchanged (#2773) | |
-| `04-10-event-attendance` | **CHECK** | Several details may be in frame: '(times edited)' wording, RSVP Activity statuses as labels, and Training Details / Requirements & Programs card text on a Training event (#2779/#2773/#2820) | |
+| `04-10-event-attendance` | **CHECK** | Several details may be in frame: '(times edited)' wording, RSVP Activity statuses as labels, and Training Details / Requirements & Programs card text on a Training event (#2779/#2773/#2820). Since 2026-11-11 that card is the read-only Training details card | |
 | `04-20-event-requests` | **CHECK** | On an expanded request, 'Public status link available' now reads 'The requester can track progress with a status link', and coordinator options show rank display names (#2779/#2788) | |
 | `04-34-guest-prospect-card` | **CHECK** | Badge casing on pipeline cards changed, if they are in frame (#2783) | |
 | `04-35-minutes-linked-elections` | **CHECK** | Minutes detail copy changed; Linked Elections card unchanged (#2786) | |
@@ -4473,6 +4502,11 @@ and program linkage", and the event-detail card that corrects those links
 afterwards (**Requirements & Programs**) never shows the course — it edits four
 ids and nothing else. Step 2 of the wizard carries all three in one frame, so
 that is what this is; the guide says where the same pickers reappear afterwards.
+
+**Superseded 2026-11-11.** The event-detail card no longer edits links at all:
+it is a read-only **Training details** summary, and **Edit training details**
+opens the training-event form, whose Training Info step this shot now
+pictures. Marked **REPLACE** at the top of this file.
 
 **Nothing is written.** The wizard creates on step 4, and this stops at step 2 —
 no `mutatesSeedData` flag, and no training session added to a department that
