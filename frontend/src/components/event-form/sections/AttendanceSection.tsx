@@ -26,6 +26,8 @@ interface AttendanceSectionProps {
   scopeNote?: React.ReactNode;
   /** `before`: above Mandatory for; `after` (the default): under its choices. */
   scopeNotePlacement?: 'before' | 'after' | undefined;
+  /** The member-type boxes on one wrapping row, as the training form's Settings step draws them. */
+  typesInRow?: boolean | undefined;
 }
 
 /** Whether attendance is mandatory, and for every member or which member types. */
@@ -34,6 +36,7 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
   scopeOnTick = 'some',
   scopeNote,
   scopeNotePlacement = 'after',
+  typesInRow = false,
 }) => {
   const {
     formData,
@@ -109,21 +112,23 @@ export const AttendanceSection: React.FC<AttendanceSectionProps> = ({
           {mandatoryScope === 'some' && (
             <div className="space-y-2 pl-7">
               <p className="text-theme-text-muted text-xs">Select one or more member types required to attend.</p>
-              {typeBoxes.map((type, index) => (
-                <label key={type.value} className="mobile-touch-target flex items-center justify-start space-x-3">
-                  <input
-                    type="checkbox"
-                    // The first box takes the field's id, so a refusal can focus it.
-                    id={index === 0 ? EVENT_FIELD_IDS.mandatory_membership_types : `mandatory-${type.value}`}
-                    checked={selected.includes(type.value)}
-                    onChange={(e) => toggleMandatoryMembershipType(type.value, e.target.checked)}
-                    aria-invalid={error ? true : undefined}
-                    aria-describedby={error ? MANDATORY_FOR_ERROR_ID : undefined}
-                    className={checkboxClass}
-                  />
-                  <span className="text-theme-text-secondary text-sm">{type.label}</span>
-                </label>
-              ))}
+              <div className={typesInRow ? 'flex flex-wrap gap-x-6' : 'space-y-2'}>
+                {typeBoxes.map((type, index) => (
+                  <label key={type.value} className="mobile-touch-target flex items-center justify-start space-x-3">
+                    <input
+                      type="checkbox"
+                      // The first box takes the field's id, so a refusal can focus it.
+                      id={index === 0 ? EVENT_FIELD_IDS.mandatory_membership_types : `mandatory-${type.value}`}
+                      checked={selected.includes(type.value)}
+                      onChange={(e) => toggleMandatoryMembershipType(type.value, e.target.checked)}
+                      aria-invalid={error ? true : undefined}
+                      aria-describedby={error ? MANDATORY_FOR_ERROR_ID : undefined}
+                      className={checkboxClass}
+                    />
+                    <span className="text-theme-text-secondary text-sm">{type.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           )}
           {error && (

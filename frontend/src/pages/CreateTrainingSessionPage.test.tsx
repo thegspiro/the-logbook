@@ -683,6 +683,32 @@ describe('CreateTrainingSessionPage as approved', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: /^Course/ }), 'course-pump');
   }
 
+  // The Settings step followed the Events form's order: Max Attendees, guests,
+  // statuses, then who sees the roster; the window and its minutes on rows of
+  // their own; and the add-a-reminder picker with no label on screen.
+  it('lays Settings out in the approved order', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    await next(user);
+    await next(user);
+    expect(screen.getByText('Step 3 of 4 · Settings')).toBeInTheDocument();
+
+    const before = (a: HTMLElement, b: HTMLElement) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const max = screen.getByLabelText(/^Max Attendees/);
+    const visibility = screen.getByLabelText("Who can see who's going");
+    const guests = screen.getByRole('checkbox', { name: /^Allow guests/ });
+    expect(before(max, visibility)).toBe(true);
+    expect(before(visibility, guests)).toBe(true);
+
+    await user.selectOptions(screen.getByLabelText('Check-In Window'), 'window');
+    const windowHint = screen.getByText(/^Flexible opens before the start/);
+    expect(before(screen.getByLabelText('Minutes after end'), windowHint)).toBe(true);
+
+    expect(screen.getByText('Add a reminder', { selector: 'label' })).toBeInTheDocument();
+  });
+
   it('draws each attendance requirement as an option saying whom it applies to', async () => {
     linkageRequirements.value = [
       {

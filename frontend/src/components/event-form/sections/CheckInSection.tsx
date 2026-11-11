@@ -38,6 +38,70 @@ export const CheckInSection: React.FC<CheckInSectionProps> = ({ model, variant =
     handleCheckInMinutesBeforeChange,
     updateGuestSwitches,
   } = model;
+  const showBefore =
+    formData.check_in_window_type === CheckInWindowType.FLEXIBLE ||
+    formData.check_in_window_type === CheckInWindowType.WINDOW;
+  const showAfter = formData.check_in_window_type === CheckInWindowType.WINDOW;
+  const windowSelect = (
+    <div>
+      <label htmlFor="checkin-window" className={labelClass}>
+        Check-In Window
+      </label>
+      <select
+        id="checkin-window"
+        value={formData.check_in_window_type || 'flexible'}
+        onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
+        aria-describedby={steps && !attendanceLocked ? WINDOW_HINT_ID : undefined}
+        className={selectClass}
+      >
+        {steps ? (
+          <>
+            <option value="flexible">Flexible</option>
+            <option value="strict">Strict</option>
+            <option value="window">Custom window</option>
+          </>
+        ) : (
+          <>
+            <option value="flexible">Flexible - Opens before the start, closes when the event ends</option>
+            <option value="strict">Strict - Only while the event is running</option>
+            <option value="window">Window - Opens before the start, closes after the end</option>
+          </>
+        )}
+      </select>
+    </div>
+  );
+  const minutesBefore = (
+    <div>
+      <label htmlFor="checkin-before" className={labelClass}>
+        Minutes before start
+      </label>
+      <input
+        type="number"
+        id="checkin-before"
+        min="0"
+        max="120"
+        value={formData.check_in_minutes_before ?? 60}
+        onChange={(e) => handleCheckInMinutesBeforeChange(e.target.value)}
+        className={inputClass}
+      />
+    </div>
+  );
+  const minutesAfter = (
+    <div>
+      <label htmlFor="checkin-after" className={labelClass}>
+        Minutes after end
+      </label>
+      <input
+        type="number"
+        id="checkin-after"
+        min="0"
+        max="120"
+        value={formData.check_in_minutes_after || 15}
+        onChange={(e) => update({ check_in_minutes_after: parseInt(e.target.value) || 15 })}
+        className={inputClass}
+      />
+    </div>
+  );
   return (
     <section className="space-y-4">
       <h2 className="text-theme-text-primary flex items-center space-x-2 text-lg font-bold">
@@ -59,77 +123,33 @@ export const CheckInSection: React.FC<CheckInSectionProps> = ({ model, variant =
         className="min-w-0 space-y-4 disabled:opacity-60"
       >
         {attendanceLocked && <legend className="sr-only">Check-in rules, locked while attendance is finalized</legend>}
-        <div>
-          <label htmlFor="checkin-window" className={labelClass}>
-            Check-In Window
-          </label>
-          <select
-            id="checkin-window"
-            value={formData.check_in_window_type || 'flexible'}
-            onChange={(e) => update({ check_in_window_type: e.target.value as 'flexible' | 'strict' | 'window' })}
-            aria-describedby={steps && !attendanceLocked ? WINDOW_HINT_ID : undefined}
-            className={selectClass}
-          >
-            {steps ? (
-              <>
-                <option value="flexible">Flexible</option>
-                <option value="strict">Strict</option>
-                <option value="window">Custom window</option>
-              </>
-            ) : (
-              <>
-                <option value="flexible">Flexible - Opens before the start, closes when the event ends</option>
-                <option value="strict">Strict - Only while the event is running</option>
-                <option value="window">Window - Opens before the start, closes after the end</option>
-              </>
-            )}
-          </select>
-          {steps && (
+        {steps ? (
+          // The training form sets the window and its minutes on one row, as
+          // the approved Settings step draws them, with the options explained
+          // once under it.
+          <div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {windowSelect}
+              {showBefore && minutesBefore}
+              {showAfter && minutesAfter}
+            </div>
             <p id={WINDOW_HINT_ID} className="text-theme-text-muted mt-1 text-sm">
               Flexible opens before the start and closes when the event ends. Strict is open only while the event runs.
               Custom window opens before the start and closes after the end.
             </p>
-          )}
-        </div>
-
-        {(formData.check_in_window_type === CheckInWindowType.FLEXIBLE ||
-          formData.check_in_window_type === CheckInWindowType.WINDOW) && (
-          <div
-            className={`grid gap-3 border-l-2 border-red-500/30 pl-4 ${
-              formData.check_in_window_type === CheckInWindowType.WINDOW ? 'grid-cols-2' : 'grid-cols-1'
-            }`}
-          >
-            <div>
-              <label htmlFor="checkin-before" className={labelClass}>
-                Minutes before start
-              </label>
-              <input
-                type="number"
-                id="checkin-before"
-                min="0"
-                max="120"
-                value={formData.check_in_minutes_before ?? 60}
-                onChange={(e) => handleCheckInMinutesBeforeChange(e.target.value)}
-                className={inputClass}
-              />
-            </div>
-            {formData.check_in_window_type === CheckInWindowType.WINDOW && (
-              <div>
-                <label htmlFor="checkin-after" className={labelClass}>
-                  Minutes after end
-                </label>
-                <input
-                  type="number"
-                  id="checkin-after"
-                  min="0"
-                  max="120"
-                  value={formData.check_in_minutes_after || 15}
-                  onChange={(e) => update({ check_in_minutes_after: parseInt(e.target.value) || 15 })}
-                  className={inputClass}
-                />
+          </div>
+        ) : (
+          <>
+            {windowSelect}
+            {showBefore && (
+              <div
+                className={`grid gap-3 border-l-2 border-red-500/30 pl-4 ${showAfter ? 'grid-cols-2' : 'grid-cols-1'}`}
+              >
+                {minutesBefore}
+                {showAfter && minutesAfter}
               </div>
             )}
-          </div>
+          </>
         )}
 
         <label className="mobile-touch-target flex items-center justify-start space-x-3">

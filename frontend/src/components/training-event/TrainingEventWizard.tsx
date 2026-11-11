@@ -700,6 +700,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
             <AttendanceSection
               model={prefill.attendanceModel}
               scopeOnTick="all"
+              typesInRow
               scopeNote={
                 prefill.note && (
                   <MandatoryPrefillNote
@@ -737,7 +738,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               }
             />
             <hr className="border-theme-surface-border" />
-            <NotificationsSection model={model} />
+            <NotificationsSection model={model} variant="steps" />
           </>
         )}
 

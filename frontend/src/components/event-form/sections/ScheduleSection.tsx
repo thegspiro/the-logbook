@@ -394,7 +394,7 @@ export const ScheduleSection: React.FC<ScheduleSectionProps> = ({ model, showRec
 
               {/* Exception Dates */}
               <div>
-                <label className={labelClass}>Exception Dates (dates to skip)</label>
+                <p className={labelClass}>Exception dates (dates to skip)</p>
                 <div className="mb-2 flex items-center gap-2">
                   <input
                     type="date"
