@@ -16,6 +16,52 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4228](https://github.com/thegspiro/the-logbook/pull/4228)**
+(branch `claude/security-review-medical-supplies-p20`):
+Feature 23 (Medical supplies), pass 20, a watchdog pickup. PR #4226
+(Feature 22, Grants & fundraising, pass 14) had already merged
+(`43aec40f3b1db32507cf40b8ff00fbd0a27a29af`). A fresh `list_pull_requests`
+(state `open`) found 7 open PRs, none with a `claude/security-review-*`
+head, and row 23 was the next pending feature, confirmed on a freshly
+fetched `main`.
+
+Baseline `d3f04ebdc` (pass 19's own merge, PR #3976). Real delta: all from
+other rotation/owner-decision work, not this pass — a new owner-decision
+check refusing a new category name that duplicates an active sibling's
+(`InventoryService._assert_category_name_free`, under a per-department
+advisory lock) plus a `duplicate_name` flag on categories stored before
+that rule (`flag_duplicate_category_names`, wired into
+`list_medical_categories`'s existing route); an item-date plausibility
+check (`app/utils/item_dates.py`) on create/update; a new "last seen"
+sighting trail (`app/services/inventory_sightings.py` + migration
+`d1165a97b48e`, ENUM-widening, guarded on `_has_table()`) recording an
+item's creation and barcode put-away as a sighting; and a forms-review
+rewrite of `MedicalItemFormModal.tsx` (shared `FormField`/
+`useFieldErrors`/`useDiscardGuard` hooks, a single-save partial-update
+retry that omits — never nulls — a refused field so the rest saves). All
+org-scoped on direct read; Pitfall #1's create/update split still holds.
+**0 fixed, 0 newly flagged.** See
+`docs/security-review/MSUP-23-medical-supplies.md`'s **Pass 20** section
+for the full trace.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`, via
+`python3.13 -m black`)/`isort --check-only` (CI's pinned `9.0.2`) on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 756
+revisions, single head `8b1cf6f55425`; `generate_schema_docs.py --check`
+— up to date; `check_route_permissions.py --strict` — 305 routes, 0
+errors/warnings; scoped backend suite (`-k "medical_supplies or
+medical_supply or lot_recall"`) — 216 passed, 1 environment-only skip
+(`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/medical-supplies` — 196
+passed (10 files).
+
+Row 23 → ✅ (pending this PR's merge). Next is Feature 24 (Meetings &
+minutes) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 14, PR #4226, merged), preserved for history</summary>
+
 **PR [#4226](https://github.com/thegspiro/the-logbook/pull/4226)**
 (branch `claude/security-review-grants-fundraising-p14`):
 Feature 22 (Grants & fundraising), pass 14, a watchdog pickup. `ListAgents`
@@ -58,6 +104,8 @@ passed (29 files); `testingRegistry.test.ts` — 12 passed;
 Row 22 → ✅ (pending this PR's merge). Next is Feature 23 (Medical
 supplies) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 21, Admin hours, pass 14, PR #4224, merged), preserved for history</summary>
@@ -25510,7 +25558,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                    | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                             | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                             | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                        | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                        | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                                  | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                      | ⬜     |
