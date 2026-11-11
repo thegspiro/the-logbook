@@ -62,6 +62,7 @@ from app.models.user import (
     User,
     user_positions,
 )
+from app.schemas.organization import SchedulingNotificationSettings
 from app.services.call_tracking_service import CallTrackingService
 from app.services.email_policy import (
     EmailKind,
@@ -72,6 +73,7 @@ from app.services.external_shift_hours_service import ExternalShiftHoursService
 from app.services.member_leave_service import MemberLeaveService
 from app.services.member_supervisor_service import MemberSupervisorService
 from app.services.notifications_service import NotificationsService
+from app.services.position_recipients import current_holder_ids
 from app.services.scheduling_module_config_service import department_seat_labels
 from app.services.shift_eligibility_service import (
     DEFAULT_LATE_SIGNUP_GRACE_MINUTES,
@@ -6289,23 +6291,15 @@ class SchedulingService:
                 if shift.shift_officer_id:
                     recipient_ids.add(str(shift.shift_officer_id))
 
-            notify_roles = sched_cfg.get("notify_roles", [])
-            if notify_roles:
-                from app.models.user import Role
-
-                role_result = await self.db.execute(
-                    select(user_positions.c.user_id)
-                    .join(
-                        Role,
-                        Role.id == user_positions.c.position_id,
-                    )
-                    .where(
-                        Role.organization_id == str(organization_id),
-                        Role.slug.in_(notify_roles),
-                    )
+            # An absent key means the schema's default, which is what the
+            # settings screen shows a department that never saved it.
+            notify_roles = sched_cfg.get(
+                "notify_roles", SchedulingNotificationSettings().notify_roles
+            )
+            if isinstance(notify_roles, list):
+                recipient_ids |= await current_holder_ids(
+                    self.db, organization_id, notify_roles
                 )
-                for row in role_result.all():
-                    recipient_ids.add(str(row[0]))
 
             recipient_ids.discard(str(user_id))
             if not recipient_ids:

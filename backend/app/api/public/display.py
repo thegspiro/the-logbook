@@ -561,9 +561,10 @@ async def guest_lookup(
 
     First step of sign-in at an event that adds guests to the prospective
     members pipeline. Writes no attendance: an active applicant gets back their
-    first name and last initial plus a short-lived token for guest-confirm; a
-    department member is pointed at the member QR code; anyone else is asked to
-    see a member of staff.
+    first name and last initial plus a short-lived token for guest-confirm;
+    anyone else — including a department member's own address — is asked to
+    see a member of staff, so this endpoint cannot be used to learn which
+    addresses belong to the department (see the member-outcome comment below).
     """
     location, event, _org = await _resolve_guest_event(db, display_code, event_id)
     _require_email_first(event)
