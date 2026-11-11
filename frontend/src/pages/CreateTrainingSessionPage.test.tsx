@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
@@ -1065,6 +1065,28 @@ describe('CreateTrainingSessionPage review step', () => {
 
     expect(screen.getByText('Counts toward attendance', { selector: 'dt' })).toBeInTheDocument();
     expect(screen.getByText('Company drills (60%)')).toBeInTheDocument();
+  });
+
+  // Review showed raw markdown, long dates, and plain-text Edit links in one
+  // stacked panel; the approved one is a grid of bordered section cards.
+  it('reviews as the approved form draws it: rendered description, short dates, Edit buttons', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await fillEventDetails(user);
+    fireEvent.change(screen.getByLabelText(/^Description/), {
+      target: { value: 'Bring full PPE; **SCBA** required.' },
+    });
+    await next(user);
+    await toReview(user);
+
+    const scba = screen.getByText('SCBA');
+    expect(scba.tagName).toBe('STRONG');
+    expect(screen.queryByText(/\*\*SCBA\*\*/)).not.toBeInTheDocument();
+    // Starts and Ends, both on the day typed.
+    expect(screen.getAllByText(/^Wed, May 1, 2030, \d{1,2}:\d{2}\s?[AP]M$/)).toHaveLength(2);
+    const edit = screen.getByRole('button', { name: 'Edit Event Details' });
+    expect(edit).toHaveClass('btn-secondary', 'touch:min-h-11');
+    expect(edit).toHaveTextContent('Edit');
   });
 
   it('goes back to the step a section is set on', async () => {

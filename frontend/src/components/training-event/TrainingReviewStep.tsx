@@ -6,12 +6,27 @@
  */
 
 import React from 'react';
-import { ClipboardCheck } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  Award,
+  Bell,
+  CalendarDays,
+  ClipboardCheck,
+  GraduationCap,
+  Link2,
+  MapPin,
+  Pencil,
+  QrCode,
+  Repeat,
+  UserCheck,
+  Users,
+} from 'lucide-react';
+import { SimpleMarkdown } from '../../utils/simpleMarkdown';
 import type { MandatoryTiersUnmapped, TrainingCourse } from '../../types/training';
 import type { TrainingLinkageData } from '../../hooks/useTrainingLinkageData';
 import { TRAINING_TYPE_LABELS } from '../../constants/enums';
 import { getEventTypeLabel } from '../../utils/eventHelpers';
-import { formatCalendarDate, formatDateCustom, formatDateTime, localToUTC } from '../../utils/dateFormatting';
+import { formatCalendarDate, formatDateCustom, localToUTC } from '../../utils/dateFormatting';
 import type { EventFormModel } from '../event-form/useEventFormModel';
 import { MONTHS, ORDINALS, RECURRENCE_PATTERNS, WEEKDAYS } from '../event-form/eventFormConstants';
 import type { TrainingDetailsForm } from './trainingDetailsModel';
@@ -83,6 +98,8 @@ interface TrainingReviewStepProps {
 const hoursLabel = (hours: number | string) => `${hours} ${Number(hours) === 1 ? 'hour' : 'hours'}`;
 
 const DATE_ONLY: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+/** "Mon, Nov 16, 2026, 7:00 PM", as the approved Review reads. */
+const DATE_TIME: Intl.DateTimeFormatOptions = { ...DATE_ONLY, hour: 'numeric', minute: '2-digit' };
 
 const reminderLabel = (hours: number) =>
   hours >= 168
@@ -93,37 +110,44 @@ const reminderLabel = (hours: number) =>
 
 const Section: React.FC<{
   title: string;
+  icon: LucideIcon;
   target: ReviewTarget;
   /** Absent for a section the form cannot change. */
   onEdit?: ((target: ReviewTarget) => void) | undefined;
   children: React.ReactNode;
-}> = ({ title, target, onEdit, children }) => (
-  <section className="border-theme-surface-border border-t pt-4 first:border-t-0 first:pt-0">
-    <div className="mb-2 flex items-center justify-between gap-3">
-      <h3 className="text-theme-text-primary font-semibold">{title}</h3>
+}> = ({ title, icon: Icon, target, onEdit, children }) => (
+  <section className="border-theme-surface-border rounded-lg border p-4 sm:p-5">
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <h3 className="text-theme-text-primary flex items-center gap-2 font-semibold">
+        <Icon className="h-5 w-5 shrink-0 text-red-700 dark:text-red-400" aria-hidden="true" />
+        {title}
+      </h3>
       {onEdit && (
         <button
           type="button"
           onClick={() => onEdit(target)}
           aria-label={`Edit ${title}`}
-          className="touch-target-phone text-sm font-medium text-red-700 underline hover:text-red-800 dark:text-red-400"
+          className="btn-secondary touch:min-h-11 inline-flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
         >
+          <Pencil className="h-4 w-4" aria-hidden="true" />
           Edit
         </button>
       )}
     </div>
-    <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-[minmax(10rem,auto)_1fr]">{children}</dl>
+    <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-[minmax(7rem,2fr)_3fr]">{children}</dl>
   </section>
 );
 
-const Row: React.FC<{ label: string; children: React.ReactNode; was?: string | undefined }> = ({
-  label,
-  children,
-  was,
-}) => (
+const Row: React.FC<{
+  label: string;
+  children: React.ReactNode;
+  was?: string | undefined;
+  /** Rendered markdown keeps its own line breaks. */
+  markdown?: boolean | undefined;
+}> = ({ label, children, was, markdown = false }) => (
   <>
     <dt className="text-theme-text-muted">{label}</dt>
-    <dd className="text-theme-text-primary font-medium break-words whitespace-pre-line">
+    <dd className={`text-theme-text-primary font-medium break-words ${markdown ? '' : 'whitespace-pre-line'}`}>
       {children}
       {was !== undefined && (
         <>
@@ -295,11 +319,16 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
 
       {scopeChoice}
 
-      <div className="bg-theme-surface-secondary space-y-4 rounded-lg p-4 sm:p-6">
-        <Section title="Event Details" target="details" onEdit={onEdit}>
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+        <Section title="Event Details" icon={CalendarDays} target="details" onEdit={onEdit}>
           <Row label="Event Type">{getEventTypeLabel(formData.event_type)}</Row>
           <Row label="Title">{formData.title.trim() || '—'}</Row>
-          {formData.description?.trim() && <Row label="Description">{formData.description.trim()}</Row>}
+          {/* Rendered as the event page renders it, so **bold** reads as bold. */}
+          {formData.description?.trim() && (
+            <Row label="Description" markdown>
+              <SimpleMarkdown text={formData.description.trim()} />
+            </Row>
+          )}
           {(model.customCategories.length > 0 || formData.custom_category) && (
             <Row label="Event category">
               {formData.custom_category
@@ -322,12 +351,12 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
           )}
           {/* The form holds local wall-clock strings; formatDateTime reads its
               input as UTC, so they are converted first, as the save does. */}
-          <Row label="Starts">{formatDateTime(localToUTC(formData.start_datetime, tz), tz)}</Row>
-          <Row label="Ends">{formatDateTime(localToUTC(formData.end_datetime, tz), tz)}</Row>
+          <Row label="Starts">{formatDateCustom(localToUTC(formData.start_datetime, tz), DATE_TIME, tz)}</Row>
+          <Row label="Ends">{formatDateCustom(localToUTC(formData.end_datetime, tz), DATE_TIME, tz)}</Row>
         </Section>
 
         {model.isRecurring && (
-          <Section title="Recurrence" target="details" onEdit={editing ? undefined : onEdit}>
+          <Section title="Recurrence" icon={Repeat} target="details" onEdit={editing ? undefined : onEdit}>
             <Row label="Pattern">{recurrenceLabel}</Row>
             {editing && seriesOccurrence?.occurrenceStart && (
               <Row label="This occurrence">
@@ -365,12 +394,12 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
           </Section>
         )}
 
-        <Section title="Location" target="details" onEdit={onEdit}>
+        <Section title="Location" icon={MapPin} target="details" onEdit={onEdit}>
           <Row label="Location">{locationLabel}</Row>
           <Row label="Additional directions">{formData.location_details?.trim() || '—'}</Row>
         </Section>
 
-        <Section title="Training Details" target="training" onEdit={onEdit}>
+        <Section title="Training Details" icon={GraduationCap} target="training" onEdit={onEdit}>
           <Row label="Course" was={was(courseLabel)}>
             {courseLabel(training)}
           </Row>
@@ -400,7 +429,7 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
           )}
         </Section>
 
-        <Section title="Requirement & Program Links" target="training" onEdit={onEdit}>
+        <Section title="Requirement & Program Links" icon={Link2} target="training" onEdit={onEdit}>
           <Row label="Training category">{nameIn(categories, training.category_id)}</Row>
           <Row label="Requirement">{requirementLabel(training.requirement_id)}</Row>
           <Row label="Program">{nameIn(programs, training.program_id)}</Row>
@@ -417,7 +446,7 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
           <Row label="Counts toward attendance">{attendanceNames.length ? attendanceNames.join('\n') : 'None'}</Row>
         </Section>
 
-        <Section title="Training completion" target="training" onEdit={onEdit}>
+        <Section title="Training completion" icon={Award} target="training" onEdit={onEdit}>
           <Row label="Counts toward certification">{training.counts_toward_certification ? 'Yes' : 'No'}</Row>
           <Row label="Auto-create records">{training.auto_create_records ? 'Yes, at check-in' : 'No'}</Row>
           <Row label="Sign-off">
@@ -427,7 +456,7 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
           </Row>
         </Section>
 
-        <Section title="Attendance" target="settings" onEdit={onEdit}>
+        <Section title="Attendance" icon={UserCheck} target="settings" onEdit={onEdit}>
           <Row label="Mandatory">{formData.is_mandatory ? 'Yes' : 'No'}</Row>
           {formData.is_mandatory && <Row label="Mandatory for">{mandatoryFor}</Row>}
           {formData.is_mandatory && unmapped.length > 0 && (
@@ -435,11 +464,11 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
           )}
         </Section>
 
-        <Section title="RSVP" target="settings" onEdit={onEdit}>
+        <Section title="RSVP" icon={Users} target="settings" onEdit={onEdit}>
           <Row label="Require RSVP">{formData.requires_rsvp ? 'Yes' : 'No'}</Row>
           <Row label="RSVP deadline">
             {formData.requires_rsvp && formData.rsvp_deadline
-              ? formatDateTime(localToUTC(formData.rsvp_deadline, tz), tz)
+              ? formatDateCustom(localToUTC(formData.rsvp_deadline, tz), DATE_TIME, tz)
               : '—'}
           </Row>
           <Row label="Max attendees">
@@ -464,7 +493,7 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
           </Row>
         </Section>
 
-        <Section title="Check-In" target="settings" onEdit={onEdit}>
+        <Section title="Check-In" icon={QrCode} target="settings" onEdit={onEdit}>
           <Row label="QR Code Check-In">Enabled</Row>
           <Row label="Window">{checkInWindow}</Row>
           <Row label="Manual check-out">{formData.require_checkout ? 'Required' : 'Not required'}</Row>
@@ -477,7 +506,7 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
           </Row>
         </Section>
 
-        <Section title="Notifications" target="settings" onEdit={onEdit}>
+        <Section title="Notifications" icon={Bell} target="settings" onEdit={onEdit}>
           <Row label="Reminders to">{reminderTarget}</Row>
           {formData.send_reminders && (
             <Row label="Schedule">
