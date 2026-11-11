@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
 const mockGetSessionByEvent = vi.fn();
@@ -187,13 +187,30 @@ describe('TrainingSessionLinkageCard', () => {
       mockGetSessionByEvent.mockResolvedValue(LEGACY);
     });
 
-    it("falls back to the event's own copies of what the session lacks", async () => {
-      renderCard({ customFields: CUSTOM_FIELDS });
+    // Nothing reads these copies: finalize credits from the session, and the
+    // training form shows the session. The card substituted them for it.
+    it('reports the session as in effect, and the old copies as not applied', async () => {
+      renderCard({ canManage: true, customFields: CUSTOM_FIELDS });
 
-      expect(await screen.findByText('Lead Instructor')).toBeInTheDocument();
-      expect(screen.getByText('Capt. Owen Kittredge (not a member)')).toBeInTheDocument();
-      expect(screen.getByText('Issued by AHA · expires after 24 months')).toBeInTheDocument();
-      expect(screen.getByText('Completed when attendance is finalized')).toBeInTheDocument();
+      expect(await screen.findByText('Training records')).toBeInTheDocument();
+      expect(screen.getByText('None')).toBeInTheDocument();
+      expect(screen.queryByText(/^Issued/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Lead Instructor')).not.toBeInTheDocument();
+      expect(screen.getByText('Started at check-in, completed when attendance is finalized')).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('list', { name: 'Entered on the old form, not applied' }))
+          .getAllByRole('listitem')
+          .map((item) => item.textContent)
+      ).toEqual([
+        'Lead instructor: Capt. Owen Kittredge',
+        'Issues a certification',
+        'Issuing agency: AHA',
+        'Expires after 24 months',
+        'Training records created only when attendance is finalized',
+      ]);
+      expect(screen.getByText('Attendance is credited with the details above.', { exact: false })).toHaveTextContent(
+        'To use any of these, enter them with Edit training details.'
+      );
     });
 
     it('prefers what the session holds', async () => {
@@ -209,6 +226,22 @@ describe('TrainingSessionLinkageCard', () => {
 
       expect(await screen.findByText('Lt. Dana Okafor')).toBeInTheDocument();
       expect(screen.getByText('Issued by State Fire Training · expires after 12 months')).toBeInTheDocument();
+      expect(screen.getByText('Lead instructor: Capt. Owen Kittredge')).toBeInTheDocument();
+    });
+
+    it('lists nothing as not applied when the copies match the session', async () => {
+      mockGetSessionByEvent.mockResolvedValue({
+        ...LEGACY,
+        instructor: 'Capt. Owen Kittredge',
+        issues_certification: true,
+        issuing_agency: 'AHA',
+        expiration_months: 24,
+        auto_create_records: false,
+      });
+      renderCard({ customFields: CUSTOM_FIELDS });
+
+      expect(await screen.findByText('Issued by AHA · expires after 24 months')).toBeInTheDocument();
+      expect(screen.queryByText('Entered on the old form, not applied')).not.toBeInTheDocument();
     });
   });
 

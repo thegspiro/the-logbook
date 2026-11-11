@@ -146,7 +146,7 @@ const DISPLAYED_TRAINING_FIELD_KEYS = [
  * training session. The copies here were written when the event was created
  * and go stale the moment the training form edits the session, so once a
  * session is reported they are not drawn here at all rather than contradicting
- * it; the card itself falls back to them where an older session holds none.
+ * it; the card lists one that disagrees with the session as not applied.
  * An event with no session still shows them: they are all it has.
  */
 const SESSION_REPORTED_TRAINING_KEYS: ReadonlySet<string> = new Set([

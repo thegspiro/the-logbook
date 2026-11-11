@@ -32,14 +32,38 @@ interface TrainingSessionLinkageCardProps {
   /**
    * The event's custom_fields. A session the old Events form attached carried
    * none of the instructor, issuing agency, expiry, certification or
-   * auto-create settings: those were written here only, so the card falls
-   * back to them where the session holds nothing, or its default.
+   * auto-create settings: those were written here only. Nothing reads them —
+   * finalizing credits from the session alone — so the card reports the
+   * session and lists any copy that says otherwise as not applied, never in
+   * its place (pitfall #29: the training form shows the session too).
    */
   customFields?: Record<string, unknown> | null | undefined;
 }
 
 const text = (value: unknown): string | null =>
   typeof value === 'string' && value.trim() ? value.trim() : typeof value === 'number' ? String(value) : null;
+
+/**
+ * The old form's copies that say something the session does not, each as the
+ * officer would read it. A copy matching the session, or empty, is not news.
+ */
+const notAppliedEntries = (session: TrainingSessionResponse, legacy: Record<string, unknown>): string[] => {
+  const entries: string[] = [];
+  const instructor = text(legacy.instructor);
+  if (instructor && instructor !== session.instructor) entries.push(`Lead instructor: ${instructor}`);
+  if (legacy.issues_certification === true && !session.issues_certification) entries.push('Issues a certification');
+  const agency = text(legacy.issuing_agency);
+  if (agency && agency !== session.issuing_agency) entries.push(`Issuing agency: ${agency}`);
+  const months = text(legacy.expiration_months);
+  if (months && months !== String(session.expiration_months ?? '')) entries.push(`Expires after ${months} months`);
+  if (typeof legacy.auto_create_records === 'boolean' && legacy.auto_create_records !== session.auto_create_records)
+    entries.push(
+      legacy.auto_create_records
+        ? 'Training records started at check-in'
+        : 'Training records created only when attendance is finalized'
+    );
+  return entries;
+};
 
 const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
@@ -199,30 +223,19 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
       ? 'No course yet (filed under the event title)'
       : `${session.course_code ? `${session.course_code} - ` : ''}${session.course_name}`;
 
-  // The session first; the event's legacy copies only where it is silent.
-  const legacy = customFields ?? {};
-  const legacyInstructor = !session.instructor ? text(legacy.instructor) : null;
-  const instructor = session.instructor || legacyInstructor;
-  const issuingAgency = session.issuing_agency || text(legacy.issuing_agency);
-  const expirationMonths = session.expiration_months || text(legacy.expiration_months);
-  const issuesCertification = session.issues_certification || legacy.issues_certification === true;
-  // True is the session's default, which an old attach left in place.
-  const autoCreateRecords =
-    session.auto_create_records && typeof legacy.auto_create_records === 'boolean'
-      ? legacy.auto_create_records
-      : session.auto_create_records;
-
-  const instructorLabel = instructor
-    ? session.instructor_id && !legacyInstructor
-      ? instructor
-      : `${instructor} (${session.course_id && !legacyInstructor ? 'from the course, ' : ''}not a member)`
+  const instructorLabel = session.instructor
+    ? session.instructor_id
+      ? session.instructor
+      : `${session.instructor} (${session.course_id ? 'from the course, ' : ''}not a member)`
     : null;
 
-  const certificationLabel = issuesCertification
+  const legacyEntries = notAppliedEntries(session, customFields ?? {});
+
+  const certificationLabel = session.issues_certification
     ? [
-        issuingAgency ? `Issued by ${issuingAgency}` : 'Issued',
+        session.issuing_agency ? `Issued by ${session.issuing_agency}` : 'Issued',
         session.certification_number_prefix ? `prefix ${session.certification_number_prefix}` : null,
-        expirationMonths ? `expires after ${expirationMonths} months` : null,
+        session.expiration_months ? `expires after ${session.expiration_months} months` : null,
       ]
         .filter(Boolean)
         .join(' · ')
@@ -310,7 +323,7 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
         {session.credit_hours > 0 && <Row label="Credit Hours">{plural(session.credit_hours, 'hour')}</Row>}
         <Row label="Certification">{certificationLabel}</Row>
         <Row label="Training records">
-          {autoCreateRecords
+          {session.auto_create_records
             ? 'Started at check-in, completed when attendance is finalized'
             : 'Completed when attendance is finalized'}
         </Row>
@@ -325,6 +338,25 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
           </Row>
         )}
       </dl>
+      {legacyEntries.length > 0 && (
+        <div className="border-theme-surface-border mt-4 rounded-lg border p-4">
+          <p id={`training-not-applied-${eventId}`} className="text-theme-text-secondary text-sm font-medium">
+            Entered on the old form, not applied
+          </p>
+          <ul
+            aria-labelledby={`training-not-applied-${eventId}`}
+            className="text-theme-text-muted mt-1 list-disc space-y-0.5 pl-5 text-sm"
+          >
+            {legacyEntries.map((entry) => (
+              <li key={entry}>{entry}</li>
+            ))}
+          </ul>
+          <p className="text-theme-text-muted mt-2 text-sm">
+            Attendance is credited with the details above.
+            {canManage && !attendanceFinalized && ' To use any of these, enter them with Edit training details.'}
+          </p>
+        </div>
+      )}
       <SessionAttendanceRequirements
         session={session}
         requirements={requirements}
