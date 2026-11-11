@@ -737,6 +737,27 @@ describe('CreateTrainingSessionPage as approved', () => {
     );
   });
 
+  it('speaks of the whole series throughout the attendance note on a series', async () => {
+    linkageRequirements.value = [
+      { id: 'req-all', name: 'Annual Drill Attendance', requirement_type: 'session_attendance', applies_to_all: true },
+    ];
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+    await user.type(screen.getByLabelText(/^Title/), 'Pump Night');
+    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-06');
+    await user.click(screen.getByRole('checkbox', { name: /Make this a recurring event/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Rolling 12-month cycle' }));
+    await next(user);
+
+    const note = screen.getByRole('group', { name: 'Counts toward attendance' });
+    expect(note).toHaveAccessibleDescription(/^Attendance at each session in the series counts/);
+    expect(note).toHaveAccessibleDescription(/leaves a session out of that member's percentage/);
+    expect(note).toHaveAccessibleDescription(
+      /Leave all unticked and the series counts toward no attendance requirement\.$/
+    );
+    expect(note).not.toHaveAccessibleDescription(/this session/);
+  });
+
   it('says on Review where the hours and the capacity came from, and the weekday of a weekly series', async () => {
     const user = userEvent.setup();
     renderWithRouter(<CreateTrainingSessionPage />);
