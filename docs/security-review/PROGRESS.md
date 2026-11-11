@@ -16,6 +16,60 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**
+(branch `claude/security-review-locations-kiosk-p13`):
+Feature 32 (Locations & kiosk), pass 13, a dedicated rotation session (not a
+watchdog pickup). PR #4245 (Feature 31, Scheduled tasks, pass 13) had already
+merged clean (`17ffe629a`). A fresh `list_pull_requests` (state `open`) found
+eleven open PRs, none with a `claude/security-review-*` head, and row 32 was
+the next pending feature, confirmed on a freshly fetched `main`.
+
+**0 fixed in code beyond a stale docstring; 3 owner-decision fixes and 1
+standalone security fix re-verified rather than newly found; 1 five-pass-old
+stale finding corrected.** All 17 routes re-enumerated by AST — unchanged from
+pass 12. The real delta since pass 12's baseline (`c139cc640eba`, PR #4016)
+is three owner decisions of 2026-11-01 that landed between passes: LOC-40
+(the public kiosk and the authenticated room page now share one builder,
+`app/services/location_display.py`) and LOC-41 (a stored `building_key`
+generated column plus `uq_locations_org_name_building`, migration
+`2bb7c963f351`) are both fixed and re-verified; LOC8-2 (hard-deleting a
+location silently cleared it from nine kinds of record) is fixed for the six
+the owner chose to protect (training records/classes/cohorts/cohort classes,
+meetings, event requests — now `ON DELETE RESTRICT` and in
+`LocationService._RESTRICTING_LOCATION_REFERENCES`), with inventory
+items/storage areas/NFC tap logs left clearing as decided. Separately, an
+already-merged, independent commit (`184b28bc5`, 2026-11-08) closed the
+member half of LOC10-3's guest-lookup oracle — a member's email now answers
+`not_found` exactly as an unknown one does, re-verified against the current
+code and its frontend type. **Correction, not a code fix:** LOC-3 ("`GET
+/locations/{id}/display` has zero frontend callers") was accurately closed
+by pass 5 (2026-10-0x, `LOC5-32-locations-kiosk.md`) when `RoomCheckInPage.tsx`
+became a real caller, but passes 8 through 12 (five passes) kept
+re-asserting the pre-pass-5 "zero callers" claim without re-reading the
+code. Corrected in `docs/security-review/LOC13-32-locations-kiosk.md`
+(LOC13-1). One genuine fix this pass: `guest_lookup`'s docstring still
+described the removed `'member'` outcome (LOC13-2). LOC10-2 (test-fixture
+convention) and LOC10-4 (cross-feature, Membership pipeline's own raw-email
+log line) re-confirmed OPEN/FLAGGED, unchanged. See
+`docs/security-review/LOC13-32-locations-kiosk.md` for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 757
+revisions, single head `09f0171ccf5e`; `check_route_permissions.py --strict`
+— 305 routes, 0 errors/warnings; scoped backend suite (`-k "location or
+admin_hub or guest_check_in or public_display or guest_email_first or
+display"`) — 769 passed, 1 environment-only skip (`pywebpush`); `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors/warnings; relevant vitest
+(`LocationsPage`, `AdminHubFrame`, `RoomCheckInPage`, `RoomQRCodesPage`) — 73
+passed across 4 files.
+
+Row 32 → ✅ (pending this PR's merge). Next is Feature 33 (Core
+infrastructure) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 31, Scheduled tasks, pass 13, PR #4245, merged), preserved for history</summary>
+
 **PR [#4245](https://github.com/thegspiro/the-logbook/pull/4245)**
 (branch `claude/security-review-scheduled-tasks-p13`):
 Feature 31 (Scheduled tasks), pass 13. PR #4240 (Feature 30, Onboarding,
@@ -57,8 +111,7 @@ meeting_action_item or action_item_reminder"`) — 351 passed, 1 environment-onl
 skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
 errors/warnings.
 
-Row 31 → ✅ (pending this PR's merge). Next is Feature 32 (Locations & kiosk)
-— re-check `list_pull_requests` fresh rather than trusting this note.
+Row 31 → ✅ (merged). Next was Feature 32 (Locations & kiosk).
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 30, Onboarding, pass 13, PR #4240, merged), preserved for history</summary>
@@ -25960,7 +26013,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                           | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                          | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                               | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                               | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                          | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                 | ⬜     |
 
@@ -25992,6 +26045,65 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-11 — Feature 31 (Scheduled tasks, pass 13) merged; Feature 32 (Locations & kiosk, pass 13): 0 fixed beyond a stale docstring, 3 owner-decision fixes and 1 standalone fix re-verified, 1 five-pass-old stale finding corrected
+
+PR #4245 merged (`17ffe629a`). `list_pull_requests` (state `open`) returned
+eleven open PRs, none with a `claude/security-review-*` head, and row 32
+(Locations & kiosk) was the next `⬜` in the rotation table, confirmed on a
+freshly fetched `main`.
+
+All 17 routes (8 `locations.py`, 6 `display.py`, 3 `admin_hub.py`)
+re-enumerated by AST — unchanged in path, auth dependency and permission
+string since pass 12 (`c139cc640eba`, PR #4016). The real delta since that
+baseline, read in full rather than diffed only: three owner decisions of
+2026-11-01 landed between passes and are each fixed and re-verified —
+**LOC-40** (the public kiosk and the authenticated room page now share one
+builder, `app/services/location_display.py`, confirmed to keep only the one
+deliberate `recheck_window` difference), **LOC-41** ((org, name, building)
+uniqueness is now a real database constraint — a stored `building_key`
+generated column plus `uq_locations_org_name_building`, migration
+`2bb7c963f351`, which also settles pre-existing duplicate rows and is
+re-run-safe), and **LOC8-2** (deleting a referenced location now deactivates
+it for training records/classes/cohorts/cohort classes, meetings and event
+requests too — `ON DELETE RESTRICT` plus
+`LocationService._RESTRICTING_LOCATION_REFERENCES`, re-derived directly from
+each model file rather than trusted from the migration docstring; inventory
+items, storage areas and NFC tap logs correctly left clearing, per the
+owner's split decision). Separately, an already-merged, independent commit
+(`184b28bc5`, 2026-11-08) closed the member half of LOC10-3's guest-lookup
+oracle — re-verified a member's email now answers `not_found` identically to
+an unknown one, on both the backend (`GuestLookupResponse`) and the frontend
+type (`GuestLookupResult`), while the audited true outcome and the
+staff-entry walk-in path's internal classification are untouched. A
+MS-18-driven rework of `admin_hub_service.py`'s missed-screening-appointment
+count (SQL comparison replaced with a Python-side one, because
+`ScreeningRecord.status`/`.screening_type` became ciphertext) was verified
+org-scoped on both sides of its join and still gated on
+`medical_screening.view` before it runs.
+
+**Correction, not a new defect:** `LOC-3` ("`GET /locations/{id}/display` has
+zero frontend callers") was accurately closed by pass 5
+(`LOC5-32-locations-kiosk.md`, 2026-10-0x) once `RoomCheckInPage.tsx` became
+a real caller, but passes 8 through 12 of this track (five passes,
+2026-10-21 through 2026-11-04) kept re-asserting the pre-pass-5 "zero
+callers" claim in a carried-forward status table without re-reading the
+code. Corrected in `docs/security-review/LOC13-32-locations-kiosk.md`
+(LOC13-1); nothing to change in `KNOWN_LIMITATIONS.md`, which never carried
+this finding. One genuine fix this pass: `guest_lookup`'s own docstring
+still described the removed `'member'` outcome three lines above the
+comment that correctly explains the new behavior (LOC13-2). LOC10-2
+(test-fixture convention) and LOC10-4 (cross-feature, Membership pipeline's
+own raw-email log line) re-confirmed OPEN/FLAGGED, files unchanged since
+pass 10. Full trace: `docs/security-review/LOC13-32-locations-kiosk.md`.
+
+Gate: flake8/black/isort clean on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` 757 revisions/1 head (`09f0171ccf5e`); `check_route_permissions.py
+--strict` 305 routes/0 errors; scoped backend suite (`-k "location or
+admin_hub or guest_check_in or public_display or guest_email_first or
+display"`) 769 passed/1 environment-only skip; `npm run typecheck` 0 errors;
+`npm run lint` 0 errors/warnings; relevant vitest (`LocationsPage`,
+`AdminHubFrame`, `RoomCheckInPage`, `RoomQRCodesPage`) 73 passed/4 files.
 
 ### 2026-11-11 — Feature 30 (Onboarding, pass 13) merged; Feature 31 (Scheduled tasks, pass 13): 0 new code findings, 7 new tasks verified wired correctly, 1 stale finding corrected
 
