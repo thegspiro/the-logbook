@@ -71,16 +71,29 @@ describe('scheduledHours', () => {
 });
 
 describe('toAttachPayload', () => {
-  it('leaves every blank out and credits the scheduled length while the hours follow it', () => {
+  // Omitted hours are each event's own scheduled length to the backend, so a
+  // series' occurrences each get theirs, as null does on an edit.
+  it('leaves every blank out, and the hours while they follow the length', () => {
     expect(toAttachPayload(form(), 2)).toEqual({
       training_type: 'continuing_education',
-      credit_hours: 2,
       issues_certification: false,
       counts_toward_certification: true,
       auto_create_records: true,
       require_completion_confirmation: false,
       attendance_requirement_ids: [],
     });
+  });
+
+  it("sends hours that do not follow the event's length as a figure", () => {
+    expect(toAttachPayload(form({ credit_hours_source: 'manual', credit_hours: '1.5' }), 2)).toMatchObject({
+      credit_hours: 1.5,
+    });
+    expect(
+      toAttachPayload(
+        form({ course_mode: 'library', course_id: 'course-pump', credit_hours_source: 'course', credit_hours: '4' }),
+        2
+      )
+    ).toMatchObject({ credit_hours: 4 });
   });
 
   // The backend refuses a library course together with a one-off name.

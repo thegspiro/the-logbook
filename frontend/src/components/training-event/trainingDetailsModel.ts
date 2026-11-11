@@ -306,7 +306,12 @@ export const toAttachPayload = (value: TrainingDetailsForm, durationHours: numbe
     phase_id: value.phase_id || undefined,
     requirement_id: value.requirement_id || undefined,
     training_type: value.training_type,
-    credit_hours: toNumber(effectiveCreditHours(value, durationHours)),
+    // Left out while the hours follow the event's length, as an edit sends
+    // null: the backend credits each event its own scheduled length
+    // (build_session_for_event), so a series' occurrences each get theirs
+    // rather than this one's figure written to all of them.
+    credit_hours:
+      value.credit_hours_source === 'duration' ? undefined : toNumber(effectiveCreditHours(value, durationHours)),
     instructor: value.instructor.trim() || undefined,
     instructor_id: value.instructor_id || undefined,
     issues_certification: value.issues_certification,

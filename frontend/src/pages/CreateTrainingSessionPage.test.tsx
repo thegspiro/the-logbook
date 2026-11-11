@@ -865,9 +865,10 @@ describe('CreateTrainingSessionPage saving', () => {
       check_in_minutes_before: 60,
       require_checkout: false,
     });
+    // No credit_hours: the hours follow the event's length, which the
+    // backend credits when none are sent.
     expect(payload.training_details).toEqual({
       training_type: 'continuing_education',
-      credit_hours: 2,
       issues_certification: false,
       counts_toward_certification: true,
       auto_create_records: true,
@@ -995,8 +996,11 @@ describe('CreateTrainingSessionPage saving', () => {
       event_type: 'training',
       recurrence_pattern: 'weekly',
       rolling_recurrence: true,
-      training_details: { training_type: 'continuing_education', credit_hours: 2 },
+      training_details: { training_type: 'continuing_education' },
     });
+    // Left out of the JSON, so each occurrence is credited its own length,
+    // not the first one's figure.
+    expect((series.training_details as Record<string, unknown>).credit_hours).toBeUndefined();
     expect(createEvent).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith('/events/event-1');
   });
