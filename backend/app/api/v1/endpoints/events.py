@@ -713,6 +713,7 @@ def _to_list_item(row: dict, counts_toward_attendance: bool = False) -> EventLis
         postponed_from_start=event.postponed_from_start,
         is_recurring=event.is_recurring or False,
         recurrence_parent_id=event.recurrence_parent_id,
+        attendance_finalized_at=event.attendance_finalized_at,
         rsvp_count=row["rsvp_count"],
         going_count=row["going_count"],
         waitlist_count=row.get("waitlist_count"),

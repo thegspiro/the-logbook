@@ -60,6 +60,10 @@ export const EventEditPage: React.FC = () => {
   // on the series' first event only (SERIES_PARENT_FIELDS in event_service),
   // so an occurrence read on its own reports neither.
   const [seriesParent, setSeriesParent] = useState<Event | null>(null);
+  // The nearest earlier occurrence with finalized attendance, for Review's
+  // "<date>, before it, has finalized attendance.": what tells the officer
+  // that "This and all future events" leaves that one alone.
+  const [finalizedBefore, setFinalizedBefore] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     void eventService
@@ -101,10 +105,35 @@ export const EventEditPage: React.FC = () => {
         }
       }
       if (data.recurrence_parent_id) {
+        const parentId = data.recurrence_parent_id;
+        let parent: Event | null = null;
         try {
-          setSeriesParent(await eventService.getEvent(data.recurrence_parent_id));
+          parent = await eventService.getEvent(parentId);
+          setSeriesParent(parent);
         } catch {
           /* non-critical: the scope choice leaves out the series' end */
+        }
+        if (data.event_type === EventTypeEnum.TRAINING) {
+          try {
+            const earlier = await eventService.getEvents({
+              ...(parent ? { start_after: parent.start_datetime } : {}),
+              start_before: data.start_datetime,
+              limit: 500,
+            });
+            const finalized = earlier
+              .filter(
+                (e) =>
+                  e.id !== data.id &&
+                  (e.id === parentId || e.recurrence_parent_id === parentId) &&
+                  Boolean(e.attendance_finalized_at) &&
+                  e.start_datetime < data.start_datetime
+              )
+              .map((e) => e.start_datetime)
+              .sort();
+            setFinalizedBefore(finalized[finalized.length - 1]);
+          } catch {
+            /* non-critical: Review leaves out the finalized occurrence */
+          }
         }
       }
       setEvent(data);
@@ -316,6 +345,7 @@ export const EventEditPage: React.FC = () => {
     trainingAccess,
     readOnlyNotice,
     storedCourseName: session?.course_name,
+    finalizedOccurrenceBefore: finalizedBefore,
     initialStep: searchParams.get('step') === 'training' ? 'training' : 'details',
     seriesScope: isSeries
       ? {

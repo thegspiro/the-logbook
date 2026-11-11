@@ -134,6 +134,8 @@ describe('EventEditPage', () => {
     vi.mocked(trainingService.getCourses).mockResolvedValue([]);
     vi.mocked(userService.getUsers).mockReset();
     vi.mocked(userService.getUsers).mockResolvedValue([]);
+    vi.mocked(eventService.getEvents).mockReset();
+    vi.mocked(eventService.getEvents).mockResolvedValue([]);
   });
 
   describe('Loading State', () => {
@@ -958,6 +960,48 @@ describe('EventEditPage', () => {
         expect(screen.getByText('This and all future events (through Mon, Jun 15, 2026)')).toBeInTheDocument();
         expect(screen.getByText('Sun, Mar 15, 2026, in a series running since Sun, Jan 4, 2026.')).toBeInTheDocument();
         expect(screen.getByText('Sun, Mar 15, 2026', { selector: 'span' })).toBeInTheDocument();
+      });
+
+      // Review named the series' start but never that an earlier occurrence
+      // is finalized, which is what says "This and all future events" leaves
+      // that one alone.
+      it('names the nearest earlier occurrence with finalized attendance', async () => {
+        vi.mocked(eventService.getEvent).mockImplementation((id: string) =>
+          Promise.resolve(id === 'series-1' ? parent : child)
+        );
+        const listed = (id: string, start: string, finalized: string | null, parentId = 'series-1') => ({
+          ...trainingEvent,
+          id,
+          start_datetime: start,
+          recurrence_parent_id: parentId,
+          attendance_finalized_at: finalized,
+        });
+        vi.mocked(eventService.getEvents).mockImplementation((params) =>
+          Promise.resolve(
+            params?.start_before
+              ? ([
+                  { ...parent, attendance_finalized_at: '2026-01-04T21:00:00Z' },
+                  listed('occ-feb', '2026-02-01T18:00:00Z', '2026-02-01T21:00:00Z'),
+                  listed('occ-mar', '2026-03-08T18:00:00Z', null),
+                  listed('other', '2026-03-10T18:00:00Z', '2026-03-10T21:00:00Z', 'other-series'),
+                  listed('evt-1', '2026-03-15T18:00:00Z', null),
+                ] as never)
+              : []
+          )
+        );
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+
+        await screen.findByText('Step 1 of 4 · Event Details');
+        await toReview(user);
+        expect(
+          screen.getByText(
+            'Sun, Mar 15, 2026, in a series running since Sun, Jan 4, 2026. Sun, Feb 1, 2026, before it, has finalized attendance.'
+          )
+        ).toBeInTheDocument();
+        expect(eventService.getEvents).toHaveBeenCalledWith(
+          expect.objectContaining({ start_after: '2026-01-04T18:00:00Z', start_before: '2026-03-15T18:00:00Z' })
+        );
       });
 
       it('says that occurrences a rolling series adds later copy the changes', async () => {

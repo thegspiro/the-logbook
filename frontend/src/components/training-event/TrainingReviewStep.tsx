@@ -21,6 +21,11 @@ import { creditHoursFromCourse, effectiveCreditHours } from './trainingDetailsMo
 export interface SeriesOccurrence {
   occurrenceStart?: string | undefined;
   seriesStart?: string | undefined;
+  /**
+   * The start of the nearest earlier occurrence whose attendance is
+   * finalized: "This and all future events" leaves it alone.
+   */
+  finalizedBefore?: string | undefined;
 }
 
 const WEEKDAY_PLURALS = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays'];
@@ -329,7 +334,11 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
                 {formatDateCustom(seriesOccurrence.occurrenceStart, DATE_ONLY, tz)}
                 {seriesOccurrence.seriesStart
                   ? `, in a series running since ${formatDateCustom(seriesOccurrence.seriesStart, DATE_ONLY, tz)}.`
-                  : ''}
+                  : seriesOccurrence.finalizedBefore
+                    ? '.'
+                    : ''}
+                {seriesOccurrence.finalizedBefore &&
+                  ` ${formatDateCustom(seriesOccurrence.finalizedBefore, DATE_ONLY, tz)}, before it, has finalized attendance.`}
               </Row>
             )}
             <Row label="Duration">

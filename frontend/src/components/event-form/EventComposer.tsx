@@ -85,6 +85,8 @@ export interface EditOptions {
   initialStep?: 'details' | 'training' | undefined;
   /** On an occurrence of a series: which occurrences the save reaches. */
   seriesScope?: SeriesScopeChoiceProps | undefined;
+  /** On an occurrence of a series: the nearest earlier one with finalized attendance (its start). */
+  finalizedOccurrenceBefore?: string | undefined;
   organizerNames?: { organizer?: string | null | undefined; alternate?: string | null | undefined } | undefined;
   onSubmitUpdate: (data: EventUpdate) => Promise<void>;
 }
@@ -271,6 +273,7 @@ export const EventComposer: React.FC<EventComposerProps> = ({
               seriesOccurrence: scope && {
                 occurrenceStart: scope.occurrenceStart,
                 seriesStart: scope.seriesStart,
+                finalizedBefore: editing.finalizedOccurrenceBefore,
               },
             }
           : {})}

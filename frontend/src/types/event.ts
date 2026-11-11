@@ -283,6 +283,8 @@ export interface EventListItem {
   postponed_from_start?: string | null;
   is_recurring?: boolean;
   recurrence_parent_id?: string;
+  /** The attendance lock; absent from an older backend. */
+  attendance_finalized_at?: string | null;
   rsvp_count?: number;
   going_count?: number;
   /** How many members are waiting. The caller's own position is not on the
