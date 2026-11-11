@@ -19,10 +19,12 @@ import pytest
 
 from app.models.email_template import EmailTemplate, EmailTemplateType
 from app.models.user import Organization, Position, User, UserStatus
+from app.schemas.email_template import EmailTemplateUpdate
 from app.services.email_service import EmailService
 from app.services.email_template_service import (
     ALWAYS_SENT_TYPES,
     NO_TEMPLATE_COPY_TYPES,
+    EmailTemplateService,
     template_copies_apply,
 )
 
@@ -270,3 +272,59 @@ class TestWhichTemplatesAreExcluded:
     )
     def test_a_type_with_no_single_template_takes_none(self, template_type):
         assert not template_copies_apply(template_type)
+
+
+@pytest.mark.integration
+class TestSavingCcPositions:
+    async def _position(self, db_session, org) -> Position:
+        position = Position(
+            organization_id=str(org.id),
+            name="Secretary",
+            slug=f"secretary-{uuid.uuid4().hex[:6]}",
+        )
+        db_session.add(position)
+        await db_session.flush()
+        return position
+
+    async def test_the_departments_own_position_is_saved_and_can_be_cleared(
+        self, db_session
+    ):
+        org = await _org(db_session)
+        position = await self._position(db_session, org)
+        template = await _template(db_session, org, EmailTemplateType.EVENT_REMINDER)
+        svc = EmailTemplateService(db_session)
+
+        saved = await svc.update_template(
+            template_id=str(template.id),
+            organization_id=str(org.id),
+            updated_by=None,
+            default_cc_position_ids=[str(position.id)],
+        )
+        assert saved.default_cc_position_ids == [str(position.id)]
+
+        cleared = await svc.update_template(
+            template_id=str(template.id),
+            organization_id=str(org.id),
+            updated_by=None,
+            default_cc_position_ids=None,
+        )
+        assert cleared.default_cc_position_ids is None
+
+    async def test_another_departments_position_is_refused(self, db_session):
+        org = await _org(db_session)
+        other = await _org(db_session)
+        foreign = await self._position(db_session, other)
+        template = await _template(db_session, org, EmailTemplateType.EVENT_REMINDER)
+
+        with pytest.raises(ValueError, match="CC position"):
+            await EmailTemplateService(db_session).update_template(
+                template_id=str(template.id),
+                organization_id=str(org.id),
+                updated_by=None,
+                default_cc_position_ids=[str(foreign.id)],
+            )
+
+    def test_the_schema_drops_blanks_and_duplicates(self):
+        update = EmailTemplateUpdate(default_cc_position_ids=["p-1", " ", "p-1", "p-2"])
+
+        assert update.default_cc_position_ids == ["p-1", "p-2"]

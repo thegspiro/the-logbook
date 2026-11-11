@@ -4497,11 +4497,25 @@ class EmailTemplateService:
             "allow_attachments",
             "default_cc",
             "default_bcc",
+            "default_cc_position_ids",
             "footer_key",
             "header_accent",
             "status_chip",
             "layout",
         }
+        if fields.get("default_cc_position_ids"):
+            # A stored id from another department would copy nobody, but it
+            # must not be stored either (pitfall #14c).
+            from app.models.user import Position
+            from app.utils.org_scoping import assert_all_in_org
+
+            await assert_all_in_org(
+                self.db,
+                Position,
+                fields["default_cc_position_ids"],
+                str(organization_id),
+                label="CC position",
+            )
         # apply_updates, not `if value is not None`. That guard collapses
         # "the caller did not mention this field" and "the caller sent an
         # explicit null to clear it" into one case, so emptying the CC box
