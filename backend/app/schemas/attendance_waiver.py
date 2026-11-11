@@ -3,7 +3,8 @@ Attendance waiver request schemas.
 
 ``AttendanceWaiverPolicy`` is the department's policy for one workflow. It is
 stored as JSON under the organization's settings (the training one at
-``settings["training"]["session_waiver_policy"]``), so this model is the only
+``settings["training"]["session_waiver_policy"]``, the business-meeting one at
+``settings["meetings"]["waiver_policy"]``), so this model is the only
 thing that gives the stored value a shape: it validates what an officer saves,
 and ``policy_from_settings`` reads the stored value back through it, turning
 anything malformed into the disabled default (CLAUDE.md pitfall #19: absence
@@ -30,6 +31,15 @@ from app.schemas.base import UTCResponseBase
 # Only the policy endpoint writes it; the generic settings save strips it.
 POLICY_SECTION = "training"
 POLICY_KEY = "session_waiver_policy"
+# The business-meeting policy, stored and protected the same way; the
+# Secretary edits it (meetings.manage).
+MEETING_POLICY_SECTION = "meetings"
+MEETING_POLICY_KEY = "waiver_policy"
+# Every (section, key) a policy endpoint owns, for the settings save to strip.
+POLICY_LOCATIONS = (
+    (POLICY_SECTION, POLICY_KEY),
+    (MEETING_POLICY_SECTION, MEETING_POLICY_KEY),
+)
 
 MAX_CATEGORIES = 20
 MAX_CATEGORY_LENGTH = 100
@@ -46,7 +56,8 @@ class AttendanceWaiverPolicy(BaseModel):
     """How a department runs one waiver workflow.
 
     ``cap`` None means no cap. ``approver_position_ids`` empty means requests
-    go straight to the fallback chain (the Chief, then training managers).
+    go straight to the fallback chain (for training the Chief, then training
+    managers; for business meetings the Secretary, then meetings managers).
     There is deliberately no attachment setting yet: nothing would read it
     (pitfall #19).
     """

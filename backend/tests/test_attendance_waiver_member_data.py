@@ -23,6 +23,7 @@ from app.models.attendance_waiver import (
     AttendanceWaiverStatus,
     AttendanceWaiverWorkflow,
 )
+from app.models.meeting import Meeting, MeetingAttendee, MeetingStatus, MeetingType
 from app.models.user import Organization, User
 from app.services.data_export_service import DataExportService
 from app.services.member_anonymization_service import MemberAnonymizationService
@@ -53,11 +54,18 @@ async def _member(db, org, **overrides) -> User:
     return user
 
 
-async def _request(db, org, user, reason, note):
+async def _request(
+    db,
+    org,
+    user,
+    reason,
+    note,
+    workflow=AttendanceWaiverWorkflow.TRAINING_SESSION,
+):
     request = AttendanceWaiverRequest(
         id=str(uuid.uuid4()),
         organization_id=org.id,
-        workflow=AttendanceWaiverWorkflow.TRAINING_SESSION,
+        workflow=workflow,
         user_id=user.id,
         event_id=None,
         event_title_snapshot="Company Drill",
@@ -167,3 +175,89 @@ async def test_anonymizing_clears_the_reason_and_notes_and_keeps_the_rows(
             )
         ).scalar_one()
         assert action.note == note
+
+
+async def _approved_meeting_waiver(db, org, member):
+    """A business-meeting request and the waiver its approval wrote."""
+    request = await _request(
+        db,
+        org,
+        member,
+        "Chemo appointment",
+        "Approved",
+        workflow=AttendanceWaiverWorkflow.BUSINESS_MEETING,
+    )
+    meeting = Meeting(
+        id=str(uuid.uuid4()),
+        organization_id=org.id,
+        title="Business Meeting",
+        meeting_type=MeetingType.BUSINESS,
+        meeting_date=date(2026, 3, 4),
+        status=MeetingStatus.APPROVED,
+    )
+    db.add(meeting)
+    await db.flush()
+    db.add(
+        MeetingAttendee(
+            organization_id=org.id,
+            meeting_id=meeting.id,
+            user_id=member.id,
+            present=False,
+            excused=True,
+            waiver_reason="Excused: approved request (Medical)",
+            waiver_request_id=request.id,
+        )
+    )
+    await db.flush()
+    return request
+
+
+async def test_the_export_carries_meeting_requests_and_their_waiver(db_session):
+    org = await _org(db_session)
+    member = await _member(db_session, org)
+    request = await _approved_meeting_waiver(db_session, org, member)
+
+    export = await DataExportService(db_session).export_user_data(member)
+
+    rows = export["attendance_waiver_requests"]
+    assert [(r["id"], r["workflow"]) for r in rows] == [
+        (request.id, "business_meeting")
+    ]
+    assert rows[0]["reason"] == "Chemo appointment"
+    assert [a["request_id"] for a in export["attendance_waiver_request_actions"]] == [
+        request.id
+    ]
+    (attendance,) = export["meeting_attendance"]
+    assert attendance["waiver_request_id"] == request.id
+    json.dumps(export)
+
+
+async def test_anonymizing_clears_a_meeting_request_and_its_waiver_text(
+    db_session,
+):
+    org = await _org(db_session)
+    departed = await _member(db_session, org, deleted_at=datetime.now(UTC))
+    request = await _approved_meeting_waiver(db_session, org, departed)
+
+    summary = await MemberAnonymizationService(db_session).anonymize_member(departed)
+
+    assert summary["attendance_waiver_reasons_scrubbed"] == 1
+    assert summary["meeting_waiver_reasons_scrubbed"] == 1
+    row = (
+        await db_session.execute(
+            select(AttendanceWaiverRequest)
+            .where(AttendanceWaiverRequest.id == request.id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+    assert row.reason is None
+    attendee = (
+        await db_session.execute(
+            select(MeetingAttendee)
+            .where(MeetingAttendee.user_id == departed.id)
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one()
+    assert attendee.waiver_reason is None
+    # The link stays: it is the record that the meeting was excused.
+    assert attendee.waiver_request_id == request.id

@@ -138,9 +138,9 @@ class AttendanceDashboardService:
                     member, stints_by_user.get(uid, []), period_months, today
                 ),
                 waived_ids={r.meeting_id for r in records if r.waiver_reason},
-                present_ids={
-                    r.meeting_id for r in records if r.present and not r.waiver_reason
-                },
+                # Waived or not: a member who was present attended
+                # (check-in wins, reconciled in tally_attendance).
+                present_ids={r.meeting_id for r in records if r.present},
                 leaves=leaves_by_user.get(uid, []),
             )
             eligible_meetings = len(tally.eligible)
@@ -233,8 +233,8 @@ class AttendanceDashboardService:
     ) -> Optional[Dict]:
         """
         Grant a meeting attendance waiver to a member.
-        The member won't be able to vote in this meeting, but their
-        attendance percentage won't be penalized.
+        A meeting they missed then does not count against their attendance
+        percentage; one they were present at still counts as attended.
         """
         # The current endpoint caller already re-fetches both Meeting and
         # User scoped to the org before calling this, but that validation
@@ -246,13 +246,25 @@ class AttendanceDashboardService:
         )
         await assert_in_org(self.db, User, user_id, organization_id, label="User")
 
+        # The meeting row is the parent both grant paths lock (this one and an
+        # approved member request, attendance_waiver_service), so the one
+        # (meeting, member) row is found by whichever comes second rather
+        # than inserted twice against the unique index (pitfall #27).
+        await self.db.execute(
+            select(Meeting.id)
+            .where(Meeting.id == meeting_id, Meeting.organization_id == organization_id)
+            .with_for_update()
+        )
         # Find or create the attendance record (org-scoped)
         result = await self.db.execute(
-            select(MeetingAttendee).where(
+            select(MeetingAttendee)
+            .where(
                 MeetingAttendee.meeting_id == meeting_id,
                 MeetingAttendee.user_id == user_id,
                 MeetingAttendee.organization_id == organization_id,
             )
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         attendee = result.scalar_one_or_none()
         granted_at = datetime.now(timezone.utc)
@@ -271,10 +283,15 @@ class AttendanceDashboardService:
             )
             self.db.add(attendee)
         else:
+            # present is left alone: a member who attended still counts as
+            # attending (check-in wins). The Secretary's words replace any
+            # standard text an approved request wrote, so the waiver is now
+            # theirs rather than the request's.
             attendee.excused = True
             attendee.waiver_reason = reason
             attendee.waiver_granted_by = granted_by
             attendee.waiver_granted_at = granted_at
+            attendee.waiver_request_id = None
 
         await self.db.commit()
 
