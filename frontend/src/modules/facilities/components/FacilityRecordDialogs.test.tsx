@@ -15,6 +15,7 @@ import { renderWithRouter } from '../../../test/utils';
 const mockGetMaintenancePage = vi.fn();
 const mockCreateMaintenanceRecord = vi.fn();
 const mockToastError = vi.fn();
+const mockCreateInspection = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   facilitiesService: {
@@ -22,6 +23,7 @@ vi.mock('../../../services/api', () => ({
     getMaintenanceTypes: vi.fn().mockResolvedValue([{ id: 'mt-1', name: 'Roof Inspection' }]),
     createMaintenanceRecord: (...args: unknown[]) => mockCreateMaintenanceRecord(...args) as unknown,
     getInspectionsPage: vi.fn().mockResolvedValue({ items: [], total: 0, skip: 0, limit: 50 }),
+    createInspection: (...args: unknown[]) => mockCreateInspection(...args) as unknown,
   },
 }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -130,6 +132,36 @@ describe('facility record dialogs', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
     expect(within(dialog).getByRole('textbox', { name: /^Description/ })).toHaveValue('Replace bay door seal');
+  });
+
+  it('puts a 422 on the inspection field it names', async () => {
+    mockCreateInspection.mockReset();
+    mockCreateInspection.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'inspector_organization', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<InspectionsSection facilityId="f-1" canEdit canDelete />);
+    await user.click(await screen.findByRole('button', { name: /New Inspection/ }));
+    const dialog = screen.getByRole('dialog', { name: 'New Inspection' });
+    await user.type(within(dialog).getByRole('textbox', { name: /^Title/ }), 'Annual');
+    await user.click(within(dialog).getByRole('button', { name: 'Create Inspection' }));
+
+    await vi.waitFor(() =>
+      expect(within(dialog).getByRole('textbox', { name: /^Inspector Organization/ })).toHaveAccessibleDescription(
+        expect.stringContaining('Value is too long.')
+      )
+    );
+  });
+
+  it('asks before Escape discards a typed inspection title', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InspectionsSection facilityId="f-1" canEdit canDelete />);
+    await user.click(await screen.findByRole('button', { name: /New Inspection/ }));
+    const dialog = screen.getByRole('dialog', { name: 'New Inspection' });
+    await user.type(within(dialog).getByRole('textbox', { name: /^Title/ }), 'Annual');
+    await user.keyboard('{Escape}');
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByRole('textbox', { name: /^Title/ })).toHaveValue('Annual');
   });
 
   it("shows the server's reason when a save is refused", async () => {

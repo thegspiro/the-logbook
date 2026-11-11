@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
 import type { InspectionCreate } from '../../../services/facilitiesServices';
@@ -6,9 +6,11 @@ import type { Inspection } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formCoercions } from '../../../utils/formValues';
-
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 import { useConfirm } from '../../../contexts/ConfirmContext';
-interface InspectionFormData {
+
+export interface InspectionFormData {
   facility_id: string;
   inspection_type: string;
   title: string;
@@ -87,6 +89,38 @@ function formToPayload(formData: InspectionFormData, isEdit: boolean): Inspectio
   };
 }
 
+export type InspectionField = keyof InspectionFormData;
+
+/** Field labels in screen order, so the first refusal takes focus. */
+const INSPECTION_LABELS: Record<InspectionField, string> = {
+  facility_id: 'Facility',
+  title: 'Title',
+  inspection_type: 'Type',
+  passed: 'Result',
+  inspection_date: 'Inspection date',
+  next_inspection_date: 'Next inspection date',
+  inspector_name: 'Inspector name',
+  inspector_organization: 'Inspector organization',
+  description: 'Description',
+  findings: 'Findings',
+  corrective_actions: 'Corrective actions',
+  corrective_action_deadline: 'Corrective action deadline',
+  notes: 'Notes',
+};
+
+/** Limits mirror FacilityInspectionBase. */
+export const INSPECTION_LIMITS = { title: 300, inspector_name: 200, inspector_organization: 200 } as const;
+
+/** The field specs for a dialog whose ids start with `idPrefix`. */
+export function inspectionFieldSpecs(idPrefix: string): FieldSpecs<InspectionField> {
+  return Object.fromEntries(
+    (Object.keys(INSPECTION_LABELS) as InspectionField[]).map((name) => [
+      name,
+      { id: `${idPrefix}-${name.replace(/_/g, '-')}`, label: INSPECTION_LABELS[name] },
+    ])
+  ) as FieldSpecs<InspectionField>;
+}
+
 type ResultFilter = 'all' | 'passed' | 'failed' | 'pending';
 
 export const INSPECTIONS_PAGE_SIZE = 50;
@@ -96,9 +130,15 @@ interface UseInspectionFormOptions {
   facilityId?: string;
   /** Only inspections whose next date falls from today through this many days ahead. */
   dueWithinDays?: number | undefined;
+  /** The prefix of the dialog's field ids, so a refusal can focus its field. */
+  idPrefix?: string;
 }
 
-export function useInspectionForm({ facilityId, dueWithinDays }: UseInspectionFormOptions = {}) {
+export function useInspectionForm({
+  facilityId,
+  dueWithinDays,
+  idPrefix = 'facility-inspection',
+}: UseInspectionFormOptions = {}) {
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const [inspections, setInspections] = useState<Inspection[]>([]);
@@ -113,6 +153,17 @@ export function useInspectionForm({ facilityId, dueWithinDays }: UseInspectionFo
   const [editingInspection, setEditingInspection] = useState<Inspection | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<InspectionFormData>(emptyForm(tz, facilityId));
+  // What the dialog held when it opened (or last saved), so closing asks
+  // before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<InspectionFormData>(formData);
+  const fieldSpecs = useMemo(() => inspectionFieldSpecs(idPrefix), [idPrefix]);
+  const fieldOrder = useMemo(() => Object.keys(fieldSpecs) as InspectionField[], [fieldSpecs]);
+  const fieldErrors = useFieldErrors(fieldSpecs);
+  const setField = (patch: Partial<InspectionFormData>) => {
+    setFormData((p) => ({ ...p, ...patch }));
+    for (const key of Object.keys(patch)) fieldErrors.setError(key as InspectionField, null);
+  };
+  const isDirty = showModal && JSON.stringify(formData) !== JSON.stringify(baseline);
 
   // A new filter or search starts again from the first page, in the same
   // update, so the stale page is never requested.
@@ -180,34 +231,63 @@ export function useInspectionForm({ facilityId, dueWithinDays }: UseInspectionFo
 
   const openCreate = (defaultFacilityId?: string) => {
     setEditingInspection(null);
-    setFormData(emptyForm(tz, defaultFacilityId || facilityId));
+    const seeded = emptyForm(tz, defaultFacilityId || facilityId);
+    setFormData(seeded);
+    setBaseline(seeded);
+    fieldErrors.clear();
     setShowModal(true);
   };
 
   const openEdit = (insp: Inspection) => {
     setEditingInspection(insp);
-    setFormData(inspectionToForm(insp));
+    const seeded = inspectionToForm(insp);
+    setFormData(seeded);
+    setBaseline(seeded);
+    fieldErrors.clear();
     setShowModal(true);
   };
 
-  const handleSave = async () => {
-    if (!facilityId && !formData.facility_id) {
-      toast.error('Select a facility');
-      return;
-    }
-    if (!formData.title.trim()) {
-      toast.error('Title is required');
-      return;
-    }
-    if (!formData.inspection_date) {
-      toast.error('Inspection date is required');
+  const handleSave = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    // Each missing answer is named on its field rather than in a toast that
+    // vanished (forms review F-3).
+    const problems: FieldErrors<InspectionField> = {};
+    if (!facilityId && !formData.facility_id) problems.facility_id = 'Choose the facility this inspection is for.';
+    if (!formData.title.trim()) problems.title = 'Enter a title for the inspection.';
+    if (!formData.inspection_date) problems.inspection_date = 'Enter the date of the inspection.';
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    // A new inspection is not created until every field is fixed; an edit
+    // saves the rest and keeps a refused field's stored value (owner rule,
+    // 2026-11-05).
+    if (!editingInspection && Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
     setIsSaving(true);
     try {
       const payload = formToPayload(formData, Boolean(editingInspection));
       if (editingInspection) {
-        await facilitiesService.updateInspection(editingInspection.id, payload);
+        const { refused } = await saveExceptRefused<InspectionField, unknown>({
+          payload: { ...payload },
+          refused: problems,
+          send: (body) => facilitiesService.updateInspection(editingInspection.id, body),
+          place: (err) => placeApiError(fieldSpecs, err),
+        });
+        const first = firstRefused(fieldOrder, refused);
+        if (first) {
+          // The list refreshes behind the dialog, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          void loadInspections();
+          fieldErrors.setErrors(refused);
+          fieldErrors.setFormError(
+            `Inspection saved, except ${INSPECTION_LABELS[first].toLowerCase()}. Fix it and save again.`
+          );
+          fieldErrors.focusFirst(refused);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as InspectionField]]));
+          setBaseline({ ...formData, ...keep });
+          return;
+        }
         toast.success('Inspection updated');
       } else {
         await facilitiesService.createInspection(payload);
@@ -215,8 +295,11 @@ export function useInspectionForm({ facilityId, dueWithinDays }: UseInspectionFo
       }
       setShowModal(false);
       void loadInspections();
-    } catch {
-      toast.error('Failed to save inspection');
+    } catch (err: unknown) {
+      // A refused field is flagged on that field (forms review F-2); anything
+      // no field answers for is said in the dialog, where it stays.
+      const placed = fieldErrors.setFromApiError(err, 'Failed to save inspection');
+      fieldErrors.focusFirst(placed);
     } finally {
       setIsSaving(false);
     }
@@ -261,6 +344,11 @@ export function useInspectionForm({ facilityId, dueWithinDays }: UseInspectionFo
     isSaving,
     formData,
     setFormData,
+    setField,
+    isDirty,
+    fieldSpecs,
+    errors: fieldErrors.errors,
+    formError: fieldErrors.formError,
     openCreate,
     openEdit,
     handleSave,

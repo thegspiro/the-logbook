@@ -23,28 +23,51 @@ vi.mock('../hooks/useFacilitiesAccess', () => ({
   useFacilitiesAccess: () => ({ canEdit: true, canDelete: true, canMaintenance: true }),
 }));
 
-vi.mock('../hooks/useInspectionForm', () => ({
-  useInspectionForm: () => ({
-    inspections: [],
-    isLoading: false,
-    loadError: null,
-    reload: vi.fn(),
-    searchQuery: '',
-    setSearchQuery: vi.fn(),
-    resultFilter: 'failed',
-    setResultFilter: vi.fn(),
-    showModal: true,
-    setShowModal: vi.fn(),
-    editingInspection: null,
-    isSaving: false,
-    formData: {},
-    setFormData: vi.fn(),
-    openCreate: vi.fn(),
-    openEdit: vi.fn(),
-    handleSave: vi.fn(),
-    handleDelete: vi.fn(),
-  }),
-}));
+vi.mock('../hooks/useInspectionForm', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../hooks/useInspectionForm')>();
+  return {
+    ...actual,
+    useInspectionForm: () => ({
+      inspections: [],
+      isLoading: false,
+      loadError: null,
+      reload: vi.fn(),
+      searchQuery: '',
+      setSearchQuery: vi.fn(),
+      resultFilter: 'failed',
+      setResultFilter: vi.fn(),
+      showModal: true,
+      setShowModal: vi.fn(),
+      editingInspection: null,
+      isSaving: false,
+      formData: {
+        facility_id: '',
+        inspection_type: 'routine',
+        title: '',
+        description: '',
+        inspection_date: '',
+        next_inspection_date: '',
+        inspector_name: '',
+        inspector_organization: '',
+        passed: '',
+        findings: '',
+        corrective_actions: '',
+        corrective_action_deadline: '',
+        notes: '',
+      },
+      setField: vi.fn(),
+      isDirty: false,
+      fieldSpecs: actual.inspectionFieldSpecs('inspection-list'),
+      errors: {},
+      formError: null,
+      setFormData: vi.fn(),
+      openCreate: vi.fn(),
+      openEdit: vi.fn(),
+      handleSave: vi.fn(),
+      handleDelete: vi.fn(),
+    }),
+  };
+});
 
 // The real field specs and limits: the shared dialog reads them, and a mock
 // that invented its own would not prove the ids the dialog is labelled by.
