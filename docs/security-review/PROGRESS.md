@@ -16,6 +16,61 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4232](https://github.com/thegspiro/the-logbook/pull/4232)**
+(branch `claude/security-review-meetings-minutes-p13`):
+Feature 24 (Meetings & minutes), pass 13, a watchdog pickup. PR #4228
+(Feature 23, Medical supplies, pass 20) had already merged. A fresh
+`list_pull_requests` (state `open`) found no PR with a
+`claude/security-review-*` head, and row 24 was the next pending feature,
+confirmed on a freshly fetched `main`. The task briefing that started this
+pass cited "5 prior passes" and asked for it to be filed as "pass 6"; both
+were stale — this file's own header and `PROGRESS.md`'s log already record
+12 completed passes for this feature (most recently PR #3978) — so this
+pass is filed as **pass 13**, matching its branch suffix.
+
+Baseline `7127d632f` (pass 12's own merge, PR #3978). Real delta: 14
+non-merge commits in scope, all from other rotation/owner-decision work —
+most notably `9e5e8b7d8`/`cb6f5103b` (an independently-landed fix confining
+a baseline `meetings.view`/`minutes.view` holder to approved, non-executive
+meetings on the Meetings API, mirroring MM-24's own minutes-side rule) and
+`7884706fa` (department-configurable quorum counting, minutes attachments
+served to a published copy's own Documents audience, a budgeted
+PDF-attachment embedder, and emailed meeting-action-item reminders) — all
+reviewed against the seven checklist dimensions, no finding.
+
+**This pass's own finding: MM-21 (MED, fixed).** The 2026-11-08
+member-visibility fix above never reached `dashboard.py`'s unified
+`GET /dashboard/action-items`[`/page`] feed, which reads `MeetingActionItem`
+directly rather than through `meetings_service.py` — so a baseline member
+could still read a draft or executive-session meeting's action-item
+descriptions (and have them counted in the feed's totals) through that one
+sibling route, even though the Meetings API itself now withholds the owning
+meeting. Fixed with `meeting_visibility_filter()`, mirroring the feed's own
+pre-existing `minutes_visibility_filter()` for the minutes half. Also
+flagged, not fixed (out of this feature's scope — belongs to Feature 29,
+Reports & analytics): `reports_service.py`'s department-overview tile has
+the same gap, but discloses only a count, never a description. **1 fixed, 1
+newly flagged** (in a different feature's scope). See
+`docs/security-review/MM-24-meetings-minutes.md`'s **Pass 13** section for
+the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 756
+revisions, single head `8b1cf6f55425`; `generate_schema_docs.py --check` —
+up to date; `check_route_permissions.py --strict` — 305 routes, 0
+errors/warnings; scoped backend suite (`-k "meeting or minutes or minute or
+quorum or attendance_dashboard or motion or action_item"`) — 1,450 passed, 1
+environment-only skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm
+run lint` — 0 errors/warnings; `npx vitest run src/modules/minutes
+src/pages/ActionItemsPage.test.tsx` — 488 passed (62 files).
+
+Row 24 → ✅ (pending this PR's merge). Next is Feature 25 (Messaging &
+notifications) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 23, Medical supplies, pass 20, PR #4228, merged), preserved for history</summary>
+
 **PR [#4228](https://github.com/thegspiro/the-logbook/pull/4228)**
 (branch `claude/security-review-medical-supplies-p20`):
 Feature 23 (Medical supplies), pass 20, a watchdog pickup. PR #4226
@@ -58,6 +113,8 @@ passed (10 files).
 Row 23 → ✅ (pending this PR's merge). Next is Feature 24 (Meetings &
 minutes) — re-check `list_pull_requests` fresh rather than trusting this
 note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 22, Grants & fundraising, pass 14, PR #4226, merged), preserved for history</summary>
@@ -25559,7 +25616,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                             | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                             | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                        | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                                  | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                                  | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                      | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                                                                      | ⬜     |
@@ -25602,6 +25659,70 @@ way Feature 17 absorbed `shift_evaluations.py`.
 ---
 
 ## Log
+
+### 2026-11-11 — Feature 23 (Medical supplies, pass 20) merged; Feature 24 (Meetings & minutes, pass 13): watchdog pickup, real delta (member-visibility fix on the Meetings API, owner-decision batch 7), 1 fixed (MM-21, MED), 1 flagged in a different feature's scope
+
+PR #4228 merged. A fresh `list_pull_requests` (state `open`) found 0 PRs
+with a `claude/security-review-*` head, and row 24 (Meetings & minutes) was
+the next `⬜` in the rotation table, confirmed on a freshly pulled `main`.
+The last completed pass for this feature is pass 12 (PR #3978) — this file's
+own log and `MM-24-meetings-minutes.md`'s header both already recorded 12
+completed passes, so this pass is filed as pass 13 rather than the "pass 6"
+the task briefing (stale relative to this file) asked for.
+
+Baseline `7127d632f` (pass 12's own merge, PR #3978). 14 non-merge commits
+in scope since, all landed by other work: most notably `9e5e8b7d8`/
+`cb6f5103b` (2026-11-08, confining a baseline `meetings.view`/`minutes.view`
+holder to approved, non-executive meetings on the Meetings API — the same
+restriction MM-24 already enforces on the Minutes API) and `7884706fa`
+(2026-11-05, the Minutes/Elections/Events slice of the owner's 2026-11-01
+decision batch: department-configurable quorum counting, minutes
+attachments served to a published copy's own Documents audience under a
+cross-checked pointer, a budgeted PDF-attachment embedder, emailed
+meeting-action-item reminders with a `reminder_emailed_on` idempotency
+marker). All reviewed fresh against the seven checklist dimensions; no
+finding in any of them.
+
+**MM-21 (MED, fixed):** the 2026-11-08 member-visibility fix reads
+`MeetingActionItem` through `meetings_service.py`'s new
+`member_visible_meeting()`, but `dashboard.py`'s unified
+`GET /dashboard/action-items`[`/page`] feed queries `MeetingActionItem`
+directly and never gained the equivalent restriction — so a baseline member
+could still read (and have counted in the feed's totals) a draft or
+executive-session meeting's action-item descriptions through that one
+sibling route, even though the Meetings API itself withholds the owning
+meeting. Fixed by adding `meeting_visibility_filter()`, structurally
+mirroring the feed's own pre-existing `minutes_visibility_filter()` (same
+file, same assignee carve-out shape). Two pre-existing dashboard tests whose
+fixture meetings defaulted to `DRAFT` (not what either test was checking)
+needed the same one-line fixture fix `9e5e8b7d8` itself applied to five MCP
+tests for the identical reason. Guard tests added at both the unit level
+(the new filter function, 4 tests) and against the live route (3 tests);
+both sets verified to fail against the pre-fix code and pass after.
+
+**Flagged, not fixed — out of this feature's scope:**
+`reports_service.py`'s department-overview tile (`_generate_department_overview`)
+has the same unrestricted `MeetingActionItem` read MM-21 just closed, but
+discloses only a count, never a description, and lives in Feature 29
+(Reports & analytics)'s own declared file — recorded for that rotation slot
+rather than fixed here.
+
+Route inventory re-enumerated by AST from scratch: 81 routes (17 + 32 + 30 +
+2), unchanged from pass 12 — the only route-level change in window was
+`list_action_item_assignees` widening its permission from `minutes.manage`
+alone to `minutes.manage OR meetings.manage` (reviewed: no sensitive fields,
+no escalation). `check_route_permissions.py --strict` — 305 routes
+repo-wide, 0 errors/warnings. Migration chain re-validated clean at a
+single head (`8b1cf6f55425`, 756 revisions); the two in-scope migrations
+since pass 12 (`a42466630e74`, `61e85742f52b`) both guard on `_has_table()`
+and backfill idempotently. See
+`docs/security-review/MM-24-meetings-minutes.md`'s **Pass 13** section for
+the full trace, including the "New surface reviewed" notes on the
+PDF-attachment embedder's abuse-resistance budgets and the published-minutes-
+attachment access path's cross-checked pointer.
+
+Row 24 → ✅ (pending this PR's merge). Next is Feature 25 (Messaging &
+notifications).
 
 ### 2026-11-10 — Feature 21 (Admin hours, pass 14) merged; Feature 22 (Grants & fundraising, pass 14): watchdog pickup, real delta (pledge-linked donations, budget-line/expenditure edit+delete, federal-program seeding), 0 fixed, 0 new findings
 
