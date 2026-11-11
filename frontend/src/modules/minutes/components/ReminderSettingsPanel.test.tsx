@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockUpdate = vi.fn();
@@ -104,25 +104,50 @@ describe('ReminderSettingsPanel', () => {
     expect(screen.getByText(/One overdue reminder, the day after it falls due, and no more/)).toBeInTheDocument();
   });
 
-  it('will not save a number outside the range, and says what is allowed', async () => {
+  it('saves the rest when a number is outside the range, and keeps that field flagged', async () => {
     const user = userEvent.setup();
     open();
 
     const days = screen.getByLabelText('First reminder, days before the due date');
     await user.clear(days);
     await user.type(days, '31');
-
     expect(screen.getByText('Enter a whole number from 0 to 30.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    const sent = (mockUpdate.mock.calls[0]?.[0] as { minutes: Record<string, unknown> }).minutes;
+    expect('reminder_days_before_due' in sent).toBe(false);
+    expect(sent.overdue_repeat_days).toBe(7);
+    expect(days).toHaveAccessibleDescription(
+      expect.stringContaining('Not saved: this needs a number in the range below.')
+    );
+    expect(days).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('status')).toHaveTextContent(/Saved, except the field flagged below/);
   });
 
-  it('will not save an empty field', async () => {
+  it('puts a 422 on its field and announces it', async () => {
+    mockUpdate
+      .mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: {
+            detail: [{ field: 'minutes.overdue_repeat_days', message: 'Input should be less than or equal to 90' }],
+          },
+        },
+      })
+      .mockResolvedValue({});
     const user = userEvent.setup();
     open();
 
-    await user.clear(screen.getByLabelText('Repeat while overdue, every this many days'));
+    await user.click(screen.getByRole('checkbox', { name: /Weekly list/ }));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    const repeat = screen.getByLabelText('Repeat while overdue, every this many days');
+    await waitFor(() =>
+      expect(repeat).toHaveAccessibleDescription(expect.stringContaining('Input should be less than or equal to 90'))
+    );
+    expect(repeat).toHaveAttribute('aria-invalid', 'true');
+    const retried = (mockUpdate.mock.calls[1]?.[0] as { minutes: Record<string, unknown> }).minutes;
+    expect('overdue_repeat_days' in retried).toBe(false);
   });
 
   it('is read-only for someone who cannot change organization settings', () => {

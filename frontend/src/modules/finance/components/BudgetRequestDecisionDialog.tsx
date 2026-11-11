@@ -12,6 +12,10 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { formatDate } from '@/utils/dateFormatting';
@@ -19,6 +23,21 @@ import { useTimezone } from '@/hooks/useTimezone';
 import { budgetRequestService } from '../services/api';
 import type { BudgetRequest, BudgetRequestDecisionKind, BudgetRequestDecisionPayload } from '../types';
 import { BUDGET_REQUEST_STATUS_LABELS, MAX_REQUEST_AMOUNT, MAX_REQUEST_TEXT } from '../utils/budgetRequests';
+
+type DecisionField = 'decision' | 'amount' | 'note';
+
+/** `BudgetRequestDecision` (schemas/finance.py). */
+const SERVER_FIELDS: Record<DecisionField, ServerFieldSpec> = {
+  decision: { label: 'Decision' },
+  amount: { label: 'Amount approved', api: ['approved_amount', 'approvedAmount'] },
+  note: { label: 'Note', maxLength: MAX_REQUEST_TEXT, api: ['decision_note', 'decisionNote'] },
+};
+const FIELD_ORDER = Object.keys(SERVER_FIELDS) as DecisionField[];
+const FIELD_IDS: Record<DecisionField, string> = {
+  decision: 'budget-request-decision-approve',
+  amount: 'budget-request-approved-amount',
+  note: 'budget-request-note',
+};
 
 interface BudgetRequestDecisionDialogProps {
   request: BudgetRequest;
@@ -41,11 +60,21 @@ export const BudgetRequestDecisionDialog: React.FC<BudgetRequestDecisionDialogPr
   const [decision, setDecision] = useState<BudgetRequestDecisionKind>('approve');
   const [amount, setAmount] = useState(String(request.requestedAmount));
   const [note, setNote] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { errors, setErrors, clearError } = useDialogFieldErrors<DecisionField>();
   const [saving, setSaving] = useState(false);
+  const isDirty = decision !== 'approve' || amount !== String(request.requestedAmount) || note !== '';
+  // Escape, the X and Cancel all ask before throwing away a typed decision.
+  const requestClose = useDiscardGuard({ isDirty, onClose });
+
+  const flag = (next: Partial<Record<DecisionField, string>>) => {
+    setErrors(next);
+    const first = firstErrorField(next, FIELD_ORDER);
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+    return first === undefined;
+  };
 
   const validate = (): BudgetRequestDecisionPayload | null => {
-    const next: Record<string, string> = {};
+    const next: Partial<Record<DecisionField, string>> = {};
     if (decision === 'adjust') {
       const parsed = Number(amount);
       if (amount.trim() === '' || !Number.isFinite(parsed) || parsed < 0) {
@@ -59,8 +88,7 @@ export const BudgetRequestDecisionDialog: React.FC<BudgetRequestDecisionDialogPr
     } else if (note.trim().length > MAX_REQUEST_TEXT) {
       next.note = `Keep the note under ${String(MAX_REQUEST_TEXT)} characters.`;
     }
-    setErrors(next);
-    if (Object.keys(next).length > 0) return null;
+    if (!flag(next)) return null;
     if (decision === 'approve') return { decision, decisionNote: note.trim() || undefined };
     if (decision === 'adjust') {
       return { decision, approvedAmount: Number(amount).toFixed(2), decisionNote: note.trim() };
@@ -81,6 +109,13 @@ export const BudgetRequestDecisionDialog: React.FC<BudgetRequestDecisionDialogPr
       );
       onDecided();
     } catch (err: unknown) {
+      // Nothing is decided until every field is accepted.
+      const mapped = refusalsOnFields(err, SERVER_FIELDS);
+      if (mapped) {
+        flag(mapped.fieldErrors);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       toast.error(getErrorMessage(err, 'Could not record the decision'));
     } finally {
       setSaving(false);
@@ -99,18 +134,19 @@ export const BudgetRequestDecisionDialog: React.FC<BudgetRequestDecisionDialogPr
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       size="lg"
       title={request.lineLabel}
       titleId="budget-request-decision-title"
       aria-describedby="budget-request-decision-description"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? 'Saving...' : 'Record decision'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -156,7 +192,10 @@ export const BudgetRequestDecisionDialog: React.FC<BudgetRequestDecisionDialogPr
                   name="budget-request-decision"
                   value={d.value}
                   checked={decision === d.value}
-                  onChange={() => setDecision(d.value)}
+                  onChange={() => {
+                    setDecision(d.value);
+                    clearError('decision');
+                  }}
                   aria-describedby={`budget-request-decision-${d.value}-hint`}
                   className="mt-1"
                 />
@@ -171,52 +210,51 @@ export const BudgetRequestDecisionDialog: React.FC<BudgetRequestDecisionDialogPr
               </div>
             ))}
           </div>
+          {errors.decision && <p className="mt-1 text-sm text-red-800 dark:text-red-300">{errors.decision}</p>}
         </fieldset>
 
         {decision === 'adjust' && (
-          <div>
-            <label htmlFor="budget-request-approved-amount" className="form-label">
-              Amount approved
-            </label>
-            <input
-              id="budget-request-approved-amount"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.01"
-              className="form-input"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              aria-invalid={Boolean(errors.amount)}
-              aria-describedby={errors.amount ? 'budget-request-approved-amount-error' : undefined}
-            />
-            {errors.amount && (
-              <p id="budget-request-approved-amount-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-                {errors.amount}
-              </p>
+          <FormField id={FIELD_IDS.amount} label="Amount approved" error={errors.amount}>
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="decimal"
+                min="0"
+                max={MAX_REQUEST_AMOUNT}
+                step="0.01"
+                className="form-input"
+                value={amount}
+                onChange={(e) => {
+                  setAmount(e.target.value);
+                  clearError('amount');
+                }}
+              />
             )}
-          </div>
+          </FormField>
         )}
 
-        <div>
-          <label htmlFor="budget-request-note" className="form-label">
-            {decision === 'approve' ? 'Note (optional)' : 'Note to the line owner'}
-          </label>
-          <textarea
-            id="budget-request-note"
-            rows={3}
-            className="form-input"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            aria-invalid={Boolean(errors.note)}
-            aria-describedby={errors.note ? 'budget-request-note-error' : undefined}
-          />
-          {errors.note && (
-            <p id="budget-request-note-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-              {errors.note}
-            </p>
+        <FormField
+          id={FIELD_IDS.note}
+          label={decision === 'approve' ? 'Note' : 'Note to the line owner'}
+          optional={decision === 'approve'}
+          error={errors.note}
+          maxLength={MAX_REQUEST_TEXT}
+          count={note.length}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              rows={3}
+              className="form-input"
+              value={note}
+              onChange={(e) => {
+                setNote(e.target.value);
+                clearError('note');
+              }}
+            />
           )}
-        </div>
+        </FormField>
       </div>
     </Modal>
   );

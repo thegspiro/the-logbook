@@ -38,11 +38,12 @@ import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electio
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
 import { MEETING_KIND_LABELS, defaultsForKind, describeEligibilityRules } from '../modules/elections/eligibilityRules';
 import { DialogPanel } from '../components/ux/DialogPanel';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
 import { Vote } from 'lucide-react';
-import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
-import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 
 interface PositionSuggestion {
   key: string;
@@ -75,18 +76,54 @@ const blankElectionForm = (defaults: ElectionFormDefaults): ElectionCreate => ({
   ...defaults,
 });
 
-type ElectionField = 'title' | 'description' | 'start_date' | 'end_date';
+type CreateField =
+  | 'title'
+  | 'description'
+  | 'start_date'
+  | 'end_date'
+  | 'positions'
+  | 'victory_threshold'
+  | 'victory_percentage'
+  | 'max_runoff_rounds'
+  | 'reminder_hours_before_close'
+  | 'seats_per_position';
+
+// Limits from ElectionBase (backend/app/schemas/election.py): title 200,
+// description 50,000, and each position name 200 (validate_positions).
+const TITLE_MAX = 200;
+const DESCRIPTION_MAX = 50_000;
+const POSITION_MAX = 200;
+
+const CREATE_FIELD_IDS: Record<CreateField, string> = {
+  title: 'election-title',
+  description: 'election-description',
+  start_date: 'election-start-date',
+  end_date: 'election-end-date',
+  positions: 'election-position-input',
+  victory_threshold: 'election-num-threshold',
+  victory_percentage: 'election-pct-threshold',
+  max_runoff_rounds: 'election-max-runoff-rounds',
+  reminder_hours_before_close: 'election-reminder-hours',
+  seats_per_position: 'election-seats',
+};
 
 // The election schema has no alias generator, so a 422 names these snake_case
-// request keys, which are already the field names.
-const ELECTION_FIELDS: FieldSpecs<ElectionField> = {
-  title: { id: 'election-title', label: 'Title' },
-  description: { id: 'election-description', label: 'Description' },
-  // The group around each date-and-time picker, not its date input: see the
-  // comment where the pickers render.
-  start_date: { id: 'election-start-date', label: 'Start Date & Time' },
-  end_date: { id: 'election-end-date', label: 'End Date & Time' },
+// request keys, which are already the field names. Order is focus order.
+const CREATE_FIELDS: FieldSpecs<CreateField> = {
+  title: { id: CREATE_FIELD_IDS.title, label: 'Title' },
+  description: { id: CREATE_FIELD_IDS.description, label: 'Description' },
+  start_date: { id: CREATE_FIELD_IDS.start_date, label: 'Start Date & Time' },
+  end_date: { id: CREATE_FIELD_IDS.end_date, label: 'End Date & Time' },
+  positions: { id: CREATE_FIELD_IDS.positions, label: 'Positions' },
+  victory_threshold: { id: CREATE_FIELD_IDS.victory_threshold, label: 'Numerical threshold' },
+  victory_percentage: { id: CREATE_FIELD_IDS.victory_percentage, label: 'Percentage threshold' },
+  max_runoff_rounds: { id: CREATE_FIELD_IDS.max_runoff_rounds, label: 'Maximum runoff rounds' },
+  reminder_hours_before_close: { id: CREATE_FIELD_IDS.reminder_hours_before_close, label: 'Auto-remind non-voters' },
+  seats_per_position: { id: CREATE_FIELD_IDS.seats_per_position, label: 'Seats per race' },
 };
+
+// The dialog's own label look, kept as the page had it.
+const LABEL_CLASS = 'text-theme-text-primary block text-sm font-medium';
 
 const holdsBuiltInDefaults = (form: ElectionCreate): boolean =>
   (Object.keys(BUILT_IN_ELECTION_DEFAULTS) as (keyof ElectionFormDefaults)[]).every(
@@ -101,7 +138,9 @@ export const ElectionsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const { busy, run } = useSubmitGuard();
-  const electionErrors = useFieldErrors(ELECTION_FIELDS);
+  const electionErrors = useFieldErrors(CREATE_FIELDS);
+  const fieldErrors = electionErrors.errors;
+  const clearFieldError = (key: CreateField) => electionErrors.setError(key, null);
   const [electionDefaults, setElectionDefaults] = useState<ElectionFormDefaults>(BUILT_IN_ELECTION_DEFAULTS);
   const [formData, setFormData] = useState<ElectionCreate>(() => blankElectionForm(BUILT_IN_ELECTION_DEFAULTS));
   const [positionInput, setPositionInput] = useState('');
@@ -278,14 +317,12 @@ export const ElectionsPage: React.FC = () => {
 
   const handleStartDateChange = (startDate: string) => {
     setFormData({ ...formData, start_date: startDate });
-    electionErrors.setError('start_date', null);
 
     // If no end date is set, default to same day at 11:59 PM. The value is a
     // datetime-local string in the department zone, so end-of-day is a string
     // operation — parsing it with `new Date` would use the browser's zone.
     if (!formData.end_date && startDate) {
       setFormData({ ...formData, start_date: startDate, end_date: endOfDepartmentDay(startDate) });
-      electionErrors.setError('end_date', null);
     }
   };
 
@@ -306,7 +343,7 @@ export const ElectionsPage: React.FC = () => {
     const start = new Date(localToUTC(formData.start_date, tz));
     const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
     setFormData({ ...formData, end_date: formatForDateTimeInput(end, tz) });
-    electionErrors.setError('end_date', null);
+    clearFieldError('end_date');
   };
 
   const setEndOfDay = () => {
@@ -316,24 +353,54 @@ export const ElectionsPage: React.FC = () => {
     }
 
     setFormData({ ...formData, end_date: endOfDepartmentDay(formData.start_date) });
-    electionErrors.setError('end_date', null);
+    clearFieldError('end_date');
+  };
+
+  const resetCreateForm = () => {
+    setFormData(blankElectionForm(electionDefaults));
+    setPositionInput('');
+    electionErrors.clear();
+  };
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    resetCreateForm();
+  };
+  const createDirty =
+    showCreateModal &&
+    (positionInput.trim() !== '' || JSON.stringify(formData) !== JSON.stringify(blankElectionForm(electionDefaults)));
+  // One guard for Escape, the X and Cancel, so leaving a changed form asks
+  // once whichever way the officer leaves (forms review F-6).
+  const requestCloseCreate = useDiscardGuard({ isDirty: createDirty, onClose: closeCreateModal });
+
+  const showFieldErrors = (errors: FieldErrors<CreateField>) => {
+    electionErrors.setErrors(errors);
+    electionErrors.focusFirst(errors);
   };
 
   const handleCreateElection = (e: React.FormEvent) => {
     e.preventDefault();
-    // Checked here rather than by the browser's required bubble, which
-    // vanished after a few seconds and was tied to no field (forms review F-3).
-    const problems: FieldErrors<ElectionField> = {};
-    if (!formData.title.trim()) problems.title = 'Enter a title for the election.';
-    if (!formData.start_date) problems.start_date = 'Choose when voting opens.';
-    if (!formData.end_date) problems.end_date = 'Choose when voting closes.';
-    electionErrors.setFormError(null);
-    electionErrors.setErrors(problems);
-    if (Object.keys(problems).length > 0) {
-      electionErrors.focusFirst(problems);
-      return Promise.resolve();
-    }
     return run(async () => {
+      electionErrors.setFormError(null);
+
+      // A create form creates nothing until every refusal is fixed (owner,
+      // 2026-11-05); each one is written under its own field.
+      const errors: FieldErrors<CreateField> = {};
+      if (!formData.title.trim()) errors.title = 'Enter a title for the election.';
+      if (!formData.start_date) errors.start_date = 'Choose when voting opens.';
+      if (!formData.end_date) errors.end_date = 'Choose when voting closes.';
+      else if (
+        formData.start_date &&
+        new Date(localToUTC(formData.end_date, tz)).getTime() <= new Date(localToUTC(formData.start_date, tz)).getTime()
+      ) {
+        // The schema's model validator refuses this with no field to point at.
+        errors.end_date = 'Voting has to end after it starts.';
+      }
+      if (Object.keys(errors).length > 0) {
+        showFieldErrors(errors);
+        return;
+      }
+      electionErrors.setErrors({});
+
       try {
         // Convert local datetime-local values to UTC before sending to backend
         const submitData = {
@@ -343,9 +410,7 @@ export const ElectionsPage: React.FC = () => {
           end_date: localToUTC(formData.end_date, tz),
         };
         await electionService.createElection(submitData);
-        setShowCreateModal(false);
-        setFormData(blankElectionForm(electionDefaults));
-        setPositionInput('');
+        closeCreateModal();
         await fetchElections();
       } catch (err: unknown) {
         electionErrors.focusFirst(electionErrors.setFromApiError(err, 'Failed to create election'));
@@ -470,10 +535,7 @@ export const ElectionsPage: React.FC = () => {
                     </svg>
                   </Link>
                   <button
-                    onClick={() => {
-                      electionErrors.clear();
-                      setShowCreateModal(true);
-                    }}
+                    onClick={() => setShowCreateModal(true)}
                     className="btn-primary inline-flex items-center rounded-md"
                   >
                     <svg
@@ -730,14 +792,8 @@ export const ElectionsPage: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-election-title"
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setShowCreateModal(false);
-            }}
           >
-            <DialogPanel
-              onClose={() => setShowCreateModal(false)}
-              className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto"
-            >
+            <DialogPanel onClose={requestCloseCreate} className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto">
               <div className="border-theme-surface-border border-b px-6 py-4">
                 <h3 id="create-election-title" className="text-theme-text-primary text-lg font-medium">
                   Create New Election
@@ -748,6 +804,7 @@ export const ElectionsPage: React.FC = () => {
                 onSubmit={(e) => {
                   void handleCreateElection(e);
                 }}
+                noValidate
                 className="px-6 py-4"
               >
                 {electionErrors.formError && (
@@ -758,21 +815,23 @@ export const ElectionsPage: React.FC = () => {
 
                 <div className="space-y-4">
                   <FormField
-                    id={ELECTION_FIELDS.title.id}
                     label="Title"
+                    id={CREATE_FIELD_IDS.title}
                     required
-                    error={electionErrors.errors.title}
-                    labelClassName="text-theme-text-primary block text-sm font-medium"
+                    error={fieldErrors.title}
+                    maxLength={TITLE_MAX}
+                    count={formData.title.length}
+                    labelClassName={LABEL_CLASS}
                   >
                     {(field) => (
                       <input
                         {...field}
                         type="text"
-                        maxLength={200}
+                        autoComplete="off"
                         value={formData.title}
                         onChange={(e) => {
                           setFormData({ ...formData, title: e.target.value });
-                          electionErrors.setError('title', null);
+                          clearFieldError('title');
                         }}
                         className="form-input mt-1 shadow-xs"
                       />
@@ -780,19 +839,20 @@ export const ElectionsPage: React.FC = () => {
                   </FormField>
 
                   <FormField
-                    id={ELECTION_FIELDS.description.id}
                     label="Description"
-                    error={electionErrors.errors.description}
-                    labelClassName="text-theme-text-primary block text-sm font-medium"
+                    id={CREATE_FIELD_IDS.description}
+                    error={fieldErrors.description}
+                    maxLength={DESCRIPTION_MAX}
+                    count={formData.description?.length ?? 0}
+                    labelClassName={LABEL_CLASS}
                   >
                     {(field) => (
                       <textarea
                         {...field}
-                        maxLength={50000}
                         value={formData.description}
                         onChange={(e) => {
                           setFormData({ ...formData, description: e.target.value });
-                          electionErrors.setError('description', null);
+                          clearFieldError('description');
                         }}
                         rows={3}
                         className="form-input mt-1 shadow-xs"
@@ -800,81 +860,90 @@ export const ElectionsPage: React.FC = () => {
                     )}
                   </FormField>
 
-                  <div>
-                    <label htmlFor="election-meeting" className="text-theme-text-primary block text-sm font-medium">
-                      Linked Meeting
-                    </label>
-                    <select
-                      id="election-meeting"
-                      value={
-                        formData.meeting_id
-                          ? `meeting:${formData.meeting_id}`
-                          : formData.event_id
-                            ? `event:${formData.event_id}`
-                            : ''
-                      }
-                      onChange={(e) => handleMeetingChange(e.target.value)}
-                      className="form-input mt-1 shadow-xs"
-                    >
-                      <option value="">No linked meeting</option>
-                      {upcomingEvents.map((event) => (
-                        <option key={`event-${event.id}`} value={`event:${event.id}`}>
-                          {event.title} ({formatDate(event.start_datetime, tz)})
-                        </option>
-                      ))}
-                      {meetings.length > 0 && (
-                        <optgroup label="Meeting Minutes">
-                          {meetings.map((meeting) => (
-                            <option key={`meeting-${meeting.id}`} value={`meeting:${meeting.id}`}>
-                              {meeting.title} ({formatDate(meeting.meeting_date, tz)})
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                    <p className="text-theme-text-muted mt-1 text-xs">
-                      Optional. Link a meeting or event to import its attendance into this election.
-                    </p>
-                  </div>
+                  <FormField
+                    label="Linked Meeting"
+                    id="election-meeting"
+                    hint="Optional. Link a meeting or event to import its attendance into this election."
+                    labelClassName={LABEL_CLASS}
+                  >
+                    {(field) => (
+                      <select
+                        {...field}
+                        value={
+                          formData.meeting_id
+                            ? `meeting:${formData.meeting_id}`
+                            : formData.event_id
+                              ? `event:${formData.event_id}`
+                              : ''
+                        }
+                        onChange={(e) => handleMeetingChange(e.target.value)}
+                        className="form-input mt-1 shadow-xs"
+                      >
+                        <option value="">No linked meeting</option>
+                        {upcomingEvents.map((event) => (
+                          <option key={`event-${event.id}`} value={`event:${event.id}`}>
+                            {event.title} ({formatDate(event.start_datetime, tz)})
+                          </option>
+                        ))}
+                        {meetings.length > 0 && (
+                          <optgroup label="Meeting Minutes">
+                            {meetings.map((meeting) => (
+                              <option key={`meeting-${meeting.id}`} value={`meeting:${meeting.id}`}>
+                                {meeting.title} ({formatDate(meeting.meeting_date, tz)})
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+                    )}
+                  </FormField>
 
                   <div className="space-y-4">
-                    {(['start_date', 'end_date'] as const).map((name) => {
-                      const spec = ELECTION_FIELDS[name];
-                      const isStart = name === 'start_date';
-                      // The picker hands these props to its date input, so the
-                      // error, required state and focus sit on the control the
-                      // label names.
-                      return (
-                        <FormField
-                          key={name}
-                          id={spec.id}
-                          label={spec.label}
-                          required
-                          error={electionErrors.errors[name]}
-                          labelClassName="text-theme-text-primary block text-sm font-medium"
-                        >
-                          {(field) => (
-                            <DateTimeQuarterHour
-                              {...field}
-                              timeLabel={isStart ? 'Start time' : 'End time'}
-                              timezone={tz}
-                              value={formData[name]}
-                              onChange={(val) => {
-                                if (isStart) {
-                                  handleStartDateChange(val);
-                                } else {
-                                  setFormData({ ...formData, end_date: val });
-                                  electionErrors.setError('end_date', null);
-                                }
-                              }}
-                              className="form-input mt-1 shadow-xs"
-                            />
-                          )}
-                        </FormField>
-                      );
-                    })}
+                    <FormField
+                      label="Start Date & Time"
+                      id={CREATE_FIELD_IDS.start_date}
+                      required
+                      error={fieldErrors.start_date}
+                      labelClassName={LABEL_CLASS}
+                    >
+                      {(field) => (
+                        <DateTimeQuarterHour
+                          {...field}
+                          timeLabel="Start time"
+                          timezone={tz}
+                          value={formData.start_date}
+                          onChange={(val) => {
+                            handleStartDateChange(val);
+                            clearFieldError('start_date');
+                          }}
+                          className="form-input mt-1 shadow-xs"
+                        />
+                      )}
+                    </FormField>
 
                     <div>
+                      <FormField
+                        label="End Date & Time"
+                        id={CREATE_FIELD_IDS.end_date}
+                        required
+                        error={fieldErrors.end_date}
+                        labelClassName={LABEL_CLASS}
+                      >
+                        {(field) => (
+                          <DateTimeQuarterHour
+                            {...field}
+                            timeLabel="End time"
+                            timezone={tz}
+                            value={formData.end_date}
+                            onChange={(val) => {
+                              setFormData({ ...formData, end_date: val });
+                              clearFieldError('end_date');
+                            }}
+                            className="form-input mt-1 shadow-xs"
+                          />
+                        )}
+                      </FormField>
+
                       {formData.start_date && (
                         <div className="mt-2">
                           <p className="text-theme-text-muted mb-2 text-xs">Quick duration:</p>
@@ -914,104 +983,110 @@ export const ElectionsPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="election-position-input"
-                      className="text-theme-text-primary mb-2 block text-sm font-medium"
+                    <FormField
+                      label="Positions"
+                      id={CREATE_FIELD_IDS.positions}
+                      error={fieldErrors.positions}
+                      maxLength={POSITION_MAX}
+                      count={positionInput.length}
+                      hint="Select a department position (President, Secretary…) or rank, or type a custom name."
+                      labelClassName={`${LABEL_CLASS} mb-2`}
                     >
-                      Positions
-                    </label>
-                    <div className="relative">
-                      <div className="flex space-x-2">
-                        <div className="relative flex-1">
-                          <input
-                            type="text"
-                            id="election-position-input"
-                            value={positionInput}
-                            onChange={(e) => {
-                              setPositionInput(e.target.value);
-                              setShowPositionDropdown(true);
-                            }}
-                            onFocus={() => setShowPositionDropdown(true)}
-                            // Options commit on mousedown and prevent the blur,
-                            // so closing here cannot swallow a pick. This
-                            // replaces a full-screen click-away layer that sat
-                            // over the Add button and ate the first click.
-                            onBlur={() => setShowPositionDropdown(false)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
+                      {(field) => (
+                        <div className="relative">
+                          <div className="flex space-x-2">
+                            <div className="relative flex-1">
+                              <input
+                                {...field}
+                                type="text"
+                                value={positionInput}
+                                onChange={(e) => {
+                                  setPositionInput(e.target.value);
+                                  setShowPositionDropdown(true);
+                                  clearFieldError('positions');
+                                }}
+                                onFocus={() => setShowPositionDropdown(true)}
+                                // Options commit on mousedown and prevent the blur,
+                                // so closing here cannot swallow a pick. This
+                                // replaces a full-screen click-away layer that sat
+                                // over the Add button and ate the first click.
+                                onBlur={() => setShowPositionDropdown(false)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    addPosition();
+                                    setShowPositionDropdown(false);
+                                  } else if (e.key === 'Escape' && positionListboxOpen) {
+                                    // Escape dismisses the open list only. Left to
+                                    // bubble, it also reaches the dialog's Escape
+                                    // handlers and discards the whole form.
+                                    e.stopPropagation();
+                                    setShowPositionDropdown(false);
+                                  }
+                                }}
+                                placeholder="Select or type a position..."
+                                aria-label="Position name"
+                                role="combobox"
+                                aria-autocomplete="list"
+                                aria-expanded={positionListboxOpen}
+                                aria-controls={positionListboxOpen ? 'election-position-listbox' : undefined}
+                                autoComplete="off"
+                                className="form-input shadow-xs"
+                              />
+                              {positionListboxOpen && (
+                                <ul
+                                  id="election-position-listbox"
+                                  className="popover-panel absolute z-20 mt-1 max-h-48 w-full overflow-auto"
+                                  role="listbox"
+                                  aria-label="Available positions"
+                                >
+                                  {positionSuggestions.map((suggestion) => (
+                                    // presentation: the option, not a list item,
+                                    // is the listbox's child in the a11y tree.
+                                    <li key={suggestion.key} role="presentation">
+                                      <button
+                                        type="button"
+                                        role="option"
+                                        className="hover:bg-theme-surface-hover text-theme-text-primary w-full cursor-pointer px-3 py-2 text-left text-sm"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault(); // Prevent input blur before click
+                                          setPositionInput('');
+                                          setShowPositionDropdown(false);
+                                          if (!addedPositions.includes(suggestion.name)) {
+                                            setFormData({
+                                              ...formData,
+                                              positions: [...addedPositions, suggestion.name],
+                                            });
+                                          }
+                                        }}
+                                      >
+                                        <span className="font-medium">{suggestion.name}</span>
+                                        <span className="text-theme-text-muted ml-2 text-xs">{suggestion.kind}</span>
+                                        {suggestion.detail && (
+                                          <span className="text-theme-text-muted ml-2 text-xs">
+                                            — {suggestion.detail}
+                                          </span>
+                                        )}
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
                                 addPosition();
                                 setShowPositionDropdown(false);
-                              } else if (e.key === 'Escape' && positionListboxOpen) {
-                                // Escape dismisses the open list only. Left to
-                                // bubble, it also reaches the dialog's Escape
-                                // handlers and discards the whole form.
-                                e.stopPropagation();
-                                setShowPositionDropdown(false);
-                              }
-                            }}
-                            placeholder="Select or type a position..."
-                            aria-label="Position name"
-                            role="combobox"
-                            aria-autocomplete="list"
-                            aria-expanded={positionListboxOpen}
-                            aria-controls={positionListboxOpen ? 'election-position-listbox' : undefined}
-                            autoComplete="off"
-                            className="form-input shadow-xs"
-                          />
-                          {positionListboxOpen && (
-                            <ul
-                              id="election-position-listbox"
-                              className="popover-panel absolute z-20 mt-1 max-h-48 w-full overflow-auto"
-                              role="listbox"
-                              aria-label="Available positions"
+                              }}
+                              className="bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-hover rounded-md px-4 py-2"
                             >
-                              {positionSuggestions.map((suggestion) => (
-                                // presentation: the option, not a list item,
-                                // is the listbox's child in the a11y tree.
-                                <li key={suggestion.key} role="presentation">
-                                  <button
-                                    type="button"
-                                    role="option"
-                                    className="hover:bg-theme-surface-hover text-theme-text-primary w-full cursor-pointer px-3 py-2 text-left text-sm"
-                                    onMouseDown={(e) => {
-                                      e.preventDefault(); // Prevent input blur before click
-                                      setPositionInput('');
-                                      setShowPositionDropdown(false);
-                                      if (!addedPositions.includes(suggestion.name)) {
-                                        setFormData({
-                                          ...formData,
-                                          positions: [...addedPositions, suggestion.name],
-                                        });
-                                      }
-                                    }}
-                                  >
-                                    <span className="font-medium">{suggestion.name}</span>
-                                    <span className="text-theme-text-muted ml-2 text-xs">{suggestion.kind}</span>
-                                    {suggestion.detail && (
-                                      <span className="text-theme-text-muted ml-2 text-xs">— {suggestion.detail}</span>
-                                    )}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
+                              Add
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            addPosition();
-                            setShowPositionDropdown(false);
-                          }}
-                          className="bg-theme-surface-hover text-theme-text-primary hover:bg-theme-surface-hover rounded-md px-4 py-2"
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-theme-text-muted mt-1 text-xs">
-                      Select a department position (President, Secretary…) or rank, or type a custom name.
-                    </p>
+                      )}
+                    </FormField>
                     {formData.positions && formData.positions.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {formData.positions.map((position) => (
@@ -1035,10 +1110,7 @@ export const ElectionsPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="election-voting-method"
-                      className="text-theme-text-primary block text-sm font-medium"
-                    >
+                    <label htmlFor="election-voting-method" className={LABEL_CLASS}>
                       How is the Winner Determined?
                     </label>
                     <select
@@ -1083,85 +1155,92 @@ export const ElectionsPage: React.FC = () => {
 
                   {formData.victory_condition === VC.THRESHOLD && (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <label
-                          htmlFor="election-num-threshold"
-                          className="text-theme-text-primary block text-sm font-medium"
-                        >
-                          Numerical Threshold
-                        </label>
-                        <input
-                          type="number"
-                          id="election-num-threshold"
-                          min="1"
-                          value={formData.victory_threshold || ''}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              victory_threshold: e.target.value ? parseInt(e.target.value) : undefined,
-                            })
-                          }
-                          placeholder="e.g., 10 votes required"
-                          aria-label="Numerical threshold"
-                          className="form-input mt-1 shadow-xs"
-                        />
-                        <p className="text-theme-text-muted mt-1 text-xs">Minimum votes needed to win</p>
-                      </div>
+                      <FormField
+                        label="Numerical Threshold"
+                        id={CREATE_FIELD_IDS.victory_threshold}
+                        error={fieldErrors.victory_threshold}
+                        hint="Minimum votes needed to win"
+                        labelClassName={LABEL_CLASS}
+                      >
+                        {(field) => (
+                          <input
+                            {...field}
+                            type="number"
+                            inputMode="numeric"
+                            min="1"
+                            value={formData.victory_threshold || ''}
+                            onChange={(e) => {
+                              setFormData({
+                                ...formData,
+                                victory_threshold: e.target.value ? parseInt(e.target.value) : undefined,
+                              });
+                              clearFieldError('victory_threshold');
+                            }}
+                            placeholder="e.g., 10 votes required"
+                            className="form-input mt-1 shadow-xs"
+                          />
+                        )}
+                      </FormField>
 
-                      <div>
-                        <label
-                          htmlFor="election-pct-threshold"
-                          className="text-theme-text-primary block text-sm font-medium"
-                        >
-                          Percentage Threshold
-                        </label>
-                        <input
-                          type="number"
-                          id="election-pct-threshold"
-                          min="1"
-                          max="100"
-                          value={formData.victory_percentage || ''}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              victory_percentage: e.target.value ? parseInt(e.target.value) : undefined,
-                            })
-                          }
-                          placeholder="e.g., 60%"
-                          aria-label="Percentage threshold"
-                          className="form-input mt-1 shadow-xs"
-                        />
-                        <p className="text-theme-text-muted mt-1 text-xs">Percentage of votes needed to win</p>
-                      </div>
+                      <FormField
+                        label="Percentage Threshold"
+                        id={CREATE_FIELD_IDS.victory_percentage}
+                        error={fieldErrors.victory_percentage}
+                        hint="Percentage of votes needed to win"
+                        labelClassName={LABEL_CLASS}
+                      >
+                        {(field) => (
+                          <input
+                            {...field}
+                            type="number"
+                            inputMode="numeric"
+                            min="1"
+                            max="100"
+                            value={formData.victory_percentage || ''}
+                            onChange={(e) => {
+                              setFormData({
+                                ...formData,
+                                victory_percentage: e.target.value ? parseInt(e.target.value) : undefined,
+                              });
+                              clearFieldError('victory_percentage');
+                            }}
+                            placeholder="e.g., 60%"
+                            className="form-input mt-1 shadow-xs"
+                          />
+                        )}
+                      </FormField>
                     </div>
                   )}
 
                   {formData.victory_condition === VC.SUPERMAJORITY && (
-                    <div>
-                      <label
-                        htmlFor="election-supermajority-pct"
-                        className="text-theme-text-primary block text-sm font-medium"
-                      >
-                        Supermajority Percentage (default: 67%)
-                      </label>
-                      <input
-                        type="number"
-                        id="election-supermajority-pct"
-                        min="51"
-                        max="100"
-                        value={formData.victory_percentage || 67}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            victory_percentage: e.target.value ? parseInt(e.target.value) : 67,
-                          })
-                        }
-                        className="form-input mt-1 shadow-xs"
-                      />
-                      <p className="text-theme-text-muted mt-1 text-xs">
-                        Percentage of votes needed (typically 67% for 2/3 majority)
-                      </p>
-                    </div>
+                    <FormField
+                      label="Supermajority Percentage (default: 67%)"
+                      // Shown in place of the threshold pair, never beside it, so it takes
+                      // the same id the percentage refusal focuses.
+                      id={CREATE_FIELD_IDS.victory_percentage}
+                      error={fieldErrors.victory_percentage}
+                      hint="Percentage of votes needed (typically 67% for 2/3 majority)"
+                      labelClassName={LABEL_CLASS}
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="number"
+                          inputMode="numeric"
+                          min="51"
+                          max="100"
+                          value={formData.victory_percentage || 67}
+                          onChange={(e) => {
+                            setFormData({
+                              ...formData,
+                              victory_percentage: e.target.value ? parseInt(e.target.value) : 67,
+                            });
+                            clearFieldError('victory_percentage');
+                          }}
+                          className="form-input mt-1 shadow-xs"
+                        />
+                      )}
+                    </FormField>
                   )}
 
                   <div className="border-theme-surface-border border-t pt-4">
@@ -1184,10 +1263,7 @@ export const ElectionsPage: React.FC = () => {
                     {formData.enable_runoffs && (
                       <div className="bg-theme-surface-secondary ml-6 space-y-3 rounded-sm p-3">
                         <div>
-                          <label
-                            htmlFor="election-runoff-type"
-                            className="text-theme-text-primary block text-sm font-medium"
-                          >
+                          <label htmlFor="election-runoff-type" className={LABEL_CLASS}>
                             Runoff Type
                           </label>
                           <select
@@ -1204,28 +1280,29 @@ export const ElectionsPage: React.FC = () => {
                           </p>
                         </div>
 
-                        <div>
-                          <label
-                            htmlFor="election-max-runoff-rounds"
-                            className="text-theme-text-primary block text-sm font-medium"
-                          >
-                            Maximum Runoff Rounds
-                          </label>
-                          <input
-                            type="number"
-                            id="election-max-runoff-rounds"
-                            min="1"
-                            max="10"
-                            value={formData.max_runoff_rounds}
-                            onChange={(e) =>
-                              setFormData({ ...formData, max_runoff_rounds: parseInt(e.target.value) || 3 })
-                            }
-                            className="form-input mt-1 shadow-xs"
-                          />
-                          <p className="text-theme-text-muted mt-1 text-xs">
-                            No more runoffs are created after this many rounds
-                          </p>
-                        </div>
+                        <FormField
+                          label="Maximum Runoff Rounds"
+                          id={CREATE_FIELD_IDS.max_runoff_rounds}
+                          error={fieldErrors.max_runoff_rounds}
+                          hint="No more runoffs are created after this many rounds"
+                          labelClassName={LABEL_CLASS}
+                        >
+                          {(field) => (
+                            <input
+                              {...field}
+                              type="number"
+                              inputMode="numeric"
+                              min="1"
+                              max="10"
+                              value={formData.max_runoff_rounds}
+                              onChange={(e) => {
+                                setFormData({ ...formData, max_runoff_rounds: parseInt(e.target.value) || 3 });
+                                clearFieldError('max_runoff_rounds');
+                              }}
+                              className="form-input mt-1 shadow-xs"
+                            />
+                          )}
+                        </FormField>
                       </div>
                     )}
                   </div>
@@ -1307,42 +1384,39 @@ export const ElectionsPage: React.FC = () => {
                     )}
 
                     {featureFlags.reminders_enabled && (
-                      <div>
-                        <label
-                          htmlFor="election-reminder-hours"
-                          className="text-theme-text-primary block text-sm font-medium"
-                        >
-                          Auto-Remind Non-Voters
-                        </label>
-                        <select
-                          id="election-reminder-hours"
-                          value={formData.reminder_hours_before_close ?? ''}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              reminder_hours_before_close: e.target.value ? Number(e.target.value) : undefined,
-                            })
-                          }
-                          className="form-input mt-1 shadow-xs"
-                        >
-                          <option value="">No automatic reminder</option>
-                          <option value="2">2 hours before close</option>
-                          <option value="6">6 hours before close</option>
-                          <option value="24">1 day before close</option>
-                          <option value="48">2 days before close</option>
-                          <option value="72">3 days before close</option>
-                        </select>
-                        <p className="text-theme-text-muted mt-1 text-xs">
-                          Members who haven&apos;t voted get one reminder email with a fresh ballot link.
-                        </p>
-                      </div>
+                      <FormField
+                        label="Auto-Remind Non-Voters"
+                        id={CREATE_FIELD_IDS.reminder_hours_before_close}
+                        error={fieldErrors.reminder_hours_before_close}
+                        hint="Members who haven't voted get one reminder email with a fresh ballot link."
+                        labelClassName={LABEL_CLASS}
+                      >
+                        {(field) => (
+                          <select
+                            {...field}
+                            value={formData.reminder_hours_before_close ?? ''}
+                            onChange={(e) => {
+                              setFormData({
+                                ...formData,
+                                reminder_hours_before_close: e.target.value ? Number(e.target.value) : undefined,
+                              });
+                              clearFieldError('reminder_hours_before_close');
+                            }}
+                            className="form-input mt-1 shadow-xs"
+                          >
+                            <option value="">No automatic reminder</option>
+                            <option value="2">2 hours before close</option>
+                            <option value="6">6 hours before close</option>
+                            <option value="24">1 day before close</option>
+                            <option value="48">2 days before close</option>
+                            <option value="72">3 days before close</option>
+                          </select>
+                        )}
+                      </FormField>
                     )}
 
                     <div>
-                      <label
-                        htmlFor="election-tie-policy"
-                        className="text-theme-text-primary block text-sm font-medium"
-                      >
+                      <label htmlFor="election-tie-policy" className={LABEL_CLASS}>
                         If the Top Candidates Tie
                       </label>
                       <select
@@ -1366,40 +1440,39 @@ export const ElectionsPage: React.FC = () => {
                       </p>
                     </div>
 
-                    <div>
-                      <label htmlFor="election-seats" className="text-theme-text-primary block text-sm font-medium">
-                        Seats per Race
-                      </label>
-                      <input
-                        id="election-seats"
-                        type="number"
-                        min={1}
-                        max={50}
-                        value={formData.seats_per_position ?? 1}
-                        disabled={formData.voting_method === VM.RANKED_CHOICE}
-                        onChange={(e) => {
-                          const seats = Math.min(50, Math.max(1, Math.trunc(Number(e.target.value)) || 1));
-                          // A voter picks as many as there are seats; the
-                          // server refuses a cap below the seat count.
-                          setFormData({ ...formData, seats_per_position: seats, max_votes_per_position: seats });
-                        }}
-                        aria-describedby="election-seats-help"
-                        className="form-input mt-1 w-24 shadow-xs"
-                      />
-                      <p id="election-seats-help" className="text-theme-text-muted mt-1 text-xs">
-                        How many people each race elects — a board race with two seats elects its top two, and voters
-                        may choose up to that many. Ranked choice elects one per race.
-                      </p>
-                    </div>
+                    <FormField
+                      label="Seats per Race"
+                      id={CREATE_FIELD_IDS.seats_per_position}
+                      error={fieldErrors.seats_per_position}
+                      hint="How many people each race elects — a board race with two seats elects its top two, and voters may choose up to that many. Ranked choice elects one per race."
+                      labelClassName={LABEL_CLASS}
+                    >
+                      {(field) => (
+                        <input
+                          {...field}
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          max={50}
+                          value={formData.seats_per_position ?? 1}
+                          disabled={formData.voting_method === VM.RANKED_CHOICE}
+                          onChange={(e) => {
+                            const seats = Math.min(50, Math.max(1, Math.trunc(Number(e.target.value)) || 1));
+                            // A voter picks as many as there are seats; the
+                            // server refuses a cap below the seat count.
+                            setFormData({ ...formData, seats_per_position: seats, max_votes_per_position: seats });
+                            clearFieldError('seats_per_position');
+                          }}
+                          className="form-input mt-1 w-24 shadow-xs"
+                        />
+                      )}
+                    </FormField>
                   </div>
                 </div>
 
                 <div className="bg-theme-surface-secondary mt-6 space-y-3 rounded-md p-4">
                   <div className="max-w-xs">
-                    <label
-                      htmlFor="election-meeting-kind"
-                      className="text-theme-text-primary block text-sm font-medium"
-                    >
+                    <label htmlFor="election-meeting-kind" className={LABEL_CLASS}>
                       Held at
                     </label>
                     <select
@@ -1446,7 +1519,7 @@ export const ElectionsPage: React.FC = () => {
                 <div className="mt-6 flex justify-end space-x-3">
                   <button
                     type="button"
-                    onClick={() => setShowCreateModal(false)}
+                    onClick={requestCloseCreate}
                     className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md border px-4 py-2"
                   >
                     Cancel

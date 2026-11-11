@@ -16,6 +16,10 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -23,9 +27,26 @@ import { budgetService } from '../services/api';
 import type { BudgetAmendmentCreatePayload, BudgetAmendmentCreated } from '../types';
 import { MAX_MONEY_AMOUNT } from '../utils/moneyLimits';
 
-/** The largest amount the backend's Numeric(12, 2) column holds. */
+/** `BudgetAmendmentCreate`'s limits. */
 const MAX_REASON = 2000;
 const MAX_APPROVED_BY = 200;
+
+type AmendField = 'amount' | 'reason' | 'approvedBy' | 'approvedOn';
+
+/** `BudgetAmendmentCreate` / `BudgetAmendmentReverse` (schemas/finance.py). */
+const SERVER_FIELDS: Record<AmendField, ServerFieldSpec> = {
+  amount: { label: 'Amount' },
+  reason: { label: 'Reason', maxLength: MAX_REASON },
+  approvedBy: { label: 'Approved by', maxLength: MAX_APPROVED_BY },
+  approvedOn: { label: 'Approval date' },
+};
+const FIELD_ORDER = Object.keys(SERVER_FIELDS) as AmendField[];
+const FIELD_IDS: Record<AmendField, string> = {
+  amount: 'amendment-amount',
+  reason: 'amendment-reason',
+  approvedBy: 'amendment-approved-by',
+  approvedOn: 'amendment-approved-on',
+};
 
 interface AmendmentDialogProps {
   budgetId: string;
@@ -43,11 +64,20 @@ export const AmendmentDialog: React.FC<AmendmentDialogProps> = ({ budgetId, line
   const [reason, setReason] = useState('');
   const [approvedBy, setApprovedBy] = useState('');
   const [approvedOn, setApprovedOn] = useState(today);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { errors, setErrors, clearError } = useDialogFieldErrors<AmendField>();
   const [saving, setSaving] = useState(false);
+  const isDirty = amount !== '' || reason !== '' || approvedBy !== '' || approvedOn !== today;
+  // Escape, the X and Cancel all ask before throwing away a typed amendment.
+  const requestClose = useDiscardGuard({ isDirty, onClose });
+  const flag = (next: Partial<Record<AmendField, string>>) => {
+    setErrors(next);
+    const first = firstErrorField(next, FIELD_ORDER);
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+    return first === undefined;
+  };
 
   const validate = (): BudgetAmendmentCreatePayload | null => {
-    const next: Record<string, string> = {};
+    const next: Partial<Record<AmendField, string>> = {};
     const parsed = Number(amount);
     if (amount.trim() === '' || !Number.isFinite(parsed) || parsed <= 0) {
       next.amount = 'Enter an amount greater than zero.';
@@ -62,8 +92,7 @@ export const AmendmentDialog: React.FC<AmendmentDialogProps> = ({ budgetId, line
     }
     if (!approvedOn) next.approvedOn = 'Enter the date it was approved.';
     else if (approvedOn > today) next.approvedOn = 'The approval date cannot be in the future.';
-    setErrors(next);
-    if (Object.keys(next).length > 0) return null;
+    if (!flag(next)) return null;
     return {
       amount: parsed.toFixed(2),
       reason: reason.trim(),
@@ -86,6 +115,13 @@ export const AmendmentDialog: React.FC<AmendmentDialogProps> = ({ budgetId, line
       toast.success('Amendment recorded — awaiting confirmation by a second officer');
       onSaved(result);
     } catch (err: unknown) {
+      // Nothing is recorded until every field is accepted.
+      const mapped = refusalsOnFields(err, SERVER_FIELDS);
+      if (mapped) {
+        flag(mapped.fieldErrors);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       // The API's own words: a locked year, a future date, a line not found.
       toast.error(getErrorMessage(err, 'Could not record the amendment'));
     } finally {
@@ -93,27 +129,21 @@ export const AmendmentDialog: React.FC<AmendmentDialogProps> = ({ budgetId, line
     }
   };
 
-  const errorText = (field: string) =>
-    errors[field] ? (
-      <p id={`amendment-${field}-error`} className="mt-1 text-xs text-red-700 dark:text-red-400">
-        {errors[field]}
-      </p>
-    ) : null;
-
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title="Add amendment"
       titleId="amendment-form-title"
       aria-describedby="amendment-form-description"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">
             Record amendment
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -126,75 +156,83 @@ export const AmendmentDialog: React.FC<AmendmentDialogProps> = ({ budgetId, line
           it.
         </p>
 
-        <div>
-          <label htmlFor="amendment-amount" className="form-label">
-            Amount added
-          </label>
-          <input
-            id="amendment-amount"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            className="form-input"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            aria-invalid={Boolean(errors.amount)}
-            aria-describedby={errors.amount ? 'amendment-amount-error' : undefined}
-          />
-          {errorText('amount')}
-        </div>
+        <FormField id={FIELD_IDS.amount} label="Amount added" error={errors.amount}>
+          {(field) => (
+            <input
+              {...field}
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max={MAX_MONEY_AMOUNT}
+              step="0.01"
+              className="form-input"
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                clearError('amount');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="amendment-reason" className="form-label">
-            Reason
-          </label>
-          <textarea
-            id="amendment-reason"
-            rows={3}
-            maxLength={MAX_REASON}
-            className="form-input"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            aria-invalid={Boolean(errors.reason)}
-            aria-describedby={errors.reason ? 'amendment-reason-error' : undefined}
-          />
-          {errorText('reason')}
-        </div>
+        <FormField
+          id={FIELD_IDS.reason}
+          label="Reason"
+          error={errors.reason}
+          maxLength={MAX_REASON}
+          count={reason.length}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              rows={3}
+              className="form-input"
+              value={reason}
+              onChange={(e) => {
+                setReason(e.target.value);
+                clearError('reason');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="amendment-approved-by" className="form-label">
-            Approved by
-          </label>
-          <input
-            id="amendment-approved-by"
-            type="text"
-            maxLength={MAX_APPROVED_BY}
-            placeholder="e.g. Board vote 10/7"
-            className="form-input"
-            value={approvedBy}
-            onChange={(e) => setApprovedBy(e.target.value)}
-            aria-invalid={Boolean(errors.approvedBy)}
-            aria-describedby={errors.approvedBy ? 'amendment-approvedBy-error' : undefined}
-          />
-          {errorText('approvedBy')}
-        </div>
+        <FormField
+          id={FIELD_IDS.approvedBy}
+          label="Approved by"
+          error={errors.approvedBy}
+          maxLength={MAX_APPROVED_BY}
+          count={approvedBy.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              placeholder="e.g. Board vote 10/7"
+              className="form-input"
+              value={approvedBy}
+              onChange={(e) => {
+                setApprovedBy(e.target.value);
+                clearError('approvedBy');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="amendment-approved-on" className="form-label">
-            Approval date
-          </label>
-          <input
-            id="amendment-approved-on"
-            type="date"
-            className="form-input"
-            value={approvedOn}
-            onChange={(e) => setApprovedOn(e.target.value)}
-            aria-invalid={Boolean(errors.approvedOn)}
-            aria-describedby={errors.approvedOn ? 'amendment-approvedOn-error' : undefined}
-          />
-          {errorText('approvedOn')}
-        </div>
+        <FormField id={FIELD_IDS.approvedOn} label="Approval date" error={errors.approvedOn}>
+          {(field) => (
+            <input
+              {...field}
+              type="date"
+              max={today}
+              className="form-input"
+              value={approvedOn}
+              onChange={(e) => {
+                setApprovedOn(e.target.value);
+                clearError('approvedOn');
+              }}
+            />
+          )}
+        </FormField>
       </div>
     </Modal>
   );

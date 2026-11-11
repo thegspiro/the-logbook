@@ -55,7 +55,13 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { AssignTermsModal, type AssignTerms } from '../components/AssignTermsModal';
-import { UnassignItemModal, type UnassignReturn } from '../components/UnassignItemModal';
+import {
+  RETURN_NOTES_MAX,
+  UnassignItemModal,
+  type UnassignField,
+  type UnassignReturn,
+} from '../components/UnassignItemModal';
+import { mapServerFieldErrors } from '../../../utils/serverFieldErrors';
 import { formatDate, formatCurrency as fmtCurrencyUtil, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formatHistoryDetails } from './itemHistoryDetails';
 import { onHandQuantity } from '../utils/onHand';
@@ -218,6 +224,10 @@ const ItemDetailPage: React.FC = () => {
   // Unassigning asks first and records the return condition.
   const [showUnassign, setShowUnassign] = useState(false);
   const [unassigning, setUnassigning] = useState(false);
+  // A refusal the server put on a field of the assign or unassign dialog,
+  // handed back to that dialog so it shows under the field (forms review F-2).
+  const [assignDateError, setAssignDateError] = useState<string | undefined>();
+  const [unassignErrors, setUnassignErrors] = useState<Partial<Record<UnassignField, string>> | undefined>();
 
   // NFPA compliance + exposure modals
   const [showNfpaModal, setShowNfpaModal] = useState(false);
@@ -324,13 +334,23 @@ const ItemDetailPage: React.FC = () => {
   const handleAssign = async (terms: AssignTerms) => {
     if (!id || !assignTarget) return;
     setAssigning(true);
+    setAssignDateError(undefined);
     try {
       await inventoryService.assignItem(id, assignTarget.userId, terms);
       toast.success(terms.assignment_type === 'temporary' ? 'Item assigned temporarily' : 'Item assigned');
       setAssignTarget(null);
       void loadItem();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to assign item'));
+      const mapped = mapServerFieldErrors(err, {
+        expected_return_date: { label: 'Return date' },
+      });
+      const dateError = mapped?.fieldErrors.expected_return_date;
+      if (dateError) {
+        setAssignDateError(dateError);
+        toast.error(mapped.unmatched.join(' ') || 'Fix the return date, then assign again.');
+      } else {
+        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to assign item'));
+      }
     } finally {
       setAssigning(false);
     }
@@ -339,13 +359,23 @@ const ItemDetailPage: React.FC = () => {
   const handleUnassign = async (details: UnassignReturn) => {
     if (!id) return;
     setUnassigning(true);
+    setUnassignErrors(undefined);
     try {
       await inventoryService.unassignItem(id, details);
       toast.success('Item unassigned');
       setShowUnassign(false);
       void loadItem();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to unassign item'));
+      const mapped = mapServerFieldErrors<UnassignField>(err, {
+        return_condition: { label: 'Condition' },
+        return_notes: { label: 'Return notes', maxLength: RETURN_NOTES_MAX },
+      });
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        setUnassignErrors(mapped.fieldErrors);
+        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then unassign again.');
+      } else {
+        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to unassign item'));
+      }
     } finally {
       setUnassigning(false);
     }
@@ -672,6 +702,7 @@ const ItemDetailPage: React.FC = () => {
         memberName={assignTarget?.memberName ?? ''}
         itemName={item.name}
         submitting={assigning}
+        returnDateError={assignDateError}
         onClose={() => setAssignTarget(null)}
         onConfirm={(terms) => void handleAssign(terms)}
       />
@@ -680,6 +711,7 @@ const ItemDetailPage: React.FC = () => {
         itemName={item.name}
         memberName={item.assigned_to_name ?? 'the member it is assigned to'}
         submitting={unassigning}
+        serverErrors={unassignErrors}
         onClose={() => setShowUnassign(false)}
         onConfirm={(details) => void handleUnassign(details)}
       />

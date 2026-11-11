@@ -16,7 +16,7 @@ import { conductListLabel } from '../../../components/layout/evaluationsNavigati
 import { useSectionPermission } from '../../../components/layout/useSectionPermission';
 import { useAuthStore } from '../../../stores/authStore';
 import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormatting';
-import { getErrorMessage } from '../../../utils/errorHandling';
+import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { saveBlob } from '../../../utils/saveBlob';
 import { AmendEvaluationDialog } from '../components/evaluations/AmendEvaluationDialog';
 import { CalibrationDialog } from '../components/evaluations/CalibrationDialog';
@@ -214,6 +214,8 @@ const EvaluationDetailPage: React.FC = () => {
       setSigning(null);
       toast.success(result.outcome === 'finalized' ? 'Signed — the evaluation is complete' : 'Signed');
     } catch (err: unknown) {
+      // A validation refusal belongs on the dialog's field, which reads it.
+      if (toAppError(err).status === 422) throw err;
       toast.error(getErrorMessage(err, 'Could not record your signature.'));
     } finally {
       setBusy(false);
@@ -227,6 +229,7 @@ const EvaluationDetailPage: React.FC = () => {
       setAmending(false);
       toast.success('Evaluation reopened for amendment');
     } catch (err: unknown) {
+      if (toAppError(err).status === 422) throw err;
       toast.error(getErrorMessage(err, 'Could not amend the evaluation.'));
     } finally {
       setBusy(false);
@@ -240,8 +243,9 @@ const EvaluationDetailPage: React.FC = () => {
       toast.success('Evaluation deleted');
       void navigate('/reports/evaluations/conduct');
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Could not delete the evaluation.'));
       setBusy(false);
+      if (toAppError(err).status === 422) throw err;
+      toast.error(getErrorMessage(err, 'Could not delete the evaluation.'));
     }
   };
 
@@ -545,13 +549,7 @@ const EvaluationDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
-      <SignDialog
-        option={signing}
-        signerName={signerName}
-        busy={busy}
-        onClose={() => setSigning(null)}
-        onSign={(signature) => void sign(signature)}
-      />
+      <SignDialog option={signing} signerName={signerName} busy={busy} onClose={() => setSigning(null)} onSign={sign} />
       <CalibrationDialog
         isOpen={calibrating}
         definition={detail.definition}
@@ -564,7 +562,7 @@ const EvaluationDetailPage: React.FC = () => {
         memberName={detail.member.name}
         busy={busy}
         onClose={() => setAmending(false)}
-        onAmend={(reason) => void amend(reason)}
+        onAmend={amend}
       />
       <DeleteEvaluationDialog
         isOpen={deleting}
@@ -572,7 +570,7 @@ const EvaluationDetailPage: React.FC = () => {
         finalized={detail.status === 'finalized'}
         busy={busy}
         onClose={() => setDeleting(false)}
-        onDelete={(reason) => void remove(reason)}
+        onDelete={remove}
       />
     </div>
   );

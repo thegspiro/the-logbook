@@ -126,9 +126,11 @@ describe('ElectionsPage position combobox (W50-63)', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(input).toHaveValue('Chief');
 
-    // With the list already closed, Escape still closes the dialog.
+    // With the list already closed, Escape still reaches the dialog, which
+    // asks before throwing the typed position away (forms review F-6).
     await userEvent.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Create New Election' })).not.toBeInTheDocument());
   });
 
   // W50-R5: a screen reader is told the suggestions opened, and where they are.

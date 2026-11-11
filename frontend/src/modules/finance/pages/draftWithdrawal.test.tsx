@@ -224,7 +224,9 @@ describe('a draft expense report', () => {
     fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Amount *'), { target: { value: '30' } });
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add line' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Description is required');
+    const description = within(screen.getByRole('dialog')).getByLabelText('Description *');
+    await waitFor(() => expect(description).toHaveAttribute('aria-invalid', 'true'));
+    expect(description).toHaveAccessibleDescription('Description is required');
     expect(mockAddLine).not.toHaveBeenCalled();
   });
 

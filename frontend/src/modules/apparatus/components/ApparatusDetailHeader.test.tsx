@@ -145,6 +145,44 @@ describe('ApparatusDetailHeader archive action', () => {
   });
 });
 
+describe('ArchiveApparatusModal errors and discarding', () => {
+  beforeEach(() => {
+    grantedPermissions = new Set(['apparatus.manage']);
+    mockArchiveApparatus.mockReset();
+    mockArchiveApparatus.mockResolvedValue({});
+  });
+
+  it('puts a refused buyer on its field, announced, and archives nothing', async () => {
+    mockArchiveApparatus.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'sold_to', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(
+      <ApparatusDetailHeader currentApparatus={apparatus} status={undefined} id={apparatus.id} isArchived={false} />
+    );
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    await user.type(await screen.findByLabelText('Buyer'), 'County Auction');
+    await user.click(screen.getByRole('button', { name: 'Archive apparatus' }));
+
+    const buyer = screen.getByLabelText('Buyer');
+    await waitFor(() => expect(buyer).toHaveAccessibleDescription('Buyer is too long — keep it to 200 characters.'));
+    expect(buyer).toHaveAttribute('maxLength', '200');
+    expect(screen.getByRole('button', { name: 'Archive apparatus' })).toBeInTheDocument();
+  });
+
+  it('asks before "Keep in service" discards a disposal record being typed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(
+      <ApparatusDetailHeader currentApparatus={apparatus} status={undefined} id={apparatus.id} isArchived={false} />
+    );
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+    await user.type(await screen.findByLabelText('Reason'), 'Replaced');
+    await user.click(screen.getByRole('button', { name: 'Keep in service' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText('Reason')).toHaveValue('Replaced');
+  });
+});
+
 // A failed equipment check puts "Deficiency" on the rig, but the failure itself
 // is only on Check reports, and logging the repair does not clear the badge.
 // The page said none of that, so a chief saw the badge and a dead end.

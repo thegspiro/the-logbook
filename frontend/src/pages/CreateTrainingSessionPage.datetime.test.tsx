@@ -51,12 +51,15 @@ describe('CreateTrainingSessionPage date/time bindings', () => {
 describe('CreateTrainingSessionPage date/time labels', () => {
   // The visible "Start Date & Time" text was a bare <label> with no `for`, so
   // the date input had no accessible name and a screen reader announced the
-  // start, end and RSVP pickers identically as "date".
+  // start, end and RSVP pickers identically as "date". Each picker now sits in
+  // a FormField, which renders the label with `htmlFor` set to its `id` and
+  // hands that id to the control.
   it('associates every date/time control with its visible label', () => {
-    const ids = [...source.matchAll(/<DateTimeQuarterHour\s+value=\{[^}]*\}\s+id="([^"]+)"/g)].map((m) => m[1] ?? '');
-    expect(ids).toHaveLength(dateTimeValueBindings().length);
-    for (const id of ids) {
-      expect(source).toContain(`htmlFor="${id}"`);
-    }
+    const wrapped = [
+      ...source.matchAll(
+        /<FormField\s+id="([^"]+)"(?:(?!<FormField)[\s\S])*?\{\(field\) => \(\s*<DateTimeQuarterHour\s+value=\{[^}]*\}\s+\{\.\.\.field\}/g
+      ),
+    ];
+    expect(wrapped).toHaveLength(dateTimeValueBindings().length);
   });
 });

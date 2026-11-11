@@ -2370,8 +2370,8 @@ class MemberDuesPayment(BaseModel):
     model_config = _REQUEST_CONFIG
 
     amount_paid: Decimal = Field(..., gt=0, max_digits=12, decimal_places=2)
-    payment_method: Optional[str] = None
-    transaction_reference: Optional[str] = None
+    payment_method: Optional[str] = Field(None, max_length=50)
+    transaction_reference: Optional[str] = Field(None, max_length=200)
     notes: Optional[str] = None
     # W66-3: the officer confirmed that what exceeds the balance is a donation.
     # Without it an overpayment is refused.
@@ -2428,7 +2428,7 @@ class ExportMappingCreate(BaseModel):
 
     internal_category: str = Field(..., min_length=1, max_length=200)
     qb_account_name: str = Field(..., min_length=1, max_length=200)
-    qb_account_number: Optional[str] = None
+    qb_account_number: Optional[str] = Field(None, max_length=50)
     qb_offset_account_name: Optional[str] = Field(None, max_length=200)
     mapping_type: str
 
@@ -2444,7 +2444,7 @@ class ExportMappingUpdate(BaseModel):
 
     internal_category: Optional[str] = Field(None, min_length=1, max_length=200)
     qb_account_name: Optional[str] = Field(None, min_length=1, max_length=200)
-    qb_account_number: Optional[str] = None
+    qb_account_number: Optional[str] = Field(None, max_length=50)
     qb_offset_account_name: Optional[str] = Field(None, max_length=200)
     mapping_type: Optional[str] = None
 

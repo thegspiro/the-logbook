@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import type { BudgetRequest, FiscalYearOption } from '../types';
 
 vi.mock('@/hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -86,7 +87,10 @@ const requests = [
 const renderPage = () =>
   render(
     <MemoryRouter initialEntries={['/finance/budget-requests/review']}>
-      <BudgetRequestReviewPage />
+      {/* The decision dialogs ask before discarding, as the app shell's provider lets them. */}
+      <ConfirmProvider>
+        <BudgetRequestReviewPage />
+      </ConfirmProvider>
     </MemoryRouter>
   );
 

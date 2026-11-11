@@ -51,7 +51,7 @@ describe('AgendaItemsEditor', () => {
   it('keeps an item’s key when its title is edited', async () => {
     const user = userEvent.setup();
     open([item('a', 'One')]);
-    await user.type(screen.getByLabelText('Item 1'), '!');
+    await user.type(screen.getByLabelText(/^Item 1/), '!');
 
     const next = onChange.mock.calls[0]?.[0] as AgendaItem[];
     expect(next[0]).toMatchObject({ key: 'a', title: 'One!' });
@@ -103,7 +103,7 @@ describe('AgendaItemsEditor', () => {
 
   it('is read-only when disabled', () => {
     open([item('a', 'One')], true);
-    expect(screen.getByLabelText('Item 1')).toBeDisabled();
+    expect(screen.getByLabelText(/^Item 1/)).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Add an item' })).not.toBeInTheDocument();
   });
 });

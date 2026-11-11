@@ -87,7 +87,7 @@ describe('SuggestionsPanel', () => {
     expect(await screen.findByRole('heading', { name: 'Your suggestions' })).toBeInTheDocument();
     expect(screen.getByText(/on the section you want/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Suggest a change to the minutes as a whole' })).toBeInTheDocument();
-    expect(screen.queryByLabelText('What should change?')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^What should change\?/)).not.toBeInTheDocument();
   });
 
   it('sends a whole-minutes suggestion with no section and no wording', async () => {
@@ -95,7 +95,7 @@ describe('SuggestionsPanel', () => {
     render('submitted', false);
 
     await user.click(await screen.findByRole('button', { name: 'Suggest a change to the minutes as a whole' }));
-    await user.type(screen.getByLabelText('What should change?'), 'Please add the guest list');
+    await user.type(screen.getByLabelText(/^What should change\?/), 'Please add the guest list');
     await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
 
     expect(mockAdd).toHaveBeenCalledWith('m1', {
@@ -103,7 +103,7 @@ describe('SuggestionsPanel', () => {
       comment: 'Please add the guest list',
       proposed_text: undefined,
     });
-    await waitFor(() => expect(screen.queryByLabelText('What should change?')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText(/^What should change\?/)).not.toBeInTheDocument());
     await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2));
   });
 
@@ -113,7 +113,7 @@ describe('SuggestionsPanel', () => {
     expect(await screen.findByRole('heading', { name: 'Suggested changes (0)' })).toBeInTheDocument();
     expect(screen.getByText('No suggestions yet.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Suggest a change/ })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('What should change?')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^What should change\?/)).not.toBeInTheDocument();
   });
 
   it('offers no form once the minutes are adopted, but still shows the member their own', async () => {
@@ -121,7 +121,7 @@ describe('SuggestionsPanel', () => {
     render('approved', false);
 
     expect(await screen.findByText('The vote was 5-1')).toBeInTheDocument();
-    expect(screen.queryByLabelText('What should change?')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^What should change\?/)).not.toBeInTheDocument();
     expect(screen.getByText(/Accepted by Sam Secretary/)).toBeInTheDocument();
   });
 
