@@ -149,7 +149,7 @@ describe('ZeffyPage — a fundraising manager', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Link Engine Fund Drive' }));
     const dialog = await screen.findByRole('dialog');
-    await user.selectOptions(within(dialog).getByLabelText('Fundraising campaign'), 'fc-1');
+    await user.selectOptions(within(dialog).getByLabelText(/^Fundraising campaign/), 'fc-1');
     await user.click(within(dialog).getByRole('button', { name: 'Save link' }));
 
     await waitFor(() =>
@@ -168,7 +168,7 @@ describe('ZeffyPage — a fundraising manager', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Link Engine Fund Drive' }));
     const dialog = await screen.findByRole('dialog');
-    await user.selectOptions(within(dialog).getByLabelText('Fundraising campaign'), 'fc-1');
+    await user.selectOptions(within(dialog).getByLabelText(/^Fundraising campaign/), 'fc-1');
     await user.type(within(dialog).getByLabelText(/Apply payments made on or after/), '2026-09-01');
     await user.click(within(dialog).getByRole('button', { name: 'Save link' }));
 
@@ -210,8 +210,43 @@ describe('ZeffyPage — a fundraising manager', () => {
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Save link' }));
 
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Choose the fundraising campaign to link.');
+    // Said on the record picker itself now, not in a banner above the form (forms review F-4).
+    expect(within(dialog).getByLabelText(/^Fundraising campaign/)).toHaveAccessibleDescription(
+      'Choose the fundraising campaign to link.'
+    );
     expect(saveLink).not.toHaveBeenCalled();
+  });
+
+  it('puts a refused start date on its field', async () => {
+    saveLink.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'apply_from', message: 'Invalid date format' }] } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<ZeffyPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Link Engine Fund Drive' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.selectOptions(within(dialog).getByLabelText(/^Fundraising campaign/), 'fc-1');
+    await user.type(within(dialog).getByLabelText(/Apply payments made on or after/), '2026-09-01');
+    await user.click(within(dialog).getByRole('button', { name: 'Save link' }));
+
+    await waitFor(() =>
+      expect(within(dialog).getByLabelText(/Apply payments made on or after/)).toHaveAccessibleDescription(
+        expect.stringContaining('Start date needs a valid date.') as string
+      )
+    );
+  });
+
+  it('asks before Cancel throws a chosen record away', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ZeffyPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Link Engine Fund Drive' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Link Zeffy campaign' });
+    await user.selectOptions(within(dialog).getByLabelText(/^Fundraising campaign/), 'fc-1');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByLabelText(/^Fundraising campaign/)).toHaveValue('fc-1');
   });
 
   it('does not offer member dues without finance.manage', async () => {
@@ -236,7 +271,7 @@ describe('ZeffyPage — a fundraising manager', () => {
     await user.click(await screen.findByRole('button', { name: 'Link Memberships' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByLabelText('Record payments as')).toHaveValue('dues_schedule');
-    await user.selectOptions(within(dialog).getByLabelText('Member dues'), 'ds-1');
+    await user.selectOptions(within(dialog).getByLabelText(/^Member dues/), 'ds-1');
     await user.click(within(dialog).getByRole('button', { name: 'Save link' }));
 
     await waitFor(() => expect(saveLink).toHaveBeenCalledTimes(1));
@@ -278,7 +313,7 @@ describe('ZeffyPage — a fundraising manager', () => {
     await user.click(await screen.findByRole('button', { name: 'Change link for Memberships' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByLabelText('Record payments as')).toHaveValue('dues_schedule');
-    expect(within(dialog).getByLabelText('Member dues')).toHaveValue('ds-1');
+    expect(within(dialog).getByLabelText(/^Member dues/)).toHaveValue('ds-1');
     expect(screen.queryByText('Changing a member dues link needs finance access.')).not.toBeInTheDocument();
   });
 

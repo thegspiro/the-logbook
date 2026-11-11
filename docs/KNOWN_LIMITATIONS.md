@@ -485,14 +485,26 @@ Approvals uses both; the approvals-admin override form beside it already did.
 The other `PromptDialog` callers are unchanged until they opt in.
 
 Still to come, module by module: the locations setup wizard, the other training
-builders and pipeline pages, the rest of Inventory (kits, storage areas,
-categories, settings, stock lots and seals), the full apparatus form, the
-facility detail sections other than emergency contacts, medical supply lots and
-imports, store checkout, the finance cards and settings, the minutes editor,
-the remaining report dialogs, communications templates, scheduling templates
-and settings, applicant conversion and stage settings, and onboarding,
-history, membership and the public portal. Each is listed in
-`docs/FORMS_REVIEW_2026-11-05.md`.
+builders and pipeline pages, the rest of Inventory (settings, stock lots and
+seals, the checklist builder and the smaller dialogs), the full apparatus form,
+the facility detail sections other than emergency contacts, medical supply lots
+and imports, store checkout, the finance cards and settings, the minutes editor,
+the remaining report dialogs, communications templates and intake, scheduling
+templates and settings, applicant conversion and stage settings, the org chart
+node and IP security admin, and onboarding, history, membership and the public
+portal. Each is listed in `docs/FORMS_REVIEW_2026-11-05.md`.
+
+**Rolled out further on 2026-11-11** (batch 18): Inventory's categories,
+variant groups, storage areas, kits, allowances, reorder requests, the
+write-off review, Copy checklist and Move NFC tag; Grants & Fundraising's
+donors, campaigns and the Zeffy link; Communications' officers and footers.
+The same rules apply. The edit loop the earlier batches wrote inline in each
+dialog is now one helper, `utils/saveExceptRefused.ts`. Three of these are
+replaced whole on every save and so refuse rather than save part: the Zeffy
+link, an officer assignment and the footer library (a refusal there names the
+card and field it belongs to). The write-off review is an approve-type step:
+Deny and Approve stay pressable and say what is missing (the note, the
+acknowledgement) on its field rather than sitting greyed out.
 
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
