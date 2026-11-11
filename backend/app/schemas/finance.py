@@ -710,23 +710,27 @@ class BudgetRequestCreate(BaseModel):
     category_id: Optional[str] = None
     station_id: Optional[str] = None
     owner_position_id: Optional[str] = None
+    # A draft may leave both out (owner decision, 2026-11-11); submitting
+    # needs both, and the service refuses it on the fields that are missing.
     # max_digits=12 with two places is the Numeric(12, 2) column's own limit.
-    requested_amount: Decimal = Field(..., ge=0, max_digits=12, decimal_places=2)
-    justification: str = Field(..., max_length=4000)
+    requested_amount: Optional[Decimal] = Field(
+        None, ge=0, max_digits=12, decimal_places=2
+    )
+    justification: Optional[str] = Field(None, max_length=4000)
 
     @field_validator("justification")
     @classmethod
-    def _justification_not_blank(cls, value: str) -> str:
-        value = value.strip()
-        if not value:
-            raise ValueError("must not be blank")
-        return value
+    def _blank_justification_is_none(cls, value: Optional[str]) -> Optional[str]:
+        return _strip_or_none(value)
 
 
 class BudgetRequestUpdate(BaseModel):
     """Change a draft or submitted request's amount or justification.
 
-    Dumped with ``exclude_unset``: an omitted key leaves the field alone.
+    Dumped with ``exclude_unset``: an omitted key leaves the field alone, and
+    an explicit null (or a blank justification) clears it. Clearing is a
+    draft's alone: the service refuses it on a submitted request, which the
+    Treasurer is reading.
     """
 
     model_config = _REQUEST_CONFIG
@@ -738,13 +742,8 @@ class BudgetRequestUpdate(BaseModel):
 
     @field_validator("justification")
     @classmethod
-    def _justification_not_blank(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return value
-        value = value.strip()
-        if not value:
-            raise ValueError("must not be blank")
-        return value
+    def _blank_justification_is_none(cls, value: Optional[str]) -> Optional[str]:
+        return _strip_or_none(value)
 
 
 class BudgetRequestDecision(BaseModel):
@@ -826,10 +825,11 @@ class BudgetRequestResponse(UTCResponseBase):
     is_proposed_line: bool
     owner_position_id: Optional[str] = None
     owner_position_name: Optional[str] = None
-    requested_amount: Decimal
+    # Null only on a draft (owner decision, 2026-11-11).
+    requested_amount: Optional[Decimal] = None
     approved_amount: Optional[Decimal] = None
     status: str
-    justification: str
+    justification: Optional[str] = None
     decision_note: Optional[str] = None
     submitted_by: Optional[str] = None
     submitted_by_name: Optional[str] = None

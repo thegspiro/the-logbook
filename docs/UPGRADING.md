@@ -775,6 +775,27 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Finance: a budget request draft can be saved blank (2026-11-11)
+
+Nothing blocks a restart. Migration `0136dd6d4144` makes
+`budget_requests.requested_amount` and `budget_requests.justification`
+nullable. Every existing request already holds both, and none is rewritten.
+
+- **What changes for owners.** A line owner can save a draft before deciding
+  the amount or writing the justification. Submit still needs both: pressing
+  it on an unfinished draft opens the draft with the missing fields flagged,
+  and the API refuses the submit with a 422 naming them. A submitted request's
+  edit still needs both, as before.
+- **The Treasurer's review screen** lists a blank draft's amount as _Not
+  entered yet_, and its totals count only what has been entered.
+- **Rolling back.** The previous release cannot read a blank draft: its
+  response schema requires both fields, so listing a year that has one fails.
+  Run the downgrade (`alembic downgrade 09f0171ccf5e`) before restoring the
+  previous image, or restore the database backup taken before upgrading. The
+  downgrade fills each blank draft with an amount of 0.00 and an empty
+  justification so the columns can be NOT NULL again; upgrading again does not
+  undo that fill, so those drafts then read $0.00 until their owner edits them.
+
 ### Training: members can ask to be excused from a session (2026-11-10)
 
 Nothing blocks a restart. Migration `8b1cf6f55425` creates two empty tables,
