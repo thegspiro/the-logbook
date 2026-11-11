@@ -4503,8 +4503,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `category_id` | VARCHAR(36) | yes | FK |  | → `budget_categories.id` ON DELETE SET NULL |
 | `station_id` | VARCHAR(36) | yes | FK |  | → `facilities.id` ON DELETE SET NULL |
 | `owner_position_id` | VARCHAR(36) | yes | FK, IDX |  | → `positions.id` ON DELETE SET NULL |
-| `requested_amount` | NUMERIC(12, 2) | no |  |  |  |
-| `justification` | TEXT | no |  |  |  |
+| `requested_amount` | NUMERIC(12, 2) | yes |  |  |  |
+| `justification` | TEXT | yes |  |  |  |
 | `status` | ENUM(`draft`, `submitted`, `approved`, `adjusted`, `declined`) | no |  | `'draft'` |  |
 | `approved_amount` | NUMERIC(12, 2) | yes |  |  |  |
 | `decision_note` | TEXT | yes |  |  |  |

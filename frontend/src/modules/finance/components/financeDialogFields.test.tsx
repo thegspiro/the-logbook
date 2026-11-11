@@ -462,6 +462,42 @@ describe('ApprovalDecisionDialog override form', () => {
   });
 });
 
+// Owner decision, 2026-11-11: the usual approve / deny prompt asks before
+// discarding too, and puts the server's refusal on its field.
+describe('ApprovalDecisionDialog prompt', () => {
+  const deny = { stepRecordId: 'step-1', action: 'deny' as const, subject: 'Radio repair' };
+
+  it('asks before Escape or Cancel throws a typed reason away', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderIn(<ApprovalDecisionDialog decision={deny} onClose={onClose} />);
+    await user.type(screen.getByLabelText('Reason'), 'Over budget');
+    await answerDiscardQuestion(user, onClose);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes at once when nothing was typed', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderIn(<ApprovalDecisionDialog decision={deny} onClose={onClose} />);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts a refused reason on its field and stays open', async () => {
+    api.denyStep.mockRejectedValue(refusal('notes', 'Say why the request is denied.'));
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderIn(<ApprovalDecisionDialog decision={deny} onClose={onClose} />);
+    await user.type(screen.getByLabelText('Reason'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Deny' }));
+
+    expect(await flagged('Reason')).toHaveAccessibleDescription('Say why the request is denied.');
+    expect(screen.getByLabelText('Reason')).toHaveValue('x');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
 describe('BudgetAdoptionDialog', () => {
   const year = { id: 'fy-1', name: 'FY2027' };
 

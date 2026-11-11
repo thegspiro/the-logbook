@@ -58,11 +58,11 @@ export const BudgetRequestDecisionDialog: React.FC<BudgetRequestDecisionDialogPr
 }) => {
   const tz = useTimezone();
   const [decision, setDecision] = useState<BudgetRequestDecisionKind>('approve');
-  const [amount, setAmount] = useState(String(request.requestedAmount));
+  const [amount, setAmount] = useState(request.requestedAmount ?? '');
   const [note, setNote] = useState('');
   const { errors, setErrors, clearError } = useDialogFieldErrors<DecisionField>();
   const [saving, setSaving] = useState(false);
-  const isDirty = decision !== 'approve' || amount !== String(request.requestedAmount) || note !== '';
+  const isDirty = decision !== 'approve' || amount !== (request.requestedAmount ?? '') || note !== '';
   // Escape, the X and Cancel all ask before throwing away a typed decision.
   const requestClose = useDiscardGuard({ isDirty, onClose });
 
