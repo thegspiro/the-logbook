@@ -165,7 +165,7 @@ that code (pitfall #29).
 | --------------------------------- | ---------------------------------------------------------------------- |
 | `training.hours`                  | hours of completed training records                                    |
 | `training.requirements_met_pct`   | share of applicable training requirements met (dashboard rules)        |
-| `training.session_attendance_pct` | training sessions attended, waived sessions left out of both counts    |
+| `training.session_attendance_pct` | sessions counting toward the member's attendance requirement, its rule |
 | `events.meeting_attendance_pct`   | business meetings attended out of those held                           |
 | `events.attended_count`           | department events checked in to                                        |
 | `shifts.hours`                    | hours on shifts worked                                                 |

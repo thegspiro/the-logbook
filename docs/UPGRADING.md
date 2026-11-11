@@ -775,6 +775,72 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Training: members can ask to be excused from a session (2026-11-10)
+
+Nothing blocks a restart. Migration `8b1cf6f55425` creates two empty tables,
+`attendance_waiver_requests` and `attendance_waiver_request_actions`. No
+existing row changes.
+
+- **Off until a training officer saves a policy.** The policy is stored in the
+  organization's settings, so there is nothing to configure at upgrade time,
+  and until it is saved members cannot ask. The screens arrive in a later
+  release; until then the policy can only be saved through the API
+  (`PUT /api/v1/training/waivers/requests/policy`, `training.manage`).
+- **Compliance exports can change on upgrade, with no policy saved.** The
+  department compliance CSV, the compliance PDF and the compliance forecast now
+  apply the training waivers, leaves of absence and Chief overrides already on
+  file, the way the compliance screens always have. Before, they graded every
+  member as if none existed, so an export could print _Not Met_ for a member
+  the compliance matrix showed as met. A member with an active leave or waiver,
+  or a Chief override, can therefore move from _Not Met_ to _Met_ in an export
+  taken after the upgrade. The data did not change; the exports now agree with
+  the screens.
+- **Once requests are approved, attendance figures move.** An approved request
+  drops its session from the member's held and attended counts for every
+  session-attendance requirement it counts toward, and from their missed
+  mandatory events. Approved requests keep doing so if the policy is later
+  turned off; turning it off only stops new requests.
+- **Downgrading** drops both tables, and every approved request with them, so
+  the sessions they excused count against those members again. Take a backup
+  first (see above) once requests are in use.
+
+### Evaluations: training-session attendance is graded by the attendance requirement (2026-11-10)
+
+Nothing blocks a restart, and no migration runs. The **Training session
+attendance** figure on an evaluation (`training.session_attendance_pct`) now
+uses the same rule as the session-attendance requirement on the training
+screens. **The percentage will change** on any evaluation template that shows
+it:
+
+- **Only sessions that count toward the member's session-attendance
+  requirement are measured.** Before, every training event in the period was,
+  including optional ones nobody was asked to attend.
+- **Attendance is what finalizing the session recorded**, not an RSVP
+  check-in. A session whose attendance has not been finalized is not counted
+  yet, as on the training screens.
+- **Every waiver and leave the training screens apply now excuses a session**,
+  including waivers limited to that requirement, which were ignored before. A
+  member who attended an excused session anyway is credited with it; before,
+  that session was dropped.
+- **The requirement is the one that applies to the member.** If several
+  apply, the one naming the member's membership type is used. If that still
+  leaves more than one, the figure reads "unavailable" rather than guessing.
+  It also reads unavailable for a member exempt from training requirements,
+  and when no requirement applies at all. Departments that never set up a
+  session-attendance requirement will see "unavailable" where a percentage
+  used to appear.
+- **The figure covers the evaluation's review period**, not the requirement's
+  own window.
+
+**Stored figures are not recalculated.** A finalized evaluation keeps the
+figure it was signed with. So does an evaluation already open at the upgrade,
+and an amendment of a finalized one, until the evaluator or a manager presses
+**Update figures**. That is possible only until the evaluator locks their part,
+so an evaluation whose evaluator had already locked it is signed with the old
+figure. Evaluations drafted after the upgrade, refreshed figures and template
+previews show the new one. The stored snapshot's `version` is now `2`; a
+snapshot still at `version` 1 holds the old figure.
+
 ### Medical screening: expiry reminder emails, and new requirements recur by default (2026-11-08)
 
 Nothing blocks a restart. Migration `cf93f3b65274` creates an empty table,

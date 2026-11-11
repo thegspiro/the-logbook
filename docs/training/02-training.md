@@ -723,6 +723,16 @@ step**. Its steps are:
 5. **Review** — check everything, then select **Create Pipeline**. The
    program, its phases, requirements and milestones are created together.
 
+   _(2026-11-09)_ The wizard keeps your progress as a **draft in this browser**,
+   saved about a second after your last change. **Save draft** saves it on
+   demand. When you come back you resume on the same step with a notice offering
+   **Start over**. The draft is removed when the program is created (kept if
+   creating it fails) and when you sign out, because station computers are
+   shared. It lives only in this browser, so it does not follow you to another
+   device. Milestones can now also wait on courses, skills tests and knowledge
+   tests and choose who is told; see
+   [Training Programs](../TRAINING_PROGRAMS.md).
+
 ![Training pipeline wizard with program details and phase list](./images/02-11-pipeline-wizard.png)
 
 > **Hint:** The **Program Code** is optional, and nothing stops two programs

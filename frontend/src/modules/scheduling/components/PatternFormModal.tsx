@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDialog } from '../../../hooks/useDialog';
-import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { FormField, FIELD_ERROR_CLASS } from '../../../components/ux/FormField';
 import { formatTimeOfDay } from '../../../utils/dateFormatting';
 import { formCoercions } from '../../../utils/formValues';
@@ -61,7 +62,11 @@ function checkPattern(form: PatternFormData, showsRotation: boolean): FieldError
 interface PatternFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (data: Record<string, unknown>) => Promise<void>;
+  /**
+   * `keepOpen` marks a save that left a refused field out (edit only): the
+   * caller saves what it was given and leaves the dialog open.
+   */
+  onSubmit: (data: Record<string, unknown>, options?: { keepOpen?: boolean }) => Promise<void>;
   initialData?: PatternFormData | undefined;
   title: string;
   templates: ShiftTemplate[];
@@ -75,8 +80,6 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
   title,
   templates,
 }) => {
-  const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose });
-
   const [formData, setFormData] = useState<PatternFormData>(initialData || emptyPatternForm);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fieldErrors = useFieldErrors(PATTERN_FIELDS);
@@ -93,6 +96,12 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
     setFormData((prev) => ({ ...prev, [key]: value }));
     setFieldError(key, null);
   };
+
+  // Anything changed from what the dialog opened with is unsaved work, so
+  // Escape, the X and Cancel ask first (forms review F-6).
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(initialData || emptyPatternForm);
+  const requestClose = useDiscardGuard({ isDirty, onClose });
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: isOpen, onClose: requestClose });
 
   const showsRotation = formData.pattern_type === 'platoon' || formData.pattern_type === 'custom';
 
@@ -134,7 +143,22 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
         days_off: num(formData.days_off),
         end_date: pick(formData.end_date),
       };
-      await onSubmit(payload);
+      try {
+        await onSubmit(payload);
+      } catch (err) {
+        // On edit the rest still saves: resend without the refused fields,
+        // which keep their stored values and stay flagged (owner rule,
+        // 2026-11-05). A create creates nothing until every field is fixed.
+        const placed = placeApiError(PATTERN_FIELDS, err);
+        const refused = placed ? (Object.keys(placed.fieldErrors) as PatternField[]) : [];
+        if (initialData === undefined || !placed || refused.length === 0 || placed.unmatched.length > 0) throw err;
+        const rest = { ...payload };
+        for (const field of refused) delete rest[field];
+        await onSubmit(rest, { keepOpen: true });
+        fieldErrors.setErrors(placed.fieldErrors);
+        fieldErrors.focusFirst(placed.fieldErrors);
+        return;
+      }
       onClose();
     } catch (err) {
       // A refusal lands on the field it names; the dialog stays open with the
@@ -153,16 +177,18 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="pattern-modal-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
     >
       <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
         <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
           <h2 id="pattern-modal-title" className="text-theme-text-primary text-xl font-bold">
             {title}
           </h2>
-          <button onClick={onClose} className="text-theme-text-muted hover:text-theme-text-primary" aria-label="Close">
+          <button
+            type="button"
+            onClick={requestClose}
+            className="text-theme-text-muted hover:text-theme-text-primary"
+            aria-label="Close"
+          >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
@@ -179,6 +205,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
               <input
                 {...field}
                 type="text"
+                autoComplete="off"
                 value={formData.name}
                 onChange={(e) => update('name', e.target.value)}
                 className="form-input"
@@ -277,6 +304,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
                     <input
                       {...field}
                       type="number"
+                      inputMode="numeric"
                       value={formData[key]}
                       onChange={(e) => update(key, e.target.value)}
                       className="form-input"
@@ -328,7 +356,7 @@ const PatternFormModal: React.FC<PatternFormModalProps> = ({
           <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2"
             >
               Cancel

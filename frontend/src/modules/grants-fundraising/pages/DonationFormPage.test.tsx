@@ -98,10 +98,10 @@ describe('DonationFormPage', () => {
     renderAt('/grants/donations/new');
 
     await screen.findByRole('option', { name: 'Ann Lee (Lee Hardware)' });
-    await user.type(screen.getByLabelText('Amount'), '250');
-    await user.clear(screen.getByLabelText('Date received'));
-    await user.type(screen.getByLabelText('Date received'), '2026-10-01');
-    await user.selectOptions(screen.getByLabelText('Payment method'), 'cash');
+    await user.type(screen.getByLabelText(/^Amount/), '250');
+    await user.clear(screen.getByLabelText(/^Date received/));
+    await user.type(screen.getByLabelText(/^Date received/), '2026-10-01');
+    await user.selectOptions(screen.getByLabelText(/^Payment method/), 'cash');
     await user.selectOptions(screen.getByLabelText(/^campaign/i), 'camp-1');
     await user.selectOptions(screen.getByLabelText(/^donor \(optional\)/i), 'donor-1');
     // A directory donor carries their own name and email.
@@ -133,10 +133,10 @@ describe('DonationFormPage', () => {
     const user = userEvent.setup();
     renderAt('/grants/donations/new');
 
-    await user.type(screen.getByLabelText('Amount'), '40');
+    await user.type(screen.getByLabelText(/^Amount/), '40');
     await user.type(screen.getByLabelText(/donor name/i), 'Walk-in donor');
     await user.selectOptions(screen.getByLabelText(/dedication/i), 'in_memory');
-    await user.type(screen.getByLabelText('Honoring'), 'Capt. R. Moss');
+    await user.type(screen.getByLabelText(/^Honoring/), 'Capt. R. Moss');
     await user.click(screen.getByRole('button', { name: 'Record donation' }));
 
     await waitFor(() => expect(createDonation).toHaveBeenCalledTimes(1));
@@ -172,11 +172,29 @@ describe('DonationFormPage', () => {
     const user = userEvent.setup();
     renderAt('/grants/donations/new');
 
-    await user.type(screen.getByLabelText('Amount'), '10');
+    await user.type(screen.getByLabelText(/^Amount/), '10');
     await user.click(screen.getByRole('button', { name: 'Record donation' }));
 
     await waitFor(() => expect(toastError).toHaveBeenCalledWith('Campaign not found'));
     expect(screen.getByRole('heading', { name: 'Record Donation' })).toBeInTheDocument();
+  });
+
+  it("puts the server's refusal of a field under that field, not in a toast", async () => {
+    createDonation.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'donorName', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderAt('/grants/donations/new');
+
+    await user.type(screen.getByLabelText(/^Amount/), '10');
+    await user.type(screen.getByLabelText(/^Donor name/), 'Pat Smith');
+    await user.click(screen.getByRole('button', { name: 'Record donation' }));
+
+    const name = screen.getByLabelText(/^Donor name/);
+    await waitFor(() => expect(name).toHaveAttribute('aria-invalid', 'true'));
+    expect(name).toHaveAccessibleDescription('Donor name is too long — keep it to 255 characters.');
+    expect(name).toHaveFocus();
+    expect(toastError).not.toHaveBeenCalled();
   });
 });
 
@@ -217,7 +235,7 @@ describe('paying toward a pledge', () => {
     const offered = Array.from((picker as HTMLSelectElement).options).map((o) => o.value);
     expect(offered).toEqual(['', 'p-open', 'p-late']);
 
-    await user.type(screen.getByLabelText('Amount'), '150');
+    await user.type(screen.getByLabelText(/^Amount/), '150');
     await user.selectOptions(picker, 'p-open');
     await user.click(screen.getByRole('button', { name: 'Record donation' }));
 
@@ -235,7 +253,7 @@ describe('paying toward a pledge', () => {
     await user.selectOptions(screen.getByLabelText(/^donor \(optional\)/i), '');
     expect(screen.queryByLabelText(/pays toward a pledge/i)).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Amount'), '20');
+    await user.type(screen.getByLabelText(/^Amount/), '20');
     await user.click(screen.getByRole('button', { name: 'Record donation' }));
     await waitFor(() => expect(createDonation).toHaveBeenCalledTimes(1));
     const payload = createDonation.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -250,7 +268,7 @@ describe('paying toward a pledge', () => {
 
     await waitFor(() => expect(listPledges).toHaveBeenCalled());
     expect(screen.queryByLabelText(/pays toward a pledge/i)).not.toBeInTheDocument();
-    await user.type(screen.getByLabelText('Amount'), '20');
+    await user.type(screen.getByLabelText(/^Amount/), '20');
     await user.click(screen.getByRole('button', { name: 'Record donation' }));
     await waitFor(() => expect(createDonation).toHaveBeenCalledTimes(1));
   });

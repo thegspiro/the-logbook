@@ -58,8 +58,10 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "Training session attendance",
         "percent",
         "training",
-        "Training events attended out of those held, with sessions the member "
-        "was excused from by a waiver left out of both counts.",
+        "Sessions attended out of those held that count toward the member's "
+        "session-attendance requirement, graded by that requirement's rule; "
+        "a session the member was excused from is left out unless they "
+        "attended it anyway.",
     ),
     DataSource(
         "events.meeting_attendance_pct",

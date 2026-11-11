@@ -60,6 +60,10 @@ export interface Event {
   is_cancelled: boolean;
   cancellation_reason?: string;
   cancelled_at?: string;
+  /** Set when the event was postponed; postponed_from_start is its start before the first postponement. */
+  postponed_at?: string | null;
+  postponed_from_start?: string | null;
+  postponement_reason?: string | null;
   /**
    * Attendance lock. Set means the event is closed: check-in, attendee edits,
    * time corrections and deletion are all refused by the API until someone
@@ -271,6 +275,8 @@ export interface EventListItem {
   counts_toward_attendance?: boolean;
   is_draft?: boolean;
   is_cancelled: boolean;
+  /** The start before the first postponement; absent for an event never postponed. */
+  postponed_from_start?: string | null;
   is_recurring?: boolean;
   recurrence_parent_id?: string;
   rsvp_count?: number;
@@ -428,6 +434,13 @@ export interface EventUpdate {
 
 export interface EventCancel {
   cancellation_reason: string;
+  send_notifications?: boolean;
+}
+
+export interface EventPostpone {
+  new_start_datetime: string;
+  new_end_datetime: string;
+  reason: string;
   send_notifications?: boolean;
 }
 
@@ -774,7 +787,8 @@ export interface RecurringEventCreate {
   attachments?: EventAttachment[] | undefined;
   allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   template_id?: string | undefined;
-  /** Attached to every occurrence; refused on a rolling series. */
+  /** Attached to every occurrence. A rolling series copies them on to the
+   *  occurrences it adds later. */
   training_details?: EventTrainingDetails | undefined;
 }
 

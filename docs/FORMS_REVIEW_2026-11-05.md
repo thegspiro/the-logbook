@@ -155,6 +155,16 @@ New Folder, Create Form, Add supply, Add several items, Request Equipment, the
 suggestion box form and Apparatus (basic)). Each keeps its button enabled,
 names what is missing on its field, and puts a 422 on the field it names.
 
+The second row — the browser's own `required` bubble — has moved too: Create
+Election, the event template form, Create Custom Role, Create Pipeline,
+Inventory's Add Item, Add Kit, Add Category, Add Group, Add Vendor, Add Storage
+Area and both reorder dialogs, and Notifications › Add Rule. Three of them
+(Custom Role, Create Pipeline, Add Rule) had no `<form>`, so their `required`
+never fired at all. Still open on this row: the vendor Contacts dialog keeps a
+native `required`, and dialogs built on the shared `Modal` keep native `min` and
+`type="email"` checks, which can still raise the browser bubble because `Modal`
+offers no `noValidate`.
+
 Pressing the primary button of an empty create dialog was probed 70 times
 (about 40 distinct dialogs). The outcomes:
 
@@ -320,6 +330,15 @@ plain-text phone fields below are on other forms and are **pending**.
 
 ### F-10 — LOW — A must-change-password sign-in renders the dashboard first
 
+**Status: fixed**, 2026-11-08. The login page decides where a sign-in lands
+from the user record the login response carries (`signInLanding` in
+`utils/postLoginRedirect.ts`): a member who must change their password, or
+whose password has expired, lands on `/account` with the forced-change state,
+and one who must enrol in MFA lands there with the MFA state, without passing
+through the dashboard. ProtectedRoute still enforces both, in the same order;
+the landing only removes the detour, and with it the seed script's
+intermittent "landed on /dashboard".
+
 **Driven:** four accounts with `must_change_password = 1` signed in. Each went
 `/login → /dashboard → /account`: the dashboard mounts and fires its requests,
 then the redirect lands once the user record loads. The change is enforced —
@@ -331,6 +350,13 @@ landing from the login response's `must_change_password` would remove both.
 
 ### F-11 — NIT
 
+**Status: two of three fixed**, 2026-11-08. A failed sign-in now returns focus
+to the password with its text selected, so it can be retyped at once. On
+Training › Requirements (`/training/requirements`), each registry card's
+"Source" link sits beside its import button instead of inside it, and the
+link's target is at least 24px tall. Add Member's example placeholders are
+left for the change that is rewriting that page's fields.
+
 - **Add Member's example placeholders read as filled values.** "Bob Doe",
   "bob.doe@example.com" and "(555) 987-6543" in the optional secondary-contact
   block are dark enough at a glance to look entered.
@@ -338,6 +364,70 @@ landing from the login response's `must_change_password` would remove both.
   field and focus is not returned to it.
 - **`/training/requirements`** — axe `nested-interactive` and `target-size` on
   six rows: an external link sits inside a clickable row.
+
+## Rollout status, 2026-11-08 (batch 16)
+
+Steps 2 to 4 below, and F-6's discard protection, were carried from the first
+five forms to these. Each converted form puts a 422 on its field, takes
+`maxLength` from its schema, is a `<form>` that submits on Enter, and follows
+the owner's save-with-an-error rule; each dialog asks before Escape, its X or
+Cancel throws typed values away.
+
+| Area                                     | Converted                                                                                                                                                                                       |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Top-level pages                          | Action Items › Update; Locations › Station and Room; basic Apparatus; Role Management; Documents › Create Folder and Upload; Scheduling › outside shift                                         |
+| Inventory and assets                     | Inventory › Add / Edit Item; Apparatus › Fuel Log, Maintenance Record, Equipment, Operator; Facilities › Add Facility; Medical Supplies › Add / Edit; Store › item, order window                |
+| Finance and grants                       | purchase, check and expense requests; budget line; dues schedule; pledge; fundraising event; donation; grant opportunity; grant application; Admin Hours › category, manual entry, entry editor |
+| Minutes, communications, smaller modules | medical screening record and requirement; message compose; shift pattern; Generate Shifts; Record Meeting Minutes; IP exception request; meeting action item; legal revision; Add Applicant     |
+
+Shared changes that came with it: `FormField` writes "(optional)" in brackets
+as the rest of the app does; `Modal` takes `noValidate` for a dialog that
+checks its own fields; `TimeQuarterHour` and `TargetRolePicker` announce a
+refusal on their controls; Edit Pattern and the meeting action item save the
+rest of an edit and stay open, with their pages refreshing behind them.
+
+Five of these dialogs were also converted by main's forms batch 3 (#4178):
+Add Station and Add Room, Add Facility, Create Folder, Add / Edit supply and
+basic Apparatus. They keep #4178's error handling (`useFieldErrors`, its
+messages, a 422 shown in the server's own words, a refusal no field answers for
+said in the dialog) with this batch's additions on top: the shared `Modal` or a
+real `<form>` with `noValidate`, discard protection, counters near the limit,
+autofill off, and the single-save rule on edits (supply, apparatus, station and
+room). A supply's refusal now lands on any of its fields, not only the name and
+category, and a basic apparatus's on its type.
+
+**Not yet converted** (F-2 to F-9 still apply to them):
+
+- **Top-level pages:** Elections › Create Election; the member admin edit page
+  (needs a `FormField` label-style option); the locations setup wizard;
+  training session, skill template, course library, external training,
+  training enhancements, knowledge tests and crew training pages; the pipeline
+  create and edit pages; integrations; forms; members admin; the manual shift
+  report and shift detail, reports and patterns tabs.
+- **Inventory and assets:** vendors, receive stock, request equipment, bulk
+  add, unassign, assign terms, size preferences, clone checklist, move NFC
+  tag, catalog quick add, the medical create panel, stock lots and seals, and
+  the category, storage area, kit, variant group, allowance, write-off,
+  reorder, checklist builder and settings pages; the full apparatus form, NFPA
+  items, archive and documents; the facility detail sections, settings and
+  list; medical supply deliveries, lots, import/export and categories; store
+  settings, order detail and checkout.
+- **Finance and grants:** the expense line, dues payment, advance return,
+  budget request and adoption, amendment and reversal, approval decision,
+  reimbursement, approval chain and step, export mapping, mark paid, leadership
+  and decision, pay by check and fiscal-year lock dialogs; the dual approval,
+  fund overspend, advance return, reminder, mileage and substantiation cards;
+  charge access, dues and advance exports; fiscal-year settings and the
+  QuickBooks page; the Zeffy link dialog, donors, campaigns and the grant
+  detail page's inline forms.
+- **Minutes, communications, smaller modules:** the minutes editor and its
+  sign, adopt, carry-forward, agenda, outline and suggestion dialogs and
+  settings; every report and evaluation dialog; communications suggestions,
+  templates, scheduled email, officers, footers, intake questions, photo
+  consent and email templates; scheduling template and settings; applicant
+  conversion, stage configuration, detail dialog, interviews and pipeline
+  settings; onboarding, the public portal, membership, history, the org chart
+  node and IP security admin.
 
 ## Suggested order
 

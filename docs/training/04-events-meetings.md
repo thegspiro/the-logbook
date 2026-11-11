@@ -1332,6 +1332,11 @@ adding occurrences so it always runs 12 months ahead, ready for RSVPs. Ticking
 alternatives. The note beneath reads "New occurrences are added automatically
 so the series always runs 12 months ahead."
 
+Each new occurrence copies the latest one, so a "this and all future events"
+edit carries on into the occurrences added after it. For a Training series
+that includes the training details and the requirements the sessions count
+toward.
+
 ![The recurrence controls with the rolling 12-month cycle ticked](./images/04-38-rolling-recurrence.png)
 
 **Dates and times stay put.** A series is laid out in your department's own
@@ -1496,7 +1501,9 @@ instead — see
 
 **More → Duplicate Event** on an event's page makes a copy with the same
 settings, date and time, and opens it for editing so you can change the date.
-RSVPs, attendance, cancellation and recurrence are not copied.
+RSVPs, attendance, cancellation and recurrence are not copied. A Training
+event's copy keeps its training details and the requirements it counts
+toward, and starts with attendance open.
 
 ### Selecting several events
 
@@ -1672,6 +1679,11 @@ approval** and **Approved**; see
 [Circulating and adopting minutes](#circulating-and-adopting-minutes).)
 
 Who sees which minutes is decided for you: members see circulated and adopted minutes, never drafts or executive sessions.
+_(2026-11-09)_ The **Meetings** list and a meeting's detail follow the same
+rule: without Manage Meetings or Manage Minutes you see only approved,
+non-executive meetings. Opening a hidden meeting reads as not found, and open
+action items from hidden meetings are left out. Before, a member could read an
+executive session's notes and motions through the Meetings list.
 The **Pending Approval** tile counts minutes awaiting approval.
 
 **Search the minutes themselves.** _(2026-10-19)_ The search box above the list
@@ -2362,6 +2374,47 @@ so a half-written schedule or comment is never lost to a stray click.
 
 > **What if scheduling or postponing is refused?** The message gives the real
 > reason — for example, that the event's attendance is already closed.
+
+### Measuring Outreach: Community Engagement
+
+**Who can do this:** officers who can manage events.
+
+**Manage Events → Community Outreach → Community Engagement** reports what the
+department's public outreach reached. Choose a period across the top: **This
+month**, **This quarter**, **This year** (the default), **Last 12 months** or
+**All time**. The **Community engagement** card on the dashboard opens this
+page on the dashboard's own period.
+
+| Figure             | What it counts                                                                 |
+| ------------------ | ------------------------------------------------------------------------------ |
+| **Events held**    | Outreach events that have started; the line below says how many are scheduled  |
+| **People reached** | Guests who signed in, plus estimates for events nobody signed in at (below)    |
+| **Member hours**   | Credited attendance time of members checked in, the same hours training uses   |
+| **Requests**       | Public requests received in the period, and how many of those are completed    |
+
+An outreach event is any **Public Education**, **Fundraiser**, **Ceremony** or
+**Social** event, or any event a public request was scheduled onto, whatever
+its type. Cancelled events are left out.
+
+**Signed in, or estimated.** A school assembly rarely passes round a sign-in
+sheet, so for an event with no guest sign-ins **People reached** uses the
+audience size the requester gave on the request, and marks it **est.** An
+event that did record sign-ins counts them and nothing else. Members on duty
+are never counted as people reached. Where an event has both, the table shows
+the gap — **25 signed in, of ~30 expected** — and the chart heading totals it:
+how many signed in against how many requesters expected.
+
+**Change since last time.** Beside each figure is its change against the
+same stretch of the previous period — the first forty days of this quarter
+against the first forty of the last — so a period still under way is not
+compared with a finished one. **All time** has nothing to compare with.
+
+Under the figures, **People reached by month** stacks signed-in guests under
+estimates (by year for an all-time span over three years; hover or tap a bar
+for its numbers, or open **Show the figures**), **By type of outreach** ranks
+the three largest types and folds the rest into **Other**, and **Recent
+outreach events** lists the latest fifty with their crew and hours. **Export
+CSV** downloads that list.
 
 ### Public Request Form
 

@@ -662,9 +662,9 @@ export const EventForm: React.FC<EventFormProps> = ({
   const rsvpDeadlineRequired = formData.requires_rsvp && !editingEventId && !(isRecurring && onSubmitRecurring);
 
   // Training details are picked only while creating: an existing event's are
-  // edited on its detail page, where the attendance lock can be checked. The
-  // backend refuses them on a rolling series, whose occurrences are generated
-  // later by a task that has no details to attach.
+  // edited on its detail page, where the attendance lock can be checked. This
+  // form still leaves them off a rolling series, which the backend accepts
+  // since 2026-11-11; the single training-event form replaces this block.
   const showsTrainingDetails = formData.event_type === EventTypeEnum.TRAINING && !editingEventId;
   const submitsRollingSeries = isRecurring && Boolean(onSubmitRecurring) && isRolling;
 

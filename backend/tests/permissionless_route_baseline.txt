@@ -41,6 +41,29 @@ app/api/v1/endpoints/analytics.py::track_event
 
 app/api/v1/endpoints/apparatus.py::list_driver_exception_approvers
 
+# Attendance waiver requests (2026-11-10). Who decides is a matter of holding a
+# position the department chose, or the Chief's, or (when those are vacant)
+# training.manage, so no route-level permission can express it and
+# AttendanceWaiverService decides in the body. Every query filters the
+# caller's organization. The policy is read by every member because the
+# request form is built from it; it carries settings and position ids, no
+# member data. Eligibility, submit and /mine act only on current_user.
+# The queue lists only requests the caller may decide or has decided. A
+# request by id is shown only to its member or someone who may decide it,
+# and is a 404 to anyone else; withdraw is the member's alone, approve and
+# deny need may_decide (never the requester), override needs a Chief
+# position (never on the Chief's own request).
+app/api/v1/endpoints/attendance_waiver_requests.py::approve_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::deny_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_eligibility
+app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_policy
+app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::list_attendance_waiver_requests
+app/api/v1/endpoints/attendance_waiver_requests.py::list_my_attendance_waiver_requests
+app/api/v1/endpoints/attendance_waiver_requests.py::override_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::submit_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::withdraw_attendance_waiver_request
+
 app/api/v1/endpoints/auth.py::change_password
 app/api/v1/endpoints/auth.py::check_authentication
 app/api/v1/endpoints/auth.py::disable_kiosk_session
@@ -181,6 +204,10 @@ app/api/v1/endpoints/events.py::remove_attendee
 # occurrence it reaches is not Training.
 app/api/v1/endpoints/events.py::end_event
 app/api/v1/endpoints/events.py::finalize_attendance
+# Postpone (2026-11-09, W80-11): same gate as update_event, which it moves the
+# event like. _authorize_event_admin runs first with events.manage, so a
+# training officer can postpone a Training event and nothing else.
+app/api/v1/endpoints/events.py::postpone_event
 app/api/v1/endpoints/events.py::record_actual_times
 app/api/v1/endpoints/events.py::reopen_attendance
 app/api/v1/endpoints/events.py::update_event

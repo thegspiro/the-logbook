@@ -22,7 +22,6 @@ import {
   VictoryCondition as VC,
   RunoffType,
 } from '../constants/enums';
-import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import {
   BUILT_IN_ELECTION_DEFAULTS,
@@ -42,6 +41,8 @@ import { DialogPanel } from '../components/ux/DialogPanel';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
 import { Vote } from 'lucide-react';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 
 interface PositionSuggestion {
   key: string;
@@ -74,6 +75,19 @@ const blankElectionForm = (defaults: ElectionFormDefaults): ElectionCreate => ({
   ...defaults,
 });
 
+type ElectionField = 'title' | 'description' | 'start_date' | 'end_date';
+
+// The election schema has no alias generator, so a 422 names these snake_case
+// request keys, which are already the field names.
+const ELECTION_FIELDS: FieldSpecs<ElectionField> = {
+  title: { id: 'election-title', label: 'Title' },
+  description: { id: 'election-description', label: 'Description' },
+  // The group around each date-and-time picker, not its date input: see the
+  // comment where the pickers render.
+  start_date: { id: 'election-start-date', label: 'Start Date & Time' },
+  end_date: { id: 'election-end-date', label: 'End Date & Time' },
+};
+
 const holdsBuiltInDefaults = (form: ElectionCreate): boolean =>
   (Object.keys(BUILT_IN_ELECTION_DEFAULTS) as (keyof ElectionFormDefaults)[]).every(
     (key) => form[key] === BUILT_IN_ELECTION_DEFAULTS[key]
@@ -87,7 +101,7 @@ export const ElectionsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const { busy, run } = useSubmitGuard();
-  const [createError, setCreateError] = useState<string | null>(null);
+  const electionErrors = useFieldErrors(ELECTION_FIELDS);
   const [electionDefaults, setElectionDefaults] = useState<ElectionFormDefaults>(BUILT_IN_ELECTION_DEFAULTS);
   const [formData, setFormData] = useState<ElectionCreate>(() => blankElectionForm(BUILT_IN_ELECTION_DEFAULTS));
   const [positionInput, setPositionInput] = useState('');
@@ -264,18 +278,26 @@ export const ElectionsPage: React.FC = () => {
 
   const handleStartDateChange = (startDate: string) => {
     setFormData({ ...formData, start_date: startDate });
+    electionErrors.setError('start_date', null);
 
     // If no end date is set, default to same day at 11:59 PM. The value is a
     // datetime-local string in the department zone, so end-of-day is a string
     // operation — parsing it with `new Date` would use the browser's zone.
     if (!formData.end_date && startDate) {
       setFormData({ ...formData, start_date: startDate, end_date: endOfDepartmentDay(startDate) });
+      electionErrors.setError('end_date', null);
     }
+  };
+
+  const flagMissingStart = () => {
+    const message = 'Set a start date first.';
+    electionErrors.setError('start_date', message);
+    electionErrors.focusFirst({ start_date: message });
   };
 
   const setDuration = (hours: number) => {
     if (!formData.start_date) {
-      setCreateError('Set a start date first.');
+      flagMissingStart();
       return;
     }
 
@@ -284,22 +306,34 @@ export const ElectionsPage: React.FC = () => {
     const start = new Date(localToUTC(formData.start_date, tz));
     const end = new Date(start.getTime() + hours * 60 * 60 * 1000);
     setFormData({ ...formData, end_date: formatForDateTimeInput(end, tz) });
+    electionErrors.setError('end_date', null);
   };
 
   const setEndOfDay = () => {
     if (!formData.start_date) {
-      setCreateError('Set a start date first.');
+      flagMissingStart();
       return;
     }
 
     setFormData({ ...formData, end_date: endOfDepartmentDay(formData.start_date) });
+    electionErrors.setError('end_date', null);
   };
 
   const handleCreateElection = (e: React.FormEvent) => {
     e.preventDefault();
+    // Checked here rather than by the browser's required bubble, which
+    // vanished after a few seconds and was tied to no field (forms review F-3).
+    const problems: FieldErrors<ElectionField> = {};
+    if (!formData.title.trim()) problems.title = 'Enter a title for the election.';
+    if (!formData.start_date) problems.start_date = 'Choose when voting opens.';
+    if (!formData.end_date) problems.end_date = 'Choose when voting closes.';
+    electionErrors.setFormError(null);
+    electionErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      electionErrors.focusFirst(problems);
+      return Promise.resolve();
+    }
     return run(async () => {
-      setCreateError(null);
-
       try {
         // Convert local datetime-local values to UTC before sending to backend
         const submitData = {
@@ -314,7 +348,7 @@ export const ElectionsPage: React.FC = () => {
         setPositionInput('');
         await fetchElections();
       } catch (err: unknown) {
-        setCreateError(getErrorMessage(err, 'Failed to create election'));
+        electionErrors.focusFirst(electionErrors.setFromApiError(err, 'Failed to create election'));
       }
     });
   };
@@ -436,7 +470,10 @@ export const ElectionsPage: React.FC = () => {
                     </svg>
                   </Link>
                   <button
-                    onClick={() => setShowCreateModal(true)}
+                    onClick={() => {
+                      electionErrors.clear();
+                      setShowCreateModal(true);
+                    }}
                     className="btn-primary inline-flex items-center rounded-md"
                   >
                     <svg
@@ -713,44 +750,55 @@ export const ElectionsPage: React.FC = () => {
                 }}
                 className="px-6 py-4"
               >
-                {createError && (
-                  <div
-                    className="mb-4 rounded-sm border border-red-500/30 bg-red-500/10 p-3"
-                    role="alert"
-                    aria-live="assertive"
-                  >
-                    <p className="text-sm text-red-700 dark:text-red-300">{createError}</p>
-                  </div>
+                {electionErrors.formError && (
+                  <p role="alert" className={`mb-4 text-sm ${FIELD_ERROR_CLASS}`}>
+                    {electionErrors.formError}
+                  </p>
                 )}
 
                 <div className="space-y-4">
-                  <div>
-                    <label htmlFor="election-title" className="text-theme-text-primary block text-sm font-medium">
-                      Title <span aria-hidden="true">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      id="election-title"
-                      required
-                      aria-required="true"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="form-input mt-1 shadow-xs"
-                    />
-                  </div>
+                  <FormField
+                    id={ELECTION_FIELDS.title.id}
+                    label="Title"
+                    required
+                    error={electionErrors.errors.title}
+                    labelClassName="text-theme-text-primary block text-sm font-medium"
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        maxLength={200}
+                        value={formData.title}
+                        onChange={(e) => {
+                          setFormData({ ...formData, title: e.target.value });
+                          electionErrors.setError('title', null);
+                        }}
+                        className="form-input mt-1 shadow-xs"
+                      />
+                    )}
+                  </FormField>
 
-                  <div>
-                    <label htmlFor="election-description" className="text-theme-text-primary block text-sm font-medium">
-                      Description
-                    </label>
-                    <textarea
-                      id="election-description"
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      rows={3}
-                      className="form-input mt-1 shadow-xs"
-                    />
-                  </div>
+                  <FormField
+                    id={ELECTION_FIELDS.description.id}
+                    label="Description"
+                    error={electionErrors.errors.description}
+                    labelClassName="text-theme-text-primary block text-sm font-medium"
+                  >
+                    {(field) => (
+                      <textarea
+                        {...field}
+                        maxLength={50000}
+                        value={formData.description}
+                        onChange={(e) => {
+                          setFormData({ ...formData, description: e.target.value });
+                          electionErrors.setError('description', null);
+                        }}
+                        rows={3}
+                        className="form-input mt-1 shadow-xs"
+                      />
+                    )}
+                  </FormField>
 
                   <div>
                     <label htmlFor="election-meeting" className="text-theme-text-primary block text-sm font-medium">
@@ -790,38 +838,43 @@ export const ElectionsPage: React.FC = () => {
                   </div>
 
                   <div className="space-y-4">
-                    <div>
-                      <label
-                        htmlFor="election-start-date"
-                        className="text-theme-text-primary block text-sm font-medium"
-                      >
-                        Start Date & Time <span aria-hidden="true">*</span>
-                      </label>
-                      <DateTimeQuarterHour
-                        id="election-start-date"
-                        timeLabel="Start time"
-                        timezone={tz}
-                        required
-                        value={formData.start_date}
-                        onChange={(val) => handleStartDateChange(val)}
-                        className="form-input mt-1 shadow-xs"
-                      />
-                    </div>
+                    {(['start_date', 'end_date'] as const).map((name) => {
+                      const spec = ELECTION_FIELDS[name];
+                      const isStart = name === 'start_date';
+                      // The picker hands these props to its date input, so the
+                      // error, required state and focus sit on the control the
+                      // label names.
+                      return (
+                        <FormField
+                          key={name}
+                          id={spec.id}
+                          label={spec.label}
+                          required
+                          error={electionErrors.errors[name]}
+                          labelClassName="text-theme-text-primary block text-sm font-medium"
+                        >
+                          {(field) => (
+                            <DateTimeQuarterHour
+                              {...field}
+                              timeLabel={isStart ? 'Start time' : 'End time'}
+                              timezone={tz}
+                              value={formData[name]}
+                              onChange={(val) => {
+                                if (isStart) {
+                                  handleStartDateChange(val);
+                                } else {
+                                  setFormData({ ...formData, end_date: val });
+                                  electionErrors.setError('end_date', null);
+                                }
+                              }}
+                              className="form-input mt-1 shadow-xs"
+                            />
+                          )}
+                        </FormField>
+                      );
+                    })}
 
                     <div>
-                      <label htmlFor="election-end-date" className="text-theme-text-primary block text-sm font-medium">
-                        End Date & Time <span aria-hidden="true">*</span>
-                      </label>
-                      <DateTimeQuarterHour
-                        id="election-end-date"
-                        timeLabel="End time"
-                        timezone={tz}
-                        required
-                        value={formData.end_date}
-                        onChange={(val) => setFormData({ ...formData, end_date: val })}
-                        className="form-input mt-1 shadow-xs"
-                      />
-
                       {formData.start_date && (
                         <div className="mt-2">
                           <p className="text-theme-text-muted mb-2 text-xs">Quick duration:</p>

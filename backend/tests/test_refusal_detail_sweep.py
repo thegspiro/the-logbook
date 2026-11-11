@@ -1540,6 +1540,10 @@ BOUNDED_JOINS = {
         "an attendance-lock refusal: attendance_lock_http_error sends it without "
         "the length cap, and it lists field names"
     ),
+    ("app/services/event_service.py", "locked_labels"): (
+        "an attendance-lock refusal: attendance_lock_http_error sends it without "
+        "the length cap, and it lists training-session column names"
+    ),
     ("app/services/file_storage_service.py", "remote_storage.labels().values()"): (
         "the remote storage platforms registered in code"
     ),

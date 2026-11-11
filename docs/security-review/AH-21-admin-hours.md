@@ -1,6 +1,213 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30 (pass 12), 2026-11-02 (pass 13) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), [#3632](https://github.com/thegspiro/the-logbook/pull/3632) (pass 10, merged), [#3764](https://github.com/thegspiro/the-logbook/pull/3764) (pass 11, merged), [#3846](https://github.com/thegspiro/the-logbook/pull/3846) (pass 12, merged), pass 13 (this PR)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8), 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30 (pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1, merged), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2, merged), [#2247](https://github.com/thegspiro/the-logbook/pull/2247) (pass 3, merged), [#2481](https://github.com/thegspiro/the-logbook/pull/2481) (pass 4, merged), [#2585](https://github.com/thegspiro/the-logbook/pull/2585) (pass 5, merged), [#2874](https://github.com/thegspiro/the-logbook/pull/2874) (pass 6, merged), [#2978](https://github.com/thegspiro/the-logbook/pull/2978) (pass 7, merged), [#3336](https://github.com/thegspiro/the-logbook/pull/3336) (pass 8, merged), [#3451](https://github.com/thegspiro/the-logbook/pull/3451) (pass 9, merged), [#3632](https://github.com/thegspiro/the-logbook/pull/3632) (pass 10, merged), [#3764](https://github.com/thegspiro/the-logbook/pull/3764) (pass 11, merged), [#3846](https://github.com/thegspiro/the-logbook/pull/3846) (pass 12, merged), [#3955](https://github.com/thegspiro/the-logbook/pull/3955) (pass 13, merged), pass 14 (this PR)
+
+## Pass 14 (2026-11-10) — 0 fixed, 0 new findings; one new external writer of this feature's table (Historical Data Import) traced safe
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable (`ListAgents` →
+"No reachable agents"). PR #4218 (Feature 20, Compliance, pass 14) had
+already merged (`20e0a953d` → `2775b491a`). A fresh `list_pull_requests`
+(state `open`) found 0 PRs with a `claude/security-review-*` head. Row 21
+(Admin hours) was confirmed the next `⬜` by reading `PROGRESS.md`'s
+rotation table directly on a freshly pulled `main`.
+
+**Baseline `d4a510b60`** (PR #3955's merge, pass 13). `git diff --stat
+d4a510b60..origin/main` across every file this feature declares in scope
+(`endpoints/admin_hours.py`, `admin_hours_service.py`, `models/admin_hours.py`,
+`schemas/admin_hours.py`, `utils/admin_hours_settings.py`,
+`core/seed_admin_hours.py`, the `admin-hours` frontend module) finds real
+movement for the first time since pass 10: `models/admin_hours.py` (+4/-0)
+and six frontend files (`AllEntriesTab.tsx`, `AdminHoursClockInPage.tsx` +
+its new test file, `AdminHoursManagePage.tsx`, `AdminHoursQRCodePage.tsx`).
+`endpoints/admin_hours.py` and `admin_hours_service.py` themselves are
+byte-identical to pass 13.
+
+### The model delta, read in full
+
+`models/admin_hours.py:35-39` adds one new member to the
+`AdminHoursEntryMethod` str-Enum, `IMPORT = "import"`, with a comment
+explaining the reason (telling an entry a historical-data import wrote
+apart from one a member typed or scanned). The column is a native MySQL
+`Enum` (`sqlalchemy.Enum`, not a plain string), so adding a Python-side
+value with no corresponding `ALTER` would be a real production hazard
+(CLAUDE.md Pitfall #35's exact failure shape: fine against CI's empty
+database, a `1265`-class rejection against the first row a department's
+install tries to write). It isn't one here: migration
+`20261104_0521_34f113ec86e3_historical_import_admin_hours.py` widens the
+native enum (`op.alter_column(..., type_=sa.Enum(*_NEW, ...))`) guarded by
+`_has_table(ENTRIES)` (Pitfall #26 — `admin_hours_entries` is one of the
+tables `create_all` can build, so CI's empty-database run must not be the
+only environment this is proven against), with a downgrade that first
+rewrites any `'import'` row to `'manual'` before narrowing the enum back,
+so the narrowing `ALTER` cannot fail on a row the upgrade itself created.
+Read directly, not taken from the docstring. Confirmed single Alembic head
+below.
+
+### The new writer, read because it targets this feature's model, not because it is this feature's file
+
+The enum value exists for one caller:
+`HistoricalImportService.commit_admin`
+(`app/services/historical_import_service.py:837-937`), reached from `POST
+/api/v1/integrations/historical-imports/{import_id}/admin/commit`
+(`app/api/v1/endpoints/historical_import.py:407-433`). This whole module
+(`historical_import.py`, `historical_import_service.py`,
+`historical_staffing_{engine,commit,service}.py`,
+`models/historical_import.py`, `schemas/historical_import.py` — 5,454
+lines across 7 files, none of it existing as of pass 13's baseline) is new
+and is **not yet claimed by any rotation row** — see the note added to the
+rotation table's unclaimed-modules paragraph below. A full seven-dimension
+pass over all of it is out of scope for this feature and is not attempted
+here. What was traced, because it writes directly into
+`admin_hours_entries`:
+
+- **Auth/permission.** Every route in `historical_import.py`, including
+  `commit_admin_hours`, is gated
+  `Depends(require_permission("integrations.historical_import"))`
+  (checked by the same AST walk used on `admin_hours.py` below, extended to
+  this file: 31 `@router.*`-decorated routes, 0 missing the permission
+  dependency). The file's own module docstring states no default role
+  holds this permission; only an explicitly-granted System Owner does.
+- **Tenant isolation (XC-3).** `commit_admin_hours` passes
+  `str(current_user.organization_id)` — never a client-supplied value — as
+  `organization_id` into `service.commit_admin`, which calls
+  `self.get(organization_id, import_id, for_update=True)`
+  (`historical_import_service.py:225-239`), itself filtering
+  `HistoricalImport.organization_id == str(organization_id)` alongside the
+  id, and raising a 404-mapped `HistoricalImportNotFound` on a miss — a
+  cross-org `import_id` cannot be addressed. Every `AdminHoursEntry` built
+  in the commit loop takes `organization_id=org_id` from that already-org-
+  scoped `record`, never from request input.
+- **Tenant isolation (XC-1, client-influenced FK).** The category id each
+  entry is stamped with comes from `record.admin_settings`, which
+  `update_admin_settings` (`:686-725`, same file) only ever writes after
+  checking every category id against `category_ids = {c.id for c in await
+self.admin_categories(record.organization_id)}` — an org-scoped read — so
+  a category belonging to another organization can never be saved into the
+  mapping `commit_admin` later reads.
+  `update_admin_settings` is reached only through `PUT
+.../admin-settings`, gated by the same permission, with `org` again taken
+  from `current_user.organization_id`.
+- **Member identity.** `user_by_key` is built by `_settle_members`
+  (`:1718-1749`), which resolves through
+  `shift_imports.create_former_members`/`member_directory` — the same,
+  already-reviewed member-resolution path the shift-history import uses —
+  scoped to `record.organization_id` throughout; not re-derived from
+  scratch here, but the call site passes no id that didn't originate from
+  the org-scoped `record`.
+- **Idempotency / abuse resistance.** `_flush_ledgered` catches
+  `IntegrityError` and raises a 409-mapped `HistoricalImportNotReady`
+  rather than silently dropping or duplicating rows; a per-source-row
+  `ImportedSourceRecord` is written beside each `AdminHoursEntry`
+  (`record_kind="admin_hours_entry"`), and `imported_source_ids` (called
+  from `_admin_plan`) is read before committing to skip rows already
+  imported — a second `commit_admin` call does not duplicate entries. Not
+  independently re-verified against two real concurrent requests this
+  pass (out of this feature's file scope); recorded as read, not as
+  "tested."
+
+No finding in the admin-hours-touching slice: the one new enum value has
+a correctly-guarded migration, and the one new writer of
+`AdminHoursEntry` is both permission-gated to System Owner only and
+org-scoped on every parameter that reaches the insert. The module as a
+whole — its CSV/upload handling, its training and staffing commit paths,
+its own abuse-resistance and data-exposure posture — has not been given a
+seven-dimension pass and should not be read as cleared; it needs its own
+rotation row (see the PROGRESS.md note below) rather than being
+re-discovered piecemeal the way `evaluations.py`/`history.py`/
+`member_supervisors.py` were by SEC-00.
+
+### The frontend delta, read in full
+
+- **`AdminHoursClockInPage.tsx`** (+69/-2, plus a new 117-line test file)
+  — W70-5: when a member opens a category's clock-in page while already
+  clocked into a _different_ category (one session per member, enforced
+  server-side), the page now names that other session and offers its own
+  Clock Out button, rather than only showing a rejected-clock-in error.
+  `handleClockOutOther` calls the existing, already-reviewed
+  `adminHoursClockService.clockOut(otherSession.id)` — the same call the
+  normal clock-out button makes — and the backend `clock_out` method
+  (`admin_hours_service.py:346-389`) filters
+  `AdminHoursEntry.user_id == user_id` **and**
+  `AdminHoursEntry.organization_id == organization_id` **and**
+  `status == ACTIVE`, so a session id from a `getActiveSession()` response
+  cannot be used to close anyone else's session even if read from the
+  client. No new endpoint, no new permission, no new client-trusted field.
+  Clock-in stays disabled (`disabled={processing ||
+Boolean(otherSession)}`) until the other session is closed — a client-
+  side convenience; the server's own one-session invariant is what
+  actually enforces it.
+- **`AllEntriesTab.tsx`** — adds `rwd-table`/`data-label` attributes
+  (CLAUDE.md's responsive-table utility) and wraps the method cell in a
+  `min-w-0` div. Layout only; no cell's data source changed.
+- **`AdminHoursManagePage.tsx`** — swaps a hand-rolled `<h1>`/`<p>` header
+  for the shared `AdminPageHeader` component. No request, no permission,
+  no new element with a handler.
+- **`AdminHoursQRCodePage.tsx`** — two link-label wording changes
+  ("Admin Hours Management" → "Admin Hours"). Text only.
+
+Swept all four non-test files for `window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, `innerHTML`, a new `fetch(`/`axios` import,
+`localStorage`/`sessionStorage`, and the banned `.toLocale*`/`date-fns`
+imports: zero hits. `entryMethodLabel()`'s fallback
+(`method.replace(/_/g, ' ')` for anything not in
+`ADMIN_HOURS_ENTRY_METHOD_LABELS`) means an unmapped method still renders
+readably; checked anyway and `import: 'Imported'` is already present in
+`constants/enums.ts`'s label map and in the `AdminHoursEntryMethod` value
+union — not left to the fallback.
+
+### Route inventory, re-enumerated by AST (not trusted from pass 13's count)
+
+A Python `ast` walk over every `@router.*` decorator in `admin_hours.py`
+finds **30 routes**, byte-identical to pass 13. Depends extracted the same
+way, per route (also by AST, not by eye): **17** carry
+`Depends(require_permission("admin_hours.manage"))`; **13** carry
+`Depends(get_current_user)` alone; 17 + 13 = 30, no route with zero auth
+dependency. Full per-route table matches pass 13's and is not repeated
+here.
+
+### Standing findings
+
+No open or flagged finding carries forward from passes 1–13 — all were
+already closed (by fix or owner decision) as of pass 13, and nothing in
+this pass's delta touches any of them. `KNOWN_LIMITATIONS.md`'s two
+admin-hours rows were re-read and still match the current code exactly —
+no edit needed.
+
+### A new unclaimed module recorded, not reviewed in full here
+
+`historical_import.py` and its five sibling service/model/schema files
+(see above) exist in the tree with no rotation row. A note was added to
+`docs/security-review/PROGRESS.md`'s "New modules with no rotation row
+yet" paragraph so a future pass folds it in (its permission string and
+URL prefix both read `integrations`, so Feature 27, Integrations, is the
+natural owner) rather than it being rediscovered the way `evaluations.py`
+was.
+
+### Completion gate (pass 14)
+
+| Check                                                             | Result                                              |
+| ----------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (flake8 7.4.1, CI's pin)            | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/` (black 26.10.1, CI's pin)    | ✅ 3086 files unchanged                             |
+| `isort --check-only app/ tests/ alembic/` (isort 9.0.2, CI's pin) | ✅ clean                                            |
+| `python3 scripts/validate_migrations.py --strict`                 | ✅ 755 revisions, single head `67ad01c43434`        |
+| `python3 scripts/generate_schema_docs.py --check`                 | ✅ up to date                                       |
+| `python3.13 -m pytest tests/ -q -k "admin_hours"`                 | ✅ 174 passed, 1 pre-existing environment-only skip |
+| `python3 scripts/check_route_permissions.py --strict` (repo root) | ✅ 305 routes, 0 errors/warnings                    |
+| `cd frontend && npm run typecheck`                                | ✅ 0 errors                                         |
+| `cd frontend && npm run lint`                                     | ✅ 0 errors/warnings (`--max-warnings 10`)          |
+| `npx vitest run src/modules/admin-hours`                          | ✅ 128 passed (15 files)                            |
+
+No admin-hours source file changed this pass — the real delta (a model
+enum value with its own migration, and four cosmetic/UX frontend files)
+pre-dates this pass and was reviewed, not written, here. This pass's own
+contribution is the trace above, the route re-enumeration, and recording
+the new unclaimed `historical_import` module so it is not lost.
+
+Next: Feature 22 (Grants & fundraising).
+
+---
 
 ## Pass 13 (2026-11-02) — 0 fixed, 0 new findings; feature remains at zero open findings
 

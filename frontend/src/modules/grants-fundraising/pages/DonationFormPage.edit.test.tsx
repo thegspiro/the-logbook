@@ -112,7 +112,7 @@ describe('Editing a donation (W69)', () => {
 
     expect(await screen.findByRole('heading', { name: 'Edit Donation' })).toBeInTheDocument();
     expect(getDonation).toHaveBeenCalledWith('don-1');
-    const amount = screen.getByLabelText('Amount');
+    const amount = screen.getByLabelText(/^Amount/);
     expect(amount).toHaveValue(125);
 
     await user.clear(amount);

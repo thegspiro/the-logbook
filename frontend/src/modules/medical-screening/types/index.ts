@@ -251,3 +251,13 @@ export interface ExpiringScreening {
  * `.manage`), so the screens hide them rather than show empty boxes.
  */
 export const NARRATIVE_PERMISSIONS = ['medical_screening.view_details', 'medical_screening.manage'] as const;
+
+/**
+ * How a screening form asks the page to save. `keepOpen` is a partial save
+ * under the owner's rule of 2026-11-05: an edit wrote everything but the
+ * fields the server refused, and the dialog stays open with those flagged
+ * rather than closing on a success it did not fully have.
+ */
+export interface ScreeningSaveOptions {
+  keepOpen?: boolean | undefined;
+}

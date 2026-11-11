@@ -24,6 +24,15 @@ Waivers come from two tables:
 Both are merged into a single list and deduplicated by calendar day so
 that overlapping entries do not double-count waived time.
 
+Two more kinds travel with them, so every grader receives them through the
+loaders it already calls, and neither excuses a month:
+
+  3. ``training_requirement_overrides`` – a Chief's ruling that a member meets
+     a session-attendance requirement (``SOURCE_OVERRIDE``).
+  4. ``attendance_waiver_requests``     – an approved request to be excused
+     from one training session (``SOURCE_SESSION_EXCUSAL``). It names its
+     event, and excuses that event only.
+
 How much of a month the covered days excuse is the department's
 ``ComplianceConfig.leave_month_rule`` (see ``month_waivers``). The fetch
 helpers stamp it on every period they return, so the many callers that prorate
@@ -39,6 +48,11 @@ from typing import Dict, List, Optional, Set, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.attendance_waiver import (
+    AttendanceWaiverRequest,
+    AttendanceWaiverStatus,
+    AttendanceWaiverWorkflow,
+)
 from app.models.compliance_config import ComplianceConfig, LeaveMonthRule
 from app.models.training import TrainingRequirementOverride, TrainingWaiver
 from app.models.user import MemberLeaveOfAbsence
@@ -55,6 +69,15 @@ SOURCE_WAIVER = "waiver"
 # no month and no session: month_waivers drops it, and only the attendance
 # rule reads it, as "met" (training_compliance.tally_session_attendance).
 SOURCE_OVERRIDE = "override"
+# An approved request to be excused from one training session
+# (AttendanceWaiverRequest). Like the override it excuses no month, so it
+# cannot pro-rate an hours, shifts or calls target: month_waivers drops it.
+# It excuses exactly one session, the one whose event it names, for every
+# attendance requirement that session counts toward, including one linked
+# after the approval (training_compliance._waiver_excuses). Its dates are the
+# session's local day and are for display only; nothing may read them as a
+# period of absence, because that would excuse every other session that day.
+SOURCE_SESSION_EXCUSAL = "session_excusal"
 
 # Days of leave in a month at which the ``half`` rule excuses half of it.
 HALF_MONTH_DAYS = 15
@@ -67,7 +90,13 @@ class WaiverPeriod:
     ``source`` says which table it came from, so a screen can say "leave"
     only where a leave of absence is the reason. ``month_rule`` is the
     department's ``leave_month_rule``; it defaults to the column's own default
-    for periods built without a department to read it from.
+    for periods built without a department to read it from. ``event_id`` is
+    set only on a ``SOURCE_SESSION_EXCUSAL``: the one session it excuses.
+
+    **A reader that branches on the dates or ``requirement_ids`` must say what
+    it does with every source.** An excusal carries ``requirement_ids=None``,
+    which every date-based reader would take for a blanket waiver of the day.
+    ``tests/test_waiver_period_source_readers.py`` holds each reader to it.
     """
 
     start_date: date
@@ -75,6 +104,7 @@ class WaiverPeriod:
     requirement_ids: Optional[List[str]] = None  # None → applies to all
     source: str = SOURCE_WAIVER
     month_rule: str = LeaveMonthRule.FULL_MONTH.value
+    event_id: Optional[str] = None
 
 
 @dataclass
@@ -165,17 +195,20 @@ async def fetch_user_waivers(
 
     waivers = tw_result.scalars().all()
     leaves = ml_result.scalars().all()
-    overrides = await _active_overrides(db, org_id, user_id)
+    # Neither kind excuses a month, so neither needs the month rule.
+    unruled = await _active_overrides(db, org_id, user_id) + [
+        p for _, p in await _session_excusals_by_user(db, org_id, user_id)
+    ]
     if not waivers and not leaves:
         # Most members have neither; the rule would go unread.
-        return overrides
+        return unruled
     rule = await get_leave_month_rule(db, org_id)
     periods: List[WaiverPeriod] = []
     for w in waivers:
         periods.append(_to_waiver_period(w, SOURCE_WAIVER, rule))
     for leave in leaves:
         periods.append(_to_waiver_period(leave, SOURCE_LEAVE, rule))
-    return periods + overrides
+    return periods + unruled
 
 
 async def fetch_org_waivers(
@@ -202,11 +235,13 @@ async def fetch_org_waivers(
 
     waivers = tw_result.scalars().all()
     leaves = ml_result.scalars().all()
-    overrides_by_user: Dict[str, List[WaiverPeriod]] = {}
-    for period_user, period in await _active_overrides_by_user(db, org_id):
-        overrides_by_user.setdefault(period_user, []).append(period)
+    unruled_by_user: Dict[str, List[WaiverPeriod]] = {}
+    for period_user, period in await _active_overrides_by_user(
+        db, org_id
+    ) + await _session_excusals_by_user(db, org_id):
+        unruled_by_user.setdefault(period_user, []).append(period)
     if not waivers and not leaves:
-        return overrides_by_user
+        return unruled_by_user
     rule = await get_leave_month_rule(db, org_id)
     by_user: Dict[str, List[WaiverPeriod]] = {}
     for w in waivers:
@@ -215,7 +250,7 @@ async def fetch_org_waivers(
     for leave in leaves:
         uid = str(leave.user_id)
         by_user.setdefault(uid, []).append(_to_waiver_period(leave, SOURCE_LEAVE, rule))
-    for uid, periods in overrides_by_user.items():
+    for uid, periods in unruled_by_user.items():
         by_user.setdefault(uid, []).extend(periods)
     return by_user
 
@@ -247,6 +282,44 @@ async def _active_overrides(
     db: AsyncSession, org_id: str, user_id: str
 ) -> List[WaiverPeriod]:
     return [p for _, p in await _active_overrides_by_user(db, org_id, user_id)]
+
+
+async def _session_excusals_by_user(
+    db: AsyncSession, org_id: str, user_id: Optional[str] = None
+) -> List[Tuple[str, WaiverPeriod]]:
+    """Approved training-session waiver requests in ``org_id``, as (user id, period).
+
+    Approved includes a denial the Chief overrode. A request whose event was
+    deleted has nothing left to excuse and is left out. The period is the
+    session's local day, carried for display; ``event_id`` is what grading
+    reads (see SOURCE_SESSION_EXCUSAL).
+    """
+    query = select(
+        AttendanceWaiverRequest.user_id,
+        AttendanceWaiverRequest.event_id,
+        AttendanceWaiverRequest.session_date,
+    ).where(
+        AttendanceWaiverRequest.organization_id == str(org_id),
+        AttendanceWaiverRequest.workflow == AttendanceWaiverWorkflow.TRAINING_SESSION,
+        AttendanceWaiverRequest.status == AttendanceWaiverStatus.APPROVED,
+        AttendanceWaiverRequest.event_id.is_not(None),
+    )
+    if user_id is not None:
+        query = query.where(AttendanceWaiverRequest.user_id == str(user_id))
+    result = await db.execute(query)
+    return [
+        (
+            str(member_id),
+            WaiverPeriod(
+                start_date=day,
+                end_date=day,
+                requirement_ids=None,
+                source=SOURCE_SESSION_EXCUSAL,
+                event_id=str(event_id),
+            ),
+        )
+        for member_id, event_id, day in result.all()
+    ]
 
 
 def override_covers(waivers, req_id: str, as_of: date) -> bool:
@@ -334,8 +407,9 @@ def month_waivers(
     applicable = [
         w
         for w in waivers
-        # An override excuses no month; see SOURCE_OVERRIDE.
-        if w.source != SOURCE_OVERRIDE
+        # Neither an override nor a session excusal excuses a month; see
+        # SOURCE_OVERRIDE and SOURCE_SESSION_EXCUSAL.
+        if w.source not in (SOURCE_OVERRIDE, SOURCE_SESSION_EXCUSAL)
         and not (w.requirement_ids and req_id and str(req_id) not in w.requirement_ids)
     ]
     if not applicable:

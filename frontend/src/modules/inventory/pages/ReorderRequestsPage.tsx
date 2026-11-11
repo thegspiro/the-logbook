@@ -23,6 +23,8 @@ import { useDeepLinkedRecord } from '../../../hooks/useDeepLinkedRecord';
 import { formatDate as formatDateUtil } from '../../../utils/dateFormatting';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { VendorName } from '../components/VendorName';
 import InventoryItemPicker from '../components/InventoryItemPicker';
@@ -89,6 +91,33 @@ interface CreateFD {
   notes: string;
 }
 
+type ReorderField =
+  | 'item_name'
+  | 'category_id'
+  | 'quantity_requested'
+  | 'vendor_id'
+  | 'vendor_contact'
+  | 'estimated_unit_cost'
+  | 'expected_delivery_date'
+  | 'urgency'
+  | 'notes';
+const REORDER_FIELDS: FieldSpecs<ReorderField> = {
+  item_name: { id: 'reorder-item-name', label: 'Item Name' },
+  category_id: { id: 'reorder-category', label: 'Category' },
+  quantity_requested: { id: 'reorder-quantity', label: 'Quantity' },
+  // The typed-in name sits under the same picker, so its errors land here too.
+  vendor_id: { id: 'reorder-vendor', label: 'Vendor', apiKeys: ['vendor'] },
+  vendor_contact: { id: 'reorder-vendor-contact', label: 'Vendor Contact' },
+  estimated_unit_cost: { id: 'reorder-est-cost', label: 'Est. Unit Cost ($)' },
+  expected_delivery_date: { id: 'reorder-delivery', label: 'Expected Delivery' },
+  urgency: { id: 'reorder-urgency', label: 'Urgency' },
+  notes: { id: 'reorder-notes', label: 'Notes' },
+};
+
+// Limits mirror ReorderRequestCreate / ReorderRequestUpdate (notes is
+// FreeText, capped at 2000).
+const REORDER_LIMITS = { item_name: 255, vendor: 255, vendor_contact: 255, notes: 2000 } as const;
+
 const EMPTY_CREATE: CreateFD = {
   item_name: '',
   item_id: '',
@@ -117,9 +146,12 @@ const ReorderFormModal: React.FC<{
 }> = ({ isOpen, onClose, onSaved, categories, vendors, lowStockAlerts, editRequest, prefillAlert }) => {
   const [f, setF] = useState<CreateFD>(EMPTY_CREATE);
   const [saving, setSaving] = useState(false);
+  const fieldErrors = useFieldErrors(REORDER_FIELDS);
+  const { clear: clearErrors } = fieldErrors;
 
   useEffect(() => {
     if (!isOpen) return;
+    clearErrors();
     if (editRequest) {
       setF({
         item_name: editRequest.item_name,
@@ -149,18 +181,26 @@ const ReorderFormModal: React.FC<{
     } else {
       setF(EMPTY_CREATE);
     }
-  }, [editRequest, isOpen, prefillAlert]);
+  }, [editRequest, isOpen, prefillAlert, clearErrors]);
 
-  const up = (k: keyof CreateFD, v: string) => setF((p) => ({ ...p, [k]: v }));
+  const up = (k: ReorderField, v: string) => {
+    setF((p) => ({ ...p, [k]: v }));
+    fieldErrors.setError(k, null);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!f.item_name.trim()) {
-      toast.error('Item name is required');
-      return;
-    }
+    // Checked here rather than by the browser's required bubble, which
+    // vanished after a few seconds and named nothing (forms review F-3).
+    const problems: FieldErrors<ReorderField> = {};
+    if (!f.item_name.trim()) problems.item_name = 'Enter the item name.';
     if (!f.quantity_requested || Number(f.quantity_requested) < 1) {
-      toast.error('Quantity must be at least 1');
+      problems.quantity_requested = 'Enter a quantity of at least 1.';
+    }
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
     setSaving(true);
@@ -210,7 +250,7 @@ const ReorderFormModal: React.FC<{
       onSaved();
       onClose();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save reorder request'));
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to save reorder request'));
     } finally {
       setSaving(false);
     }
@@ -237,6 +277,11 @@ const ReorderFormModal: React.FC<{
       }
     >
       <div className="space-y-4 p-4">
+        {fieldErrors.formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {fieldErrors.formError}
+          </p>
+        )}
         {/* Quick-fill from low stock alerts */}
         {!editRequest && lowStockAlerts.length > 0 && (
           <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
@@ -251,6 +296,8 @@ const ReorderFormModal: React.FC<{
                   className="touch:min-h-[44px] touch:min-w-[44px] rounded bg-yellow-500/20 px-2 py-1 text-xs text-yellow-800 hover:bg-yellow-500/30 dark:text-yellow-300"
                   onClick={() => {
                     const firstItem = alert.items?.[0];
+                    fieldErrors.setError('item_name', null);
+                    fieldErrors.setError('quantity_requested', null);
                     setF((p) => ({
                       ...p,
                       item_name: firstItem?.name ?? alert.category_name,
@@ -288,172 +335,215 @@ const ReorderFormModal: React.FC<{
               Link the item this order restocks. Stock can only be received against a linked item.
             </p>
           </div>
-          <div className="sm:col-span-2">
-            <label className={lbl} htmlFor="reorder-item-name">
-              Item Name *
-            </label>
-            <input
-              id="reorder-item-name"
-              className={inp}
-              value={f.item_name}
-              onChange={(e) => up('item_name', e.target.value)}
-              placeholder="e.g. SCBA Air Cylinders"
-              required
-            />
-          </div>
-          <div>
-            <label className={lbl} htmlFor="reorder-category">
-              Category
-            </label>
-            <select
-              id="reorder-category"
-              className={inp}
-              value={f.category_id}
-              onChange={(e) => up('category_id', e.target.value)}
-            >
-              <option value="">— Select —</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={lbl} htmlFor="reorder-quantity">
-              Quantity *
-            </label>
-            <input
-              id="reorder-quantity"
-              type="number"
-              min="1"
-              className={inp}
-              value={f.quantity_requested}
-              onChange={(e) => up('quantity_requested', e.target.value)}
-              required
-            />
-          </div>
+          <FormField
+            id={REORDER_FIELDS.item_name.id}
+            label="Item Name"
+            required
+            error={fieldErrors.errors.item_name}
+            labelClassName={lbl}
+            className="sm:col-span-2"
+          >
+            {(field) => (
+              <input
+                {...field}
+                className={inp}
+                maxLength={REORDER_LIMITS.item_name}
+                value={f.item_name}
+                onChange={(e) => up('item_name', e.target.value)}
+                placeholder="e.g. SCBA Air Cylinders"
+              />
+            )}
+          </FormField>
+          <FormField
+            id={REORDER_FIELDS.category_id.id}
+            label="Category"
+            error={fieldErrors.errors.category_id}
+            labelClassName={lbl}
+          >
+            {(field) => (
+              <select
+                {...field}
+                className={inp}
+                value={f.category_id}
+                onChange={(e) => up('category_id', e.target.value)}
+              >
+                <option value="">— Select —</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          <FormField
+            id={REORDER_FIELDS.quantity_requested.id}
+            label="Quantity"
+            required
+            error={fieldErrors.errors.quantity_requested}
+            labelClassName={lbl}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                min="1"
+                className={inp}
+                value={f.quantity_requested}
+                onChange={(e) => up('quantity_requested', e.target.value)}
+              />
+            )}
+          </FormField>
         </div>
 
         <fieldset>
           <legend className="text-theme-text-primary mb-2 text-sm font-semibold">Vendor &amp; Cost</legend>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label className={lbl} htmlFor="reorder-vendor">
-                Vendor
-              </label>
-              <select
-                id="reorder-vendor"
-                className={inp}
-                value={f.vendor_id}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  const picked = vendors.find((v) => v.id === id);
-                  const contact = picked?.contacts.find((c) => c.is_primary) ?? picked?.contacts[0];
-                  setF((p) => ({
-                    ...p,
-                    vendor_id: id,
-                    // Linking wins over the typed-in name, and the vendor's own
-                    // contact details save re-typing them onto every order.
-                    vendor: id ? '' : p.vendor,
-                    vendor_contact: picked
-                      ? contact?.email || contact?.phone || picked.email || picked.phone || ''
-                      : p.vendor_contact,
-                  }));
-                }}
-              >
-                <option value="">— Not linked —</option>
-                {vendors
-                  .filter((v) => v.is_active || v.id === f.vendor_id)
-                  .map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                      {v.is_active ? '' : ' (inactive)'}
-                    </option>
-                  ))}
-              </select>
-              {!f.vendor_id && (
+            <FormField
+              id={REORDER_FIELDS.vendor_id.id}
+              label="Vendor"
+              error={fieldErrors.errors.vendor_id}
+              labelClassName={lbl}
+            >
+              {(field) => (
+                <>
+                  <select
+                    {...field}
+                    className={inp}
+                    value={f.vendor_id}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      const picked = vendors.find((v) => v.id === id);
+                      const contact = picked?.contacts.find((c) => c.is_primary) ?? picked?.contacts[0];
+                      fieldErrors.setError('vendor_id', null);
+                      setF((p) => ({
+                        ...p,
+                        vendor_id: id,
+                        // Linking wins over the typed-in name, and the vendor's own
+                        // contact details save re-typing them onto every order.
+                        vendor: id ? '' : p.vendor,
+                        vendor_contact: picked
+                          ? contact?.email || contact?.phone || picked.email || picked.phone || ''
+                          : p.vendor_contact,
+                      }));
+                    }}
+                  >
+                    <option value="">— Not linked —</option>
+                    {vendors
+                      .filter((v) => v.is_active || v.id === f.vendor_id)
+                      .map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name}
+                          {v.is_active ? '' : ' (inactive)'}
+                        </option>
+                      ))}
+                  </select>
+                  {!f.vendor_id && (
+                    <input
+                      className={`${inp} mt-2`}
+                      maxLength={REORDER_LIMITS.vendor}
+                      value={f.vendor}
+                      onChange={(e) => {
+                        setF((p) => ({ ...p, vendor: e.target.value }));
+                        fieldErrors.setError('vendor_id', null);
+                      }}
+                      aria-label="Vendor name (not on file)"
+                      placeholder="Or type a name not on file"
+                    />
+                  )}
+                </>
+              )}
+            </FormField>
+            <FormField
+              id={REORDER_FIELDS.vendor_contact.id}
+              label="Vendor Contact"
+              error={fieldErrors.errors.vendor_contact}
+              labelClassName={lbl}
+            >
+              {(field) => (
                 <input
-                  className={`${inp} mt-2`}
-                  value={f.vendor}
-                  onChange={(e) => up('vendor', e.target.value)}
-                  aria-label="Vendor name (not on file)"
-                  placeholder="Or type a name not on file"
+                  {...field}
+                  className={inp}
+                  maxLength={REORDER_LIMITS.vendor_contact}
+                  value={f.vendor_contact}
+                  onChange={(e) => up('vendor_contact', e.target.value)}
+                  placeholder="Email or phone"
                 />
               )}
-            </div>
-            <div>
-              <label className={lbl} htmlFor="reorder-vendor-contact">
-                Vendor Contact
-              </label>
-              <input
-                id="reorder-vendor-contact"
-                className={inp}
-                value={f.vendor_contact}
-                onChange={(e) => up('vendor_contact', e.target.value)}
-                placeholder="Email or phone"
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="reorder-est-cost">
-                Est. Unit Cost ($)
-              </label>
-              <input
-                id="reorder-est-cost"
-                type="number"
-                min="0"
-                step="0.01"
-                className={inp}
-                value={f.estimated_unit_cost}
-                onChange={(e) => up('estimated_unit_cost', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="reorder-delivery">
-                Expected Delivery
-              </label>
-              <input
-                id="reorder-delivery"
-                type="date"
-                className={inp}
-                value={f.expected_delivery_date}
-                onChange={(e) => up('expected_delivery_date', e.target.value)}
-              />
-            </div>
+            </FormField>
+            <FormField
+              id={REORDER_FIELDS.estimated_unit_cost.id}
+              label="Est. Unit Cost ($)"
+              error={fieldErrors.errors.estimated_unit_cost}
+              labelClassName={lbl}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={inp}
+                  value={f.estimated_unit_cost}
+                  onChange={(e) => up('estimated_unit_cost', e.target.value)}
+                />
+              )}
+            </FormField>
+            <FormField
+              id={REORDER_FIELDS.expected_delivery_date.id}
+              label="Expected Delivery"
+              error={fieldErrors.errors.expected_delivery_date}
+              labelClassName={lbl}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="date"
+                  className={inp}
+                  value={f.expected_delivery_date}
+                  onChange={(e) => up('expected_delivery_date', e.target.value)}
+                />
+              )}
+            </FormField>
           </div>
         </fieldset>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className={lbl} htmlFor="reorder-urgency">
-              Urgency
-            </label>
-            <select
-              id="reorder-urgency"
-              className={inp}
-              value={f.urgency}
-              onChange={(e) => up('urgency', e.target.value)}
-            >
-              {URGENCY_OPTIONS.map((u) => (
-                <option key={u} value={u}>
-                  {u.charAt(0).toUpperCase() + u.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="sm:col-span-1">
-            <label className={lbl} htmlFor="reorder-notes">
-              Notes
-            </label>
-            <textarea
-              id="reorder-notes"
-              className={inp}
-              rows={2}
-              value={f.notes}
-              onChange={(e) => up('notes', e.target.value)}
-              placeholder="Additional details..."
-            />
-          </div>
+          <FormField
+            id={REORDER_FIELDS.urgency.id}
+            label="Urgency"
+            error={fieldErrors.errors.urgency}
+            labelClassName={lbl}
+          >
+            {(field) => (
+              <select {...field} className={inp} value={f.urgency} onChange={(e) => up('urgency', e.target.value)}>
+                {URGENCY_OPTIONS.map((u) => (
+                  <option key={u} value={u}>
+                    {u.charAt(0).toUpperCase() + u.slice(1)}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+          <FormField
+            id={REORDER_FIELDS.notes.id}
+            label="Notes"
+            error={fieldErrors.errors.notes}
+            labelClassName={lbl}
+            className="sm:col-span-1"
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                className={inp}
+                rows={2}
+                maxLength={REORDER_LIMITS.notes}
+                value={f.notes}
+                onChange={(e) => up('notes', e.target.value)}
+                placeholder="Additional details..."
+              />
+            )}
+          </FormField>
         </div>
       </div>
     </Modal>
@@ -474,6 +564,22 @@ const ACTION_DONE: Record<WorkflowAction, string> = {
   receive: 'Stock received',
   cancel: 'Request cancelled',
 };
+type ActionField =
+  'item' | 'quantity' | 'storage_location' | 'unit_cost' | 'lot_number' | 'vendor_id' | 'purchase_order_number';
+// Keys are the receipt and transition request bodies' own, so a 422 lands on
+// the field it names.
+const ACTION_FIELDS: FieldSpecs<ActionField> = {
+  item: { id: 'reorder-receive-item', label: 'Inventory item', apiKeys: ['item_id'] },
+  quantity: { id: 'reorder-receive-qty', label: 'Quantity received' },
+  storage_location: { id: 'reorder-receive-location', label: 'Storage location' },
+  unit_cost: { id: 'reorder-receive-cost', label: 'Unit cost ($)' },
+  lot_number: { id: 'reorder-receive-lot', label: 'Lot number' },
+  vendor_id: { id: 'reorder-order-vendor', label: 'Vendor', apiKeys: ['vendor'] },
+  purchase_order_number: { id: 'reorder-po', label: 'Purchase-order reference' },
+};
+// Limits mirror ReorderReceiptCreate / ReorderTransitionRequest.
+const ACTION_LIMITS = { storage_location: 255, lot_number: 100, purchase_order_number: 255 } as const;
+
 const WorkflowActionModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
@@ -493,8 +599,11 @@ const WorkflowActionModal: React.FC<{
   // W41-5: an unlinked order is linked here, at receipt, before stock posts.
   const [linkItemId, setLinkItemId] = useState('');
   const receivingItemId = request?.item_id || linkItemId;
+  const fieldErrors = useFieldErrors(ACTION_FIELDS);
+  const { clear: clearErrors } = fieldErrors;
   useEffect(() => {
     if (!isOpen || !request) return;
+    clearErrors();
     setLinkItemId('');
     setVendorId(request.vendor_id ?? '');
     setPONumber(request.purchase_order_number ?? '');
@@ -503,18 +612,32 @@ const WorkflowActionModal: React.FC<{
     setLocation('');
     setLotNumber('');
     setConfirmOver(false);
-  }, [isOpen, request]);
+  }, [isOpen, request, clearErrors]);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!request || !action) return;
+    // Checked here rather than by the browser's required bubble, which
+    // vanished after a few seconds and named nothing (forms review F-3).
+    const qty = Number(quantity);
+    const problems: FieldErrors<ActionField> = {};
+    if (action === 'receive') {
+      if (!receivingItemId) {
+        problems.item = 'Choose the inventory item the stock goes onto.';
+      } else {
+        if (!(qty > 0)) problems.quantity = 'Enter a quantity above 0.';
+        if (!location.trim()) problems.storage_location = 'Enter where the stock is being put away.';
+        if (unitCost === '' || Number(unitCost) < 0) problems.unit_cost = 'Enter a unit cost of 0 or more.';
+      }
+    }
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
+      return;
+    }
     setSaving(true);
     try {
       if (action === 'receive') {
-        const qty = Number(quantity);
-        if (qty <= 0 || !location.trim() || Number(unitCost) < 0 || unitCost === '') {
-          toast.error('Enter a quantity above 0, a storage location, and a unit cost');
-          return;
-        }
         if (!request.item_id && linkItemId) {
           // The plain edit does not bump `version`, so the receipt below still
           // matches the version this dialog opened with.
@@ -541,7 +664,7 @@ const WorkflowActionModal: React.FC<{
       onSaved();
       onClose();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, `Failed to ${ACTION_LABELS[action].toLowerCase()}`));
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, `Failed to ${ACTION_LABELS[action].toLowerCase()}`));
     } finally {
       setSaving(false);
     }
@@ -556,7 +679,8 @@ const WorkflowActionModal: React.FC<{
       footer={
         <>
           <button
-            disabled={saving || (action === 'receive' && !receivingItemId)}
+            type="submit"
+            disabled={saving}
             className={action === 'cancel' ? 'btn-danger btn-md' : 'btn-info btn-md'}
           >
             {saving ? 'Saving…' : action && ACTION_LABELS[action]}
@@ -568,46 +692,92 @@ const WorkflowActionModal: React.FC<{
       }
     >
       <div className="space-y-4 p-4">
+        {fieldErrors.formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {fieldErrors.formError}
+          </p>
+        )}
         {action === 'mark_ordered' && (
           <>
-            <div>
-              <label className={lbl} htmlFor="reorder-order-vendor">
-                Vendor
-              </label>
-              <select
-                id="reorder-order-vendor"
-                className={inp}
-                value={vendorId}
-                onChange={(e) => setVendorId(e.target.value)}
-              >
-                <option value="">Select vendor</option>
-                {vendors
-                  .filter((v) => v.is_active)
-                  .map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <div>
-              <label className={lbl} htmlFor="reorder-po">
-                Purchase-order reference
-              </label>
-              <input id="reorder-po" className={inp} value={poNumber} onChange={(e) => setPONumber(e.target.value)} />
-            </div>
+            <FormField
+              id={ACTION_FIELDS.vendor_id.id}
+              label="Vendor"
+              error={fieldErrors.errors.vendor_id}
+              labelClassName={lbl}
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  className={inp}
+                  value={vendorId}
+                  onChange={(e) => {
+                    setVendorId(e.target.value);
+                    fieldErrors.setError('vendor_id', null);
+                  }}
+                >
+                  <option value="">Select vendor</option>
+                  {vendors
+                    .filter((v) => v.is_active)
+                    .map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                      </option>
+                    ))}
+                </select>
+              )}
+            </FormField>
+            <FormField
+              id={ACTION_FIELDS.purchase_order_number.id}
+              label="Purchase-order reference"
+              error={fieldErrors.errors.purchase_order_number}
+              labelClassName={lbl}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  className={inp}
+                  maxLength={ACTION_LIMITS.purchase_order_number}
+                  value={poNumber}
+                  onChange={(e) => {
+                    setPONumber(e.target.value);
+                    fieldErrors.setError('purchase_order_number', null);
+                  }}
+                />
+              )}
+            </FormField>
           </>
         )}
         {action === 'receive' && request && !request.item_id && (
           // Receipts post stock onto a linked item, and the server refuses one
-          // without (W41-5); link it here first.
-          <div>
-            <span className={lbl}>Inventory item *</span>
+          // without (W41-5); link it here first. The group is the focus target
+          // for its error: the picker has no single input to name.
+          <div
+            id={ACTION_FIELDS.item.id}
+            role="group"
+            aria-labelledby={`${ACTION_FIELDS.item.id}-label`}
+            aria-describedby={fieldErrors.errors.item ? `${ACTION_FIELDS.item.id}-error` : undefined}
+            tabIndex={-1}
+            className="focus:outline-none"
+          >
+            <span id={`${ACTION_FIELDS.item.id}-label`} className={lbl}>
+              Inventory item{' '}
+              <span aria-hidden="true" className={FIELD_ERROR_CLASS}>
+                *
+              </span>
+            </span>
             <InventoryItemPicker
               value={linkItemId || undefined}
               placeholder="Search inventory to link…"
-              onChange={(id) => setLinkItemId(id ?? '')}
+              onChange={(id) => {
+                setLinkItemId(id ?? '');
+                fieldErrors.setError('item', null);
+              }}
             />
+            {fieldErrors.errors.item && (
+              <p id={`${ACTION_FIELDS.item.id}-error`} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+                {fieldErrors.errors.item}
+              </p>
+            )}
             <p className="text-theme-text-muted mt-1 text-xs">
               This order isn&apos;t linked to an inventory item yet. Choose the item the stock goes onto; the order
               stays linked to it.
@@ -620,58 +790,88 @@ const WorkflowActionModal: React.FC<{
               Ordered {request?.quantity_requested ?? 0} · Received {request?.quantity_received ?? 0} · Outstanding{' '}
               {request?.quantity_outstanding ?? 0}
             </p>
-            <div>
-              <label className={lbl} htmlFor="reorder-receive-qty">
-                Quantity received *
-              </label>
-              <input
-                id="reorder-receive-qty"
-                type="number"
-                min="1"
-                required
-                className={inp}
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="reorder-receive-location">
-                Storage location *
-              </label>
-              <input
-                id="reorder-receive-location"
-                required
-                className={inp}
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="reorder-receive-cost">
-                Unit cost ($) *
-              </label>
-              <input
-                id="reorder-receive-cost"
-                required
-                type="number"
-                min="0"
-                step="0.01"
-                className={inp}
-                value={unitCost}
-                onChange={(e) => setUnitCost(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className={lbl} htmlFor="reorder-receive-lot">
-                Lot number
-              </label>
-              <input
-                id="reorder-receive-lot"
-                className={inp}
-                value={lotNumber}
-                onChange={(e) => setLotNumber(e.target.value)}
-              />
-            </div>
+            <FormField
+              id={ACTION_FIELDS.quantity.id}
+              label="Quantity received"
+              required
+              error={fieldErrors.errors.quantity}
+              labelClassName={lbl}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  min="1"
+                  className={inp}
+                  value={quantity}
+                  onChange={(e) => {
+                    setQuantity(e.target.value);
+                    fieldErrors.setError('quantity', null);
+                  }}
+                />
+              )}
+            </FormField>
+            <FormField
+              id={ACTION_FIELDS.storage_location.id}
+              label="Storage location"
+              required
+              error={fieldErrors.errors.storage_location}
+              labelClassName={lbl}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  className={inp}
+                  maxLength={ACTION_LIMITS.storage_location}
+                  value={location}
+                  onChange={(e) => {
+                    setLocation(e.target.value);
+                    fieldErrors.setError('storage_location', null);
+                  }}
+                />
+              )}
+            </FormField>
+            <FormField
+              id={ACTION_FIELDS.unit_cost.id}
+              label="Unit cost ($)"
+              required
+              error={fieldErrors.errors.unit_cost}
+              labelClassName={lbl}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={inp}
+                  value={unitCost}
+                  onChange={(e) => {
+                    setUnitCost(e.target.value);
+                    fieldErrors.setError('unit_cost', null);
+                  }}
+                />
+              )}
+            </FormField>
+            <FormField
+              id={ACTION_FIELDS.lot_number.id}
+              label="Lot number"
+              error={fieldErrors.errors.lot_number}
+              labelClassName={lbl}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  className={inp}
+                  maxLength={ACTION_LIMITS.lot_number}
+                  value={lotNumber}
+                  onChange={(e) => {
+                    setLotNumber(e.target.value);
+                    fieldErrors.setError('lot_number', null);
+                  }}
+                />
+              )}
+            </FormField>
             {Number(quantity) > (request?.quantity_outstanding ?? 0) && (
               <label className="flex gap-2 text-sm">
                 <input type="checkbox" checked={confirmOver} onChange={(e) => setConfirmOver(e.target.checked)} />{' '}

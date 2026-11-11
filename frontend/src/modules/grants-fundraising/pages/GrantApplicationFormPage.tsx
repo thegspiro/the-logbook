@@ -26,6 +26,8 @@ import {
 import type { BudgetAmounts, ContactRow } from '../utils/applicationStructuredFields';
 import { getErrorMessage, toAppError } from '@/utils/errorHandling';
 import { formCoercions } from '@/utils/formValues';
+import { FormField } from '@/components/ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { displayNameOf } from '@/utils/memberName';
 import { userService } from '@/services/api';
 import type { User } from '@/types/user';
@@ -87,6 +89,55 @@ interface FormData {
   priority: string;
   notes: string;
 }
+
+/** `GrantApplicationCreate`'s max_length; the other text fields have none. */
+const MAX_LENGTH: Partial<Record<keyof FormData, number>> = {
+  grantProgramName: 255,
+  grantAgency: 255,
+  matchSource: 255,
+  federalAwardId: 100,
+};
+
+/**
+ * The fields as a 422 names them; each key is also its payload key. Grant
+ * request schemas report the camelCase alias, and the mapper reads both
+ * spellings. The budget and contacts are checked as a whole.
+ */
+const SERVER_FIELDS: Record<keyof FormData | 'budgetSummary' | 'keyContacts', ServerFieldSpec> = {
+  grantProgramName: { label: 'Grant Program Name', maxLength: MAX_LENGTH.grantProgramName },
+  grantAgency: { label: 'Grant Agency', maxLength: MAX_LENGTH.grantAgency },
+  opportunityId: { label: 'Grant Opportunity' },
+  applicationStatus: { label: 'Status' },
+  amountRequested: { label: 'Amount Requested' },
+  amountAwarded: { label: 'Amount Awarded' },
+  matchAmount: { label: 'Match Amount' },
+  matchSource: { label: 'Match Source', maxLength: MAX_LENGTH.matchSource },
+  applicationDeadline: { label: 'Application Deadline' },
+  submittedDate: { label: 'Submitted Date' },
+  awardDate: { label: 'Award Date' },
+  grantStartDate: { label: 'Grant Start Date' },
+  grantEndDate: { label: 'Grant End Date' },
+  projectDescription: { label: 'Project Description' },
+  narrativeSummary: { label: 'Narrative Summary' },
+  federalAwardId: { label: 'Federal Award ID', maxLength: MAX_LENGTH.federalAwardId },
+  performancePeriodMonths: { label: 'Performance Period' },
+  reportingFrequency: { label: 'Reporting Frequency' },
+  nextReportDue: { label: 'Next Report Due' },
+  finalReportDue: { label: 'Final Report Due' },
+  assignedTo: { label: 'Assigned To' },
+  priority: { label: 'Priority' },
+  notes: { label: 'Notes' },
+  budgetSummary: { label: 'Budget Summary' },
+  keyContacts: { label: 'Key Contacts' },
+};
+type ServerField = keyof typeof SERVER_FIELDS;
+
+/** Where to put focus for a field the server refused. */
+const focusField = (field: ServerField | undefined) => {
+  if (!field) return;
+  const id = field === 'budgetSummary' ? 'budgetNotes' : field === 'keyContacts' ? null : field;
+  if (id) document.getElementById(id)?.focus();
+};
 
 const EMPTY_FORM: FormData = {
   grantProgramName: '',
@@ -323,7 +374,32 @@ export const GrantApplicationFormPage: React.FC = () => {
 
     try {
       if (isEditing && id) {
-        await grantsService.updateApplication(id, payload);
+        let refused: Partial<Record<ServerField, string>> = {};
+        try {
+          await grantsService.updateApplication(id, payload);
+        } catch (err: unknown) {
+          // Owner rule (2026-11-05) for a single-save form: a value the
+          // application cannot hold is not written, the rest saves, and the
+          // field keeps what was typed, flagged, until it is fixed. Anything
+          // the form has no field for is a real failure and is reported as one.
+          const mapped = mapServerFieldErrors(err, SERVER_FIELDS);
+          const keys = Object.keys(mapped?.fieldErrors ?? {}) as ServerField[];
+          if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
+          refused = mapped.fieldErrors;
+          const rest: Partial<GrantApplication> = { ...payload };
+          for (const key of keys) delete rest[key];
+          await grantsService.updateApplication(id, rest);
+        }
+        const firstRefused = (Object.keys(refused) as ServerField[])[0];
+        if (firstRefused) {
+          // Stays on the page, so the refused field can be fixed and saved again.
+          setErrors(refused);
+          toast.error(
+            `Application saved, except ${SERVER_FIELDS[firstRefused].label.toLowerCase()}: ${refused[firstRefused] ?? ''} Fix it and save again.`
+          );
+          focusField(firstRefused);
+          return;
+        }
         toast.success('Application updated.');
         void navigate(`/grants/applications/${id}`);
       } else {
@@ -332,11 +408,23 @@ export const GrantApplicationFormPage: React.FC = () => {
         void navigate(`/grants/applications/${created.id}`);
       }
     } catch (err: unknown) {
+      // A new application is created only once nothing is refused, so each
+      // refusal goes on its field (forms review F-2).
+      const mapped = isEditing ? null : mapServerFieldErrors(err, SERVER_FIELDS);
+      const keys = Object.keys(mapped?.fieldErrors ?? {}) as ServerField[];
+      if (mapped && keys[0]) {
+        setErrors(mapped.fieldErrors);
+        focusField(keys[0]);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       toast.error(getErrorMessage(err, 'Failed to save application. Try again.'));
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const fieldError = (name: keyof FormData): string | undefined => errors[name];
 
   if (isLoading) {
     return (
@@ -380,119 +468,127 @@ export const GrantApplicationFormPage: React.FC = () => {
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Program Information</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <label htmlFor="grantProgramName" className={labelClass}>
-                Grant Program Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="grantProgramName"
-                name="grantProgramName"
-                type="text"
-                value={formData.grantProgramName}
-                onChange={handleChange}
-                className={`${inputClass} ${errors.grantProgramName ? 'border-red-500' : ''}`}
-                placeholder="e.g. Assistance to Firefighters Grant"
-              />
-              {errors.grantProgramName && <p className="mt-1 text-xs text-red-500">{errors.grantProgramName}</p>}
-            </div>
-            <div>
-              <label htmlFor="grantAgency" className={labelClass}>
-                Grant Agency <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="grantAgency"
-                name="grantAgency"
-                type="text"
-                value={formData.grantAgency}
-                onChange={handleChange}
-                className={`${inputClass} ${errors.grantAgency ? 'border-red-500' : ''}`}
-                placeholder="e.g. FEMA"
-              />
-              {errors.grantAgency && <p className="mt-1 text-xs text-red-500">{errors.grantAgency}</p>}
-            </div>
-            <div>
-              <label htmlFor="opportunityId" className={labelClass}>
-                Grant Opportunity
-              </label>
-              <select
-                id="opportunityId"
-                name="opportunityId"
-                value={formData.opportunityId}
-                onChange={handleChange}
-                className={selectClass}
-              >
-                <option value="">-- None --</option>
-                {opportunities.map((opp) => (
-                  <option key={opp.id} value={opp.id}>
-                    {opp.name} ({opp.agency})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="applicationStatus" className={labelClass}>
-                Application Status
-              </label>
-              <select
-                id="applicationStatus"
-                name="applicationStatus"
-                value={formData.applicationStatus}
-                onChange={handleChange}
-                className={selectClass}
-              >
-                {statusOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-              {isEditing && allowedNextStatuses?.length === 0 && (
-                <p className="text-theme-text-secondary mt-1 text-xs">This status is final.</p>
+            <FormField
+              id="grantProgramName"
+              label="Grant Program Name"
+              error={fieldError('grantProgramName')}
+              required
+              maxLength={MAX_LENGTH.grantProgramName}
+              count={MAX_LENGTH.grantProgramName ? formData.grantProgramName.length : undefined}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  name="grantProgramName"
+                  type="text"
+                  value={formData.grantProgramName}
+                  onChange={handleChange}
+                  className={inputClass}
+                  placeholder="e.g. Assistance to Firefighters Grant"
+                />
               )}
-            </div>
-            <div>
-              <label htmlFor="priority" className={labelClass}>
-                Priority
-              </label>
-              <select
-                id="priority"
-                name="priority"
-                value={formData.priority}
-                onChange={handleChange}
-                className={selectClass}
-              >
-                {PRIORITY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="assignedTo" className={labelClass}>
-                Assigned To
-              </label>
-              <select
-                id="assignedTo"
-                name="assignedTo"
-                value={formData.assignedTo}
-                onChange={handleChange}
-                className={selectClass}
-              >
-                <option value="">Unassigned</option>
-                {/* Keeps a stored assignee who is no longer on the member
+            </FormField>
+            <FormField
+              id="grantAgency"
+              label="Grant Agency"
+              error={fieldError('grantAgency')}
+              required
+              maxLength={MAX_LENGTH.grantAgency}
+              count={MAX_LENGTH.grantAgency ? formData.grantAgency.length : undefined}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  name="grantAgency"
+                  type="text"
+                  value={formData.grantAgency}
+                  onChange={handleChange}
+                  className={inputClass}
+                  placeholder="e.g. FEMA"
+                />
+              )}
+            </FormField>
+            <FormField id="opportunityId" label="Grant Opportunity" error={fieldError('opportunityId')}>
+              {(field) => (
+                <select
+                  {...field}
+                  name="opportunityId"
+                  value={formData.opportunityId}
+                  onChange={handleChange}
+                  className={selectClass}
+                >
+                  <option value="">-- None --</option>
+                  {opportunities.map((opp) => (
+                    <option key={opp.id} value={opp.id}>
+                      {opp.name} ({opp.agency})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            <FormField
+              id="applicationStatus"
+              label="Application Status"
+              error={fieldError('applicationStatus')}
+              hint={isEditing && allowedNextStatuses?.length === 0 ? 'This status is final.' : undefined}
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  name="applicationStatus"
+                  value={formData.applicationStatus}
+                  onChange={handleChange}
+                  className={selectClass}
+                >
+                  {statusOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            <FormField id="priority" label="Priority" error={fieldError('priority')}>
+              {(field) => (
+                <select
+                  {...field}
+                  name="priority"
+                  value={formData.priority}
+                  onChange={handleChange}
+                  className={selectClass}
+                >
+                  {PRIORITY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            <FormField id="assignedTo" label="Assigned To" error={fieldError('assignedTo')}>
+              {(field) => (
+                <select
+                  {...field}
+                  name="assignedTo"
+                  value={formData.assignedTo}
+                  onChange={handleChange}
+                  className={selectClass}
+                >
+                  <option value="">Unassigned</option>
+                  {/* Keeps a stored assignee who is no longer on the member
                     list selectable, so saving does not silently swap them
                     for whichever option the browser shows first. */}
-                {formData.assignedTo && !members.some((member) => member.id === formData.assignedTo) && (
-                  <option value={formData.assignedTo}>Current assignee</option>
-                )}
-                {members.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {displayNameOf(member) || member.username}
-                  </option>
-                ))}
-              </select>
-            </div>
+                  {formData.assignedTo && !members.some((member) => member.id === formData.assignedTo) && (
+                    <option value={formData.assignedTo}>Current assignee</option>
+                  )}
+                  {members.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {displayNameOf(member) || member.username}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
           </div>
         </div>
 
@@ -500,82 +596,89 @@ export const GrantApplicationFormPage: React.FC = () => {
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Funding Details</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <label htmlFor="amountRequested" className={labelClass}>
-                Amount Requested
-              </label>
-              <input
-                id="amountRequested"
-                name="amountRequested"
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.amountRequested}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <label htmlFor="amountAwarded" className={labelClass}>
-                Amount Awarded
-              </label>
-              <input
-                id="amountAwarded"
-                name="amountAwarded"
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.amountAwarded}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <label htmlFor="matchAmount" className={labelClass}>
-                Match Amount
-              </label>
-              <input
-                id="matchAmount"
-                name="matchAmount"
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.matchAmount}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <label htmlFor="matchSource" className={labelClass}>
-                Match Source
-              </label>
-              <input
-                id="matchSource"
-                name="matchSource"
-                type="text"
-                value={formData.matchSource}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="e.g. Municipal budget"
-              />
-            </div>
-            <div>
-              <label htmlFor="federalAwardId" className={labelClass}>
-                Federal Award ID
-              </label>
-              <input
-                id="federalAwardId"
-                name="federalAwardId"
-                type="text"
-                value={formData.federalAwardId}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="e.g. EMW-2025-FO-00123"
-              />
-            </div>
+            <FormField id="amountRequested" label="Amount Requested" error={fieldError('amountRequested')}>
+              {(field) => (
+                <input
+                  {...field}
+                  name="amountRequested"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.amountRequested}
+                  onChange={handleChange}
+                  className={inputClass}
+                  placeholder="0.00"
+                />
+              )}
+            </FormField>
+            <FormField id="amountAwarded" label="Amount Awarded" error={fieldError('amountAwarded')}>
+              {(field) => (
+                <input
+                  {...field}
+                  name="amountAwarded"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.amountAwarded}
+                  onChange={handleChange}
+                  className={inputClass}
+                  placeholder="0.00"
+                />
+              )}
+            </FormField>
+            <FormField id="matchAmount" label="Match Amount" error={fieldError('matchAmount')}>
+              {(field) => (
+                <input
+                  {...field}
+                  name="matchAmount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={formData.matchAmount}
+                  onChange={handleChange}
+                  className={inputClass}
+                  placeholder="0.00"
+                />
+              )}
+            </FormField>
+            <FormField
+              id="matchSource"
+              label="Match Source"
+              error={fieldError('matchSource')}
+              maxLength={MAX_LENGTH.matchSource}
+              count={MAX_LENGTH.matchSource ? formData.matchSource.length : undefined}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  name="matchSource"
+                  type="text"
+                  value={formData.matchSource}
+                  onChange={handleChange}
+                  className={inputClass}
+                  placeholder="e.g. Municipal budget"
+                />
+              )}
+            </FormField>
+            <FormField
+              id="federalAwardId"
+              label="Federal Award ID"
+              error={fieldError('federalAwardId')}
+              maxLength={MAX_LENGTH.federalAwardId}
+              count={MAX_LENGTH.federalAwardId ? formData.federalAwardId.length : undefined}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  name="federalAwardId"
+                  type="text"
+                  value={formData.federalAwardId}
+                  onChange={handleChange}
+                  className={inputClass}
+                  placeholder="e.g. EMW-2025-FO-00123"
+                />
+              )}
+            </FormField>
           </div>
         </div>
 
@@ -583,86 +686,84 @@ export const GrantApplicationFormPage: React.FC = () => {
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Dates</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <label htmlFor="applicationDeadline" className={labelClass}>
-                Application Deadline
-              </label>
-              <input
-                id="applicationDeadline"
-                name="applicationDeadline"
-                type="date"
-                value={formData.applicationDeadline}
-                onChange={handleChange}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="submittedDate" className={labelClass}>
-                Submitted
-              </label>
-              <input
-                id="submittedDate"
-                name="submittedDate"
-                type="date"
-                value={formData.submittedDate}
-                onChange={handleChange}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="awardDate" className={labelClass}>
-                Award Date
-              </label>
-              <input
-                id="awardDate"
-                name="awardDate"
-                type="date"
-                value={formData.awardDate}
-                onChange={handleChange}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="grantStartDate" className={labelClass}>
-                Grant Start Date
-              </label>
-              <input
-                id="grantStartDate"
-                name="grantStartDate"
-                type="date"
-                value={formData.grantStartDate}
-                onChange={handleChange}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="grantEndDate" className={labelClass}>
-                Grant End Date
-              </label>
-              <input
-                id="grantEndDate"
-                name="grantEndDate"
-                type="date"
-                value={formData.grantEndDate}
-                onChange={handleChange}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="performancePeriodMonths" className={labelClass}>
-                Performance Period (months)
-              </label>
-              <input
-                id="performancePeriodMonths"
-                name="performancePeriodMonths"
-                type="number"
-                min="0"
-                value={formData.performancePeriodMonths}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="12"
-              />
-            </div>
+            <FormField id="applicationDeadline" label="Application Deadline" error={fieldError('applicationDeadline')}>
+              {(field) => (
+                <input
+                  {...field}
+                  name="applicationDeadline"
+                  type="date"
+                  value={formData.applicationDeadline}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
+            <FormField id="submittedDate" label="Submitted" error={fieldError('submittedDate')}>
+              {(field) => (
+                <input
+                  {...field}
+                  name="submittedDate"
+                  type="date"
+                  value={formData.submittedDate}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
+            <FormField id="awardDate" label="Award Date" error={fieldError('awardDate')}>
+              {(field) => (
+                <input
+                  {...field}
+                  name="awardDate"
+                  type="date"
+                  value={formData.awardDate}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
+            <FormField id="grantStartDate" label="Grant Start Date" error={fieldError('grantStartDate')}>
+              {(field) => (
+                <input
+                  {...field}
+                  name="grantStartDate"
+                  type="date"
+                  value={formData.grantStartDate}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
+            <FormField id="grantEndDate" label="Grant End Date" error={fieldError('grantEndDate')}>
+              {(field) => (
+                <input
+                  {...field}
+                  name="grantEndDate"
+                  type="date"
+                  value={formData.grantEndDate}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
+            <FormField
+              id="performancePeriodMonths"
+              label="Performance Period (months)"
+              error={fieldError('performancePeriodMonths')}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  name="performancePeriodMonths"
+                  type="number"
+                  min="0"
+                  value={formData.performancePeriodMonths}
+                  onChange={handleChange}
+                  className={inputClass}
+                  placeholder="12"
+                />
+              )}
+            </FormField>
           </div>
         </div>
 
@@ -670,51 +771,48 @@ export const GrantApplicationFormPage: React.FC = () => {
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Reporting</h2>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <div>
-              <label htmlFor="reportingFrequency" className={labelClass}>
-                Reporting Frequency
-              </label>
-              <select
-                id="reportingFrequency"
-                name="reportingFrequency"
-                value={formData.reportingFrequency}
-                onChange={handleChange}
-                className={selectClass}
-              >
-                <option value="">Select frequency</option>
-                {REPORTING_FREQUENCY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="nextReportDue" className={labelClass}>
-                Next Report Due
-              </label>
-              <input
-                id="nextReportDue"
-                name="nextReportDue"
-                type="date"
-                value={formData.nextReportDue}
-                onChange={handleChange}
-                className={inputClass}
-              />
-            </div>
-            <div>
-              <label htmlFor="finalReportDue" className={labelClass}>
-                Final Report Due
-              </label>
-              <input
-                id="finalReportDue"
-                name="finalReportDue"
-                type="date"
-                value={formData.finalReportDue}
-                onChange={handleChange}
-                className={inputClass}
-              />
-            </div>
+            <FormField id="reportingFrequency" label="Reporting Frequency" error={fieldError('reportingFrequency')}>
+              {(field) => (
+                <select
+                  {...field}
+                  name="reportingFrequency"
+                  value={formData.reportingFrequency}
+                  onChange={handleChange}
+                  className={selectClass}
+                >
+                  <option value="">Select frequency</option>
+                  {REPORTING_FREQUENCY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            <FormField id="nextReportDue" label="Next Report Due" error={fieldError('nextReportDue')}>
+              {(field) => (
+                <input
+                  {...field}
+                  name="nextReportDue"
+                  type="date"
+                  value={formData.nextReportDue}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
+            <FormField id="finalReportDue" label="Final Report Due" error={fieldError('finalReportDue')}>
+              {(field) => (
+                <input
+                  {...field}
+                  name="finalReportDue"
+                  type="date"
+                  value={formData.finalReportDue}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
           </div>
         </div>
 
@@ -722,34 +820,32 @@ export const GrantApplicationFormPage: React.FC = () => {
         <div className="card p-6">
           <h2 className="text-theme-text-primary mb-4 font-semibold">Project Details</h2>
           <div className="space-y-4">
-            <div>
-              <label htmlFor="projectDescription" className={labelClass}>
-                Project Description
-              </label>
-              <textarea
-                id="projectDescription"
-                name="projectDescription"
-                rows={4}
-                value={formData.projectDescription}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="Describe the project this grant will fund..."
-              />
-            </div>
-            <div>
-              <label htmlFor="narrativeSummary" className={labelClass}>
-                Narrative Summary
-              </label>
-              <textarea
-                id="narrativeSummary"
-                name="narrativeSummary"
-                rows={4}
-                value={formData.narrativeSummary}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="Executive summary of the grant narrative..."
-              />
-            </div>
+            <FormField id="projectDescription" label="Project Description" error={fieldError('projectDescription')}>
+              {(field) => (
+                <textarea
+                  {...field}
+                  name="projectDescription"
+                  rows={4}
+                  value={formData.projectDescription}
+                  onChange={handleChange}
+                  className={inputClass}
+                  placeholder="Describe the project this grant will fund..."
+                />
+              )}
+            </FormField>
+            <FormField id="narrativeSummary" label="Narrative Summary" error={fieldError('narrativeSummary')}>
+              {(field) => (
+                <textarea
+                  {...field}
+                  name="narrativeSummary"
+                  rows={4}
+                  value={formData.narrativeSummary}
+                  onChange={handleChange}
+                  className={inputClass}
+                  placeholder="Executive summary of the grant narrative..."
+                />
+              )}
+            </FormField>
             <fieldset>
               <legend className={labelClass}>Budget Summary</legend>
               <p className="text-theme-text-muted mb-2 text-xs">
@@ -787,7 +883,11 @@ export const GrantApplicationFormPage: React.FC = () => {
                 onChange={(e) => setBudgetNotes(e.target.value)}
                 className={inputClass}
               />
-              {errors.budgetSummary && <p className="mt-1 text-xs text-red-500">{errors.budgetSummary}</p>}
+              {errors.budgetSummary && (
+                <p role="alert" className="mt-1 text-sm text-red-800 dark:text-red-300">
+                  {errors.budgetSummary}
+                </p>
+              )}
             </fieldset>
             <fieldset>
               <legend className={labelClass}>Key Contacts</legend>
@@ -851,22 +951,25 @@ export const GrantApplicationFormPage: React.FC = () => {
                 <Plus className="h-4 w-4" aria-hidden="true" />
                 Add contact
               </button>
-              {errors.keyContacts && <p className="mt-1 text-xs text-red-500">{errors.keyContacts}</p>}
+              {errors.keyContacts && (
+                <p role="alert" className="mt-1 text-sm text-red-800 dark:text-red-300">
+                  {errors.keyContacts}
+                </p>
+              )}
             </fieldset>
-            <div>
-              <label htmlFor="notes" className={labelClass}>
-                Notes
-              </label>
-              <textarea
-                id="notes"
-                name="notes"
-                rows={3}
-                value={formData.notes}
-                onChange={handleChange}
-                className={inputClass}
-                placeholder="Internal notes about this application..."
-              />
-            </div>
+            <FormField id="notes" label="Notes" error={fieldError('notes')}>
+              {(field) => (
+                <textarea
+                  {...field}
+                  name="notes"
+                  rows={3}
+                  value={formData.notes}
+                  onChange={handleChange}
+                  className={inputClass}
+                  placeholder="Internal notes about this application..."
+                />
+              )}
+            </FormField>
           </div>
         </div>
 

@@ -10,6 +10,7 @@ import type {
   Event,
   EventAttendee,
   EventCancel,
+  EventPostpone,
   EventCreate,
   EventListItem,
   EventStats,
@@ -148,6 +149,14 @@ export const eventService = {
    */
   async cancelEvent(eventId: string, cancelData: EventCancel): Promise<Event> {
     const response = await api.post<Event>(`/events/${eventId}/cancel`, cancelData);
+    return response.data;
+  },
+
+  /**
+   * Postpone an event to a new time: clears its check-ins, keeps its RSVPs
+   */
+  async postponeEvent(eventId: string, data: EventPostpone): Promise<Event> {
+    const response = await api.post<Event>(`/events/${eventId}/postpone`, data);
     return response.data;
   },
 

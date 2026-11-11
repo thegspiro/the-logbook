@@ -33,9 +33,9 @@ const exception = (overrides: Partial<IPException> = {}): IPException => ({
 });
 
 const fill = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.type(screen.getByLabelText('IP Address'), '999.1.1.1');
-  await user.selectOptions(screen.getByLabelText('Use Case'), 'travel');
-  await user.type(screen.getByLabelText('Justification'), 'At a conference in Denver');
+  await user.type(screen.getByLabelText(/^IP Address/), '999.1.1.1');
+  await user.selectOptions(screen.getByLabelText(/^Use Case/), 'travel');
+  await user.type(screen.getByLabelText(/^Justification/), 'At a conference in Denver');
   await user.click(screen.getByRole('button', { name: 'Submit Request' }));
 };
 
@@ -48,8 +48,8 @@ describe('IPExceptionRequestForm (W74)', () => {
     await fill(user);
 
     expect(onSubmit).toHaveBeenCalled();
-    expect(screen.getByLabelText('Use Case')).toHaveValue('travel');
-    expect(screen.getByLabelText('Justification')).toHaveValue('At a conference in Denver');
+    expect(screen.getByLabelText(/^Use Case/)).toHaveValue('travel');
+    expect(screen.getByLabelText(/^Justification/)).toHaveValue('At a conference in Denver');
   });
 
   it('clears once the request is filed', async () => {
@@ -59,7 +59,7 @@ describe('IPExceptionRequestForm (W74)', () => {
 
     await fill(user);
 
-    expect(screen.getByLabelText('Justification')).toHaveValue('');
+    expect(screen.getByLabelText(/^Justification/)).toHaveValue('');
   });
 });
 

@@ -2,14 +2,15 @@
  * CreateFacilityModal — Modal dialog for adding a new facility.
  */
 
-import { useState } from 'react';
-import { useDialog } from '../../../hooks/useDialog';
-import { X, Loader2 } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { organizationEmailError } from '../../../utils/organizationProfile';
-import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
-import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import type { FacilityCreate } from '../../../services/facilitiesServices';
 import type { Facility, FacilityType, FacilityStatus } from '../types';
 
@@ -52,8 +53,6 @@ const FACILITY_LIMITS = {
   email: 200,
 } as const;
 
-const LABEL_CLASS = 'text-theme-text-secondary mb-1 block text-sm font-medium';
-
 interface Props {
   facilityTypes: FacilityType[];
   facilityStatuses: FacilityStatus[];
@@ -61,40 +60,44 @@ interface Props {
   onCreated: (facility: Facility) => void;
 }
 
-export default function CreateFacilityModal({ facilityTypes, facilityStatuses, onClose, onCreated }: Props) {
-  const dialogRef = useDialog<HTMLDivElement>({ onClose });
+const EMPTY: Record<FacilityField, string> = {
+  name: '',
+  facility_number: '',
+  address_line1: '',
+  city: '',
+  state: '',
+  zip_code: '',
+  phone: '',
+  email: '',
+  facility_type_id: '',
+  status_id: '',
+  notes: '',
+};
 
+export default function CreateFacilityModal({ facilityTypes, facilityStatuses, onClose, onCreated }: Props) {
   const { createFacility } = useFacilitiesStore();
   const [isCreating, setIsCreating] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    facility_number: '',
-    address_line1: '',
-    city: '',
-    state: '',
-    zip_code: '',
-    facility_type_id: '',
-    status_id: '',
-    phone: '',
-    email: '',
-    notes: '',
-  });
+  const [formData, setFormData] = useState(EMPTY);
+  // The dialog mounts empty each time it opens, so anything typed is a change
+  // that Escape, the X and Cancel ask about first (forms review F-6).
+  const isDirty = (Object.keys(EMPTY) as FacilityField[]).some((k) => formData[k] !== EMPTY[k]);
+  const requestClose = useDiscardGuard({ isDirty, onClose });
 
   const fieldErrors = useFieldErrors(FACILITY_FIELDS);
   const setField = (field: FacilityField, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     fieldErrors.setError(field, null);
   };
-  // The modal submits from a button rather than a form, so type="email" is
-  // never checked by the browser, and the server accepts any string. Shown
-  // as it is typed; a server refusal of the address takes its place.
+  // The server accepts any string as the address, so the form checks it.
+  // Shown as it is typed; a server refusal of the address takes its place.
   const emailError = organizationEmailError(formData.email);
   const errors: FieldErrors<FacilityField> = {
     ...fieldErrors.errors,
     ...(emailError ? { email: emailError } : {}),
   };
 
-  const handleCreate = async () => {
+  const handleCreate = async (e: FormEvent) => {
+    e.preventDefault();
     // Checked here rather than by greying out Add Facility, which told an
     // officer nothing about why it would not press (forms review F-3).
     const problems: FieldErrors<FacilityField> = {};
@@ -127,262 +130,259 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
       toast.success('Facility created');
       onCreated(facility);
     } catch (err: unknown) {
+      // Nothing is created until a refused field is fixed (forms review F-2).
       fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to create facility'));
     } finally {
       setIsCreating(false);
     }
   };
 
+  // autoComplete is off throughout: these are the station's address and
+  // contacts, and the browser would offer the member's own.
   const inputCls = 'form-input py-2.5';
 
   return (
-    <div
-      className="modal-overlay z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-facility-title"
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
-    >
-      <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-md overflow-y-auto">
-        <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-          <h2 id="create-facility-title" className="text-theme-text-primary text-lg font-bold">
+    <Modal
+      isOpen
+      onClose={requestClose}
+      title="Add Facility"
+      titleId="create-facility-title"
+      size="md"
+      onSubmit={(e) => void handleCreate(e)}
+      noValidate
+      footer={
+        <>
+          <button type="submit" disabled={isCreating} className="btn-primary flex items-center gap-2 px-5">
+            {isCreating && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
             Add Facility
-          </h2>
+          </button>
           <button
             type="button"
-            data-dialog-close
-            onClick={onClose}
-            className="text-theme-text-muted hover:text-theme-text-primary transition-colors"
-            aria-label="Close dialog"
-          >
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="space-y-4 p-6">
-          <FormField
-            id={FACILITY_FIELDS.name.id}
-            label="Name"
-            required
-            labelClassName={LABEL_CLASS}
-            error={errors.name}
-          >
-            {(field) => (
-              <input
-                {...field}
-                type="text"
-                value={formData.name}
-                maxLength={FACILITY_LIMITS.name}
-                onChange={(e) => setField('name', e.target.value)}
-                placeholder="e.g., Station 1"
-                className={inputCls}
-                autoFocus
-              />
-            )}
-          </FormField>
-
-          <FormField
-            id={FACILITY_FIELDS.facility_number.id}
-            label="Facility Number"
-            labelClassName={LABEL_CLASS}
-            error={errors.facility_number}
-          >
-            {(field) => (
-              <input
-                {...field}
-                type="text"
-                value={formData.facility_number}
-                maxLength={FACILITY_LIMITS.facility_number}
-                onChange={(e) => setField('facility_number', e.target.value)}
-                placeholder="e.g., STA-01"
-                className={inputCls}
-              />
-            )}
-          </FormField>
-
-          <FormField
-            id={FACILITY_FIELDS.address_line1.id}
-            label="Address"
-            labelClassName={LABEL_CLASS}
-            error={errors.address_line1}
-          >
-            {(field) => (
-              <input
-                {...field}
-                type="text"
-                value={formData.address_line1}
-                maxLength={FACILITY_LIMITS.address_line1}
-                onChange={(e) => setField('address_line1', e.target.value)}
-                placeholder="123 Main St"
-                className={inputCls}
-              />
-            )}
-          </FormField>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <FormField id={FACILITY_FIELDS.city.id} label="City" labelClassName={LABEL_CLASS} error={errors.city}>
-              {(field) => (
-                <input
-                  {...field}
-                  type="text"
-                  value={formData.city}
-                  maxLength={FACILITY_LIMITS.city}
-                  onChange={(e) => setField('city', e.target.value)}
-                  className={inputCls}
-                />
-              )}
-            </FormField>
-            <FormField id={FACILITY_FIELDS.state.id} label="State" labelClassName={LABEL_CLASS} error={errors.state}>
-              {(field) => (
-                <input
-                  {...field}
-                  type="text"
-                  value={formData.state}
-                  maxLength={FACILITY_LIMITS.state}
-                  onChange={(e) => setField('state', e.target.value)}
-                  className={inputCls}
-                />
-              )}
-            </FormField>
-            <FormField
-              id={FACILITY_FIELDS.zip_code.id}
-              label="Zip Code"
-              labelClassName={LABEL_CLASS}
-              error={errors.zip_code}
-            >
-              {(field) => (
-                <input
-                  {...field}
-                  type="text"
-                  value={formData.zip_code}
-                  maxLength={FACILITY_LIMITS.zip_code}
-                  onChange={(e) => setField('zip_code', e.target.value)}
-                  className={inputCls}
-                />
-              )}
-            </FormField>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <FormField id={FACILITY_FIELDS.phone.id} label="Phone" labelClassName={LABEL_CLASS} error={errors.phone}>
-              {(field) => (
-                <input
-                  {...field}
-                  type="tel"
-                  value={formData.phone}
-                  maxLength={FACILITY_LIMITS.phone}
-                  onChange={(e) => setField('phone', e.target.value)}
-                  placeholder="(555) 123-4567"
-                  className={inputCls}
-                />
-              )}
-            </FormField>
-            <FormField id={FACILITY_FIELDS.email.id} label="Email" labelClassName={LABEL_CLASS} error={errors.email}>
-              {(field) => (
-                <input
-                  {...field}
-                  type="email"
-                  value={formData.email}
-                  maxLength={FACILITY_LIMITS.email}
-                  onChange={(e) => setField('email', e.target.value)}
-                  placeholder="station@example.com"
-                  className={inputCls}
-                />
-              )}
-            </FormField>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {facilityTypes.length > 0 && (
-              <FormField
-                id={FACILITY_FIELDS.facility_type_id.id}
-                label="Type"
-                labelClassName={LABEL_CLASS}
-                error={errors.facility_type_id}
-              >
-                {(field) => (
-                  <select
-                    {...field}
-                    value={formData.facility_type_id}
-                    onChange={(e) => setField('facility_type_id', e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">Select type...</option>
-                    {facilityTypes.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </FormField>
-            )}
-            {facilityStatuses.length > 0 && (
-              <FormField
-                id={FACILITY_FIELDS.status_id.id}
-                label="Status"
-                labelClassName={LABEL_CLASS}
-                error={errors.status_id}
-              >
-                {(field) => (
-                  <select
-                    {...field}
-                    value={formData.status_id}
-                    onChange={(e) => setField('status_id', e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">Select status...</option>
-                    {facilityStatuses.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </FormField>
-            )}
-          </div>
-
-          <FormField id={FACILITY_FIELDS.notes.id} label="Notes" labelClassName={LABEL_CLASS} error={errors.notes}>
-            {(field) => (
-              <textarea
-                {...field}
-                value={formData.notes}
-                onChange={(e) => setField('notes', e.target.value)}
-                rows={3}
-                placeholder="Optional notes..."
-                className={inputCls + ' resize-none'}
-              />
-            )}
-          </FormField>
-          {fieldErrors.formError && (
-            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
-              {fieldErrors.formError}
-            </p>
-          )}
-        </div>
-
-        <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-          <button
-            onClick={onClose}
+            onClick={requestClose}
             className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
           >
             Cancel
           </button>
-          <button
-            onClick={() => {
-              void handleCreate();
-            }}
-            disabled={isCreating}
-            className="btn-primary flex items-center gap-2 px-5"
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <FormField
+          label="Name"
+          required
+          error={errors.name}
+          id={FACILITY_FIELDS.name.id}
+          maxLength={FACILITY_LIMITS.name}
+          count={formData.name.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              className={inputCls}
+              type="text"
+              placeholder="e.g., Station 1"
+              autoFocus
+              value={formData.name}
+              onChange={(e) => setField('name', e.target.value)}
+            />
+          )}
+        </FormField>
+        <FormField
+          label="Facility Number"
+          error={errors.facility_number}
+          id={FACILITY_FIELDS.facility_number.id}
+          maxLength={FACILITY_LIMITS.facility_number}
+          count={formData.facility_number.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              className={inputCls}
+              type="text"
+              placeholder="e.g., STA-01"
+              autoComplete="off"
+              value={formData.facility_number}
+              onChange={(e) => setField('facility_number', e.target.value)}
+            />
+          )}
+        </FormField>
+        <FormField
+          label="Address"
+          error={errors.address_line1}
+          id={FACILITY_FIELDS.address_line1.id}
+          maxLength={FACILITY_LIMITS.address_line1}
+          count={formData.address_line1.length}
+        >
+          {(field) => (
+            <input
+              {...field}
+              className={inputCls}
+              type="text"
+              placeholder="123 Main St"
+              autoComplete="off"
+              value={formData.address_line1}
+              onChange={(e) => setField('address_line1', e.target.value)}
+            />
+          )}
+        </FormField>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <FormField
+            label="City"
+            error={errors.city}
+            id={FACILITY_FIELDS.city.id}
+            maxLength={FACILITY_LIMITS.city}
+            count={formData.city.length}
           >
-            {isCreating && <Loader2 className="h-4 w-4 animate-spin" />}
-            Add Facility
-          </button>
+            {(field) => (
+              <input
+                {...field}
+                className={inputCls}
+                type="text"
+                autoComplete="off"
+                value={formData.city}
+                onChange={(e) => setField('city', e.target.value)}
+              />
+            )}
+          </FormField>
+          <FormField
+            label="State"
+            error={errors.state}
+            id={FACILITY_FIELDS.state.id}
+            maxLength={FACILITY_LIMITS.state}
+            count={formData.state.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                className={inputCls}
+                type="text"
+                autoComplete="off"
+                value={formData.state}
+                onChange={(e) => setField('state', e.target.value)}
+              />
+            )}
+          </FormField>
+          <FormField
+            label="Zip Code"
+            error={errors.zip_code}
+            id={FACILITY_FIELDS.zip_code.id}
+            maxLength={FACILITY_LIMITS.zip_code}
+            count={formData.zip_code.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                className={inputCls}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={formData.zip_code}
+                onChange={(e) => setField('zip_code', e.target.value)}
+              />
+            )}
+          </FormField>
         </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <FormField
+            label="Phone"
+            error={errors.phone}
+            id={FACILITY_FIELDS.phone.id}
+            maxLength={FACILITY_LIMITS.phone}
+            count={formData.phone.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                className={inputCls}
+                type="tel"
+                placeholder="(555) 123-4567"
+                autoComplete="off"
+                value={formData.phone}
+                onChange={(e) => setField('phone', e.target.value)}
+              />
+            )}
+          </FormField>
+          <FormField
+            label="Email"
+            error={errors.email}
+            id={FACILITY_FIELDS.email.id}
+            maxLength={FACILITY_LIMITS.email}
+            count={formData.email.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                className={inputCls}
+                type="email"
+                placeholder="station@example.com"
+                autoComplete="off"
+                value={formData.email}
+                onChange={(e) => setField('email', e.target.value)}
+              />
+            )}
+          </FormField>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          {facilityTypes.length > 0 && (
+            <FormField label="Type" error={errors.facility_type_id} id={FACILITY_FIELDS.facility_type_id.id}>
+              {(field) => (
+                <select
+                  {...field}
+                  className={inputCls}
+                  value={formData.facility_type_id}
+                  onChange={(e) => setField('facility_type_id', e.target.value)}
+                >
+                  <option value="">Select type...</option>
+                  {facilityTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+          )}
+          {facilityStatuses.length > 0 && (
+            <FormField label="Status" error={errors.status_id} id={FACILITY_FIELDS.status_id.id}>
+              {(field) => (
+                <select
+                  {...field}
+                  className={inputCls}
+                  value={formData.status_id}
+                  onChange={(e) => setField('status_id', e.target.value)}
+                >
+                  <option value="">Select status...</option>
+                  {facilityStatuses.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+          )}
+        </div>
+        <FormField label="Notes" error={errors.notes} id={FACILITY_FIELDS.notes.id}>
+          {(field) => (
+            <textarea
+              {...field}
+              className={inputCls + ' resize-none'}
+              rows={3}
+              placeholder="Optional notes..."
+              value={formData.notes}
+              onChange={(e) => setField('notes', e.target.value)}
+            />
+          )}
+        </FormField>
+        {fieldErrors.formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {fieldErrors.formError}
+          </p>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 }

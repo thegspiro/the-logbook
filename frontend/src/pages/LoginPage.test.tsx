@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
@@ -18,19 +19,26 @@ let mockMfaRequired = false;
 let mockMfaToken: string | null = null;
 let mockLoginLockouts: Record<string, { attempts: number; lockedUntil: number | null }> = {};
 const mockCompleteMfaLogin = vi.fn();
+const mockLogin = vi.fn();
+// The user the store holds once a sign-in completes; the page reads it through
+// getState to decide where to land (forms review F-10).
+let mockSignedInUser: Record<string, unknown> | null = null;
 vi.mock('../stores/authStore', () => ({
-  useAuthStore: () => ({
-    login: vi.fn(),
-    completeMfaLogin: (...a: unknown[]) => mockCompleteMfaLogin(...a) as unknown,
-    cancelMfa: vi.fn(),
-    mfaRequired: mockMfaRequired,
-    mfaToken: mockMfaToken,
-    isLoading: false,
-    isAuthenticated: false,
-    error: null,
-    clearError: vi.fn(),
-    loginLockouts: mockLoginLockouts,
-  }),
+  useAuthStore: Object.assign(
+    () => ({
+      login: (...a: unknown[]) => mockLogin(...a) as unknown,
+      completeMfaLogin: (...a: unknown[]) => mockCompleteMfaLogin(...a) as unknown,
+      cancelMfa: vi.fn(),
+      mfaRequired: mockMfaRequired,
+      mfaToken: mockMfaToken,
+      isLoading: false,
+      isAuthenticated: false,
+      error: null,
+      clearError: vi.fn(),
+      loginLockouts: mockLoginLockouts,
+    }),
+    { getState: () => ({ user: mockSignedInUser, mfaRequired: mockMfaRequired }) }
+  ),
   lockedUntilFor: (lockouts: Record<string, { lockedUntil: number | null }>, username: string) => {
     const until = lockouts[username.trim().toLowerCase()]?.lockedUntil ?? null;
     return until !== null && Date.now() < until ? until : null;
@@ -217,6 +225,7 @@ describe('LoginPage passkey second factor', () => {
     mockAssertion.mockReset();
     mockAssertion.mockResolvedValue({ id: 'cred-1', response: {} });
     mockCompleteMfaLogin.mockReset();
+    mockSignedInUser = null;
     mockCompleteMfaLogin.mockResolvedValue(undefined);
     mockMfaRequired = true;
     mockMfaToken = 'pending-token';
@@ -248,6 +257,19 @@ describe('LoginPage passkey second factor', () => {
     );
     expect(mockAssertion).toHaveBeenCalledWith(options);
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/dashboard', { replace: true }));
+  });
+
+  it('lands a member who must change their password on /account, not the dashboard (forms review F-10)', async () => {
+    mockMfaChallenge.mockResolvedValue({ totp: false, passkey_options: options });
+    mockSignedInUser = { id: 'u-1', must_change_password: true, password_expired: false };
+    renderLogin();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Use your passkey' }));
+
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('/account', { replace: true, state: { forcePasswordChange: true } })
+    );
+    expect(mockNavigate).not.toHaveBeenCalledWith('/dashboard', expect.anything());
   });
 
   it('offers the passkey and the code to a member with both', async () => {
@@ -309,6 +331,7 @@ describe('LoginPage return after an expired session', () => {
     mockAssertion.mockReset();
     mockAssertion.mockResolvedValue({ id: 'cred-1', response: {} });
     mockCompleteMfaLogin.mockReset();
+    mockSignedInUser = null;
     mockCompleteMfaLogin.mockResolvedValue(undefined);
     mockMfaRequired = true;
     mockMfaToken = 'pending-token';
@@ -402,5 +425,32 @@ describe('LoginPage wait after failed sign-ins', () => {
 
     fireEvent.change(username, { target: { value: 'review_member' } });
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled();
+  });
+});
+
+describe('LoginPage failed sign-in', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockLogin.mockReset();
+    mockLogin.mockRejectedValue(new Error('Invalid credentials'));
+    mockGet.mockReset();
+    mockGet.mockImplementation((url: string) =>
+      url === '/api/v1/onboarding/status'
+        ? Promise.resolve({ data: { needs_onboarding: false } })
+        : Promise.reject(new Error('not mocked'))
+    );
+  });
+
+  it('puts focus back on the password, selected, so it can be retyped (forms review F-11)', async () => {
+    const user = userEvent.setup();
+    renderLogin();
+    await user.type(await screen.findByLabelText('Username or Email'), 'review_member');
+    const password = screen.getByLabelText('Password');
+    await user.type(password, 'wrong-password{Enter}');
+
+    await waitFor(() => expect(password).toHaveFocus());
+    const field = password as HTMLInputElement;
+    expect(field.selectionStart).toBe(0);
+    expect(field.selectionEnd).toBe('wrong-password'.length);
   });
 });

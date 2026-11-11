@@ -1,6 +1,171 @@
 # Security Review — Forms
 
-**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11), 2026-11-03 (pass 12) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+**Prefix:** `FORM` · **Iteration:** 26 · **Reviewed:** 2026-08-27 (pass 1), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4), 2026-10-03 (pass 5), 2026-10-07 (pass 6), 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27 (pass 10), 2026-10-30 (pass 11), 2026-11-03 (pass 12), 2026-11-11 (pass 13) · **PR:** [#1908](https://github.com/thegspiro/the-logbook/pull/1908) (pass 1), [#2085](https://github.com/thegspiro/the-logbook/pull/2085) (pass 2)
+
+---
+
+## Pass 13 (2026-11-11) — a correctness fix that removes an escaping layer, verified safe at every consumer; 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup:** the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents`, "No
+reachable agents"). PR #4233 (Feature 25, Messaging & notifications, pass 13)
+had already merged clean (`81093040b3d6784feb83fac8bab198a96d339c1e`, CI
+green 26/26, no conflicts, no open review threads bar the usual Codex
+quota-limit comment). A fresh `list_pull_requests` (state `open`) found no
+PR with a `claude/security-review-*` head, and row 26 was the next pending
+feature, confirmed on a freshly fetched `main`.
+
+**Scope:** loaded prior art (`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/module-audit/forms.md`, `docs/app-review/forms.md`, this file's passes
+1-12) before touching code. Baseline: pass 12's merge (`12f1430d2`). `git log
+12f1430d2..HEAD` on the six declared backend scope files
+(`endpoints/forms.py`, `api/public/forms.py`, `forms_service.py`,
+`models/forms.py`, `schemas/forms.py`, `utils/embed_origins.py`) shows real
+content only in `forms_service.py` (+23/-13); the other five are
+byte-identical (confirmed by `git diff --stat`, empty for all five). On the
+frontend surface (`modules/forms/`, `components/forms/`,
+`pages/PublicFormPage.tsx`, `pages/FormsPage.tsx`) there is real content in
+`components/forms/FieldRenderer.tsx` (+6/-1, plus a new
+`FieldRenderer.ranks.test.tsx`) and `pages/FormsPage.tsx` (+102/-64).
+
+**Git-history artifact, noted rather than re-investigated (same class as
+`MSG-25-messaging-notifications.md`'s `a87067dfe` note):** `git log` on
+`forms_service.py` and `FieldRenderer.tsx` since the baseline attributes both
+diffs only to `5787d3eda` ("Merge pull request #4057 ... Card Readers: stop
+repeating a facility room's building in its name") — an unrelated PR title,
+and a commit with no resolvable second parent in this shallow/grafted
+history, matching every prior pass's standing note that this repository's
+squashed/grafted history makes git-blame on this module's files unreliable
+beyond a point. The diffs were verified by direct content reading, not by
+trusting the attribution.
+
+- **`forms_service.py` — `_create_prospect_from_submission`'s metadata/PII
+  build (`forms_service.py:2614-2653`) now `html_lib.unescape()`s every
+  string value of `mapped_data` before it is written into
+  `ProspectiveMember.first_name`/`last_name`/`email`/`phone`/`mobile`/
+  `date_of_birth`/`address_*`/`interest_reason`/`referral_source`/
+  `metadata_`, per the function's own new comment: answers are HTML-escaped
+  once at submission storage (`_sanitize_submission_data:393`, "HTML-escape
+  to prevent stored XSS") and copying that escaped text verbatim into the
+  applicant record made `O'Brien` read `O&#x27;Brien` on every pipeline
+  screen and in emails — this removes that display bug by decoding exactly
+  the one escaping layer that was applied.**
+
+  Removing an escaping layer is exactly the shape of change this checklist's
+  dimension 4 (injection) exists to catch, so it was traced to every place
+  the now-unescaped value is later rendered, not accepted on the commit
+  message:
+  - **Frontend:** `grep -rn dangerouslySetInnerHTML` under
+    `frontend/src/modules/membership-pipeline/`,
+    `frontend/src/pages/*Prospect*`, `frontend/src/components/*rospect*` —
+    zero matches. `ProspectiveMember` fields and `metadata_` (serialized as
+    `metadata` — `schemas/membership_pipeline.py:443`) reach the UI as plain
+    JSON and are rendered as ordinary React text children, which escape on
+    their own; unescaping before storage is what makes that default escaping
+    produce the right on-screen character instead of a visible entity.
+  - **Email:** no Jinja2 template references `prospect`/`first_name`
+    (`grep` across `backend/app/templates/` and every `*email*`/
+    `*notification*` service file for a `jinja2`/`Environment(` import:
+    none — this backend does not use Jinja2 for email despite
+    `CLAUDE.md`'s tech-stack line; templates are the DB-backed
+    `EmailTemplate` model, rendered by `EmailTemplateService.render`/
+    `_replace_variables`). Read `_replace_variables`
+    (`email_template_service.py:4973-5003`) in full: every `{{var}}`
+    substituted into `html_body` is `html.escape()`d unless the variable name
+    is in `_RAW_HTML_VARIABLES` (system-generated HTML only — logos, item
+    tables — never a name field), and that escaping is independent of
+    whatever escaping the value already carried. So a prospect's name
+    reaching an HTML email is escaped again at the point it is embedded,
+    regardless of this fix; the fix only changes what a non-HTML consumer
+    (the API response, a React text node) sees.
+  - **No CSV export:** `grep` for `csv`/`Blob(` scoped to
+    `frontend/src/modules/membership-pipeline/**/*.tsx` and for
+    `SafeCsvWriter`/`csv.writer` in `membership_pipeline_service.py`/
+    `membership_pipeline.py` (the endpoint file) — no matches; this data has
+    no CSV export path to re-check against Pitfall #15.
+
+  **Conclusion:** correctness-only, as the commit describes. The escaping
+  this removes was never load-bearing for anything downstream of
+  `ProspectiveMember` — it was a display bug caused by double-handling one
+  escaping layer meant only for the submission's own stored-XSS defense.
+  No finding.
+
+- **`FieldRenderer.tsx` — `useRanks(true, { enabled: field.field_type ===
+FieldType.MEMBER_LOOKUP })`** replaces an unconditional `useRanks()` call.
+  Only the `MEMBER_LOOKUP` field type's rank-formatting needs the ladder, and
+  the same component renders unauthenticated on the public follow-up form
+  (opened signed out from an emailed link, per Feature 08/Membership
+  pipeline's own token-scoped surface noted in pass 11) — an unconditional
+  call fired `GET /operational-ranks` there too, which answers 401 and the
+  shared axios instance's response interceptor sends a signed-out visitor to
+  `/login`, so the follow-up form could 401-redirect away from itself on load
+  for fields that never needed ranks at all.
+
+  Read `useRanks`'s own `enabled` option (`hooks/useRanks.ts:10-18,91-93`) —
+  this is a pre-existing, already-documented contract (`UseRanksOptions`'s
+  own docstring: "`/operational-ranks` needs a session, and a 401 from it
+  sends a signed-out visitor to /login"), and its `useEffect` guards the
+  fetch with `if (!enabled) return;` before any call is made — `enabled:
+false` suppresses the request outright, not merely the loading UI. No new
+  surface, no weakened check: this is the existing public-page escape hatch
+  applied to a field renderer that had not yet used it, with a new
+  `FieldRenderer.ranks.test.tsx` covering the gate. No finding.
+
+- **`FormsPage.tsx` (+102/-64)** — a forms-review UX pass on the Create Form
+  modal: `FormField`/`useFieldErrors` (CLAUDE.md's standard form-field
+  pattern) replace hand-rolled labels/inputs, a client-side name-required
+  check now shows an inline error and focuses the field instead of silently
+  no-opping the disabled Create button (forms review F-3,
+  `76fa2c8fb`/`ccr-b89290be-forms-batch3`'s merge), `maxLength={255}` mirrors
+  `FormBase.name`'s existing column/schema limit client-side, and the page
+  header moved to the shared `AdminPageHeader` component (the repo-wide admin
+  page-header sweep, `580e7aa5d`/`aad90537c` — cosmetic, unrelated to this
+  feature's own content). Same `formsService.createForm` call, same payload
+  shape, no new client-supplied id, no permission change. No finding.
+
+### Route inventory (re-enumerated by AST, not diffed)
+
+Re-ran the AST walk rather than trusting the near-empty diff: **22** routes
+in `endpoints/forms.py` + **3** in `api/public/forms.py` = **25 total**, same
+count as pass 12. `endpoints/forms.py` and `api/public/forms.py` are both
+byte-identical to pass 12 (confirmed by `git diff --stat`, empty for both),
+so every route's permission dependency is unchanged from pass 12's
+inventory: `forms.view` ×3, `forms.manage` ×17, bare `get_current_user` ×2
+(`member_lookup`, `submit_form`); the three public routes
+(`GET /{slug}`, `GET /{slug}/embed-policy`, `POST /{slug}/submit`) unchanged.
+
+### Re-verified this pass (unchanged, all hold)
+
+- **FORM-4** (form-definition text stored unescaped, flagged defense-in-depth
+  by design) — re-grepped `dangerouslySetInnerHTML` under
+  `frontend/src/components/forms/`, `pages/PublicFormPage.tsx`,
+  `modules/forms/`: zero matches, unchanged.
+- **FORM-12** (three submission endpoints ignore the `form_id` path segment)
+  — correctness-only API-shape gap, not a security boundary; unchanged.
+- BXC-1, sensitive-field sealing/row-locking, the embed `allow_embed`/
+  origin-allowlist machinery, the member-lookup contact-policy gate, LIKE
+  escaping (`FormsService.search_members`), and the admin CSV export (still
+  a frontend `Blob` download with its own `escapeCsvCell`, not a backend
+  `csv.writer` — n/a for Pitfall #15) — none of this pass's three real
+  changes touch any file these findings concern; nothing regressed.
+
+No new route, no permission string changed, no by-id query added without an
+org filter, no LIKE call added without `escape=LIKE_ESCAPE_CHAR`, no new
+migration.
+
+### Completion gate (pass 13)
+
+| Check                                                                                           | Result                                                |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI's pinned 7.4.1)                                               | ✅ 0 violations                                       |
+| `black --check app/ tests/ alembic/` (CI's pinned 26.10.1)                                      | ✅ clean, 3106 files unchanged                        |
+| `isort --check-only app/ tests/ alembic/` (CI's pinned 9.0.2)                                   | ✅ clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                                               | ✅ PASSED — 756 revisions, single head `8b1cf6f55425` |
+| `python3 scripts/check_route_permissions.py --strict`                                           | ✅ 305 routes, 0 errors, 0 warnings                   |
+| `pytest tests/ -q -k "form or applicant_field or sensitive_field or embed"`                     | ✅ 1205 passed, 1 pre-existing skip (`pywebpush`)     |
+| `cd frontend && npm run typecheck`                                                              | ✅ 0 errors                                           |
+| `cd frontend && npm run lint`                                                                   | ✅ exit 0, 0 warnings                                 |
+| `npx vitest run src/components/forms src/pages/FormsPage.*.test.tsx src/hooks/useRanks.test.ts` | ✅ 13 files, 67 tests passed                          |
 
 ---
 

@@ -110,6 +110,58 @@ that labels and cards carry the actual-size hint and that every 5160 label's
 text lands inside its own label. A new generator belongs in its `DOCUMENTS`
 table.
 
+## Fonts
+
+Documents print in **Noto Sans**, embedded. Before 2026-11-10 they used
+ReportLab's built-in Helvetica, which is never embedded and covers Latin-1
+only, so a member named Łukasz, Nguyễn or Ольга printed as empty boxes.
+
+- The four faces (regular, bold, italic, bold italic) are in
+  `backend/app/assets/fonts/`, with the SIL Open Font License and a README
+  giving their source and checksums. They are the Noto project's static
+  TrueType builds; ReportLab embeds only the glyphs a document uses.
+- They cover Latin (including Vietnamese), Greek and Cyrillic.
+- `app/utils/pdf_fonts.py` registers them as `LogbookSans` (with a family, so
+  `<b>` and `<i>` in a Paragraph resolve) and fails at import, naming the
+  file, if one is missing.
+- **ReportLab falls back to Helvetica in three places a document never names
+  a font:** the sample stylesheet, plain-string table cells, and the canvas's
+  initial font. Use `document_stylesheet()` instead of
+  `getSampleStyleSheet()`, `body_table_style(...)` instead of
+  `TableStyle(...)`, and pass `initialFontName=BODY_FONT` to every doc
+  template. `tests/test_pdf_fonts.py` fails on any unembedded font in any
+  document generator.
+- Label sheets and ID cards stay on Helvetica (owner decision, 2026-11-09):
+  their text is fitted to die-cut stock and thermal printer dots.
+
+## Archival records (PDF/A)
+
+Certified election results, finalized evaluations and meeting minutes are
+written as **PDF/A-2b** (ISO 19005-2, level B), the archival profile:
+`app/utils/pdfa.to_pdfa()` rewrites the rendered file with pypdf to add what
+PDF/A requires beyond embedded fonts:
+
+- an **sRGB output intent**, from a profile Pillow's littleCMS generates, so
+  no ICC file is committed;
+- **XMP metadata**, uncompressed, declaring part 2 / conformance B and
+  agreeing with the information dictionary's title, author, producer and
+  dates;
+- the **Print flag on every annotation** (ReportLab writes the links in
+  rich-text minutes without one).
+
+A minutes PDF that **appends attachment PDFs** is left as it was, with no
+PDF/A claim: pages from outside cannot be vouched for (owner decision,
+2026-11-09). Minutes whose attachments are images, or listed by name only,
+are PDF/A. Evaluations already stored keep the file they were frozen with;
+each new revision is PDF/A.
+
+**Verification.** veraPDF 1.28 passed the certified results (with a
+transparent logo), an evaluation, and minutes with a link and an embedded
+image on 2026-11-10. CI does not run veraPDF; `tests/test_pdfa.py` asserts the
+structure it checked. To run it locally, resolve the
+`org.verapdf.apps:greenfield-apps` jars from Maven Central and run
+`java -cp "lib/*" org.verapdf.apps.GreenfieldCliWrapper --flavour 2b FILE.pdf`.
+
 ## The report layout
 
 `pdf_report_kit.render_report(meta, body)` gives every tabular report the same
@@ -144,9 +196,13 @@ Recorded in `docs/KNOWN_LIMITATIONS.md` under "PDF Reports".
   tree; automatic tagging is a commercial ReportLab feature. The kit sets
   what the open-source library can (title, language, outline, reading order
   follows the story), but a screen reader still gets untagged text.
-- **Fonts and PDF/A.** Every PDF uses the built-in Helvetica family, which is
-  not embedded and covers Latin-1 only, so a name in Cyrillic, Greek or CJK
-  script does not render, and no PDF can conform to PDF/A.
+- **Scripts Noto Sans does not cover.** CJK, Arabic, Hebrew and emoji
+  print as empty boxes. Noto Sans CJK is CFF-based, and ReportLab embeds only
+  TrueType outlines.
+- **Label sheets and ID cards stay on Helvetica** (Latin-1 only, not
+  embedded), by owner decision: their text is fitted to physical stock.
+- **Minutes that append attachment PDFs are not PDF/A.** Pages from outside
+  cannot be vouched for, so that file makes no claim.
 - **Older layouts.** Minutes, the impact plan and the election documents keep
   their own layouts, and their page numbers are "Page N" rather than "of Y"
   (the ballot excepted).
@@ -155,11 +211,8 @@ Recorded in `docs/KNOWN_LIMITATIONS.md` under "PDF Reports".
 
 ## Roadmap (owner decisions of 2026-11-09)
 
-- **Phase 3, fonts and archival records.** Bundle **Noto Sans** (SIL Open
-  Font License) and register it in the kit. This gives full Unicode and
-  embedded fonts. Then add XMP metadata and an ICC output intent so minutes,
-  certified results and evaluations can conform to PDF/A, verified with
-  veraPDF.
+- **Phase 3, fonts and archival records** — **done 2026-11-10**; see
+  "Fonts" and "Archival records (PDF/A)" above.
 - **Phase 4, Reports page.** Replace the browser print with a **server-side
   PDF** built on the kit and audited on the server, so every report has the
   same footer, numbering and trail on every browser.
