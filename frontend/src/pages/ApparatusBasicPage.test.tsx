@@ -192,9 +192,9 @@ describe('ApparatusBasicPage save validation', () => {
     await user.clear(within(dialog).getByRole('spinbutton', { name: /^Minimum Staffing/ }));
     await user.click(within(dialog).getByRole('button', { name: 'Add Apparatus' }));
 
-    expect(within(dialog).getByRole('spinbutton', { name: /^Minimum Staffing/ })).toHaveAccessibleDescription(
-      'Minimum staffing must be a whole number from 1 to 50.'
-    );
+    const staffing = within(dialog).getByRole('spinbutton', { name: /^Minimum Staffing/ });
+    expect(staffing).toHaveAccessibleDescription('Minimum staffing must be a whole number from 1 to 50.');
+    expect(staffing).toHaveFocus();
     expect(mockCreateBasicApparatus).not.toHaveBeenCalled();
 
     await user.type(within(dialog).getByRole('spinbutton', { name: /^Minimum Staffing/ }), '3');
@@ -223,7 +223,27 @@ describe('ApparatusBasicPage save validation', () => {
     expect(mockCreateBasicApparatus).not.toHaveBeenCalled();
   });
 
-  it('puts a server refusal on its field and adds nothing', async () => {
+  // Forms review F-3: Add Apparatus stayed greyed out until both a unit
+  // number and a name were typed, with nothing saying why.
+  it('names each missing field on an empty save and focuses the first', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: /add apparatus/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Add Apparatus' });
+
+    await user.click(within(dialog).getByRole('button', { name: 'Add Apparatus' }));
+
+    const unit = within(dialog).getByRole('textbox', { name: /^Unit Number/ });
+    expect(unit).toHaveAttribute('aria-invalid', 'true');
+    expect(unit).toHaveAccessibleDescription('Enter the unit number.');
+    expect(unit).toHaveFocus();
+    expect(within(dialog).getByRole('textbox', { name: /^Name/ })).toHaveAccessibleDescription(
+      'Enter a name for the apparatus.'
+    );
+    expect(mockCreateBasicApparatus).not.toHaveBeenCalled();
+  });
+
+  it('puts a refused field from the server on that field and adds nothing', async () => {
     mockCreateBasicApparatus.mockRejectedValueOnce({
       response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
     });
@@ -233,9 +253,9 @@ describe('ApparatusBasicPage save validation', () => {
     // Enter submits: the dialog is a real form (forms review F-7).
     await user.type(within(dialog).getByRole('textbox', { name: /^Name/ }), '{Enter}');
 
-    const name = within(dialog).getByRole('textbox', { name: /^Name/ });
-    await waitFor(() => expect(name).toHaveAccessibleDescription('Name is too long — keep it to 100 characters.'));
+    const name = await within(dialog).findByRole('textbox', { name: /^Name/, description: 'Value is too long.' });
     expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveFocus();
     expect(name).toHaveAttribute('maxLength', '100');
     expect(mockCreateBasicApparatus).toHaveBeenCalledTimes(1);
     expect(mockToastError).not.toHaveBeenCalled();
@@ -262,7 +282,8 @@ describe('ApparatusBasicPage save validation', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Add Apparatus' }));
 
-    await waitFor(() => expect(mockToastError).toHaveBeenCalledWith('Unit number E-52 is already in use'));
+    // Not a field error, so it is said in the dialog, which stays open.
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Unit number E-52 is already in use');
   });
 });
 

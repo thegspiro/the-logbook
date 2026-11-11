@@ -27,6 +27,32 @@ const courses: RequirementDetail = {
 };
 
 describe('RequirementDetailCard', () => {
+  // Workflow review W80-9: no session held yet read "0/0 sessions" and
+  // "Complete", and counted as met. It is now neither.
+  it('says no session has been held yet, rather than 0/0 and Complete', () => {
+    render(
+      <RequirementDetailCard
+        requirement={{
+          ...base,
+          name: 'Monthly Drill Attendance',
+          requirement_type: 'session_attendance',
+          required_hours: 0,
+          completed_hours: 0,
+          progress_percentage: 0,
+          is_met: false,
+          not_applicable: true,
+        }}
+        timezone="UTC"
+      />
+    );
+
+    expect(screen.getByText('No sessions held yet')).toBeInTheDocument();
+    expect(screen.getByText('Not graded until a session is held')).toBeInTheDocument();
+    expect(screen.queryByText('Complete')).not.toBeInTheDocument();
+    expect(screen.queryByText(/0\/0/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Due:/)).not.toBeInTheDocument();
+  });
+
   it('counts a courses requirement in courses, not hours', () => {
     render(<RequirementDetailCard requirement={courses} timezone="UTC" audience="officer" />);
     expect(screen.getByText('1/4 courses')).toBeInTheDocument();

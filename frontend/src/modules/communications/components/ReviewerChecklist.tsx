@@ -3,7 +3,7 @@
  * a single suggestion is forwarded to.
  */
 
-import React, { useId } from 'react';
+import React from 'react';
 import type { ReviewerRef } from '../types/suggestions';
 
 interface ReviewerChecklistProps {
@@ -12,33 +12,15 @@ interface ReviewerChecklistProps {
   selected: string[];
   onChange: (selected: string[]) => void;
   filter?: string;
-  /** A refusal about the selection, shown under the list and announced on the group. */
-  error?: string | null | undefined;
-  /** Lets a form focus the group when its refusal is the first one. */
-  id?: string | undefined;
 }
 
-const ReviewerChecklist: React.FC<ReviewerChecklistProps> = ({
-  legend,
-  items,
-  selected,
-  onChange,
-  filter = '',
-  error,
-  id,
-}) => {
-  const errorId = useId();
+const ReviewerChecklist: React.FC<ReviewerChecklistProps> = ({ legend, items, selected, onChange, filter = '' }) => {
   const needle = filter.trim().toLowerCase();
   const visible = needle ? items.filter((item) => item.name.toLowerCase().includes(needle)) : items;
   const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
 
   return (
-    <fieldset
-      id={id}
-      tabIndex={id ? -1 : undefined}
-      aria-invalid={error ? true : undefined}
-      aria-describedby={error ? errorId : undefined}
-    >
+    <fieldset>
       <legend className="form-label">{legend}</legend>
       <div className="border-theme-surface-border max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
         {visible.length === 0 ? (
@@ -57,11 +39,6 @@ const ReviewerChecklist: React.FC<ReviewerChecklistProps> = ({
           ))
         )}
       </div>
-      {error && (
-        <p id={errorId} className="mt-1 text-sm text-red-800 dark:text-red-300">
-          {error}
-        </p>
-      )}
     </fieldset>
   );
 };

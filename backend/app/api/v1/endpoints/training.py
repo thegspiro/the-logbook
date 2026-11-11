@@ -99,8 +99,8 @@ from app.services.requirement_override_service import (
     holds_chief_position,
 )
 from app.services.training_compliance import (
-    CATCH_UP_STATUS,
     STANDING_NOT_APPLICABLE,
+    UNGRADED_STATUSES,
     ComplianceGrading,
     _load_compliance_config,
     classify_standing,
@@ -126,6 +126,7 @@ from app.services.training_record_notices import (
     send_training_record_notice,
     snapshot,
 )
+from app.services.training_record_source import record_sources
 from app.services.training_requirement_removal import (
     purge_requirement,
     remove_requirement,
@@ -260,9 +261,10 @@ async def get_training_dashboard_summary(
                 held_sessions=held_sessions,
             )
             statuses.append(req_status)
-            # Inside an existing member's catch-up period the requirement is
-            # neither unmet nor part of the at-risk denominator.
-            if req_status == CATCH_UP_STATUS:
+            # Inside an existing member's catch-up period, or with no session
+            # held yet, the requirement is neither unmet nor part of the
+            # at-risk denominator.
+            if req_status in UNGRADED_STATUSES:
                 continue
             applicable_counts[str(req.id)] += 1
             if req_status != TrainingStatus.COMPLETED.value:
@@ -793,23 +795,30 @@ async def list_records(
 
     result = await db.execute(query)
     records = result.scalars().all()
-    if is_officer:
-        # Officers get the stored name: the record edit form sends it back on
-        # save, so a display name here would overwrite it.
-        return records
-    names = await library_course_names(
-        db, str(current_user.organization_id), (r.course_id for r in records)
+    sources = await record_sources(db, str(current_user.organization_id), records)
+    names = (
+        {}
+        if is_officer
+        else await library_course_names(
+            db, str(current_user.organization_id), (r.course_id for r in records)
+        )
     )
     # Copies, never the ORM rows: assigning to a loaded record would let the
     # session flush the display name into the stored one.
-    return [
-        TrainingRecordResponse.model_validate(r).model_copy(
-            update={
-                "course_name": member_course_name(r.course_id, r.course_name, names)
-            }
+    responses = []
+    for r in records:
+        source = sources[str(r.id)]
+        update: dict[str, Any] = {"source": source.kind, "source_label": source.label}
+        if not is_officer:
+            # Officers get the stored name: the record edit form sends it back
+            # on save, so a display name here would overwrite it.
+            update["course_name"] = member_course_name(
+                r.course_id, r.course_name, names
+            )
+        responses.append(
+            TrainingRecordResponse.model_validate(r).model_copy(update=update)
         )
-        for r in records
-    ]
+    return responses
 
 
 @router.post(
@@ -3316,8 +3325,10 @@ class RequirementStatusItem(BaseModel):
 
     requirement_id: str
     requirement_name: str
-    # "completed", "in_progress", "expired", "not_started", or "catch_up" for an
-    # existing member's unmet requirement before its catch-up deadline.
+    # "completed", "in_progress", "expired", "not_started", "catch_up" for an
+    # existing member's unmet requirement before its catch-up deadline, or
+    # "not_applicable" for a session-attendance requirement with no session
+    # held yet in the member's window (graded neither way, W80-9).
     status: str
     completion_date: str | None = None
     expiry_date: str | None = None

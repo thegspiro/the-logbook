@@ -35,9 +35,9 @@ import { formatCurrency } from '@/utils/currencyFormatting';
 import { blankToNull } from '../../../utils/formValues';
 import { isSafeExternalUrl } from '../../../utils/safeUrl';
 import { Modal } from '../../../components/Modal';
-import { FormField } from '../../../components/ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { formatVendorAddress, primaryContact } from '../utils/vendorHelpers';
 import { EmptyState } from '../../../components/ux';
 import type {
@@ -104,26 +104,46 @@ type VendorField = Exclude<keyof VendorFD, 'is_preferred'>;
  * primary contact, `InventoryVendorContactBase`. Ordered as on screen, so the
  * first refusal takes focus.
  */
-const VENDOR_FIELDS: Record<VendorField, ServerFieldSpec & { id: string }> = {
-  name: { label: 'Vendor name', maxLength: 255, id: 'vendor-name' },
-  account_number: { label: 'Account number', maxLength: 100, id: 'vendor-account' },
-  payment_terms: { label: 'Payment terms', maxLength: 100, id: 'vendor-terms' },
-  phone: { label: 'Phone', maxLength: 50, id: 'vendor-phone' },
-  email: { label: 'Email', maxLength: 255, id: 'vendor-email' },
-  fax: { label: 'Fax', maxLength: 50, id: 'vendor-fax' },
-  website: { label: 'Website', maxLength: 255, id: 'vendor-website' },
-  address_line1: { label: 'Street address', maxLength: 255, id: 'vendor-address1' },
-  address_line2: { label: 'Suite / unit', maxLength: 255, id: 'vendor-address2' },
-  city: { label: 'City', maxLength: 100, id: 'vendor-city' },
-  state: { label: 'State', maxLength: 100, id: 'vendor-state' },
-  postal_code: { label: 'Postal code', maxLength: 20, id: 'vendor-zip' },
-  country: { label: 'Country', maxLength: 100, id: 'vendor-country' },
-  contact_name: { label: 'Contact name', maxLength: 255, id: 'vendor-contact-name', api: 'contacts.0.name' },
-  contact_title: { label: 'Contact title', maxLength: 150, id: 'vendor-contact-title', api: 'contacts.0.title' },
-  contact_email: { label: 'Contact email', maxLength: 255, id: 'vendor-contact-email', api: 'contacts.0.email' },
-  contact_phone: { label: 'Contact phone', maxLength: 50, id: 'vendor-contact-phone', api: 'contacts.0.phone' },
-  // `FreeText` max_length.
-  notes: { label: 'Notes', maxLength: 2000, id: 'vendor-notes' },
+const VENDOR_FIELDS: FieldSpecs<VendorField> = {
+  name: { id: 'vendor-name', label: 'Vendor name' },
+  account_number: { id: 'vendor-account', label: 'Account number' },
+  payment_terms: { id: 'vendor-terms', label: 'Payment terms' },
+  phone: { id: 'vendor-phone', label: 'Phone' },
+  email: { id: 'vendor-email', label: 'Email' },
+  fax: { id: 'vendor-fax', label: 'Fax' },
+  website: { id: 'vendor-website', label: 'Website' },
+  address_line1: { id: 'vendor-address1', label: 'Street address' },
+  address_line2: { id: 'vendor-address2', label: 'Suite / unit' },
+  city: { id: 'vendor-city', label: 'City' },
+  state: { id: 'vendor-state', label: 'State' },
+  postal_code: { id: 'vendor-zip', label: 'Postal code' },
+  country: { id: 'vendor-country', label: 'Country' },
+  contact_name: { id: 'vendor-contact-name', label: 'Contact name', apiKeys: ['contacts.0.name'] },
+  contact_title: { id: 'vendor-contact-title', label: 'Contact title', apiKeys: ['contacts.0.title'] },
+  contact_email: { id: 'vendor-contact-email', label: 'Contact email', apiKeys: ['contacts.0.email'] },
+  contact_phone: { id: 'vendor-contact-phone', label: 'Contact phone', apiKeys: ['contacts.0.phone'] },
+  notes: { id: 'vendor-notes', label: 'Notes' },
+};
+
+const VENDOR_MAX_LENGTH: Record<VendorField, number> = {
+  name: 255,
+  account_number: 100,
+  payment_terms: 100,
+  phone: 50,
+  email: 255,
+  fax: 50,
+  website: 255,
+  address_line1: 255,
+  address_line2: 255,
+  city: 100,
+  state: 100,
+  postal_code: 20,
+  country: 100,
+  contact_name: 255,
+  contact_title: 150,
+  contact_email: 255,
+  contact_phone: 50,
+  notes: 2000,
 };
 
 /** A loose shape check, so a typo is flagged on its field before it is sent. */
@@ -138,7 +158,7 @@ const looksLikeEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valu
 async function saveExcept<K extends string>(
   payload: Record<string, unknown>,
   skip: Partial<Record<K, string>>,
-  fields: Record<K, ServerFieldSpec>,
+  fields: FieldSpecs<K>,
   send: (rest: Record<string, unknown>) => Promise<unknown>
 ): Promise<Partial<Record<K, string>>> {
   const without = (held: Partial<Record<K, string>>) => {
@@ -150,7 +170,7 @@ async function saveExcept<K extends string>(
     await send(without(skip));
     return skip;
   } catch (err) {
-    const mapped = mapServerFieldErrors(err, fields);
+    const mapped = placeApiError(fields, err);
     if (!mapped || Object.keys(mapped.fieldErrors).length === 0 || mapped.unmatched.length > 0) throw err;
     const refused = { ...skip, ...mapped.fieldErrors };
     await send(without(refused));
@@ -169,7 +189,8 @@ const VendorFormModal: React.FC<{
 }> = ({ isOpen, onClose, onSaved, onSavedExcept, editVendor }) => {
   const [f, setF] = useState<VendorFD>(EMPTY_VENDOR);
   const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<VendorField, string>>>({});
+  const fieldErrors = useFieldErrors(VENDOR_FIELDS);
+  const { errors, clear: clearErrors } = fieldErrors;
   // What the form held when it opened (or last saved), so Escape, the X and
   // Cancel ask before discarding anything typed since (forms review F-6).
   const [baseline, setBaseline] = useState('');
@@ -178,7 +199,7 @@ const VendorFormModal: React.FC<{
 
   useEffect(() => {
     if (!isOpen) return;
-    setErrors({});
+    clearErrors();
     const seeded: VendorFD = editVendor
       ? {
           ...EMPTY_VENDOR,
@@ -203,23 +224,22 @@ const VendorFormModal: React.FC<{
     setBaseline(JSON.stringify(seeded));
     // Keyed on the vendor object the page holds, not on the refreshed list, so
     // a refresh behind the dialog after a partial save does not re-seed it.
-  }, [editVendor, isOpen]);
+  }, [editVendor, isOpen, clearErrors]);
 
   const up = (k: keyof VendorFD, v: string | boolean) => {
     setF((p) => ({ ...p, [k]: v }));
-    if (k in VENDOR_FIELDS) setErrors((p) => ({ ...p, [k]: undefined }));
+    if (k in VENDOR_FIELDS) fieldErrors.setError(k as VendorField, null);
   };
 
-  const showErrors = (next: Partial<Record<VendorField, string>>) => {
-    setErrors(next);
-    const first = (Object.keys(VENDOR_FIELDS) as VendorField[]).find((k) => next[k]);
-    if (first) window.setTimeout(() => document.getElementById(VENDOR_FIELDS[first].id)?.focus(), 0);
+  const showErrors = (next: FieldErrors<VendorField>) => {
+    fieldErrors.setErrors(next);
+    fieldErrors.focusFirst(next);
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const found: Partial<Record<VendorField, string>> = {};
-    if (!f.name.trim()) found.name = 'Give the vendor a name.';
+    const found: FieldErrors<VendorField> = {};
+    if (!f.name.trim()) found.name = 'Enter the vendor name.';
     if (f.email.trim() && !looksLikeEmail(f.email)) found.email = 'Enter an email address like orders@vendor.com.';
     if (!editVendor) {
       // The primary contact is only created when it has a name, so a title,
@@ -319,13 +339,7 @@ const VendorFormModal: React.FC<{
     } catch (err: unknown) {
       // A refused field is flagged on that field rather than named in a toast
       // (forms review F-2); a new vendor is not created until it is fixed.
-      const mapped = mapServerFieldErrors(err, VENDOR_FIELDS);
-      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
-        showErrors(mapped.fieldErrors);
-        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then save again.');
-      } else {
-        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to save vendor'));
-      }
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to save vendor'));
     } finally {
       setSaving(false);
     }
@@ -342,7 +356,7 @@ const VendorFormModal: React.FC<{
       required={extra.required}
       id={VENDOR_FIELDS[key].id}
       error={errors[key]}
-      maxLength={VENDOR_FIELDS[key].maxLength}
+      maxLength={VENDOR_MAX_LENGTH[key]}
       count={f[key].length}
       className={extra.className}
     >
@@ -382,6 +396,11 @@ const VendorFormModal: React.FC<{
       }
     >
       <div className="space-y-4 p-4">
+        {fieldErrors.formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {fieldErrors.formError}
+          </p>
+        )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {text('name', 'Vendor Name', { placeholder: 'e.g. Galls', required: true, className: 'sm:col-span-2' })}
           {text('account_number', 'Account Number', { placeholder: 'Our account with them' })}
@@ -428,7 +447,7 @@ const VendorFormModal: React.FC<{
           label="Notes"
           id={VENDOR_FIELDS.notes.id}
           error={errors.notes}
-          maxLength={VENDOR_FIELDS.notes.maxLength}
+          maxLength={VENDOR_MAX_LENGTH.notes}
           count={f.notes.length}
         >
           {(field) => (
@@ -480,14 +499,22 @@ const EMPTY_CONTACT: ContactFD = {
 type ContactField = Exclude<keyof ContactFD, 'is_primary'>;
 
 /** `InventoryVendorContactBase` max_lengths, ordered as on screen. */
-const CONTACT_FIELDS: Record<ContactField, ServerFieldSpec & { id: string }> = {
-  name: { label: 'Name', maxLength: 255, id: 'contact-name' },
-  title: { label: 'Title', maxLength: 150, id: 'contact-title' },
-  email: { label: 'Email', maxLength: 255, id: 'contact-email' },
-  phone: { label: 'Phone', maxLength: 50, id: 'contact-phone' },
-  phone_extension: { label: 'Extension', maxLength: 20, id: 'contact-ext' },
-  // `FreeText` max_length.
-  notes: { label: 'Notes', maxLength: 2000, id: 'contact-notes' },
+const CONTACT_FIELDS: FieldSpecs<ContactField> = {
+  name: { id: 'contact-name', label: 'Name' },
+  title: { id: 'contact-title', label: 'Title' },
+  email: { id: 'contact-email', label: 'Email' },
+  phone: { id: 'contact-phone', label: 'Phone' },
+  phone_extension: { id: 'contact-ext', label: 'Extension' },
+  notes: { id: 'contact-notes', label: 'Notes' },
+};
+
+const CONTACT_MAX_LENGTH: Record<ContactField, number> = {
+  name: 255,
+  title: 150,
+  email: 255,
+  phone: 50,
+  phone_extension: 20,
+  notes: 2000,
 };
 
 // -- Contacts Modal --
@@ -500,7 +527,8 @@ const VendorContactsModal: React.FC<{
   const [f, setF] = useState<ContactFD>(EMPTY_CONTACT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<ContactField, string>>>({});
+  const fieldErrors = useFieldErrors(CONTACT_FIELDS);
+  const { errors, clear: clearErrors } = fieldErrors;
   // The contact form's starting point — blank, or the contact being edited —
   // so Escape and the X ask before discarding what was typed (forms review F-6).
   const [baseline, setBaseline] = useState(JSON.stringify(EMPTY_CONTACT));
@@ -509,32 +537,31 @@ const VendorContactsModal: React.FC<{
   const resetForm = () => {
     setF(EMPTY_CONTACT);
     setEditingId(null);
-    setErrors({});
+    clearErrors();
     setBaseline(JSON.stringify(EMPTY_CONTACT));
   };
 
   useEffect(() => {
     setF(EMPTY_CONTACT);
     setEditingId(null);
-    setErrors({});
+    clearErrors();
     setBaseline(JSON.stringify(EMPTY_CONTACT));
-  }, [vendor?.id]);
+  }, [vendor?.id, clearErrors]);
 
   const up = (k: keyof ContactFD, v: string | boolean) => {
     setF((p) => ({ ...p, [k]: v }));
-    if (k in CONTACT_FIELDS) setErrors((p) => ({ ...p, [k]: undefined }));
+    if (k in CONTACT_FIELDS) fieldErrors.setError(k as ContactField, null);
   };
 
-  const showErrors = (next: Partial<Record<ContactField, string>>) => {
-    setErrors(next);
-    const first = (Object.keys(CONTACT_FIELDS) as ContactField[]).find((k) => next[k]);
-    if (first) window.setTimeout(() => document.getElementById(CONTACT_FIELDS[first].id)?.focus(), 0);
+  const showErrors = (next: FieldErrors<ContactField>) => {
+    fieldErrors.setErrors(next);
+    fieldErrors.focusFirst(next);
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!vendor) return;
-    const found: Partial<Record<ContactField, string>> = {};
+    const found: FieldErrors<ContactField> = {};
     if (!f.name.trim()) found.name = 'Give the contact a name.';
     if (f.email.trim() && !looksLikeEmail(f.email)) found.email = 'Enter an email address like rep@vendor.com.';
     // A new contact is not added until every flagged field is fixed; an edit
@@ -594,13 +621,7 @@ const VendorContactsModal: React.FC<{
       onSaved();
     } catch (err: unknown) {
       // A refused field is flagged on that field rather than named in a toast (forms review F-2).
-      const mapped = mapServerFieldErrors(err, CONTACT_FIELDS);
-      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
-        showErrors(mapped.fieldErrors);
-        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then save again.');
-      } else {
-        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to save contact'));
-      }
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to save contact'));
     } finally {
       setSaving(false);
     }
@@ -636,7 +657,7 @@ const VendorContactsModal: React.FC<{
       is_primary: contact.is_primary,
     };
     setEditingId(contact.id);
-    setErrors({});
+    clearErrors();
     setF(seeded);
     setBaseline(JSON.stringify(seeded));
   };
@@ -652,7 +673,7 @@ const VendorContactsModal: React.FC<{
       required={extra.required}
       id={CONTACT_FIELDS[key].id}
       error={errors[key]}
-      maxLength={CONTACT_FIELDS[key].maxLength}
+      maxLength={CONTACT_MAX_LENGTH[key]}
       count={f[key].length}
       className={key === 'phone' ? 'flex-1' : key === 'phone_extension' ? 'w-24' : undefined}
     >
@@ -734,6 +755,11 @@ const VendorContactsModal: React.FC<{
           <p className="text-theme-text-primary text-sm font-semibold">
             {editingId ? 'Edit contact' : 'Add a contact'}
           </p>
+          {fieldErrors.formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {fieldErrors.formError}
+            </p>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {text('name', 'Name', { required: true })}
             {text('title', 'Title', { placeholder: 'e.g. Account Manager' })}
@@ -747,7 +773,7 @@ const VendorContactsModal: React.FC<{
             label="Notes"
             id={CONTACT_FIELDS.notes.id}
             error={errors.notes}
-            maxLength={CONTACT_FIELDS.notes.maxLength}
+            maxLength={CONTACT_MAX_LENGTH.notes}
             count={f.notes.length}
           >
             {(field) => (

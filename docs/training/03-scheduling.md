@@ -372,6 +372,15 @@ person.
 The **My Shifts** tab shows only your own shifts. It has three views:
 **Upcoming**, **Past** and **Hours**.
 
+**Past view by year and month** _(2026-11-09)_. **Past** opens on your newest
+year. A **Year** dropdown picks another year or **All time**, and the three
+stat tiles follow it. A bar chart shows hours worked by month (by year under
+**All time**); tap a bar to jump to that month, or to open that year. Shifts are
+listed under month headings that stay pinned as you scroll and carry the
+month's shift count and hours. Before, Past was one flat list with no year on
+any card, so a long-serving member saw "Sat, Oct 11" twice with nothing to tell
+the years apart. _Screenshot: replace the Past view image._
+
 For each shift you see:
 
 - the date and time;
@@ -4780,6 +4789,17 @@ well as ones still in service. If members should still log hours on it, switch
 it on in **Outside Apparatus** settings after you commit. Units already hidden
 stay pickable in the import, marked **hidden from members**. Names that are not
 a vehicle at all (`POV`, `Other EMS`) can each be sent to **Catch-all: Other**.
+
+**Shift notification CC boxes** _(2026-11-09)_. The four **CC additional email
+addresses** boxes in Scheduling notification settings now refuse text that is
+not an email address, and a duplicate, and say why under the box. Each saved
+address has a **Remove** button named for the address. Before, "bob" was
+accepted and saved onto the CC list.
+
+**End-of-shift summary groups call types** _(2026-11-09)_. The email and the
+in-app notice now list each call type once with a count, most frequent first
+("EMS ×10"), instead of one line per call. Every type is listed; the old notice
+stopped after five calls and the email after ten.
 That puts all of them on a single outside unit named **Other**, under an agency
 named **Other**, created on the first commit and reused after that.
 

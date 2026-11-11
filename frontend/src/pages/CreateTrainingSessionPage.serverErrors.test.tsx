@@ -28,7 +28,7 @@ import CreateTrainingSessionPage from './CreateTrainingSessionPage';
 async function fillAndReachReview(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/Training Title/), 'CPR recert night');
   await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-  await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
+  await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
   await user.click(screen.getByRole('button', { name: 'Next' }));
   await user.type(screen.getByLabelText(/Course Name/), 'CPR');
   await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -64,7 +64,7 @@ describe('CreateTrainingSessionPage › refusals on their fields', () => {
     renderWithRouter(<CreateTrainingSessionPage />);
     await user.type(screen.getByLabelText(/Training Title/), 'CPR recert night');
     await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
+    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: 'Next' }));

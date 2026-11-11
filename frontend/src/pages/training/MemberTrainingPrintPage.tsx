@@ -257,6 +257,7 @@ const MemberTrainingPrintPage: React.FC = () => {
                       <th scope="col">Date</th>
                       <th scope="col">Hours</th>
                       <th scope="col">Instructor</th>
+                      <th scope="col">Source</th>
                       <th scope="col">Status</th>
                     </tr>
                   </thead>
@@ -274,6 +275,7 @@ const MemberTrainingPrintPage: React.FC = () => {
                           <td>{fmtDate(r.completion_date || r.scheduled_date)}</td>
                           <td className="member-training-print__hours">{formatHours(r.hours_completed)}</td>
                           <td>{r.instructor || '—'}</td>
+                          <td>{r.source_label || '—'}</td>
                           <td>{STATUS_LABELS[r.status] || r.status}</td>
                         </tr>
                       ))}

@@ -33,7 +33,11 @@ vi.mock('../services/adminHubService', () => ({
   },
 }));
 
-vi.mock('./MembersAdminPage', () => ({ default: () => <p>Member management body</p> }));
+vi.mock('./MembersAdminPage', () => ({
+  default: ({ population }: { population?: string }) => (
+    <p>{population === 'former' ? 'Former members body' : 'Member management body'}</p>
+  ),
+}));
 vi.mock('./AddMember', () => ({ default: () => <p>Add member body</p> }));
 vi.mock('./ImportMembers', () => ({ default: () => <p>Import members body</p> }));
 vi.mock('./QualificationImport', () => ({ default: () => <p>Qualification import body</p> }));
@@ -133,6 +137,20 @@ describe('MembersAdminHub', () => {
     renderAt('?tab=add');
 
     expect(await screen.findByText('Add member body')).toBeInTheDocument();
+  });
+
+  it('opens Former Members beside Member Management under Roster', async () => {
+    const user = userEvent.setup();
+    mockCheckPermission.mockReturnValue(false);
+    renderAt('?tab=former');
+
+    expect(await screen.findByText('Former members body')).toBeInTheDocument();
+    const pages = screen.getByRole('tablist', { name: 'Roster pages' });
+    expect(within(pages).getByRole('tab', { name: 'Former Members' })).toHaveAttribute('aria-selected', 'true');
+
+    await user.click(within(pages).getByRole('tab', { name: 'Member Management' }));
+    expect(window.location.search).toBe('?tab=manage');
+    expect(await screen.findByText('Member management body')).toBeInTheDocument();
   });
 
   it('always keeps Settings reachable', async () => {

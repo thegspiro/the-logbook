@@ -6,14 +6,52 @@ import { useState, type FormEvent } from 'react';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
-import { FormField } from '../../../components/ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
-import { getErrorMessage } from '../../../utils/errorHandling';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { organizationEmailError } from '../../../utils/organizationProfile';
 import type { FacilityCreate } from '../../../services/facilitiesServices';
 import type { Facility, FacilityType, FacilityStatus } from '../types';
+
+type FacilityField =
+  | 'name'
+  | 'facility_number'
+  | 'address_line1'
+  | 'city'
+  | 'state'
+  | 'zip_code'
+  | 'phone'
+  | 'email'
+  | 'facility_type_id'
+  | 'status_id'
+  | 'notes';
+
+const FACILITY_FIELDS: FieldSpecs<FacilityField> = {
+  name: { id: 'facility-name', label: 'Name' },
+  facility_number: { id: 'facility-facility-number', label: 'Facility Number' },
+  address_line1: { id: 'facility-address', label: 'Address' },
+  city: { id: 'facility-city', label: 'City' },
+  state: { id: 'facility-state', label: 'State' },
+  zip_code: { id: 'facility-zip', label: 'Zip Code' },
+  phone: { id: 'facility-phone', label: 'Phone' },
+  email: { id: 'facility-email', label: 'Email' },
+  facility_type_id: { id: 'facility-type', label: 'Type' },
+  status_id: { id: 'facility-status', label: 'Status' },
+  notes: { id: 'facility-notes', label: 'Notes' },
+};
+
+// Mirror FacilityCreate (forms review F-2).
+const FACILITY_LIMITS = {
+  name: 200,
+  facility_number: 50,
+  address_line1: 200,
+  city: 100,
+  state: 50,
+  zip_code: 20,
+  phone: 50,
+  email: 200,
+} as const;
 
 interface Props {
   facilityTypes: FacilityType[];
@@ -22,7 +60,7 @@ interface Props {
   onCreated: (facility: Facility) => void;
 }
 
-const EMPTY = {
+const EMPTY: Record<FacilityField, string> = {
   name: '',
   facility_number: '',
   address_line1: '',
@@ -36,71 +74,39 @@ const EMPTY = {
   notes: '',
 };
 
-type FacilityField = keyof typeof EMPTY;
-
-/**
- * How the facility create endpoint's field names land on this dialog (forms
- * review F-2), in screen order. Lengths are `FacilityBase`'s max_length.
- */
-const FACILITY_FIELDS: Record<FacilityField, ServerFieldSpec> = {
-  name: { label: 'Name', maxLength: 200 },
-  facility_number: { label: 'Facility number', maxLength: 50 },
-  address_line1: { label: 'Address', maxLength: 200 },
-  city: { label: 'City', maxLength: 100 },
-  state: { label: 'State', maxLength: 50 },
-  zip_code: { label: 'Zip code', maxLength: 20 },
-  phone: { label: 'Phone', maxLength: 50 },
-  email: { label: 'Email', maxLength: 200 },
-  facility_type_id: { label: 'Type' },
-  status_id: { label: 'Status' },
-  notes: { label: 'Notes' },
-};
-
-// The ids the dialog has always used, so labels and focus keep their targets.
-const IDS: Record<FacilityField, string> = {
-  name: 'facility-name',
-  facility_number: 'facility-facility-number',
-  address_line1: 'facility-address',
-  city: 'facility-city',
-  state: 'facility-state',
-  zip_code: 'facility-zip',
-  phone: 'facility-phone',
-  email: 'facility-email',
-  facility_type_id: 'facility-type',
-  status_id: 'facility-status',
-  notes: 'facility-notes',
-};
-
 export default function CreateFacilityModal({ facilityTypes, facilityStatuses, onClose, onCreated }: Props) {
   const { createFacility } = useFacilitiesStore();
   const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState(EMPTY);
-  const [errors, setErrors] = useState<Partial<Record<FacilityField, string>>>({});
   // The dialog mounts empty each time it opens, so anything typed is a change
   // that Escape, the X and Cancel ask about first (forms review F-6).
   const isDirty = (Object.keys(EMPTY) as FacilityField[]).some((k) => formData[k] !== EMPTY[k]);
   const requestClose = useDiscardGuard({ isDirty, onClose });
 
+  const fieldErrors = useFieldErrors(FACILITY_FIELDS);
   const setField = (field: FacilityField, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    setErrors((prev) => ({ ...prev, [field]: undefined }));
+    fieldErrors.setError(field, null);
   };
   // The server accepts any string as the address, so the form checks it.
+  // Shown as it is typed; a server refusal of the address takes its place.
   const emailError = organizationEmailError(formData.email);
-
-  const showErrors = (next: Partial<Record<FacilityField, string>>) => {
-    setErrors(next);
-    const first = (Object.keys(IDS) as FacilityField[]).find((k) => next[k]);
-    if (first) window.setTimeout(() => document.getElementById(IDS[first])?.focus(), 0);
+  const errors: FieldErrors<FacilityField> = {
+    ...fieldErrors.errors,
+    ...(emailError ? { email: emailError } : {}),
   };
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
-    const missing: Partial<Record<FacilityField, string>> = {};
-    if (!formData.name.trim()) missing.name = 'Facility name is required.';
-    if (emailError) missing.email = emailError;
-    if (Object.keys(missing).length > 0) {
-      showErrors(missing);
+    // Checked here rather than by greying out Add Facility, which told an
+    // officer nothing about why it would not press (forms review F-3).
+    const problems: FieldErrors<FacilityField> = {};
+    if (!formData.name.trim()) problems.name = 'Enter a name for the facility.';
+    if (emailError) problems.email = emailError;
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
     setIsCreating(true);
@@ -123,16 +129,9 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
       const facility = await createFacility(payload);
       toast.success('Facility created');
       onCreated(facility);
-    } catch (err) {
-      // A refused field is flagged on that field rather than in a toast that
-      // names nothing (forms review F-2); nothing is created until it is fixed.
-      const mapped = mapServerFieldErrors(err, FACILITY_FIELDS);
-      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
-        showErrors(mapped.fieldErrors);
-        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then save again.');
-      } else {
-        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to create facility'));
-      }
+    } catch (err: unknown) {
+      // Nothing is created until a refused field is fixed (forms review F-2).
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to create facility'));
     } finally {
       setIsCreating(false);
     }
@@ -172,8 +171,8 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
           label="Name"
           required
           error={errors.name}
-          id={IDS.name}
-          maxLength={FACILITY_FIELDS.name.maxLength}
+          id={FACILITY_FIELDS.name.id}
+          maxLength={FACILITY_LIMITS.name}
           count={formData.name.length}
         >
           {(field) => (
@@ -191,8 +190,8 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
         <FormField
           label="Facility Number"
           error={errors.facility_number}
-          id={IDS.facility_number}
-          maxLength={FACILITY_FIELDS.facility_number.maxLength}
+          id={FACILITY_FIELDS.facility_number.id}
+          maxLength={FACILITY_LIMITS.facility_number}
           count={formData.facility_number.length}
         >
           {(field) => (
@@ -210,8 +209,8 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
         <FormField
           label="Address"
           error={errors.address_line1}
-          id={IDS.address_line1}
-          maxLength={FACILITY_FIELDS.address_line1.maxLength}
+          id={FACILITY_FIELDS.address_line1.id}
+          maxLength={FACILITY_LIMITS.address_line1}
           count={formData.address_line1.length}
         >
           {(field) => (
@@ -231,8 +230,8 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
           <FormField
             label="City"
             error={errors.city}
-            id={IDS.city}
-            maxLength={FACILITY_FIELDS.city.maxLength}
+            id={FACILITY_FIELDS.city.id}
+            maxLength={FACILITY_LIMITS.city}
             count={formData.city.length}
           >
             {(field) => (
@@ -249,8 +248,8 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
           <FormField
             label="State"
             error={errors.state}
-            id={IDS.state}
-            maxLength={FACILITY_FIELDS.state.maxLength}
+            id={FACILITY_FIELDS.state.id}
+            maxLength={FACILITY_LIMITS.state}
             count={formData.state.length}
           >
             {(field) => (
@@ -267,8 +266,8 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
           <FormField
             label="Zip Code"
             error={errors.zip_code}
-            id={IDS.zip_code}
-            maxLength={FACILITY_FIELDS.zip_code.maxLength}
+            id={FACILITY_FIELDS.zip_code.id}
+            maxLength={FACILITY_LIMITS.zip_code}
             count={formData.zip_code.length}
           >
             {(field) => (
@@ -289,8 +288,8 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
           <FormField
             label="Phone"
             error={errors.phone}
-            id={IDS.phone}
-            maxLength={FACILITY_FIELDS.phone.maxLength}
+            id={FACILITY_FIELDS.phone.id}
+            maxLength={FACILITY_LIMITS.phone}
             count={formData.phone.length}
           >
             {(field) => (
@@ -307,9 +306,9 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
           </FormField>
           <FormField
             label="Email"
-            error={errors.email ?? (emailError || undefined)}
-            id={IDS.email}
-            maxLength={FACILITY_FIELDS.email.maxLength}
+            error={errors.email}
+            id={FACILITY_FIELDS.email.id}
+            maxLength={FACILITY_LIMITS.email}
             count={formData.email.length}
           >
             {(field) => (
@@ -328,7 +327,7 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
 
         <div className="grid grid-cols-2 gap-3">
           {facilityTypes.length > 0 && (
-            <FormField label="Type" error={errors.facility_type_id} id={IDS.facility_type_id}>
+            <FormField label="Type" error={errors.facility_type_id} id={FACILITY_FIELDS.facility_type_id.id}>
               {(field) => (
                 <select
                   {...field}
@@ -347,7 +346,7 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
             </FormField>
           )}
           {facilityStatuses.length > 0 && (
-            <FormField label="Status" error={errors.status_id} id={IDS.status_id}>
+            <FormField label="Status" error={errors.status_id} id={FACILITY_FIELDS.status_id.id}>
               {(field) => (
                 <select
                   {...field}
@@ -366,7 +365,7 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
             </FormField>
           )}
         </div>
-        <FormField label="Notes" error={errors.notes} id={IDS.notes}>
+        <FormField label="Notes" error={errors.notes} id={FACILITY_FIELDS.notes.id}>
           {(field) => (
             <textarea
               {...field}
@@ -378,6 +377,11 @@ export default function CreateFacilityModal({ facilityTypes, facilityStatuses, o
             />
           )}
         </FormField>
+        {fieldErrors.formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {fieldErrors.formError}
+          </p>
+        )}
       </div>
     </Modal>
   );

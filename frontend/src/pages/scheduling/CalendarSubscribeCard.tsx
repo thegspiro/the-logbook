@@ -62,7 +62,7 @@ export const CalendarSubscribeCard: React.FC = () => {
   };
 
   return (
-    <div className="card">
+    <div className="card px-4 py-3" data-testid="calendar-subscribe-card">
       <button
         onClick={() => {
           void handleOpen();

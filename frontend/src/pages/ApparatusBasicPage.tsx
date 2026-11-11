@@ -12,8 +12,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useDialog } from '../hooks/useDialog';
 import { useDiscardGuard } from '../hooks/useDiscardGuard';
-import { FormField } from '../components/ux/FormField';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
 import {
   Truck,
   Plus,
@@ -30,6 +28,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
 import { schedulingService } from '../modules/scheduling/services/api';
 
 import { useConfirm } from '../contexts/ConfirmContext';
@@ -110,19 +110,43 @@ const UNIT_NUMBER_MAX_LENGTH = 20;
 const NAME_MAX_LENGTH = 100;
 const MIN_STAFFING_MAX = 50;
 
+// The crew list is a set of pickers with no single field to flag; a refusal
+// against it falls through to the dialog-level message.
 type ApparatusField = 'unit_number' | 'name' | 'apparatus_type' | 'min_staffing';
-const APPARATUS_FIELDS: Record<ApparatusField, ServerFieldSpec> = {
-  unit_number: { label: 'Unit number', maxLength: UNIT_NUMBER_MAX_LENGTH },
-  name: { label: 'Name', maxLength: NAME_MAX_LENGTH },
-  apparatus_type: { label: 'Apparatus type' },
-  min_staffing: { label: 'Minimum staffing' },
+
+const APPARATUS_FIELDS: FieldSpecs<ApparatusField> = {
+  unit_number: { id: 'apparatus-basic-unit', label: 'Unit Number' },
+  name: { id: 'apparatus-basic-name', label: 'Name' },
+  apparatus_type: { id: 'apparatus-basic-type', label: 'Apparatus Type' },
+  min_staffing: { id: 'apparatus-basic-min-staffing', label: 'Minimum Staffing' },
 };
-const APPARATUS_FIELD_IDS: Record<ApparatusField, string> = {
-  unit_number: 'apparatus-basic-unit',
-  name: 'apparatus-basic-name',
-  apparatus_type: 'apparatus-basic-type',
-  min_staffing: 'apparatus-basic-min-staffing',
-};
+
+/**
+ * What stops a save. The limits mirror BasicApparatusCreate (unit_number
+ * max_length=20, name max_length=100, min_staffing ge=1 le=50), so the form
+ * names the problem on its field instead of the save failing with a bare
+ * error (forms review F-3).
+ */
+function checkApparatus(form: {
+  unit_number: string;
+  name: string;
+  min_staffing: string;
+}): FieldErrors<ApparatusField> {
+  const errors: FieldErrors<ApparatusField> = {};
+  const unit = form.unit_number.trim();
+  if (!unit) errors.unit_number = 'Enter the unit number.';
+  else if (unit.length > UNIT_NUMBER_MAX_LENGTH) {
+    errors.unit_number = `Unit number must be ${UNIT_NUMBER_MAX_LENGTH} characters or fewer.`;
+  }
+  const name = form.name.trim();
+  if (!name) errors.name = 'Enter a name for the apparatus.';
+  else if (name.length > NAME_MAX_LENGTH) errors.name = `Name must be ${NAME_MAX_LENGTH} characters or fewer.`;
+  const minStaffing = form.min_staffing.trim() === '' ? Number.NaN : Number(form.min_staffing);
+  if (!Number.isInteger(minStaffing) || minStaffing < 1 || minStaffing > MIN_STAFFING_MAX) {
+    errors.min_staffing = `Minimum staffing must be a whole number from 1 to ${MIN_STAFFING_MAX}.`;
+  }
+  return errors;
+}
 
 interface ApparatusForm {
   unit_number: string;
@@ -163,8 +187,10 @@ export default function ApparatusBasicPage() {
   const [editing, setEditing] = useState<BasicApparatus | null>(null);
   const [form, setForm] = useState<ApparatusForm>(NEW_APPARATUS_FORM);
   const [initialForm, setInitialForm] = useState<ApparatusForm>(NEW_APPARATUS_FORM);
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<ApparatusField, string | undefined>>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const fieldErrors = useFieldErrors(APPARATUS_FIELDS);
+  const clearFieldErrors = fieldErrors.clear;
+  const setFieldError = fieldErrors.setError;
 
   const loadApparatus = useCallback(async () => {
     setIsLoading(true);
@@ -208,7 +234,7 @@ export default function ApparatusBasicPage() {
     setEditing(apparatus);
     setForm(next);
     setInitialForm(next);
-    setFieldErrors({});
+    clearFieldErrors();
     setShowModal(true);
   };
 
@@ -224,15 +250,9 @@ export default function ApparatusBasicPage() {
       positions: apparatus.positions || [],
     });
 
-  const setField = (field: Exclude<ApparatusField, 'apparatus_type'>, value: string) => {
-    setForm((p) => ({ ...p, [field]: value }));
-    setFieldErrors((p) => ({ ...p, [field]: undefined }));
-  };
-
-  const showFieldErrors = (errors: Partial<Record<ApparatusField, string | undefined>>) => {
-    setFieldErrors(errors);
-    const first = (Object.keys(APPARATUS_FIELD_IDS) as ApparatusField[]).find((f) => errors[f]);
-    if (first) document.getElementById(APPARATUS_FIELD_IDS[first])?.focus();
+  const showFieldErrors = (errors: FieldErrors<ApparatusField>) => {
+    fieldErrors.setErrors(errors);
+    fieldErrors.focusFirst(errors);
   };
 
   const handleTypeChange = (type: string) => {
@@ -242,7 +262,8 @@ export default function ApparatusBasicPage() {
       positions: DEFAULT_POSITIONS_BY_TYPE[type] || ['driver'],
       min_staffing: String((DEFAULT_POSITIONS_BY_TYPE[type] || ['driver']).length),
     }));
-    setFieldErrors((p) => ({ ...p, apparatus_type: undefined, min_staffing: undefined }));
+    setFieldError('apparatus_type', null);
+    setFieldError('min_staffing', null);
   };
 
   const addPosition = () => {
@@ -266,27 +287,21 @@ export default function ApparatusBasicPage() {
     }));
   };
 
+  /** Set one field, and drop the error it carried: editing it is the answer. */
+  const editField = (key: 'unit_number' | 'name' | 'min_staffing', value: string) => {
+    setForm((p) => ({ ...p, [key]: value }));
+    setFieldError(key, null);
+  };
+
   const handleSave = async () => {
-    // These mirror BasicApparatusCreate (unit_number max_length=20, name
-    // max_length=100, min_staffing ge=1 le=50), so the form names the problem
-    // on its field instead of the save failing with a bare error.
-    const missing: Partial<Record<ApparatusField, string>> = {};
-    if (!form.unit_number.trim()) missing.unit_number = 'Enter the unit number.';
-    else if (form.unit_number.trim().length > UNIT_NUMBER_MAX_LENGTH) {
-      missing.unit_number = `Unit number must be ${UNIT_NUMBER_MAX_LENGTH} characters or fewer.`;
-    }
-    if (!form.name.trim()) missing.name = 'Enter the name.';
-    else if (form.name.trim().length > NAME_MAX_LENGTH) {
-      missing.name = `Name must be ${NAME_MAX_LENGTH} characters or fewer.`;
-    }
-    const minStaffing = form.min_staffing.trim() === '' ? Number.NaN : Number(form.min_staffing);
-    if (!Number.isInteger(minStaffing) || minStaffing < 1 || minStaffing > MIN_STAFFING_MAX) {
-      missing.min_staffing = `Minimum staffing must be a whole number from 1 to ${MIN_STAFFING_MAX}.`;
-    }
-    if (Object.keys(missing).length > 0) {
-      showFieldErrors(missing);
+    const problems = checkApparatus(form);
+    fieldErrors.setFormError(null);
+    fieldErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
+    const minStaffing = Number(form.min_staffing);
     setIsSaving(true);
     try {
       const payload = {
@@ -296,12 +311,12 @@ export default function ApparatusBasicPage() {
         min_staffing: minStaffing,
         positions: form.positions,
       };
-      let refused: Partial<Record<ApparatusField, string>> = {};
+      let refused: FieldErrors<ApparatusField> = {};
       try {
         if (editing) await schedulingService.updateBasicApparatus(editing.id, payload);
         else await schedulingService.createBasicApparatus(payload);
       } catch (err: unknown) {
-        const mapped = mapServerFieldErrors(err, APPARATUS_FIELDS);
+        const mapped = placeApiError(APPARATUS_FIELDS, err);
         const keys = mapped ? (Object.keys(mapped.fieldErrors) as ApparatusField[]) : [];
         if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
         refused = mapped.fieldErrors;
@@ -329,7 +344,10 @@ export default function ApparatusBasicPage() {
       setShowModal(false);
       void loadApparatus();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save apparatus'));
+      // The dialog stays open with the officer's values; a refusal lands on
+      // the field it names, anything else (a duplicate unit number) above
+      // the actions.
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to save apparatus'));
     } finally {
       setIsSaving(false);
     }
@@ -605,8 +623,8 @@ export default function ApparatusBasicPage() {
                   <FormField
                     label="Unit Number"
                     required
-                    id={APPARATUS_FIELD_IDS.unit_number}
-                    error={fieldErrors.unit_number}
+                    id={APPARATUS_FIELDS.unit_number.id}
+                    error={fieldErrors.errors.unit_number}
                     maxLength={UNIT_NUMBER_MAX_LENGTH}
                     count={form.unit_number.length}
                   >
@@ -616,7 +634,7 @@ export default function ApparatusBasicPage() {
                         type="text"
                         autoComplete="off"
                         value={form.unit_number}
-                        onChange={(e) => setField('unit_number', e.target.value)}
+                        onChange={(e) => editField('unit_number', e.target.value)}
                         placeholder="e.g., E-1, L-1, M-1"
                         className={inputCls}
                       />
@@ -625,8 +643,8 @@ export default function ApparatusBasicPage() {
                   <FormField
                     label="Name"
                     required
-                    id={APPARATUS_FIELD_IDS.name}
-                    error={fieldErrors.name}
+                    id={APPARATUS_FIELDS.name.id}
+                    error={fieldErrors.errors.name}
                     maxLength={NAME_MAX_LENGTH}
                     count={form.name.length}
                   >
@@ -636,7 +654,7 @@ export default function ApparatusBasicPage() {
                         type="text"
                         autoComplete="off"
                         value={form.name}
-                        onChange={(e) => setField('name', e.target.value)}
+                        onChange={(e) => editField('name', e.target.value)}
                         placeholder="e.g., Engine 1, Ladder 1"
                         className={inputCls}
                       />
@@ -646,8 +664,8 @@ export default function ApparatusBasicPage() {
 
                 <FormField
                   label="Apparatus Type"
-                  id={APPARATUS_FIELD_IDS.apparatus_type}
-                  error={fieldErrors.apparatus_type}
+                  id={APPARATUS_FIELDS.apparatus_type.id}
+                  error={fieldErrors.errors.apparatus_type}
                 >
                   {(field) => (
                     <select
@@ -668,8 +686,8 @@ export default function ApparatusBasicPage() {
                 <FormField
                   label="Minimum Staffing"
                   required
-                  id={APPARATUS_FIELD_IDS.min_staffing}
-                  error={fieldErrors.min_staffing}
+                  id={APPARATUS_FIELDS.min_staffing.id}
+                  error={fieldErrors.errors.min_staffing}
                 >
                   {(field) => (
                     <input
@@ -679,7 +697,7 @@ export default function ApparatusBasicPage() {
                       max={MIN_STAFFING_MAX}
                       step={1}
                       value={form.min_staffing}
-                      onChange={(e) => setField('min_staffing', e.target.value)}
+                      onChange={(e) => editField('min_staffing', e.target.value)}
                       className={inputCls}
                     />
                   )}
@@ -729,6 +747,11 @@ export default function ApparatusBasicPage() {
                   </div>
                 </div>
               </div>
+              {fieldErrors.formError && (
+                <p role="alert" className={`px-6 pb-2 text-sm ${FIELD_ERROR_CLASS}`}>
+                  {fieldErrors.formError}
+                </p>
+              )}
               <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
                 <button
                   type="button"

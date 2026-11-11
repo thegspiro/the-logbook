@@ -96,6 +96,42 @@ describe('MedicalItemFormModal', () => {
     expect(onSaved).toHaveBeenCalled();
   });
 
+  // Forms review F-3: name and category were refused by toasts, and with no
+  // categories at all the button was greyed out.
+  it('names a missing name and category on an empty save, focusing the first', async () => {
+    renderWithRouter(
+      <MedicalItemFormModal categories={[category]} categoriesError={null} onClose={vi.fn()} onSaved={vi.fn()} />
+    );
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: 'Add supply' }));
+
+    const name = screen.getByLabelText(/^Name/);
+    expect(name).toHaveAccessibleDescription('Give the supply a name.');
+    expect(name).toHaveFocus();
+    expect(screen.getByLabelText(/^Category/)).toHaveAccessibleDescription(
+      'Choose a category — it is what makes this a medical supply.'
+    );
+    expect(mockCreateItem).not.toHaveBeenCalled();
+  });
+
+  it('says a category must be added first when there are none', async () => {
+    renderWithRouter(
+      <MedicalItemFormModal categories={[]} categoriesError={null} onClose={vi.fn()} onSaved={vi.fn()} />
+    );
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText(/^Name/), 'Gauze pads');
+
+    await user.click(screen.getByRole('button', { name: 'Add supply' }));
+
+    const select = screen.getByLabelText(/^Category/);
+    expect(select).toHaveAccessibleDescription(
+      'Add a medical supply category first — the notice above links to the page.'
+    );
+    expect(select).toHaveFocus();
+    expect(mockCreateItem).not.toHaveBeenCalled();
+  });
+
   // The shared create schema defaults a missing quantity to 1, so omitting
   // a blank box put one phantom unit on the shelf of a supply nobody had
   // received.
@@ -577,9 +613,7 @@ describe('MedicalItemFormModal errors and discarding', () => {
     await user.click(screen.getByRole('button', { name: 'Add supply' }));
 
     const field = screen.getByLabelText('Manufacturer');
-    await waitFor(() =>
-      expect(field).toHaveAccessibleDescription('Manufacturer is too long — keep it to 255 characters.')
-    );
+    await waitFor(() => expect(field).toHaveAccessibleDescription('Value is too long.'));
     expect(field).toHaveAttribute('aria-invalid', 'true');
     expect(onSaved).not.toHaveBeenCalled();
   });
@@ -609,9 +643,7 @@ describe('MedicalItemFormModal errors and discarding', () => {
     expect(retry).toMatchObject({ size: 'Large' });
     expect(onSavedExcept).toHaveBeenCalledTimes(1);
     expect(onSaved).not.toHaveBeenCalled();
-    expect(screen.getByLabelText('Vendor')).toHaveAccessibleDescription(
-      'Vendor is too long — keep it to 255 characters.'
-    );
+    expect(screen.getByLabelText('Vendor')).toHaveAccessibleDescription('Value is too long.');
   });
 
   it('asks before Escape or Cancel discards what was typed', async () => {

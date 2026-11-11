@@ -240,3 +240,47 @@ describe('EventTemplateForm clearing a field (workflow review W21)', () => {
     expect(sent).not.toHaveProperty('reminder_schedule');
   });
 });
+
+// Forms review F-3: an empty submit was refused by the browser's required
+// bubble, which vanished after a few seconds and was tied to no field.
+describe('EventTemplateForm required name and save errors', () => {
+  it('names a missing template name under the field and focuses it', async () => {
+    const onSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(<EventTemplateForm onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    const name = screen.getByRole('textbox', { name: 'Template Name' });
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Enter a name for the template.');
+    expect(name).toHaveFocus();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 from a rejected save on the field it names', async () => {
+    const onSubmit = vi.fn().mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'default_location', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    render(<EventTemplateForm onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Template Name' }), 'Drill');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    const field = await screen.findByRole('textbox', { description: 'Value is too long.' });
+    expect(field).toHaveAccessibleName('Default Location');
+    expect(field).toHaveFocus();
+  });
+
+  it('shows any other failed save inside the form', async () => {
+    const onSubmit = vi.fn().mockRejectedValue(new Error('Server unavailable'));
+    const user = userEvent.setup();
+    render(<EventTemplateForm onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByRole('textbox', { name: 'Template Name' }), 'Drill');
+    await user.click(screen.getByRole('button', { name: 'Save Template' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Server unavailable');
+  });
+});

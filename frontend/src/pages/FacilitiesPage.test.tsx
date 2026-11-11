@@ -196,7 +196,7 @@ describe('FacilitiesDashboard', () => {
     expect(firstAddButton).toBeDefined();
     await user.click(firstAddButton as HTMLElement);
 
-    expect(screen.getByRole('textbox', { name: 'Name' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveAttribute('aria-required', 'true');
     expect(screen.getByPlaceholderText('e.g., Station 1')).toBeInTheDocument();
   });
 

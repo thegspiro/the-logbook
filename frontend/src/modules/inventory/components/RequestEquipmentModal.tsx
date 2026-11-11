@@ -23,9 +23,9 @@ import { styleAttributesLabel } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import { EmptyState } from '../../../components/ux';
-import { FormField } from '../../../components/ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import toast from 'react-hot-toast';
 
 interface RequestEquipmentModalProps {
@@ -118,26 +118,24 @@ const MAX_QUANTITY = 99;
 
 type RequestField = 'freeText' | 'size' | 'duration' | 'quantity' | 'reason';
 
-/** How the request endpoint's field names land on this dialog (forms review F-2). */
-const REQUEST_FIELDS: Record<RequestField, ServerFieldSpec> = {
-  // `EquipmentRequestCreate.item_name` max_length; a chosen product's name is
-  // the catalog's own, so only a typed description can run over it.
-  freeText: { label: 'Description', maxLength: 255, api: 'item_name' },
-  // `EquipmentRequestCreate.requested_size` max_length.
-  size: { label: 'Size', maxLength: 50, api: ['requested_size', 'item_id'] },
-  duration: { label: 'How long you need it', api: 'requested_duration' },
-  quantity: { label: 'Quantity' },
-  // `FreeText` max_length.
-  reason: { label: 'Reason', maxLength: 2000 },
-};
+// Limits from EquipmentRequestCreate: `item_name` 255 (a chosen product's name
+// is the catalog's own, so only a typed description can run over it) and the
+// `FreeText` reason 2000.
+const FREE_TEXT_MAX = 255;
+const REASON_MAX = 2000;
 
-/** Field order on screen, and each control's id, so the first refusal takes focus. */
-const REQUEST_FIELD_IDS: Record<RequestField, string> = {
-  freeText: 'request-free-text',
-  size: 'request-size-first',
-  duration: 'requested-duration',
-  quantity: 'request-quantity',
-  reason: 'request-reason',
+/**
+ * How the request endpoint's field names land on this dialog (forms review
+ * F-2), in screen order so the first refusal takes focus. The free-text box
+ * answers "what do you need" when nothing is picked from the list, so a missing
+ * item is flagged there; a missing size on the group of size chips.
+ */
+const REQUEST_FIELDS: FieldSpecs<RequestField> = {
+  freeText: { id: 'request-free-text', label: 'What you need', apiKeys: ['item_name'] },
+  size: { id: 'request-size', label: 'Size', apiKeys: ['requested_size', 'item_id'] },
+  duration: { id: 'requested-duration', label: 'How long you need it', apiKeys: ['requested_duration'] },
+  quantity: { id: 'request-quantity', label: 'Quantity' },
+  reason: { id: 'request-reason', label: 'Reason' },
 };
 
 export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ isOpen, onClose, onSubmitted }) => {
@@ -155,18 +153,18 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
   const [quantity, setQuantity] = useState('1');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<RequestField, string>>>({});
+  const fieldErrors = useFieldErrors(REQUEST_FIELDS);
+  const { errors, clear: clearErrors } = fieldErrors;
   // Anything the member has chosen or typed toward the request (the search box
   // is only a way to look, not part of the request) is lost on close, so
   // Escape, the X and Cancel ask first (forms review F-6).
   const isDirty = selected !== null || freeText !== '' || reason !== '' || quantity !== '1' || duration !== 'temporary';
   const requestClose = useDiscardGuard({ isDirty, onClose });
 
-  const clearError = (field: RequestField) => setErrors((prev) => ({ ...prev, [field]: undefined }));
-  const showErrors = (next: Partial<Record<RequestField, string>>) => {
-    setErrors(next);
-    const first = (Object.keys(REQUEST_FIELD_IDS) as RequestField[]).find((k) => next[k]);
-    if (first) window.setTimeout(() => document.getElementById(REQUEST_FIELD_IDS[first])?.focus(), 0);
+  const clearError = (field: RequestField) => fieldErrors.setError(field, null);
+  const showErrors = (next: FieldErrors<RequestField>) => {
+    fieldErrors.setErrors(next);
+    fieldErrors.focusFirst(next);
   };
 
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -190,8 +188,8 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
     setDuration('temporary');
     setQuantity('1');
     setReason('');
-    setErrors({});
-  }, []);
+    clearErrors();
+  }, [clearErrors]);
 
   const loadCatalog = useCallback(async (term: string, category: string) => {
     const seq = ++loadSeq.current;
@@ -268,7 +266,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
 
   const chooseProduct = (product: RequestableProduct) => {
     setSelected(product);
-    setErrors({});
+    clearErrors();
     setQuantity('1');
     if (!product.has_sizes) {
       setSelectedVariant(product.variants[0] ? variantKey(product.variants[0]) : '');
@@ -310,8 +308,8 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
     e?.preventDefault();
     // A create: nothing is sent until each flagged field is fixed.
     const itemName = selected ? selected.name : freeText.trim();
-    const found: Partial<Record<RequestField, string>> = {};
-    if (!itemName) found.freeText = 'Choose an item above, or describe what you need.';
+    const found: FieldErrors<RequestField> = {};
+    if (!itemName) found.freeText = 'Choose an item from the list, or describe what you need here.';
     if (selected?.has_sizes && !activeVariant) found.size = 'Choose a size.';
     if (isPool && !quantityValid) found.quantity = `Enter a quantity between 1 and ${MAX_QUANTITY}.`;
     if (Object.keys(found).length > 0) {
@@ -336,14 +334,9 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
       onSubmitted();
       onClose();
     } catch (err: unknown) {
-      // A refused field is flagged on that field rather than named in a toast (forms review F-2).
-      const mapped = mapServerFieldErrors(err, REQUEST_FIELDS);
-      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
-        showErrors(mapped.fieldErrors);
-        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then submit again.');
-      } else {
-        toast.error(mapped?.unmatched.join(' ') || getErrorMessage(err, 'Failed to submit request'));
-      }
+      // A refused field is flagged on that field, and anything else is said in
+      // the dialog rather than in a toast behind it (forms review F-2).
+      fieldErrors.focusFirst(fieldErrors.setFromApiError(err, 'Failed to submit request'));
     } finally {
       setSubmitting(false);
     }
@@ -363,7 +356,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
   const durationField = (
     <FormField
       label="How long do you need it?"
-      id={REQUEST_FIELD_IDS.duration}
+      id={REQUEST_FIELDS.duration.id}
       error={errors.duration}
       hint="This is a guide for the quartermaster. They decide how it is issued — loaned, assigned to you, or issued from stock — based on what is available and department policy."
     >
@@ -388,9 +381,9 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
     <FormField
       label="Reason"
       optional
-      id={REQUEST_FIELD_IDS.reason}
+      id={REQUEST_FIELDS.reason.id}
       error={errors.reason}
-      maxLength={REQUEST_FIELDS.reason.maxLength}
+      maxLength={REASON_MAX}
       count={reason.length}
     >
       {(field) => (
@@ -425,7 +418,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
         <>
           <button
             type="submit"
-            disabled={submitting || (!selected && !freeText.trim())}
+            disabled={submitting}
             className="btn-info btn-md disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? 'Submitting…' : 'Submit Request'}
@@ -436,6 +429,11 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
         </>
       }
     >
+      {fieldErrors.formError && (
+        <p role="alert" className={`mb-4 text-sm ${FIELD_ERROR_CLASS}`}>
+          {fieldErrors.formError}
+        </p>
+      )}
       {selected === null ? (
         <div className="space-y-4">
           <div>
@@ -535,9 +533,9 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
                   Not listed? Describe what you need
                 </>
               }
-              id={REQUEST_FIELD_IDS.freeText}
+              id={REQUEST_FIELDS.freeText.id}
               error={errors.freeText}
-              maxLength={REQUEST_FIELDS.freeText.maxLength}
+              maxLength={FREE_TEXT_MAX}
               count={freeText.length}
               hint="The quartermaster reviews these like any other request and decides whether to get it. It is also how the department learns what it is missing."
             >
@@ -590,18 +588,20 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
                 Size
               </span>
               <div
-                className="flex flex-wrap gap-2"
+                id={REQUEST_FIELDS.size.id}
+                // Focus target for a missing size: the chips answer it together.
+                tabIndex={-1}
+                className="flex flex-wrap gap-2 focus:outline-none"
                 role="group"
                 aria-labelledby="request-size-label"
-                aria-describedby={errors.size ? 'request-size-error' : undefined}
+                aria-describedby={errors.size ? `${REQUEST_FIELDS.size.id}-error` : undefined}
               >
-                {sizeOptions.map((variant, index) => {
+                {sizeOptions.map((variant) => {
                   const key = variantKey(variant);
                   const stock = stockPhrase(variant);
                   return (
                     <button
                       key={key}
-                      id={index === 0 ? REQUEST_FIELD_IDS.size : undefined}
                       type="button"
                       onClick={() => {
                         setSelectedVariant(key);
@@ -623,7 +623,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
                 })}
               </div>
               {errors.size && (
-                <p id="request-size-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
+                <p id={`${REQUEST_FIELDS.size.id}-error`} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
                   {errors.size}
                 </p>
               )}
@@ -648,7 +648,7 @@ export const RequestEquipmentModal: React.FC<RequestEquipmentModalProps> = ({ is
           {durationField}
 
           {isPool && (
-            <FormField label="Quantity" id={REQUEST_FIELD_IDS.quantity} error={errors.quantity}>
+            <FormField label="Quantity" id={REQUEST_FIELDS.quantity.id} error={errors.quantity}>
               {(field) => (
                 <input
                   {...field}

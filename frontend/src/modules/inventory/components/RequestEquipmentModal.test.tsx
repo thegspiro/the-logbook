@@ -243,10 +243,45 @@ describe('RequestEquipmentModal', () => {
     await user.click(await screen.findByRole('button', { name: /Long Sleeve/ }));
     await user.click(screen.getByRole('button', { name: /Submit Request/ }));
 
-    await waitFor(() =>
-      expect(screen.getByRole('group', { name: 'Size' })).toHaveAccessibleDescription('Choose a size.')
-    );
+    const sizes = screen.getByRole('group', { name: 'Size' });
+    expect(sizes).toHaveAccessibleDescription('Choose a size.');
+    expect(sizes).toHaveFocus();
     expect(mockCreateEquipmentRequest).not.toHaveBeenCalled();
+  });
+
+  // Forms review F-3: Submit Request stayed greyed out until something was
+  // picked or typed, with nothing saying what it was waiting for.
+  it('says what is missing on an empty submit, on the describe-it box', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByRole('button', { name: /Long Sleeve/ });
+
+    await user.click(screen.getByRole('button', { name: /Submit Request/ }));
+
+    const describe = screen.getByRole('textbox', { name: /Describe what you need/ });
+    expect(describe).toHaveAttribute('aria-invalid', 'true');
+    expect(describe).toHaveAccessibleDescription(
+      expect.stringContaining('Choose an item from the list, or describe what you need here.')
+    );
+    expect(describe).toHaveFocus();
+    expect(mockCreateEquipmentRequest).not.toHaveBeenCalled();
+  });
+
+  it('puts a refused field from the server on that field', async () => {
+    mockCreateEquipmentRequest.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'item_name', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderModal();
+    await user.type(await screen.findByRole('textbox', { name: /Describe what you need/ }), 'Wildland gloves');
+
+    await user.click(screen.getByRole('button', { name: /Submit Request/ }));
+
+    const describe = await screen.findByRole('textbox', {
+      name: /Describe what you need/,
+      description: /Value is too long\./,
+    });
+    expect(describe).toHaveFocus();
   });
 
   it('omits the quantity box for a serialized product', async () => {
@@ -364,9 +399,7 @@ describe('RequestEquipmentModal', () => {
 
     const description = screen.getByLabelText(/Describe what you need/);
     await waitFor(() => expect(description).toHaveAttribute('aria-invalid', 'true'));
-    expect(description).toHaveAccessibleDescription(
-      expect.stringContaining('Description is too long — keep it to 255 characters.')
-    );
+    expect(description).toHaveAccessibleDescription(expect.stringContaining('Value is too long.'));
     expect(description).toHaveAttribute('maxLength', '255');
     expect(onClose).not.toHaveBeenCalled();
   });

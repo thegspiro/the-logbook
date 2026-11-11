@@ -216,10 +216,11 @@ describe('LocationsPage create validation', () => {
 
     const address = within(dialog).getByLabelText('Street Address *');
     expect(address).toHaveAccessibleDescription('A station needs a street address.');
+    expect(address).toHaveFocus();
     expect(address).toHaveAttribute('aria-invalid', 'true');
     expect(createLocation).not.toHaveBeenCalled();
 
-    await user.type(within(dialog).getByLabelText('Street Address *'), '200 Oak Avenue');
+    await user.type(address, '200 Oak Avenue');
     await user.click(within(dialog).getByRole('button', { name: 'Add Station' }));
 
     await waitFor(() => expect(createLocation).toHaveBeenCalledTimes(1));
@@ -241,6 +242,41 @@ describe('LocationsPage create validation', () => {
     expect(updateLocation).not.toHaveBeenCalled();
   });
 
+  // Forms review F-3: Add Station and Add Room stayed greyed out until a name
+  // was typed, with nothing saying why.
+  it('names a missing station name and address on an empty save, focusing the first', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<LocationsPage />);
+    await user.click(await screen.findByRole('button', { name: /Add Station/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Add Station' });
+
+    await user.click(within(dialog).getByRole('button', { name: 'Add Station' }));
+
+    const name = within(dialog).getByLabelText('Station Name / Number *');
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Enter the station name or number.');
+    expect(name).toHaveFocus();
+    expect(within(dialog).getByLabelText('Street Address *')).toHaveAccessibleDescription(
+      'A station needs a street address.'
+    );
+    expect(createLocation).not.toHaveBeenCalled();
+  });
+
+  it('names a missing room name on an empty save', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<LocationsPage />);
+    await openStation();
+    await user.click(screen.getByRole('button', { name: 'Edit room' }));
+    const nameBox = screen.getByLabelText('Room Name *');
+    await user.clear(nameBox);
+
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    expect(nameBox).toHaveAccessibleDescription('Enter a name for the room.');
+    expect(nameBox).toHaveFocus();
+    expect(updateLocation).not.toHaveBeenCalled();
+  });
+
   it('puts a server refusal on a new station field and creates nothing', async () => {
     createLocation.mockRejectedValueOnce({
       response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
@@ -255,9 +291,7 @@ describe('LocationsPage create validation', () => {
     await user.type(within(dialog).getByLabelText('Street Address *'), '200 Oak Avenue{Enter}');
 
     const name = within(dialog).getByLabelText('Station Name / Number *');
-    await waitFor(() =>
-      expect(name).toHaveAccessibleDescription('Station name is too long — keep it to 200 characters.')
-    );
+    await waitFor(() => expect(name).toHaveAccessibleDescription('Value is too long.'));
     expect(name).toHaveAttribute('aria-invalid', 'true');
     expect(name).toHaveAttribute('maxLength', '200');
     expect(createLocation).toHaveBeenCalledTimes(1);
@@ -277,9 +311,30 @@ describe('LocationsPage create validation', () => {
     await user.click(screen.getByRole('button', { name: 'Update' }));
 
     const floor = await screen.findByLabelText('Floor');
-    await waitFor(() => expect(floor).toHaveAccessibleDescription('Floor is too long — keep it to 20 characters.'));
+    await waitFor(() => expect(floor).toHaveAccessibleDescription('Value is too long.'));
     expect(updateLocation).toHaveBeenCalledTimes(2);
     expect(updateLocation.mock.calls[1]?.[1]).not.toHaveProperty('floor');
+  });
+
+  it('puts a refused field from the server on that field, and other refusals in the dialog', async () => {
+    createLocation
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'zip', message: 'Value is too long.' }] } },
+      })
+      .mockRejectedValueOnce(serverError('A location named "Station 2" already exists'));
+    const user = userEvent.setup();
+    renderWithRouter(<LocationsPage />);
+    await user.click(await screen.findByRole('button', { name: /Add Station/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Add Station' });
+    await user.type(within(dialog).getByLabelText('Station Name / Number *'), 'Station 2');
+    await user.type(within(dialog).getByLabelText('Street Address *'), '200 Oak Avenue');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Add Station' }));
+    const zip = await within(dialog).findByRole('textbox', { name: 'Zip', description: 'Value is too long.' });
+    expect(zip).toHaveFocus();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Add Station' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('A location named "Station 2" already exists');
   });
 
   it('asks before Escape discards a half-typed station', async () => {

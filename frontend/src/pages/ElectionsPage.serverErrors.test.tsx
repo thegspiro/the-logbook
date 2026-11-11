@@ -60,7 +60,7 @@ describe('ElectionsPage › Create Election, refusals on their fields', () => {
 
     const title = within(dialog).getByLabelText(/^Title/);
     await waitFor(() => expect(title).toHaveAttribute('aria-invalid', 'true'));
-    expect(title).toHaveAccessibleDescription('Title is too long — keep it to 200 characters.');
+    expect(title).toHaveAccessibleDescription('String should have at most 200 characters.');
     expect(title).toHaveFocus();
     expect(screen.getByRole('dialog', { name: 'Create New Election' })).toBeInTheDocument();
   });
@@ -70,7 +70,7 @@ describe('ElectionsPage › Create Election, refusals on their fields', () => {
     fireEvent.change(within(dialog).getByLabelText(/Start Date & Time/), { target: { value: '2099-12-10' } });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Create Election' }));
 
-    expect(within(dialog).getByLabelText(/^Title/)).toHaveAccessibleDescription('Title is required.');
+    expect(within(dialog).getByLabelText(/^Title/)).toHaveAccessibleDescription('Enter a title for the election.');
     expect(mockCreateElection).not.toHaveBeenCalled();
   });
 

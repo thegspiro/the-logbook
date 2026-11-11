@@ -23,6 +23,7 @@ from app.api.dependencies import (
     require_permission,
     user_has_permission,
 )
+from app.core.audit import log_audit_event
 from app.core.constants import TRAINING_OFFICER_ROLE_SLUGS
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -52,6 +53,7 @@ from app.services.shift_evaluation_service import ShiftEvaluationService
 from app.services.skills_testing_service import member_skill_expirations
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    NOT_YET_HELD_STATUS,
     get_org_include_current_month,
     load_credited_shift_dates,
     load_held_sessions,
@@ -65,6 +67,7 @@ from app.services.training_course_names import (
 )
 from app.services.training_module_config_service import TrainingModuleConfigService
 from app.services.training_program_service import TrainingProgramService
+from app.services.training_record_source import record_sources
 from app.services.training_requirement_courses import (
     load_required_course_catalog,
 )
@@ -344,6 +347,10 @@ async def _evaluate_member_requirements(
         # catch-up period ends — the same rule every compliance screen uses.
         if detail["catch_up_deadline"]:
             statuses.append(CATCH_UP_STATUS)
+            continue
+        # No linked session held yet: listed, graded neither way (W80-9).
+        if detail["not_applicable"]:
+            statuses.append(NOT_YET_HELD_STATUS)
             continue
         total_progress_pct += detail["progress_percentage"]
         statuses.append(
@@ -1040,8 +1047,12 @@ async def get_my_training_records(
     page_course_names = await library_course_names(
         db, str(current_user.organization_id), (r.course_id for r in page_records)
     )
+    page_sources = await record_sources(
+        db, str(current_user.organization_id), page_records
+    )
     items: list[dict[str, Any]] = []
     for r in page_records:
+        source = page_sources[str(r.id)]
         item: dict[str, Any] = {
             "id": str(r.id),
             "course_name": member_course_name(
@@ -1059,6 +1070,8 @@ async def get_my_training_records(
             "instructor": r.instructor,
             "voided_at": r.voided_at.isoformat() if r.voided_at else None,
             "void_reason": r.void_reason,
+            "source": source.kind,
+            "source_label": source.label,
         }
         if show_hours:
             item["hours_completed"] = (
@@ -1117,6 +1130,20 @@ async def export_my_training(
     user_id = str(current_user.id)
     include_certifications = bool(config.show_certification_status)
 
+    await log_audit_event(
+        db=db,
+        event_type="my_training_record_exported",
+        event_category="training",
+        severity="info",
+        event_data={
+            "format": format,
+            "start_date": start_date.isoformat() if start_date else None,
+            "end_date": end_date.isoformat() if end_date else None,
+        },
+        user_id=user_id,
+        organization_id=str(current_user.organization_id),
+    )
+
     try:
         if format == "pdf":
             pdf_buf = await export_service.generate_individual_pdf(
@@ -1125,13 +1152,14 @@ async def export_my_training(
                 start_date=start_date,
                 end_date=end_date,
                 include_certifications=include_certifications,
+                generated_by=current_user.full_name,
             )
             return StreamingResponse(
                 pdf_buf,
                 media_type="application/pdf",
                 headers={
                     "Content-Disposition": (
-                        "attachment; filename=my_training_record.pdf"
+                        'attachment; filename="my_training_record.pdf"'
                     )
                 },
             )
@@ -1147,7 +1175,7 @@ async def export_my_training(
             content=csv_content,
             media_type="text/csv",
             headers={
-                "Content-Disposition": ("attachment; filename=my_training_record.csv")
+                "Content-Disposition": ('attachment; filename="my_training_record.csv"')
             },
         )
     except ValueError as e:

@@ -133,6 +133,7 @@ const PurchaseRequestFormPage: React.FC = () => {
     handleSubmit,
     formState: { errors, isSubmitting, isDirty },
     reset,
+    resetField,
     watch,
     setValue,
     setError,
@@ -184,15 +185,19 @@ const PurchaseRequestFormPage: React.FC = () => {
     }
   }, [isEdit, id, fetchPurchaseRequest]);
 
-  // Auto-select active fiscal year
+  // Auto-select the active fiscal year. It becomes this field's default, so
+  // the selection is not itself a change, and nothing else is touched. A
+  // whole-form reset here took the member's current entries as the new
+  // defaults, so anything typed before the options arrived counted as
+  // unchanged: neither leave warning fired for it.
   useEffect(() => {
     if (fiscalYears.length > 0 && !isEdit) {
       const active = fiscalYears.find((fy) => fy.status === 'active');
       if (active) {
-        reset((prev) => ({ ...prev, fiscalYearId: active.id }));
+        resetField('fiscalYearId', { defaultValue: active.id });
       }
     }
-  }, [fiscalYears, isEdit, reset]);
+  }, [fiscalYears, isEdit, resetField]);
 
   // Populate form for edit
   useEffect(() => {

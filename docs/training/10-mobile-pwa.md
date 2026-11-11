@@ -320,6 +320,16 @@ Nothing in The Logbook should make you scroll sideways on a phone. Here is how
 screens adapt:
 
 - **Page headers** stack the title above the buttons.
+  _(2026-11-09)_ Below 640px the header's text buttons share each row equally:
+  two short labels sit side by side at the same width, otherwise each takes a
+  full row. Icon-only buttons keep their size.
+- **Wide tables become cards** _(2026-11-09)_ when the space they sit in is
+  narrow, not only on a phone: the member roster, apparatus list and fuel log,
+  error monitoring, audit log, IP security tables, public portal access log,
+  budgets, purchase requests, donations, donors, grant budget and expenditures,
+  training administration tables, waivers, prospective members, voter
+  eligibility roster, admin hours entries, issuance charges and scheduling
+  reports. Each row reads as a labelled card.
 - **Tab rows** scroll sideways inside themselves instead of wrapping onto two
   lines.
 - **Two-column forms** become one column.

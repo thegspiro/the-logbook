@@ -195,22 +195,52 @@ describe('InventoryCategoriesPage', () => {
     const nameInput = await screen.findByPlaceholderText('e.g. Turnout Gear');
     await user.type(nameInput, 'Test');
     await user.click(screen.getByText('Create Category'));
-    await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith(expect.any(String));
-    });
+    // A server failure is shown inside the dialog, which stays open.
+    expect(await screen.findByRole('alert')).toHaveTextContent('Server error');
+    expect(mockToastError).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Test');
+  });
+});
+
+describe('InventoryCategoriesPage add dialog validation', () => {
+  beforeEach(() => {
+    mockGetCategories.mockReset();
+    mockCreateCategory.mockReset();
+    mockCheckPermission.mockReset();
+    mockToastError.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+    mockGetCategories.mockResolvedValue([makeCategory()]);
+    mockCreateCategory.mockResolvedValue({ id: 'cat-new' });
   });
 
-  it('validates that category name is required', async () => {
+  const openAdd = async () => {
     const user = userEvent.setup();
     renderWithRouter(<InventoryCategoriesPage />);
-    await waitFor(() => {
-      expect(screen.getByText('Turnout Gear')).toBeInTheDocument();
-    });
+    await screen.findByText('Turnout Gear');
     await user.click(screen.getByText('Add Category'));
-    await user.click(await screen.findByText('Create Category'));
-    // The form uses HTML required attribute, so the browser prevents submission
-    // and createCategory should NOT be called
+    await screen.findByText('Create Category');
+    return user;
+  };
+
+  it('names the missing name under its field and sends nothing', async () => {
+    const user = await openAdd();
+    await user.click(screen.getByText('Create Category'));
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Enter a name for the category.');
+    expect(name).toHaveFocus();
     expect(mockCreateCategory).not.toHaveBeenCalled();
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the field it names', async () => {
+    mockCreateCategory.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+    });
+    const user = await openAdd();
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Radios');
+    await user.click(screen.getByText('Create Category'));
+    expect(await screen.findByRole('textbox', { name: 'Name', description: 'Value is too long.' })).toHaveFocus();
   });
 });
 

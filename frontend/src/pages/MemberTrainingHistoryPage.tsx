@@ -590,6 +590,7 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                             null,
                           formatDate(training.completion_date || training.scheduled_date, tz),
                           formatHoursLabel(training.hours_completed),
+                          training.source_label || null,
                         ]
                           .filter(Boolean)
                           .map((item, i) => (

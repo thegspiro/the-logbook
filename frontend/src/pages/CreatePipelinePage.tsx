@@ -46,6 +46,8 @@ import type {
   TrainingRequirementEnhanced,
 } from '../types/training';
 import { getErrorDetail } from '../utils/errorHandling';
+import { FormField } from '../components/ux/FormField';
+import { useFieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import {
   emptyProgramRequirementSettings,
   programRequirementSettingsError,
@@ -399,6 +401,17 @@ const REQUIREMENT_TYPE_HELP: Record<string, string> = {
   refusals: 'A number of patient refusals, totalled from submitted shift evaluations.',
 };
 
+// Only the program's name is required to create it. The build request nests
+// the program under `program`, and the validation handler reports a nested
+// field by its dotted path.
+type ProgramField = 'name';
+
+const PROGRAM_FIELDS: FieldSpecs<ProgramField> = {
+  name: { id: 'prog-name', label: 'Program Name', apiKeys: ['program.name'] },
+};
+
+const PROGRAM_NAME_MISSING = 'Enter a name for the program.';
+
 // ==================== Step Components ====================
 
 const StepInfo: React.FC<{
@@ -416,7 +429,8 @@ const StepInfo: React.FC<{
     shift_evaluation_template_id: string;
   };
   onChange: (field: string, value: string | boolean | string[]) => void;
-}> = ({ data, onChange }) => (
+  nameError?: string | undefined;
+}> = ({ data, onChange, nameError }) => (
   <div className="space-y-6">
     <div>
       <h2 className="text-theme-text-primary mb-1 text-xl font-semibold">Program Information</h2>
@@ -437,20 +451,19 @@ const StepInfo: React.FC<{
       </p>
     </InfoCallout>
 
-    <div>
-      <label htmlFor="prog-name" className="form-label">
-        Program Name <span className="text-red-700 dark:text-red-400">*</span>
-      </label>
-      <input
-        id="prog-name"
-        type="text"
-        value={data.name}
-        onChange={(e) => onChange('name', e.target.value)}
-        className="form-input"
-        placeholder="e.g., Recruit / Probationary Firefighter"
-        required
-      />
-    </div>
+    <FormField id={PROGRAM_FIELDS.name.id} label="Program Name" required error={nameError}>
+      {(field) => (
+        <input
+          {...field}
+          type="text"
+          maxLength={255}
+          value={data.name}
+          onChange={(e) => onChange('name', e.target.value)}
+          className="form-input"
+          placeholder="e.g., Recruit / Probationary Firefighter"
+        />
+      )}
+    </FormField>
 
     <div>
       <label htmlFor="prog-desc" className="form-label">
@@ -1534,6 +1547,10 @@ const CreatePipelinePage: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<WizardStep>(restored?.draft.currentStep ?? 'info');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const programErrors = useFieldErrors(PROGRAM_FIELDS);
+  // Set when the name is flagged from another step, so focus lands on the
+  // field once the Program Information step has rendered it.
+  const focusNamePending = useRef(false);
 
   // Program info state
   const [info, setInfo] = useState<ProgramInfoForm>(restored?.draft.info ?? emptyInfo);
@@ -1647,6 +1664,7 @@ const CreatePipelinePage: React.FC = () => {
     setProgramRequirements(fresh.programRequirements);
     setProgramMilestones(fresh.programMilestones);
     setError('');
+    programErrors.clear();
     setDraftSavedAt(null);
     setDraftSaveFailed(false);
     setShowRestoredNotice(false);
@@ -1687,12 +1705,32 @@ const CreatePipelinePage: React.FC = () => {
   // ---- Step navigation ----
   const stepIndex = wizardSteps.findIndex((s) => s.key === currentStep);
 
-  const canGoNext = () => {
-    if (currentStep === 'info') return info.name.trim().length > 0;
-    return true;
+  // Next and Create stay pressable without a name, and pressing one says what
+  // is missing under the field. A greyed-out Next told the officer nothing,
+  // and the native required bubble never fired outside a form (forms review
+  // F-3).
+  const flagMissingName = () => {
+    programErrors.setError('name', PROGRAM_NAME_MISSING);
+    if (currentStep === 'info') {
+      programErrors.focusFirst({ name: PROGRAM_NAME_MISSING });
+    } else {
+      focusNamePending.current = true;
+      setCurrentStep('info');
+    }
   };
 
+  useEffect(() => {
+    if (currentStep === 'info' && focusNamePending.current) {
+      focusNamePending.current = false;
+      document.getElementById(PROGRAM_FIELDS.name.id)?.focus();
+    }
+  }, [currentStep]);
+
   const goNext = () => {
+    if (currentStep === 'info' && !info.name.trim()) {
+      flagMissingName();
+      return;
+    }
     const idx = wizardSteps.findIndex((s) => s.key === currentStep);
     const next = wizardSteps[idx + 1];
     if (idx < wizardSteps.length - 1 && next) setCurrentStep(next.key);
@@ -1707,6 +1745,7 @@ const CreatePipelinePage: React.FC = () => {
   // ---- Info handlers ----
   const handleInfoChange = (field: string, value: string | boolean | string[]) => {
     setInfo((prev) => ({ ...prev, [field]: value }));
+    if (field === 'name') programErrors.setError('name', null);
     // Switching to a one-list program while sitting on the Phases step would
     // leave the wizard showing a step that no longer exists.
     if (field === 'structure_type' && value !== 'phases' && currentStep === 'phases') {
@@ -1852,6 +1891,10 @@ const CreatePipelinePage: React.FC = () => {
 
   // ---- Submit ----
   const handleSubmit = async () => {
+    if (!info.name.trim()) {
+      flagMissingName();
+      return;
+    }
     const problem = firstProblem();
     if (problem) {
       setError(problem);
@@ -1904,6 +1947,14 @@ const CreatePipelinePage: React.FC = () => {
       toast.success('Training pipeline created');
       void navigate(`/training/programs/${program.id}`);
     } catch (err: unknown) {
+      // A 422 on the program's name belongs under that field, which is on the
+      // first step; anything else keeps the message box and toast below.
+      const fieldErrors = programErrors.setFromApiError(err, 'Failed to create pipeline');
+      if (fieldErrors.name) {
+        focusNamePending.current = true;
+        setCurrentStep('info');
+        return;
+      }
       const errorMessage = getErrorDetail(err) || 'Failed to create pipeline';
       setError(errorMessage);
       toast.error(errorMessage);
@@ -1972,7 +2023,11 @@ const CreatePipelinePage: React.FC = () => {
                 )}
                 <button
                   onClick={() => {
-                    if (i <= stepIndex || canGoNext()) setCurrentStep(step.key);
+                    if (i > stepIndex && currentStep === 'info' && !info.name.trim()) {
+                      flagMissingName();
+                      return;
+                    }
+                    setCurrentStep(step.key);
                   }}
                   aria-current={isActive ? 'step' : undefined}
                   className={`touch-target-phone flex shrink-0 items-center space-x-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
@@ -1999,7 +2054,9 @@ const CreatePipelinePage: React.FC = () => {
             </div>
           )}
 
-          {currentStep === 'info' && <StepInfo data={info} onChange={handleInfoChange} />}
+          {currentStep === 'info' && (
+            <StepInfo data={info} onChange={handleInfoChange} nameError={programErrors.errors.name} />
+          )}
           {currentStep === 'phases' && (
             <StepPhases
               phases={phases}
@@ -2083,7 +2140,7 @@ const CreatePipelinePage: React.FC = () => {
               onClick={() => {
                 void handleSubmit();
               }}
-              disabled={isSubmitting || !info.name.trim()}
+              disabled={isSubmitting}
               className="btn-primary flex items-center space-x-2 px-6"
             >
               {isSubmitting ? (
@@ -2099,7 +2156,7 @@ const CreatePipelinePage: React.FC = () => {
               )}
             </button>
           ) : (
-            <button onClick={goNext} disabled={!canGoNext()} className="btn-primary flex items-center space-x-2">
+            <button onClick={goNext} className="btn-primary flex items-center space-x-2">
               <span>Next</span>
               <ArrowRight className="h-4 w-4" />
             </button>

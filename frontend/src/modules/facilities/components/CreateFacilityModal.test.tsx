@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -38,7 +38,11 @@ describe('CreateFacilityModal email', () => {
 
     expect(email).toHaveAttribute('aria-invalid', 'true');
     expect(email).toHaveAccessibleDescription(/Enter an email address/);
+
+    // Forms review F-3: the button used to grey out here; pressing it now
+    // returns focus to the address that stops it.
     await user.click(screen.getByRole('button', { name: 'Add Facility' }));
+    expect(email).toHaveFocus();
     expect(mockCreateFacility).not.toHaveBeenCalled();
   });
 
@@ -57,6 +61,43 @@ describe('CreateFacilityModal email', () => {
   });
 });
 
+describe('CreateFacilityModal refusals', () => {
+  beforeEach(() => {
+    mockCreateFacility.mockReset();
+  });
+
+  it('names a missing name on an empty save and focuses it', async () => {
+    const user = userEvent.setup();
+    renderModal();
+
+    await user.click(screen.getByRole('button', { name: 'Add Facility' }));
+
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Enter a name for the facility.');
+    expect(name).toHaveFocus();
+    expect(mockCreateFacility).not.toHaveBeenCalled();
+  });
+
+  it('puts a refused field on that field, and says any other failure in the dialog', async () => {
+    mockCreateFacility
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'zip_code', message: 'Value is too long.' }] } },
+      })
+      .mockRejectedValueOnce({ response: { status: 500, data: { detail: 'Database unavailable' } } });
+    const user = userEvent.setup();
+    renderModal();
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Station 2');
+
+    await user.click(screen.getByRole('button', { name: 'Add Facility' }));
+    const zip = await screen.findByRole('textbox', { name: 'Zip Code', description: 'Value is too long.' });
+    expect(zip).toHaveFocus();
+
+    await user.click(screen.getByRole('button', { name: 'Add Facility' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+});
+
 describe('CreateFacilityModal errors and discarding', () => {
   beforeEach(() => {
     mockCreateFacility.mockReset();
@@ -64,28 +105,12 @@ describe('CreateFacilityModal errors and discarding', () => {
     vi.mocked(toast.error).mockClear();
   });
 
-  it('puts a server refusal on the field it names, announced', async () => {
-    mockCreateFacility.mockRejectedValueOnce({
-      response: { status: 422, data: { detail: [{ field: 'zip_code', message: 'Value is too long.' }] } },
-    });
-    const user = userEvent.setup();
-    renderModal();
-    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Station 2');
-    await user.type(screen.getByRole('textbox', { name: 'Zip Code' }), '12345');
-    await user.click(screen.getByRole('button', { name: 'Add Facility' }));
-
-    const zip = screen.getByRole('textbox', { name: 'Zip Code' });
-    await waitFor(() => expect(zip).toHaveAccessibleDescription('Zip code is too long — keep it to 20 characters.'));
-    expect(zip).toHaveAttribute('aria-invalid', 'true');
-    expect(toast.error).toHaveBeenCalledWith('Fix the fields marked below, then save again.');
-  });
-
   it('flags a missing name on the field when Enter submits', async () => {
     const user = userEvent.setup();
     renderModal();
     await user.type(screen.getByRole('textbox', { name: 'City' }), 'Springfield{Enter}');
     const name = screen.getByRole('textbox', { name: 'Name' });
-    expect(name).toHaveAccessibleDescription('Facility name is required.');
+    expect(name).toHaveAccessibleDescription('Enter a name for the facility.');
     expect(mockCreateFacility).not.toHaveBeenCalled();
   });
 

@@ -1,5 +1,49 @@
 # Known Limitations & Open Decisions
 
+## PDF Reports — What the Generated PDFs Do Not Yet Meet (2026-11-09)
+
+A review of every server-rendered PDF (see `docs/PDF_REPORTS.md`) fixed the
+escaping, audit and truncation defects. Training and equipment-check reports
+now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
+
+- **No tagged PDF (PDF/UA).** Open-source ReportLab cannot build a structure
+  tree; automatic tagging is in the commercial ReportLab product only. Reports
+  carry a title, language and outline, but a screen reader reads them as
+  untagged text. **Accepted** until a library decision is made. Moving to an
+  HTML-to-PDF engine with PDF/UA output, such as WeasyPrint, would mean
+  rewriting every renderer and bringing that engine's SSRF hardening with it
+  (CVE-2025-68616, CVE-2026-55073).
+- ~~**Latin-1 only, fonts not embedded, no PDF/A.**~~ **Resolved
+  2026-11-10:** documents embed Noto Sans, and certified results,
+  evaluations and minutes are PDF/A-2b. What remains:
+  - **Scripts outside Latin, Greek and Cyrillic** (CJK, Arabic, Hebrew,
+    emoji) still print as empty boxes; Noto Sans CJK is CFF-based and
+    ReportLab cannot embed it. **Accepted** until a member needs it.
+  - **Label sheets and ID cards stay on Helvetica** by owner decision
+    (2026-11-09): their text is fitted to physical stock.
+  - **Minutes that append attachment PDFs make no PDF/A claim** (owner
+    decision, 2026-11-09): outside pages cannot be vouched for.
+  - **CI does not run veraPDF.** Conformance was confirmed with veraPDF 1.28
+    on 2026-11-10; `tests/test_pdfa.py` guards the structure it checked, not
+    every rule.
+- **The Reports page prints from the browser.** "Print / PDF" has no page
+  numbers, no repeated header, the browser's own time zone and no audit row.
+  **Decided, to build (owner, 2026-11-09):** a server-side PDF on the kit,
+  audited on the server.
+- **Print hints reach Acrobat, not browsers.** Label sheets and ID cards ask
+  to print at actual size (`/PrintScaling /None`), but most browser PDF
+  viewers ignore that and default to "Fit". The label pages tell the user to
+  set Scale to 100%; nothing can enforce it. The tray-by-page-size hint is not
+  set, because ReportLab rejects the key. The browser-printed label sheet
+  also depends on the print dialog's margins being left at "Default", where
+  the page's own `@page` margins apply. (Print-safe margins and the Avery
+  5160 alignment were fixed on 2026-11-09; see "Printing" in
+  `docs/PDF_REPORTS.md`.)
+- **Minutes, the inventory impact plan and the election documents keep their
+  own layouts**, numbered "Page N" rather than "Page X of Y" (except the
+  ballot). They escape correctly and are audited; moving them onto the kit is
+  a layout change, not a fix.
+
 ## Medical Screening — What Is Still Plaintext at Rest (MS-18, 2026-11-05)
 
 **Decided 2026-11-04: encrypt the status first.** `screening_records.status`
@@ -286,6 +330,15 @@ with the server's reason, until it is changed. The rest of the app's forms
 still refuse a save on error in various ways (F-3 in that review) and come
 into line module by module.
 
+Also on the shared pieces since: every create dialog the review found with a
+button greyed out until valid (Locations, Facilities, Documents' New Folder,
+Forms' Create Form, Medical Supplies' Add supply, Inventory's Add several
+items and Request Equipment, the suggestion box form, Apparatus (basic)).
+Then the dialogs that relied on the browser's `required` bubble: Create
+Election, event templates, custom roles, Create Pipeline, Inventory's item,
+kit, category, variant group, vendor, storage area and reorder dialogs, and
+notification rules.
+
 Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
 needs a course name and a completion date, because both are NOT NULL
 columns, and making them nullable was declined. Every other field follows
@@ -340,7 +393,10 @@ the minutes sign, adopt, carry-forward, agenda, outline and suggestion forms,
 minutes reminder and signer settings, evaluation sign / amend / delete, saved
 reports, suggestion boxes and Schedule Email. The same rules apply: a create
 form creates nothing until fixed, an edit saves the rest, and a step that
-approves (adopt, sign, adopt a budget) refuses.
+approves (adopt, sign, adopt a budget) refuses. Where main's own forms work had
+already converted a form (Create Election, Request Equipment, Add several items,
+Add / Edit Vendor, the suggestion box), it keeps main's `useFieldErrors`
+messages, with this batch's additions on top.
 
 **Budget request drafts still need an amount and a justification.** The owner
 rule says Save Draft always succeeds, but `BudgetRequestCreate` requires
@@ -9406,6 +9462,26 @@ was flagged rather than changed. The options are to keep it, to require
 the drill, and a training officer would link it), or to require both grants.
 Found by `docs/security-review/TR-17-training-core.md` pass 14.
 
+## Training — Records From the Older CSV Importers Read "The Logbook" (2026-11-10)
+
+**Accepted (owner decision 2026-11-10).** Training lists, the print page and
+the individual CSV and PDF exports show where each record came from:
+
+- the provider for a sync ("Target Solutions");
+- "Imported" for the Historical Data Import;
+- "The Logbook" for everything else.
+
+The server decides the label in `app/services/training_record_source.py`. It
+needs nothing stored: a sync carries `external_provider_id` and
+`external_record_id`, and the Historical Data Import ledgers every record it
+writes in `imported_source_records`.
+
+The two older importers on the Training screens, the CSV import wizard
+(`POST /training/import/confirm`) and `POST /training/records/import-csv`,
+leave no such mark. Their records therefore read "The Logbook". The owner chose
+this over adding a stored source column, which could only have labelled records
+imported after the change.
+
 ## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06, resolved 2026-10-29)
 
 Found by security review SKT-19 pass 7
@@ -9557,9 +9633,99 @@ edit only drafts; this governs `PUT /shift-reports/{id}`. Covered by
 `tests/test_shift_completion.py::TestAnEditedReportGoesBackToReview`; history
 in `docs/security-review/EC-14-equipment-check-shifts.md`.
 
+## W80 — Training Event Decisions Left Open (2026-11-08)
+
+From the training-event lifecycle pass
+([`workflow-review/W80-training-event-lifecycle.md`](./workflow-review/W80-training-event-lifecycle.md)).
+Decided and fixed in the same pass: over-credit is warned, not capped; an
+approver on a roster cannot approve it; a schedule change that strands
+check-ins is refused; a training-only waiver can name its requirements. Open:
+
+- **W80-11 — Postpone (decided, not built).** The owner chose a real Postpone
+  action with `postponed_at` / `postponed_from_start` / `postponement_reason`
+  columns. Its design is in the findings file and goes in its own pull request:
+  it adds a migration and a public endpoint.
+- **W80-8 — Recording one member on a past drill.** Check-in is refused once the
+  window closes, with a message telling the organizer to ask an organizer; the
+  only routes are adding the whole roster, or the member's own "I was there".
+  Whether an attendance manager may record a check-in after the window, with
+  times, needs a decision.
+- **W80-9 — "0/0 sessions — Complete".** A session-attendance requirement with no
+  held sessions in a member's window reads met, on My Training and the matrix.
+  Reporting "not applicable" (CLAUDE.md pitfall #29) changes compliance
+  percentages department-wide.
+- **W80-10 — Training waivers and "missed mandatory".** The missed-mandatory list
+  excludes leaves of absence only, so a drill excused by a training waiver stays
+  listed. Whether a training waiver also excuses the event is policy.
+
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
 mirrored here so they're visible outside the log. The parallel module-by-module
 security audit tracks its rotation and per-module findings under
 [`docs/module-audit/`](./module-audit/PROGRESS.md); its open decisions are
 mirrored in the Multi-Tenant Isolation section above.
+
+## LIFE-11 — Anonymizing a Member Leaves Their Separation Letter, With Home Address, in Documents (2026-11-10, app review A6 pass 6)
+
+Anonymization (`POST /users/{id}/anonymize`, `MemberAnonymizationService`)
+scrubs the member's personal data from a long list of tables but touches no
+`Document`. The property-return letter generated when the member was dropped is
+filed in the leadership-only **Member Separations** folder, and its body states
+the member's home address and the reason given for the separation. After an
+erasure both remain readable to anyone with access to that folder.
+
+A separation letter may be a record the department must keep: it states a
+chargeable liability for property not returned. So this is a decision, not a
+fix. Options:
+
+1. **Redact on anonymization** — rewrite stored letters with the address and
+   reason removed, keeping the item list and values.
+2. **Delete** the letters with the rest of the member's personal data.
+3. **Keep them as they are** and say so in the anonymization docstring and
+   `docs/COMPLIANCE.md`, so a privacy reviewer is not told the member is fully
+   scrubbed.
+
+## LIFE-2 — A Pool Issuance Is Valued Three Ways, and the Departure Clearance's Figure Is Wrong (2026-08-05, evidence added 2026-11-10, app review A6)
+
+A departing member's unreturned pool issuance (uniform pieces and the like) is
+valued differently by the three places that state what the member owes:
+
+| Where                                                  | Formula                                                          |
+| ------------------------------------------------------ | ---------------------------------------------------------------- |
+| Member charges (`inventory_service.py:8550`)           | `unit_cost_at_issuance × quantity issued`                        |
+| Property-return letter (`property_return_service.py`)  | `current_value × quantity issued`                                |
+| Departure clearance (`departure_clearance_service.py`) | `current_value ÷ (quantity + quantity_issued) × quantity issued` |
+
+`current_value` is a per-unit value: every inventory valuation total sums
+`current_value * quantity`. So the clearance divides a per-unit value by the
+pool's whole size and **understates the item by that factor**. A pool of 40
+shirts at $25 each, two of them issued, shows $1.25 outstanding on the clearance and
+$50 on the letter.
+
+Which basis is right — today's value, or the cost recorded at issuance that
+charges already use — is an accounting decision. Whichever is chosen, the
+clearance and the letter should both use it; the clearance's current formula
+is wrong under either. Existing clearances store their line values, so a
+change applies to new clearances unless the owner also wants open ones
+recomputed.
+
+## DASH-2 — `GET /dashboard/stats` Returns Three Made-Up Figures, and Nothing Calls It (2026-08-05, recorded here 2026-11-10, app review A7)
+
+`GET /api/v1/dashboard/stats` counts members, active members and events created
+in the last 30 days, and returns three more fields as constants:
+`total_documents` is always `0`, `pending_tasks_count` always `0`, and
+`setup_percentage` always `100`. The last is the risk: it tells any client that
+the department's setup is complete whatever its state. The frontend's
+`dashboardService.getStats` has no caller, so no screen shows these figures
+today; an external client or a future screen could.
+
+Flagged in every app-review pass since the first, but never recorded here, so it
+was not among the questions the owner answered on 2026-11-01. Options:
+
+1. **Remove the route** and `dashboardService.getStats`. Nothing in the app
+   uses them; a third-party client that does would get 404.
+2. **Compute the three figures** — documents from the Documents module,
+   pending tasks from the action-item feed's open count, and setup from the
+   onboarding checklist the Organization Setup widget already reads.
+3. **Remove only the three made-up fields**, keeping the counts that are real.
+   This changes the response shape for any caller.

@@ -147,6 +147,24 @@ Training, `/account` and Add Member use `useFieldErrors` (with
 `ErrorSummary` on the long forms); Create Event and the later rollout use
 `utils/serverFieldErrors.ts`. No field runs both.
 
+Every dialog in the table's first row — a button disabled until valid, with no
+message — has now moved: Create Shift with the shared pieces, New Pattern and
+New Template in the next batch, and the rest in the one after (Add Station and
+Add Room, Add Facility, the facility type / status / maintenance type dialog,
+New Folder, Create Form, Add supply, Add several items, Request Equipment, the
+suggestion box form and Apparatus (basic)). Each keeps its button enabled,
+names what is missing on its field, and puts a 422 on the field it names.
+
+The second row — the browser's own `required` bubble — has moved too: Create
+Election, the event template form, Create Custom Role, Create Pipeline,
+Inventory's Add Item, Add Kit, Add Category, Add Group, Add Vendor, Add Storage
+Area and both reorder dialogs, and Notifications › Add Rule. Three of them
+(Custom Role, Create Pipeline, Add Rule) had no `<form>`, so their `required`
+never fired at all. Still open on this row: the vendor Contacts dialog keeps a
+native `required`, and dialogs built on the shared `Modal` keep native `min` and
+`type="email"` checks, which can still raise the browser bubble because `Modal`
+offers no `noValidate`.
+
 Pressing the primary button of an empty create dialog was probed 70 times
 (about 40 distinct dialogs). The outcomes:
 
@@ -352,6 +370,16 @@ checks its own fields; `TimeQuarterHour` and `TargetRolePicker` announce a
 refusal on their controls; Edit Pattern and the meeting action item save the
 rest of an edit and stay open, with their pages refreshing behind them.
 
+Five of these dialogs were also converted by main's forms batch 3 (#4178):
+Add Station and Add Room, Add Facility, Create Folder, Add / Edit supply and
+basic Apparatus. They keep #4178's error handling (`useFieldErrors`, its
+messages, a 422 shown in the server's own words, a refusal no field answers for
+said in the dialog) with this batch's additions on top: the shared `Modal` or a
+real `<form>` with `noValidate`, discard protection, counters near the limit,
+autofill off, and the single-save rule on edits (supply, apparatus, station and
+room). A supply's refusal now lands on any of its fields, not only the name and
+category, and a basic apparatus's on its type.
+
 ## Rollout status, 2026-11-09 (batch 17)
 
 The same steps, on these:
@@ -365,13 +393,24 @@ The same steps, on these:
 
 Shared changes that came with it: `FormField`'s `labelClassName` keeps the
 member admin page's uppercase labels; the inventory and medical item pickers
-take a field's label and error wiring (`controlProps`); `PersonPicker`,
-`ReviewerChecklist` and the agenda editor take an `error`. The dues payment's
+take a field's label and error wiring (`controlProps`); `PersonPicker` and
+the agenda editor take an `error`. The dues payment's
 method and reference and the export mapping's account number gained schema
 `max_length`s matching their columns, so an over-long value is a 422 on the
 field rather than a database error. The training wizard's toast names the step
 it went back to rather than repeating the refusal, which the focused field
 already reads out.
+
+Five of these forms were also converted by main's own forms work (F-3, "say
+what is missing"): Create Election, Request Equipment, Add several items, Add /
+Edit Vendor and the suggestion box. They keep main's `useFieldErrors` and its
+messages (a 422 in the server's own words, anything no field answers for said
+in the dialog, Submit never greyed out) with this batch's additions on top:
+Create Election's six further fields and its end-after-start check, the
+discard question, counters, the single-save rule on vendor, contact and
+suggestion-box edits, and Add several items naming a refused line by its place
+in the list. The training wizard keeps main's end-after-start check on leaving
+the first step, now also written on the End field.
 
 Two departures are recorded in `docs/KNOWN_LIMITATIONS.md`: a budget request
 draft still needs its amount and justification, and the Approvals approve /

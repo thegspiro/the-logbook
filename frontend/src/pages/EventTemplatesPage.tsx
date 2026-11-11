@@ -72,11 +72,13 @@ export const EventTemplatesPage: React.FC = () => {
       setShowForm(false);
       setEditingTemplate(null);
       void fetchTemplates();
-    } catch {
-      toast.error(editingTemplate ? 'Failed to update template' : 'Failed to create template');
     } finally {
       setIsSubmitting(false);
     }
+    // No catch: a failed save rejects into EventTemplateForm, which puts a
+    // 422 on the field it names and shows anything else inside the dialog,
+    // still open with the officer's values (forms review F-3). A toast here
+    // would have swallowed it behind the dialog.
   };
 
   const handleFormCancel = () => {

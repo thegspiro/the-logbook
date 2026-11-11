@@ -46,7 +46,8 @@ import {
   isAdminOnlyRefusal,
 } from '../components/documents/folderAccess';
 import { useConfirm } from '../contexts/ConfirmContext';
-import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
+import { getErrorDetail } from '../utils/errorHandling';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import { fileTypeLabel } from '../utils/fileTypeLabel';
 
 type ViewMode = 'grid' | 'list';
@@ -62,6 +63,14 @@ const DOCUMENTS_PAGE_SIZE = 50;
 const FOLDER_PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
 
+/** DocumentFolderCreate.name max_length (forms review F-2). */
+const FOLDER_NAME_MAX_LENGTH = 255;
+type CreateFolderField = 'name' | 'description';
+const CREATE_FOLDER_FIELDS: FieldSpecs<CreateFolderField> = {
+  name: { id: 'folder-name', label: 'Folder Name' },
+  description: { id: 'folder-description', label: 'Description' },
+};
+
 /**
  * How a restricted folder is described to the people who file into it. The
  * server enforces these (`_folder_admits_user`); the label only says so, so a
@@ -72,15 +81,6 @@ const RESTRICTED_FOLDER_LABEL: Record<string, string> = {
   leadership: 'Document managers only',
   owner: 'Only its owner',
 };
-
-type FolderField = 'name' | 'description';
-// DocumentFolderCreate (backend/app/schemas/documents.py): the name is
-// max_length=255; the description has no limit.
-const FOLDER_FIELDS: Record<FolderField, ServerFieldSpec> = {
-  name: { label: 'Folder name', maxLength: 255 },
-  description: { label: 'Description' },
-};
-const FOLDER_FIELD_IDS: Record<FolderField, string> = { name: 'folder-name', description: 'folder-description' };
 
 // The upload endpoint takes `name` and `description` as plain Form fields with
 // no length limit, so neither input carries a maxLength.
@@ -137,8 +137,8 @@ const DocumentsPage: React.FC = () => {
   // Form state
   const [folderForm, setFolderForm] = useState({ name: '', description: '' });
   const [folderAccess, setFolderAccess] = useState(EMPTY_FOLDER_ACCESS);
-  const [createFolderError, setCreateFolderError] = useState<string | null>(null);
-  const [folderErrors, setFolderErrors] = useState<Partial<Record<FolderField, string | undefined>>>({});
+  const createFolderErrors = useFieldErrors(CREATE_FOLDER_FIELDS);
+  const clearCreateFolderErrors = createFolderErrors.clear;
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadErrors, setUploadErrors] = useState<Partial<Record<UploadField, string | undefined>>>({});
   const [uploadInitialFolder, setUploadInitialFolder] = useState('');
@@ -274,23 +274,24 @@ const DocumentsPage: React.FC = () => {
   // Handlers
   // -------------------------------------------------------
 
-  const showFolderErrors = (errors: Partial<Record<FolderField, string | undefined>>) => {
-    setFolderErrors(errors);
-    const first = (Object.keys(FOLDER_FIELD_IDS) as FolderField[]).find((f) => errors[f]);
-    if (first) document.getElementById(FOLDER_FIELD_IDS[first])?.focus();
-  };
-
+  const { setErrors: setCreateFolderFieldErrors, setFormError: setCreateFolderFormError } = createFolderErrors;
+  const { focusFirst: focusFirstCreateFolderError, setFromApiError: setCreateFolderApiError } = createFolderErrors;
   const handleCreateFolder = useCallback(async () => {
-    if (!folderForm.name.trim()) {
-      showFolderErrors({ name: 'Enter a name for the folder.' });
+    // Checked here rather than by greying out Create Folder, which told a
+    // member nothing about why it would not press (forms review F-3).
+    const problems: FieldErrors<CreateFolderField> = {};
+    if (!folderForm.name.trim()) problems.name = 'Enter a name for the folder.';
+    setCreateFolderFieldErrors(problems);
+    // The positions list says "Choose at least one position" beside itself;
+    // this repeats it where the press happened.
+    setCreateFolderFormError(
+      folderAccessIncomplete(folderAccess) ? 'Choose at least one position who can open the folder.' : null
+    );
+    if (Object.keys(problems).length > 0 || folderAccessIncomplete(folderAccess)) {
+      focusFirstCreateFolderError(problems);
       return;
     }
-    // FolderAccessFields already says "Choose at least one position" beside the
-    // choice, and the button stays disabled while it is unmet.
-    if (folderAccessIncomplete(folderAccess)) return;
     setActionLoading(true);
-    setCreateFolderError(null);
-    setFolderErrors({});
     const payload = {
       name: folderForm.name.trim(),
       ...(folderForm.description.trim() ? { description: folderForm.description.trim() } : {}),
@@ -311,20 +312,28 @@ const DocumentsPage: React.FC = () => {
       await fetchFolders(currentFolder?.id, ++levelGeneration.current, folderSkip);
       await fetchSummary();
     } catch (err: unknown) {
-      // A field the server refused is flagged on that field, and nothing is
-      // created until it is fixed (forms review F-2).
-      const mapped = mapServerFieldErrors(err, FOLDER_FIELDS);
-      if (mapped && Object.keys(mapped.fieldErrors).length > 0 && mapped.unmatched.length === 0) {
-        showFolderErrors(mapped.fieldErrors);
-        return;
-      }
       // Shown in the dialog, not behind it: the server's reason (an unknown
-      // position, settings that would shut you out) is what to fix.
-      setCreateFolderError(getErrorMessage(err, 'Unable to create folder. Check your connection and try again.'));
+      // position, settings that would shut you out) is what to fix. A
+      // refusal naming the folder's name or description lands on that field.
+      focusFirstCreateFolderError(
+        setCreateFolderApiError(err, 'Unable to create folder. Check your connection and try again.')
+      );
     } finally {
       setActionLoading(false);
     }
-  }, [folderForm, folderAccess, currentFolder, folderSkip, fetchFolders, fetchSummary, confirm]);
+  }, [
+    folderForm,
+    folderAccess,
+    currentFolder,
+    folderSkip,
+    fetchFolders,
+    fetchSummary,
+    confirm,
+    setCreateFolderFieldErrors,
+    setCreateFolderFormError,
+    focusFirstCreateFolderError,
+    setCreateFolderApiError,
+  ]);
 
   const handleUploadDocument = useCallback(async () => {
     if (!uploadForm.file) {
@@ -477,7 +486,7 @@ const DocumentsPage: React.FC = () => {
   const closeCreateFolder = () => {
     setShowCreateFolder(false);
     setFolderForm({ name: '', description: '' });
-    setFolderErrors({});
+    clearCreateFolderErrors();
   };
   const requestCloseCreateFolder = useDiscardGuard({
     isDirty:
@@ -552,8 +561,7 @@ const DocumentsPage: React.FC = () => {
             onClick={() => {
               // Fresh access settings and no stale error each time it opens.
               setFolderAccess(EMPTY_FOLDER_ACCESS);
-              setCreateFolderError(null);
-              setFolderErrors({});
+              clearCreateFolderErrors();
               setShowCreateFolder(true);
             }}
             className="bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary touch:min-h-11 flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors"
@@ -1313,9 +1321,9 @@ const DocumentsPage: React.FC = () => {
                       </button>
                     </div>
                     <div className="space-y-4">
-                      {createFolderError && (
+                      {createFolderErrors.formError && (
                         <p className="alert-danger" role="alert">
-                          {createFolderError}
+                          {createFolderErrors.formError}
                         </p>
                       )}
                       <p className="text-theme-text-secondary text-sm">
@@ -1326,9 +1334,9 @@ const DocumentsPage: React.FC = () => {
                       <FormField
                         label="Folder Name"
                         required
-                        id={FOLDER_FIELD_IDS.name}
-                        error={folderErrors.name}
-                        maxLength={FOLDER_FIELDS.name.maxLength}
+                        id={CREATE_FOLDER_FIELDS.name.id}
+                        error={createFolderErrors.errors.name}
+                        maxLength={FOLDER_NAME_MAX_LENGTH}
                         count={folderForm.name.length}
                       >
                         {(field) => (
@@ -1339,14 +1347,18 @@ const DocumentsPage: React.FC = () => {
                             value={folderForm.name}
                             onChange={(e) => {
                               setFolderForm({ ...folderForm, name: e.target.value });
-                              setFolderErrors((prev) => ({ ...prev, name: undefined }));
+                              createFolderErrors.setError('name', null);
                             }}
                             className="form-input"
                             placeholder="e.g., Safety Bulletins"
                           />
                         )}
                       </FormField>
-                      <FormField label="Description" id={FOLDER_FIELD_IDS.description} error={folderErrors.description}>
+                      <FormField
+                        label="Description"
+                        id={CREATE_FOLDER_FIELDS.description.id}
+                        error={createFolderErrors.errors.description}
+                      >
                         {(field) => (
                           <textarea
                             {...field}
@@ -1354,13 +1366,20 @@ const DocumentsPage: React.FC = () => {
                             value={folderForm.description}
                             onChange={(e) => {
                               setFolderForm({ ...folderForm, description: e.target.value });
-                              setFolderErrors((prev) => ({ ...prev, description: undefined }));
+                              createFolderErrors.setError('description', null);
                             }}
                             className="form-input"
                           />
                         )}
                       </FormField>
-                      <FolderAccessFields idPrefix="create-folder" value={folderAccess} onChange={setFolderAccess} />
+                      <FolderAccessFields
+                        idPrefix="create-folder"
+                        value={folderAccess}
+                        onChange={(next) => {
+                          setFolderAccess(next);
+                          createFolderErrors.setFormError(null);
+                        }}
+                      />
                     </div>
                   </div>
                   <div className="bg-theme-surface-secondary flex justify-end space-x-3 rounded-b-lg px-6 py-3">
@@ -1373,11 +1392,9 @@ const DocumentsPage: React.FC = () => {
                     </button>
                     <button
                       type="submit"
-                      disabled={folderAccessIncomplete(folderAccess) || actionLoading}
+                      disabled={actionLoading}
                       className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 text-white transition-colors ${
-                        folderAccessIncomplete(folderAccess) || actionLoading
-                          ? 'cursor-not-allowed bg-amber-700 opacity-50'
-                          : 'bg-amber-700 hover:bg-amber-800'
+                        actionLoading ? 'cursor-not-allowed bg-amber-700 opacity-50' : 'bg-amber-700 hover:bg-amber-800'
                       }`}
                     >
                       {actionLoading && <Loader2 className="h-4 w-4 animate-spin" />}

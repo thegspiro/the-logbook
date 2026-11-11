@@ -119,7 +119,7 @@ describe('SuggestionBoxFormModal', () => {
     await user.click(screen.getByRole('button', { name: 'Save box' }));
 
     const name = screen.getByLabelText(/^Name/);
-    await waitFor(() => expect(name).toHaveAccessibleDescription('Name is too long — keep it to 100 characters.'));
+    await waitFor(() => expect(name).toHaveAccessibleDescription('String should have at most 100 characters.'));
     expect(name).toHaveAttribute('aria-invalid', 'true');
     expect(mockUpdateBox).toHaveBeenCalledTimes(2);
     expect((mockUpdateBox.mock.calls[0]?.[1] as { name: string }).name).toBe('Ideas and more');
@@ -138,5 +138,50 @@ describe('SuggestionBoxFormModal', () => {
 
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/^Name/)).toHaveValue('Ideas box');
+  });
+
+  // Forms review F-3: Save used to stay greyed out until a name was typed,
+  // and a box with no reviewers was refused by a toast nothing pointed at.
+  describe('refusing a save', () => {
+    it('names a missing name under the field and focuses it, sending nothing', async () => {
+      renderWithRouter(<SuggestionBoxFormModal box={null} options={options} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: 'Save box' }));
+
+      const nameInput = screen.getByRole('textbox', { name: /^Name/ });
+      expect(nameInput).toHaveAttribute('aria-invalid', 'true');
+      expect(nameInput).toHaveAccessibleDescription('Enter a name for the box.');
+      expect(nameInput).toHaveFocus();
+      expect(mockCreateBox).not.toHaveBeenCalled();
+    });
+
+    it('ties the missing-reviewer message to the reviewer section', async () => {
+      renderWithRouter(<SuggestionBoxFormModal box={null} options={options} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+      const user = userEvent.setup();
+      await user.type(screen.getByRole('textbox', { name: /^Name/ }), 'Ideas');
+      await user.click(screen.getByRole('button', { name: 'Save box' }));
+
+      const message = 'Choose at least one reviewer, or save the box as inactive.';
+      expect(screen.getByText(message)).toBeInTheDocument();
+      const reviewers = screen.getByRole('group', { name: 'Reviewers' });
+      expect(reviewers).toHaveFocus();
+      expect(reviewers).toHaveAccessibleDescription(message);
+      expect(mockCreateBox).not.toHaveBeenCalled();
+    });
+
+    it('puts a refused name from the server on the field', async () => {
+      mockUpdateBox.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+      });
+      renderWithRouter(<SuggestionBoxFormModal box={existing} options={options} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: 'Save box' }));
+
+      const nameInput = await screen.findByRole('textbox', { name: /^Name/, description: 'Value is too long.' });
+      expect(nameInput).toHaveAttribute('aria-invalid', 'true');
+    });
   });
 });

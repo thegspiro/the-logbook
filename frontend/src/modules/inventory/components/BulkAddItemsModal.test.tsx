@@ -160,10 +160,21 @@ describe('BulkAddItemsModal', () => {
     });
   });
 
-  it('will not submit an empty list', () => {
+  // Forms review F-3: the button used to grey out on an empty list; pressing
+  // it now says what is missing, on the box, and sends nothing.
+  it('will not submit an empty list, and says so on the box', async () => {
+    const user = userEvent.setup();
     open();
 
-    expect(screen.getByRole('button', { name: /Add item/ })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Add item/ }));
+
+    const list = screen.getByLabelText(/One item per line/);
+    expect(list).toHaveAttribute('aria-invalid', 'true');
+    expect(list).toHaveAccessibleDescription(
+      expect.stringContaining('Paste or type at least one item name, one per line.')
+    );
+    expect(list).toHaveFocus();
+    expect(mockCreateItemsBulk).not.toHaveBeenCalled();
   });
 
   it('keeps the modal open when the write fails', async () => {
@@ -196,9 +207,7 @@ describe('BulkAddItemsModal', () => {
 
     const list = screen.getByLabelText(/One item per line/);
     await waitFor(() => expect(list).toHaveAttribute('aria-invalid', 'true'));
-    expect(list).toHaveAccessibleDescription(
-      expect.stringContaining('Item 2: Unit is too long — keep it to 50 characters.')
-    );
+    expect(list).toHaveAccessibleDescription(expect.stringContaining('Item 2, unit: Value is too long.'));
     expect(onClose).not.toHaveBeenCalled();
   });
 

@@ -17,9 +17,9 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull, formatNameList, numberOrNull, parseNameList } from '../../../utils/formValues';
 import { formatNumber } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
-import { FormField } from '../../../components/ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { MEDICAL_UNITS } from '../types';
 import type { MedicalStorageOptions } from '../types';
 
@@ -68,41 +68,38 @@ type MedicalField = Exclude<keyof FormState, 'apparatus_only'>;
 
 /**
  * How the medical item endpoints' field names land on this dialog (forms
- * review F-2), in screen order. Lengths are the max_length of
- * `InventoryItemCreate` / `InventoryItemUpdate`, which both endpoints take.
+ * review F-2), in screen order, with the ids the dialog has always used so
+ * labels, tests and focus keep their targets.
  */
-const MEDICAL_FIELDS: Record<MedicalField, ServerFieldSpec> = {
-  name: { label: 'Name', maxLength: 255 },
-  also_called: { label: 'Also called' },
-  category_id: { label: 'Category' },
-  size: { label: 'Size', maxLength: 50 },
-  quantity: { label: 'On hand' },
-  unit_of_measure: { label: 'Unit', maxLength: 50 },
-  reorder_point: { label: 'Reorder at' },
-  manufacturer: { label: 'Manufacturer', maxLength: 255 },
-  vendor: { label: 'Vendor', maxLength: 255 },
-  location_id: { label: 'Room' },
-  storage_area_id: { label: 'Storage area' },
-  storage_location: { label: 'Storage note', maxLength: 255 },
-  description: { label: 'Notes', maxLength: 2000 },
+const SUPPLY_FIELDS: FieldSpecs<MedicalField> = {
+  name: { id: 'ms-name', label: 'Name' },
+  also_called: { id: 'ms-also-called', label: 'Also called' },
+  category_id: { id: 'ms-category', label: 'Category' },
+  size: { id: 'ms-size', label: 'Size' },
+  quantity: { id: 'ms-qty', label: 'On hand' },
+  unit_of_measure: { id: 'ms-unit', label: 'Unit' },
+  reorder_point: { id: 'ms-reorder', label: 'Reorder at' },
+  manufacturer: { id: 'ms-manufacturer', label: 'Manufacturer' },
+  vendor: { id: 'ms-vendor', label: 'Vendor' },
+  location_id: { id: 'ms-room', label: 'Room' },
+  storage_area_id: { id: 'ms-area', label: 'Storage area' },
+  storage_location: { id: 'ms-storage', label: 'Storage note' },
+  description: { id: 'ms-description', label: 'Notes' },
 };
 
-// The ids the dialog has always used, so labels, tests and focus keep their targets.
-const IDS: Record<MedicalField, string> = {
-  name: 'ms-name',
-  also_called: 'ms-also-called',
-  category_id: 'ms-category',
-  size: 'ms-size',
-  quantity: 'ms-qty',
-  unit_of_measure: 'ms-unit',
-  reorder_point: 'ms-reorder',
-  manufacturer: 'ms-manufacturer',
-  vendor: 'ms-vendor',
-  location_id: 'ms-room',
-  storage_area_id: 'ms-area',
-  storage_location: 'ms-storage',
-  description: 'ms-description',
-};
+/**
+ * The max_length of `InventoryItemCreate` / `InventoryItemUpdate`, which both
+ * endpoints take (forms review F-2).
+ */
+const MEDICAL_LIMITS = {
+  name: 255,
+  size: 50,
+  unit_of_measure: 50,
+  manufacturer: 255,
+  vendor: 255,
+  storage_location: 255,
+  description: 2000,
+} as const;
 
 function initialState(item?: InventoryItem): FormState {
   return {
@@ -140,23 +137,23 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
   const isLotStocked = Boolean(item?.is_lot_stocked);
   const [form, setForm] = useState<FormState>(() => initialState(item));
   const [isSaving, setIsSaving] = useState(false);
-  const [errors, setErrors] = useState<Partial<Record<MedicalField, string>>>({});
   // What the form held when it opened (or last saved), so Escape, the X and
   // Cancel can ask before discarding anything typed since (forms review F-6).
   const [baseline, setBaseline] = useState(() => JSON.stringify(initialState(item)));
   const isDirty = JSON.stringify(form) !== baseline;
   const requestClose = useDiscardGuard({ isDirty, onClose });
 
-  const clearError = (key: keyof FormState) => setErrors((p) => (key in p ? { ...p, [key]: undefined } : p));
+  const fieldErrors = useFieldErrors(SUPPLY_FIELDS);
+  const errors = fieldErrors.errors;
+  const clearError = (key: MedicalField) => fieldErrors.setError(key, null);
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
-    clearError(key);
+    if (key !== 'apparatus_only') clearError(key);
   };
 
-  const showErrors = (next: Partial<Record<MedicalField, string>>) => {
-    setErrors(next);
-    const first = (Object.keys(IDS) as MedicalField[]).find((k) => next[k]);
-    if (first) window.setTimeout(() => document.getElementById(IDS[first])?.focus(), 0);
+  const showErrors = (next: FieldErrors<MedicalField>) => {
+    fieldErrors.setErrors(next);
+    fieldErrors.focusFirst(next);
   };
 
   // The rooms and areas come from Inventory › Storage Areas. Read through the
@@ -222,24 +219,32 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
    * behind the dialog, which stays open with those fields flagged, and only
    * they count as unsaved. onSaved is not called — it closes the dialog.
    */
-  const keepRefused = (refused: Partial<Record<MedicalField, string>>) => {
+  const keepRefused = (refused: FieldErrors<MedicalField>) => {
     showErrors(refused);
     const stored = JSON.parse(baseline) as FormState;
     const keys = Object.keys(refused) as MedicalField[];
     setBaseline(JSON.stringify({ ...form, ...Object.fromEntries(keys.map((k) => [k, stored[k]])) }));
-    const first = (Object.keys(IDS) as MedicalField[]).find((k) => refused[k]);
+    const first = (Object.keys(SUPPLY_FIELDS) as MedicalField[]).find((k) => refused[k]);
     if (first) {
       toast.error(
-        `Supply saved, except ${MEDICAL_FIELDS[first].label.toLowerCase()}: ${refused[first] ?? ''} Fix it and save again.`
+        `Supply saved, except ${SUPPLY_FIELDS[first].label.toLowerCase()}: ${refused[first] ?? ''} Fix it and save again.`
       );
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const missing: Partial<Record<MedicalField, string>> = {};
+    // Checked here rather than by greying out Add supply, which told an
+    // officer nothing about why it would not press (forms review F-3).
+    const missing: FieldErrors<MedicalField> = {};
     if (!form.name.trim()) missing.name = 'Give the supply a name.';
-    if (!form.category_id) missing.category_id = 'Choose a category — it is what makes this a medical supply.';
+    if (!form.category_id) {
+      missing.category_id =
+        categories.length === 0
+          ? 'Add a medical supply category first — the notice above links to the page.'
+          : 'Choose a category — it is what makes this a medical supply.';
+    }
+    fieldErrors.setFormError(null);
     // A new supply is not created until every field is fixed; an edit saves
     // the rest and keeps the stored value of a refused one (below).
     if (!isEdit && Object.keys(missing).length > 0) {
@@ -279,8 +284,8 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
         // is not written — its key is left out, which the backend reads as
         // "leave alone", so the stored value is kept — the rest saves, and the
         // field stays flagged until it is fixed.
-        let refused: Partial<Record<MedicalField, string>> = missing;
-        const send = (skip: Partial<Record<MedicalField, string>>) => {
+        let refused: FieldErrors<MedicalField> = missing;
+        const send = (skip: FieldErrors<MedicalField>) => {
           const rest: Record<string, unknown> = { ...payload };
           for (const key of Object.keys(skip)) delete rest[key];
           return medicalSuppliesService.updateItem(item.id, rest);
@@ -288,7 +293,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
         try {
           await send(refused);
         } catch (err) {
-          const mapped = mapServerFieldErrors(err, MEDICAL_FIELDS);
+          const mapped = placeApiError(SUPPLY_FIELDS, err);
           if (!mapped || Object.keys(mapped.fieldErrors).length === 0 || mapped.unmatched.length > 0) throw err;
           refused = { ...refused, ...mapped.fieldErrors };
           await send(refused);
@@ -327,18 +332,12 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
       }
       onSaved();
     } catch (err: unknown) {
-      // A refused field is flagged on that field rather than named in a toast
-      // (forms review F-2); a new supply is not created until it is fixed.
-      const mapped = mapServerFieldErrors(err, MEDICAL_FIELDS);
-      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
-        showErrors(mapped.fieldErrors);
-        toast.error(mapped.unmatched.join(' ') || 'Fix the fields marked below, then save again.');
-      } else {
-        toast.error(
-          mapped?.unmatched.join(' ') ||
-            getErrorMessage(err, isEdit ? 'Failed to update supply' : 'Failed to add supply')
-        );
-      }
+      // A refused field is flagged on that field (forms review F-2); a new
+      // supply is not created until it is fixed. Anything no field answers
+      // for is said above the fields.
+      fieldErrors.focusFirst(
+        fieldErrors.setFromApiError(err, isEdit ? 'Failed to update supply' : 'Failed to add supply')
+      );
     } finally {
       setIsSaving(false);
     }
@@ -354,7 +353,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
       noValidate
       footer={
         <>
-          <button type="submit" className="btn-primary" disabled={isSaving || categories.length === 0}>
+          <button type="submit" className="btn-primary" disabled={isSaving}>
             {isSaving ? 'Saving…' : isEdit ? 'Save changes' : 'Add supply'}
           </button>
           <button
@@ -395,12 +394,17 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           </div>
         ) : null}
 
+        {fieldErrors.formError && (
+          <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+            {fieldErrors.formError}
+          </p>
+        )}
         <FormField
           label="Name"
           required
           error={errors.name}
-          id={IDS.name}
-          maxLength={MEDICAL_FIELDS.name.maxLength}
+          id={SUPPLY_FIELDS.name.id}
+          maxLength={MEDICAL_LIMITS.name}
           count={form.name.length}
         >
           {(field) => (
@@ -417,7 +421,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
         <FormField
           label="Also called"
           error={errors.also_called}
-          id={IDS.also_called}
+          id={SUPPLY_FIELDS.also_called.id}
           hint="Other names for this supply, separated by commas. Checklists use them to find it."
         >
           {(field) => (
@@ -431,7 +435,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           )}
         </FormField>
 
-        <FormField label="Category" required error={errors.category_id} id={IDS.category_id}>
+        <FormField label="Category" required error={errors.category_id} id={SUPPLY_FIELDS.category_id.id}>
           {(field) => (
             <select
               {...field}
@@ -452,8 +456,8 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
         <FormField
           label="Size"
           error={errors.size}
-          id={IDS.size}
-          maxLength={MEDICAL_FIELDS.size.maxLength}
+          id={SUPPLY_FIELDS.size.id}
+          maxLength={MEDICAL_LIMITS.size}
           count={form.size.length}
         >
           {(field) => (
@@ -485,7 +489,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
         </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
-          <FormField label="On hand" error={errors.quantity} id={IDS.quantity}>
+          <FormField label="On hand" error={errors.quantity} id={SUPPLY_FIELDS.quantity.id}>
             {(field) =>
               form.apparatus_only ? (
                 // The shelf is not counted for this supply (the backend treats it
@@ -521,8 +525,8 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
             <FormField
               label="Unit"
               error={errors.unit_of_measure}
-              id={IDS.unit_of_measure}
-              maxLength={MEDICAL_FIELDS.unit_of_measure.maxLength}
+              id={SUPPLY_FIELDS.unit_of_measure.id}
+              maxLength={MEDICAL_LIMITS.unit_of_measure}
               count={form.unit_of_measure.length}
             >
               {(field) => (
@@ -541,7 +545,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
               ))}
             </datalist>
           </div>
-          <FormField label="Reorder at" error={errors.reorder_point} id={IDS.reorder_point}>
+          <FormField label="Reorder at" error={errors.reorder_point} id={SUPPLY_FIELDS.reorder_point.id}>
             {(field) => (
               <input
                 {...field}
@@ -561,8 +565,8 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           <FormField
             label="Manufacturer"
             error={errors.manufacturer}
-            id={IDS.manufacturer}
-            maxLength={MEDICAL_FIELDS.manufacturer.maxLength}
+            id={SUPPLY_FIELDS.manufacturer.id}
+            maxLength={MEDICAL_LIMITS.manufacturer}
             count={form.manufacturer.length}
           >
             {(field) => (
@@ -577,8 +581,8 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           <FormField
             label="Vendor"
             error={errors.vendor}
-            id={IDS.vendor}
-            maxLength={MEDICAL_FIELDS.vendor.maxLength}
+            id={SUPPLY_FIELDS.vendor.id}
+            maxLength={MEDICAL_LIMITS.vendor}
             count={form.vendor.length}
           >
             {(field) => (
@@ -602,7 +606,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
             </p>
           )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField label="Room" error={errors.location_id} id={IDS.location_id}>
+            <FormField label="Room" error={errors.location_id} id={SUPPLY_FIELDS.location_id.id}>
               {(field) => (
                 <select
                   {...field}
@@ -620,7 +624,7 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
                 </select>
               )}
             </FormField>
-            <FormField label="Storage area" error={errors.storage_area_id} id={IDS.storage_area_id}>
+            <FormField label="Storage area" error={errors.storage_area_id} id={SUPPLY_FIELDS.storage_area_id.id}>
               {(field) => (
                 <select
                   {...field}
@@ -650,8 +654,8 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
           <FormField
             label="Storage note"
             error={errors.storage_location}
-            id={IDS.storage_location}
-            maxLength={MEDICAL_FIELDS.storage_location.maxLength}
+            id={SUPPLY_FIELDS.storage_location.id}
+            maxLength={MEDICAL_LIMITS.storage_location}
             count={form.storage_location.length}
           >
             {(field) => (
@@ -669,8 +673,8 @@ export const MedicalItemFormModal: React.FC<MedicalItemFormModalProps> = ({
         <FormField
           label="Notes"
           error={errors.description}
-          id={IDS.description}
-          maxLength={MEDICAL_FIELDS.description.maxLength}
+          id={SUPPLY_FIELDS.description.id}
+          maxLength={MEDICAL_LIMITS.description}
           count={form.description.length}
         >
           {(field) => (

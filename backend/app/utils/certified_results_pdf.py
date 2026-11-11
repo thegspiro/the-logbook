@@ -29,10 +29,10 @@ from reportlab.platypus import (
     SimpleDocTemplate,
     Spacer,
     Table,
-    TableStyle,
 )
 
 from app.utils.election_pdf_style import (
+    BOTTOM_MARGIN,
     CONTENT_WIDTH,
     INK,
     MUTED,
@@ -48,6 +48,8 @@ from app.utils.election_pdf_style import (
     ruled_table,
     section,
 )
+from app.utils.pdf_fonts import BODY_FONT, BOLD_FONT, body_table_style
+from app.utils.pdfa import to_pdfa
 
 _TIE_POLICY_LABELS = {
     "co_winners": "All tied candidates are declared winners",
@@ -94,9 +96,11 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
+        # The canvas otherwise declares Helvetica, never embedded, on every page.
+        initialFontName=BODY_FONT,
         pagesize=letter,
         topMargin=VERTICAL_MARGIN,
-        bottomMargin=VERTICAL_MARGIN,
+        bottomMargin=BOTTOM_MARGIN,
         leftMargin=SIDE_MARGIN,
         rightMargin=SIDE_MARGIN,
         title="Certified Election Results",
@@ -110,14 +114,14 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
         "CertCell", parent=styles["panel"], fontSize=10, leading=12
     )
     styles["cell_bold"] = ParagraphStyle(
-        "CertCellBold", parent=styles["cell"], fontName="Helvetica-Bold"
+        "CertCellBold", parent=styles["cell"], fontName=BOLD_FONT
     )
     styles["small"] = ParagraphStyle(
         "CertSmall", parent=styles["panel"], fontSize=9, leading=12, textColor=MUTED
     )
     styles["meta"] = ParagraphStyle("CertMeta", parent=styles["small"], spaceBefore=2)
     styles["notice"] = ParagraphStyle(
-        "CertNotice", parent=styles["panel"], fontName="Helvetica-Bold"
+        "CertNotice", parent=styles["panel"], fontName=BOLD_FONT
     )
 
     story: List[Any] = [
@@ -343,7 +347,7 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
         ],
         colWidths=[line_width, gutter, line_width],
         rowHeights=[34, None, 34, None],
-        style=TableStyle(
+        style=body_table_style(
             [
                 ("FONTSIZE", (0, 0), (-1, -1), 9),
                 ("TEXTCOLOR", (0, 0), (-1, -1), MUTED),
@@ -378,5 +382,5 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
 
     footer = page_footer(f"Certified Election Results · {election.get('title') or ''}")
     doc.build(story, onFirstPage=footer, onLaterPages=footer)
-    buf.seek(0)
-    return buf
+    # A certified result is a record kept for years: archival PDF/A-2b.
+    return BytesIO(to_pdfa(buf.getvalue()))

@@ -281,6 +281,21 @@ const CreateTrainingSessionPage: React.FC = () => {
     return match?.label ?? recurrencePattern;
   };
 
+  // Both values are local "YYYY-MM-DDTHH:mm" strings in one timezone, so they
+  // order correctly as strings. Checked when leaving the first step as well as
+  // on submit: the server refuses the schedule too, but only after the officer
+  // has filled in three more steps (workflow review, training events).
+  const endsAfterStart = formData.end_datetime > formData.start_datetime;
+
+  const handleNext = () => {
+    if (currentStep === 1 && formData.start_datetime && formData.end_datetime && !endsAfterStart) {
+      setFieldErrors((prev) => ({ ...prev, end_datetime: 'End time must be after the start time' }));
+      toast.error('End time must be after the start time');
+      return;
+    }
+    setCurrentStep(currentStep + 1);
+  };
+
   const handleSubmit = async () => {
     // A create form creates nothing until each refusal is fixed (owner,
     // 2026-11-05). Each is written under its field, the wizard goes back to
@@ -292,6 +307,7 @@ const CreateTrainingSessionPage: React.FC = () => {
     if (!formData.title.trim()) errors.title = 'Enter a title';
     if (!formData.start_datetime) errors.start_datetime = 'Enter a start time';
     if (!formData.end_datetime) errors.end_datetime = 'Enter an end time';
+    else if (formData.start_datetime && !endsAfterStart) errors.end_datetime = 'End time must be after the start time';
     if (isRecurring && !recurrenceEndDate) errors.recurrence_end_date = 'Recurrence end date is required';
     if (isRecurring && recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
       errors.recurrence_custom_days = 'Select at least one day for custom recurrence';
@@ -514,7 +530,7 @@ const CreateTrainingSessionPage: React.FC = () => {
           noValidate
           onSubmit={(e) => {
             e.preventDefault();
-            if (currentStep < 4) setCurrentStep(currentStep + 1);
+            if (currentStep < 4) handleNext();
             else void handleSubmit();
           }}
         >

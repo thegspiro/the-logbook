@@ -15,24 +15,22 @@ import { PositionKind } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { AdminPageHeader } from '../components/admin/AdminPageHeader';
-import { FormField } from '../components/ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
 import { useDiscardGuard } from '../hooks/useDiscardGuard';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 
 type RoleField = 'name' | 'description' | 'priority';
 
-// RoleCreate / RoleUpdate (backend/app/schemas/role.py): only the name has a
-// max_length; priority is ge=0 le=100.
-const ROLE_FIELDS: Record<RoleField, ServerFieldSpec> = {
-  name: { label: 'Role name', maxLength: 100 },
-  description: { label: 'Description' },
-  priority: { label: 'Priority' },
+// The role schema has no alias generator, so a 422 names the snake_case
+// request keys, which are these field names. RoleCreate / RoleUpdate
+// (backend/app/schemas/role.py): only the name has a max_length; priority is
+// ge=0 le=100.
+const ROLE_FIELDS: FieldSpecs<RoleField> = {
+  name: { id: 'role-name', label: 'Role Name' },
+  description: { id: 'role-description', label: 'Description' },
+  priority: { id: 'role-priority', label: 'Priority' },
 };
-const ROLE_FIELD_IDS: Record<RoleField, string> = {
-  name: 'role-name',
-  description: 'role-description',
-  priority: 'role-priority',
-};
+const ROLE_NAME_MAX_LENGTH = 100;
 
 interface RoleForm {
   name: string;
@@ -77,7 +75,7 @@ export const RoleManagementPage: React.FC = () => {
   const emptyForm: RoleForm = { name: '', description: '', permissions: [], priority: 50, kind: PositionKind.OFFICE };
   const [formData, setFormData] = useState<RoleForm>(emptyForm);
   const [initialForm, setInitialForm] = useState<RoleForm>(emptyForm);
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<RoleField, string | undefined>>>({});
+  const roleErrors = useFieldErrors(ROLE_FIELDS);
 
   useEffect(() => {
     void fetchData();
@@ -105,7 +103,7 @@ export const RoleManagementPage: React.FC = () => {
   const openRoleDialog = (role: Role | null, form: RoleForm) => {
     setFormData(form);
     setInitialForm(form);
-    setFieldErrors({});
+    roleErrors.clear();
     setEditingRole(role);
     setError(null);
     setShowCreateModal(true);
@@ -128,13 +126,10 @@ export const RoleManagementPage: React.FC = () => {
     onClose: () => setShowCreateModal(false),
   });
 
-  const showFieldErrors = (errors: Partial<Record<RoleField, string | undefined>>) => {
-    setFieldErrors(errors);
-    const first = (Object.keys(ROLE_FIELD_IDS) as RoleField[]).find((f) => errors[f]);
-    if (first) document.getElementById(ROLE_FIELD_IDS[first])?.focus();
+  const showFieldErrors = (errors: FieldErrors<RoleField>) => {
+    roleErrors.setErrors(errors);
+    roleErrors.focusFirst(errors);
   };
-
-  const clearFieldError = (field: RoleField) => setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
 
   // ORU-7c: the baseline `member` position is held by every member, so a
   // permission change to it is an organization-wide grant (or revocation) in
@@ -171,21 +166,22 @@ export const RoleManagementPage: React.FC = () => {
   const handleSubmit = () =>
     run(async () => {
       try {
-        setError(null);
-        setFieldErrors({});
         // Checked here so the reason is ours rather than the server's
-        // "name: Value is too short" (workflow review W05).
+        // "name: Value is too short" (workflow review W05), and shown under
+        // the field it is about rather than at the top of a long dialog
+        // (forms review F-3).
         const name = formData.name.trim();
-        if (!name) {
-          showFieldErrors({ name: 'Give the role a name.' });
-          return;
-        }
+        const problems: FieldErrors<RoleField> = {};
+        if (!name) problems.name = 'Give the role a name.';
+        roleErrors.setFormError(null);
+        showFieldErrors(problems);
+        if (Object.keys(problems).length > 0) return;
 
         if (editingRole && !(await confirmBaselineGrantChange(editingRole))) {
           return;
         }
 
-        let refused: Partial<Record<RoleField, string>> = {};
+        let refused: FieldErrors<RoleField> = {};
         if (editingRole) {
           // Update existing role
           const update = {
@@ -203,7 +199,7 @@ export const RoleManagementPage: React.FC = () => {
             // Single-save rule (owner, 2026-11-05): a value the role cannot
             // hold is left out, the rest is written, and the field stays
             // flagged with the server's reason until it is fixed.
-            const mapped = mapServerFieldErrors(err, ROLE_FIELDS);
+            const mapped = placeApiError(ROLE_FIELDS, err);
             const keys = mapped ? (Object.keys(mapped.fieldErrors) as RoleField[]) : [];
             if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
             refused = mapped.fieldErrors;
@@ -217,7 +213,7 @@ export const RoleManagementPage: React.FC = () => {
           try {
             await roleService.createRole({ ...formData, name });
           } catch (err: unknown) {
-            const mapped = mapServerFieldErrors(err, ROLE_FIELDS);
+            const mapped = placeApiError(ROLE_FIELDS, err);
             if (!mapped || Object.keys(mapped.fieldErrors).length === 0 || mapped.unmatched.length > 0) throw err;
             showFieldErrors(mapped.fieldErrors);
             return;
@@ -226,13 +222,15 @@ export const RoleManagementPage: React.FC = () => {
 
         await fetchData();
         if (Object.keys(refused).length > 0) {
-          setError('The role was saved, except the field marked below. Fix it and save again.');
+          roleErrors.setFormError('The role was saved, except the field marked below. Fix it and save again.');
           showFieldErrors(refused);
           return;
         }
         setShowCreateModal(false);
       } catch (err: unknown) {
-        setError(getErrorMessage(err, 'Could not save the role. Check the details and try again.'));
+        roleErrors.focusFirst(
+          roleErrors.setFromApiError(err, 'Could not save the role. Check the details and try again.')
+        );
       }
     });
 
@@ -437,12 +435,12 @@ export const RoleManagementPage: React.FC = () => {
                   className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4"
                   data-testid="role-modal-scroll-area"
                 >
-                  {error && (
+                  {roleErrors.formError && (
                     <div
                       role="alert"
                       className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10"
                     >
-                      <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+                      <p className={`text-sm ${FIELD_ERROR_CLASS}`}>{roleErrors.formError}</p>
                     </div>
                   )}
 
@@ -459,9 +457,9 @@ export const RoleManagementPage: React.FC = () => {
                   <FormField
                     label="Role Name"
                     required
-                    id={ROLE_FIELD_IDS.name}
-                    error={fieldErrors.name}
-                    maxLength={ROLE_FIELDS.name.maxLength}
+                    id={ROLE_FIELDS.name.id}
+                    error={roleErrors.errors.name}
+                    maxLength={ROLE_NAME_MAX_LENGTH}
                     count={formData.name.length}
                   >
                     {(field) => (
@@ -472,7 +470,7 @@ export const RoleManagementPage: React.FC = () => {
                         value={formData.name}
                         onChange={(e) => {
                           setFormData({ ...formData, name: e.target.value });
-                          clearFieldError('name');
+                          roleErrors.setError('name', null);
                         }}
                         disabled={editingRole?.is_system && editingRole.slug !== 'member'}
                         className="form-input"
@@ -480,14 +478,14 @@ export const RoleManagementPage: React.FC = () => {
                     )}
                   </FormField>
 
-                  <FormField label="Description" id={ROLE_FIELD_IDS.description} error={fieldErrors.description}>
+                  <FormField label="Description" id={ROLE_FIELDS.description.id} error={roleErrors.errors.description}>
                     {(field) => (
                       <textarea
                         {...field}
                         value={formData.description}
                         onChange={(e) => {
                           setFormData({ ...formData, description: e.target.value });
-                          clearFieldError('description');
+                          roleErrors.setError('description', null);
                         }}
                         rows={2}
                         className="form-input"
@@ -535,8 +533,8 @@ export const RoleManagementPage: React.FC = () => {
                   {!editingRole?.is_system && (
                     <FormField
                       label="Priority (0-100)"
-                      id={ROLE_FIELD_IDS.priority}
-                      error={fieldErrors.priority}
+                      id={ROLE_FIELDS.priority.id}
+                      error={roleErrors.errors.priority}
                       // Priority orders lists and picks a member's main position
                       // (label_service, inventory_service); no permission check
                       // reads it, so it must not be described as authority
@@ -552,7 +550,7 @@ export const RoleManagementPage: React.FC = () => {
                           value={formData.priority}
                           onChange={(e) => {
                             setFormData({ ...formData, priority: parseInt(e.target.value) || 0 });
-                            clearFieldError('priority');
+                            roleErrors.setError('priority', null);
                           }}
                           className="form-input w-32"
                         />

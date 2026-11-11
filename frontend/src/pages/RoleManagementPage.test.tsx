@@ -214,21 +214,29 @@ describe('RoleManagementPage', () => {
   // W05: the save error was rendered on the page behind the dialog, so a
   // refused save looked like a button that did nothing.
   describe('errors while the dialog is open', () => {
-    it('refuses an empty name inside the dialog without calling the server', async () => {
+    beforeEach(() => {
+      vi.mocked(roleService.createRole).mockReset();
+      vi.mocked(roleService.createRole).mockResolvedValue({ ...role, id: 'role-2', name: 'Report Reader' });
+    });
+
+    // Forms review F-3: the refusal now sits under the name field and takes
+    // focus there, rather than in an alert at the top of a long dialog.
+    it('refuses an empty name under the field without calling the server', async () => {
       const user = userEvent.setup();
       renderWithRouter(<RoleManagementPage />);
 
       await user.click(await screen.findByRole('button', { name: 'Create Custom Role' }));
       await user.click(screen.getByRole('button', { name: 'Create Role' }));
 
-      const name = screen.getByLabelText(/^Role Name/);
+      const name = screen.getByRole('textbox', { name: 'Role Name' });
       expect(name).toHaveAccessibleDescription('Give the role a name.');
       expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toHaveAttribute('aria-required', 'true');
       await waitFor(() => expect(name).toHaveFocus());
       expect(roleService.createRole).not.toHaveBeenCalled();
     });
 
-    it('puts a server refusal on the field it names and creates nothing', async () => {
+    it('puts a 422 on the field it names and creates nothing', async () => {
       const user = userEvent.setup();
       vi.mocked(roleService.createRole).mockRejectedValueOnce({
         response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
@@ -239,10 +247,8 @@ describe('RoleManagementPage', () => {
       // Enter submits: the dialog is a real form (forms review F-7).
       await user.type(screen.getByLabelText(/^Role Name/), 'Report Reader{Enter}');
 
-      const name = screen.getByLabelText(/^Role Name/);
-      await waitFor(() =>
-        expect(name).toHaveAccessibleDescription('Role name is too long — keep it to 100 characters.')
-      );
+      const name = await screen.findByRole('textbox', { description: 'Value is too long.' });
+      expect(name).toHaveAccessibleName('Role Name');
       expect(name).toHaveAttribute('aria-invalid', 'true');
       expect(name).toHaveAttribute('maxLength', '100');
       expect(screen.getByRole('dialog', { name: 'Create New Role' })).toBeInTheDocument();

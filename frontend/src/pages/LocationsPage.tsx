@@ -41,11 +41,11 @@ import type { Location, LocationCreate } from '../services/api';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { copyToClipboard } from '../utils/clipboard';
-import { getErrorDetail, getErrorMessage } from '../utils/errorHandling';
+import { getErrorMessage } from '../utils/errorHandling';
 import { formCoercions } from '../utils/formValues';
-import { FormField } from '../components/ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
 import { useDiscardGuard } from '../hooks/useDiscardGuard';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 
 // Group locations: top-level = stations (has address, no room_number), children = rooms (have room_number or building)
 function groupLocations(locations: Location[]): { stations: Location[]; rooms: Map<string, Location[]> } {
@@ -89,24 +89,19 @@ function capacityError(value: string): string | null {
 
 type StationMode = 'single_station' | 'multi_station' | null;
 
-// Limits from LocationBase / LocationUpdate (backend/app/schemas/location.py);
+// Limits mirror LocationCreate / LocationUpdate (forms review F-2);
 // `description` has none there, so its textarea carries none.
+const STATION_LIMITS = { name: 200, address: 255, city: 100, state: 50, zip: 20 } as const;
+const ROOM_LIMITS = { name: 200, room_number: 50, floor: 20 } as const;
+
 type StationField = 'name' | 'address' | 'city' | 'state' | 'zip' | 'description';
-const STATION_FIELDS: Record<StationField, ServerFieldSpec> = {
-  name: { label: 'Station name', maxLength: 200 },
-  address: { label: 'Street address', maxLength: 255 },
-  city: { label: 'City', maxLength: 100 },
-  state: { label: 'State', maxLength: 50 },
-  zip: { label: 'Zip', maxLength: 20 },
-  description: { label: 'Description' },
-};
-const STATION_FIELD_IDS: Record<StationField, string> = {
-  name: 'station-name',
-  address: 'station-address',
-  city: 'station-city',
-  state: 'station-state',
-  zip: 'station-zip',
-  description: 'station-description',
+const STATION_FIELDS: FieldSpecs<StationField> = {
+  name: { id: 'station-name', label: 'Station Name / Number' },
+  address: { id: 'station-address', label: 'Street Address' },
+  city: { id: 'station-city', label: 'City' },
+  state: { id: 'station-state', label: 'State' },
+  zip: { id: 'station-zip', label: 'Zip' },
+  description: { id: 'station-description', label: 'Description' },
 };
 const EMPTY_STATION_FORM: Record<StationField, string> = {
   name: '',
@@ -118,19 +113,12 @@ const EMPTY_STATION_FORM: Record<StationField, string> = {
 };
 
 type RoomField = 'name' | 'room_number' | 'floor' | 'capacity' | 'description';
-const ROOM_FIELDS: Record<RoomField, ServerFieldSpec> = {
-  name: { label: 'Room name', maxLength: 200 },
-  room_number: { label: 'Room number', maxLength: 50 },
-  floor: { label: 'Floor', maxLength: 20 },
-  capacity: { label: 'Capacity' },
-  description: { label: 'Description' },
-};
-const ROOM_FIELD_IDS: Record<RoomField, string> = {
-  name: 'room-form-room-name',
-  room_number: 'room-form-room-number',
-  floor: 'room-form-floor',
-  capacity: 'room-form-capacity',
-  description: 'room-form-description',
+const ROOM_FIELDS: FieldSpecs<RoomField> = {
+  name: { id: 'room-form-room-name', label: 'Room Name' },
+  room_number: { id: 'room-form-room-number', label: 'Room Number' },
+  floor: { id: 'room-form-floor', label: 'Floor' },
+  capacity: { id: 'room-form-capacity', label: 'Capacity' },
+  description: { id: 'room-form-description', label: 'Description' },
 };
 const EMPTY_ROOM_FORM: Record<RoomField, string> = {
   name: '',
@@ -159,7 +147,7 @@ const firstErrorKey = <K extends string>(order: Record<K, unknown>, errors: Part
  */
 async function saveLocationExceptRefused<K extends keyof LocationCreate>(
   payload: LocationCreate,
-  fields: Record<K, ServerFieldSpec>,
+  fields: FieldSpecs<K>,
   write:
     | { create: (body: LocationCreate) => Promise<unknown> }
     | { update: (body: Partial<LocationCreate>) => Promise<unknown> }
@@ -168,7 +156,7 @@ async function saveLocationExceptRefused<K extends keyof LocationCreate>(
     await ('create' in write ? write.create(payload) : write.update(payload));
     return { refused: {}, written: payload };
   } catch (err: unknown) {
-    const mapped = mapServerFieldErrors(err, fields);
+    const mapped = placeApiError(fields, err);
     const keys = mapped ? (Object.keys(mapped.fieldErrors) as K[]) : [];
     if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
     if ('create' in write) return { refused: mapped.fieldErrors, written: null };
@@ -1127,7 +1115,7 @@ export default function LocationsPage() {
   const [editingStation, setEditingStation] = useState<Location | null>(null);
   const [stationForm, setStationForm] = useState<Record<StationField, string>>(EMPTY_STATION_FORM);
   const [stationInitial, setStationInitial] = useState<Record<StationField, string>>(EMPTY_STATION_FORM);
-  const [stationErrors, setStationErrors] = useState<Partial<Record<StationField, string | undefined>>>({});
+  const stationErrors = useFieldErrors(STATION_FIELDS);
   const [isSavingStation, setIsSavingStation] = useState(false);
 
   // Room modal state
@@ -1136,7 +1124,7 @@ export default function LocationsPage() {
   const [roomParentStation, setRoomParentStation] = useState<string>('');
   const [roomForm, setRoomForm] = useState<Record<RoomField, string>>(EMPTY_ROOM_FORM);
   const [roomInitial, setRoomInitial] = useState<Record<RoomField, string>>(EMPTY_ROOM_FORM);
-  const [roomErrors, setRoomErrors] = useState<Partial<Record<RoomField, string | undefined>>>({});
+  const roomErrors = useFieldErrors(ROOM_FIELDS);
   const [isSavingRoom, setIsSavingRoom] = useState(false);
 
   // Setup wizard state
@@ -1221,7 +1209,7 @@ export default function LocationsPage() {
     setEditingStation(station);
     setStationForm(form);
     setStationInitial(form);
-    setStationErrors({});
+    stationErrors.clear();
     setShowStationModal(true);
   };
 
@@ -1239,7 +1227,7 @@ export default function LocationsPage() {
 
   const setStationField = (field: StationField, value: string) => {
     setStationForm((p) => ({ ...p, [field]: value }));
-    setStationErrors((p) => ({ ...p, [field]: undefined }));
+    stationErrors.setError(field, null);
   };
 
   // Escape, the X and Cancel all ask before discarding a changed station.
@@ -1248,20 +1236,20 @@ export default function LocationsPage() {
     onClose: () => setShowStationModal(false),
   });
 
-  const showStationErrors = (errors: Partial<Record<StationField, string | undefined>>) => {
-    setStationErrors(errors);
-    const first = firstErrorKey(STATION_FIELDS, errors);
-    if (first) document.getElementById(STATION_FIELD_IDS[first])?.focus();
+  const showStationErrors = (errors: FieldErrors<StationField>) => {
+    stationErrors.setErrors(errors);
+    stationErrors.focusFirst(errors);
   };
 
   const handleSaveStation = async () => {
-    const missing: Partial<Record<StationField, string>> = {};
+    const missing: FieldErrors<StationField> = {};
     if (!stationForm.name.trim()) missing.name = 'Enter the station name or number.';
     // groupLocations decides "station" by the presence of an address. A new
     // station without one, or an existing one with it cleared, lands under
     // "Other Locations" and every room filed under its name has no card to
     // render under, so the page would appear to lose them.
     if (!stationForm.address.trim()) missing.address = 'A station needs a street address.';
+    stationErrors.setFormError(null);
     if (Object.keys(missing).length > 0) {
       showStationErrors(missing);
       return;
@@ -1318,8 +1306,9 @@ export default function LocationsPage() {
       setShowStationModal(false);
       void loadLocations();
     } catch (err: unknown) {
-      const detail = getErrorDetail(err);
-      toast.error(detail || 'Failed to save station');
+      // Shown in the dialog, which stays open: a refusal lands on the field it
+      // names, anything else above the actions.
+      stationErrors.focusFirst(stationErrors.setFromApiError(err, 'Failed to save station'));
     } finally {
       setIsSavingStation(false);
     }
@@ -1359,7 +1348,7 @@ export default function LocationsPage() {
     setRoomParentStation(parent);
     setRoomForm(form);
     setRoomInitial(form);
-    setRoomErrors({});
+    roomErrors.clear();
     setShowRoomModal(true);
   };
 
@@ -1376,7 +1365,7 @@ export default function LocationsPage() {
 
   const setRoomField = (field: RoomField, value: string) => {
     setRoomForm((p) => ({ ...p, [field]: value }));
-    setRoomErrors((p) => ({ ...p, [field]: undefined }));
+    roomErrors.setError(field, null);
   };
 
   const requestCloseRoom = useDiscardGuard({
@@ -1384,17 +1373,17 @@ export default function LocationsPage() {
     onClose: () => setShowRoomModal(false),
   });
 
-  const showRoomErrors = (errors: Partial<Record<RoomField, string | undefined>>) => {
-    setRoomErrors(errors);
-    const first = firstErrorKey(ROOM_FIELDS, errors);
-    if (first) document.getElementById(ROOM_FIELD_IDS[first])?.focus();
+  const showRoomErrors = (errors: FieldErrors<RoomField>) => {
+    roomErrors.setErrors(errors);
+    roomErrors.focusFirst(errors);
   };
 
   const handleSaveRoom = async () => {
-    const missing: Partial<Record<RoomField, string>> = {};
-    if (!roomForm.name.trim()) missing.name = 'Enter the room name.';
+    const missing: FieldErrors<RoomField> = {};
+    if (!roomForm.name.trim()) missing.name = 'Enter a name for the room.';
     const roomCapacityError = capacityError(roomForm.capacity);
     if (roomCapacityError) missing.capacity = `${roomCapacityError}.`;
+    roomErrors.setFormError(null);
     if (Object.keys(missing).length > 0) {
       showRoomErrors(missing);
       return;
@@ -1432,8 +1421,7 @@ export default function LocationsPage() {
       setShowRoomModal(false);
       void loadLocations();
     } catch (err: unknown) {
-      const detail = getErrorDetail(err);
-      toast.error(detail || 'Failed to save room');
+      roomErrors.focusFirst(roomErrors.setFromApiError(err, 'Failed to save room'));
     } finally {
       setIsSavingRoom(false);
     }
@@ -1817,9 +1805,9 @@ export default function LocationsPage() {
                 <FormField
                   label="Station Name / Number"
                   required
-                  id={STATION_FIELD_IDS.name}
-                  error={stationErrors.name}
-                  maxLength={STATION_FIELDS.name.maxLength}
+                  id={STATION_FIELDS.name.id}
+                  error={stationErrors.errors.name}
+                  maxLength={STATION_LIMITS.name}
                   count={stationForm.name.length}
                 >
                   {(field) => (
@@ -1837,9 +1825,9 @@ export default function LocationsPage() {
                 <FormField
                   label="Street Address"
                   required
-                  id={STATION_FIELD_IDS.address}
-                  error={stationErrors.address}
-                  maxLength={STATION_FIELDS.address.maxLength}
+                  id={STATION_FIELDS.address.id}
+                  error={stationErrors.errors.address}
+                  maxLength={STATION_LIMITS.address}
                   count={stationForm.address.length}
                 >
                   {(field) => (
@@ -1857,9 +1845,9 @@ export default function LocationsPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <FormField
                     label="City"
-                    id={STATION_FIELD_IDS.city}
-                    error={stationErrors.city}
-                    maxLength={STATION_FIELDS.city.maxLength}
+                    id={STATION_FIELDS.city.id}
+                    error={stationErrors.errors.city}
+                    maxLength={STATION_LIMITS.city}
                     count={stationForm.city.length}
                   >
                     {(field) => (
@@ -1875,9 +1863,9 @@ export default function LocationsPage() {
                   </FormField>
                   <FormField
                     label="State"
-                    id={STATION_FIELD_IDS.state}
-                    error={stationErrors.state}
-                    maxLength={STATION_FIELDS.state.maxLength}
+                    id={STATION_FIELDS.state.id}
+                    error={stationErrors.errors.state}
+                    maxLength={STATION_LIMITS.state}
                     count={stationForm.state.length}
                   >
                     {(field) => (
@@ -1893,9 +1881,9 @@ export default function LocationsPage() {
                   </FormField>
                   <FormField
                     label="Zip"
-                    id={STATION_FIELD_IDS.zip}
-                    error={stationErrors.zip}
-                    maxLength={STATION_FIELDS.zip.maxLength}
+                    id={STATION_FIELDS.zip.id}
+                    error={stationErrors.errors.zip}
+                    maxLength={STATION_LIMITS.zip}
                     count={stationForm.zip.length}
                   >
                     {(field) => (
@@ -1911,7 +1899,11 @@ export default function LocationsPage() {
                     )}
                   </FormField>
                 </div>
-                <FormField label="Description" id={STATION_FIELD_IDS.description} error={stationErrors.description}>
+                <FormField
+                  label="Description"
+                  id={STATION_FIELDS.description.id}
+                  error={stationErrors.errors.description}
+                >
                   {(field) => (
                     <textarea
                       {...field}
@@ -1923,6 +1915,11 @@ export default function LocationsPage() {
                     />
                   )}
                 </FormField>
+                {stationErrors.formError && (
+                  <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                    {stationErrors.formError}
+                  </p>
+                )}
               </div>
               <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
                 <button
@@ -1976,9 +1973,9 @@ export default function LocationsPage() {
                 <FormField
                   label="Room Name"
                   required
-                  id={ROOM_FIELD_IDS.name}
-                  error={roomErrors.name}
-                  maxLength={ROOM_FIELDS.name.maxLength}
+                  id={ROOM_FIELDS.name.id}
+                  error={roomErrors.errors.name}
+                  maxLength={ROOM_LIMITS.name}
                   count={roomForm.name.length}
                 >
                   {(field) => (
@@ -1996,9 +1993,9 @@ export default function LocationsPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <FormField
                     label="Room Number"
-                    id={ROOM_FIELD_IDS.room_number}
-                    error={roomErrors.room_number}
-                    maxLength={ROOM_FIELDS.room_number.maxLength}
+                    id={ROOM_FIELDS.room_number.id}
+                    error={roomErrors.errors.room_number}
+                    maxLength={ROOM_LIMITS.room_number}
                     count={roomForm.room_number.length}
                   >
                     {(field) => (
@@ -2015,9 +2012,9 @@ export default function LocationsPage() {
                   </FormField>
                   <FormField
                     label="Floor"
-                    id={ROOM_FIELD_IDS.floor}
-                    error={roomErrors.floor}
-                    maxLength={ROOM_FIELDS.floor.maxLength}
+                    id={ROOM_FIELDS.floor.id}
+                    error={roomErrors.errors.floor}
+                    maxLength={ROOM_LIMITS.floor}
                     count={roomForm.floor.length}
                   >
                     {(field) => (
@@ -2033,7 +2030,7 @@ export default function LocationsPage() {
                     )}
                   </FormField>
                 </div>
-                <FormField label="Capacity" id={ROOM_FIELD_IDS.capacity} error={roomErrors.capacity}>
+                <FormField label="Capacity" id={ROOM_FIELDS.capacity.id} error={roomErrors.errors.capacity}>
                   {(field) => (
                     <input
                       {...field}
@@ -2047,7 +2044,7 @@ export default function LocationsPage() {
                     />
                   )}
                 </FormField>
-                <FormField label="Description" id={ROOM_FIELD_IDS.description} error={roomErrors.description}>
+                <FormField label="Description" id={ROOM_FIELDS.description.id} error={roomErrors.errors.description}>
                   {(field) => (
                     <textarea
                       {...field}
@@ -2059,6 +2056,11 @@ export default function LocationsPage() {
                     />
                   )}
                 </FormField>
+                {roomErrors.formError && (
+                  <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                    {roomErrors.formError}
+                  </p>
+                )}
               </div>
               <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
                 <button

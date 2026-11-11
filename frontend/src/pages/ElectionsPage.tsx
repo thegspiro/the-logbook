@@ -22,7 +22,6 @@ import {
   VictoryCondition as VC,
   RunoffType,
 } from '../constants/enums';
-import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import {
   BUILT_IN_ELECTION_DEFAULTS,
@@ -39,9 +38,9 @@ import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electio
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
 import { MEETING_KIND_LABELS, defaultsForKind, describeEligibilityRules } from '../modules/elections/eligibilityRules';
 import { DialogPanel } from '../components/ux/DialogPanel';
-import { FormField } from '../components/ux/FormField';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
 import { useDiscardGuard } from '../hooks/useDiscardGuard';
-import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
 import { Vote } from 'lucide-react';
@@ -95,19 +94,6 @@ const TITLE_MAX = 200;
 const DESCRIPTION_MAX = 50_000;
 const POSITION_MAX = 200;
 
-const CREATE_FIELDS: Record<CreateField, ServerFieldSpec> = {
-  title: { label: 'Title', maxLength: TITLE_MAX },
-  description: { label: 'Description', maxLength: DESCRIPTION_MAX },
-  start_date: { label: 'Start date & time' },
-  end_date: { label: 'End date & time' },
-  positions: { label: 'Positions', maxLength: POSITION_MAX },
-  victory_threshold: { label: 'Numerical threshold' },
-  victory_percentage: { label: 'Percentage threshold' },
-  max_runoff_rounds: { label: 'Maximum runoff rounds' },
-  reminder_hours_before_close: { label: 'Auto-remind non-voters' },
-  seats_per_position: { label: 'Seats per race' },
-};
-
 const CREATE_FIELD_IDS: Record<CreateField, string> = {
   title: 'election-title',
   description: 'election-description',
@@ -119,6 +105,21 @@ const CREATE_FIELD_IDS: Record<CreateField, string> = {
   max_runoff_rounds: 'election-max-runoff-rounds',
   reminder_hours_before_close: 'election-reminder-hours',
   seats_per_position: 'election-seats',
+};
+
+// The election schema has no alias generator, so a 422 names these snake_case
+// request keys, which are already the field names. Order is focus order.
+const CREATE_FIELDS: FieldSpecs<CreateField> = {
+  title: { id: CREATE_FIELD_IDS.title, label: 'Title' },
+  description: { id: CREATE_FIELD_IDS.description, label: 'Description' },
+  start_date: { id: CREATE_FIELD_IDS.start_date, label: 'Start Date & Time' },
+  end_date: { id: CREATE_FIELD_IDS.end_date, label: 'End Date & Time' },
+  positions: { id: CREATE_FIELD_IDS.positions, label: 'Positions' },
+  victory_threshold: { id: CREATE_FIELD_IDS.victory_threshold, label: 'Numerical threshold' },
+  victory_percentage: { id: CREATE_FIELD_IDS.victory_percentage, label: 'Percentage threshold' },
+  max_runoff_rounds: { id: CREATE_FIELD_IDS.max_runoff_rounds, label: 'Maximum runoff rounds' },
+  reminder_hours_before_close: { id: CREATE_FIELD_IDS.reminder_hours_before_close, label: 'Auto-remind non-voters' },
+  seats_per_position: { id: CREATE_FIELD_IDS.seats_per_position, label: 'Seats per race' },
 };
 
 // The dialog's own label look, kept as the page had it.
@@ -137,9 +138,9 @@ export const ElectionsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const { busy, run } = useSubmitGuard();
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<CreateField, string | undefined>>>({});
-  const clearFieldError = (key: CreateField) => setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
+  const electionErrors = useFieldErrors(CREATE_FIELDS);
+  const fieldErrors = electionErrors.errors;
+  const clearFieldError = (key: CreateField) => electionErrors.setError(key, null);
   const [electionDefaults, setElectionDefaults] = useState<ElectionFormDefaults>(BUILT_IN_ELECTION_DEFAULTS);
   const [formData, setFormData] = useState<ElectionCreate>(() => blankElectionForm(BUILT_IN_ELECTION_DEFAULTS));
   const [positionInput, setPositionInput] = useState('');
@@ -325,10 +326,15 @@ export const ElectionsPage: React.FC = () => {
     }
   };
 
+  const flagMissingStart = () => {
+    const message = 'Set a start date first.';
+    electionErrors.setError('start_date', message);
+    electionErrors.focusFirst({ start_date: message });
+  };
+
   const setDuration = (hours: number) => {
     if (!formData.start_date) {
-      setFieldErrors((prev) => ({ ...prev, start_date: 'Set a start date first.' }));
-      document.getElementById(CREATE_FIELD_IDS.start_date)?.focus();
+      flagMissingStart();
       return;
     }
 
@@ -342,8 +348,7 @@ export const ElectionsPage: React.FC = () => {
 
   const setEndOfDay = () => {
     if (!formData.start_date) {
-      setFieldErrors((prev) => ({ ...prev, start_date: 'Set a start date first.' }));
-      document.getElementById(CREATE_FIELD_IDS.start_date)?.focus();
+      flagMissingStart();
       return;
     }
 
@@ -354,8 +359,7 @@ export const ElectionsPage: React.FC = () => {
   const resetCreateForm = () => {
     setFormData(blankElectionForm(electionDefaults));
     setPositionInput('');
-    setFieldErrors({});
-    setCreateError(null);
+    electionErrors.clear();
   };
   const closeCreateModal = () => {
     setShowCreateModal(false);
@@ -368,23 +372,22 @@ export const ElectionsPage: React.FC = () => {
   // once whichever way the officer leaves (forms review F-6).
   const requestCloseCreate = useDiscardGuard({ isDirty: createDirty, onClose: closeCreateModal });
 
-  const showFieldErrors = (errors: Partial<Record<CreateField, string>>) => {
-    setFieldErrors(errors);
-    const first = (Object.keys(CREATE_FIELDS) as CreateField[]).find((key) => errors[key]);
-    if (first) document.getElementById(CREATE_FIELD_IDS[first])?.focus();
+  const showFieldErrors = (errors: FieldErrors<CreateField>) => {
+    electionErrors.setErrors(errors);
+    electionErrors.focusFirst(errors);
   };
 
   const handleCreateElection = (e: React.FormEvent) => {
     e.preventDefault();
     return run(async () => {
-      setCreateError(null);
+      electionErrors.setFormError(null);
 
       // A create form creates nothing until every refusal is fixed (owner,
       // 2026-11-05); each one is written under its own field.
-      const errors: Partial<Record<CreateField, string>> = {};
-      if (!formData.title.trim()) errors.title = 'Title is required.';
-      if (!formData.start_date) errors.start_date = 'Start date & time is required.';
-      if (!formData.end_date) errors.end_date = 'End date & time is required.';
+      const errors: FieldErrors<CreateField> = {};
+      if (!formData.title.trim()) errors.title = 'Enter a title for the election.';
+      if (!formData.start_date) errors.start_date = 'Choose when voting opens.';
+      if (!formData.end_date) errors.end_date = 'Choose when voting closes.';
       else if (
         formData.start_date &&
         new Date(localToUTC(formData.end_date, tz)).getTime() <= new Date(localToUTC(formData.start_date, tz)).getTime()
@@ -396,7 +399,7 @@ export const ElectionsPage: React.FC = () => {
         showFieldErrors(errors);
         return;
       }
-      setFieldErrors({});
+      electionErrors.setErrors({});
 
       try {
         // Convert local datetime-local values to UTC before sending to backend
@@ -410,13 +413,7 @@ export const ElectionsPage: React.FC = () => {
         closeCreateModal();
         await fetchElections();
       } catch (err: unknown) {
-        const mapped = mapServerFieldErrors(err, CREATE_FIELDS);
-        if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
-          showFieldErrors(mapped.fieldErrors);
-          if (mapped.unmatched.length > 0) setCreateError(mapped.unmatched.join(' '));
-          return;
-        }
-        setCreateError(getErrorMessage(err, 'Failed to create election'));
+        electionErrors.focusFirst(electionErrors.setFromApiError(err, 'Failed to create election'));
       }
     });
   };
@@ -810,14 +807,10 @@ export const ElectionsPage: React.FC = () => {
                 noValidate
                 className="px-6 py-4"
               >
-                {createError && (
-                  <div
-                    className="mb-4 rounded-sm border border-red-800/30 bg-red-50 p-3 dark:bg-red-500/10"
-                    role="alert"
-                    aria-live="assertive"
-                  >
-                    <p className="text-sm text-red-800 dark:text-red-300">{createError}</p>
-                  </div>
+                {electionErrors.formError && (
+                  <p role="alert" className={`mb-4 text-sm ${FIELD_ERROR_CLASS}`}>
+                    {electionErrors.formError}
+                  </p>
                 )}
 
                 <div className="space-y-4">

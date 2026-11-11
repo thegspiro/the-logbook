@@ -815,7 +815,10 @@ def evaluate_member_requirement_detail(
     # Measured against the real day rather than the evaluation cut-off: the
     # deadline is a calendar promise to the member, not a period boundary.
     deadline = catch_up_deadline(req, join_date, today)
-    if deadline is not None and ev.status != TrainingStatus.COMPLETED.value:
+    if deadline is not None and ev.status not in (
+        TrainingStatus.COMPLETED.value,
+        NOT_YET_HELD_STATUS,
+    ):
         return replace(
             ev, status=CATCH_UP_STATUS, catch_up_deadline=deadline.isoformat()
         )
@@ -1188,9 +1191,12 @@ def _grade_member_requirement(
         latest_comp = (
             tally.latest_attended.isoformat() if tally.latest_attended else None
         )
-        # No session charged yet (none held, or every one excused) is met:
-        # the member owes nothing for the window, as a target prorated to
-        # zero is for shifts and calls.
+        # Nothing held yet: nothing to have attended, so not graded at all.
+        # Held but every one excused is different: the member was excused and
+        # owes nothing, as a target prorated to zero is for shifts and calls,
+        # and that is met.
+        if tally.held == 0:
+            return _ev(NOT_YET_HELD_STATUS, None, None, **progress)
         if tally.met:
             return replace(
                 _ev("completed", latest_comp, None, **progress),
@@ -1667,6 +1673,17 @@ def _find_matching_profile(
 # obligation, not a training record, and it never counts against standing.
 CATCH_UP_STATUS = "catch_up"
 
+# Status for a session-attendance requirement with no linked session held in
+# the member's window yet. There is nothing to have attended, so it is neither
+# met nor unmet: it used to read "0/0 sessions - Complete" and count as met,
+# the empty denominator CLAUDE.md pitfall #29 warns of (workflow review W80-9,
+# owner decision 2026-11-08). The same value the competency matrix uses for a
+# requirement that does not apply to a member, and graded the same way.
+NOT_YET_HELD_STATUS = "not_applicable"
+
+# Statuses that count neither for nor against a member's standing.
+UNGRADED_STATUSES = frozenset({CATCH_UP_STATUS, NOT_YET_HELD_STATUS})
+
 
 def member_join_date(member) -> Optional[date]:
     """The date a member joined the department, for grandfathering.
@@ -1739,15 +1756,16 @@ def tally_standing(statuses: Iterable[str]) -> Tuple[int, int]:
     """(met, total) over a member's requirement statuses.
 
     A requirement in its catch-up period is left out of both counts: it is
-    neither met nor held against the member until the deadline passes. Every
-    screen that turns statuses into a standing goes through this so a
-    grandfathered member reads the same on the dashboard, the matrix and the
-    profile card.
+    neither met nor held against the member until the deadline passes. So is
+    a session-attendance requirement no session of which has been held yet
+    (:data:`NOT_YET_HELD_STATUS`). Every screen that turns statuses into a
+    standing goes through this so a member reads the same on the dashboard,
+    the matrix and the profile card.
     """
     met = 0
     total = 0
     for status in statuses:
-        if status == CATCH_UP_STATUS:
+        if status in UNGRADED_STATUSES:
             continue
         total += 1
         if status == TrainingStatus.COMPLETED.value:
