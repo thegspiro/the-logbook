@@ -16,6 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4240](https://github.com/thegspiro/the-logbook/pull/4240)**
+(branch `claude/security-review-onboarding-p13`):
+Feature 30 (Onboarding), pass 13, a dedicated rotation session (not a
+watchdog pickup). PR #4238 (Feature 29, Reports & analytics, pass 15) had
+already merged clean (`413ab36e6`). A fresh `list_pull_requests` (state
+`open`) found no PR with a `claude/security-review-*` head, and row 30 was
+the next pending feature, confirmed on a freshly fetched `main`.
+
+**0 fixed, 0 new findings.** All 26 routes re-enumerated by AST — identical
+method/path/function set and auth-dependency shape to passes 7–12. Real
+delta since pass 12's baseline (`4c52bfee2`, PR #4003) traces to five
+independent, already-merged engineering commits from other rotation/owner-
+decision work (an S3 endpoint allowlist check at onboarding's file-storage
+save step, a bulk role delete now closing open `MemberPositionTerm` rows
+first, `/reset` releasing a wider set of `ON DELETE RESTRICT` location
+references added by other features, `public_info` moving into the wizard's
+asked-about module set, and new-org creation seeding Federal Programs grant
+opportunities plus de-duplicating the HQ station's location by name) — each
+read in full and verified good; none change this feature's auth posture,
+tenant scoping, or data-exposure surface. Standing flagged items (ONB-7;
+`ITTeamMemberRequest.email` as `str`) re-verified unchanged. See
+`docs/security-review/ONB5-30-onboarding.md`'s **Pass 13** section for the
+full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 757 revisions, single head `09f0171ccf5e`; `check_route_permissions.py
+--strict` — 305 routes, 0 errors/warnings; scoped backend suite (`-k "onboard
+or org_template or template_service or key_custody or system_notices or
+gmail_service_account or email_provider or encrypt_email or position_kind or
+position_seeding"`) — 724 passed, 1 environment-only skip (`pywebpush`); `npm
+run typecheck` — 0 errors; `npm run lint` — 0 errors/warnings; `npx vitest run
+src/modules/onboarding` — 509 passed (44 files).
+
+Row 30 → ✅ (pending this PR's merge). Next is Feature 31 (Scheduled tasks) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 15, PR #4238, merged), preserved for history</summary>
+
 **PR [#4238](https://github.com/thegspiro/the-logbook/pull/4238)**
 (branch `claude/security-review-reports-analytics-p15`):
 Feature 29 (Reports & analytics), pass 15. PR #4236 (Feature 28, Security,
@@ -64,6 +104,8 @@ src/pages/PlatformAnalyticsPage.test.tsx` — 359 passed (27 files).
 
 Row 29 → ✅ (pending this PR's merge). Next is Feature 30 (Onboarding) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 13, PR #4236, merged), preserved for history</summary>
@@ -25867,7 +25909,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (31 routes, added pass 13), `historical_staffing_*.py`                                                                       | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                        | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                           | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                          | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                          | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                               | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                          | ⬜     |
@@ -25901,6 +25943,62 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-11 — Feature 29 (Reports & analytics, pass 15) merged; Feature 30 (Onboarding, pass 13): 0 fixed, 0 new findings
+
+PR #4238 merged (`413ab36e6`). `list_pull_requests` (state `open`) found no
+PR with a `claude/security-review-*` head, and row 30 (Onboarding) was the
+next `⬜` in the rotation table, confirmed on a freshly pulled `main`.
+
+Baseline `4c52bfee2` (pass 12's own merge, PR #4003). Real delta since then,
+restricted to this feature's declared file list: `onboarding.py` (+32/-6),
+`services/onboarding.py` (+129/-25), and a shared `schemas/organization.py`
+(+114/-0, only one onboarding-relevant symbol touched). Five independent,
+already-merged engineering commits from other rotation/owner-decision work
+account for all of it — none from this security-review rotation itself:
+
+1. **S3 endpoint allowlisted at onboarding's file-storage save step**
+   (`s3_storage.endpoint_allowed`), mirroring the authenticated Settings
+   screen's existing `_refuse_unlisted_s3_endpoint` check, same owner
+   decision (2026-11-01). Verified the stricter SSRF/private-address guard
+   (`check_endpoint`) still runs, unchanged, wherever a client is actually
+   built — the save-time check is deliberately allowlist-only, by design,
+   matching the one place this control already existed.
+2. **A bulk role delete in `/session/roles` now closes open
+   `MemberPositionTerm` rows first** (`close_terms_for_positions`), landed
+   by the "keep a dated history of positions held" feature — a bulk
+   `DELETE` bypasses the ORM hook that would otherwise do this, which would
+   leave a dangling-but-FK'd term. Org-scoped identically to the delete it
+   precedes.
+3. **Onboarding's `/reset` now releases the wider set of
+   `ON DELETE RESTRICT` location references** other features added since
+   pass 12 (events, training history, meetings, requests, apparatus) before
+   deleting `Location` — the same shape ONB-1 fixed in 2026 for
+   `Location.created_by`, extended pre-emptively before a populated
+   instance could hit the new FK-fail. Correctly unscoped: reset is a
+   whole-database wipe under the single-department model.
+4. **`public_info` moved into the wizard's asked-about module set**,
+   completing the W01-24 owner decision pass 12 described as landed only on
+   the _write_ side (the backfill migration); this is the _ask_ side.
+5. **New-org creation now seeds the department's own Federal Programs grant
+   opportunities** (`seed_federal_program_opportunities`) and the HQ
+   station's `Location` now de-duplicates by name via
+   `save_system_named_location`/`LocationService.remove_location` (LOC-41)
+   instead of a bare insert/delete — both org-scoped from the
+   already-established org context, no client-supplied id involved.
+
+All five read in full and verified good; none change this feature's auth
+posture, tenant scoping, or data-exposure surface. Frontend diff (7 files) is
+the same W01-24 work plus one new presentational component
+(`ExpiredSessionBanner.tsx`) — no network call, no new storage write.
+
+Route surface re-enumerated by AST: still 26 routes, identical auth-dependency
+shape to passes 7–12. Standing flagged items re-verified unchanged: **ONB-7**
+(no numeric rate cap on `/session/roles` beyond its 200-item size cap) and
+`ITTeamMemberRequest.email` (`str`, not `EmailStr`, intentionally loose).
+
+Full writeup: `docs/security-review/ONB5-30-onboarding.md`'s **Pass 13**
+section.
 
 ### 2026-11-11 — Feature 28 (Security, audit & IP, pass 13) merged; Feature 29 (Reports & analytics, pass 15): 2 fixed (RPT6-29-5, RPT6-29-6, both MEDIUM), 0 new findings beyond those two
 
