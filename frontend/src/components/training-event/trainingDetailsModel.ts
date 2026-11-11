@@ -190,6 +190,8 @@ export const creditHoursFromCourse = (value: TrainingDetailsForm, course: Traini
   );
 };
 
+const inLibrary = (value: TrainingDetailsForm) => value.course_mode === 'library' && Boolean(value.course_id);
+
 /**
  * A change of course choice. Hours that came from a library course no longer
  * describe the session once it has none, so they go back to following the
@@ -197,9 +199,30 @@ export const creditHoursFromCourse = (value: TrainingDetailsForm, course: Traini
  * to the library with the course still chosen puts its hours back: the
  * course reads as picked, and nothing else would re-apply it, since the
  * course-mode choice does not pass through the course picker.
+ *
+ * `previous` is the value before the change and its library course. An edit
+ * loads a library session's hours as typed ('manual'), since only the course
+ * list tells they are the course's figure, so it is the move away from the
+ * library, judged against the course the session had, that sends hours the
+ * form shows as the course's back to the length. Only that move: hours typed
+ * later are left alone even when they equal a course picked earlier.
  */
-export const withCourseChoice = (value: TrainingDetailsForm, course?: TrainingCourse): TrainingDetailsForm => {
-  if (value.credit_hours_source === 'course' && (value.course_mode !== 'library' || !value.course_id)) {
+export const withCourseChoice = (
+  value: TrainingDetailsForm,
+  course?: TrainingCourse,
+  previous?: { value: TrainingDetailsForm; course: TrainingCourse | undefined }
+): TrainingDetailsForm => {
+  if (value.credit_hours_source === 'course' && !inLibrary(value)) {
+    return { ...value, credit_hours_source: 'duration' };
+  }
+  if (
+    previous &&
+    inLibrary(previous.value) &&
+    !inLibrary(value) &&
+    value.credit_hours === previous.value.credit_hours &&
+    value.credit_hours_source === previous.value.credit_hours_source &&
+    creditHoursFromCourse(previous.value, previous.course)
+  ) {
     return { ...value, credit_hours_source: 'duration' };
   }
   const hours = courseCreditHours(course);

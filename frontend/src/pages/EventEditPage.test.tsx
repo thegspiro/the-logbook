@@ -1056,6 +1056,65 @@ describe('EventEditPage', () => {
         expect(screen.getByText('2 hours (from the course)')).toBeInTheDocument();
       });
 
+      /**
+       * A three-hour event whose session holds the pump course with the given
+       * stored hours, opened on Training Info once the Course Library has
+       * loaded, so the form can tell whether the hours are the course's.
+       */
+      async function openWithStoredHours(storedHours: number) {
+        vi.mocked(eventService.getEvent).mockResolvedValue({ ...trainingEvent, end_datetime: '2026-03-15T21:00:00Z' });
+        vi.mocked(trainingSessionService.getSessionByEvent).mockResolvedValue({
+          ...session,
+          course_id: 'course-pump',
+          course_name: 'Pump Operations',
+          credit_hours: storedHours,
+        });
+        window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
+        const user = userEvent.setup();
+        renderWithRouter(<EventEditPage />);
+        await screen.findByRole('option', { name: 'PUMP - Pump Operations' });
+        return user;
+      }
+
+      async function save(user: User) {
+        await toReview(user);
+        await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+        await waitFor(() => expect(eventService.updateEvent).toHaveBeenCalledTimes(1));
+      }
+
+      // Stored hours equal to the course's are its figure, not the officer's.
+      // Leaving the library kept them as typed, so the course-less session was
+      // saved with the old course's 2 hours on a three-hour event, where a
+      // create goes back to the length. Null is each event's own length to
+      // the backend.
+      it("follows the event's length again when the course is left", async () => {
+        const user = await openWithStoredHours(2);
+        expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
+          expect.stringContaining('From the course (2 hours).')
+        );
+
+        await user.click(screen.getByRole('radio', { name: /No course yet/ }));
+        expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(3);
+        await save(user);
+
+        expect(sent()?.training_details).toMatchObject({ course_id: null, credit_hours: null });
+      });
+
+      it('keeps hours unlike the course when the course is left', async () => {
+        const user = await openWithStoredHours(5);
+
+        await user.click(screen.getByRole('radio', { name: /One-off course/ }));
+        await user.type(screen.getByLabelText(/Course Name/), 'Pump Refresher');
+        expect(screen.getByLabelText(/Credit Hours/)).toHaveValue(5);
+        await save(user);
+
+        expect(sent()?.training_details).toMatchObject({
+          course_id: null,
+          course_name: 'Pump Refresher',
+          credit_hours: 5,
+        });
+      });
+
       it('says why the session-attendance requirement link is kept, on the step and on Review', async () => {
         window.history.replaceState({}, '', '/events/evt-1/edit?step=training');
         const user = userEvent.setup();

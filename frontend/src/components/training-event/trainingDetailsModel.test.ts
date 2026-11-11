@@ -202,6 +202,54 @@ describe('withCourseChoice', () => {
   });
 });
 
+describe('withCourseChoice on an edit', () => {
+  // fromSession reads a library session's stored hours as typed ('manual'):
+  // only the course list can tell they are the course's figure. Leaving the
+  // library kept them as typed, so the course-less session was saved with
+  // the old course's hours instead of its own length, where a create goes
+  // back to following the length.
+  const LIBRARY_SESSION = { ...SESSION, course_id: 'course-pump', course_name: 'Pump Operations', credit_hours: 2 };
+  const THREE_HOURS = { ...EVENT, end_datetime: '2026-11-16T22:00:00Z' };
+
+  it.each([['none' as const], ['oneoff' as const]])(
+    "follows the event's length again when hours from the course are left for %s",
+    (mode) => {
+      const loaded = fromSession(LIBRARY_SESSION, THREE_HOURS);
+      expect(loaded).toMatchObject({ course_mode: 'library', credit_hours_source: 'manual' });
+
+      const away = withCourseChoice({ ...loaded, course_mode: mode }, COURSE, { value: loaded, course: COURSE });
+      expect(away.credit_hours_source).toBe('duration');
+      expect(toUpdatePayload(away, 3).credit_hours).toBeNull();
+    }
+  );
+
+  it('follows the length again when the course itself is cleared', () => {
+    const loaded = fromSession(LIBRARY_SESSION, THREE_HOURS);
+    const cleared = withCourseChoice({ ...loaded, course_id: '' }, undefined, { value: loaded, course: COURSE });
+    expect(cleared.credit_hours_source).toBe('duration');
+  });
+
+  it('keeps hours unlike the course, which the officer typed', () => {
+    const loaded = fromSession({ ...LIBRARY_SESSION, credit_hours: 5 }, THREE_HOURS);
+    const away = withCourseChoice({ ...loaded, course_mode: 'none' }, COURSE, { value: loaded, course: COURSE });
+    expect(away).toMatchObject({ credit_hours: '5', credit_hours_source: 'manual' });
+    expect(toUpdatePayload(away, 3).credit_hours).toBe(5);
+  });
+
+  // Only the move away from the library resets them: hours typed later,
+  // equal to a course still remembered from an earlier pick, stay typed.
+  it('leaves typed hours alone on a change that is not a move away from the library', () => {
+    const typed = form({
+      course_mode: 'none',
+      course_id: 'course-pump',
+      credit_hours_source: 'manual',
+      credit_hours: '2',
+    });
+    const next = { ...typed, instructor: 'Someone' };
+    expect(withCourseChoice(next, COURSE, { value: typed, course: COURSE })).toBe(next);
+  });
+});
+
 describe('strippedForFinalized', () => {
   // A finalized event refuses (409) every changed training field but its links.
   it('keeps only the attendance links', () => {
