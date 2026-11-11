@@ -1439,11 +1439,6 @@ class RecurringEventCreate(BaseModel):
             raise ValueError(
                 "recurrence_end_date is required unless rolling_recurrence is true"
             )
-        # The nightly job that extends a rolling series copies the event, not
-        # a session attached to it, so later occurrences would silently lose
-        # the details the first ones carry.
-        if self.rolling_recurrence and self.training_details is not None:
-            raise ValueError("Training details can't be added to a rolling series")
         if self.recurrence_pattern == "custom" and not self.recurrence_custom_days:
             raise ValueError(
                 "recurrence_custom_days is required when recurrence_pattern is 'custom'"

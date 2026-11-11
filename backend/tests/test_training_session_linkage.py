@@ -27,6 +27,7 @@ from pydantic import ValidationError
 
 from app.models.event import EventType
 from app.models.training import RequirementType, TrainingSession, TrainingType
+from app.schemas.event import RecurringEventCreate
 from app.schemas.training_session import (
     TrainingSessionAttach,
     TrainingSessionCreate,
@@ -560,19 +561,18 @@ class TestRecurringTrainingDetails:
         )
         assert db.added == []
 
-    async def test_a_rolling_series_is_refused(self):
-        """The job that extends a rolling series copies events, not sessions.
-        The schema refuses it first; the service holds the line for any other
-        caller."""
-        db = RecordingSession()
-        events, error = await EventService(db).create_recurring_event(
-            self._data(rolling_recurrence=True, recurrence_end_date=None), ORG, ACTOR
-        )
-        assert (events, error) == (
-            [],
-            "Training details can't be added to a rolling series",
-        )
-        assert db.added == []
+    def test_a_rolling_series_may_carry_them(self):
+        """The job that extends a rolling series copies the latest
+        occurrence's session and attendance links on to each new one, so the
+        schema no longer refuses details on one. The integration tests in
+        test_rolling_training_series.py cover the series end to end."""
+        data = self._data(rolling_recurrence=True, recurrence_end_date=None)
+        data["recurrence_pattern"] = "weekly"
+
+        created = RecurringEventCreate(**data)
+
+        assert created.rolling_recurrence is True
+        assert created.training_details is not None
 
     async def test_a_foreign_category_is_refused(self):
         db = RecordingSession([_one(None)])

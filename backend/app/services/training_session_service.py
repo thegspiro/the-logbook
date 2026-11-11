@@ -4,6 +4,7 @@ Training Session Service
 Business logic for training session management, approval workflows, and notifications.
 """
 
+import copy
 import secrets
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -64,6 +65,33 @@ from app.utils.json_ids import json_array_contains
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 from app.utils.org_timezone import local_and_utc_dates, resolve_scheduling_timezone
+
+# What a copied session takes from its source: the course, filing and credit
+# settings. Not its id, event, finalized state or timestamps — the copy is a
+# new session for a new occurrence that has not been held.
+SESSION_CLONE_FIELDS = (
+    "course_id",
+    "category_id",
+    "program_id",
+    "phase_id",
+    "requirement_id",
+    "course_name",
+    "course_code",
+    "training_type",
+    "credit_hours",
+    "instructor",
+    "instructor_id",
+    "co_instructors",
+    "apparatus_id",
+    "issues_certification",
+    "certification_number_prefix",
+    "issuing_agency",
+    "expiration_months",
+    "counts_toward_certification",
+    "auto_create_records",
+    "require_completion_confirmation",
+    "approval_deadline_days",
+)
 
 # A second set of training details for one event. training_sessions.event_id
 # is unique; the endpoint answers this with a 409, not a 400.
@@ -585,6 +613,57 @@ class TrainingSessionService:
                 training_session, details.attendance_requirement_ids or []
             )
         return sessions
+
+    async def source_for_cloning(
+        self, event: Event
+    ) -> Tuple[Optional[TrainingSession], List[str]]:
+        """An event's session and its attendance links, to copy onto another.
+
+        ``(None, [])`` when the event has no session.
+        """
+        session = await self.get_session_by_event(event.id, event.organization_id)
+        if session is None:
+            return None, []
+        links = await self.attendance_requirement_ids([str(session.id)])
+        return session, links[str(session.id)]
+
+    async def clone_sessions_for_events(
+        self,
+        source: TrainingSession,
+        link_ids: Sequence[str],
+        source_title: str,
+        events: Sequence[Event],
+        created_by: UUID | str | None,
+    ) -> List[TrainingSession]:
+        """Give each event a copy of ``source`` and its attendance links.
+
+        For the next occurrences of a rolling series and for a duplicated
+        event. A session filed under its own event's title (no course, no
+        one-off name) is filed under each new event's title instead, as the
+        source would have been. Does not commit; the events must already be
+        added to the session.
+        """
+        await self.db.flush()
+        files_under_title = (
+            source.course_id is None and source.course_name == source_title
+        )
+        clones = []
+        for event in events:
+            clone = TrainingSession(
+                organization_id=str(source.organization_id),
+                event_id=str(event.id),
+                created_by=str(created_by) if created_by else None,
+            )
+            for name in SESSION_CLONE_FIELDS:
+                setattr(clone, name, copy.deepcopy(getattr(source, name)))
+            if files_under_title:
+                clone.course_name = event.title
+            self.db.add(clone)
+            clones.append(clone)
+        await self.db.flush()
+        for clone in clones:
+            self._link_attendance_requirements(clone, link_ids)
+        return clones
 
     async def attach_session_to_event(
         self,

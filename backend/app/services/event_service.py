@@ -2014,6 +2014,23 @@ class EventService:
         )
 
         self.db.add(new_event)
+        if self.event_credits_training(source_event):
+            # Local import: training_session_service imports this module.
+            from app.services.training_session_service import TrainingSessionService
+
+            # The copy files its credit and counts toward attendance as the
+            # source does. A copy is a session that has not been held, so it
+            # is not finalized whatever the source is.
+            training = TrainingSessionService(self.db)
+            source_session, link_ids = await training.source_for_cloning(source_event)
+            if source_session is not None:
+                await training.clone_sessions_for_events(
+                    source_session,
+                    link_ids,
+                    source_event.title,
+                    [new_event],
+                    created_by,
+                )
         await self.db.commit()
         await self.db.refresh(new_event)
 
@@ -5655,9 +5672,9 @@ class EventService:
         recurrence_exceptions = event_data.pop("recurrence_exceptions", None)
         raw_training_details = event_data.pop("training_details", None)
 
-        # Training details become one training session per occurrence. The
-        # schema already refuses them on a rolling series (the job extending
-        # it copies events, not sessions); the type is checked here.
+        # Training details become one training session per occurrence. On a
+        # rolling series the job that extends it copies the latest
+        # occurrence's session and attendance links on to each new one.
         training = None
         training_details = None
         course = None
@@ -5667,8 +5684,6 @@ class EventService:
 
             if event_data.get("event_type") != EventType.TRAINING.value:
                 return [], "Training details can only be added to a Training event"
-            if rolling_recurrence:
-                return [], "Training details can't be added to a rolling series"
             training_details = TrainingSessionAttach(**raw_training_details)
             training = TrainingSessionService(self.db)
             course, error = await training.resolve_attach_details(
