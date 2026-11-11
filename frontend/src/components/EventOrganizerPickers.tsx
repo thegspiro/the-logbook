@@ -4,7 +4,8 @@
  *
  * The alternate list leaves out whoever is the organizer — the API refuses the
  * same person twice — including the member the organizer defaults to when the
- * organizer select is left on its placeholder.
+ * organizer select is left on its placeholder. The organizer list leaves that
+ * member out too, since the placeholder already names them.
  */
 
 import React from 'react';
@@ -43,6 +44,13 @@ export const EventOrganizerPickers: React.FC<EventOrganizerPickersProps> = ({
 }) => {
   const effectiveOrganizer = organizerId || defaultOrganizerId || '';
   const alternates = options.filter((o) => o.id !== effectiveOrganizer);
+  // The placeholder ("Me (default)") already stands for the default organizer,
+  // so listing them by name as well offers one person twice. They stay listed
+  // while explicitly chosen, so the select never shows a value it lacks.
+  const organizers =
+    organizerPlaceholder && defaultOrganizerId
+      ? options.filter((o) => o.id !== defaultOrganizerId || o.id === organizerId)
+      : options;
 
   const changeOrganizer = (id: string) => {
     onOrganizerChange(id);
@@ -65,7 +73,7 @@ export const EventOrganizerPickers: React.FC<EventOrganizerPickersProps> = ({
           className={selectClassName}
         >
           <option value="">{organizerPlaceholder ?? 'Choose a member'}</option>
-          {options.map((o) => (
+          {organizers.map((o) => (
             <option key={o.id} value={o.id}>
               {o.name}
             </option>

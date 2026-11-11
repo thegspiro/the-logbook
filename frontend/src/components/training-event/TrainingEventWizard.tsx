@@ -216,7 +216,9 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   seriesOccurrence,
   onDetailsStepChange,
 }) => {
-  const { formatRank } = useRanks();
+  // Every rank, not only the active ladder: a member can still hold a rank the
+  // department has since retired, and it should read as its name, not its code.
+  const { formatRank } = useRanks(false);
   const { confirm } = useConfirm();
   const editing = Boolean(model.editingEventId);
   // A series is created as one; an edit changes one occurrence or the rest of
