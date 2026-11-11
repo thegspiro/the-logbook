@@ -128,7 +128,11 @@ class DataBlock(BaseModel):
         if source is None:
             raise ValueError(f"Unknown data source '{self.source}'")
         if self.scoring_rule is not None and not source.scoreable:
-            raise ValueError(f"'{source.label}' is a list and cannot be scored")
+            raise ValueError(
+                f"'{source.label}' is "
+                + ("a list" if source.unit == "list" else "a record, not a grade")
+                + " and cannot be scored"
+            )
         return self
 
 

@@ -37,6 +37,38 @@ taken; each is listed so the owner can confirm or reverse it.
   `_TEMPLATES` in `attendance_waiver_email_service.py` and choose the
   approvers' `EmailKind` (training uses `TRAINING_DUTIES`).
 
+## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
+
+The annual review can show a member's requests to be excused from training
+sessions and business meetings (`training.session_waivers_summary`,
+`training.session_waiver_history`, `meetings.waivers_summary`,
+`meetings.waiver_history`; see `docs/EVALUATIONS_MODULE.md`). Gaps the owner's
+decisions did not settle, each answered conservatively:
+
+- **"Attachment on file" always reads no.** Attachments are being added by a
+  parallel change and have no table on `main` yet. The flag is wired through
+  `EvaluationDataService._waiver_attachments_on_file`, which returns nothing
+  until that table lands; switching it on is a query in that one method. An
+  evaluation drafted before then records "no" permanently, as every snapshot
+  records what was true when it was taken.
+- **A voided request is listed, and counted only as voided.** Nothing voids a
+  request yet. When something does, the history shows the request and that it
+  was voided, and the summary counts it under `voided` rather than as approved
+  or denied, since a voided approval no longer counts toward the cap.
+- **The screens show the summary's count, not its breakdown.** The evaluation
+  pages and PDF print a count source as its number; the approved / denied /
+  withdrawn split is stored beside it (`breakdown`) and every request's
+  outcome is on the history lines, but nothing shows the split on its own.
+  Showing it would mean teaching the frontend's `formatFigure` and the PDF's
+  `format_figure` about an extra field. **Open:** whether to.
+- **Deciders are named by their current name**, or "a former member" when the
+  account is gone, as the request screens name them. A decision log step
+  carries no name snapshot.
+- **The category is shown.** It is the department's own label, chosen from its
+  policy list, and the owner exposed "all waiver data … but not reasons or
+  attachments". A department whose categories are themselves medical ("Cardiac
+  follow-up") will see them in the review; name categories accordingly.
+
 ## Training Waiver Requests — What the Screens Leave Open (2026-11-11)
 
 The member, approver and settings screens for session waiver requests (the

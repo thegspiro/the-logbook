@@ -1423,6 +1423,13 @@ class TestEverySource:
         assert detail["data"]["skills.tests_passed"]["value"] == 0
         assert detail["data"]["training.session_attendance_pct"]["available"] is False
         assert detail["data"]["calls.response_pct"]["available"] is False
+        # No waiver requests: a count of nothing, and an empty history, for
+        # both workflows (business-meeting requests read zero until written).
+        for key in ("training.session_waivers_summary", "meetings.waivers_summary"):
+            assert detail["data"][key]["value"] == 0
+            assert detail["data"][key]["requested"] == 0
+        for key in ("training.session_waiver_history", "meetings.waiver_history"):
+            assert detail["data"][key] == {"available": True, "value": []}
 
 
 class TestDraftingDefaults:
