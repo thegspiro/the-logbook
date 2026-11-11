@@ -1,6 +1,213 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-11-03 (pass 12, this PR), 2026-10-30 (pass 11, PR merged as `9ae9e594`), 2026-10-27 (pass 10, PR #3782), 2026-10-24 (pass 9, PR #3641), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 12); pass 11 (merged, `9ae9e594`); #3782 (pass 10, merged); #3641 (pass 9, merged); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-11-11 (pass 13, this PR), 2026-11-03 (pass 12, PR #3996, merged), 2026-10-30 (pass 11, PR merged as `9ae9e594`), 2026-10-27 (pass 10, PR #3782), 2026-10-24 (pass 9, PR #3641), 2026-10-20 (pass 8, PR #3467), 2026-10-17 (pass 7, rotation pass 7), 2026-10-07 (pass 6, rotation pass 7), 2026-10-04 (pass 5, rotation pass 5), 2026-09-13 (pass 4, rotation pass 4), 2026-09-06 (pass 3, rotation pass 3), 2026-08-31 (pass 2, rotation pass 2) · **PR:** this PR (pass 13); #3996 (pass 12, merged `3bd09ed02`); pass 11 (merged, `9ae9e594`); #3782 (pass 10, merged); #3641 (pass 9, merged); #3467 (pass 8, merged); #3375 (pass 7); #2988 (pass 6); #2892 (pass 5); #2508 (pass 4); #2307 (pass 3); #2087 (pass 2, merged); #1910 (pass 1, merged)
+
+---
+
+## Pass 13 (2026-11-11) — Historical Data Import grew into a 31-route sub-feature that plain `git log` missed entirely; 0 fixed, 0 new findings (watchdog pickup)
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) was unreachable (`ListAgents`, "No
+reachable agents"). PR #4234 (Feature 26, Forms, pass 13) had already merged
+clean (`5a2c61836c7f6238d505d7d744931adcde96044b`, CI green 26/26, no
+conflicts, no open review threads bar the usual Codex quota-limit comment); a
+fresh `list_pull_requests` (state `open`) found no PR with a
+`claude/security-review-*` head, and row 27 was the next pending feature,
+confirmed on a freshly fetched `main`.
+
+**Baseline `3bd09ed02`** (pass 12's own merge, PR #3996). A per-file `git diff
+3bd09ed02..HEAD --stat` across this feature's declared scope — all ten route
+files, every file under `services/integration_services/`, the directory-
+account and Google Workspace services, `models/integration.py`,
+`schemas/integration.py`, `utils/ssrf_transport.py`, `mcp/keys.py`, and
+`frontend/src/pages/IntegrationsPage.tsx` — found real content in only three
+files: `integrations.py` (+107/-?), `schemas/integration.py` (+19) and
+`IntegrationsPage.tsx` (+37/-?). `git log 3bd09ed02..HEAD` on those files named
+four commits, one of which (`5787d3eda`) is this repo's standing git-history-
+graft artifact (a merge with no resolvable second parent that makes an
+untouched file's whole content look newly added — same class as pass 11/12's
+notes on this). The other three are real and reviewed below (IP/UA audit
+logging, the catalog-reconciliation owner-decision feature, a cosmetic admin-
+header sweep).
+
+### `git log` undercounted again — this time it hid a 31-route sub-feature
+
+Pass 10's own note already named this failure mode ("`git log`, which
+undercounts"), but this pass is the first to find it hiding something this
+large. `IntegrationsPage.tsx`'s _content_ diff (`git diff 3bd09ed02..HEAD --
+frontend/src/pages/IntegrationsPage.tsx`, read directly rather than trusted
+from `git log`) showed a `canImportHistory` permission check, a `History`
+icon import and a "Historical Data Import" card linking to
+`/integrations/historical-import` — none of which appear in any of the three
+commits `git log` named for that file. `git log --all` (not the plain range)
+surfaced the actual commit, `6f53bec53` ("Add Historical Data Import with
+shift and on-call batches"); `git merge-base --is-ancestor 6f53bec53
+3bd09ed02` confirmed it postdates the pass-12 baseline (2026-11-04 vs.
+2026-11-03) and so is real, in-scope delta that a baseline-relative `git log`
+range query simply could not see in this repo's grafted history. The lesson
+carried forward explicitly: **a file-content diff is the ground truth; `git
+log` on a range is a hint that can miss a real commit entirely, not just
+under-attribute one.**
+
+That one commit turned out to be the start of a feature that kept growing:
+nine more commits (all independently confirmed non-ancestors of the baseline,
+e.g. `e1cafa290`, `2ba59eb40`, `64cac4b2f`) built a staffing-roster half on
+top of it between 2026-11-04 and 2026-11-08. By the time this pass started,
+the feature was `backend/app/api/v1/endpoints/historical_import.py` (905
+lines, 31 routes), `services/historical_import_service.py`,
+`historical_import_engine.py`, and five `historical_staffing_*.py` service
+files, `models/historical_import.py`, `schemas/historical_import.py`, six
+migrations, and a new frontend module
+(`frontend/src/modules/integrations/` + `pages/historicalImport/`). All of it
+read and reviewed in full below, as this feature's own scope.
+
+### Historical Data Import + Historical Staffing — read in full, 0 findings
+
+An IT administrator uploads a previous system's CSV export, maps its columns,
+and the tool routes rows to Admin Hours, Training, Drills, Shifts/On-call, and
+(separately) a staffing roster that assigns members to seats on events it
+creates. Gated throughout by `integrations.historical_import`, a permission no
+default role holds — only the wildcard-holding `it_manager` System Owner has
+it (confirmed: `grep historical_import backend/app/core/permissions.py` and a
+repo-wide search for a default-role grant of it, zero hits).
+
+**Route inventory, by AST, not sampled:** all 31 `@router.*` decorators in
+`historical_import.py` enumerated programmatically; every single one carries
+`Depends(require_permission("integrations.historical_import"))` (verified by
+checking each function's source for the exact dependency call, not by
+spot-checking a few). Combined with the pre-existing 39, this feature's total
+is now **70 routes** (up from pass 12's 39) — `check_route_permissions.py
+--strict` agrees: 305 app-wide routes, 0 errors/warnings.
+
+**Tenant isolation (checklist §3).** Every mutating method goes through
+`HistoricalImportService.get(organization_id, import_id, for_update=True)`,
+which filters **both** `id` and `organization_id` in one query and row-locks
+— the correct shape, not `require_permission` alone (Pitfall #14b). The five
+staffing-service files never query `HistoricalImport`/`HistoricalStaffingFile`
+directly by id; they resolve through that same `get()` first
+(`self.imports.get(...)`), then apply the parent's `organization_id` a second
+time on the child row (`historical_staffing_service.py`'s `_file()`, with an
+explicit Pitfall #14 comment) — correct (b)-shape resolution, not a bare by-id
+query.
+
+**Idempotency (Pitfall #36).** `imported_source_records` is unique on
+`(organization_id, source_system, source_id)`
+(`uq_imported_source_records_org_system_id`); every commit path
+(`commit_admin`, `commit_training`, `commit_drills`, the staffing `commit`)
+checks `imported_source_ids()`/the ledger before building its write plan, and
+`_flush_ledgered()` catches `IntegrityError` on the insert itself and turns it
+into a 409 asking the caller to reload — closing the race a lookup-then-write
+leaves open, not just the common case. A re-run, re-upload, or two admins
+racing each other cannot write the same source row twice.
+
+**Former-member creation.** `shift_history_import_service.create_former_members`
+(the path both the shift-batch commit and the staffing commit resolve into)
+sets `password_hash=None`, `status=UserStatus.ARCHIVED`,
+`email_verified=False`, and assigns no position or permission — an archived
+record of someone who served, not an account; cannot sign in, holds no grant.
+
+**Uploads.** CSV-only extension check, a 40MB bound enforced by
+`read_upload_limited` (reads `max_bytes + 1` and rejects on overflow — bounded
+before the bytes are fully materialized for parsing), and
+`reject_if_malicious()` (the repo's shared, fail-closed ClamAV scan) runs
+before anything else touches the content, on both the main upload and the
+staffing-file upload routes. The log-download export uses `SafeCsvChunks`
+(Pitfall #15), not a bare `csv.writer`. Reading is via stdlib `csv.reader`
+with a UTF-8-sig → latin-1 decode fallback (`decode_upload`) — reading a CSV
+is not the formula-injection surface Pitfall #15 covers; writing one is, and
+that path is covered.
+
+**Migrations (checklist §7).** All six
+(`c0ae312b2385`/`34f113ec86e3`/`514dca8e6de3`/`5a7c3e91d2b4`/`8b2d4f6a1c3e`,
+plus the unrelated-to-this-sub-feature `7c41e9a2b6d8` below) guard
+`_has_table`/`get_table_names()` first (Pitfall #26); every `ondelete="SET
+NULL"` column is `nullable=True` (Pitfall #2:
+`imported_source_records.historical_import_id`,
+`historical_staffing_files.created_by`); every added column on a pre-existing
+table is nullable (Pitfall #35 — no tightening of a populated column).
+`validate_migrations.py --strict`: 756 revisions, single head, PASSED.
+`generate_schema_docs.py --check`: up to date.
+
+**What was deliberately not re-reviewed:** the ~355-line `models/training.py`
+diff and the 600-line `shift_history_import_service.py` diff that also show up
+in the accumulated-scope stat are overwhelmingly _not_ this feature's — they
+carry Features 15/17/18's own unrelated work (match-key/milestone columns, a
+`location_id` ondelete change) that happens to share those files. Isolated
+this feature's own slice of each with `git show 6f53bec53 -- <file>` rather
+than reviewing the whole accumulated diff: `Shift.duty_type` (new, default
+`"in_station"`, `server_default` set — Pitfall #35 correctly applied),
+`ExternalShiftHours.call_count` (new, nullable), `CallSource.IMPORT` (a new
+enum member). All three are additive and reviewed above via their call sites;
+the unrelated training.py/shift-history-import content is left for Features
+15/17/18's own passes, per Pitfall #29 (don't re-derive another feature's
+review).
+
+### The three small commits (the part `git log` _did_ find)
+
+- **`1e3f5a620`** — `connect_integration`/`disconnect_integration`/
+  `update_integration`'s audit rows now also record `get_client_ip(request)`
+  and the user agent (previously only `user_id`/`organization_id`). Both are
+  pre-existing imports and `request: Request` was already a parameter on all
+  three (used for rate limiting). No new surface; closes a trail gap only.
+- **`26b2e202d`** (owner decision 2026-11-01, batch 8's Integrations slice) —
+  `ensure_catalog` now reconciles `name`/`description`/`category` and
+  `status` (only between `available`↔`coming_soon`; a `connected`/`error` row
+  is left alone) on every existing row, not just newly-seeded ones;
+  `event_types_to_sync` gained a `field_validator` rejecting unknown
+  `EventType` values. `ensure_catalog` is called only with
+  `current_user.organization_id` (both call sites checked) — no client-
+  supplied org id. Migration `7c41e9a2b6d8` applies the same rule once to rows
+  that predate it, guards `_has_table` first, and is honestly irreversible
+  (documented: nothing records which older catalog text a row held, so there
+  is nothing to restore on downgrade).
+- **`580e7aa5d`** — `IntegrationsPage.tsx` swaps its hand-rolled header block
+  for the shared `AdminPageHeader` (repo-wide admin-page sweep). Cosmetic; no
+  access-control or data-handling change.
+
+## Verified good ✅ (re-confirmed, not re-derived)
+
+Every item under this heading in pass 12 — INT-1 through INT-5, the
+Salesforce OAuth flow, SOQL injection defense, instance-URL domain pinning,
+tenant isolation across both endpoint files, no secret exposure — re-checked
+against the current tree and unchanged by this window's non-historical-import
+delta (all three small commits above touch only `integrations.py`,
+`schemas/integration.py` and `IntegrationsPage.tsx`, none of which carry these
+mechanisms).
+
+## Confirmed still open — nothing needing a product decision
+
+- **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` chat-webhook allowlist) —
+  unchanged, still an explicit owner behavior decision.
+
+## Findings
+
+**0 fixed, 0 new findings.** The pass's substantive work was reviewing a
+31-route sub-feature (Historical Data Import + Historical Staffing) that a
+plain `git log` range query did not surface at all, end to end against all
+seven checklist dimensions: every route permission-gated, every by-id
+resolution org-scoped through the parent, idempotent against re-runs and
+races, uploads size-capped and malware-scanned, former members created with
+no login and no grant, and all six migrations safe on populated tables. The
+three smaller commits (audit-trail IP/UA, catalog reconciliation, a cosmetic
+header swap) are each narrow, reviewed, and clean.
+
+## Completion gate
+
+| Check                                                                                                                                                                                                                                                         | Result                                                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (CI's pinned 7.4.1)                                                                                                                                                                                                             | ✅ 0 violations                                                                                                                               |
+| `black --check app/ tests/ alembic/` (CI's pinned 26.10.1)                                                                                                                                                                                                    | ✅ 3106 files unchanged                                                                                                                       |
+| `isort --check-only app/ tests/ alembic/` (CI's pinned 9.0.2)                                                                                                                                                                                                 | ✅ clean                                                                                                                                      |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                                                                          | ✅ 756 revisions, single head `8b1cf6f55425`, PASSED                                                                                          |
+| `python3.13 scripts/check_route_permissions.py --strict`                                                                                                                                                                                                      | ✅ 305 routes, 0 errors, 0 warnings                                                                                                           |
+| `python3.13 scripts/generate_schema_docs.py --check`                                                                                                                                                                                                          | ✅ up to date                                                                                                                                 |
+| backend tests, scope (`-k "integration or salesforce or calcom or documenso or paypal or webhook or connector or mcp_key or google_calendar or google_workspace or ical or calendar or outlook or directory_account or microsoft_365 or directory or zeffy"`) | ✅ 11359 passed, 24 skipped (environment-only — `pywebpush`, Docker daemon/registry, opt-in API-contract suite, no-timezone-tables), 0 failed |
+| backend tests, scope (`-k "historical_import or historical_staffing"`)                                                                                                                                                                                        | ✅ 133 passed, 1 skipped (`pywebpush`), 0 failed                                                                                              |
+| `npm run typecheck`                                                                                                                                                                                                                                           | ✅ 0 errors                                                                                                                                   |
+| `npm run lint`                                                                                                                                                                                                                                                | ✅ exit 0, 0 warnings                                                                                                                         |
+| `npx vitest run src/pages/IntegrationsPage.test.tsx src/pages/historicalImport src/pages/scheduling/admin/historyImport`                                                                                                                                      | ✅ 135 passed (4 files)                                                                                                                       |
+
+Next in rotation: Feature 28 (Security, audit & IP).
 
 ---
 
