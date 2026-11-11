@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PLACEHOLDER](https://github.com/thegspiro/the-logbook/pull/PLACEHOLDER)**
+**PR [#4234](https://github.com/thegspiro/the-logbook/pull/4234)**
 (branch `claude/security-review-forms-p13`):
 Feature 26 (Forms), pass 13, a watchdog pickup. PR #4233 (Feature 25,
 Messaging & notifications, pass 13) had already merged clean
