@@ -16,6 +16,49 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**Branch `claude/security-review-frontend-shared-p15`** (PR number to follow
+in a second commit on this same branch, per Step 8): Feature 34 (Frontend
+shared), pass 15, closing out this rotation lap. PR #4256 (Feature 33, Core
+infrastructure, pass 14) had already merged (`a649ff685`). A fresh
+`list_pull_requests` (state `open`) returned six open PRs, none with a head
+branch starting `claude/security-review-`, and row 34 was the next (and
+last) pending feature, confirmed on a freshly fetched, fast-forwarded `main`.
+
+**0 fixed, 0 new findings.** Baseline `88fcfcd4a` (the merge that landed
+`FE14-34-frontend-shared.md`, PR #4018). `createApiClient.ts`,
+`errorHandling.ts`, `errorTracking.ts`, `ProtectedRoute.tsx` and four of the
+five other global stores are byte-identical to pass 14; `apiCache.ts` gained
+3 new additive `UNCACHEABLE_PREFIXES`/`SUBSTRINGS` entries (plus one,
+`/evaluations`, that landed between passes for the new evaluations module —
+all additive, none narrowed); `apiClient.ts`, `authStore.ts`,
+`errorReporting.ts`, the global `services/api.ts` barrel and 6 of the 14
+module `services/api.ts` files carry real, additive deltas, all read in full.
+Two new second-per-module clients (`modules/integrations/services/historicalImportApi.ts`,
+`modules/scheduling/services/historyImportApi.ts`) both use the shared
+`createApiClient()` factory. A repo-wide sweep extracted every new GET
+endpoint added since the baseline (25 real call sites) and checked each
+programmatically against the current cache-exclusion lists: all 25 covered,
+22 by an existing broad prefix and 3 by this pass's own additions. No new
+`axios.create()` hand-rolled instance, no new token written to
+`localStorage`/`sessionStorage`, no new hardcoded secret literal, no new XSS
+sink. See `docs/security-review/FE15-34-frontend-shared.md` for the full
+trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 760
+revisions, single head `ccd374a66f82` (the two-head fork PR #4256 flagged as
+pre-existing/out-of-scope has since been resolved by PR #4255); `npm run
+typecheck` — 0 errors; `npm run lint` — 0 errors/warnings; scoped frontend
+suite (16 files) — 374 passed.
+
+**This is the last `⬜` row of the current rotation lap.** Per the skill's
+Step 1 rule, the next iteration should see every row `✅`, say the rotation
+is complete, and reset all 35 rows (00–34) to `⬜` for a fresh pass — that
+reset is not performed here.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 33, Core infrastructure, pass 14, PR #4256, merged), preserved for history</summary>
+
 **PR [#4256](https://github.com/thegspiro/the-logbook/pull/4256)**
 (branch `claude/security-review-core-infrastructure-p14`):
 Feature 33 (Core infrastructure), pass 14. PR #4252
@@ -51,6 +94,8 @@ scope changed).
 
 Row 33 → ✅ (pending this PR's merge). Next is Feature 34 (Frontend shared) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 32, Locations & kiosk, pass 13, PR #4252, merged), preserved for history</summary>
@@ -26052,7 +26097,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                                                               | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                                                                          | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                 | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                                                                 | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -26082,6 +26127,72 @@ future pass's accumulated-scope diff covers it by default.
 ---
 
 ## Log
+
+### 2026-11-11 — Feature 33 (Core infrastructure, pass 14) merged; Feature 34 (Frontend shared, pass 15): 0 fixed, 0 new findings — last row of this rotation lap
+
+PR #4256 merged (`a649ff685`), including its re-joining of the Alembic fork
+(PR #4255, merged first) — `validate_migrations.py --strict` now passes
+clean (760 revisions, single head `ccd374a66f82`), closing out the one
+pre-existing out-of-scope defect pass 14's note flagged. `list_pull_requests`
+(state `open`) returned six open PRs, none with a head branch starting
+`claude/security-review-`, and row 34 (Frontend shared) was the next — and
+last — `⬜` in the rotation table, confirmed on a freshly fetched,
+fast-forwarded `main`.
+
+Path-scoped diff against the feature's declared files plus a repo-wide sweep
+(`git diff 88fcfcd4a..HEAD`, baseline = the merge that landed
+`FE14-34-frontend-shared.md`, PR #4018) found `createApiClient.ts`,
+`errorHandling.ts`, `errorTracking.ts`, `ProtectedRoute.tsx`,
+`learningProgressStore.ts`, `pendingSyncStore.ts`, `skillsTestingStore.ts`,
+`practicalSkillsStore.ts` and 8 of the 14 module `services/api.ts` files
+byte-identical to pass 14, all re-read in full regardless. Real deltas:
+`apiCache.ts` (+3 additive `UNCACHEABLE_PREFIXES`/`SUBSTRINGS` entries, none
+removed or narrowed), `apiClient.ts` (one new import,
+`loginPathReturningTo`, wired into the expired-session full-page redirect —
+read `postLoginRedirect.ts` in full and confirmed its open-redirect guards
+hold against `//host`, `/\host`, `javascript:`, and a crafted `?from=`),
+`authStore.ts` (login lockout moved from per-tab to per-account, capped and
+evicted; a new `releaseHeldWorkFor` call on device-claim, which only ever
+hands an examiner back their _own_ held skills evaluations — traced through
+`skillsTestOfflineStore.ts`'s ownership filtering in full), `errorReporting.ts`
+(an unhandled-rejection fix, no behavioural change to what is reported), the
+global `services/api.ts` barrel (re-exports only), and 6 module
+`services/api.ts` files (new endpoints only — `finance`,
+`grants-fundraising`, `prospective-members`, `scheduling`). Two new
+second-per-module clients since pass 14
+(`modules/integrations/services/historicalImportApi.ts`,
+`modules/scheduling/services/historyImportApi.ts`) both use the shared
+`createApiClient()` factory, confirmed by reading both in full.
+
+The repo-wide sweep extracted every new `api.get(`/`api.get<` call site's URL
+added since the baseline (25 real endpoints, after excluding two
+test-fixture-only literals) and checked each programmatically against
+`UNCACHEABLE_PREFIXES`/`UNCACHEABLE_SUBSTRINGS` with the same
+`startsWith`/`includes` semantics `apiCache.ts`'s own `isCacheable()` uses:
+all 25 covered — 22 by an existing broad module prefix (`/finance/`,
+`/scheduling/`, `/training/…`, `/users`, `/evaluations`, `/overrides`,
+`/documents`, `/grants`) and 3 by this pass's own new entries
+(`/email-templates/member-email-opt-outs`,
+`/training/programs/milestone-options`, the `/overrides` substring). No new
+hand-rolled `axios.create()` instance, no new token in `localStorage`/
+`sessionStorage` in production code, no new hardcoded secret literal, no new
+XSS sink, since the baseline. Two new per-member-namespaced browser-storage
+utilities (`sessionDrafts.ts`, `programWizardDraft.ts`) were both confirmed
+wired into the existing logout purge and, for the one adopting form
+(`ManualShiftReportPage.tsx`), confirmed to exclude PHI per its own
+docstring's rule.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean; `validate_migrations.py --strict` — 760
+revisions, single head `ccd374a66f82`; `npm run typecheck` — 0 errors;
+`npm run lint` — 0 errors/warnings; scoped frontend suite (16 files) — 374
+passed.
+
+Row 34 → ✅ (pending this PR's merge). **This is the last `⬜` row of the
+current rotation lap** — once this PR merges every row reads `✅`, and the
+next iteration should say the rotation is complete and reset all 35 rows
+(00–34) to `⬜` for a fresh pass, per the skill's Step 1. That reset is not
+performed in this iteration's own commit.
 
 ### 2026-11-11 — Feature 32 (Locations & kiosk, pass 13) merged; Feature 33 (Core infrastructure, pass 14): 0 fixed, 0 new findings; one pre-existing out-of-scope migration fork flagged
 
