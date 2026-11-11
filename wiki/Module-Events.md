@@ -851,9 +851,13 @@ responsible for an event (the organizer defaults to the creator).
   (**Event settings → Attendance → Attendance requests**, default
   "Secretary"; options from `GET /events/settings/position-options`), then the
   `secretary` position, then every `events.manage` holder — never nobody.
-- **Decision rights:** organizer, alternate, or `events.manage`. The creator
-  does not decide once the event is handed over. The page gates on the
-  server's `can_manage_organizers` rather than comparing ids.
+- **Decision rights:** organizer, alternate, `events.manage`, or whoever the
+  request is currently routed to — a fallback position holder without
+  `events.manage` may decide the request they were sent
+  (`EventOrganizerService.may_decide_attendance_request`, which reuses the
+  routing above). The creator does not decide once the event is handed over.
+  The page shows the requests card on the server's
+  `can_review_attendance_requests` rather than comparing ids.
 - **Attendance:** the organizer pair also run their own event's attendance —
   see [Manager tools on the detail page](#manager-tools-on-the-detail-page).
 - **`POST /events/{id}/transfer`**, scope `this` or `future` (upcoming

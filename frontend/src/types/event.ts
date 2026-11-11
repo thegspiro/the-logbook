@@ -93,6 +93,10 @@ export interface Event {
   /** Server-decided: may this caller decide the event's attendance requests
    * and hand it over. Detail endpoint only; false elsewhere. */
   can_manage_organizers?: boolean;
+  /** Server-decided: may this caller see and decide the event's attendance
+   * requests — the above, plus a fallback position holder a request was
+   * sent to. Detail endpoint only; false elsewhere. */
+  can_review_attendance_requests?: boolean;
   /** Server-decided: how this caller may use the attendance tools — the
    * roster, adding, checking in and removing members — or null. An
    * `organizer` may not write their own row. Detail endpoint only. */
