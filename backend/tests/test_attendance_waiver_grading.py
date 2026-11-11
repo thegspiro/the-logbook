@@ -30,7 +30,6 @@ from app.models.attendance_waiver import (
     AttendanceWaiverStatus,
     AttendanceWaiverWorkflow,
 )
-from app.models.event import EventRSVP
 from app.models.training import (
     RequirementFrequency,
     RequirementType,
@@ -430,34 +429,52 @@ class TestARealGrader:
 @pytest.mark.integration
 class TestTheEvaluationFigure:
     """``training.session_attendance_pct`` on a member evaluation reads the
-    same excusals: the excused session drops out of held, another session that
-    day stays, and a member who came anyway is credited with both."""
+    same excusals, through the requirement's own rule: the excused session
+    drops out of held, another session that day stays, and a member who came
+    anyway is credited with both."""
 
     @pytest.mark.parametrize(
-        ("came_anyway", "figure"),
+        ("came_anyway", "counts"),
         [
-            (False, {"available": True, "value": 0.0, "attended": 0, "held": 1}),
-            (True, {"available": True, "value": 50.0, "attended": 1, "held": 2}),
+            (False, {"value": 0.0, "attended": 0, "held": 2, "excused": 1}),
+            (True, {"value": 50.0, "attended": 1, "held": 2, "excused": 0}),
         ],
         ids=["missed", "came-anyway"],
     )
     async def test_only_the_excused_session_drops_out(
-        self, db_session, came_anyway, figure
+        self, db_session, came_anyway, counts
     ):
         org = await make_org(db_session, tz="UTC")
-        member = await load(db_session, await make_member(db_session, org, "Sam"))
-        morning = await make_session(db_session, org, utc(2026, 3, 4, 9))
-        await make_session(db_session, org, utc(2026, 3, 4, 18))
+        member_id = await make_member(db_session, org, "Sam")
+        # Sessions before a member joined are not charged to them; this member
+        # joined long before the review period.
+        await db_session.execute(
+            text("UPDATE users SET hire_date = '2015-03-01' WHERE id = :id"),
+            {"id": member_id},
+        )
+        member = await load(db_session, member_id)
+        drills = await make_requirement(db_session, org)
+        morning = await make_session(
+            db_session, org, utc(2026, 3, 4, 9), link=[drills], finalized=True
+        )
+        await make_session(
+            db_session, org, utc(2026, 3, 4, 18), link=[drills], finalized=True
+        )
         await _request(
             db_session, org, member.id, morning, AttendanceWaiverStatus.APPROVED
         )
         if came_anyway:
             db_session.add(
-                EventRSVP(
+                TrainingRecord(
+                    id=uid(),
                     organization_id=org,
-                    event_id=morning,
                     user_id=member.id,
-                    checked_in=True,
+                    source_event_id=morning,
+                    course_name="Company Drill",
+                    training_type=TrainingType.CONTINUING_EDUCATION,
+                    completion_date=date(2026, 3, 4),
+                    hours_completed=2,
+                    status=TrainingStatus.COMPLETED,
                 )
             )
             await db_session.flush()
@@ -470,7 +487,10 @@ class TestTheEvaluationFigure:
             ZoneInfo("UTC"),
         )
 
-        assert values[SESSION_ATTENDANCE_SOURCE] == figure
+        figure = values[SESSION_ATTENDANCE_SOURCE]
+        assert figure["available"] is True
+        assert {key: figure[key] for key in counts} == counts
+        assert figure["requirement"] == drills.name
 
 
 @pytest.mark.integration

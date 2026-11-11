@@ -804,6 +804,43 @@ existing row changes.
   the sessions they excused count against those members again. Take a backup
   first (see above) once requests are in use.
 
+### Evaluations: training-session attendance is graded by the attendance requirement (2026-11-10)
+
+Nothing blocks a restart, and no migration runs. The **Training session
+attendance** figure on an evaluation (`training.session_attendance_pct`) now
+uses the same rule as the session-attendance requirement on the training
+screens. **The percentage will change** on any evaluation template that shows
+it:
+
+- **Only sessions that count toward the member's session-attendance
+  requirement are measured.** Before, every training event in the period was,
+  including optional ones nobody was asked to attend.
+- **Attendance is what finalizing the session recorded**, not an RSVP
+  check-in. A session whose attendance has not been finalized is not counted
+  yet, as on the training screens.
+- **Every waiver and leave the training screens apply now excuses a session**,
+  including waivers limited to that requirement, which were ignored before. A
+  member who attended an excused session anyway is credited with it; before,
+  that session was dropped.
+- **The requirement is the one that applies to the member.** If several
+  apply, the one naming the member's membership type is used. If that still
+  leaves more than one, the figure reads "unavailable" rather than guessing.
+  It also reads unavailable for a member exempt from training requirements,
+  and when no requirement applies at all. Departments that never set up a
+  session-attendance requirement will see "unavailable" where a percentage
+  used to appear.
+- **The figure covers the evaluation's review period**, not the requirement's
+  own window.
+
+**Stored figures are not recalculated.** A finalized evaluation keeps the
+figure it was signed with. So does an evaluation already open at the upgrade,
+and an amendment of a finalized one, until the evaluator or a manager presses
+**Update figures**. That is possible only until the evaluator locks their part,
+so an evaluation whose evaluator had already locked it is signed with the old
+figure. Evaluations drafted after the upgrade, refreshed figures and template
+previews show the new one. The stored snapshot's `version` is now `2`; a
+snapshot still at `version` 1 holds the old figure.
+
 ### Medical screening: expiry reminder emails, and new requirements recur by default (2026-11-08)
 
 Nothing blocks a restart. Migration `cf93f3b65274` creates an empty table,

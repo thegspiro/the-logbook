@@ -9408,7 +9408,13 @@ recorded yet.
 
 ## Training — Event Organizers Decide Which Sessions Count Toward a Session-Attendance Requirement (2026-11-08, security review TR14-2)
 
-**Open, awaiting an owner decision.** A training officer (`training.manage`)
+**Accepted by the owner (2026-11-10): keep it.** Whoever creates the session
+(`events.manage`) decides which sessions count toward a session-attendance
+requirement, and linking past sessions after the fact stays allowed. The audit
+entry described below remains the control. The text below is the finding as
+it was raised.
+
+~~**Open, awaiting an owner decision.**~~ A training officer (`training.manage`)
 creates a session-attendance requirement, for example "attend 60% of the
 company drills this year". The decision about _which_ sessions count toward it
 is made with `events.manage` alone:
