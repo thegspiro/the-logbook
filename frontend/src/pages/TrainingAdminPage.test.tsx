@@ -290,6 +290,26 @@ describe('TrainingAdminPage', () => {
     expect(screen.getByRole('tab', { name: 'Sessions' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('titles the sessions page Create Training Session for an event manager', () => {
+    useAuthStore.setState({ user: signedInWith(['training.manage', 'events.manage']) });
+    window.history.replaceState({}, '', '/training/admin?page=records&tab=sessions');
+    renderWithRouter(<TrainingAdminPage />);
+
+    const strip = screen.getByText('Scheduled classes and their attendance', { exact: false });
+    expect(strip).toHaveTextContent('Records · Sessions');
+    expect(within(strip).getByText('Create Training Session')).toHaveClass('font-semibold');
+    expect(screen.getByRole('tab', { name: 'Sessions' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('keeps the tab’s own name in the strip for a viewer who cannot create a session', () => {
+    window.history.replaceState({}, '', '/training/admin?page=records&tab=sessions');
+    renderWithRouter(<TrainingAdminPage />);
+
+    const strip = screen.getByText('Scheduled classes and their attendance', { exact: false });
+    expect(strip).not.toHaveTextContent('Create Training Session');
+    expect(within(strip).getByText('Sessions')).toHaveClass('font-semibold');
+  });
+
   it('badges the area and destination the attention queue points at', async () => {
     mockGetSummary.mockResolvedValue(summaryWithAttention);
     window.history.replaceState({}, '', '/training/admin?page=records&tab=sessions');

@@ -178,6 +178,7 @@ export const TrainingAdminPage: React.FC = () => {
   // the signed-in user reloads; with no user loaded, nothing extra is granted.
   const user = useAuthStore((s) => s.user);
   const checkPermission = useAuthStore((s) => s.checkPermission);
+  const canManageEvents = user ? checkPermission('events.manage') : false;
   const areas = useMemo(
     () => trainingAdminAreasFor(practicalSkillsMethod, user ? checkPermission : () => false),
     [practicalSkillsMethod, checkPermission, user]
@@ -255,6 +256,12 @@ export const TrainingAdminPage: React.FC = () => {
           onTabChange={(tab) => navigateTo(activeAreaId, tab)}
           attentionCounts={navCounts}
           hintOf={(destination) => destination.hint}
+          // The sessions tab is the Create Training Session form, and the strip
+          // is where that form's title is drawn. A viewer who cannot create one
+          // sees a notice instead, so the strip stays on the tab's own name.
+          titleOf={(destination) =>
+            destination.id === 'sessions' && canManageEvents ? 'Create Training Session' : destination.label
+          }
           label="Training admin areas"
           // Matches `areaTabId` / `areaPanelId`, under which the page renders the area's panel.
           idPrefix="training-admin-area"
