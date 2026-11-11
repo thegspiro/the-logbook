@@ -587,7 +587,8 @@ reason appears on the field instead of a native popup.
 
 **Rolled out further on 2026-11-09** (batch 17): Create Election, the member
 admin edit page (its uppercase labels kept through `FormField`'s
-`labelClassName`), the Create Training Session wizard, Inventory's Receive
+`labelClassName`), the Create Training Session wizard (carried into the
+training-event form that replaced it, 2026-11-11), Inventory's Receive
 Stock, Request Equipment, vendors and contacts, Add several items, Unassign and
 Assign terms, Apparatus › Archive and NFPA items, the facility emergency
 contacts, medical supply deliveries, sixteen Finance dialogs (expense line,
