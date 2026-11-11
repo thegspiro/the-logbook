@@ -342,7 +342,7 @@ describe('EvaluationDetailPage', () => {
       get.mockResolvedValue(detail({ viewer: memberViewer }));
     });
 
-    it('signs only once a name is typed and the intent confirmed', async () => {
+    it('signs only once a name is typed and the intent confirmed, saying so on each field', async () => {
       sign.mockResolvedValue({
         outcome: 'finalized',
         evaluation: detail({
@@ -357,10 +357,17 @@ describe('EvaluationDetailPage', () => {
       const dialog = await screen.findByRole('dialog');
       expect(within(dialog).getByText(/does not mean you agree with it/)).toBeInTheDocument();
       const submit = within(dialog).getByRole('button', { name: 'Acknowledge receipt' });
-      expect(submit).toBeDisabled();
+      await user.click(submit);
+      expect(within(dialog).getByLabelText(/^Type your full name to sign/)).toHaveAccessibleDescription(
+        'Type your full name to sign.'
+      );
 
-      await user.type(within(dialog).getByLabelText('Type your full name to sign'), 'Pat Member');
-      expect(submit).toBeDisabled();
+      await user.type(within(dialog).getByLabelText(/^Type your full name to sign/), 'Pat Member');
+      await user.click(submit);
+      expect(within(dialog).getByRole('checkbox', { name: /intend this typed name/ })).toHaveAccessibleDescription(
+        'Confirm that the typed name is your signature.'
+      );
+      expect(sign).not.toHaveBeenCalled();
       await user.click(within(dialog).getByRole('checkbox', { name: /intend this typed name/ }));
       await user.click(submit);
 
@@ -382,10 +389,14 @@ describe('EvaluationDetailPage', () => {
       await user.click(await screen.findByRole('button', { name: 'Member acknowledgement' }));
       const dialog = await screen.findByRole('dialog');
       await user.click(within(dialog).getByRole('radio', { name: /Refuse to sign/ }));
-      await user.type(within(dialog).getByLabelText('Type your full name to sign'), 'Pat Member');
+      await user.type(within(dialog).getByLabelText(/^Type your full name to sign/), 'Pat Member');
       await user.click(within(dialog).getByRole('checkbox', { name: /intend this typed name/ }));
       const submit = within(dialog).getByRole('button', { name: 'Refuse to sign' });
-      expect(submit).toBeDisabled();
+      await user.click(submit);
+      expect(within(dialog).getByLabelText(/Reason for refusing/)).toHaveAccessibleDescription(
+        'Say why you are refusing to sign.'
+      );
+      expect(sign).not.toHaveBeenCalled();
       await user.type(within(dialog).getByLabelText(/Reason for refusing/), 'I dispute the rating.');
       await user.click(submit);
       await waitFor(() =>
@@ -431,7 +442,11 @@ describe('EvaluationDetailPage', () => {
     renderPage();
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
     const confirmDelete = screen.getByRole('button', { name: 'Delete evaluation' });
-    expect(confirmDelete).toBeDisabled();
+    await user.click(confirmDelete);
+    expect(screen.getByLabelText(/Reason \(shown to Pat Member\)/)).toHaveAccessibleDescription(
+      'Give a reason. Pat Member will read it.'
+    );
+    expect(remove).not.toHaveBeenCalled();
     await user.type(screen.getByLabelText(/Reason \(shown to Pat Member\)/), '  Drafted twice.  ');
     await user.click(confirmDelete);
     await waitFor(() => expect(remove).toHaveBeenCalledWith('ev1', 'Drafted twice.'));
@@ -462,12 +477,47 @@ describe('EvaluationDetailPage', () => {
     renderPage();
     await user.click(await screen.findByRole('button', { name: 'Amend' }));
     const confirmAmend = screen.getByRole('button', { name: 'Amend evaluation' });
-    expect(confirmAmend).toBeDisabled();
+    await user.click(confirmAmend);
+    expect(screen.getByLabelText(/Reason \(shown to Pat Member\)/)).toHaveAccessibleDescription(
+      'Give a reason. Pat Member will read it.'
+    );
+    expect(amend).not.toHaveBeenCalled();
     await user.type(screen.getByLabelText(/Reason \(shown to Pat Member\)/), ' Corrected a comment. ');
     await user.click(confirmAmend);
     await waitFor(() => expect(amend).toHaveBeenCalledWith('ev1', 'Corrected a comment.'));
     expect(await screen.findByRole('heading', { name: 'Amendments' })).toBeInTheDocument();
     expect(screen.getByText('Reason: Corrected a comment.')).toBeInTheDocument();
+  });
+
+  it('puts a 422 on the delete reason and announces it', async () => {
+    remove.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'reason', message: 'String should have at most 2000 characters' }] },
+      },
+    });
+    get.mockResolvedValue(detail({ viewer: { ...detail().viewer, can_delete: true } }));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await user.type(screen.getByLabelText(/Reason \(shown to Pat Member\)/), 'Drafted twice.');
+    await user.click(screen.getByRole('button', { name: 'Delete evaluation' }));
+
+    const reason = screen.getByLabelText(/Reason \(shown to Pat Member\)/);
+    await waitFor(() => expect(reason).toHaveAccessibleDescription('Reason is too long — keep it to 2000 characters.'));
+    expect(reason).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('asks before the amend reason is thrown away', async () => {
+    get.mockResolvedValue(detail({ status: 'finalized', viewer: { ...detail().viewer, can_amend: true } }));
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Amend' }));
+    await user.type(screen.getByLabelText(/Reason \(shown to Pat Member\)/), 'Corrected a comment.');
+    await user.click(screen.getByRole('button', { name: 'Keep it final' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+
+    expect(screen.getByLabelText(/Reason \(shown to Pat Member\)/)).toHaveValue('Corrected a comment.');
   });
 
   describe('the member’s written response', () => {

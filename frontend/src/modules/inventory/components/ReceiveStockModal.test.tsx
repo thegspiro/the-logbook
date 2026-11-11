@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import ReceiveStockModal from './ReceiveStockModal';
+
+// The app shell mounts ConfirmProvider; the dialog needs it to ask before discarding.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 const mockAddLotsBulk = vi.fn();
 const mockGetItems = vi.fn();
@@ -69,7 +73,7 @@ describe('ReceiveStockModal', () => {
 
     await user.type(screen.getByLabelText('Lot #'), 'LOT-A');
     await user.type(screen.getByLabelText('Expiration'), '2027-03-01');
-    const qty = screen.getByLabelText('Quantity');
+    const qty = screen.getByLabelText('Quantity *');
     await user.clear(qty);
     await user.type(qty, '24');
 
@@ -109,14 +113,14 @@ describe('ReceiveStockModal', () => {
     open();
     await pickItem(user);
 
-    const qty = screen.getByLabelText('Quantity');
+    const qty = screen.getByLabelText('Quantity *');
     await user.clear(qty);
     await user.type(qty, '0');
 
     await user.click(screen.getByRole('button', { name: /Receive 1 lot/ }));
 
     expect(mockAddLotsBulk).not.toHaveBeenCalled();
-    expect(mockToastError).toHaveBeenCalledWith(expect.stringContaining('quantity'));
+    expect(qty).toHaveAccessibleDescription('Enter a quantity of at least 1.');
   });
 
   it('keeps the modal open when the delivery is rejected', async () => {
@@ -133,5 +137,41 @@ describe('ReceiveStockModal', () => {
     // All or nothing: nothing landed, so the officer keeps what they typed.
     expect(onClose).not.toHaveBeenCalled();
     expect(onReceived).not.toHaveBeenCalled();
+  });
+
+  it('puts a refused lot number on its own line, announced', async () => {
+    const user = userEvent.setup();
+    mockAddLotsBulk.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'entries.0.lot_number', message: 'Value is too long.' }] } },
+    });
+    open();
+    await pickItem(user);
+    await user.type(screen.getByLabelText('Lot #'), 'LOT-A');
+    await user.click(screen.getByRole('button', { name: /Receive 1 lot/ }));
+
+    const lot = screen.getByLabelText('Lot #');
+    await waitFor(() => expect(lot).toHaveAccessibleDescription('Lot # is too long — keep it to 100 characters.'));
+    expect(lot).toHaveAttribute('aria-invalid', 'true');
+    expect(lot).toHaveAttribute('maxLength', '100');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks before Escape or Cancel discards a half-entered delivery', async () => {
+    const user = userEvent.setup();
+    const view = open();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    view.unmount();
+    onClose.mockClear();
+
+    open();
+    await user.type(screen.getByLabelText('Lot #'), 'LOT-A');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

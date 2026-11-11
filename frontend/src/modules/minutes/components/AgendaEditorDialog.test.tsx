@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockUpdate = vi.fn();
@@ -9,6 +9,7 @@ vi.mock('../../../services/api', () => ({
 }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
+import { renderWithRouter } from '../../../test/utils';
 import { AgendaEditorDialog } from './AgendaEditorDialog';
 import type { MeetingRecord } from '../../../services/api';
 
@@ -40,7 +41,9 @@ describe('AgendaEditorDialog', () => {
   });
 
   const open = (hasMinutes = false) =>
-    render(<AgendaEditorDialog meeting={meeting} hasMinutes={hasMinutes} onClose={onClose} onSaved={onSaved} />);
+    renderWithRouter(
+      <AgendaEditorDialog meeting={meeting} hasMinutes={hasMinutes} onClose={onClose} onSaved={onSaved} />
+    );
 
   it('shows the meeting’s items', () => {
     open();
@@ -63,7 +66,7 @@ describe('AgendaEditorDialog', () => {
   it('saves the items on the meeting', async () => {
     const user = userEvent.setup();
     open();
-    await user.type(screen.getByLabelText('Item 1'), ' now');
+    await user.type(screen.getByLabelText(/^Item 1/), ' now');
     await user.click(screen.getByRole('button', { name: 'Save agenda' }));
 
     expect(mockUpdate).toHaveBeenCalledWith('m1', {
@@ -76,10 +79,42 @@ describe('AgendaEditorDialog', () => {
   it('will not save an item with no title', async () => {
     const user = userEvent.setup();
     open();
-    await user.clear(screen.getByLabelText('Item 1'));
+    await user.clear(screen.getByLabelText(/^Item 1/));
+    await user.click(screen.getByRole('button', { name: 'Save agenda' }));
 
-    expect(screen.getByRole('button', { name: 'Save agenda' })).toBeDisabled();
-    expect(screen.getByText('Every item needs a title.')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Item 1/)).toHaveAccessibleDescription('Give this item a title.');
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the item field it names and announces it', async () => {
+    mockUpdate.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'agenda_items.0.presenter', message: 'String should have at most 200 characters' }] },
+      },
+    });
+    const user = userEvent.setup();
+    open();
+    await user.type(screen.getByLabelText('Presented by'), 'Chief');
+    await user.click(screen.getByRole('button', { name: 'Save agenda' }));
+
+    const presenter = screen.getByLabelText('Presented by');
+    await waitFor(() =>
+      expect(presenter).toHaveAccessibleDescription('Presented by is too long — keep it to 200 characters.')
+    );
+    expect(presenter).toHaveAttribute('aria-invalid', 'true');
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel throws an edited agenda away', async () => {
+    const user = userEvent.setup();
+    open();
+    await user.type(screen.getByLabelText(/^Item 1/), ' now');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^Item 1/)).toHaveValue('Call to order now');
   });
 
   it('stays open when the save fails', async () => {

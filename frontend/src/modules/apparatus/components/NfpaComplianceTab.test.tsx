@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render as rtlRender, screen } from '@testing-library/react';
+import type React from 'react';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import type { ApparatusNfpaSummary } from '../types';
 
 const mockGetSummary = vi.fn();
@@ -20,6 +22,9 @@ vi.mock('../../../stores/authStore', () => ({
 }));
 
 import { NfpaComplianceTab } from './NfpaComplianceTab';
+
+// The app shell mounts ConfirmProvider; the item dialog the tab holds needs it to ask before discarding.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 const summary: ApparatusNfpaSummary = {
   apparatusId: 'app-1',

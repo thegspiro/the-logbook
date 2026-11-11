@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 
 vi.mock('../store/scheduledEmailsStore', () => ({
   useScheduledEmailsStore: () => ({
@@ -13,6 +13,7 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
+import { renderWithRouter } from '../../../test/utils';
 import ScheduleEmailForm from './ScheduleEmailForm';
 import type { EmailTemplate } from '../types';
 
@@ -48,7 +49,7 @@ describe('ScheduleEmailForm template types', () => {
       makeTemplate({ id: '4', template_type: 'storefront_window_open' }),
     ];
 
-    render(<ScheduleEmailForm templates={templates} onClose={vi.fn()} />);
+    renderWithRouter(<ScheduleEmailForm templates={templates} onClose={vi.fn()} />);
 
     const picker = screen.getByRole('combobox', { name: /template/i });
     const options = within(picker)

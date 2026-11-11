@@ -224,7 +224,8 @@ describe('CreateTrainingSessionPage with a course from the library', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: /Create Training Session/ }));
 
-    expect(toastError).toHaveBeenCalledWith('Choose a course from the Course Library');
+    expect(toastError).toHaveBeenCalledWith('Back to Training Info: fix the flagged field');
+    expect(await screen.findByText('Choose a course from the Course Library')).toBeInTheDocument();
     expect(createSession).not.toHaveBeenCalled();
   });
 
