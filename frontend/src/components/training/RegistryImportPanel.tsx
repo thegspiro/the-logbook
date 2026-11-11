@@ -48,7 +48,7 @@ export const RegistryImportPanel: React.FC<RegistryImportPanelProps> = ({ regist
               <button
                 type="button"
                 onClick={() => setRegistryModal({ key: registry.key, name: registry.name })}
-                className="hover:bg-theme-surface-hover flex w-full flex-col items-center rounded-md py-1"
+                className="hover:bg-theme-surface-hover touch:min-h-11 flex w-full flex-col items-center justify-center rounded-md py-1"
               >
                 <span className="flex items-center space-x-2">
                   <Download className="h-5 w-5" aria-hidden="true" />
