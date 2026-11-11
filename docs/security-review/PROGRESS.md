@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**
+**PR [#4245](https://github.com/thegspiro/the-logbook/pull/4245)**
 (branch `claude/security-review-scheduled-tasks-p13`):
 Feature 31 (Scheduled tasks), pass 13. PR #4240 (Feature 30, Onboarding,
 pass 13) had already merged clean (`deb9601f3`). A fresh `list_pull_requests`
