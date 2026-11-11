@@ -63,7 +63,10 @@ from app.schemas.event import (
     RSVPCreate,
     RSVPOverride,
 )
-from app.schemas.training_session import TrainingSessionAttach
+from app.schemas.training_session import (
+    TrainingSessionAttach,
+    TrainingSessionDetailsUpdate,
+)
 from app.services.admin_hours_service import AdminHoursService
 from app.services.email_policy import (
     EmailKind,
@@ -441,6 +444,21 @@ class FinalizeOutcome:
     error: Optional[str] = None
 
 
+def _training_details_from(
+    update_data: Dict[str, Any],
+) -> Optional[TrainingSessionDetailsUpdate]:
+    """Take an edit's training details out of its dumped payload.
+
+    Not an event column, so it must not reach the setattr loop. Rebuilt from
+    the dump, which holds only the keys the client sent, so the rebuilt
+    model's own exclude_unset still tells a key left out from a null.
+    """
+    raw = update_data.pop("training_details", None)
+    if raw is None:
+        return None
+    return TrainingSessionDetailsUpdate.model_validate(raw)
+
+
 class EventService:
     """Service for event management"""
 
@@ -567,13 +585,10 @@ class EventService:
 
         self.db.add(event)
         if training is not None and training_details is not None:
-            # One commit for both, so an event is never left behind without
-            # the details the officer picked for it.
-            await self.db.flush()
-            self.db.add(
-                training.build_session_for_event(
-                    event, training_details, course, organization_id, created_by
-                )
+            # One commit for all of it, so an event is never left behind
+            # without the details the officer picked for it.
+            await training.add_sessions_for_events(
+                [event], training_details, course, organization_id, created_by
             )
         await self.db.commit()
         await self.db.refresh(event)
@@ -1210,8 +1225,10 @@ class EventService:
         if event.is_cancelled:
             raise ValueError("Cannot update cancelled event")
 
-        # Update fields
+        # Update fields. training_details is not an event column: it is the
+        # event's training session, applied once the event's own fields are.
         update_data = event_data.model_dump(exclude_unset=True)
+        training_details = _training_details_from(update_data)
 
         # EV-17 / XC-1: same guard as create_event — a client-supplied
         # attachment file_path must name a file under this org's own upload
@@ -1293,6 +1310,14 @@ class EventService:
         training_follow_up = await self._follow_training_changes(
             event, was_training, old_title, organization_id
         )
+        if training_details is not None:
+            await self._apply_training_details(
+                [event],
+                training_details,
+                organization_id,
+                updated_by,
+                previous_titles={str(event.id): old_title},
+            )
 
         if updated_by:
             event.updated_by = str(updated_by)
@@ -1312,6 +1337,58 @@ class EventService:
             )
 
         return event
+
+    async def _apply_training_details(
+        self,
+        events: List[Event],
+        details: TrainingSessionDetailsUpdate,
+        organization_id: UUID | str,
+        updated_by: UUID | str | None,
+        previous_titles: Optional[Dict[str, str]] = None,
+    ) -> None:
+        """Apply an edit's training details to each event's session.
+
+        Called after the events' own fields are written (and a renamed
+        event's session has followed its title), so the details are judged
+        against the event the save leaves. Refuses the whole edit, before
+        anything is written, when it would change a finalized event's
+        session beyond its attendance links, and names how many of the
+        finalized events it would change.
+        """
+        # Local import: training_session_service imports this module.
+        from app.services.training_session_service import TrainingSessionService
+
+        # A series edit leaves an occurrence re-typed away from Training alone.
+        training_events = [e for e in events if e.event_type == EventType.TRAINING]
+        if not training_events:
+            raise ValueError("Training details can only be added to a Training event")
+        training = TrainingSessionService(self.db)
+        plans = await training.plan_session_details(
+            training_events, details, organization_id, previous_titles
+        )
+        locked = [plan for plan in plans if plan.locked_fields]
+        if locked:
+            # Session column names: a fixed set, and the refusal is sent
+            # without safe_error_detail's length cap (attendance_locked_error).
+            locked_labels = sorted(
+                {f.replace("_", " ") for plan in locked for f in plan.locked_fields}
+            )
+            what = "changing " + ", ".join(locked_labels)
+            if len(events) > 1:
+                finalized = sum(
+                    1 for e in training_events if attendance_is_finalized(e)
+                )
+                what += (
+                    f" across this series ({len(locked)} of {finalized} "
+                    + (
+                        "finalized occurrence"
+                        if finalized == 1
+                        else "finalized occurrences"
+                    )
+                    + " would change)"
+                )
+            raise ValueError(attendance_locked_error(what))
+        await training.apply_session_details(plans, organization_id, updated_by)
 
     async def _refuse_orphaning_check_ins(
         self, event: Event, update_data: Dict[str, Any]
@@ -1478,6 +1555,7 @@ class EventService:
             )
 
         update_data = event_data.model_dump(exclude_unset=True)
+        training_details = _training_details_from(update_data)
 
         # The times are the anchor's, not the series'. Written verbatim, as the
         # other fields are, they stamped the anchor's date onto every later
@@ -1585,9 +1663,11 @@ class EventService:
         updated_count = 0
 
         training_follow_ups = []
+        previous_titles: Dict[str, str] = {}
         for event in future_events:
             was_training = self.event_credits_training(event)
             old_title = event.title
+            previous_titles[str(event.id)] = old_title
             old_start = event.start_datetime
             for field, value in update_data.items():
                 if field == "custom_fields":
@@ -1613,6 +1693,19 @@ class EventService:
                 event.updated_by = str(updated_by)
             event.updated_at = now
             updated_count += 1
+
+        # The training details reach every Training occurrence the event
+        # fields did, judged after them so a renamed series is compared under
+        # its new title. A finalized occurrence takes only attendance links;
+        # any other change to one refuses the whole save, before the commit.
+        if training_details is not None and future_events:
+            await self._apply_training_details(
+                list(future_events),
+                training_details,
+                organization_id,
+                updated_by,
+                previous_titles=previous_titles,
+            )
 
         if updated_count > 0:
             await self.db.commit()
@@ -2256,6 +2349,23 @@ class EventService:
         )
 
         self.db.add(new_event)
+        if self.event_credits_training(source_event):
+            # Local import: training_session_service imports this module.
+            from app.services.training_session_service import TrainingSessionService
+
+            # The copy files its credit and counts toward attendance as the
+            # source does. A copy is a session that has not been held, so it
+            # is not finalized whatever the source is.
+            training = TrainingSessionService(self.db)
+            source_session, link_ids = await training.source_for_cloning(source_event)
+            if source_session is not None:
+                await training.clone_sessions_for_events(
+                    source_session,
+                    link_ids,
+                    source_event.title,
+                    [new_event],
+                    created_by,
+                )
         await self.db.commit()
         await self.db.refresh(new_event)
 
@@ -2333,10 +2443,10 @@ class EventService:
             custom_fields.pop("series_end_reminder_sent", None)
         successor.custom_fields = custom_fields or None
 
-        # The parent's organizer pair is the one a rolling series copies onto
-        # new occurrences (a "this and future" handover always writes it), so
-        # an upcoming successor takes it. A successor that already happened
-        # keeps the organizer who ran it: past occurrences are a record.
+        # The parent's organizer pair is the series' current one (a "this and
+        # future" handover always writes it), so an upcoming successor takes
+        # it. A successor that already happened keeps the organizer who ran
+        # it: past occurrences are a record.
         if _utc_instant(successor.start_datetime) >= now:
             successor.organizer_id = old_parent.organizer_id
             successor.alternate_organizer_id = old_parent.alternate_organizer_id
@@ -5897,9 +6007,9 @@ class EventService:
         recurrence_exceptions = event_data.pop("recurrence_exceptions", None)
         raw_training_details = event_data.pop("training_details", None)
 
-        # Training details become one training session per occurrence. The
-        # schema already refuses them on a rolling series (the job extending
-        # it copies events, not sessions); the type is checked here.
+        # Training details become one training session per occurrence. On a
+        # rolling series the job that extends it copies the latest
+        # occurrence's session and attendance links on to each new one.
         training = None
         training_details = None
         course = None
@@ -5909,8 +6019,6 @@ class EventService:
 
             if event_data.get("event_type") != EventType.TRAINING.value:
                 return [], "Training details can only be added to a Training event"
-            if rolling_recurrence:
-                return [], "Training details can't be added to a rolling series"
             training_details = TrainingSessionAttach(**raw_training_details)
             training = TrainingSessionService(self.db)
             course, error = await training.resolve_attach_details(
@@ -6048,17 +6156,9 @@ class EventService:
             created_events.append(child_event)
 
         if training is not None and training_details is not None:
-            await self.db.flush()
-            for occurrence in created_events:
-                self.db.add(
-                    training.build_session_for_event(
-                        occurrence,
-                        training_details,
-                        course,
-                        organization_id,
-                        created_by,
-                    )
-                )
+            await training.add_sessions_for_events(
+                created_events, training_details, course, organization_id, created_by
+            )
 
         await self.db.commit()
 

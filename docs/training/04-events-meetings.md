@@ -1332,6 +1332,11 @@ adding occurrences so it always runs 12 months ahead, ready for RSVPs. Ticking
 alternatives. The note beneath reads "New occurrences are added automatically
 so the series always runs 12 months ahead."
 
+Each new occurrence copies the latest one, so a "this and all future events"
+edit carries on into the occurrences added after it. For a Training series
+that includes the training details and the requirements the sessions count
+toward.
+
 ![The recurrence controls with the rolling 12-month cycle ticked](./images/04-38-rolling-recurrence.png)
 
 **Dates and times stay put.** A series is laid out in your department's own
@@ -1496,7 +1501,9 @@ instead — see
 
 **More → Duplicate Event** on an event's page makes a copy with the same
 settings, date and time, and opens it for editing so you can change the date.
-RSVPs, attendance, cancellation and recurrence are not copied.
+RSVPs, attendance, cancellation and recurrence are not copied. A Training
+event's copy keeps its training details and the requirements it counts
+toward, and starts with attendance open.
 
 ### Selecting several events
 

@@ -639,6 +639,7 @@ class CourseCohortService:
             organization_id=organization_id,
             created_by=created_by,
             commit=False,
+            stored_requirement_id=cohort_class.requirement_id,
         )
 
     async def _generate_program(

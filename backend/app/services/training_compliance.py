@@ -9,7 +9,7 @@ import calendar
 import math
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from sqlalchemy import ColumnElement, and_, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1886,6 +1886,9 @@ def requirement_applies_to_member(
     requirement's grandfathering dates before any of the above. Every caller
     in ``app/`` passes it — ``tests/test_requirement_grandfathering.py``
     sweeps for one that does not.
+
+    :func:`mandatory_tiers_for_requirements` projects this same precedence
+    onto an event's "Mandatory for" tiers; a change here belongs there too.
     """
     if not requirement_applies_by_join_date(req, join_date):
         return False
@@ -1900,6 +1903,105 @@ def requirement_applies_to_member(
         if any(slug in position_slugs for slug in req.required_positions):
             return True
     return False
+
+
+# Membership words that name a member class rather than a rung: an
+# administrative member stands on whatever rung their status puts them, so no
+# tier stands for "administrative", and "honorary" is the social class.
+_CLASS_MEMBERSHIP_WORDS = frozenset({"administrative", "honorary"})
+
+
+@dataclass(frozen=True)
+class UnmappedRequirement:
+    requirement_id: str
+    name: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class MandatoryTiers:
+    """Who an event counting toward some requirements is mandatory for."""
+
+    everyone: bool
+    tier_ids: List[str]
+    unmapped: List[UnmappedRequirement]
+
+
+def mandatory_tiers_for_requirements(
+    requirements: Sequence[Any], ladder: Sequence[str]
+) -> MandatoryTiers:
+    """Project who ``requirements`` grade onto an event's "Mandatory for".
+
+    The pre-fill for an event that counts toward attendance requirements: the
+    membership tiers (ids on ``ladder``, in ladder order) whose members those
+    requirements apply to. It reads the same fields in the same precedence as
+    :func:`requirement_applies_to_member`, which decides who a requirement
+    actually grades; keep the two in step (pitfall #29).
+
+    - ``applies_to_all`` means everyone, which covers every other requirement.
+    - Each ``required_membership_types`` word becomes the tiers it canonically
+      stands on. ``probationary`` also takes a ``junior`` tier, because a
+      junior member's legacy membership type derives to probationary.
+    - A class word (administrative, honorary), a word with no tier on this
+      ladder, or a requirement scoped only by rank or position is reported
+      unmapped rather than guessed at.
+    - A requirement naming nobody contributes nothing.
+
+    Grandfathering and compliance profiles are ignored: they decide which
+    members a requirement grades, not which tiers an event is mandatory for.
+    ``training_exempt`` tiers are not left out, because the requirement rule
+    does not leave them out either.
+    """
+    tiers: List[str] = []
+    unmapped: List[UnmappedRequirement] = []
+    by_standing: Dict[str, List[str]] = {}
+    for tier_id in ladder:
+        standing = canonical_member_status(tier_id)
+        if standing:
+            by_standing.setdefault(standing, []).append(tier_id)
+
+    for req in requirements:
+        req_id, name = str(req.id), str(req.name)
+        if req.applies_to_all:
+            return MandatoryTiers(everyone=True, tier_ids=[], unmapped=[])
+        if req.required_membership_types:
+            for word in req.required_membership_types:
+                key = (word or "").strip().lower()
+                if not key:
+                    continue
+                if key in _CLASS_MEMBERSHIP_WORDS:
+                    unmapped.append(
+                        UnmappedRequirement(
+                            req_id,
+                            name,
+                            f"{key.capitalize()} is a member class, "
+                            "not a membership tier",
+                        )
+                    )
+                    continue
+                matched = list(by_standing.get(canonical_member_status(key) or "", []))
+                if key == "probationary":
+                    matched += by_standing.get(MemberStatus.JUNIOR, [])
+                if not matched:
+                    unmapped.append(
+                        UnmappedRequirement(
+                            req_id, name, f"No membership tier stands for {key}"
+                        )
+                    )
+                tiers.extend(matched)
+        elif req.required_roles or req.required_positions:
+            unmapped.append(
+                UnmappedRequirement(
+                    req_id, name, "It applies by rank or position, not membership"
+                )
+            )
+
+    picked = set(tiers)
+    return MandatoryTiers(
+        everyone=False,
+        tier_ids=[tier_id for tier_id in ladder if tier_id in picked],
+        unmapped=unmapped,
+    )
 
 
 def member_position_slugs(member) -> List[str]:

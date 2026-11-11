@@ -297,10 +297,10 @@ class EventOrganizerService:
 
     async def _series_events(self, anchor: Event, organization_id: str) -> List[Event]:
         """This occurrence, every upcoming one in its series, and the series
-        parent — which carries the series-end reminder and is what a rolling
-        series copies new occurrences from, so a handover that skipped it
-        would be undone the next time the series extends. Past occurrences
-        keep the organizer who ran them."""
+        parent, which carries the series-end reminder. The latest upcoming
+        occurrence is what a rolling series copies new occurrences from, so
+        reaching it is what keeps the handover when the series extends. Past
+        occurrences keep the organizer who ran them."""
         parent_id = str(anchor.recurrence_parent_id or anchor.id)
         result = await self.db.execute(
             select(Event)

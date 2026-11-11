@@ -28,7 +28,10 @@ from app.models.event import (
 from app.schemas.base import UTCDateTime, UTCResponseBase, as_utc
 from app.schemas.column_bounds import INT32_MAX, INT32_MIN
 from app.schemas.reminder_limits import ReminderLeadDays, ReminderLeadHours
-from app.schemas.training_session import TrainingSessionAttach
+from app.schemas.training_session import (
+    TrainingSessionAttach,
+    TrainingSessionDetailsUpdate,
+)
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -437,6 +440,11 @@ class EventUpdate(BaseModel):
     # GET returned would 422 on the narrower type.
     attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: Optional[bool] = None
+    # The event's training session, edited with the event in one save. Left
+    # out, the session is untouched; see TrainingSessionDetailsUpdate for what
+    # each field's null means. A Training event with no session gets one only
+    # when something here differs from what a session-less event credits.
+    training_details: Optional[TrainingSessionDetailsUpdate] = None
 
     @field_validator("start_datetime", "end_datetime", "rsvp_deadline")
     @classmethod
@@ -1474,11 +1482,6 @@ class RecurringEventCreate(BaseModel):
             raise ValueError(
                 "recurrence_end_date is required unless rolling_recurrence is true"
             )
-        # The nightly job that extends a rolling series copies the event, not
-        # a session attached to it, so later occurrences would silently lose
-        # the details the first ones carry.
-        if self.rolling_recurrence and self.training_details is not None:
-            raise ValueError("Training details can't be added to a rolling series")
         if self.recurrence_pattern == "custom" and not self.recurrence_custom_days:
             raise ValueError(
                 "recurrence_custom_days is required when recurrence_pattern is 'custom'"
