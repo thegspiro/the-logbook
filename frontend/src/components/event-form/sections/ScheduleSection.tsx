@@ -17,7 +17,38 @@ import {
 import type { EventFormModel } from '../useEventFormModel';
 
 interface ScheduleSectionProps {
-  model: EventFormModel;
+  model: Pick<
+    EventFormModel,
+    | 'tz'
+    | 'formData'
+    | 'update'
+    | 'fieldErrors'
+    | 'attendanceLocked'
+    | 'scheduleLockHintId'
+    | 'handleStartDateChange'
+    | 'conflicts'
+    | 'setDuration'
+    | 'isRecurring'
+    | 'setIsRecurring'
+    | 'recurrencePattern'
+    | 'setRecurrencePattern'
+    | 'isRolling'
+    | 'setIsRolling'
+    | 'recurrenceEndDate'
+    | 'handleRecurrenceEndDateChange'
+    | 'recurrenceCustomDays'
+    | 'setRecurrenceCustomDays'
+    | 'recurrenceWeekOrdinal'
+    | 'setRecurrenceWeekOrdinal'
+    | 'recurrenceWeekday'
+    | 'setRecurrenceWeekday'
+    | 'recurrenceMonth'
+    | 'setRecurrenceMonth'
+    | 'newExceptionDate'
+    | 'setNewExceptionDate'
+    | 'recurrenceExceptions'
+    | 'setRecurrenceExceptions'
+  >;
   /** Offer the recurring-series controls under the schedule. */
   showRecurrence: boolean;
 }

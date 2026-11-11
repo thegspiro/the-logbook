@@ -5,7 +5,18 @@ import { EVENT_FIELDS, inputClass, labelClass, selectClass } from '../eventFormC
 import type { EventFormModel } from '../useEventFormModel';
 
 interface LocationSectionProps {
-  model: EventFormModel;
+  model: Pick<
+    EventFormModel,
+    | 'formData'
+    | 'update'
+    | 'fieldErrors'
+    | 'locations'
+    | 'locationMode'
+    | 'handleLocationSelect'
+    | 'formatLocationLabel'
+    | 'formatLocationAddress'
+    | 'selectedLocation'
+  >;
 }
 
 /** A listed location or a typed one, and directions. */

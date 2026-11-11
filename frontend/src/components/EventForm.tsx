@@ -5,24 +5,16 @@
  * Supports location picker, role-based eligibility, RSVP settings,
  * check-in window configuration, and reminder settings.
  *
- * State, validation and payloads live in `useEventFormModel`; the markup is the
- * sections under `./event-form/sections`, which other event forms compose too.
+ * State, validation and payloads live in `useEventFormModel`; the markup is
+ * `EventFormView`, a composition of the sections under `./event-form/sections`,
+ * which other event forms compose too.
  */
 
 import React from 'react';
 import type { EventCreate, RecurringEventCreate } from '../types/event';
 import type { ConflictEvent, InitialRecurrence } from './event-form/eventFormTypes';
 import { useEventFormModel } from './event-form/useEventFormModel';
-import { NoticesSection } from './event-form/sections/NoticesSection';
-import { DetailsSection } from './event-form/sections/DetailsSection';
-import { ScheduleSection } from './event-form/sections/ScheduleSection';
-import { LocationSection } from './event-form/sections/LocationSection';
-import { AttendanceSection } from './event-form/sections/AttendanceSection';
-import { RsvpSection } from './event-form/sections/RsvpSection';
-import { CheckInSection } from './event-form/sections/CheckInSection';
-import { NotificationsSection } from './event-form/sections/NotificationsSection';
-import { AttachmentsSection } from './event-form/sections/AttachmentsSection';
-import { DraftSection } from './event-form/sections/DraftSection';
+import { EventFormView } from './event-form/EventFormView';
 
 export type { ConflictEvent, InitialRecurrence } from './event-form/eventFormTypes';
 
@@ -89,51 +81,12 @@ export const EventForm: React.FC<EventFormProps> = ({
   });
 
   return (
-    <form
-      noValidate
-      onSubmit={(e) => {
-        void model.handleSubmit(e);
-      }}
-      className="space-y-8"
-    >
-      <NoticesSection model={model} />
-
-      {/* === Event Details === */}
-      <DetailsSection model={model} />
-
-      <hr className="border-theme-surface-border" />
-
-      {/* === Schedule === */}
-      <ScheduleSection model={model} showRecurrence={showRecurrence} />
-
-      <hr className="border-theme-surface-border" />
-
-      {/* === Location === */}
-      <LocationSection model={model} />
-
-      <hr className="border-theme-surface-border" />
-
-      {/* === Attendance & RSVP Settings (side-by-side) === */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <AttendanceSection model={model} />
-        <RsvpSection model={model} />
-      </div>
-
-      <hr className="border-theme-surface-border" />
-
-      {/* === Check-In Settings & Notifications (side-by-side) === */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <CheckInSection model={model} />
-        <NotificationsSection model={model} />
-      </div>
-
-      <hr className="border-theme-surface-border" />
-
-      {/* === Attachments === */}
-      <AttachmentsSection existingAttachments={model.existingAttachments} />
-
-      {/* === Actions === */}
-      <DraftSection model={model} onCancel={onCancel} isSubmitting={isSubmitting} submitLabel={submitLabel} />
-    </form>
+    <EventFormView
+      model={model}
+      onCancel={onCancel}
+      submitLabel={submitLabel}
+      isSubmitting={isSubmitting}
+      showRecurrence={showRecurrence}
+    />
   );
 };

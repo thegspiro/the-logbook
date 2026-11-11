@@ -486,14 +486,12 @@ export const useEventFormModel = ({
   const showsTrainingDetails = formData.event_type === EventTypeEnum.TRAINING && !editingEventId;
   const submitsRollingSeries = isRecurring && Boolean(onSubmitRecurring) && isRolling;
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setFieldErrors({});
-
-    // Every field check is collected first, so all of them show at once and
-    // focus goes to the first; the form is noValidate, so these replace the
-    // browser's bubbles (forms review F-3).
+  /**
+   * Every field check, collected so all of them show at once and focus goes to
+   * the first; the form is noValidate, so these replace the browser's bubbles
+   * (forms review F-3). Reports rather than shows: the caller decides when.
+   */
+  const validate = (): Partial<Record<EventField, string>> => {
     const invalid: Partial<Record<EventField, string>> = {};
     if (!formData.title.trim()) invalid.title = 'Enter a title for the event.';
     if (!formData.start_datetime) invalid.start_datetime = 'Choose when the event starts.';
@@ -520,16 +518,23 @@ export const useEventFormModel = ({
     if (isRecurring && onSubmitRecurring && !isRolling && !recurrenceEndDate) {
       invalid.recurrence_end_date = 'Choose the date the series ends.';
     }
-    if (Object.keys(invalid).length > 0) {
-      showFieldErrors(invalid);
-      return;
-    }
+    return invalid;
+  };
 
+  /** The refusal for a mandatory event with no member type chosen, or null. */
+  const checkMandatory = (): string | null => {
     if (formData.is_mandatory && !formData.mandatory_membership_types?.length && !storedMandatoryForEveryone) {
-      setError('Select at least one member type for mandatory attendance');
-      return;
+      return 'Select at least one member type for mandatory attendance';
     }
+    return null;
+  };
 
+  /**
+   * The cleaned-up, UTC-converted payload the form would save, as a single
+   * event or as a series, or the refusal that stops it. Assumes `validate()`
+   * and `checkMandatory()` have passed.
+   */
+  const buildPayload = (): { single: EventCreate } | { recurring: RecurringEventCreate } | { error: string } => {
     // Clean up data before submit
     const submitData = { ...formData };
 
@@ -590,27 +595,58 @@ export const useEventFormModel = ({
       submitData.rsvp_deadline = localToUTC(submitData.rsvp_deadline, tz);
     }
 
+    if (!(isRecurring && onSubmitRecurring)) return { single: submitData };
+
+    if (recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
+      return { error: 'Select at least one day for custom recurrence' };
+    }
+    const needsWeekday = recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday';
+    return {
+      recurring: {
+        ...submitData,
+        recurrence_pattern: recurrencePattern,
+        recurrence_end_date: isRolling ? undefined : localToUTC(recurrenceEndDate + 'T23:59', tz),
+        rolling_recurrence: isRolling || undefined,
+        recurrence_custom_days: recurrencePattern === 'custom' ? recurrenceCustomDays : undefined,
+        recurrence_weekday: needsWeekday ? recurrenceWeekday : undefined,
+        recurrence_week_ordinal: needsWeekday ? recurrenceWeekOrdinal : undefined,
+        recurrence_month: recurrencePattern === 'annually_weekday' ? recurrenceMonth : undefined,
+        recurrence_exceptions: recurrenceExceptions.length > 0 ? recurrenceExceptions : undefined,
+      },
+    };
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setFieldErrors({});
+
+    const invalid = validate();
+    if (Object.keys(invalid).length > 0) {
+      showFieldErrors(invalid);
+      return;
+    }
+
+    const mandatoryError = checkMandatory();
+    if (mandatoryError) {
+      setError(mandatoryError);
+      return;
+    }
+
     try {
-      if (isRecurring && onSubmitRecurring) {
-        if (recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
-          setError('Select at least one day for custom recurrence');
-          return;
-        }
-        const needsWeekday = recurrencePattern === 'monthly_weekday' || recurrencePattern === 'annually_weekday';
-        const recurringData: RecurringEventCreate = {
-          ...submitData,
-          recurrence_pattern: recurrencePattern,
-          recurrence_end_date: isRolling ? undefined : localToUTC(recurrenceEndDate + 'T23:59', tz),
-          rolling_recurrence: isRolling || undefined,
-          recurrence_custom_days: recurrencePattern === 'custom' ? recurrenceCustomDays : undefined,
-          recurrence_weekday: needsWeekday ? recurrenceWeekday : undefined,
-          recurrence_week_ordinal: needsWeekday ? recurrenceWeekOrdinal : undefined,
-          recurrence_month: recurrencePattern === 'annually_weekday' ? recurrenceMonth : undefined,
-          recurrence_exceptions: recurrenceExceptions.length > 0 ? recurrenceExceptions : undefined,
-        };
-        await onSubmitRecurring(recurringData);
+      // Built inside the try, as the series half always was: a date the
+      // browser accepts but `Date` cannot represent throws from localToUTC,
+      // and that shows as the form's error rather than a dead submit button.
+      const payload = buildPayload();
+      if ('error' in payload) {
+        setError(payload.error);
+        return;
+      }
+      if ('recurring' in payload) {
+        // buildPayload returns a series only when onSubmitRecurring is set.
+        await onSubmitRecurring?.(payload.recurring);
       } else {
-        await onSubmit(submitData);
+        await onSubmit(payload.single);
       }
     } catch (err: unknown) {
       const mapped = mapServerFieldErrors(err, EVENT_FIELDS);
@@ -620,6 +656,14 @@ export const useEventFormModel = ({
         setError(mapped?.unmatched.join(' ') || getErrorMessage(err, 'An error occurred'));
       }
     }
+  };
+
+  // Not `update`: the checkbox has always written a whole new object from this
+  // render's formData rather than a functional update, and is_draft is never a
+  // field error, so update's clearing would have nothing to clear. Routing it
+  // through update would change the write's form for no gain.
+  const setIsDraft = (isDraft: boolean) => {
+    setFormData({ ...formData, is_draft: isDraft });
   };
 
   return {
@@ -636,7 +680,7 @@ export const useEventFormModel = ({
     canCreateTrainingSession,
     // Form values
     formData,
-    setFormData,
+    setIsDraft,
     update,
     error,
     fieldErrors,
@@ -706,6 +750,11 @@ export const useEventFormModel = ({
     handleReminderTargetChange,
     toggleMandatoryMembershipType,
     handleLocationSelect,
+    // Submission, in the order handleSubmit runs them; a second form can run
+    // the same checks and build the same payload without a FormEvent.
+    validate,
+    checkMandatory,
+    buildPayload,
     handleSubmit,
   };
 };
