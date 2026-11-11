@@ -58,6 +58,15 @@ interface EventComposerProps {
    * `onSubmitUpdate`, with the training details.
    */
   editing?: EditOptions | undefined;
+  /**
+   * Told whether the form is on its first page: always for the single-page
+   * form, only while Event Details is open for the training form. The host's
+   * template picker is drawn only then, because picking a template starts the
+   * form afresh, and offering that on a later step would throw away every
+   * step's entries and return the officer to the first. The picker stays the
+   * host's, outside the form it remounts, so a pick keeps focus on it.
+   */
+  onFirstStepChange?: ((onFirstStep: boolean) => void) | undefined;
 }
 
 /** What the edit page knows about the event, for whichever form draws it. */
@@ -96,6 +105,7 @@ export const EventComposer: React.FC<EventComposerProps> = ({
   trainingRecurringSubmitShortLabel,
   typeNote,
   editing,
+  onFirstStepChange,
 }) => {
   const model = useEventFormModel({
     initialData: lockedType ? { ...initialData, event_type: lockedType } : initialData,
@@ -136,6 +146,11 @@ export const EventComposer: React.FC<EventComposerProps> = ({
   // when the form opened on Training (a Training template, or Training Admin).
   const [switchedFrom, setSwitchedFrom] = useState<EventType | null>(null);
   const isTraining = model.formData.event_type === EventTypeEnum.TRAINING;
+  const [onDetailsStep, setOnDetailsStep] = useState(true);
+  const onFirstStep = !isTraining || onDetailsStep;
+  useEffect(() => {
+    onFirstStepChange?.(onFirstStep);
+  }, [onFirstStep, onFirstStepChange]);
 
   // Swapping forms unmounts the type picker the officer was using; focus goes
   // to the new form's picker, so a keyboard or screen-reader user carries on
@@ -238,6 +253,7 @@ export const EventComposer: React.FC<EventComposerProps> = ({
         submitLabel={trainingSubmitLabel}
         recurringSubmitLabel={trainingRecurringSubmitLabel}
         recurringSubmitShortLabel={trainingRecurringSubmitShortLabel}
+        onDetailsStepChange={setOnDetailsStep}
         {...(editing
           ? {
               submittingLabel: 'Saving...',

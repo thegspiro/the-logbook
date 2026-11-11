@@ -31,6 +31,8 @@ const CreateTrainingSessionPage: React.FC = () => {
   // Training templates only: the type here is fixed to Training.
   const [templates, setTemplates] = useState<EventTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  // The picker is offered on Event Details only: a pick starts the form afresh.
+  const [onFirstStep, setOnFirstStep] = useState(true);
   const templateInitialData = useMemo(() => {
     const template = templates.find((t) => t.id === selectedTemplateId);
     return template ? templateToInitialData(template, tz) : undefined;
@@ -90,17 +92,17 @@ const CreateTrainingSessionPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div data-page-main className="mx-auto max-w-5xl py-8">
-        {/* Rendered only inside Training Administration, whose section nav already
-            names this page; the title stays for heading navigation only, and the
+        {/* Rendered only inside Training Administration, whose page strip draws
+            this title visibly; the heading stays for heading navigation, and the
             old back link pointed at the hub the user is already on. The line
-            under it said something the nav does not, so it stays visible. */}
+            under it said something the strip does not, so it stays visible. */}
         <h2 className="sr-only">Create Training Session</h2>
         {canManageEvents ? (
           <>
             <p className="text-theme-text-muted mb-6">
               Schedule a training event with automatic attendance tracking via QR code
             </p>
-            {templates.length > 0 && (
+            {templates.length > 0 && onFirstStep && (
               <EventTemplatePicker
                 templates={templates}
                 value={selectedTemplateId}
@@ -119,6 +121,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                 void navigate('/training/admin');
               }}
               userEvents={userEvents}
+              onFirstStepChange={setOnFirstStep}
             />
           </>
         ) : (

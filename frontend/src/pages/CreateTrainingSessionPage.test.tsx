@@ -213,6 +213,22 @@ describe('CreateTrainingSessionPage templates', () => {
     expect(screen.getByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
   });
 
+  // A pick on a later step remounted the form: every step's entries were
+  // thrown away and the officer was back on step 1.
+  it('offers the templates on Event Details only', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Start from a template' }), 'tpl-drill');
+    await next(user);
+
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Start from a template' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    expect(await screen.findByRole('combobox', { name: 'Start from a template' })).toHaveValue('tpl-drill');
+    expect(screen.getByLabelText(/^Title/)).toHaveValue('Company Drill');
+  });
+
   it('records the template a series was created from', async () => {
     const user = userEvent.setup();
     renderWithRouter(<CreateTrainingSessionPage />);

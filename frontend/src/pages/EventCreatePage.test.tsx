@@ -435,6 +435,22 @@ describe('EventCreatePage templates', () => {
     expect(screen.getAllByText('Failed to create event. Try again.')).toHaveLength(1);
   });
 
+  // A pick on a later step remounted the form, discarding every step.
+  it('offers templates on the training form’s first step only', async () => {
+    window.history.pushState({}, '', '/events/admin?tab=create&template=tpl-cpr');
+    const user = userEvent.setup();
+    renderWithRouter(<EventCreatePage />);
+
+    await screen.findByText('Step 1 of 4 · Event Details');
+    expect(await picker()).toHaveValue('tpl-cpr');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(await screen.findByText('Step 2 of 4 · Training Info')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Start from a template' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Previous' }));
+    expect(await picker()).toHaveValue('tpl-cpr');
+  });
+
   it('opens the training form from a link to a Training template', async () => {
     window.history.pushState({}, '', '/events/admin?tab=create&template=tpl-cpr');
     renderWithRouter(<EventCreatePage />);

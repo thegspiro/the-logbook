@@ -26,6 +26,9 @@ export const EventCreatePage: React.FC = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [templateInitialData, setTemplateInitialData] = useState<Partial<EventCreate> | undefined>(undefined);
   const [userEvents, setUserEvents] = useState<ConflictEvent[]>([]);
+  // The picker is offered on the form's first page only: a pick starts the
+  // form afresh, which on a later training step would discard every step.
+  const [onFirstStep, setOnFirstStep] = useState(true);
   // The Events list's "Use template" opens this tab with ?template=<id>.
   const [searchParams] = useSearchParams();
   const requestedTemplateId = searchParams.get('template');
@@ -134,7 +137,7 @@ export const EventCreatePage: React.FC = () => {
           </p>
         </div>
 
-        {templates.length > 0 && (
+        {templates.length > 0 && onFirstStep && (
           <EventTemplatePicker
             templates={templates}
             value={selectedTemplateId}
@@ -157,6 +160,7 @@ export const EventCreatePage: React.FC = () => {
           trainingSubmitLabel="Create Event"
           trainingRecurringSubmitLabel="Create Recurring Events"
           trainingRecurringSubmitShortLabel="Create events"
+          onFirstStepChange={setOnFirstStep}
         />
       </div>
     </div>

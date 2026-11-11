@@ -172,6 +172,8 @@ interface TrainingEventWizardProps {
   organizerNames?: { organizer?: string | null | undefined; alternate?: string | null | undefined } | undefined;
   /** On a series edit, the occurrence's start and its series' (ISO instants), for Review. */
   seriesOccurrence?: SeriesOccurrence | undefined;
+  /** Told whether Event Details is the open step, for what the host draws above the steps. */
+  onDetailsStepChange?: ((onDetails: boolean) => void) | undefined;
 }
 
 export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
@@ -199,6 +201,7 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   scopeChoice,
   organizerNames,
   seriesOccurrence,
+  onDetailsStepChange,
 }) => {
   const { formatRank } = useRanks();
   const { confirm } = useConfirm();
@@ -207,6 +210,9 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
   // its series through the scope choice, never the recurrence itself.
   const creatingSeries = model.isRecurring && !editing;
   const [step, setStep] = useState(initialStep === 'training' ? TRAINING : DETAILS);
+  useEffect(() => {
+    onDetailsStepChange?.(step === DETAILS);
+  }, [step, onDetailsStepChange]);
   const [trainingErrors, setTrainingErrors] = useState<TrainingErrors>({});
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [coursesLoaded, setCoursesLoaded] = useState(false);
