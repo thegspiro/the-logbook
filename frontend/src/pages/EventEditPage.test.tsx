@@ -454,7 +454,7 @@ describe('EventEditPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<EventEditPage />);
 
-      expect(await screen.findByText(/mandatory for every member/i)).toBeInTheDocument();
+      expect(await screen.findByRole('radio', { name: 'All members' })).toBeChecked();
       const title = screen.getByLabelText(/^title/i);
       await user.clear(title);
       await user.type(title, 'Recruit school, class 3 (corrected)');
@@ -465,13 +465,15 @@ describe('EventEditPage', () => {
       expect(payload).toEqual(
         expect.objectContaining({ title: 'Recruit school, class 3 (corrected)', is_mandatory: true })
       );
-      expect(payload?.mandatory_membership_types).toBeUndefined();
+      // All members is sent, as every field the form owns is on an update
+      // (pitfall #1): the empty list the API reads as every member.
+      expect(payload?.mandatory_membership_types).toEqual([]);
       expect(screen.queryByText(/select at least one member type/i)).not.toBeInTheDocument();
     });
 
-    // Only an event stored with no member types means everyone. Narrowing one
-    // down to nothing, or making an event mandatory now, still needs a choice:
-    // the server would read an empty list as every member.
+    // Every member is the All members choice. "Only these member types" with
+    // none ticked, whether unticked or newly made mandatory, is refused under
+    // the field: the server would read the empty list as every member.
     it('still asks for a member type when every saved one is unticked', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue({
         ...mockEvent,
@@ -484,7 +486,11 @@ describe('EventEditPage', () => {
       await user.click(await screen.findByLabelText('Active'));
       await user.click(screen.getByRole('button', { name: /save changes/i }));
 
-      expect(await screen.findByText(/select at least one member type/i)).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.getByLabelText('Active')).toHaveAccessibleDescription(
+          'Select at least one member type, or choose All members.'
+        )
+      );
       expect(eventService.updateEvent).not.toHaveBeenCalled();
     });
 
@@ -496,7 +502,11 @@ describe('EventEditPage', () => {
       await user.click(await screen.findByLabelText(/mandatory attendance/i));
       await user.click(screen.getByRole('button', { name: /save changes/i }));
 
-      expect(await screen.findByText(/select at least one member type/i)).toBeInTheDocument();
+      await waitFor(() =>
+        expect(screen.getByLabelText('Active')).toHaveAccessibleDescription(
+          'Select at least one member type, or choose All members.'
+        )
+      );
       expect(eventService.updateEvent).not.toHaveBeenCalled();
     });
 

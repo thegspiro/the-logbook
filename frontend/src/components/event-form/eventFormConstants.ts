@@ -61,6 +61,7 @@ export const EVENT_FIELDS = {
   end_datetime: { label: 'End' },
   location: { label: 'Location', maxLength: 300 },
   location_details: { label: 'Additional directions' },
+  mandatory_membership_types: { label: 'Mandatory for' },
   rsvp_deadline: { label: 'RSVP deadline' },
   max_attendees: { label: 'Max attendees' },
   recurrence_end_date: { label: 'Recurrence end date' },
@@ -77,6 +78,8 @@ export const EVENT_FIELD_IDS: Record<EventField, string> = {
   recurrence_end_date: 'recurrence-end-date',
   location: 'location-text',
   location_details: 'location-details',
+  // The first member-type box under "Only these member types".
+  mandatory_membership_types: 'mandatory-for-first',
   rsvp_deadline: 'rsvp-deadline',
   max_attendees: 'max-attendees',
 };
@@ -106,10 +109,17 @@ export const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] 
 
 export const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+/**
+ * Shown only when the department's own ladder cannot be loaded. An event's
+ * "Mandatory for" holds tier ids, matched against the member's status, and
+ * `administrative` is a membership class rather than a tier: it canonicalizes
+ * to `regular` (`app/utils/membership.py`), so ticking it would have required
+ * every regular member instead. All members covers a session administrative
+ * members must attend.
+ */
 export const DEFAULT_MEMBERSHIP_TYPES = [
   { value: 'active', label: 'Active' },
   { value: 'probationary', label: 'Probationary' },
-  { value: 'administrative', label: 'Administrative' },
   { value: 'life', label: 'Life' },
   { value: 'retired', label: 'Retired' },
 ];

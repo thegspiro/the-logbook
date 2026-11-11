@@ -3,7 +3,7 @@
  * Administration.
  *
  * A training session is a Training event, so this is the one training-event
- * form (TrainingEventWizard) with the type fixed. It saves through the events
+ * form (EventComposer, drawing TrainingEventWizard) with the type fixed. It saves through the events
  * endpoints, which need events.manage; the hub opens for training.manage, so
  * a training manager without it is told who can create one instead of being
  * handed a form whose save would be refused.
@@ -16,7 +16,8 @@ import toast from 'react-hot-toast';
 import { eventService } from '../services/api';
 import type { EventCreate, RecurringEventCreate } from '../types/event';
 import type { ConflictEvent } from '../components/event-form/eventFormTypes';
-import { TrainingEventWizard } from '../components/training-event/TrainingEventWizard';
+import { EventComposer } from '../components/event-form/EventComposer';
+import { EventType as EventTypeEnum } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
 
 const CreateTrainingSessionPage: React.FC = () => {
@@ -71,7 +72,8 @@ const CreateTrainingSessionPage: React.FC = () => {
             <p className="text-theme-text-muted mb-6">
               Schedule a training event with automatic attendance tracking via QR code
             </p>
-            <TrainingEventWizard
+            <EventComposer
+              lockedType={EventTypeEnum.TRAINING}
               onSubmit={handleSubmit}
               onSubmitRecurring={handleSubmitRecurring}
               onCancel={() => {

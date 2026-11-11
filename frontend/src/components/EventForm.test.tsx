@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ComponentProps } from 'react';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { EventForm } from './EventForm';
@@ -39,24 +39,11 @@ vi.mock('../services/api', () => ({
   userService: {
     getUsers: vi.fn(),
   },
-  // Behind the Training details section (TrainingDetailsFields).
-  trainingService: {
-    getCourses: vi.fn(),
-    getCategories: vi.fn(),
-    getRequirements: vi.fn(),
-  },
-  trainingProgramService: {
-    getPrograms: vi.fn(),
-    getProgramPhases: vi.fn(),
-  },
 }));
 
-// Only the Training details section asks: whether to link Create Training
-// Session, which only a training.manage holder can open.
-const mockCheckPermission = vi.fn();
+// The form reads only who is signed in, for the organizer default.
 vi.mock('../stores/authStore', () => ({
-  useAuthStore: (selector: (state: { checkPermission: (permission: string) => boolean }) => unknown) =>
-    selector({ checkPermission: (permission: string) => mockCheckPermission(permission) as boolean }),
+  useAuthStore: (selector: (state: { user: { id: string } }) => unknown) => selector({ user: { id: 'me' } }),
 }));
 
 /** The org's event settings, with whatever custom categories a test needs. */
@@ -243,69 +230,26 @@ describe('EventForm', () => {
     });
   });
 
-  describe('Training details', () => {
-    // Pitfall #28: this block states every mock the section depends on.
+  // A Training event's details are the training-event form's: on the Events
+  // page EventComposer hands off to it (EventComposer.test.tsx), and the edit
+  // page will draw it too. EventForm itself no longer carries a cut-down copy.
+  describe('Training events', () => {
     beforeEach(() => {
-      const { trainingService, trainingProgramService } = apiModule;
-      vi.mocked(trainingService.getCourses).mockReset();
-      vi.mocked(trainingService.getCourses).mockResolvedValue([]);
-      vi.mocked(trainingService.getCategories).mockReset();
-      vi.mocked(trainingService.getCategories).mockResolvedValue([]);
-      vi.mocked(trainingService.getRequirements).mockReset();
-      vi.mocked(trainingService.getRequirements).mockResolvedValue([]);
-      vi.mocked(trainingProgramService.getPrograms).mockReset();
-      vi.mocked(trainingProgramService.getPrograms).mockResolvedValue([]);
-      vi.mocked(trainingProgramService.getProgramPhases).mockReset();
-      vi.mocked(trainingProgramService.getProgramPhases).mockResolvedValue([]);
       mockOnSubmit.mockReset();
       mockOnSubmit.mockResolvedValue(undefined);
-      mockCheckPermission.mockReset();
-      mockCheckPermission.mockImplementation((permission: string) => permission === 'training.manage');
     });
 
-    const fillRequired = async (user: ReturnType<typeof userEvent.setup>) => {
+    it('draws no training details block and sends none', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
       await user.type(screen.getByLabelText(/title/i), 'Hose drill');
+      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
       fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
       fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
-    };
-
-    it('offers an optional training details section on a new Training event', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       expect(screen.queryByText('Training details (optional)')).not.toBeInTheDocument();
-      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
-
-      expect(screen.getByRole('heading', { name: 'Training details (optional)' })).toBeInTheDocument();
-      expect(
-        screen.getByText(/credited to members' training records when attendance is finalized/i)
-      ).toBeInTheDocument();
-      expect(screen.getByText(/filed under the event title as Continuing Education/i)).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Create Training Session' })).toHaveAttribute(
-        'href',
-        '/training/admin?page=records&tab=sessions'
-      );
-      expect(screen.getByLabelText('Training Type')).toHaveValue('');
-      expect(screen.queryByText(/use "Create Training Session" instead/i)).not.toBeInTheDocument();
-    });
-
-    it('names Create Training Session without linking it for someone who cannot open it', async () => {
-      mockCheckPermission.mockReturnValue(false);
-      const user = userEvent.setup();
-      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
-
-      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
-
-      expect(screen.getByText(/a training officer uses Create Training Session instead/)).toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: 'Create Training Session' })).not.toBeInTheDocument();
-    });
-
-    it('sends no training_details when the section is left untouched', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
-
-      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
-      await fillRequired(user);
+      expect(screen.queryByLabelText('Training Type')).not.toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /create event/i }));
 
       await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
@@ -314,105 +258,17 @@ describe('EventForm', () => {
       expect(submitted).not.toHaveProperty('training_details');
     });
 
-    it('sends the picked training type, omitting the blanks', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
-
-      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
-      await user.selectOptions(screen.getByLabelText('Training Type'), 'skills_practice');
-      await fillRequired(user);
-      await user.click(screen.getByRole('button', { name: /create event/i }));
-
-      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
-      const submitted = mockOnSubmit.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect(submitted.training_details).toStrictEqual({ training_type: 'skills_practice' });
-    });
-
-    it('drops the details if the event is retyped away from Training', async () => {
-      const user = userEvent.setup();
-      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
-
-      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
-      await user.selectOptions(screen.getByLabelText('Training Type'), 'skills_practice');
-      await user.selectOptions(screen.getByLabelText(/event type/i), 'social');
-      await fillRequired(user);
-      await user.click(screen.getByRole('button', { name: /create event/i }));
-
-      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
-      expect(mockOnSubmit.mock.calls[0]?.[0]).not.toHaveProperty('training_details');
-    });
-
-    it('points to the event page when editing instead of offering the section', () => {
+    it('no longer points an edit at the event page for training details', () => {
       renderWithRouter(
         <EventForm
           onSubmit={mockOnSubmit}
           onCancel={mockOnCancel}
           editingEventId="evt-1"
-          submitLabel="Save Changes"
           initialData={{ title: 'Hose drill', event_type: 'training' }}
         />
       );
 
-      expect(
-        screen.getByText("Training details are edited on the event page's Requirements & Programs card.")
-      ).toBeInTheDocument();
-      expect(screen.queryByText('Training details (optional)')).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('Training Type')).not.toBeInTheDocument();
-    });
-
-    it('disables the section on a rolling series and sends nothing from it', async () => {
-      const mockOnSubmitRecurring = vi.fn().mockResolvedValue(undefined);
-      const user = userEvent.setup();
-      renderWithRouter(
-        <EventForm
-          onSubmit={mockOnSubmit}
-          onSubmitRecurring={mockOnSubmitRecurring}
-          onCancel={mockOnCancel}
-          showRecurrence
-        />
-      );
-
-      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
-      await user.selectOptions(screen.getByLabelText('Training Type'), 'refresher');
-      await user.click(screen.getByLabelText('Make this a recurring event'));
-      await user.click(screen.getByLabelText('Rolling 12-month cycle'));
-
-      expect(screen.getByText("Training details can't be added to a rolling series.")).toBeInTheDocument();
-      expect(screen.getByLabelText('Training Type')).toBeDisabled();
-      expect(screen.getByLabelText('Course')).toBeDisabled();
-
-      await fillRequired(user);
-      await user.click(screen.getByRole('button', { name: /create event/i }));
-
-      await waitFor(() => expect(mockOnSubmitRecurring).toHaveBeenCalledTimes(1));
-      const submitted = mockOnSubmitRecurring.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect(submitted.rolling_recurrence).toBe(true);
-      expect(submitted).not.toHaveProperty('training_details');
-    });
-
-    it('carries the details onto a fixed-length series', async () => {
-      const mockOnSubmitRecurring = vi.fn().mockResolvedValue(undefined);
-      const user = userEvent.setup();
-      renderWithRouter(
-        <EventForm
-          onSubmit={mockOnSubmit}
-          onSubmitRecurring={mockOnSubmitRecurring}
-          onCancel={mockOnCancel}
-          showRecurrence
-        />
-      );
-
-      await user.selectOptions(screen.getByLabelText(/event type/i), 'training');
-      await user.selectOptions(screen.getByLabelText('Training Type'), 'refresher');
-      await user.click(screen.getByLabelText('Make this a recurring event'));
-      fireEvent.change(screen.getByLabelText('Series end date'), { target: { value: '2026-06-30' } });
-
-      await fillRequired(user);
-      await user.click(screen.getByRole('button', { name: /create event/i }));
-
-      await waitFor(() => expect(mockOnSubmitRecurring).toHaveBeenCalledTimes(1));
-      const submitted = mockOnSubmitRecurring.mock.calls[0]?.[0] as Record<string, unknown>;
-      expect(submitted.training_details).toStrictEqual({ training_type: 'refresher' });
+      expect(screen.queryByText(/Training details are edited on the event page/)).not.toBeInTheDocument();
     });
   });
 
@@ -989,6 +845,134 @@ describe('EventForm', () => {
 
       expect(screen.getByRole('alert')).toHaveTextContent('Select at least one member type');
       expect(mockOnSubmit).not.toHaveBeenCalled();
+    });
+  });
+
+  // The backend reads a mandatory event with no member types as every member;
+  // the form now offers that as a choice instead of refusing an empty list
+  // (owner decision, 2026-11-10).
+  describe('Mandatory for: All members', () => {
+    beforeEach(() => {
+      mockOnSubmit.mockReset();
+      mockOnSubmit.mockResolvedValue(undefined);
+    });
+
+    const fillRequired = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.type(screen.getByLabelText(/title/i), 'Required drill');
+      fireEvent.change(screen.getByLabelText(/start date & time/i), { target: { value: '2026-04-01' } });
+      fireEvent.change(screen.getByLabelText(/end date & time/i), { target: { value: '2026-04-01' } });
+    };
+
+    it('offers All members beside Only these member types, opening on the narrower choice', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      await user.click(screen.getByLabelText(/mandatory attendance/i));
+
+      const group = screen.getByRole('group', { name: 'Mandatory for' });
+      expect(within(group).getByRole('radio', { name: 'All members' })).not.toBeChecked();
+      expect(within(group).getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+      await user.click(within(group).getByRole('radio', { name: 'All members' }));
+      expect(within(group).queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    it('creates an event mandatory for every member with no member types', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      await fillRequired(user);
+      await user.click(screen.getByLabelText(/mandatory attendance/i));
+      await user.click(screen.getByLabelText('Active Member'));
+      await user.click(screen.getByRole('radio', { name: 'All members' }));
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
+      const submitted = mockOnSubmit.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(submitted.is_mandatory).toBe(true);
+      // A create leaves the key out; the tick behind All members is not sent.
+      expect(submitted.mandatory_membership_types).toBeUndefined();
+    });
+
+    it('keeps the ticks when All members is chosen and then undone', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      await fillRequired(user);
+      await user.click(screen.getByLabelText(/mandatory attendance/i));
+      await user.click(screen.getByLabelText('Cadet'));
+      await user.click(screen.getByRole('radio', { name: 'All members' }));
+      await user.click(screen.getByRole('radio', { name: 'Only these member types' }));
+
+      expect(screen.getByLabelText('Cadet')).toBeChecked();
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
+      expect(mockOnSubmit.mock.calls[0]?.[0]).toMatchObject({ mandatory_membership_types: ['cadet'] });
+    });
+
+    it('puts the refusal under Mandatory for and focuses its first box', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      await fillRequired(user);
+      await user.click(screen.getByLabelText(/mandatory attendance/i));
+      await user.click(screen.getByRole('button', { name: /create event/i }));
+
+      const first = screen.getByLabelText('Cadet');
+      expect(first).toHaveAccessibleDescription('Select at least one member type, or choose All members.');
+      expect(first).toHaveAttribute('aria-invalid', 'true');
+      await waitFor(() => expect(first).toHaveFocus());
+      expect(mockOnSubmit).not.toHaveBeenCalled();
+
+      // Choosing All members answers it.
+      await user.click(screen.getByRole('radio', { name: 'All members' }));
+      expect(
+        within(screen.getByRole('group', { name: 'Mandatory for' })).queryByText(
+          'Select at least one member type, or choose All members.'
+        )
+      ).not.toBeInTheDocument();
+    });
+
+    it('sends an empty list when an edit widens saved member types to All members', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(
+        <EventForm
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          editingEventId="evt-1"
+          submitLabel="Save Changes"
+          initialData={{
+            title: 'Monday drill',
+            event_type: 'other',
+            start_datetime: '2026-04-01T22:00:00Z',
+            end_datetime: '2026-04-01T23:00:00Z',
+            is_mandatory: true,
+            mandatory_membership_types: ['active'],
+          }}
+        />
+      );
+
+      expect(screen.getByRole('radio', { name: 'Only these member types' })).toBeChecked();
+      await user.click(screen.getByRole('radio', { name: 'All members' }));
+      await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+      // Left out, the update would keep ['active'] behind a success toast.
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalledTimes(1));
+      expect(mockOnSubmit.mock.calls[0]?.[0]).toMatchObject({ is_mandatory: true, mandatory_membership_types: [] });
+    });
+
+    // Administrative is a membership class, not a tier: as an event's member
+    // type it canonicalizes to regular, and required every regular member.
+    it('leaves Administrative out of the built-in list used when the department’s cannot load', async () => {
+      vi.mocked(apiModule.eventService.getVisibleEventTypesWithCategories).mockReset();
+      vi.mocked(apiModule.eventService.getVisibleEventTypesWithCategories).mockRejectedValue(new Error('offline'));
+      const user = userEvent.setup();
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      await user.click(screen.getByLabelText(/mandatory attendance/i));
+
+      expect(screen.getByLabelText('Active')).toBeInTheDocument();
+      expect(screen.getByLabelText('Probationary')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Administrative')).not.toBeInTheDocument();
     });
   });
 

@@ -2,22 +2,25 @@
  * Event Create Page
  *
  * Full-page form for creating new events with all supported fields.
- * Supports both single and recurring event creation.
+ * Supports both single and recurring event creation. A Training event, picked
+ * by type or by a Training template, is created in the training-event form
+ * (EventComposer hands off, carrying what was typed).
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { FileText } from 'lucide-react';
 import { eventService } from '../services/api';
 import type { EventCreate, EventTemplate, RecurringEventCreate } from '../types/event';
-import { EventForm } from '../components/EventForm';
-import type { ConflictEvent } from '../components/EventForm';
+import { EventComposer } from '../components/event-form/EventComposer';
+import type { ConflictEvent } from '../components/event-form/eventFormTypes';
+import { EventType as EventTypeEnum } from '../constants/enums';
 import toast from 'react-hot-toast';
 import { getErrorDetail } from '../utils/errorHandling';
 import { mapServerFieldErrors } from '../utils/serverFieldErrors';
 
 /**
- * A validation failure is shown by EventForm, on the fields it names; this
+ * A validation failure is shown by the form, on the fields it names; this
  * page's banner would repeat it with the API's field names ("title: Value is
  * too long.") — the message forms review F-2 set out to retire.
  */
@@ -77,6 +80,9 @@ export const EventCreatePage: React.FC = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [templateInitialData, setTemplateInitialData] = useState<Partial<EventCreate> | undefined>(undefined);
   const [userEvents, setUserEvents] = useState<ConflictEvent[]>([]);
+  // The Events list's "Use template" opens this tab with ?template=<id>.
+  const [searchParams] = useSearchParams();
+  const requestedTemplateId = searchParams.get('template');
 
   useEffect(() => {
     void eventService
@@ -98,15 +104,27 @@ export const EventCreatePage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     void eventService
       .getTemplates()
       .then((data) => {
-        setTemplates(data.filter((t) => t.is_active));
+        if (cancelled) return;
+        const active = data.filter((t) => t.is_active);
+        setTemplates(active);
+        // An unknown or inactive id starts blank, as picking nothing would.
+        const requested = requestedTemplateId ? active.find((t) => t.id === requestedTemplateId) : undefined;
+        if (requested) {
+          setSelectedTemplateId(requested.id);
+          setTemplateInitialData(templateToInitialData(requested, tz));
+        }
       })
       .catch(() => {
         // Templates are optional — silently ignore fetch errors
       });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [requestedTemplateId, tz]);
 
   const handleSubmit = async (data: EventCreate) => {
     setIsSubmitting(true);
@@ -117,7 +135,7 @@ export const EventCreatePage: React.FC = () => {
     } catch (err: unknown) {
       if (!isFieldValidationError(err)) setError(getErrorDetail(err) || 'Failed to create event. Try again.');
       setIsSubmitting(false);
-      throw err; // Re-throw so EventForm knows submission failed
+      throw err; // Re-throw so the form knows submission failed
     }
   };
 
@@ -125,7 +143,12 @@ export const EventCreatePage: React.FC = () => {
     setIsSubmitting(true);
     setError(null);
     try {
-      const events = await eventService.createRecurringEvent(data);
+      // Records which template the series came from; a single event has no
+      // such field.
+      const events = await eventService.createRecurringEvent({
+        ...data,
+        template_id: selectedTemplateId || undefined,
+      });
       const count = events.length;
       toast.success(`Created ${count} recurring event${count !== 1 ? 's' : ''}`);
       void navigate('/events');
@@ -186,11 +209,13 @@ export const EventCreatePage: React.FC = () => {
               <FileText className="text-theme-text-muted h-5 w-5" />
               <h2 className="text-theme-text-primary text-lg font-semibold">Start from a Template</h2>
             </div>
-            <p className="text-theme-text-muted mb-3 text-sm">
-              Pick a template to pre-fill common settings, or start blank.
+            <p id="event-template-hint" className="text-theme-text-muted mb-3 text-sm">
+              Pick a template to pre-fill common settings, or start blank. A Training template opens the step-by-step
+              form.
             </p>
             <select
               aria-label="Start from a template"
+              aria-describedby="event-template-hint"
               value={selectedTemplateId}
               onChange={handleTemplateChange}
               className="form-input px-3 text-sm focus:ring-red-500 sm:w-96"
@@ -200,27 +225,27 @@ export const EventCreatePage: React.FC = () => {
                 <option key={t.id} value={t.id}>
                   {t.name}
                   {t.description ? ` — ${t.description}` : ''}
+                  {t.event_type === EventTypeEnum.TRAINING ? ' (Training)' : ''}
                 </option>
               ))}
             </select>
           </div>
         )}
 
-        {/* Form Card */}
-        <div className="card p-8">
-          <EventForm
-            key={selectedTemplateId || 'no-template'}
-            initialData={templateInitialData}
-            onSubmit={handleSubmit}
-            onSubmitRecurring={handleSubmitRecurring}
-            showOrganizerPickers
-            onCancel={handleCancel}
-            submitLabel="Create Event"
-            isSubmitting={isSubmitting}
-            showRecurrence
-            userEvents={userEvents}
-          />
-        </div>
+        {/* A template starts the form afresh from its values. */}
+        <EventComposer
+          key={selectedTemplateId || 'no-template'}
+          initialData={templateInitialData}
+          onSubmit={handleSubmit}
+          onSubmitRecurring={handleSubmitRecurring}
+          onCancel={handleCancel}
+          submitLabel="Create Event"
+          isSubmitting={isSubmitting}
+          userEvents={userEvents}
+          trainingSubmitLabel="Create Event"
+          trainingRecurringSubmitLabel="Create Recurring Events"
+          trainingRecurringSubmitShortLabel="Create events"
+        />
       </div>
     </div>
   );

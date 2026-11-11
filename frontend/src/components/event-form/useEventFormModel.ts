@@ -28,12 +28,6 @@ import { useAuthStore } from '../../stores/authStore';
 import { formatForDateTimeInput, localToUTC } from '../../utils/dateFormatting';
 import { useOrganizerOptions } from '../../hooks/useOrganizerOptions';
 import { mapServerFieldErrors } from '../../utils/serverFieldErrors';
-import {
-  EMPTY_TRAINING_DETAILS,
-  hasExplicitTrainingDetails,
-  toTrainingDetailsPayload,
-  type TrainingDetailsValue,
-} from '../training/trainingDetailsValue';
 import { asArray } from '../../utils/asArray';
 import { buildingNotInName } from '../../utils/locationLabel';
 import {
@@ -44,7 +38,7 @@ import {
   EVENT_TYPES,
   type EventField,
 } from './eventFormConstants';
-import type { EventFormModelOptions } from './eventFormTypes';
+import type { EventFormModelOptions, MandatoryScope } from './eventFormTypes';
 
 export const useEventFormModel = ({
   initialData,
@@ -62,9 +56,6 @@ export const useEventFormModel = ({
   const organizerOptions = useOrganizerOptions(showOrganizerPickers);
   const [organizerId, setOrganizerId] = useState('');
   const [alternateId, setAlternateId] = useState('');
-  // Create Training Session lives in the Training admin hub, which only a
-  // training.manage holder can open; anyone else is pointed at who can.
-  const canCreateTrainingSession = useAuthStore((state) => state.checkPermission('training.manage'));
 
   // Convert any ISO date strings from the API into datetime-local format
   // in the user's timezone so the inputs display correctly.
@@ -141,7 +132,14 @@ export const useEventFormModel = ({
     initialRecurrence?.recurrence_exceptions || []
   );
   const [newExceptionDate, setNewExceptionDate] = useState('');
-  const [trainingDetails, setTrainingDetails] = useState<TrainingDetailsValue>(EMPTY_TRAINING_DETAILS);
+  // "Mandatory for": every member, or only the ticked member types. Kept apart
+  // from the ticks so choosing All members and back does not lose them. The
+  // backend reads a mandatory event with no member types as every member, and
+  // course-cohort classes, among others, are stored that way, so one loaded
+  // like that opens on All members rather than on an empty list it refuses.
+  const [mandatoryScope, setMandatoryScopeState] = useState<MandatoryScope>(
+    initialData?.is_mandatory && !initialData.mandatory_membership_types?.length ? 'all' : 'some'
+  );
   const checkInLeadTimeEdited = useRef(initialData?.check_in_minutes_before !== undefined);
   const lockNoticeId = useId();
   const scheduleLockHintId = useId();
@@ -381,7 +379,9 @@ export const useEventFormModel = ({
 
   // Unless the reminder audience was chosen by hand, it follows the mandatory
   // switch: everyone is reminded of a mandatory event, sign-ups otherwise.
-  const handleMandatoryChange = (isMandatory: boolean) => {
+  // `scopeOnTick` is where "Mandatory for" opens: each form says which.
+  const handleMandatoryChange = (isMandatory: boolean, scopeOnTick: MandatoryScope = 'some') => {
+    if (isMandatory) setMandatoryScopeState(scopeOnTick);
     update({
       is_mandatory: isMandatory,
       mandatory_membership_types: isMandatory ? formData.mandatory_membership_types : undefined,
@@ -401,12 +401,14 @@ export const useEventFormModel = ({
     update({ send_reminders: target !== 'none', reminder_target: target });
   };
 
-  // The backend reads a mandatory event with no member types as mandatory for
-  // every member. Course-cohort classes, among others, are stored that way, so
-  // an event loaded like that keeps meaning everyone rather than refusing every
-  // save until somebody narrows it. Creating an event still asks for a choice.
-  const storedMandatoryForEveryone =
-    Boolean(editingEventId) && Boolean(initialData?.is_mandatory) && !initialData?.mandatory_membership_types?.length;
+  const setMandatoryScope = (scope: MandatoryScope) => {
+    setMandatoryScopeState(scope);
+    if (fieldErrors.mandatory_membership_types) {
+      setFieldErrors(({ mandatory_membership_types: _cleared, ...rest }) => rest);
+    }
+  };
+  /** Mandatory for every member: an explicit choice, saved as no member types. */
+  const mandatoryForEveryone = Boolean(formData.is_mandatory) && mandatoryScope === 'all';
   // A saved type the department has since removed or renamed would otherwise
   // be required by the server while no box shows it, with no way to untick it.
   // Drawn from what was saved as well as what is ticked, so unticking one keeps
@@ -483,13 +485,6 @@ export const useEventFormModel = ({
   // no deadline (a single fixed deadline has no meaning across a series).
   const rsvpDeadlineRequired = formData.requires_rsvp && !editingEventId && !(isRecurring && onSubmitRecurring);
 
-  // Training details are picked only while creating: an existing event's are
-  // edited on its detail page, where the attendance lock can be checked. This
-  // form still leaves them off a rolling series, which the backend accepts
-  // since 2026-11-11; the single training-event form replaces this block.
-  const showsTrainingDetails = formData.event_type === EventTypeEnum.TRAINING && !editingEventId;
-  const submitsRollingSeries = isRecurring && Boolean(onSubmitRecurring) && isRolling;
-
   /**
    * Every field check, collected so all of them show at once and focus goes to
    * the first; the form is noValidate, so these replace the browser's bubbles
@@ -522,22 +517,18 @@ export const useEventFormModel = ({
     if (isRecurring && onSubmitRecurring && !isRolling && !recurrenceEndDate) {
       invalid.recurrence_end_date = 'Choose the date the series ends.';
     }
-    return invalid;
-  };
-
-  /** The refusal for a mandatory event with no member type chosen, or null. */
-  const checkMandatory = (): string | null => {
-    if (formData.is_mandatory && !formData.mandatory_membership_types?.length && !storedMandatoryForEveryone) {
-      return 'Select at least one member type for mandatory attendance';
+    // "Only these member types" with none ticked. Saved as is, the server
+    // would read the empty list as every member, which is All members' job.
+    if (formData.is_mandatory && mandatoryScope === 'some' && !formData.mandatory_membership_types?.length) {
+      invalid.mandatory_membership_types = 'Select at least one member type, or choose All members.';
     }
-    return null;
+    return invalid;
   };
 
   /**
    * The cleaned-up, UTC-converted single-event payload the form would save.
-   * Assumes `validate()` and `checkMandatory()` have passed. The old training
-   * block's details are set (or left out) here; a form that edits training
-   * details itself replaces `training_details` on the result.
+   * Assumes `validate()` has passed. Carries no `training_details`: the
+   * training-event form adds its own to the result.
    */
   const buildSinglePayload = (): EventCreate => {
     // Clean up data before submit
@@ -550,12 +541,8 @@ export const useEventFormModel = ({
       submitData.alternate_organizer_id = alternateId || undefined;
     }
 
-    // Only an explicit pick attaches a training session; an untouched section
-    // leaves the event to be credited under its title as Continuing Education.
+    // Only the training-event form sends training details, from its own state.
     delete submitData.training_details;
-    if (showsTrainingDetails && !submitsRollingSeries && hasExplicitTrainingDetails(trainingDetails)) {
-      submitData.training_details = toTrainingDetailsPayload(trainingDetails);
-    }
 
     // What a blank or inapplicable field becomes. A create omits it; an edit
     // sends null, because the update path reads an omitted key as "leave
@@ -588,6 +575,9 @@ export const useEventFormModel = ({
     if (!submitData.location_details) submitData.location_details = cleared;
     if (!submitData.rsvp_deadline) submitData.rsvp_deadline = cleared;
     if (!submitData.custom_category) submitData.custom_category = cleared;
+    // All members is no member types. An edit sends the empty list, which
+    // clears types saved before; a create leaves the key out.
+    if (mandatoryForEveryone) submitData.mandatory_membership_types = editingEventId ? [] : undefined;
     // An emptied capacity box is undefined in form state; it means unlimited.
     if (typeof submitData.max_attendees !== 'number' || Number.isNaN(submitData.max_attendees)) {
       submitData.max_attendees = cleared;
@@ -664,12 +654,6 @@ export const useEventFormModel = ({
       return;
     }
 
-    const mandatoryError = checkMandatory();
-    if (mandatoryError) {
-      setError(mandatoryError);
-      return;
-    }
-
     // The single-event half is built before the try and the series half
     // inside it, exactly where the original handleSubmit built them.
     const submitData = buildSinglePayload();
@@ -708,7 +692,6 @@ export const useEventFormModel = ({
     tz,
     currentUserId,
     organizerOptions,
-    canCreateTrainingSession,
     // Form values
     formData,
     setIsDraft,
@@ -719,8 +702,8 @@ export const useEventFormModel = ({
     setOrganizerId,
     alternateId,
     setAlternateId,
-    trainingDetails,
-    setTrainingDetails,
+    mandatoryScope,
+    setMandatoryScope,
     // Reference data
     locations,
     locationMode,
@@ -761,13 +744,11 @@ export const useEventFormModel = ({
     insertMarkdown,
     // Derived values
     conflicts,
-    storedMandatoryForEveryone,
+    mandatoryForEveryone,
     unlistedMandatoryTypes,
     unlistedCategories,
     selectedLocation,
     rsvpDeadlineRequired,
-    showsTrainingDetails,
-    submitsRollingSeries,
     formatLocationAddress,
     formatLocationLabel,
     // Handlers
@@ -785,7 +766,6 @@ export const useEventFormModel = ({
     // the same checks, show their results, build the same payload and show a
     // refused save without a FormEvent.
     validate,
-    checkMandatory,
     showFieldErrors,
     // For a form that places and focuses errors itself, across steps.
     setFieldErrors,

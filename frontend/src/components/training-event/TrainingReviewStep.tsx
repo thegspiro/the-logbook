@@ -27,7 +27,7 @@ type ReviewModel = Pick<
   | 'alternateId'
   | 'customCategories'
   | 'membershipTypes'
-  | 'storedMandatoryForEveryone'
+  | 'mandatoryForEveryone'
   | 'isRecurring'
   | 'recurrencePattern'
   | 'isRolling'
@@ -160,8 +160,9 @@ export const TrainingReviewStep: React.FC<TrainingReviewStepProps> = ({
   });
 
   const mandatoryFor = (() => {
+    if (model.mandatoryForEveryone) return 'All members';
     const types = formData.mandatory_membership_types ?? [];
-    if (!types.length) return model.storedMandatoryForEveryone ? 'All members' : 'None chosen';
+    if (!types.length) return 'None chosen';
     return types.map((value) => model.membershipTypes.find((t) => t.value === value)?.label ?? value).join(', ');
   })();
 

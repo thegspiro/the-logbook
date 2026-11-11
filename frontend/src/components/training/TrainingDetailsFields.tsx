@@ -39,8 +39,9 @@ const toLinkage = (value: TrainingDetailsValue): TrainingLinkageValue => ({
  *
  * All of it is optional: a Training event with no details is still credited
  * when attendance is finalized, filed under the event's title as Continuing
- * Education. Shared by the Events form and the event page's card so both
- * describe the same choice the same way.
+ * Education. Used only by the event page's card: the Events form hands a
+ * Training event to the training-event form instead, whose edit mode is to
+ * replace this editor too.
  */
 export const TrainingDetailsFields: React.FC<TrainingDetailsFieldsProps> = ({
   value,

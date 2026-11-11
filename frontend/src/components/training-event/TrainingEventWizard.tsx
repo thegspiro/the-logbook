@@ -6,26 +6,29 @@
  * `training_details`, so every Training event it creates has a session to
  * file its credit under.
  *
+ * The model and the session's fields are its host's (`EventComposer`), which
+ * draws the single-page form instead when the type is not Training, so a type
+ * change in either form carries every value to the other.
+ *
  * Each step is checked before Next; a refused save, or a 422, puts every
  * message under its field and goes to the earliest step holding one, never a
  * toast (forms review F-3/F-4).
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { Calendar, CheckCircle, ClipboardCheck, GraduationCap, QrCode, SlidersHorizontal } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { EventCreate, RecurringEventCreate } from '../../types/event';
 import type { TrainingCourse } from '../../types/training';
 import type { User } from '../../types/user';
-import { EventType as EventTypeEnum } from '../../constants/enums';
 import { trainingService, userService } from '../../services/api';
 import { useRanks } from '../../hooks/useRanks';
 import { useTrainingLinkageData } from '../../hooks/useTrainingLinkageData';
 import { getErrorDetail } from '../../utils/errorHandling';
 import { mapServerFieldErrors } from '../../utils/serverFieldErrors';
 import { displayNameOf } from '../../utils/memberName';
-import { useEventFormModel } from '../event-form/useEventFormModel';
-import type { ConflictEvent } from '../event-form/eventFormTypes';
+import type { EventFormModel } from '../event-form/useEventFormModel';
 import { EVENT_FIELDS, EVENT_FIELD_IDS, type EventField } from '../event-form/eventFormConstants';
 import { NoticesSection } from '../event-form/sections/NoticesSection';
 import { DetailsSection } from '../event-form/sections/DetailsSection';
@@ -39,7 +42,6 @@ import { AttachmentsSection } from '../event-form/sections/AttachmentsSection';
 import { TrainingInfoStep } from './TrainingInfoStep';
 import { TrainingReviewStep, type ReviewTarget } from './TrainingReviewStep';
 import {
-  DEFAULT_TRAINING_DETAILS,
   TRAINING_FIELDS,
   applyLibraryCourse,
   scheduledHours,
@@ -62,6 +64,7 @@ const SETTINGS = 2;
 const REVIEW = 3;
 
 const STEP_HEADING_ID = 'training-wizard-step';
+const TYPE_HINT_ID = 'training-wizard-type-hint';
 
 const REVIEW_TARGET_STEP: Record<ReviewTarget, number> = {
   details: DETAILS,
@@ -79,6 +82,7 @@ const EVENT_FIELD_STEP: Record<EventField, number> = {
   recurrence_end_date: DETAILS,
   location: DETAILS,
   location_details: DETAILS,
+  mandatory_membership_types: SETTINGS,
   rsvp_deadline: SETTINGS,
   max_attendees: SETTINGS,
 };
@@ -96,13 +100,24 @@ interface StepMessage {
 }
 
 interface TrainingEventWizardProps {
+  /**
+   * The event form's model, owned by the host (`EventComposer`) so that every
+   * value survives a hand-off to or from the single-page form.
+   */
+  model: EventFormModel;
+  /** The training session's fields, owned by the host for the same reason. */
+  training: TrainingDetailsForm;
+  setTraining: Dispatch<SetStateAction<TrainingDetailsForm>>;
   /** Save a single event. Throw on failure: the wizard shows why. */
   onSubmit: (data: EventCreate) => Promise<void>;
   /** Save a series. Throw on failure: the wizard shows why. */
   onSubmitRecurring: (data: RecurringEventCreate) => Promise<void>;
   onCancel: () => void;
-  /** Events the user is going to, for the schedule conflict warning. */
-  userEvents?: ConflictEvent[] | undefined;
+  /**
+   * Training Admin fixes the type and says so; the Events page offers the type
+   * picker, where choosing another type returns to the single-page form.
+   */
+  typeLocked?: boolean | undefined;
   /** Says where the fixed event type comes from. */
   typeNote?: string | undefined;
   submitLabel?: string | undefined;
@@ -112,29 +127,20 @@ interface TrainingEventWizardProps {
 }
 
 export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
+  model,
+  training,
+  setTraining,
   onSubmit,
   onSubmitRecurring,
   onCancel,
-  userEvents,
+  typeLocked = true,
   typeNote = 'Set by Training Admin. Other event types use the Events page.',
   submitLabel = 'Create Training Session',
   recurringSubmitLabel = 'Create Recurring Sessions',
   recurringSubmitShortLabel = 'Create sessions',
 }) => {
-  const model = useEventFormModel({
-    initialData: { event_type: EventTypeEnum.TRAINING },
-    onSubmit,
-    onSubmitRecurring,
-    userEvents,
-    editingEventId: undefined,
-    initialRecurrence: undefined,
-    showOrganizerPickers: true,
-    attendanceLocked: false,
-    eventTypeLocked: false,
-  });
   const { formatRank } = useRanks();
   const [step, setStep] = useState(DETAILS);
-  const [training, setTraining] = useState<TrainingDetailsForm>(DEFAULT_TRAINING_DETAILS);
   const [trainingErrors, setTrainingErrors] = useState<TrainingErrors>({});
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -216,10 +222,6 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
       const series = model.buildRecurringPayload(model.buildSinglePayload());
       if ('error' in series) messages.push({ step: DETAILS, message: series.error });
     }
-    if (onStep === undefined || onStep === SETTINGS) {
-      const mandatory = model.checkMandatory();
-      if (mandatory) messages.push({ step: SETTINGS, message: mandatory });
-    }
     const trainingInvalid =
       onStep === undefined || onStep === TRAINING ? validateTrainingDetails(training, durationHours) : {};
     return { event, training: trainingInvalid, messages };
@@ -236,7 +238,8 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
     messages: StepMessage[],
     extra: string[] = []
   ): boolean => {
-    // The type is fixed and has no control here to carry a message.
+    // The type picker draws no message under itself, and Training Admin has
+    // no picker at all, so a refusal of the type goes in the banner.
     const { event_type: typeMessage, ...rest } = eventErrors;
     const fieldErrors: EventErrors = rest;
     const allMessages = typeMessage ? [...messages, { step: DETAILS, message: typeMessage }] : messages;
@@ -415,13 +418,23 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
           <>
             <DetailsSection
               model={model}
-              hideTypePicker
+              hideTypePicker={typeLocked}
+              typeFirst
+              typeHintId={TYPE_HINT_ID}
+              typeHint={
+                <p id={TYPE_HINT_ID} className="text-theme-text-muted mt-2 text-sm">
+                  Training uses this step-by-step form. Pick another type to go back to the single-page form; your
+                  entries carry over.
+                </p>
+              }
               beforeTitle={
-                <div>
-                  <span className="form-label">Event Type</span>
-                  <p className="text-theme-text-primary font-medium">Training</p>
-                  <p className="text-theme-text-muted text-sm">{typeNote}</p>
-                </div>
+                typeLocked && (
+                  <div>
+                    <span className="form-label">Event Type</span>
+                    <p className="text-theme-text-primary font-medium">Training</p>
+                    <p className="text-theme-text-muted text-sm">{typeNote}</p>
+                  </div>
+                )
               }
               titlePlaceholder="e.g., CPR/AED Renewal Training"
               titleHint="Becomes the event title, and the course name when no course is chosen."
@@ -458,7 +471,9 @@ export const TrainingEventWizard: React.FC<TrainingEventWizardProps> = ({
               <SlidersHorizontal className="h-5 w-5 text-red-700" aria-hidden="true" />
               <span>Settings</span>
             </h2>
-            <AttendanceSection model={model} />
+            {/* Opens on All members: ticking Mandatory with nothing narrower
+                chosen means everyone, said on screen rather than refused. */}
+            <AttendanceSection model={model} scopeOnTick="all" />
             <hr className="border-theme-surface-border" />
             <RsvpSection model={model} />
             <hr className="border-theme-surface-border" />
