@@ -32,13 +32,13 @@ CASES = [
 ]
 
 
-@pytest.mark.parametrize("schema,base,field,width", CASES)
+@pytest.mark.parametrize(("schema", "base", "field", "width"), CASES)
 def test_a_value_at_the_column_width_is_accepted(schema, base, field, width):
     model = schema.model_validate({**base, field: "x" * width})
     assert getattr(model, field) == "x" * width
 
 
-@pytest.mark.parametrize("schema,base,field,width", CASES)
+@pytest.mark.parametrize(("schema", "base", "field", "width"), CASES)
 def test_a_value_past_the_column_width_is_refused(schema, base, field, width):
     with pytest.raises(ValidationError) as caught:
         schema.model_validate({**base, field: "x" * (width + 1)})
