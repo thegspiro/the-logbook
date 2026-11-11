@@ -16,6 +16,52 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4236](https://github.com/thegspiro/the-logbook/pull/4236)**
+(branch `claude/security-review-security-audit-ip-p13`):
+Feature 28 (Security, audit & IP), pass 13. PR #4235 (Feature 27,
+Integrations, pass 13) had already merged clean
+(`19b02e4851795ed213e2797b66989ce8681e0142`). A fresh `gh api
+repos/.../pulls?state=open` found eleven open PRs, none with a
+`claude/security-review-*` head, and row 28 was the next pending feature,
+confirmed on a freshly fetched `main`.
+
+Baseline `a6e04e494` (pass 12's own merge, PR #3998). Real delta: eight of
+the nine backend scope files byte-identical to pass 12; the ninth
+(`core/security_middleware.py`) carries a real diff, but entirely outside
+this doc's declared slice of that file — the login/account rate-limiting
+dependencies implementing the 2026-10-05 owner decision "Sign-in From a
+Shared Station Address," not the IP-enforcement classes (`IPBlockingMiddleware`,
+`IPLoggingMiddleware`, `SecurityMonitoringMiddleware`) this feature scopes
+itself to. Read in full anyway and confirmed safe (hashed account key, no
+PII in limiter state, backstop before account bucket) but recorded as out of
+scope — Feature 01/33's, not Feature 28's. Frontend: a forms-review pass on
+`IPExceptionRequestForm.tsx` (`FormField`/422-to-field mapping) and
+`rwd-table` responsive adoption on the three ip-security tables plus
+`AuditLogPage.tsx`'s entries table — cosmetic/UX only, read in full, no data
+or auth change. **0 fixed, 0 newly flagged.** SEC2-28-6 (TOCTOU on the
+IP-exception duplicate-request check) and the dead-detector-code note remain
+open, re-verified unchanged. Route surface re-enumerated by AST: 37/37
+unchanged from pass 12, all permission strings verified. See
+`docs/security-review/SEC2-28-security-audit-ip.md`'s **Pass 13** section
+for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 756 revisions, single head `8b1cf6f55425`; `generate_schema_docs.py
+--check` — up to date; `check_route_permissions.py --strict` — 305 routes, 0
+errors/warnings; scoped backend suite (same `-k` filter as pass 11/12) — 882
+passed, 1 environment-only skip (`pywebpush`); `npm run typecheck` — 0
+errors; `npm run lint` — 0 errors/warnings; `npx vitest run
+src/modules/ip-security src/pages/AuditLogPage.test.tsx
+src/pages/ErrorMonitoringPage.test.tsx` — 65 passed (5 files).
+
+Row 28 → ✅ (pending this PR's merge). Next is Feature 29 (Reports &
+analytics) — re-check `list_pull_requests` fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 27, Integrations, pass 13, PR #4235, merged), preserved for history</summary>
+
 **PR [#4235](https://github.com/thegspiro/the-logbook/pull/4235)**
 (branch `claude/security-review-integrations-p13`):
 Feature 27 (Integrations), pass 13, a watchdog pickup. PR #4234 (Feature 26,
@@ -63,8 +109,9 @@ failed; `npm run typecheck` — 0 errors; `npm run lint` — 0 errors/warnings;
 `npx vitest run src/pages/IntegrationsPage.test.tsx src/pages/historicalImport
 src/pages/scheduling/admin/historyImport` — 135 passed (4 files).
 
-Row 27 → ✅ (pending this PR's merge). Next is Feature 28 (Security, audit &
-IP) — re-check `list_pull_requests` fresh rather than trusting this note.
+Row 27 → ✅ (merged). Next was Feature 28 (Security, audit & IP).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 26, Forms, pass 13, PR #4234, merged), preserved for history</summary>
@@ -25764,7 +25811,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                      | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`, `historical_import.py` (31 routes, added pass 13), `historical_staffing_*.py`                                                                       | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                        | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                        | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                           | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (26 unauth bootstrap routes)                                                                                                                                          | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                                                                | ⬜     |
