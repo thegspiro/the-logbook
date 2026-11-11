@@ -145,7 +145,8 @@ const DISPLAYED_TRAINING_FIELD_KEYS = [
  * Training keys the Training details card reports live from the event's
  * training session. The copies here were written when the event was created
  * and go stale the moment the training form edits the session, so once a
- * session is reported they are not drawn at all rather than contradicting it.
+ * session is reported they are not drawn here at all rather than contradicting
+ * it; the card itself falls back to them where an older session holds none.
  * An event with no session still shows them: they are all it has.
  */
 const SESSION_REPORTED_TRAINING_KEYS: ReadonlySet<string> = new Set([
@@ -1804,6 +1805,7 @@ export const EventDetailPage: React.FC = () => {
                 attendanceFinalized={isAttendanceFinalized}
                 refreshKey={trainingRefreshKey}
                 onSessionChange={setTrainingSession}
+                customFields={event.custom_fields}
               />
             )}
 

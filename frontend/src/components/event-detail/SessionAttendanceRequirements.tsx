@@ -8,6 +8,8 @@ interface SessionAttendanceRequirementsProps {
   session: TrainingSessionResponse;
   /** Every active requirement; only session-attendance ones are named. */
   requirements: TrainingRequirement[];
+  /** Whether `requirements` has loaded: until then a linked id is not known to be retired. */
+  loaded?: boolean | undefined;
 }
 
 /**
@@ -19,9 +21,15 @@ interface SessionAttendanceRequirementsProps {
  * finalized, since they change how the session is graded and no record it
  * wrote.
  */
-const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps> = ({ session, requirements }) => {
+const SessionAttendanceRequirements: React.FC<SessionAttendanceRequirementsProps> = ({
+  session,
+  requirements,
+  loaded = true,
+}) => {
   const linked = session.attendance_requirement_ids ?? [];
   const options = attendanceRequirements(requirements);
+
+  if (!loaded) return null;
 
   if (options.length === 0 && linked.length === 0) return null;
 

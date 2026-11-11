@@ -29,7 +29,17 @@ interface TrainingSessionLinkageCardProps {
   refreshKey?: number | undefined;
   /** Told what session the event has, so the page can describe it consistently. */
   onSessionChange?: ((session: TrainingSessionResponse | null) => void) | undefined;
+  /**
+   * The event's custom_fields. A session the old Events form attached carried
+   * none of the instructor, issuing agency, expiry, certification or
+   * auto-create settings: those were written here only, so the card falls
+   * back to them where the session holds nothing, or its default.
+   */
+  customFields?: Record<string, unknown> | null | undefined;
 }
+
+const text = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim() ? value.trim() : typeof value === 'number' ? String(value) : null;
 
 const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
@@ -64,6 +74,7 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
   attendanceFinalized,
   refreshKey = 0,
   onSessionChange,
+  customFields,
 }) => {
   const [session, setSession] = useState<TrainingSessionResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,7 +86,9 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
   const [loadFailed, setLoadFailed] = useState(false);
   const tz = useTimezone();
 
-  const { categories, requirements, programs, phases } = useTrainingLinkageData(session?.program_id);
+  const { categories, requirements, programs, phases, requirementsLoaded } = useTrainingLinkageData(
+    session?.program_id
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -186,17 +199,30 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
       ? 'No course yet (filed under the event title)'
       : `${session.course_code ? `${session.course_code} - ` : ''}${session.course_name}`;
 
-  const instructorLabel = session.instructor
-    ? session.instructor_id
-      ? session.instructor
-      : `${session.instructor} (${session.course_id ? 'from the course, ' : ''}not a member)`
+  // The session first; the event's legacy copies only where it is silent.
+  const legacy = customFields ?? {};
+  const legacyInstructor = !session.instructor ? text(legacy.instructor) : null;
+  const instructor = session.instructor || legacyInstructor;
+  const issuingAgency = session.issuing_agency || text(legacy.issuing_agency);
+  const expirationMonths = session.expiration_months || text(legacy.expiration_months);
+  const issuesCertification = session.issues_certification || legacy.issues_certification === true;
+  // True is the session's default, which an old attach left in place.
+  const autoCreateRecords =
+    session.auto_create_records && typeof legacy.auto_create_records === 'boolean'
+      ? legacy.auto_create_records
+      : session.auto_create_records;
+
+  const instructorLabel = instructor
+    ? session.instructor_id && !legacyInstructor
+      ? instructor
+      : `${instructor} (${session.course_id && !legacyInstructor ? 'from the course, ' : ''}not a member)`
     : null;
 
-  const certificationLabel = session.issues_certification
+  const certificationLabel = issuesCertification
     ? [
-        session.issuing_agency ? `Issued by ${session.issuing_agency}` : 'Issued',
+        issuingAgency ? `Issued by ${issuingAgency}` : 'Issued',
         session.certification_number_prefix ? `prefix ${session.certification_number_prefix}` : null,
-        session.expiration_months ? `expires after ${session.expiration_months} months` : null,
+        expirationMonths ? `expires after ${expirationMonths} months` : null,
       ]
         .filter(Boolean)
         .join(' · ')
@@ -284,7 +310,7 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
         {session.credit_hours > 0 && <Row label="Credit Hours">{plural(session.credit_hours, 'hour')}</Row>}
         <Row label="Certification">{certificationLabel}</Row>
         <Row label="Training records">
-          {session.auto_create_records
+          {autoCreateRecords
             ? 'Started at check-in, completed when attendance is finalized'
             : 'Completed when attendance is finalized'}
         </Row>
@@ -299,7 +325,11 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
           </Row>
         )}
       </dl>
-      <SessionAttendanceRequirements session={session} requirements={requirements} />
+      <SessionAttendanceRequirements
+        session={session}
+        requirements={requirements}
+        loaded={requirementsLoaded ?? true}
+      />
     </div>
   );
 };

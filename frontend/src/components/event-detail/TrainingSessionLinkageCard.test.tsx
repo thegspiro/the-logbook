@@ -87,6 +87,7 @@ interface CardProps {
   attendanceFinalized?: boolean;
   refreshKey?: number;
   onSessionChange?: (session: TrainingSessionResponse | null) => void;
+  customFields?: Record<string, string | number | boolean | null> | undefined;
 }
 
 const renderCard = (initial: CardProps = {}) => {
@@ -96,6 +97,7 @@ const renderCard = (initial: CardProps = {}) => {
     attendanceFinalized = false,
     refreshKey = 0,
     onSessionChange,
+    customFields,
   }: CardProps) => (
     <MemoryRouter>
       <TrainingSessionLinkageCard
@@ -106,6 +108,7 @@ const renderCard = (initial: CardProps = {}) => {
         attendanceFinalized={attendanceFinalized}
         refreshKey={refreshKey}
         onSessionChange={onSessionChange}
+        customFields={customFields}
       />
     </MemoryRouter>
   );
@@ -159,6 +162,86 @@ describe('TrainingSessionLinkageCard', () => {
     mockGetPrograms.mockResolvedValue([]);
     mockGetProgramPhases.mockReset();
     mockGetProgramPhases.mockResolvedValue([]);
+  });
+
+  // A session the old Events form attached carried none of these: they were
+  // written to the event's custom_fields only.
+  describe('a session attached before the training form', () => {
+    const LEGACY: TrainingSessionResponse = {
+      ...SESSION,
+      instructor: null,
+      issues_certification: false,
+      issuing_agency: null,
+      expiration_months: null,
+      auto_create_records: true,
+    };
+    const CUSTOM_FIELDS = {
+      instructor: 'Capt. Owen Kittredge',
+      issues_certification: true,
+      issuing_agency: 'AHA',
+      expiration_months: 24,
+      auto_create_records: false,
+    };
+
+    beforeEach(() => {
+      mockGetSessionByEvent.mockResolvedValue(LEGACY);
+    });
+
+    it("falls back to the event's own copies of what the session lacks", async () => {
+      renderCard({ customFields: CUSTOM_FIELDS });
+
+      expect(await screen.findByText('Lead Instructor')).toBeInTheDocument();
+      expect(screen.getByText('Capt. Owen Kittredge (not a member)')).toBeInTheDocument();
+      expect(screen.getByText('Issued by AHA · expires after 24 months')).toBeInTheDocument();
+      expect(screen.getByText('Completed when attendance is finalized')).toBeInTheDocument();
+    });
+
+    it('prefers what the session holds', async () => {
+      mockGetSessionByEvent.mockResolvedValue({
+        ...LEGACY,
+        instructor: 'Lt. Dana Okafor',
+        instructor_id: 'u-1',
+        issues_certification: true,
+        issuing_agency: 'State Fire Training',
+        expiration_months: 12,
+      });
+      renderCard({ customFields: CUSTOM_FIELDS });
+
+      expect(await screen.findByText('Lt. Dana Okafor')).toBeInTheDocument();
+      expect(screen.getByText('Issued by State Fire Training · expires after 12 months')).toBeInTheDocument();
+    });
+  });
+
+  // Until the requirements load, every linked id matched nothing and read as retired.
+  it('names no linked requirement as retired before the requirements have loaded', async () => {
+    let release: (value: unknown) => void = () => {};
+    mockGetRequirements.mockReturnValue(new Promise((resolve) => (release = resolve)));
+    mockGetSessionByEvent.mockResolvedValue({ ...SESSION, attendance_requirement_ids: ['req-att'] });
+    renderCard({ canManage: true });
+
+    expect(await screen.findByText('Course')).toBeInTheDocument();
+    expect(screen.queryByText('A requirement no longer active')).not.toBeInTheDocument();
+
+    await act(async () => {
+      release([
+        {
+          id: 'req-att',
+          organization_id: 'org-1',
+          name: 'Company Drill Attendance',
+          requirement_type: 'session_attendance',
+          required_attendance_pct: 60,
+          source: 'department',
+          frequency: 'annual',
+          applies_to_all: true,
+          due_date_type: 'calendar_period',
+          active: true,
+          created_at: '',
+          updated_at: '',
+        },
+      ]);
+      await Promise.resolve();
+    });
+    expect(screen.getByText('Company Drill Attendance (60%)')).toBeInTheDocument();
   });
 
   describe('an event with no training details', () => {
