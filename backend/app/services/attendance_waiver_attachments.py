@@ -176,7 +176,7 @@ class AttendanceWaiverAttachmentService:
     # Submitting with documents, and adding them later
     # ------------------------------------------------------------------
 
-    async def submit(
+    async def submit_with_attachments(
         self,
         organization_id: str,
         member: User,
@@ -209,7 +209,7 @@ class AttendanceWaiverAttachmentService:
             await self._abandon(org_id, request_id, stored)
             raise
 
-    async def add(
+    async def add_attachments(
         self,
         organization_id: str,
         member: User,

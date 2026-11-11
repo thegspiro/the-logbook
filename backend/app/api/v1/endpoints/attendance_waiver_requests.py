@@ -212,7 +212,7 @@ async def submit_attendance_waiver_request_with_attachments(
     **Authentication required**
     """
     with _refusals():
-        request = await AttendanceWaiverAttachmentService(db).submit(
+        request = await AttendanceWaiverAttachmentService(db).submit_with_attachments(
             str(current_user.organization_id),
             current_user,
             event_id,
@@ -395,7 +395,7 @@ async def add_attendance_waiver_attachments(
     **Authentication required**
     """
     with _refusals():
-        request = await AttendanceWaiverAttachmentService(db).add(
+        request = await AttendanceWaiverAttachmentService(db).add_attachments(
             str(current_user.organization_id), current_user, request_id, files
         )
     return await _one(AttendanceWaiverService(db), current_user, request)
