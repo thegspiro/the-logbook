@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**PR [#PENDING](https://github.com/thegspiro/the-logbook/pull/PENDING)**
+**PR [#4252](https://github.com/thegspiro/the-logbook/pull/4252)**
 (branch `claude/security-review-locations-kiosk-p13`):
 Feature 32 (Locations & kiosk), pass 13, a dedicated rotation session (not a
 watchdog pickup). PR #4245 (Feature 31, Scheduled tasks, pass 13) had already
