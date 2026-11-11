@@ -1,0 +1,55 @@
+/**
+ * Sentences the session-waiver screens share. Each one only words a figure
+ * the backend computed (eligibility's cap counts, the request's decision log);
+ * none of them decides anything (CLAUDE.md pitfall #29).
+ */
+
+import type { AttendanceWaiverActionEntry, AttendanceWaiverEligibility } from '../types/attendanceWaiver';
+import { AttendanceWaiverCapPeriod } from '../constants/enums';
+
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+/**
+ * "You have used 1 of 3 waivers for 2026 (2 left)." — or null with no cap.
+ *
+ * The year is the session's, not today's: the backend counts a calendar-year
+ * cap by the session's date, so a December request asked in January is
+ * measured against December's year.
+ */
+export const capSummary = (
+  eligibility: Pick<AttendanceWaiverEligibility, 'cap' | 'cap_used' | 'cap_remaining' | 'cap_period' | 'session_date'>
+): string | null => {
+  const { cap, cap_used: used, cap_remaining: left, cap_period: period, session_date: sessionDate } = eligibility;
+  if (cap === null || used === null || left === null) return null;
+  const where =
+    period === AttendanceWaiverCapPeriod.ROLLING_12_MONTHS
+      ? 'in any 12 months that include this session'
+      : `for ${(sessionDate ?? '').slice(0, 4) || 'this year'}`;
+  return `You have used ${used} of ${plural(cap, 'waiver')} ${where} (${left} left).`;
+};
+
+/** The note the latest decision was recorded with, for the member's card. */
+export const latestDecisionNote = (actions: readonly AttendanceWaiverActionEntry[]): string | null => {
+  for (let i = actions.length - 1; i >= 0; i -= 1) {
+    const entry = actions[i];
+    if (entry && ['approved', 'denied', 'chief_override'].includes(entry.action)) return entry.note || null;
+  }
+  return null;
+};
+
+export const ATTENDANCE_WAIVER_ACTION_LABELS: Record<string, string> = {
+  submitted: 'Asked to be excused',
+  withdrawn: 'Withdrew the request',
+  approved: 'Approved',
+  denied: 'Denied',
+  chief_override: 'Approved by Chief override',
+  voided: 'Voided',
+};
+
+/** The decision page every queue row and email button opens. */
+export const attendanceWaiverPath = (requestId: string) => `/attendance-waivers/${encodeURIComponent(requestId)}`;
+
+export const ATTENDANCE_WAIVER_QUEUE_PATH = '/attendance-waivers';
+
+/** Matches `MAX_TEXT_LENGTH` in backend/app/schemas/attendance_waiver.py. */
+export const WAIVER_TEXT_MAX_LENGTH = 2000;
