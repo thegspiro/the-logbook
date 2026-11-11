@@ -14,6 +14,8 @@ import { ITEM_TYPES } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { DuplicateCategoryNameBadge } from '../components/DuplicateCategoryNameBadge';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
@@ -60,6 +62,15 @@ const EMPTY_FORM: CategoryFormData = {
   self_checkout_loan_days: '',
 };
 
+type CategoryField = 'name' | 'description';
+
+// snake_case keys: schemas/inventory.py carries no alias generator, so a 422
+// names the request body's own keys.
+const CATEGORY_FIELDS: FieldSpecs<CategoryField> = {
+  name: { id: 'cat-name', label: 'Name' },
+  description: { id: 'cat-desc', label: 'Description' },
+};
+
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
 const labelClass = 'form-label';
@@ -74,6 +85,7 @@ const InventoryCategoriesPage: React.FC = () => {
   const [editingCategory, setEditingCategory] = useState<InventoryCategory | null>(null);
   const [formData, setFormData] = useState<CategoryFormData>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
+  const categoryErrors = useFieldErrors(CATEGORY_FIELDS);
 
   const loadCategories = useCallback(async () => {
     setIsLoading(true);
@@ -94,6 +106,7 @@ const InventoryCategoriesPage: React.FC = () => {
   const openCreateModal = () => {
     setEditingCategory(null);
     setFormData(EMPTY_FORM);
+    categoryErrors.clear();
     setShowModal(true);
   };
 
@@ -111,6 +124,7 @@ const InventoryCategoriesPage: React.FC = () => {
       allow_self_checkout: category.allow_self_checkout ?? false,
       self_checkout_loan_days: category.self_checkout_loan_days != null ? String(category.self_checkout_loan_days) : '',
     });
+    categoryErrors.clear();
     setShowModal(true);
   };
 
@@ -122,8 +136,15 @@ const InventoryCategoriesPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      toast.error('Category name is required');
+    // Checked here rather than by the browser's required bubble, which
+    // vanished after a few seconds and was tied to nothing a screen reader
+    // could find again (forms review F-3).
+    const problems: FieldErrors<CategoryField> = {};
+    if (!formData.name.trim()) problems.name = 'Enter a name for the category.';
+    categoryErrors.setFormError(null);
+    categoryErrors.setErrors(problems);
+    if (Object.keys(problems).length > 0) {
+      categoryErrors.focusFirst(problems);
       return;
     }
     setIsSaving(true);
@@ -160,7 +181,7 @@ const InventoryCategoriesPage: React.FC = () => {
       closeModal();
       void loadCategories();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save category'));
+      categoryErrors.focusFirst(categoryErrors.setFromApiError(err, 'Failed to save category'));
     } finally {
       setIsSaving(false);
     }
@@ -331,33 +352,54 @@ const InventoryCategoriesPage: React.FC = () => {
         size="md"
       >
         <form id="category-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-          <div>
-            <label htmlFor="cat-name" className={labelClass}>
-              Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="cat-name"
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-              className={inputClass}
-              placeholder="e.g. Turnout Gear"
-            />
-          </div>
-          <div>
-            <label htmlFor="cat-desc" className={labelClass}>
-              Description
-            </label>
-            <textarea
-              id="cat-desc"
-              rows={2}
-              value={formData.description}
-              onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-              className={inputClass}
-              placeholder="Optional description for this category"
-            />
-          </div>
+          {categoryErrors.formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {categoryErrors.formError}
+            </p>
+          )}
+          <FormField
+            id={CATEGORY_FIELDS.name.id}
+            label="Name"
+            required
+            error={categoryErrors.errors.name}
+            labelClassName={labelClass}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                maxLength={255}
+                value={formData.name}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, name: e.target.value }));
+                  categoryErrors.setError('name', null);
+                }}
+                className={inputClass}
+                placeholder="e.g. Turnout Gear"
+              />
+            )}
+          </FormField>
+          <FormField
+            id={CATEGORY_FIELDS.description.id}
+            label="Description"
+            error={categoryErrors.errors.description}
+            labelClassName={labelClass}
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                rows={2}
+                maxLength={2000}
+                value={formData.description}
+                onChange={(e) => {
+                  setFormData((prev) => ({ ...prev, description: e.target.value }));
+                  categoryErrors.setError('description', null);
+                }}
+                className={inputClass}
+                placeholder="Optional description for this category"
+              />
+            )}
+          </FormField>
           <div>
             <label htmlFor="cat-type" className={labelClass}>
               Item Type

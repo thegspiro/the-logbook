@@ -243,18 +243,31 @@ describe('ApparatusBasicPage save validation', () => {
     expect(mockCreateBasicApparatus).not.toHaveBeenCalled();
   });
 
-  it('puts a refused field from the server on that field', async () => {
-    mockCreateBasicApparatus.mockRejectedValue({
+  it('puts a refused field from the server on that field and adds nothing', async () => {
+    mockCreateBasicApparatus.mockRejectedValueOnce({
       response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
     });
     const user = userEvent.setup();
     const dialog = await openAdd(user);
 
-    await user.click(within(dialog).getByRole('button', { name: 'Add Apparatus' }));
+    // Enter submits: the dialog is a real form (forms review F-7).
+    await user.type(within(dialog).getByRole('textbox', { name: /^Name/ }), '{Enter}');
 
     const name = await within(dialog).findByRole('textbox', { name: /^Name/, description: 'Value is too long.' });
     expect(name).toHaveAttribute('aria-invalid', 'true');
     expect(name).toHaveFocus();
+    expect(name).toHaveAttribute('maxLength', '100');
+    expect(mockCreateBasicApparatus).toHaveBeenCalledTimes(1);
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel discards a half-filled vehicle', async () => {
+    const user = userEvent.setup();
+    const dialog = await openAdd(user);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByRole('textbox', { name: /^Unit Number/ })).toHaveValue('E-52');
   });
 
   it("shows the server's reason when the save fails", async () => {

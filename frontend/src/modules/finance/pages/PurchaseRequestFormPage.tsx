@@ -21,6 +21,8 @@ import { FundSelect } from '../components/FundSelect';
 import { ApprovalRoutePreview } from '../components/ApprovalRoutePreview';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { FormField } from '@/components/ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
 import { ApprovalEntityType, PurchaseRequestPriority, PurchaseRequestStatus } from '../types';
 import { getSaveFailureMessage } from '@/utils/errorHandling';
 import { useConfirm } from '@/contexts/ConfirmContext';
@@ -38,8 +40,14 @@ import {
 // Validation Schema
 // =============================================================================
 
+/** `PurchaseRequestCreate.title`'s max_length; the other text fields have none in the schema. */
+const TITLE_MAX_LENGTH = 300;
+
 const purchaseRequestSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(200),
+  title: z
+    .string()
+    .min(1, 'Title is required')
+    .max(TITLE_MAX_LENGTH, `Keep the title to ${TITLE_MAX_LENGTH} characters`),
   description: z.string().max(2000).optional(),
   vendor: z.string().max(200).optional(),
   estimatedAmount: z
@@ -61,8 +69,21 @@ type PurchaseRequestFormData = z.infer<typeof purchaseRequestSchema>;
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
-const labelClass = 'form-label';
-const errorClass = 'mt-1 text-xs text-red-600';
+
+/**
+ * The form's fields as a 422 names them. Finance request schemas report
+ * snake_case locs (`loc_by_alias=False`); the mapper reads both spellings.
+ */
+const SERVER_FIELDS: Record<keyof PurchaseRequestFormData, ServerFieldSpec> = {
+  title: { label: 'Title', maxLength: TITLE_MAX_LENGTH },
+  description: { label: 'Description' },
+  vendor: { label: 'Vendor' },
+  estimatedAmount: { label: 'Estimated Amount' },
+  priority: { label: 'Priority' },
+  budgetId: { label: 'Budget' },
+  fundCampaignId: { label: 'Fund' },
+  fiscalYearId: { label: 'Fiscal Year' },
+};
 
 // =============================================================================
 // Priority Options
@@ -112,8 +133,11 @@ const PurchaseRequestFormPage: React.FC = () => {
     handleSubmit,
     formState: { errors, isSubmitting, isDirty },
     reset,
+    resetField,
     watch,
     setValue,
+    setError,
+    setFocus,
   } = useForm<PurchaseRequestFormData>({
     resolver: zodResolver(purchaseRequestSchema),
     defaultValues: {
@@ -161,15 +185,19 @@ const PurchaseRequestFormPage: React.FC = () => {
     }
   }, [isEdit, id, fetchPurchaseRequest]);
 
-  // Auto-select active fiscal year
+  // Auto-select the active fiscal year. It becomes this field's default, so
+  // the selection is not itself a change, and nothing else is touched. A
+  // whole-form reset here took the member's current entries as the new
+  // defaults, so anything typed before the options arrived counted as
+  // unchanged: neither leave warning fired for it.
   useEffect(() => {
     if (fiscalYears.length > 0 && !isEdit) {
       const active = fiscalYears.find((fy) => fy.status === 'active');
       if (active) {
-        reset((prev) => ({ ...prev, fiscalYearId: active.id }));
+        resetField('fiscalYearId', { defaultValue: active.id });
       }
     }
-  }, [fiscalYears, isEdit, reset]);
+  }, [fiscalYears, isEdit, resetField]);
 
   // Populate form for edit
   useEffect(() => {
@@ -205,9 +233,18 @@ const PurchaseRequestFormPage: React.FC = () => {
       toast.success(isEdit ? 'Purchase request updated' : 'Purchase request saved as a draft');
       void navigate(`/finance/purchase-requests/${savedId}`);
     } catch (err: unknown) {
+      // A refusal the server ties to a field is shown under that field, in its
+      // own words, rather than as a toast naming the API key (forms review F-2).
+      const mapped = mapServerFieldErrors(err, SERVER_FIELDS);
+      const keys = Object.keys(mapped?.fieldErrors ?? {}) as (keyof PurchaseRequestFormData)[];
+      for (const key of keys) setError(key, { type: 'server', message: mapped?.fieldErrors[key] ?? '' });
+      if (keys[0]) setFocus(keys[0]);
+      if (keys.length > 0 && !mapped?.unmatched.length) return;
       // A fixed id so repeated taps replace the toast instead of stacking one
       // per attempt.
-      toast.error(getSaveFailureMessage(err, 'save the purchase request'), { id: 'purchase-request-save-error' });
+      toast.error(mapped?.unmatched.join(' ') || getSaveFailureMessage(err, 'save the purchase request'), {
+        id: 'purchase-request-save-error',
+      });
     }
   };
 
@@ -319,116 +356,112 @@ const PurchaseRequestFormPage: React.FC = () => {
       {/* Form */}
       <form onSubmit={(e) => void handleSubmit(onSubmit)(e)} className="card p-6">
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          {/* Title */}
-          <div className="sm:col-span-2">
-            <label htmlFor="pr-title" className={labelClass}>
-              Title *
-            </label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="Brief title for the purchase"
-              id="pr-title"
-              {...register('title')}
-            />
-            {errors.title && <p className={errorClass}>{errors.title.message}</p>}
-          </div>
+          <FormField
+            className="sm:col-span-2"
+            id="pr-title"
+            label="Title"
+            required
+            error={errors.title?.message}
+            maxLength={TITLE_MAX_LENGTH}
+            count={formValues.title.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                className={inputClass}
+                placeholder="Brief title for the purchase"
+                autoComplete="off"
+                {...register('title')}
+              />
+            )}
+          </FormField>
 
-          {/* Description */}
-          <div className="sm:col-span-2">
-            <label htmlFor="pr-description" className={labelClass}>
-              Description
-            </label>
-            <textarea
-              className={inputClass}
-              rows={3}
-              placeholder="What you're buying and why"
-              id="pr-description"
-              {...register('description')}
-            />
-            {errors.description && <p className={errorClass}>{errors.description.message}</p>}
-          </div>
+          <FormField
+            className="sm:col-span-2"
+            id="pr-description"
+            label="Description"
+            error={errors.description?.message}
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                className={inputClass}
+                rows={3}
+                placeholder="What you're buying and why"
+                {...register('description')}
+              />
+            )}
+          </FormField>
 
-          {/* Vendor */}
-          <div>
-            <label htmlFor="pr-vendor" className={labelClass}>
-              Vendor
-            </label>
-            <input
-              type="text"
-              className={inputClass}
-              placeholder="Vendor or supplier name"
-              id="pr-vendor"
-              {...register('vendor')}
-            />
-            {errors.vendor && <p className={errorClass}>{errors.vendor.message}</p>}
-          </div>
+          <FormField id="pr-vendor" label="Vendor" error={errors.vendor?.message}>
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                className={inputClass}
+                placeholder="Vendor or supplier name"
+                autoComplete="off"
+                {...register('vendor')}
+              />
+            )}
+          </FormField>
 
-          {/* Estimated Amount */}
-          <div>
-            <label htmlFor="pr-estimatedAmount" className={labelClass}>
-              Estimated Amount *
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              min={MIN_MONEY_AMOUNT}
-              max={MAX_MONEY_AMOUNT}
-              className={inputClass}
-              placeholder="0.00"
-              id="pr-estimatedAmount"
-              {...register('estimatedAmount', { valueAsNumber: true })}
-            />
-            {errors.estimatedAmount && <p className={errorClass}>{errors.estimatedAmount.message}</p>}
-          </div>
+          <FormField id="pr-estimatedAmount" label="Estimated Amount" required error={errors.estimatedAmount?.message}>
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min={MIN_MONEY_AMOUNT}
+                max={MAX_MONEY_AMOUNT}
+                className={inputClass}
+                placeholder="0.00"
+                {...register('estimatedAmount', { valueAsNumber: true })}
+              />
+            )}
+          </FormField>
 
-          {/* Priority */}
-          <div>
-            <label htmlFor="pr-priority" className={labelClass}>
-              Priority *
-            </label>
-            <select className={selectClass} id="pr-priority" {...register('priority')}>
-              {PRIORITY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            {errors.priority && <p className={errorClass}>{errors.priority.message}</p>}
-          </div>
-
-          {/* Fiscal Year */}
-          <div>
-            <label htmlFor="pr-fiscalYearId" className={labelClass}>
-              Fiscal Year *
-            </label>
-            <select className={selectClass} id="pr-fiscalYearId" {...register('fiscalYearId')}>
-              <option value="">Select fiscal year</option>
-              {fiscalYears.map((fy) => (
-                <option key={fy.id} value={fy.id}>
-                  {fy.name} {fy.status === 'active' ? '(Active)' : ''}
-                </option>
-              ))}
-            </select>
-            {errors.fiscalYearId && <p className={errorClass}>{errors.fiscalYearId.message}</p>}
-          </div>
-
-          {/* Budget Category */}
-          <div className="sm:col-span-2">
-            <label htmlFor="pr-budgetId" className={labelClass}>
-              Budget
-            </label>
-            <select className={selectClass} id="pr-budgetId" {...register('budgetId')}>
-              <option value="">No budget linked</option>
-              {selectableBudgetOptions(budgetOptions, isEdit ? selectedPurchaseRequest?.budgetId : undefined).map(
-                (option) => (
-                  <option key={option.id} value={option.id}>
-                    {budgetOptionLabel(option)}
+          <FormField id="pr-priority" label="Priority" required error={errors.priority?.message}>
+            {(field) => (
+              <select {...field} className={selectClass} {...register('priority')}>
+                {PRIORITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
                   </option>
-                )
-              )}
-            </select>
-          </div>
+                ))}
+              </select>
+            )}
+          </FormField>
+
+          <FormField id="pr-fiscalYearId" label="Fiscal Year" required error={errors.fiscalYearId?.message}>
+            {(field) => (
+              <select {...field} className={selectClass} {...register('fiscalYearId')}>
+                <option value="">Select fiscal year</option>
+                {fiscalYears.map((fy) => (
+                  <option key={fy.id} value={fy.id}>
+                    {fy.name} {fy.status === 'active' ? '(Active)' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+
+          <FormField className="sm:col-span-2" id="pr-budgetId" label="Budget" error={errors.budgetId?.message}>
+            {(field) => (
+              <select {...field} className={selectClass} {...register('budgetId')}>
+                <option value="">No budget linked</option>
+                {selectableBudgetOptions(budgetOptions, isEdit ? selectedPurchaseRequest?.budgetId : undefined).map(
+                  (option) => (
+                    <option key={option.id} value={option.id}>
+                      {budgetOptionLabel(option)}
+                    </option>
+                  )
+                )}
+              </select>
+            )}
+          </FormField>
 
           <div className="sm:col-span-2">
             <FundSelect
@@ -438,6 +471,7 @@ const PurchaseRequestFormPage: React.FC = () => {
               amount={watch('estimatedAmount') || 0}
               funds={funds}
               mode={fundMode}
+              error={errors.fundCampaignId?.message}
             />
           </div>
 

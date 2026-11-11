@@ -3,6 +3,7 @@
  */
 
 import { create } from 'zustand';
+import { mapServerFieldErrors } from '../../../utils/serverFieldErrors';
 import { createFetchAction, handleStoreError } from '../../../utils/storeHelpers';
 import { ipSecurityService } from '../services/api';
 import type {
@@ -130,7 +131,14 @@ export const useIPSecurityStore = create<IPSecurityState>((set) => ({
       }));
       return exception;
     } catch (err: unknown) {
-      set({ error: handleStoreError(err, 'Failed to submit IP exception request'), isSaving: false });
+      // A validation refusal is the request form's to show on the field it
+      // names (forms review F-2); as `error` it would also be toasted, under
+      // the API's field name.
+      set(
+        mapServerFieldErrors(err, {})
+          ? { isSaving: false }
+          : { error: handleStoreError(err, 'Failed to submit IP exception request'), isSaving: false }
+      );
       throw err;
     }
   },

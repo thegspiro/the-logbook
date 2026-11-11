@@ -5,7 +5,8 @@
  * frequency implies, and leaves a date the officer typed alone.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
+import { renderWithRouter } from '../../../test/utils';
 import userEvent from '@testing-library/user-event';
 import type { ScreeningRequirement, ScreeningSubjects } from '../types';
 
@@ -37,7 +38,9 @@ const REQUIREMENTS = [
 ];
 
 const renderForm = () =>
-  render(<ScreeningRecordForm record={null} requirements={REQUIREMENTS} onSave={vi.fn()} onClose={vi.fn()} />);
+  renderWithRouter(
+    <ScreeningRecordForm record={null} requirements={REQUIREMENTS} onSave={vi.fn()} onClose={vi.fn()} />
+  );
 
 describe('ScreeningRecordForm — suggested expiration (W71)', () => {
   beforeEach(() => {

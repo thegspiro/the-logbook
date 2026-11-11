@@ -242,14 +242,14 @@ describe('BudgetsPage', () => {
     await user.click(screen.getByRole('button', { name: /add budget line/i }));
     const dialog = await screen.findByRole('dialog');
     // Closed years take no new lines.
-    const yearSelect = within(dialog).getByLabelText('Fiscal year');
+    const yearSelect = within(dialog).getByLabelText(/^Fiscal year/);
     expect(within(yearSelect).queryByText(/FY2025/)).not.toBeInTheDocument();
     expect(yearSelect).toHaveValue('fy-active');
 
-    await user.selectOptions(within(dialog).getByLabelText('Category'), 'cat-gear');
+    await user.selectOptions(within(dialog).getByLabelText(/^Category/), 'cat-gear');
     await within(dialog).findByRole('option', { name: 'Station 2' });
     await user.selectOptions(within(dialog).getByLabelText('Station'), 'st-2');
-    await user.type(within(dialog).getByLabelText('Amount budgeted'), '1200');
+    await user.type(within(dialog).getByLabelText(/^Amount budgeted/), '1200');
     await within(dialog).findByRole('option', { name: 'Chief' });
     await user.selectOptions(within(dialog).getByLabelText('Owner position'), 'pos-chief');
     await user.click(within(dialog).getByRole('button', { name: 'Add budget line' }));
@@ -275,14 +275,14 @@ describe('BudgetsPage', () => {
 
     await user.click(screen.getByRole('button', { name: /add budget line/i }));
     const dialog = await screen.findByRole('dialog');
-    await user.selectOptions(within(dialog).getByLabelText('Fiscal year'), 'fy-draft');
+    await user.selectOptions(within(dialog).getByLabelText(/^Fiscal year/), 'fy-draft');
 
-    await user.selectOptions(within(dialog).getByLabelText('Category'), 'cat-gear');
+    await user.selectOptions(within(dialog).getByLabelText(/^Category/), 'cat-gear');
     expect(within(dialog).getByText('No owner')).toBeInTheDocument();
-    await user.selectOptions(within(dialog).getByLabelText('Category'), 'cat-training');
+    await user.selectOptions(within(dialog).getByLabelText(/^Category/), 'cat-training');
     expect(within(dialog).getByText("Uses the category's owner: Training Officer")).toBeInTheDocument();
 
-    await user.type(within(dialog).getByLabelText('Amount budgeted'), '50');
+    await user.type(within(dialog).getByLabelText(/^Amount budgeted/), '50');
     await user.click(within(dialog).getByRole('button', { name: 'Add budget line' }));
 
     await waitFor(() =>
@@ -303,7 +303,7 @@ describe('BudgetsPage', () => {
 
     await user.click(screen.getByRole('button', { name: /add budget line/i }));
     const dialog = await screen.findByRole('dialog');
-    await user.selectOptions(within(dialog).getByLabelText('Category'), 'cat-gear');
+    await user.selectOptions(within(dialog).getByLabelText(/^Category/), 'cat-gear');
     await user.click(within(dialog).getByRole('button', { name: 'Add budget line' }));
 
     expect(within(dialog).getByText('Enter an amount of zero or more.')).toBeInTheDocument();
@@ -342,7 +342,7 @@ describe('BudgetDetailPage', () => {
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText(/FY2026 · Training/)).toBeInTheDocument();
-    expect(within(dialog).getByLabelText('Amount budgeted')).toHaveValue(300);
+    expect(within(dialog).getByLabelText(/^Amount budgeted/)).toHaveValue(300);
     expect(within(dialog).getByLabelText('Owner position')).toHaveValue('pos-chief');
     expect(within(dialog).getByLabelText('Station')).toHaveValue('st-2');
 
@@ -372,7 +372,7 @@ describe('BudgetDetailPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');
-    const amount = within(dialog).getByLabelText('Amount budgeted');
+    const amount = within(dialog).getByLabelText(/^Amount budgeted/);
     expect(amount).toHaveAttribute('readonly');
     expect(amount).toHaveAccessibleDescription(
       'This budget has gone before the board. Change the amount with an amendment, which another officer confirms.'
@@ -394,7 +394,7 @@ describe('BudgetDetailPage', () => {
 
     await user.click(screen.getByRole('button', { name: 'Edit' }));
     const dialog = await screen.findByRole('dialog');
-    const amount = within(dialog).getByLabelText('Amount budgeted');
+    const amount = within(dialog).getByLabelText(/^Amount budgeted/);
     await user.clear(amount);
     await user.type(amount, '100');
     await user.click(within(dialog).getByRole('button', { name: 'Save budget line' }));

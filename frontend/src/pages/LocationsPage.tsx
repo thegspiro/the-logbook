@@ -41,10 +41,11 @@ import type { Location, LocationCreate } from '../services/api';
 import { useConfirm } from '../contexts/ConfirmContext';
 import { useAuthStore } from '../stores/authStore';
 import { copyToClipboard } from '../utils/clipboard';
-import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
-import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formCoercions } from '../utils/formValues';
+import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 
 // Group locations: top-level = stations (has address, no room_number), children = rooms (have room_number or building)
 function groupLocations(locations: Location[]): { stations: Location[]; rooms: Map<string, Location[]> } {
@@ -88,7 +89,8 @@ function capacityError(value: string): string | null {
 
 type StationMode = 'single_station' | 'multi_station' | null;
 
-// Limits mirror LocationCreate / LocationUpdate (forms review F-2).
+// Limits mirror LocationCreate / LocationUpdate (forms review F-2);
+// `description` has none there, so its textarea carries none.
 const STATION_LIMITS = { name: 200, address: 255, city: 100, state: 50, zip: 20 } as const;
 const ROOM_LIMITS = { name: 200, room_number: 50, floor: 20 } as const;
 
@@ -101,6 +103,14 @@ const STATION_FIELDS: FieldSpecs<StationField> = {
   zip: { id: 'station-zip', label: 'Zip' },
   description: { id: 'station-description', label: 'Description' },
 };
+const EMPTY_STATION_FORM: Record<StationField, string> = {
+  name: '',
+  address: '',
+  city: '',
+  state: '',
+  zip: '',
+  description: '',
+};
 
 type RoomField = 'name' | 'room_number' | 'floor' | 'capacity' | 'description';
 const ROOM_FIELDS: FieldSpecs<RoomField> = {
@@ -110,6 +120,52 @@ const ROOM_FIELDS: FieldSpecs<RoomField> = {
   capacity: { id: 'room-form-capacity', label: 'Capacity' },
   description: { id: 'room-form-description', label: 'Description' },
 };
+const EMPTY_ROOM_FORM: Record<RoomField, string> = {
+  name: '',
+  room_number: '',
+  floor: '',
+  capacity: '',
+  description: '',
+};
+
+const sameForm = <K extends string>(a: Record<K, string>, b: Record<K, string>) =>
+  (Object.keys(a) as K[]).every((key) => a[key] === b[key]);
+
+const firstErrorKey = <K extends string>(order: Record<K, unknown>, errors: Partial<Record<K, string | undefined>>) =>
+  (Object.keys(order) as K[]).find((key) => errors[key]);
+
+/**
+ * Saves a location, putting a 422 on the fields it names (forms review F-2).
+ *
+ * A create refuses outright: nothing is created until every refused field is
+ * fixed, because a record created without the value would leave the flag on a
+ * dialog that has already closed. An edit follows the owner's single-save
+ * rule of 2026-11-05: the refused fields are left out and the rest is written,
+ * so the stored values of the refused ones stay, and the fields stay flagged.
+ * Returns the fields the server refused and the payload actually written
+ * (`null` when nothing was).
+ */
+async function saveLocationExceptRefused<K extends keyof LocationCreate>(
+  payload: LocationCreate,
+  fields: FieldSpecs<K>,
+  write:
+    | { create: (body: LocationCreate) => Promise<unknown> }
+    | { update: (body: Partial<LocationCreate>) => Promise<unknown> }
+): Promise<{ refused: Partial<Record<K, string>>; written: Partial<LocationCreate> | null }> {
+  try {
+    await ('create' in write ? write.create(payload) : write.update(payload));
+    return { refused: {}, written: payload };
+  } catch (err: unknown) {
+    const mapped = placeApiError(fields, err);
+    const keys = mapped ? (Object.keys(mapped.fieldErrors) as K[]) : [];
+    if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
+    if ('create' in write) return { refused: mapped.fieldErrors, written: null };
+    const rest: Partial<LocationCreate> = { ...payload };
+    for (const key of keys) delete rest[key];
+    await write.update(rest);
+    return { refused: mapped.fieldErrors, written: rest };
+  }
+}
 
 /* ──────────────────────────────────────────────────────────
  * Location Setup Wizard
@@ -1057,24 +1113,19 @@ export default function LocationsPage() {
   // Station modal state
   const [showStationModal, setShowStationModal] = useState(false);
   const [editingStation, setEditingStation] = useState<Location | null>(null);
-  const [stationForm, setStationForm] = useState({
-    name: '',
-    address: '',
-    city: '',
-    state: '',
-    zip: '',
-    description: '',
-  });
-  const [isSavingStation, setIsSavingStation] = useState(false);
+  const [stationForm, setStationForm] = useState<Record<StationField, string>>(EMPTY_STATION_FORM);
+  const [stationInitial, setStationInitial] = useState<Record<StationField, string>>(EMPTY_STATION_FORM);
   const stationErrors = useFieldErrors(STATION_FIELDS);
+  const [isSavingStation, setIsSavingStation] = useState(false);
 
   // Room modal state
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Location | null>(null);
   const [roomParentStation, setRoomParentStation] = useState<string>('');
-  const [roomForm, setRoomForm] = useState({ name: '', room_number: '', floor: '', capacity: '', description: '' });
-  const [isSavingRoom, setIsSavingRoom] = useState(false);
+  const [roomForm, setRoomForm] = useState<Record<RoomField, string>>(EMPTY_ROOM_FORM);
+  const [roomInitial, setRoomInitial] = useState<Record<RoomField, string>>(EMPTY_ROOM_FORM);
   const roomErrors = useFieldErrors(ROOM_FIELDS);
+  const [isSavingRoom, setIsSavingRoom] = useState(false);
 
   // Setup wizard state
   const [showWizard, setShowWizard] = useState(false);
@@ -1154,16 +1205,18 @@ export default function LocationsPage() {
   };
 
   // ── Station CRUD ──
-  const openCreateStation = () => {
-    setEditingStation(null);
-    setStationForm({ name: '', address: '', city: '', state: '', zip: '', description: '' });
+  const openStationDialog = (station: Location | null, form: Record<StationField, string>) => {
+    setEditingStation(station);
+    setStationForm(form);
+    setStationInitial(form);
     stationErrors.clear();
     setShowStationModal(true);
   };
 
-  const openEditStation = (station: Location) => {
-    setEditingStation(station);
-    setStationForm({
+  const openCreateStation = () => openStationDialog(null, EMPTY_STATION_FORM);
+
+  const openEditStation = (station: Location) =>
+    openStationDialog(station, {
       name: station.name || '',
       address: station.address || '',
       city: station.city || '',
@@ -1171,29 +1224,34 @@ export default function LocationsPage() {
       zip: station.zip || '',
       description: station.description || '',
     });
-    stationErrors.clear();
-    setShowStationModal(true);
+
+  const setStationField = (field: StationField, value: string) => {
+    setStationForm((p) => ({ ...p, [field]: value }));
+    stationErrors.setError(field, null);
   };
 
-  const editStation = (key: StationField, value: string) => {
-    setStationForm((p) => ({ ...p, [key]: value }));
-    stationErrors.setError(key, null);
+  // Escape, the X and Cancel all ask before discarding a changed station.
+  const requestCloseStation = useDiscardGuard({
+    isDirty: showStationModal && !sameForm(stationForm, stationInitial),
+    onClose: () => setShowStationModal(false),
+  });
+
+  const showStationErrors = (errors: FieldErrors<StationField>) => {
+    stationErrors.setErrors(errors);
+    stationErrors.focusFirst(errors);
   };
 
   const handleSaveStation = async () => {
-    // Checked here rather than by greying out Save, which told an officer
-    // nothing about why it would not press (forms review F-3).
-    const problems: FieldErrors<StationField> = {};
-    if (!stationForm.name.trim()) problems.name = 'Enter the station name or number.';
+    const missing: FieldErrors<StationField> = {};
+    if (!stationForm.name.trim()) missing.name = 'Enter the station name or number.';
     // groupLocations decides "station" by the presence of an address. A new
     // station without one, or an existing one with it cleared, lands under
     // "Other Locations" and every room filed under its name has no card to
     // render under, so the page would appear to lose them.
-    if (!stationForm.address.trim()) problems.address = 'A station needs a street address.';
+    if (!stationForm.address.trim()) missing.address = 'A station needs a street address.';
     stationErrors.setFormError(null);
-    stationErrors.setErrors(problems);
-    if (Object.keys(problems).length > 0) {
-      stationErrors.focusFirst(problems);
+    if (Object.keys(missing).length > 0) {
+      showStationErrors(missing);
       return;
     }
     setIsSavingStation(true);
@@ -1209,25 +1267,47 @@ export default function LocationsPage() {
         zip: text(stationForm.zip),
         description: text(stationForm.description),
       };
+      let refused: Partial<Record<StationField, string>>;
       if (editingStation) {
         const oldName = editingStation.name;
-        await locationsService.updateLocation(editingStation.id, payload);
+        const result = await saveLocationExceptRefused(payload, STATION_FIELDS, {
+          update: (body) => locationsService.updateLocation(editingStation.id, body),
+        });
+        refused = result.refused;
         // If station name changed, update the building field on all child rooms
-        // so they stay grouped under the renamed station.
-        if (oldName !== payload.name) {
+        // so they stay grouped under the renamed station. A refused name was
+        // not written, so the rooms keep the name the station still has.
+        const newName = result.written?.name;
+        if (newName !== undefined && oldName !== newName) {
           const stationRooms = rooms.get(oldName) || [];
           for (const room of stationRooms) {
-            await locationsService.updateLocation(room.id, { building: payload.name });
+            await locationsService.updateLocation(room.id, { building: newName });
           }
         }
-        toast.success('Station updated');
       } else {
-        await locationsService.createLocation(payload);
-        toast.success('Station added');
+        refused = (
+          await saveLocationExceptRefused(payload, STATION_FIELDS, {
+            create: (body) => locationsService.createLocation(body),
+          })
+        ).refused;
       }
+      const firstRefused = firstErrorKey(STATION_FIELDS, refused);
+      if (firstRefused) {
+        showStationErrors(refused);
+        if (editingStation) {
+          toast.error(
+            `Station saved, except ${STATION_FIELDS[firstRefused].label.toLowerCase()}. Fix it and save again.`
+          );
+          void loadLocations();
+        }
+        return;
+      }
+      toast.success(editingStation ? 'Station updated' : 'Station added');
       setShowStationModal(false);
       void loadLocations();
     } catch (err: unknown) {
+      // Shown in the dialog, which stays open: a refusal lands on the field it
+      // names, anything else above the actions.
       stationErrors.focusFirst(stationErrors.setFromApiError(err, 'Failed to save station'));
     } finally {
       setIsSavingStation(false);
@@ -1263,42 +1343,49 @@ export default function LocationsPage() {
   };
 
   // ── Room CRUD ──
-  const openAddRoom = (stationName: string) => {
-    setEditingRoom(null);
-    setRoomParentStation(stationName);
-    setRoomForm({ name: '', room_number: '', floor: '', capacity: '', description: '' });
+  const openRoomDialog = (room: Location | null, parent: string, form: Record<RoomField, string>) => {
+    setEditingRoom(room);
+    setRoomParentStation(parent);
+    setRoomForm(form);
+    setRoomInitial(form);
     roomErrors.clear();
     setShowRoomModal(true);
   };
 
-  const openEditRoom = (room: Location) => {
-    setEditingRoom(room);
-    setRoomParentStation(room.building || '');
-    setRoomForm({
+  const openAddRoom = (stationName: string) => openRoomDialog(null, stationName, EMPTY_ROOM_FORM);
+
+  const openEditRoom = (room: Location) =>
+    openRoomDialog(room, room.building || '', {
       name: room.name || '',
       room_number: room.room_number || '',
       floor: room.floor || '',
       capacity: room.capacity?.toString() || '',
       description: room.description || '',
     });
-    roomErrors.clear();
-    setShowRoomModal(true);
+
+  const setRoomField = (field: RoomField, value: string) => {
+    setRoomForm((p) => ({ ...p, [field]: value }));
+    roomErrors.setError(field, null);
   };
 
-  const editRoom = (key: RoomField, value: string) => {
-    setRoomForm((p) => ({ ...p, [key]: value }));
-    roomErrors.setError(key, null);
+  const requestCloseRoom = useDiscardGuard({
+    isDirty: showRoomModal && !sameForm(roomForm, roomInitial),
+    onClose: () => setShowRoomModal(false),
+  });
+
+  const showRoomErrors = (errors: FieldErrors<RoomField>) => {
+    roomErrors.setErrors(errors);
+    roomErrors.focusFirst(errors);
   };
 
   const handleSaveRoom = async () => {
-    const problems: FieldErrors<RoomField> = {};
-    if (!roomForm.name.trim()) problems.name = 'Enter a name for the room.';
+    const missing: FieldErrors<RoomField> = {};
+    if (!roomForm.name.trim()) missing.name = 'Enter a name for the room.';
     const roomCapacityError = capacityError(roomForm.capacity);
-    if (roomCapacityError) problems.capacity = `${roomCapacityError}.`;
+    if (roomCapacityError) missing.capacity = `${roomCapacityError}.`;
     roomErrors.setFormError(null);
-    roomErrors.setErrors(problems);
-    if (Object.keys(problems).length > 0) {
-      roomErrors.focusFirst(problems);
+    if (Object.keys(missing).length > 0) {
+      showRoomErrors(missing);
       return;
     }
     setIsSavingRoom(true);
@@ -1314,13 +1401,23 @@ export default function LocationsPage() {
         capacity: num(roomForm.capacity),
         description: text(roomForm.description),
       };
-      if (editingRoom) {
-        await locationsService.updateLocation(editingRoom.id, payload);
-        toast.success('Room updated');
-      } else {
-        await locationsService.createLocation(payload);
-        toast.success('Room added');
+      const { refused } = editingRoom
+        ? await saveLocationExceptRefused(payload, ROOM_FIELDS, {
+            update: (body) => locationsService.updateLocation(editingRoom.id, body),
+          })
+        : await saveLocationExceptRefused(payload, ROOM_FIELDS, {
+            create: (body) => locationsService.createLocation(body),
+          });
+      const firstRefused = firstErrorKey(ROOM_FIELDS, refused);
+      if (firstRefused) {
+        showRoomErrors(refused);
+        if (editingRoom) {
+          toast.error(`Room saved, except ${ROOM_FIELDS[firstRefused].label.toLowerCase()}. Fix it and save again.`);
+          void loadLocations();
+        }
+        return;
       }
+      toast.success(editingRoom ? 'Room updated' : 'Room added');
       setShowRoomModal(false);
       void loadLocations();
     } catch (err: unknown) {
@@ -1351,7 +1448,6 @@ export default function LocationsPage() {
   };
 
   const inputCls = 'form-input py-2.5';
-  const labelCls = 'form-label';
 
   const isSingleStation = stationMode === 'single_station';
 
@@ -1682,159 +1778,163 @@ export default function LocationsPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="station-dialog-title"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowStationModal(false);
-          }}
         >
-          <DialogPanel onClose={() => setShowStationModal(false)} className="modal-panel-scroll w-full max-w-md">
-            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 id="station-dialog-title" className="text-theme-text-primary text-lg font-bold">
-                {editingStation ? 'Edit Station' : 'Add Station'}
-              </h2>
-              <button
-                data-dialog-close
-                onClick={() => setShowStationModal(false)}
-                aria-label="Close dialog"
-                className="text-theme-text-muted hover:text-theme-text-primary"
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </button>
-            </div>
-            <div className="space-y-4 p-6">
-              <FormField
-                id={STATION_FIELDS.name.id}
-                label="Station Name / Number"
-                required
-                labelClassName={labelCls}
-                error={stationErrors.errors.name}
-              >
-                {(field) => (
-                  <input
-                    {...field}
-                    type="text"
-                    value={stationForm.name}
-                    maxLength={STATION_LIMITS.name}
-                    onChange={(e) => editStation('name', e.target.value)}
-                    placeholder="e.g., Station 1, Headquarters"
-                    className={inputCls}
-                  />
-                )}
-              </FormField>
-              <FormField
-                id={STATION_FIELDS.address.id}
-                label="Street Address"
-                required
-                labelClassName={labelCls}
-                error={stationErrors.errors.address}
-              >
-                {(field) => (
-                  <input
-                    {...field}
-                    type="text"
-                    value={stationForm.address}
-                    maxLength={STATION_LIMITS.address}
-                    onChange={(e) => editStation('address', e.target.value)}
-                    placeholder="123 Main Street"
-                    className={inputCls}
-                  />
-                )}
-              </FormField>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <FormField
-                  id={STATION_FIELDS.city.id}
-                  label="City"
-                  labelClassName={labelCls}
-                  error={stationErrors.errors.city}
+          <DialogPanel onClose={requestCloseStation} className="modal-panel-scroll w-full max-w-md">
+            <form
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleSaveStation();
+              }}
+            >
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+                <h2 id="station-dialog-title" className="text-theme-text-primary text-lg font-bold">
+                  {editingStation ? 'Edit Station' : 'Add Station'}
+                </h2>
+                <button
+                  type="button"
+                  data-dialog-close
+                  onClick={requestCloseStation}
+                  aria-label="Close dialog"
+                  className="text-theme-text-muted hover:text-theme-text-primary"
                 >
-                  {(field) => (
-                    <input
-                      {...field}
-                      type="text"
-                      value={stationForm.city}
-                      maxLength={STATION_LIMITS.city}
-                      onChange={(e) => editStation('city', e.target.value)}
-                      className={inputCls}
-                    />
-                  )}
-                </FormField>
-                <FormField
-                  id={STATION_FIELDS.state.id}
-                  label="State"
-                  labelClassName={labelCls}
-                  error={stationErrors.errors.state}
-                >
-                  {(field) => (
-                    <input
-                      {...field}
-                      type="text"
-                      value={stationForm.state}
-                      maxLength={STATION_LIMITS.state}
-                      onChange={(e) => editStation('state', e.target.value)}
-                      className={inputCls}
-                    />
-                  )}
-                </FormField>
-                <FormField
-                  id={STATION_FIELDS.zip.id}
-                  label="Zip"
-                  labelClassName={labelCls}
-                  error={stationErrors.errors.zip}
-                >
-                  {(field) => (
-                    <input
-                      {...field}
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="postal-code"
-                      value={stationForm.zip}
-                      maxLength={STATION_LIMITS.zip}
-                      onChange={(e) => editStation('zip', e.target.value)}
-                      className={inputCls}
-                    />
-                  )}
-                </FormField>
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
               </div>
-              <FormField
-                id={STATION_FIELDS.description.id}
-                label="Description"
-                labelClassName={labelCls}
-                error={stationErrors.errors.description}
-              >
-                {(field) => (
-                  <textarea
-                    {...field}
-                    value={stationForm.description}
-                    onChange={(e) => editStation('description', e.target.value)}
-                    rows={2}
-                    placeholder="Optional notes about this station..."
-                    className={inputCls + ' resize-none'}
-                  />
+              <div className="space-y-4 p-6">
+                <FormField
+                  label="Station Name / Number"
+                  required
+                  id={STATION_FIELDS.name.id}
+                  error={stationErrors.errors.name}
+                  maxLength={STATION_LIMITS.name}
+                  count={stationForm.name.length}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="text"
+                      autoComplete="off"
+                      value={stationForm.name}
+                      onChange={(e) => setStationField('name', e.target.value)}
+                      placeholder="e.g., Station 1, Headquarters"
+                      className={inputCls}
+                    />
+                  )}
+                </FormField>
+                <FormField
+                  label="Street Address"
+                  required
+                  id={STATION_FIELDS.address.id}
+                  error={stationErrors.errors.address}
+                  maxLength={STATION_LIMITS.address}
+                  count={stationForm.address.length}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="text"
+                      autoComplete="street-address"
+                      value={stationForm.address}
+                      onChange={(e) => setStationField('address', e.target.value)}
+                      placeholder="123 Main Street"
+                      className={inputCls}
+                    />
+                  )}
+                </FormField>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <FormField
+                    label="City"
+                    id={STATION_FIELDS.city.id}
+                    error={stationErrors.errors.city}
+                    maxLength={STATION_LIMITS.city}
+                    count={stationForm.city.length}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        autoComplete="address-level2"
+                        value={stationForm.city}
+                        onChange={(e) => setStationField('city', e.target.value)}
+                        className={inputCls}
+                      />
+                    )}
+                  </FormField>
+                  <FormField
+                    label="State"
+                    id={STATION_FIELDS.state.id}
+                    error={stationErrors.errors.state}
+                    maxLength={STATION_LIMITS.state}
+                    count={stationForm.state.length}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        autoComplete="address-level1"
+                        value={stationForm.state}
+                        onChange={(e) => setStationField('state', e.target.value)}
+                        className={inputCls}
+                      />
+                    )}
+                  </FormField>
+                  <FormField
+                    label="Zip"
+                    id={STATION_FIELDS.zip.id}
+                    error={stationErrors.errors.zip}
+                    maxLength={STATION_LIMITS.zip}
+                    count={stationForm.zip.length}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="postal-code"
+                        value={stationForm.zip}
+                        onChange={(e) => setStationField('zip', e.target.value)}
+                        className={inputCls}
+                      />
+                    )}
+                  </FormField>
+                </div>
+                <FormField
+                  label="Description"
+                  id={STATION_FIELDS.description.id}
+                  error={stationErrors.errors.description}
+                >
+                  {(field) => (
+                    <textarea
+                      {...field}
+                      value={stationForm.description}
+                      onChange={(e) => setStationField('description', e.target.value)}
+                      rows={2}
+                      placeholder="Optional notes about this station..."
+                      className={inputCls + ' resize-none'}
+                    />
+                  )}
+                </FormField>
+                {stationErrors.formError && (
+                  <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                    {stationErrors.formError}
+                  </p>
                 )}
-              </FormField>
-              {stationErrors.formError && (
-                <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
-                  {stationErrors.formError}
-                </p>
-              )}
-            </div>
-            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-              <button
-                onClick={() => setShowStationModal(false)}
-                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  void handleSaveStation();
-                }}
-                disabled={isSavingStation}
-                className="btn-primary flex items-center gap-2 px-5"
-              >
-                {isSavingStation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {editingStation ? 'Update' : 'Add Station'}
-              </button>
-            </div>
+              </div>
+              <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+                <button
+                  type="button"
+                  onClick={requestCloseStation}
+                  className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSavingStation} className="btn-primary flex items-center gap-2 px-5">
+                  {isSavingStation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {editingStation ? 'Update' : 'Add Station'}
+                </button>
+              </div>
+            </form>
           </DialogPanel>
         </div>
       )}
@@ -1846,142 +1946,136 @@ export default function LocationsPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="room-dialog-title"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowRoomModal(false);
-          }}
         >
-          <DialogPanel onClose={() => setShowRoomModal(false)} className="modal-panel-scroll w-full max-w-md">
-            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 id="room-dialog-title" className="text-theme-text-primary text-lg font-bold">
-                {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}
-              </h2>
-              <button
-                data-dialog-close
-                onClick={() => setShowRoomModal(false)}
-                aria-label="Close dialog"
-                className="text-theme-text-muted hover:text-theme-text-primary"
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </button>
-            </div>
-            <div className="space-y-4 p-6">
-              <FormField
-                id={ROOM_FIELDS.name.id}
-                label="Room Name"
-                required
-                labelClassName={labelCls}
-                error={roomErrors.errors.name}
-              >
-                {(field) => (
-                  <input
-                    {...field}
-                    type="text"
-                    value={roomForm.name}
-                    maxLength={ROOM_LIMITS.name}
-                    onChange={(e) => editRoom('name', e.target.value)}
-                    placeholder="e.g., Main Hall, Bunk Room A, Training Room"
-                    className={inputCls}
-                  />
-                )}
-              </FormField>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <FormField
-                  id={ROOM_FIELDS.room_number.id}
-                  label="Room Number"
-                  labelClassName={labelCls}
-                  error={roomErrors.errors.room_number}
+          <DialogPanel onClose={requestCloseRoom} className="modal-panel-scroll w-full max-w-md">
+            <form
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleSaveRoom();
+              }}
+            >
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+                <h2 id="room-dialog-title" className="text-theme-text-primary text-lg font-bold">
+                  {editingRoom ? 'Edit Room' : `Add Room${roomParentStation ? ` to ${roomParentStation}` : ''}`}
+                </h2>
+                <button
+                  type="button"
+                  data-dialog-close
+                  onClick={requestCloseRoom}
+                  aria-label="Close dialog"
+                  className="text-theme-text-muted hover:text-theme-text-primary"
                 >
-                  {(field) => (
-                    <input
-                      {...field}
-                      type="text"
-                      value={roomForm.room_number}
-                      maxLength={ROOM_LIMITS.room_number}
-                      onChange={(e) => editRoom('room_number', e.target.value)}
-                      placeholder="e.g., 101"
-                      className={inputCls}
-                    />
-                  )}
-                </FormField>
-                <FormField
-                  id={ROOM_FIELDS.floor.id}
-                  label="Floor"
-                  labelClassName={labelCls}
-                  error={roomErrors.errors.floor}
-                >
-                  {(field) => (
-                    <input
-                      {...field}
-                      type="text"
-                      value={roomForm.floor}
-                      maxLength={ROOM_LIMITS.floor}
-                      onChange={(e) => editRoom('floor', e.target.value)}
-                      placeholder="e.g., 1, 2, Basement"
-                      className={inputCls}
-                    />
-                  )}
-                </FormField>
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
               </div>
-              <FormField
-                id={ROOM_FIELDS.capacity.id}
-                label="Capacity"
-                labelClassName={labelCls}
-                error={roomErrors.errors.capacity}
-              >
-                {(field) => (
-                  <input
-                    {...field}
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={roomForm.capacity}
-                    onChange={(e) => editRoom('capacity', e.target.value)}
-                    placeholder="Maximum occupancy"
-                    className={inputCls}
-                  />
+              <div className="space-y-4 p-6">
+                <FormField
+                  label="Room Name"
+                  required
+                  id={ROOM_FIELDS.name.id}
+                  error={roomErrors.errors.name}
+                  maxLength={ROOM_LIMITS.name}
+                  count={roomForm.name.length}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="text"
+                      autoComplete="off"
+                      value={roomForm.name}
+                      onChange={(e) => setRoomField('name', e.target.value)}
+                      placeholder="e.g., Main Hall, Bunk Room A, Training Room"
+                      className={inputCls}
+                    />
+                  )}
+                </FormField>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <FormField
+                    label="Room Number"
+                    id={ROOM_FIELDS.room_number.id}
+                    error={roomErrors.errors.room_number}
+                    maxLength={ROOM_LIMITS.room_number}
+                    count={roomForm.room_number.length}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        autoComplete="off"
+                        value={roomForm.room_number}
+                        onChange={(e) => setRoomField('room_number', e.target.value)}
+                        placeholder="e.g., 101"
+                        className={inputCls}
+                      />
+                    )}
+                  </FormField>
+                  <FormField
+                    label="Floor"
+                    id={ROOM_FIELDS.floor.id}
+                    error={roomErrors.errors.floor}
+                    maxLength={ROOM_LIMITS.floor}
+                    count={roomForm.floor.length}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        autoComplete="off"
+                        value={roomForm.floor}
+                        onChange={(e) => setRoomField('floor', e.target.value)}
+                        placeholder="e.g., 1, 2, Basement"
+                        className={inputCls}
+                      />
+                    )}
+                  </FormField>
+                </div>
+                <FormField label="Capacity" id={ROOM_FIELDS.capacity.id} error={roomErrors.errors.capacity}>
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={roomForm.capacity}
+                      onChange={(e) => setRoomField('capacity', e.target.value)}
+                      placeholder="Maximum occupancy"
+                      className={inputCls}
+                    />
+                  )}
+                </FormField>
+                <FormField label="Description" id={ROOM_FIELDS.description.id} error={roomErrors.errors.description}>
+                  {(field) => (
+                    <textarea
+                      {...field}
+                      value={roomForm.description}
+                      onChange={(e) => setRoomField('description', e.target.value)}
+                      rows={2}
+                      placeholder="Equipment, amenities, or notes about this room..."
+                      className={inputCls + ' resize-none'}
+                    />
+                  )}
+                </FormField>
+                {roomErrors.formError && (
+                  <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                    {roomErrors.formError}
+                  </p>
                 )}
-              </FormField>
-              <FormField
-                id={ROOM_FIELDS.description.id}
-                label="Description"
-                labelClassName={labelCls}
-                error={roomErrors.errors.description}
-              >
-                {(field) => (
-                  <textarea
-                    {...field}
-                    value={roomForm.description}
-                    onChange={(e) => editRoom('description', e.target.value)}
-                    rows={2}
-                    placeholder="Equipment, amenities, or notes about this room..."
-                    className={inputCls + ' resize-none'}
-                  />
-                )}
-              </FormField>
-              {roomErrors.formError && (
-                <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
-                  {roomErrors.formError}
-                </p>
-              )}
-            </div>
-            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-              <button
-                onClick={() => setShowRoomModal(false)}
-                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  void handleSaveRoom();
-                }}
-                disabled={isSavingRoom}
-                className="btn-primary flex items-center gap-2 px-5"
-              >
-                {isSavingRoom ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {editingRoom ? 'Update' : 'Add Room'}
-              </button>
-            </div>
+              </div>
+              <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+                <button
+                  type="button"
+                  onClick={requestCloseRoom}
+                  className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSavingRoom} className="btn-primary flex items-center gap-2 px-5">
+                  {isSavingRoom ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {editingRoom ? 'Update' : 'Add Room'}
+                </button>
+              </div>
+            </form>
           </DialogPanel>
         </div>
       )}

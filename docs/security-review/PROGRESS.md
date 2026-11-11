@@ -16,6 +16,155 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4224](https://github.com/thegspiro/the-logbook/pull/4224)**
+(branch `claude/security-review-admin-hours-p14`): Feature 21
+(Admin hours), pass 14, a watchdog pickup. `ListAgents` → "No reachable
+agents"; the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable. PR #4213
+(Feature 20, Compliance, pass 14) had already merged (`2775b491a`,
+squash-merged directly onto `main`). A fresh check for any open PR with a
+`claude/security-review-*` head found none, and row 21 was the next
+pending feature.
+
+Baseline `d4a510b60` (pass 13's own merge, PR #3955). Real delta:
+`models/admin_hours.py` gains one `AdminHoursEntryMethod` enum member
+(`IMPORT`), migrated correctly (`34f113ec86e3` widens the native MySQL
+enum behind a table-existence guard, with a safe downgrade); and four
+cosmetic/UX frontend files (a same-member-one-session clock-in fix with its
+own new test, a responsive-table pass, a shared header swap, a label
+wording change) — `endpoints/admin_hours.py` and `admin_hours_service.py`
+are byte-identical to pass 13. The enum's one consumer is a brand-new,
+previously-nonexistent Historical Data Import module
+(`endpoints/historical_import.py` + 5 siblings, 5,454 lines, 31 routes, all
+gated `integrations.historical_import`, System-Owner-only); the one slice
+that writes an `AdminHoursEntry` was traced and found org-scoped and
+permission-gated on every parameter that reaches the insert. The module as
+a whole carries no rotation row — noted in this table's unclaimed-modules
+paragraph for a future pass (naturally Feature 27, Integrations) rather
+than reviewed in full here. **0 fixed, 0 newly flagged.** See
+`docs/security-review/AH-21-admin-hours.md`'s **Pass 14** section for the
+full trace.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`)/
+`isort --check-only` (CI's pinned `9.0.2`) on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — 755 revisions, single head
+`67ad01c43434`; `generate_schema_docs.py --check` — up to date;
+`check_route_permissions.py --strict` — 305 routes, 0 errors/warnings;
+scoped backend suite (`-k "admin_hours"`) — 174 passed, 1 environment-only
+skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/admin-hours` — 128 passed (15
+files).
+
+Row 21 → ✅ (pending this PR's merge). Next is Feature 22 (Grants &
+fundraising) — re-check the rotation table fresh rather than trusting this
+note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 20, Compliance, pass 14, PR #4213, merged), preserved for history</summary>
+
+**PR [#4213](https://github.com/thegspiro/the-logbook/pull/4213)**
+(branch `claude/security-review-compliance`): Feature 20
+(Compliance), pass 14, a watchdog pickup. `ListAgents` → "No reachable
+agents"; the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable. PR #4198
+(Feature 19, Skills testing, pass 14) had already merged (`878b64fb4`). A
+fresh check for any open PR with a `claude/security-review-*` head found
+none, and row 20 was the next pending feature.
+
+Baseline `dffccc891` (pass 13's own merge, PR #3940). Real delta: a new
+SESSION_ATTENDANCE training-requirement type ("attend 60% of company
+drills") graded through this feature's own `training_compliance.py` (585
+lines changed across three commits), a Chief-override path for it (mostly
+Feature 17's own surface, re-confirmed only this feature's slice), a
+department-configurable `leave_month_rule`, and an empty-denominator bug fix
+(W80-9: a requirement with no session held yet used to read "0/0 – Complete"
+and count as met; now reads "not applicable" and counts neither way).
+Traced end to end: the one new query (`load_held_sessions`) is org-scoped
+directly in the query itself, not merely inherited from its caller; the one
+new `LIKE` (registry-code prefix match) goes through `like_pattern`/
+`LIKE_ESCAPE_CHAR`; the Chief-override path only ever turns a miss into a
+met, never the reverse, and only for a member who would otherwise fall
+short. **0 fixed, 0 newly flagged.** See
+`docs/security-review/CMP-20-compliance.md`'s **Pass 14** section for the
+full trace.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`)/
+`isort --check-only` (CI's pinned `9.0.2`) on `app/ tests/ alembic/` all
+clean (installed CI's pinned `flake8==7.4.1` — the ambient install resolved
+`7.5.0`); `validate_migrations.py --strict` — 755 revisions, single head
+`67ad01c43434`; `generate_schema_docs.py --check` — up to date;
+`check_route_permissions.py --strict` — 305 routes, 0 errors/warnings;
+scoped backend suite (`-k "compliance or attestation or session_attendance"`)
+— 723 passed, 1 environment-only skip (`pywebpush`); `npm run typecheck` —
+0 errors; `npm run lint` — 0 errors/warnings; 14 compliance-scoped frontend
+test files — 175 passed.
+
+Row 20 → ✅ (pending this PR's merge). Next is Feature 21 (Admin hours) —
+re-check the rotation table fresh rather than trusting this note.
+
+**2026-11-10 watchdog check-in:** a second watchdog session, subscribed to
+this PR's activity, found its `CI` workflow run on this head SHA
+(`613a43687`) still `pending` with 0 jobs roughly an hour after it was
+opened — the zero-jobs stuck-trigger symptom CLAUDE.md Pitfall #24
+describes, the same one a prior check-in hit on PR #4198. This commit is
+the documented fix: a substantive push producing a fresh head SHA, rather
+than an empty commit or a close/reopen.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 19, Skills testing, pass 14, PR #4198, merged), preserved for history</summary>
+
+**PR [#4198](https://github.com/thegspiro/the-logbook/pull/4198)**
+(branch `claude/security-review-skills-testing`): Feature 19
+(Skills testing), pass 14, a watchdog pickup. `ListAgents` → "No reachable
+agents"; the dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remained unreachable. PR #4180
+(Feature 18, Training extended, pass 14) had already merged. A fresh check
+for any open PR with a `claude/security-review-*` head found none, and row
+19 was the next pending feature.
+
+Baseline `85c3b760` (pass 13's own merge). Real delta: one file changed
+(`skills_testing.py`, +14/-0) — a new cross-feature hook wiring an
+already-reviewed Training-core helper, `process_milestones_for_user`
+(`app/services/program_milestones.py`), into `complete_test` and
+`validate_test`'s existing post-commit hook pattern, immediately alongside
+the sibling `apply_test_pass_to_pipeline` call under the identical guard
+condition. Traced safe: org-scoped on both ends (caller passes the
+authenticated user's own `organization_id` and a candidate id pulled from an
+already org-scoped `test` row; the callee re-filters on both), fails closed
+into the already-committed test result rather than out of it (`process_user`
+never raises — it catches, rolls back its own work, and returns `0`), not
+reachable twice for one test's first validation, and idempotent by
+`ProgramMilestoneAchievement`'s own unique constraint regardless. **0 fixed,
+0 newly flagged.** See `docs/security-review/SKT-19-skills-testing.md`'s
+**Pass 14** section for the full trace.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`)/
+`isort --check-only` (CI's pinned `9.0.2`) on `app/ tests/ alembic/` all
+clean (installed CI's pinned `flake8==7.4.1` — the ambient install resolved
+`7.5.0`); `validate_migrations.py --strict` — 750 revisions, single head
+`55e20c02dea7`; `check_route_permissions.py --strict` — 305 routes, 0
+errors/warnings; scoped backend suite (`-k "skill or skt"`) — 642 passed, 1
+environment-only skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm
+run lint` — 0 errors/warnings.
+
+Row 19 → ✅ (merged). Next was Feature 20 (Compliance).
+
+**2026-11-10 watchdog check-in:** the dedicated `/loop 30m /security-review`
+session remained unreachable via `ListAgents`. After the prior check-in's
+merge-conflict resolution (`fee22771d`), this PR's `CI` workflow run
+(`42764489571`) sat at `pending` with 0 jobs for roughly an hour — the
+zero-jobs stuck-trigger symptom Pitfall #24 describes, not a reused branch
+name this time but the same failure mode. This commit is the documented
+fix: a substantive push producing a fresh head SHA, rather than an empty
+commit or a close/reopen.
+
+</details>
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 18, Training extended, pass 14, PR #4180, merged), preserved for history</summary>
+
 **PR [#4180](https://github.com/thegspiro/the-logbook/pull/4180)**
 (branch `claude/security-review-training-extended`): Feature 18 (Training
 extended), pass 14, a watchdog pickup. PR #4151 (Feature 17, Training core,
@@ -62,8 +211,9 @@ external or enhancement or submission or xapi or crew or module_config"`) —
 2777 passed, 1 environment-only skip (`pywebpush`); `npm run typecheck` — 0
 errors; `npm run lint` — 0 errors/warnings.
 
-Row 18 → ✅ (pending this PR's merge); next is Feature 19 (Skills testing) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 18 → ✅ (merged). Next was Feature 19 (Skills testing).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 17, Training core, pass 14, PR #4151, merged), preserved for history</summary>
@@ -25310,9 +25460,9 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                                                                    | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`, `knowledge_tests.py` (added pass 12), `shift_evaluation_templates.py`/`shift_evaluations.py` (added pass 13)                  | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py`, `training_module_config.py` (added pass 14) | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                       | ⬜     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                                                              | ⬜     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                             | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3855 L)                                                                                                                                                       | ✅     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`, `training_compliance.py` (declared scope since pass ≤11)                                                                                    | ✅     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                                                             | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`, `zeffy.py`/`zeffy_service.py`/`zeffy_sync_service.py` (added pass 13)                                                             | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                        | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                                  | ⬜     |
@@ -25341,9 +25491,148 @@ absorbed `shift_evaluations.py` the same way; or Feature 07, Users &
 organizations, for `member_supervisors.py`/`history.py`) rather than leaving
 them to be re-discovered by SEC-00 every lap.
 
+**Another new unclaimed module, found by Feature 21's pass 14** (not SEC-00 —
+found because it writes into Admin Hours' own table): Historical Data Import
+(`endpoints/historical_import.py`, `historical_import_service.py`,
+`historical_staffing_{engine,commit,service}.py`,
+`models/historical_import.py`, `schemas/historical_import.py` — 5,454 lines,
+31 routes, all gated `integrations.historical_import`, a System-Owner-only
+grant). It did not exist as of Feature 21 pass 13's baseline. Only the one
+code path that writes an `AdminHoursEntry` (`commit_admin`) was traced, and
+found org-scoped and permission-gated; the module's CSV/upload handling and
+its training/staffing commit paths have had no seven-dimension pass. Its
+permission string and URL prefix both read `integrations`, so Feature 27
+(Integrations) is the natural owner for a future pass to claim it, the same
+way Feature 17 absorbed `shift_evaluations.py`.
+
 ---
 
 ## Log
+
+### 2026-11-10 — Feature 20 (Compliance, pass 14) merged; Feature 21 (Admin hours, pass 14): watchdog pickup, real delta, 0 fixed, 0 new findings; a new unclaimed module (Historical Data Import) found and recorded
+
+PR #4213 merged (`2775b491a`, squash-merged directly onto `main`). A fresh
+`list_pull_requests` (state `open`) found 0 PRs with a
+`claude/security-review-*` head, and row 21 (Admin hours) was the next `⬜`
+in the rotation table, confirmed on a freshly pulled `main`.
+
+Baseline `d4a510b60` (pass 13's own merge, PR #3955). Real delta across the
+six declared backend/frontend scope areas: `models/admin_hours.py` gains one
+`AdminHoursEntryMethod` enum member (`IMPORT`), correctly migrated
+(`34f113ec86e3` widens the native MySQL enum, guarded by a table-existence
+check, with a safe downgrade that rewrites `'import'` rows to `'manual'`
+before narrowing); and four frontend files (a same-member-one-session UX fix
+on the clock-in page with its own new test file, a responsive-table markup
+pass, a shared page-header swap, a link-label wording change) — all
+cosmetic/UX, no new endpoint or permission. `endpoints/admin_hours.py` and
+`admin_hours_service.py` are byte-identical to pass 13; the route inventory
+re-enumerated by AST is unchanged at 30 routes (17 `admin_hours.manage`, 13
+`get_current_user`-only).
+
+The enum's one consumer — `HistoricalImportService.commit_admin`, reached
+from a brand-new, previously-nonexistent 5,454-line Historical Data Import
+module (`endpoints/historical_import.py` and five service/model/schema
+siblings, 31 routes, all gated `integrations.historical_import`, a
+System-Owner-only grant) — was traced for the slice that writes into this
+feature's table: org id, category id and member id all resolve through
+already-org-scoped reads, never from client-supplied values, and a
+double-commit is guarded by a unique per-source-row ledger. The module as a
+whole has not had a seven-dimension pass and carries no rotation row; a note
+was added to this table's unclaimed-modules paragraph above so a future pass
+(naturally Feature 27, Integrations — the permission string and URL prefix
+both say so) claims it rather than it being rediscovered piecemeal. **0
+fixed, 0 newly flagged** for Admin Hours itself. See
+`docs/security-review/AH-21-admin-hours.md`'s **Pass 14** section for the
+full trace.
+
+Completion gate: `flake8`/`black --check` (CI's pinned `26.10.1`)/
+`isort --check-only` (CI's pinned `9.0.2`) on `app/ tests/ alembic/` all
+clean; `validate_migrations.py --strict` — 755 revisions, single head
+`67ad01c43434`; `generate_schema_docs.py --check` — up to date;
+`check_route_permissions.py --strict` — 305 routes, 0 errors/warnings;
+scoped backend suite (`-k "admin_hours"`) — 174 passed, 1 environment-only
+skip (`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/modules/admin-hours` — 128 passed (15
+files).
+
+Row 21 → ✅ (pending this PR's merge). Next is Feature 22 (Grants &
+fundraising) — re-check `list_pull_requests` fresh rather than trusting
+this note.
+
+### 2026-11-10 — Feature 19 (Skills testing, pass 14) merged; Feature 20 (Compliance, pass 14): watchdog pickup, real delta, 0 fixed, 0 new findings
+
+PR #4198 merged (`878b64fb4`). A fresh check for any open PR with a
+`claude/security-review-*` head found none, and row 20 (Compliance) was
+next. Baseline `dffccc891` (pass 13's own merge, PR #3940). A real delta
+across five of this feature's declared-scope files (539 insertions, 97
+deletions): a new SESSION_ATTENDANCE training-requirement type graded
+through this feature's own `training_compliance.py` (the bulk of the
+change, 585 lines across three commits), a department-configurable
+`leave_month_rule`, and a Chief-override path for the new requirement type
+(mostly Feature 17's own surface — three routes and a new service in
+`training.py`, already reviewed under TR14's own pass — with only this
+feature's own 30-line slice and the `ComplianceMatrixTab.tsx` render slot
+re-confirmed here). Also includes the W80-9 bug fix: a session-attendance
+requirement with no session held yet used to read "0/0 sessions –
+Complete" and count as met (the empty-denominator-as-success shape
+Pitfall #29 warns of); it now reads "not applicable" and counts toward
+neither met nor total, consistently across every reader (`tally_standing`,
+the at-risk tally, non-compliance notices, the competency matrix, the
+forecast and the report cells).
+
+Traced end to end: the one new query (`load_held_sessions`) filters
+`organization_id` directly in the query itself rather than only trusting an
+already-scoped caller (defense in depth, Pitfall #14a); the one new `LIKE`
+(a registry-code prefix match) goes through `like_pattern`/
+`LIKE_ESCAPE_CHAR` (Pitfall #25); the override path only ever turns a miss
+into a met, never the reverse, and only for a member who would otherwise
+fall short of the count. **0 fixed, 0 newly flagged.** Every standing
+CMP/CS item (CS-8 attestation dual control, `grace_period_days` unwired —
+both owner-accepted, by design) re-verified unchanged at its current
+citation. See `docs/security-review/CMP-20-compliance.md`'s **Pass 14**
+section for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (CI's pinned `flake8==7.4.1` installed over
+an ambient `7.5.0`); `validate_migrations.py --strict` — 755 revisions,
+single head `67ad01c43434`; `generate_schema_docs.py --check` — up to date;
+`check_route_permissions.py --strict` — 305 routes, 0 errors/warnings;
+scoped backend suite (`-k "compliance or attestation or session_attendance"`)
+— 723 passed, 1 environment-only skip (`pywebpush`); `npm run typecheck` —
+0 errors; `npm run lint` — 0 errors/warnings; 14 compliance-scoped frontend
+test files — 175 passed.
+
+Row 20 → ✅ (pending this PR's merge); next is Feature 21 (Admin hours) —
+re-check the rotation table fresh rather than trusting this note.
+
+### 2026-11-09 — Feature 18 (Training extended, pass 14) merged; Feature 19 (Skills testing, pass 14): watchdog pickup, real delta, 0 fixed, 0 new findings
+
+PR #4180 merged. A fresh check for any open PR with a `claude/security-review-*`
+head found none, and row 19 (Skills testing) was next. Baseline `85c3b760`
+(pass 13's own merge). One file changed in the declared backend scope
+(`skills_testing.py`, +14/-0): a new cross-feature hook wiring
+`process_milestones_for_user` (Feature 17's own `program_milestones.py`) into
+`complete_test` and `validate_test`'s existing post-commit hook pattern,
+alongside the sibling `apply_test_pass_to_pipeline` call under the identical
+guard. Traced safe — org-scoped on both ends, fails closed into the
+already-committed result rather than out of it, not reachable twice for one
+test's first validation, and idempotent by `ProgramMilestoneAchievement`'s own
+unique constraint regardless. Every standing SKT fix (SKT-1 through SKT5-1,
+Pitfall #32) re-verified present at its current citation; route surface
+29/29, route-permission registry 305 routes/0 errors. **0 fixed, 0 newly
+flagged.** See `docs/security-review/SKT-19-skills-testing.md`'s **Pass 14**
+section for the full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` on
+`app/ tests/ alembic/` all clean (CI's pinned `flake8==7.4.1` installed over
+an ambient `7.5.0`); `validate_migrations.py --strict` — 750 revisions,
+single head `55e20c02dea7`; `check_route_permissions.py --strict` — 305
+routes, 0 errors/warnings; scoped backend suite (`-k "skill or skt"`) — 642
+passed, 1 environment-only skip (`pywebpush`); `npm run typecheck` — 0
+errors; `npm run lint` — 0 errors/warnings.
+
+Row 19 → ✅ (pending this PR's merge); next is Feature 20 (Compliance) —
+re-check the rotation table fresh rather than trusting this note.
 
 ### 2026-11-08 — Feature 15 (Scheduling, pass 14) merged; Feature 16 (Events & requests, pass 14) — watchdog pickup, real delta, 0 fixed, 0 new findings
 

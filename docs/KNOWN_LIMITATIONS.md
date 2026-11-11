@@ -13,12 +13,19 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   HTML-to-PDF engine with PDF/UA output, such as WeasyPrint, would mean
   rewriting every renderer and bringing that engine's SSRF hardening with it
   (CVE-2025-68616, CVE-2026-55073).
-- **Latin-1 only, fonts not embedded, no PDF/A.** Every PDF uses the built-in
-  Helvetica family. A member's name in Cyrillic, Greek or CJK script does not
-  render, and minutes, certified results and evaluations cannot be archived as
-  PDF/A. **Decided, to build (owner, 2026-11-09):** bundle Noto Sans (SIL OFL)
-  in the kit, then add XMP metadata and an ICC output intent for the record
-  documents.
+- ~~**Latin-1 only, fonts not embedded, no PDF/A.**~~ **Resolved
+  2026-11-10:** documents embed Noto Sans, and certified results,
+  evaluations and minutes are PDF/A-2b. What remains:
+  - **Scripts outside Latin, Greek and Cyrillic** (CJK, Arabic, Hebrew,
+    emoji) still print as empty boxes; Noto Sans CJK is CFF-based and
+    ReportLab cannot embed it. **Accepted** until a member needs it.
+  - **Label sheets and ID cards stay on Helvetica** by owner decision
+    (2026-11-09): their text is fitted to physical stock.
+  - **Minutes that append attachment PDFs make no PDF/A claim** (owner
+    decision, 2026-11-09): outside pages cannot be vouched for.
+  - **CI does not run veraPDF.** Conformance was confirmed with veraPDF 1.28
+    on 2026-11-10; `tests/test_pdfa.py` guards the structure it checked, not
+    every rule.
 - **The Reports page prints from the browser.** "Print / PDF" has no page
   numbers, no repeated header, the browser's own time zone and no audit row.
   **Decided, to build (owner, 2026-11-09):** a server-side PDF on the kit,
@@ -327,6 +334,10 @@ Also on the shared pieces since: every create dialog the review found with a
 button greyed out until valid (Locations, Facilities, Documents' New Folder,
 Forms' Create Form, Medical Supplies' Add supply, Inventory's Add several
 items and Request Equipment, the suggestion box form, Apparatus (basic)).
+Then the dialogs that relied on the browser's `required` bubble: Create
+Election, event templates, custom roles, Create Pipeline, Inventory's item,
+kit, category, variant group, vendor, storage area and reorder dialogs, and
+notification rules.
 
 Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
 needs a course name and a completion date, because both are NOT NULL
@@ -340,6 +351,46 @@ the flag on a form that has already navigated away. An event saved as a draft
 is still refused for the rules the server enforces on every event (an end after
 the start, an RSVP deadline before it).
 
+**Rolled out further on 2026-11-08** (batch 16). The shared field, 422s on
+their fields, schema `maxLength`, `<form>` with Enter, and discard protection
+now also cover:
+
+- **Top-level pages:** Action Items › Update, Locations › Station and Room,
+  basic Apparatus, Role Management, Documents › Create Folder and Upload, and
+  Scheduling's outside-shift form.
+- **Inventory and assets:** Inventory › Add / Edit Item, Apparatus › Fuel Log,
+  Maintenance Record, Equipment and Operator, Facilities › Add Facility,
+  Medical Supplies › Add / Edit, and the Store's item and order-window dialogs.
+- **Finance and grants:** purchase, check and expense requests (the server
+  draft and the expense session draft still work), the budget line and dues
+  schedule dialogs, pledges, fundraising events, donations, grant
+  opportunities and applications, and Admin Hours' category, manual entry and
+  entry editor.
+- **Minutes, communications and the smaller modules:** medical screening
+  records and requirements, messages, shift patterns and Generate Shifts,
+  Record Meeting Minutes, IP exception requests, meeting action items, legal
+  revisions and Add Applicant.
+
+Edits on these follow the single-save rule above, including Edit Pattern and
+the meeting action item, whose pages now refresh behind a dialog left open on a
+refused field. **One exception: Admin Hours' entry editor does not partially
+save.** It resubmits the whole entry and checks the start and end together, so
+saving one time without the other could leave an entry whose duration makes no
+sense; it saves nothing until every refusal is fixed. Dialogs that check their
+own fields turn off the browser's validation bubbles (`noValidate`), so the
+reason appears on the field instead of a native popup.
+
+Still to come, module by module: Create Election, the member admin edit page
+(its uppercase label style needs a `FormField` option first), the training
+builders and pipeline pages, the rest of Inventory (vendors, receiving, kits,
+storage areas, settings), the full apparatus form, the facility detail
+sections, medical supply deliveries and imports, store checkout, the remaining
+finance dialogs and settings cards, the minutes editor and its dialogs, report
+and evaluation dialogs, communications templates, scheduling templates and
+settings, applicant conversion and stage settings, and onboarding, history,
+membership and the public portal. Each is listed in
+`docs/FORMS_REVIEW_2026-11-05.md`.
+
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
 
@@ -347,9 +398,10 @@ Two of the three options, and not the third:
   changed asks "Keep editing" / "Discard changes" before Escape, its X or its
   Cancel throws them away; a clean dialog closes at once, so Escape stays the
   way out (Pitfall #31). It is opt-in per dialog (`isDirty` on `Modal` /
-  `DialogPanel`, or `useDiscardGuard`), and adopted so far on Inventory › Add /
-  Edit Item and Scheduling › Create Shift; other dialogs still close without
-  asking until they pass the flag.
+  `DialogPanel`, or `useDiscardGuard`), adopted on Inventory › Add / Edit Item
+  and Scheduling › Create Shift on 2026-11-06 and on every dialog the 2026-11-08
+  rollout converted (above); other dialogs still close without asking until
+  they pass the flag.
 - **Local drafts — built** for training submission (new ones; an edit is
   already stored on the server), the manual shift report (Scheduling's shift
   reports already kept their own draft), the expense report and Add Member.
@@ -9558,6 +9610,31 @@ edit only drafts; this governs `PUT /shift-reports/{id}`. Covered by
 `tests/test_shift_completion.py::TestAnEditedReportGoesBackToReview`; history
 in `docs/security-review/EC-14-equipment-check-shifts.md`.
 
+## W80 — Training Event Decisions Left Open (2026-11-08)
+
+From the training-event lifecycle pass
+([`workflow-review/W80-training-event-lifecycle.md`](./workflow-review/W80-training-event-lifecycle.md)).
+Decided and fixed in the same pass: over-credit is warned, not capped; an
+approver on a roster cannot approve it; a schedule change that strands
+check-ins is refused; a training-only waiver can name its requirements. Open:
+
+- **W80-11 — Postpone (decided, not built).** The owner chose a real Postpone
+  action with `postponed_at` / `postponed_from_start` / `postponement_reason`
+  columns. Its design is in the findings file and goes in its own pull request:
+  it adds a migration and a public endpoint.
+- **W80-8 — Recording one member on a past drill.** Check-in is refused once the
+  window closes, with a message telling the organizer to ask an organizer; the
+  only routes are adding the whole roster, or the member's own "I was there".
+  Whether an attendance manager may record a check-in after the window, with
+  times, needs a decision.
+- **W80-9 — "0/0 sessions — Complete".** A session-attendance requirement with no
+  held sessions in a member's window reads met, on My Training and the matrix.
+  Reporting "not applicable" (CLAUDE.md pitfall #29) changes compliance
+  percentages department-wide.
+- **W80-10 — Training waivers and "missed mandatory".** The missed-mandatory list
+  excludes leaves of absence only, so a drill excused by a training waiver stays
+  listed. Whether a training waiver also excuses the event is policy.
+
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
 mirrored here so they're visible outside the log. The parallel module-by-module
@@ -9608,3 +9685,24 @@ clearance and the letter should both use it; the clearance's current formula
 is wrong under either. Existing clearances store their line values, so a
 change applies to new clearances unless the owner also wants open ones
 recomputed.
+
+## DASH-2 — `GET /dashboard/stats` Returns Three Made-Up Figures, and Nothing Calls It (2026-08-05, recorded here 2026-11-10, app review A7)
+
+`GET /api/v1/dashboard/stats` counts members, active members and events created
+in the last 30 days, and returns three more fields as constants:
+`total_documents` is always `0`, `pending_tasks_count` always `0`, and
+`setup_percentage` always `100`. The last is the risk: it tells any client that
+the department's setup is complete whatever its state. The frontend's
+`dashboardService.getStats` has no caller, so no screen shows these figures
+today; an external client or a future screen could.
+
+Flagged in every app-review pass since the first, but never recorded here, so it
+was not among the questions the owner answered on 2026-11-01. Options:
+
+1. **Remove the route** and `dashboardService.getStats`. Nothing in the app
+   uses them; a third-party client that does would get 404.
+2. **Compute the three figures** — documents from the Documents module,
+   pending tasks from the action-item feed's open count, and setup from the
+   onboarding checklist the Organization Setup widget already reads.
+3. **Remove only the three made-up fields**, keeping the counts that are real.
+   This changes the response shape for any caller.

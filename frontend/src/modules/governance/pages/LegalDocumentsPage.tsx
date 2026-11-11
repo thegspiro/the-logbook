@@ -12,7 +12,8 @@ import { useAuthStore } from '../../../stores/authStore';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull } from '../../../utils/formValues';
-import { RevisionEditorModal } from '../components/RevisionEditorModal';
+import { RevisionEditorModal, type RevisionSaveOptions } from '../components/RevisionEditorModal';
+import { mapServerFieldErrors } from '../../../utils/serverFieldErrors';
 import { useLegalDocumentsStore } from '../store/legalDocumentsStore';
 import { LEGAL_DOCUMENT_LABEL, LegalDocumentType, type LegalDocumentState, type LegalRevision } from '../types/legal';
 import { useTablist } from '../../../hooks/useTablist';
@@ -195,18 +196,27 @@ const LegalDocumentsPage: React.FC = () => {
     });
   };
 
-  const handleSave = async (values: { body: string; changeNote: string; effectiveDate: string }) => {
+  const handleSave = async (
+    values: { body: string; changeNote: string; effectiveDate: string },
+    options?: RevisionSaveOptions
+  ) => {
     if (!editor) return;
+    const omit = options?.omit ?? [];
     try {
       if (editor.revisionId) {
-        await updateRevision(editor.revisionId, {
+        const update: Parameters<typeof updateRevision>[1] = {
           body: values.body,
           changeNote: values.changeNote,
           // blankToNull, not `|| undefined`: on an update an omitted key means
           // "leave this alone", so clearing the date has to travel as an
           // explicit null or the old one survives behind the success toast.
           effectiveDate: blankToNull(values.effectiveDate),
-        });
+        };
+        // A field the editor flagged is left out, so the draft keeps it.
+        for (const field of omit) delete update[field];
+        await updateRevision(editor.revisionId, update);
+        // Partly saved: the editor stays open with the refused fields flagged.
+        if (omit.length) return;
       } else {
         await createRevision({
           documentType: editor.documentType,
@@ -218,7 +228,10 @@ const LegalDocumentsPage: React.FC = () => {
       toast.success('Draft saved. It is not public until it is published.');
       setEditor(null);
     } catch (err: unknown) {
+      // A validation refusal goes back to the editor, which puts it on its field.
+      if (mapServerFieldErrors(err, {})) throw err;
       toast.error(getErrorMessage(err, 'Could not save the draft'));
+      throw err;
     }
   };
 

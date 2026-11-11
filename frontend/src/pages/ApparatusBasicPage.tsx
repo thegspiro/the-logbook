@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useDialog } from '../hooks/useDialog';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import {
   Truck,
   Plus,
@@ -27,7 +28,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '../utils/errorHandling';
-import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
 import { schedulingService } from '../modules/scheduling/services/api';
 
@@ -109,13 +110,14 @@ const UNIT_NUMBER_MAX_LENGTH = 20;
 const NAME_MAX_LENGTH = 100;
 const MIN_STAFFING_MAX = 50;
 
-// The type and crew list are pickers with no free text to get wrong; a
-// refusal against either falls through to the dialog-level message.
-type ApparatusField = 'unit_number' | 'name' | 'min_staffing';
+// The crew list is a set of pickers with no single field to flag; a refusal
+// against it falls through to the dialog-level message.
+type ApparatusField = 'unit_number' | 'name' | 'apparatus_type' | 'min_staffing';
 
 const APPARATUS_FIELDS: FieldSpecs<ApparatusField> = {
   unit_number: { id: 'apparatus-basic-unit', label: 'Unit Number' },
   name: { id: 'apparatus-basic-name', label: 'Name' },
+  apparatus_type: { id: 'apparatus-basic-type', label: 'Apparatus Type' },
   min_staffing: { id: 'apparatus-basic-min-staffing', label: 'Minimum Staffing' },
 };
 
@@ -146,6 +148,30 @@ function checkApparatus(form: {
   return errors;
 }
 
+interface ApparatusForm {
+  unit_number: string;
+  name: string;
+  apparatus_type: string;
+  // Held as the box's text so a cleared field reads as blank, not as 0.
+  min_staffing: string;
+  positions: string[];
+}
+
+const NEW_APPARATUS_FORM: ApparatusForm = {
+  unit_number: '',
+  name: '',
+  apparatus_type: 'engine',
+  min_staffing: '4',
+  positions: ['officer', 'driver', 'firefighter', 'firefighter'],
+};
+
+const sameApparatusForm = (a: ApparatusForm, b: ApparatusForm) =>
+  a.unit_number === b.unit_number &&
+  a.name === b.name &&
+  a.apparatus_type === b.apparatus_type &&
+  a.min_staffing === b.min_staffing &&
+  a.positions.join('|') === b.positions.join('|');
+
 export default function ApparatusBasicPage() {
   const { confirm } = useConfirm();
   const [apparatusList, setApparatusList] = useState<BasicApparatus[]>([]);
@@ -159,14 +185,8 @@ export default function ApparatusBasicPage() {
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<BasicApparatus | null>(null);
-  const [form, setForm] = useState({
-    unit_number: '',
-    name: '',
-    apparatus_type: 'engine',
-    // Held as the box's text so a cleared field reads as blank, not as 0.
-    min_staffing: '4',
-    positions: ['officer', 'driver', 'firefighter', 'firefighter'] as string[],
-  });
+  const [form, setForm] = useState<ApparatusForm>(NEW_APPARATUS_FORM);
+  const [initialForm, setInitialForm] = useState<ApparatusForm>(NEW_APPARATUS_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const fieldErrors = useFieldErrors(APPARATUS_FIELDS);
   const clearFieldErrors = fieldErrors.clear;
@@ -210,30 +230,29 @@ export default function ApparatusBasicPage() {
       a.apparatus_type.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm({
-      unit_number: '',
-      name: '',
-      apparatus_type: 'engine',
-      min_staffing: '4',
-      positions: [...(DEFAULT_POSITIONS_BY_TYPE.engine ?? [])],
-    });
+  const openDialog = (apparatus: BasicApparatus | null, next: ApparatusForm) => {
+    setEditing(apparatus);
+    setForm(next);
+    setInitialForm(next);
     clearFieldErrors();
     setShowModal(true);
   };
 
-  const openEdit = (apparatus: BasicApparatus) => {
-    setEditing(apparatus);
-    setForm({
+  const openCreate = () =>
+    openDialog(null, { ...NEW_APPARATUS_FORM, positions: [...(DEFAULT_POSITIONS_BY_TYPE.engine ?? [])] });
+
+  const openEdit = (apparatus: BasicApparatus) =>
+    openDialog(apparatus, {
       unit_number: apparatus.unit_number,
       name: apparatus.name,
       apparatus_type: apparatus.apparatus_type,
       min_staffing: String(apparatus.min_staffing || 1),
       positions: apparatus.positions || [],
     });
-    clearFieldErrors();
-    setShowModal(true);
+
+  const showFieldErrors = (errors: FieldErrors<ApparatusField>) => {
+    fieldErrors.setErrors(errors);
+    fieldErrors.focusFirst(errors);
   };
 
   const handleTypeChange = (type: string) => {
@@ -243,6 +262,8 @@ export default function ApparatusBasicPage() {
       positions: DEFAULT_POSITIONS_BY_TYPE[type] || ['driver'],
       min_staffing: String((DEFAULT_POSITIONS_BY_TYPE[type] || ['driver']).length),
     }));
+    setFieldError('apparatus_type', null);
+    setFieldError('min_staffing', null);
   };
 
   const addPosition = () => {
@@ -290,13 +311,36 @@ export default function ApparatusBasicPage() {
         min_staffing: minStaffing,
         positions: form.positions,
       };
-      if (editing) {
-        await schedulingService.updateBasicApparatus(editing.id, payload);
-        toast.success('Apparatus updated');
-      } else {
-        await schedulingService.createBasicApparatus(payload);
-        toast.success('Apparatus added');
+      let refused: FieldErrors<ApparatusField> = {};
+      try {
+        if (editing) await schedulingService.updateBasicApparatus(editing.id, payload);
+        else await schedulingService.createBasicApparatus(payload);
+      } catch (err: unknown) {
+        const mapped = placeApiError(APPARATUS_FIELDS, err);
+        const keys = mapped ? (Object.keys(mapped.fieldErrors) as ApparatusField[]) : [];
+        if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
+        refused = mapped.fieldErrors;
+        // A new vehicle is created only once every refused field is fixed. An
+        // edit follows the single-save rule (owner, 2026-11-05): the rest is
+        // written, the refused field keeps its stored value and stays flagged.
+        if (editing) {
+          const rest: Record<string, unknown> = { ...payload };
+          for (const key of keys) delete rest[key];
+          await schedulingService.updateBasicApparatus(editing.id, rest);
+        }
       }
+      const firstRefused = (Object.keys(APPARATUS_FIELDS) as ApparatusField[]).find((f) => refused[f]);
+      if (firstRefused) {
+        showFieldErrors(refused);
+        if (editing) {
+          toast.error(
+            `Apparatus saved, except ${APPARATUS_FIELDS[firstRefused].label.toLowerCase()}. Fix it and save again.`
+          );
+          void loadApparatus();
+        }
+        return;
+      }
+      toast.success(editing ? 'Apparatus updated' : 'Apparatus added');
       setShowModal(false);
       void loadApparatus();
     } catch (err: unknown) {
@@ -358,9 +402,13 @@ export default function ApparatusBasicPage() {
   const getTypeInfo = (type: string) =>
     APPARATUS_TYPES.find((t) => t.value === type) || APPARATUS_TYPES[APPARATUS_TYPES.length - 1];
   const inputCls = 'form-input py-2.5';
-  const labelCls = 'form-label';
 
-  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showModal, onClose: () => setShowModal(false) });
+  // Escape, the X and Cancel all ask before a changed vehicle is discarded.
+  const requestClose = useDiscardGuard({
+    isDirty: showModal && !sameApparatusForm(form, initialForm),
+    onClose: () => setShowModal(false),
+  });
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: showModal, onClose: requestClose });
 
   // Reading the fleet is auth-only on purpose — a department without the
   // Apparatus module still needs these unit definitions for shift staffing,
@@ -548,168 +596,176 @@ export default function ApparatusBasicPage() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="apparatus-basic-dialog-title"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowModal(false);
-          }}
         >
           <div ref={dialogRef} className="modal-panel max-h-[90dvh] w-full max-w-lg overflow-y-auto">
-            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 id="apparatus-basic-dialog-title" className="text-theme-text-primary text-lg font-bold">
-                {editing ? 'Edit Apparatus' : 'Add Apparatus'}
-              </h2>
-              <button
-                onClick={() => setShowModal(false)}
-                aria-label="Close dialog"
-                className="text-theme-text-muted hover:text-theme-text-primary"
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </button>
-            </div>
-            <div className="space-y-4 p-6">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <FormField
-                  id={APPARATUS_FIELDS.unit_number.id}
-                  label="Unit Number"
-                  required
-                  labelClassName={labelCls}
-                  error={fieldErrors.errors.unit_number}
+            <form
+              noValidate
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleSave();
+              }}
+            >
+              <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
+                <h2 id="apparatus-basic-dialog-title" className="text-theme-text-primary text-lg font-bold">
+                  {editing ? 'Edit Apparatus' : 'Add Apparatus'}
+                </h2>
+                <button
+                  type="button"
+                  onClick={requestClose}
+                  aria-label="Close dialog"
+                  className="text-theme-text-muted hover:text-theme-text-primary"
                 >
-                  {(field) => (
-                    <input
-                      {...field}
-                      type="text"
-                      value={form.unit_number}
-                      maxLength={UNIT_NUMBER_MAX_LENGTH}
-                      onChange={(e) => editField('unit_number', e.target.value)}
-                      placeholder="e.g., E-1, L-1, M-1"
-                      className={inputCls}
-                    />
-                  )}
-                </FormField>
-                <FormField
-                  id={APPARATUS_FIELDS.name.id}
-                  label="Name"
-                  required
-                  labelClassName={labelCls}
-                  error={fieldErrors.errors.name}
-                >
-                  {(field) => (
-                    <input
-                      {...field}
-                      type="text"
-                      value={form.name}
-                      maxLength={NAME_MAX_LENGTH}
-                      onChange={(e) => editField('name', e.target.value)}
-                      placeholder="e.g., Engine 1, Ladder 1"
-                      className={inputCls}
-                    />
-                  )}
-                </FormField>
+                  <X className="h-5 w-5" aria-hidden="true" />
+                </button>
               </div>
-
-              <div>
-                <label htmlFor="apparatus-basic-type" className={labelCls}>
-                  Apparatus Type
-                </label>
-                <select
-                  id="apparatus-basic-type"
-                  value={form.apparatus_type}
-                  onChange={(e) => handleTypeChange(e.target.value)}
-                  className={inputCls}
-                >
-                  {APPARATUS_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.icon} {t.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <FormField
-                id={APPARATUS_FIELDS.min_staffing.id}
-                label="Minimum Staffing"
-                required
-                labelClassName={labelCls}
-                error={fieldErrors.errors.min_staffing}
-              >
-                {(field) => (
-                  <input
-                    {...field}
-                    type="number"
-                    min={1}
-                    max={MIN_STAFFING_MAX}
-                    step={1}
-                    value={form.min_staffing}
-                    onChange={(e) => editField('min_staffing', e.target.value)}
-                    className={inputCls}
-                  />
-                )}
-              </FormField>
-
-              <div>
-                <div className="mb-2 flex items-center justify-between">
-                  <label className={labelCls}>Crew Positions</label>
-                  <button
-                    type="button"
-                    onClick={addPosition}
-                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+              <div className="space-y-4 p-6">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <FormField
+                    label="Unit Number"
+                    required
+                    id={APPARATUS_FIELDS.unit_number.id}
+                    error={fieldErrors.errors.unit_number}
+                    maxLength={UNIT_NUMBER_MAX_LENGTH}
+                    count={form.unit_number.length}
                   >
-                    <Plus className="h-3 w-3" /> Add Position
-                  </button>
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        autoComplete="off"
+                        value={form.unit_number}
+                        onChange={(e) => editField('unit_number', e.target.value)}
+                        placeholder="e.g., E-1, L-1, M-1"
+                        className={inputCls}
+                      />
+                    )}
+                  </FormField>
+                  <FormField
+                    label="Name"
+                    required
+                    id={APPARATUS_FIELDS.name.id}
+                    error={fieldErrors.errors.name}
+                    maxLength={NAME_MAX_LENGTH}
+                    count={form.name.length}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="text"
+                        autoComplete="off"
+                        value={form.name}
+                        onChange={(e) => editField('name', e.target.value)}
+                        placeholder="e.g., Engine 1, Ladder 1"
+                        className={inputCls}
+                      />
+                    )}
+                  </FormField>
                 </div>
-                <div className="space-y-2">
-                  {form.positions.map((pos, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="text-theme-text-muted w-6 text-right text-xs">{i + 1}.</span>
-                      <select
-                        aria-label={`Crew position ${i + 1}`}
-                        value={pos}
-                        onChange={(e) => updatePosition(i, e.target.value)}
-                        className="form-input flex-1"
-                      >
-                        {POSITION_OPTIONS.map((o) => (
-                          <option key={o} value={o}>
-                            {positionLabel(o)}
-                          </option>
-                        ))}
-                      </select>
-                      {form.positions.length > 1 && (
-                        <button
-                          onClick={() => removePosition(i)}
-                          aria-label={`Remove crew position ${i + 1}`}
-                          className="text-theme-text-muted rounded-sm p-1.5 transition-colors hover:text-red-500"
+
+                <FormField
+                  label="Apparatus Type"
+                  id={APPARATUS_FIELDS.apparatus_type.id}
+                  error={fieldErrors.errors.apparatus_type}
+                >
+                  {(field) => (
+                    <select
+                      {...field}
+                      value={form.apparatus_type}
+                      onChange={(e) => handleTypeChange(e.target.value)}
+                      className={inputCls}
+                    >
+                      {APPARATUS_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>
+                          {t.icon} {t.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </FormField>
+
+                <FormField
+                  label="Minimum Staffing"
+                  required
+                  id={APPARATUS_FIELDS.min_staffing.id}
+                  error={fieldErrors.errors.min_staffing}
+                >
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="number"
+                      min={1}
+                      max={MIN_STAFFING_MAX}
+                      step={1}
+                      value={form.min_staffing}
+                      onChange={(e) => editField('min_staffing', e.target.value)}
+                      className={inputCls}
+                    />
+                  )}
+                </FormField>
+
+                <div role="group" aria-labelledby="apparatus-basic-positions-label">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span id="apparatus-basic-positions-label" className="form-label mb-0">
+                      Crew Positions
+                    </span>
+                    <button
+                      type="button"
+                      onClick={addPosition}
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-red-800 transition-colors hover:bg-red-500/10 dark:text-red-300"
+                    >
+                      <Plus className="h-3 w-3" /> Add Position
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {form.positions.map((pos, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <span className="text-theme-text-muted w-6 text-right text-xs">{i + 1}.</span>
+                        <select
+                          aria-label={`Crew position ${i + 1}`}
+                          value={pos}
+                          onChange={(e) => updatePosition(i, e.target.value)}
+                          className="form-input flex-1"
                         >
-                          <X className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                          {POSITION_OPTIONS.map((o) => (
+                            <option key={o} value={o}>
+                              {positionLabel(o)}
+                            </option>
+                          ))}
+                        </select>
+                        {form.positions.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removePosition(i)}
+                            aria-label={`Remove crew position ${i + 1}`}
+                            className="text-theme-text-muted rounded-sm p-1.5 transition-colors hover:text-red-500"
+                          >
+                            <X className="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-            {fieldErrors.formError && (
-              <p role="alert" className={`px-6 pb-2 text-sm ${FIELD_ERROR_CLASS}`}>
-                {fieldErrors.formError}
-              </p>
-            )}
-            <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  void handleSave();
-                }}
-                disabled={isSaving}
-                className="btn-primary flex items-center gap-2 px-5"
-              >
-                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                {editing ? 'Update' : 'Add Apparatus'}
-              </button>
-            </div>
+              {fieldErrors.formError && (
+                <p role="alert" className={`px-6 pb-2 text-sm ${FIELD_ERROR_CLASS}`}>
+                  {fieldErrors.formError}
+                </p>
+              )}
+              <div className="border-theme-surface-border flex items-center justify-end gap-3 border-t p-6">
+                <button
+                  type="button"
+                  onClick={requestClose}
+                  className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button type="submit" disabled={isSaving} className="btn-primary flex items-center gap-2 px-5">
+                  {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {editing ? 'Update' : 'Add Apparatus'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

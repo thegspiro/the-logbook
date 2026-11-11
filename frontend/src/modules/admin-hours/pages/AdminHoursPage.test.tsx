@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithRouter } from '../../../test/utils';
 import type { AdminHoursComplianceItem, AdminHoursSummary } from '../types';
 import AdminHoursPage from './AdminHoursPage';
+import { adminHoursEntryService } from '../services/api';
 
 interface SummaryParams {
   userId: string;
@@ -332,6 +333,27 @@ describe('AdminHoursPage manual entry times', () => {
     expect(
       screen.getByText(/go to an officer for review before they count, whatever the category/i)
     ).toBeInTheDocument();
+  });
+
+  it("puts the server's refusal of the description under the description", async () => {
+    vi.mocked(adminHoursEntryService.createManual).mockReset();
+    vi.mocked(adminHoursEntryService.createManual).mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'description', message: 'Description must be plain text.' }] },
+      },
+    });
+    const { start } = await openForm();
+    fireEvent.change(screen.getByLabelText('Category *'), { target: { value: 'category-1' } });
+    fireEvent.change(start, { target: { value: '2026-09-01' } });
+    fireEvent.click(screen.getByRole('button', { name: '2 hours' }));
+    fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Filing <b>' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }));
+
+    const description = screen.getByLabelText('Description');
+    await waitFor(() => expect(description).toHaveAttribute('aria-invalid', 'true'));
+    expect(description).toHaveAccessibleDescription('Description must be plain text.');
+    expect(description).toHaveFocus();
   });
 
   it('will not offer a duration before there is a start to measure from', async () => {

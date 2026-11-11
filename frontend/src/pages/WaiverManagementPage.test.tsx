@@ -19,6 +19,7 @@ const mockCreateWaiver = vi.fn();
 const mockDeleteLeave = vi.fn();
 const mockUpdateLeave = vi.fn();
 const mockGetUsers = vi.fn();
+const mockGetRequirements = vi.fn();
 
 vi.mock('../services/api', () => ({
   memberStatusService: {
@@ -32,6 +33,9 @@ vi.mock('../services/api', () => ({
   },
   userService: {
     getUsers: (...args: unknown[]) => mockGetUsers(...args) as unknown,
+  },
+  trainingService: {
+    getRequirements: (...args: unknown[]) => mockGetRequirements(...args) as unknown,
   },
 }));
 
@@ -83,10 +87,15 @@ describe('WaiverManagementPage — creating a waiver (workflow review W13)', () 
       mockCreateLeave,
       mockCreateWaiver,
       mockGetUsers,
+      mockGetRequirements,
       mockToastError,
     ]) {
       m.mockReset();
     }
+    mockGetRequirements.mockResolvedValue([
+      { id: 'req-drill', name: 'Monthly Drill Attendance' },
+      { id: 'req-hours', name: 'Annual Fire Training Hours' },
+    ]);
     mockListLeaves.mockResolvedValue([]);
     mockListWaivers.mockResolvedValue([]);
     mockCreateLeave.mockResolvedValue({});
@@ -128,6 +137,36 @@ describe('WaiverManagementPage — creating a waiver (workflow review W13)', () 
 
     await waitFor(() => expect(mockCreateWaiver).toHaveBeenCalled());
     expect(mockCreateLeave).not.toHaveBeenCalled();
+  });
+
+  // Workflow review, training events: excusing one missed drill waived that day
+  // for every requirement, and under a "full month" leave rule cut the member's
+  // annual hours target. A training-only waiver can now name what it excuses.
+  it('scopes a training-only waiver to the requirements ticked', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<WaiverManagementPage />);
+    await screen.findByRole('group', { name: 'Applies To' });
+
+    expect(screen.queryByRole('group', { name: 'Training requirements excused' })).not.toBeInTheDocument();
+    await user.click(screen.getByLabelText('Meeting Attendance & Shift Requirements'));
+    const scope = await screen.findByRole('group', { name: 'Training requirements excused' });
+    await user.click(within(scope).getByLabelText('Monthly Drill Attendance'));
+    await fillAndSubmit(user);
+
+    await waitFor(() => expect(mockCreateWaiver).toHaveBeenCalled());
+    expect(mockCreateWaiver.mock.calls[0]?.[0]).toMatchObject({ user_id: 'u1', requirement_ids: ['req-drill'] });
+  });
+
+  it('sends no requirement list when none is ticked, excusing every requirement', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<WaiverManagementPage />);
+    await screen.findByRole('group', { name: 'Applies To' });
+
+    await user.click(screen.getByLabelText('Meeting Attendance & Shift Requirements'));
+    await fillAndSubmit(user);
+
+    await waitFor(() => expect(mockCreateWaiver).toHaveBeenCalled());
+    expect(mockCreateWaiver.mock.calls[0]?.[0]).not.toHaveProperty('requirement_ids');
   });
 
   it('labels the form and names each member by rank, not rank code', async () => {
