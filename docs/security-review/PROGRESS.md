@@ -16,6 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#4240](https://github.com/thegspiro/the-logbook/pull/4240)**
+(branch `claude/security-review-onboarding-p13`):
+Feature 30 (Onboarding), pass 13, a dedicated rotation session (not a
+watchdog pickup). PR #4238 (Feature 29, Reports & analytics, pass 15) had
+already merged clean (`413ab36e6`). A fresh `list_pull_requests` (state
+`open`) found no PR with a `claude/security-review-*` head, and row 30 was
+the next pending feature, confirmed on a freshly fetched `main`.
+
+**0 fixed, 0 new findings.** All 26 routes re-enumerated by AST — identical
+method/path/function set and auth-dependency shape to passes 7–12. Real
+delta since pass 12's baseline (`4c52bfee2`, PR #4003) traces to five
+independent, already-merged engineering commits from other rotation/owner-
+decision work (an S3 endpoint allowlist check at onboarding's file-storage
+save step, a bulk role delete now closing open `MemberPositionTerm` rows
+first, `/reset` releasing a wider set of `ON DELETE RESTRICT` location
+references added by other features, `public_info` moving into the wizard's
+asked-about module set, and new-org creation seeding Federal Programs grant
+opportunities plus de-duplicating the HQ station's location by name) — each
+read in full and verified good; none change this feature's auth posture,
+tenant scoping, or data-exposure surface. Standing flagged items (ONB-7;
+`ITTeamMemberRequest.email` as `str`) re-verified unchanged. See
+`docs/security-review/ONB5-30-onboarding.md`'s **Pass 13** section for the
+full trace.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 757 revisions, single head `09f0171ccf5e`; `check_route_permissions.py
+--strict` — 305 routes, 0 errors/warnings; scoped backend suite (`-k "onboard
+or org_template or template_service or key_custody or system_notices or
+gmail_service_account or email_provider or encrypt_email or position_kind or
+position_seeding"`) — 724 passed, 1 environment-only skip (`pywebpush`); `npm
+run typecheck` — 0 errors; `npm run lint` — 0 errors/warnings; `npx vitest run
+src/modules/onboarding` — 509 passed (44 files).
+
+Row 30 → ✅ (pending this PR's merge). Next is Feature 31 (Scheduled tasks) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 29, Reports & analytics, pass 15, PR #4238, merged), preserved for history</summary>
+
 **PR [#4238](https://github.com/thegspiro/the-logbook/pull/4238)**
 (branch `claude/security-review-reports-analytics-p15`):
 Feature 29 (Reports & analytics), pass 15. PR #4236 (Feature 28, Security,
@@ -64,6 +104,8 @@ src/pages/PlatformAnalyticsPage.test.tsx` — 359 passed (27 files).
 
 Row 29 → ✅ (pending this PR's merge). Next is Feature 30 (Onboarding) —
 re-check `list_pull_requests` fresh rather than trusting this note.
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 28, Security, audit & IP, pass 13, PR #4236, merged), preserved for history</summary>
