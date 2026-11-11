@@ -14,6 +14,7 @@ import shutil
 import socket
 import subprocess
 from pathlib import Path
+from typing import Callable, Iterable
 
 import pytest
 
@@ -183,6 +184,41 @@ class TestDetectMode:
         assert result.returncode != 0
 
 
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def _distinct_free_port(
+    taken: Iterable[str], free_port: Callable[[], int] = _free_port
+) -> str:
+    """A free port that none of ``taken`` already uses.
+
+    A free port is found by binding port 0 and closing the socket, so the
+    kernel can hand the same port out again on the next call. Two listeners
+    of one config on the same port share one socket: the plain HTTP server
+    then takes on the TLS server's ``ssl`` flag, and nginx refuses it for
+    having no certificate. That failed this suite intermittently on CI.
+    """
+    used = set(taken)
+    while True:
+        port = str(free_port())
+        if port not in used:
+            return port
+
+
+@pytest.mark.unit
+class TestEachListenerGetsItsOwnPort:
+    def test_a_port_the_kernel_hands_out_twice_is_skipped(self):
+        handed_out = iter([40001, 40001, 40002])
+        ports: list[str] = []
+        for _ in range(2):
+            ports.append(_distinct_free_port(ports, lambda: next(handed_out)))
+
+        assert ports == ["40001", "40002"]
+
+
 @pytest.mark.unit
 @pytest.mark.skipif(shutil.which("nginx") is None, reason="nginx is not installed")
 class TestNginxAcceptsTheConfigs:
@@ -214,12 +250,6 @@ class TestNginxAcceptsTheConfigs:
         )
         return cert, key
 
-    @staticmethod
-    def _free_port() -> int:
-        with socket.socket() as sock:
-            sock.bind(("127.0.0.1", 0))
-            return sock.getsockname()[1]
-
     def _nginx_t(self, tmp_path, certs, *configs: str) -> subprocess.CompletedProcess:
         cert, key = certs
         includes = []
@@ -228,8 +258,9 @@ class TestNginxAcceptsTheConfigs:
         ports: dict[str, str] = {}
 
         def move_port(match: re.Match) -> str:
-            port = ports.setdefault(match[2], str(self._free_port()))
-            return f"{match[1]}{port}"
+            if match[2] not in ports:
+                ports[match[2]] = _distinct_free_port(ports.values())
+            return f"{match[1]}{ports[match[2]]}"
 
         for i, config in enumerate(configs):
             # Point at throwaway certificates, and drop IPv6 listeners, which
