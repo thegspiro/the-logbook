@@ -16,6 +16,50 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
+**PR [#PLACEHOLDER](https://github.com/thegspiro/the-logbook/pull/PLACEHOLDER)**
+(branch `claude/security-review-forms-p13`):
+Feature 26 (Forms), pass 13, a watchdog pickup. PR #4233 (Feature 25,
+Messaging & notifications, pass 13) had already merged clean
+(`81093040b3d6784feb83fac8bab198a96d339c1e`, CI green 26/26, no conflicts,
+no open review threads bar the usual Codex quota-limit comment). A fresh
+`list_pull_requests` (state `open`) found no PR with a
+`claude/security-review-*` head, and row 26 was the next pending feature,
+confirmed on a freshly fetched `main`.
+
+Baseline `12f1430d2` (pass 12's own merge, PR #3980). Real delta: a
+correctness fix removing a display-only double-escaping layer on
+prospective-member fields built from a form submission
+(`forms_service.py`, traced to every later consumer — React text
+rendering, HTML email variable substitution, no CSV export — and found
+safe in each), a `useRanks` fix stopping `FieldRenderer` from firing an
+authenticated ranks lookup on the public, signed-out follow-up form (the
+existing `enabled` escape-hatch applied to a field type that had not yet
+used it), and a Create Form modal forms-review UX pass (`FormField`/
+`useFieldErrors`, inline validation, `AdminPageHeader` adoption) — all
+reviewed against the seven checklist dimensions, no finding. Route
+inventory re-enumerated by AST: 25 routes, unchanged from pass 12.
+**0 fixed, 0 newly flagged.** See
+`docs/security-review/FORM-26-forms.md`'s **Pass 13** section for the
+full trace, including the git-history-graft attribution note (same class
+as `MSG-25-messaging-notifications.md`'s `a87067dfe`).
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` (CI's pinned
+7.4.1/26.10.1/9.0.2) on `app/ tests/ alembic/` all clean; `validate_migrations.py
+--strict` — 756 revisions, single head `8b1cf6f55425`; `generate_schema_docs.py
+--check` — up to date; `check_route_permissions.py --strict` — 305 routes, 0
+errors/warnings; scoped backend suite (`-k "form or applicant_field or
+sensitive_field or embed"`) — 1,205 passed, 1 environment-only skip
+(`pywebpush`); `npm run typecheck` — 0 errors; `npm run lint` — 0
+errors/warnings; `npx vitest run src/components/forms
+src/pages/FormsPage.*.test.tsx src/hooks/useRanks.test.ts` — 67 passed (13
+files).
+
+Row 26 → ✅ (pending this PR's merge). Next is Feature 27 (Integrations) —
+re-check `list_pull_requests` fresh rather than trusting this note.
+
+<details>
+<summary>Superseded — prior Open PR note (Feature 25, Messaging & notifications, pass 13, PR #4233, merged), preserved for history</summary>
+
 **PR [#4233](https://github.com/thegspiro/the-logbook/pull/4233)**
 (branch `claude/security-review-messaging-notifications-p13`):
 Feature 25 (Messaging & notifications), pass 13, a watchdog pickup. PR #4232
@@ -51,8 +95,11 @@ src/modules/notifications src/pages/NotificationsPage.test.tsx
 src/hooks/usePushNotifications.test.ts src/utils/devicePushSubscription.test.ts`
 — 302 passed (41 files).
 
-Row 25 → ✅ (pending this PR's merge). Next is Feature 26 (Forms) —
-re-check `list_pull_requests` fresh rather than trusting this note.
+Row 25 → ✅. Merged clean (`81093040b3d6784feb83fac8bab198a96d339c1e`, CI
+green 26/26, no conflicts, no open review threads bar the usual Codex
+quota-limit comment). Next was Feature 26 (Forms).
+
+</details>
 
 <details>
 <summary>Superseded — prior Open PR note (Feature 24, Meetings & minutes, pass 13, PR #4232, merged), preserved for history</summary>
@@ -25661,7 +25708,7 @@ this same reset, per the "folded into this iteration's commit" rule.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                                                                        | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                                                                  | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                                                                | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                      | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                                                                      | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                                                                      | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`, `audit_ship_service.py`                                                                                        | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                                                                           | ⬜     |
