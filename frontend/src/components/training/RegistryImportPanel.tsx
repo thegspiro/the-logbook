@@ -37,34 +37,42 @@ export const RegistryImportPanel: React.FC<RegistryImportPanelProps> = ({ regist
                 { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 0 },
               ]
           ).map((registry) => (
-            <button
+            // The source link sits beside the import button, not inside it: a
+            // link within a button is two controls in one (axe
+            // nested-interactive), and its tap target was a line of small
+            // text (forms review F-11).
+            <div
               key={registry.key}
-              onClick={() => setRegistryModal({ key: registry.key, name: registry.name })}
-              className="bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover flex flex-col items-center rounded-lg px-4 py-3"
+              className="bg-theme-surface text-theme-text-primary flex flex-col items-center rounded-lg px-4 py-3"
             >
-              <div className="flex items-center space-x-2">
-                <Download className="h-5 w-5" aria-hidden="true" />
-                <span>Import {registry.name}</span>
-              </div>
-              {registry.last_updated && (
-                <span className="text-theme-text-muted mt-1 text-xs">Updated {registry.last_updated}</span>
-              )}
-              {registry.requirement_count > 0 && (
-                <span className="text-theme-text-muted text-xs">{registry.requirement_count} requirements</span>
-              )}
+              <button
+                type="button"
+                onClick={() => setRegistryModal({ key: registry.key, name: registry.name })}
+                className="hover:bg-theme-surface-hover flex w-full flex-col items-center rounded-md py-1"
+              >
+                <span className="flex items-center space-x-2">
+                  <Download className="h-5 w-5" aria-hidden="true" />
+                  <span>Import {registry.name}</span>
+                </span>
+                {registry.last_updated && (
+                  <span className="text-theme-text-muted mt-1 text-xs">Updated {registry.last_updated}</span>
+                )}
+                {registry.requirement_count > 0 && (
+                  <span className="text-theme-text-muted text-xs">{registry.requirement_count} requirements</span>
+                )}
+              </button>
               {registry.source_url && isSafeExternalUrl(registry.source_url) && (
                 <a
                   href={registry.source_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="mt-1 flex items-center space-x-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
+                  className="mt-1 inline-flex min-h-6 items-center space-x-1 px-2 text-xs text-blue-800 hover:underline dark:text-blue-300"
                 >
                   <ExternalLink className="h-3 w-3" aria-hidden="true" />
                   <span>Source</span>
                 </a>
               )}
-            </button>
+            </div>
           ))}
         </div>
       </div>
