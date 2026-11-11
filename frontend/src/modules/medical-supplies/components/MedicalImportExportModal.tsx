@@ -21,6 +21,9 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { useFieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 
 interface MedicalImportExportModalProps {
   onClose: () => void;
@@ -41,6 +44,11 @@ const saveBlob = (blob: Blob, filename: string) => {
   URL.revokeObjectURL(url);
 };
 
+// The upload is sent as multipart `file`, so a refusal of it reports that key.
+const IMPORT_FIELDS: FieldSpecs<'file'> = {
+  file: { id: 'medical-import-file', label: 'CSV file to import' },
+};
+
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 
 const importSummary = (result: MedicalImportResult) =>
@@ -55,6 +63,7 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState<'items' | 'lots' | 'template' | 'import' | null>(null);
   const [result, setResult] = useState<MedicalImportResult | null>(null);
+  const importErrors = useFieldErrors(IMPORT_FIELDS);
 
   const filtered = Boolean(
     filters.search ||
@@ -65,10 +74,17 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
     filters.storage_area_id
   );
 
-  const handleClose = () => {
-    if (result && (result.imported > 0 || result.lots_added > 0 || result.categories_created.length > 0)) onImported();
-    onClose();
-  };
+  // A chosen file that has not been imported is the one thing here that
+  // closing would lose; Done, Escape and the X ask first (forms review F-6).
+  const handleClose = useDiscardGuard({
+    isDirty: file !== null,
+    message: 'The chosen file has not been imported yet.',
+    onClose: () => {
+      if (result && (result.imported > 0 || result.lots_added > 0 || result.categories_created.length > 0))
+        onImported();
+      onClose();
+    },
+  });
 
   const runDownload = async (
     kind: 'items' | 'lots' | 'template',
@@ -89,8 +105,10 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0] ?? null;
     setResult(null);
+    importErrors.clear();
     if (selected && !selected.name.toLowerCase().endsWith('.csv')) {
-      toast.error('Choose a .csv file');
+      // Said on the file field rather than in a toast (forms review F-3).
+      importErrors.setError('file', `${selected.name} is not a CSV file. Choose a .csv file.`);
       setFile(null);
       event.target.value = '';
       return;
@@ -98,8 +116,16 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
     setFile(selected);
   };
 
-  const handleImport = async () => {
-    if (!file) return;
+  const handleImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    importErrors.setFormError(null);
+    // Import is not greyed out until a file is chosen; pressing it says what
+    // is missing instead (forms review F-3).
+    if (!file) {
+      importErrors.setErrors({ file: 'Choose a CSV file to import.' });
+      importErrors.focusFirst({ file: 'Choose a CSV file to import.' });
+      return;
+    }
     setBusy('import');
     try {
       const imported = await medicalSuppliesService.importItemsCsv(file);
@@ -115,7 +141,9 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to import supplies'));
+      // On the file field when the refusal names it, otherwise in the form,
+      // not a toast that goes away with the reason.
+      importErrors.focusFirst(importErrors.setFromApiError(err, 'Failed to import supplies'));
     } finally {
       setBusy(null);
     }
@@ -209,28 +237,31 @@ export const MedicalImportExportModal: React.FC<MedicalImportExportModalProps> =
             Download template
           </button>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <label htmlFor="medical-import-file" className="form-label sr-only">
-              CSV file to import
-            </label>
-            <input
-              id="medical-import-file"
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              onChange={handleFileChange}
-              className="text-theme-text-primary text-sm"
-            />
-            <button
-              type="button"
-              className="btn-primary inline-flex items-center gap-2"
-              disabled={!file || busy !== null}
-              onClick={() => void handleImport()}
-            >
-              <Upload className="h-4 w-4" aria-hidden="true" />
-              {busy === 'import' ? 'Importing…' : 'Import'}
-            </button>
-          </div>
+          <form noValidate onSubmit={(e) => void handleImport(e)} className="space-y-2">
+            {importErrors.formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {importErrors.formError}
+              </p>
+            )}
+            <div className="flex flex-wrap items-end gap-2">
+              <FormField id={IMPORT_FIELDS.file.id} label="CSV file to import" error={importErrors.errors.file}>
+                {(field) => (
+                  <input
+                    {...field}
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={handleFileChange}
+                    className="text-theme-text-primary text-sm"
+                  />
+                )}
+              </FormField>
+              <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={busy !== null}>
+                <Upload className="h-4 w-4" aria-hidden="true" />
+                {busy === 'import' ? 'Importing…' : 'Import'}
+              </button>
+            </div>
+          </form>
 
           {result && (
             <div className="border-theme-surface-border space-y-2 rounded-md border p-3 text-sm" role="status">
