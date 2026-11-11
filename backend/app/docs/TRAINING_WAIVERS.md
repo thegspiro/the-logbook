@@ -280,11 +280,11 @@ notification.
 
 **Where it is in the app.**
 
-| Who              | Where                                                                                                                                                                                                           |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Training officer | **Training Admin > Settings & Data > Session Waivers** turns requests on and sets the policy above                                                                                                              |
-| Member           | A training session's page offers **Request to be excused** when the session counts against them, shows how many waivers are left, then the request's state; **My Training > My Waiver Requests** lists them all |
-| Approver         | **Training Admin > Records > Waiver Requests**, or `/attendance-waivers`, lists what they decide; `/attendance-waivers/{id}` is the page their email opens                                                      |
+| Who              | Where                                                                                                                                                                                                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Training officer | **Training Admin > Settings & Data > Session Waivers** turns requests on and sets the policy above, including **Supporting documents** and how many days they are kept                                                                                                            |
+| Member           | A training session's page offers **Request to be excused** when the session counts against them, shows how many waivers are left, then the request's state; the request form has a document field when the policy takes them; **My Training > My Waiver Requests** lists them all |
+| Approver         | **Training Admin > Records > Waiver Requests**, or `/attendance-waivers`, lists what they decide; `/attendance-waivers/{id}` is the page their email opens, with the filed documents to download (and, for the member, to add while pending)                                      |
 
 The email's approve and deny buttons only pre-select a choice
 (`?action=approve|deny`). The page never decides on load, because mail scanners

@@ -81,6 +81,6 @@ describe('WaiverAttachmentList', () => {
     await user.click(button);
     expect(mockAdd).toHaveBeenCalledWith('r1', [note]);
     expect(mockToastSuccess).toHaveBeenCalledWith('Document filed.');
-    expect(onAttached).toHaveBeenCalledWith({ id: 'r1' });
+    expect(onAttached).toHaveBeenCalled();
   });
 });

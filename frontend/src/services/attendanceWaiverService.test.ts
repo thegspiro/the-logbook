@@ -30,13 +30,26 @@ describe('attendanceWaiverService response shapes', () => {
 
   it('gives a request with no decision log an empty one', async () => {
     mockGet.mockResolvedValue({ data: { id: 'req-1' } });
-    await expect(attendanceWaiverService.get('req-1')).resolves.toEqual({ id: 'req-1', actions: [] });
+    await expect(attendanceWaiverService.get('req-1')).resolves.toEqual({
+      id: 'req-1',
+      actions: [],
+      attachments: [],
+      can_attach: false,
+    });
   });
 
   it('gives a policy and an eligibility answer with no lists empty ones', async () => {
     mockGet.mockResolvedValue({ data: {} });
-    await expect(attendanceWaiverService.getPolicy()).resolves.toEqual({ categories: [], approver_position_ids: [] });
-    await expect(attendanceWaiverService.getEligibility('evt-1')).resolves.toEqual({ categories: [] });
+    await expect(attendanceWaiverService.getPolicy()).resolves.toEqual({
+      categories: [],
+      approver_position_ids: [],
+      attachment: 'off',
+      attachment_retention_days: 365,
+    });
+    await expect(attendanceWaiverService.getEligibility('evt-1')).resolves.toEqual({
+      categories: [],
+      attachment: 'off',
+    });
     expect(mockGet).toHaveBeenLastCalledWith('/training/waivers/requests/eligibility', {
       params: { event_id: 'evt-1' },
     });

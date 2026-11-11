@@ -9858,10 +9858,9 @@ request, kept 365 days) shipped with these gaps, each the narrower choice:
   by the sweep.
 - **HEIC is stored as filed, not converted.** A decider on Windows may need
   the HEIF extension to open an iPhone photo; nothing previews it in the page.
-- **The upload field and the document list are standalone components** until
-  the training waiver screens merge; they are wired into the request dialog
-  and the decision page in a follow-up push. Until then the policy's two new
-  settings can be saved through `PUT /training/waivers/requests/policy`.
+- **The upload field sits in the request dialog and the document list on the
+  decision page; the policy screen sets both new settings.** There is no
+  preview of a document in the page: a decider downloads it.
 
 ## Meetings — Business-Meeting Waiver Requests: Choices Made Without An Owner Ruling (2026-11-11)
 

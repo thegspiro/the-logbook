@@ -28,6 +28,7 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { ATTENDANCE_WAIVER_STATUS_COLORS, ATTENDANCE_WAIVER_STATUS_LABELS } from '../../constants/enums';
 import type { AttendanceWaiverRequest } from '../../types/attendanceWaiver';
 import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
+import { WaiverAttachmentList } from '../../components/waivers/WaiverAttachmentList';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import {
   ATTENDANCE_WAIVER_ACTION_LABELS,
@@ -277,6 +278,16 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
             {request.category && <Detail label="Category">{request.category}</Detail>}
             {request.reason && <Detail label="Reason">{request.reason}</Detail>}
           </dl>
+          {/* Shown when documents are on file, or when the member may still file
+              one; a request under a policy without documents shows nothing. */}
+          {((request.attachments ?? []).length > 0 || request.can_attach) && (
+            <WaiverAttachmentList
+              requestId={request.id}
+              attachments={request.attachments ?? []}
+              canAttach={request.can_attach === true}
+              onAttached={() => void reload()}
+            />
+          )}
         </section>
 
         {request.can_decide && (

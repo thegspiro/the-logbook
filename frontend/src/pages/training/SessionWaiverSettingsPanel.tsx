@@ -11,9 +11,10 @@
  * Every field the policy owns is sent on every save: the endpoint replaces the
  * stored policy whole, so an omitted field would be reset to its default.
  *
- * There is no attachment setting: the backend's policy model forbids unknown
- * keys and has none yet, because nothing would read it (CLAUDE.md pitfall
- * #19). The panel says so rather than offer a switch that does nothing.
+ * Attachments: whether a member may, or must, file a document with a request
+ * (PDF, JPEG, PNG or HEIC, 10 MB each, three at most), and how many days after
+ * a request closes its documents are kept before the daily retention task
+ * deletes them.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -31,6 +32,12 @@ import {
   AttendanceWaiverReasonText,
 } from '../../constants/enums';
 import type { AttendanceWaiverPolicy } from '../../types/attendanceWaiver';
+import {
+  WAIVER_ATTACHMENT_MAX_COUNT,
+  WAIVER_ATTACHMENT_MAX_MB,
+  WAIVER_ATTACHMENT_TYPES_LABEL,
+  WaiverAttachmentMode,
+} from '../../services/waiverAttachmentService';
 import type { AvailablePosition } from '../../types/training';
 import { getErrorMessage } from '../../utils/errorHandling';
 
@@ -39,13 +46,16 @@ const CAP_MIN = 1;
 const CAP_MAX = 365;
 const MAX_CATEGORIES = 20;
 const MAX_CATEGORY_LENGTH = 100;
+const RETENTION_MIN = 1;
+const RETENTION_MAX = 3650;
 
-type Field = 'cap' | 'categories' | 'category_required' | 'approver_position_ids';
+type Field = 'cap' | 'categories' | 'category_required' | 'attachment_retention_days' | 'approver_position_ids';
 
 const FIELDS: FieldSpecs<Field> = {
   cap: { id: 'waiver-policy-cap', label: 'Most waivers per member' },
   categories: { id: 'waiver-policy-category-0', label: 'Reason categories' },
   category_required: { id: 'waiver-policy-category-required', label: 'Category required' },
+  attachment_retention_days: { id: 'waiver-policy-retention', label: 'Keep documents for' },
   approver_position_ids: { id: 'waiver-policy-positions', label: 'Who decides' },
 };
 
@@ -55,6 +65,12 @@ const REASON_TEXT_OPTIONS = [
   { value: AttendanceWaiverReasonText.OFF, label: 'Not asked' },
   { value: AttendanceWaiverReasonText.OPTIONAL, label: 'Optional' },
   { value: AttendanceWaiverReasonText.REQUIRED, label: 'Required' },
+] as const;
+
+const ATTACHMENT_OPTIONS = [
+  { value: WaiverAttachmentMode.OFF, label: 'Not taken' },
+  { value: WaiverAttachmentMode.OPTIONAL, label: 'Optional' },
+  { value: WaiverAttachmentMode.REQUIRED, label: 'Required' },
 ] as const;
 
 interface Draft {
@@ -67,6 +83,9 @@ interface Draft {
   categories: string[];
   categoryRequired: boolean;
   reasonText: AttendanceWaiverReasonText;
+  attachment: WaiverAttachmentMode;
+  /** The input's text, like `cap`. */
+  retentionDays: string;
   positionIds: string[];
 }
 
@@ -79,6 +98,8 @@ const toDraft = (policy: AttendanceWaiverPolicy): Draft => ({
   categories: [...policy.categories],
   categoryRequired: policy.category_required,
   reasonText: policy.reason_text,
+  attachment: policy.attachment,
+  retentionDays: String(policy.attachment_retention_days),
   positionIds: [...policy.approver_position_ids],
 });
 
@@ -113,6 +134,10 @@ const validatePolicyDraft = (draft: Draft): FieldErrors<Field> => {
   if (draft.categoryRequired && labels.length === 0) {
     errors.category_required = 'Add a category before requiring one.';
   }
+  const days = Number(draft.retentionDays);
+  if (!draft.retentionDays.trim() || !Number.isInteger(days) || days < RETENTION_MIN || days > RETENTION_MAX) {
+    errors.attachment_retention_days = `Enter a whole number of days from ${RETENTION_MIN} to ${RETENTION_MAX}.`;
+  }
   return errors;
 };
 
@@ -129,6 +154,8 @@ const toPolicy = (draft: Draft, knownPositionIds: ReadonlySet<string> | null): A
   categories: draft.categories.map((c) => c.trim()),
   category_required: draft.categoryRequired && draft.categories.length > 0,
   reason_text: draft.reasonText,
+  attachment: draft.attachment,
+  attachment_retention_days: Number(draft.retentionDays),
   approver_position_ids: knownPositionIds
     ? draft.positionIds.filter((p) => knownPositionIds.has(p))
     : draft.positionIds,
@@ -417,12 +444,50 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
           </div>
         </fieldset>
 
-        <div>
-          <p className="form-label">Attachments</p>
-          <p className="text-theme-text-muted text-sm">
-            Letting members attach a document, such as a doctor&apos;s note, arrives in a later update.
+        <fieldset disabled={saving} className="space-y-3">
+          <legend className="form-label">Supporting documents</legend>
+          <p className="text-theme-text-muted text-xs">
+            A document such as a doctor&apos;s note: {WAIVER_ATTACHMENT_TYPES_LABEL}, up to {WAIVER_ATTACHMENT_MAX_MB}{' '}
+            MB each and {WAIVER_ATTACHMENT_MAX_COUNT} per request. Only the member and the officers who decide can open
+            them; they are never shown in the annual review or sent in an email.
           </p>
-        </div>
+          <div className="flex flex-wrap gap-3">
+            {ATTACHMENT_OPTIONS.map((option) => (
+              <label key={option.value} className="flex min-h-11 items-center gap-2">
+                <input
+                  type="radio"
+                  name="waiver-policy-attachment"
+                  value={option.value}
+                  checked={draft.attachment === option.value}
+                  onChange={() => update({ attachment: option.value })}
+                />
+                <span className="text-theme-text-primary text-sm">{option.label}</span>
+              </label>
+            ))}
+          </div>
+          <FormField
+            id={FIELDS.attachment_retention_days.id}
+            label={FIELDS.attachment_retention_days.label}
+            error={errors.attachment_retention_days}
+            hint="Days after a request is decided or withdrawn. Then the documents are deleted; the request and its decision are kept. Applies to documents already filed even if you stop taking new ones."
+          >
+            {(field) => (
+              <div className="flex items-center gap-2">
+                <input
+                  {...field}
+                  type="number"
+                  inputMode="numeric"
+                  min={RETENTION_MIN}
+                  max={RETENTION_MAX}
+                  className="form-input w-28"
+                  value={draft.retentionDays}
+                  onChange={(e) => update({ retentionDays: e.target.value })}
+                />
+                <span className="text-theme-text-secondary text-sm">days</span>
+              </div>
+            )}
+          </FormField>
+        </fieldset>
       </div>
 
       <div className="card space-y-3 p-6">

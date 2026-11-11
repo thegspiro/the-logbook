@@ -26,8 +26,8 @@ interface WaiverAttachmentListProps {
   attachments: readonly WaiverAttachment[];
   /** From the request response's `can_attach`. */
   canAttach?: boolean;
-  /** Called with the updated request after more documents are filed. */
-  onAttached?: (request: unknown) => void;
+  /** Called after more documents are filed; the page re-fetches the request. */
+  onAttached?: () => void;
 }
 
 function sizeLabel(bytes: number): string {
@@ -65,11 +65,11 @@ export const WaiverAttachmentList: React.FC<WaiverAttachmentListProps> = ({
     if (!selection.valid || selection.files.length === 0) return;
     setUploading(true);
     try {
-      const updated = await waiverAttachmentService.addAttachments(requestId, selection.files);
+      await waiverAttachmentService.addAttachments(requestId, selection.files);
       toast.success(selection.files.length === 1 ? 'Document filed.' : 'Documents filed.');
       setSelection(EMPTY_SELECTION);
       setPickerKey((k) => k + 1);
-      onAttached?.(updated);
+      onAttached?.();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Could not file the document.'));
     } finally {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import type { AttendanceWaiverPolicy } from '../../types/attendanceWaiver';
@@ -28,6 +28,8 @@ const policy = (over: Partial<AttendanceWaiverPolicy> = {}): AttendanceWaiverPol
   categories: [],
   category_required: false,
   reason_text: 'optional',
+  attachment: 'off',
+  attachment_retention_days: 365,
   approver_position_ids: [],
   ...over,
 });
@@ -62,7 +64,10 @@ describe('SessionWaiverSettingsPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Add a category' }));
     await user.type(screen.getByLabelText('Category 1'), ' Work ');
     await user.click(screen.getByLabelText('A member must choose a category'));
-    await user.click(screen.getByLabelText('Required'));
+    await user.click(within(screen.getByRole('group', { name: 'Written explanation' })).getByLabelText('Required'));
+    await user.click(within(screen.getByRole('group', { name: 'Supporting documents' })).getByLabelText('Optional'));
+    await user.clear(screen.getByLabelText(/Keep documents for/));
+    await user.type(screen.getByLabelText(/Keep documents for/), '730');
     await user.click(screen.getByLabelText('Training Officer'));
     await user.click(save());
 
@@ -74,6 +79,8 @@ describe('SessionWaiverSettingsPanel', () => {
       categories: ['Work'],
       category_required: true,
       reason_text: 'required',
+      attachment: 'optional',
+      attachment_retention_days: 730,
       approver_position_ids: ['pos-to'],
     });
   });
@@ -148,9 +155,24 @@ describe('SessionWaiverSettingsPanel', () => {
     expect(mockSavePolicy).toHaveBeenCalledWith(expect.objectContaining({ approver_position_ids: ['pos-to'] }));
   });
 
-  it('says attachments arrive later rather than offering a setting', async () => {
+  it('shows the stored document setting and retention period', async () => {
+    mockGetPolicy.mockResolvedValue(policy({ attachment: 'required', attachment_retention_days: 90 }));
     renderWithRouter(<SessionWaiverSettingsPanel />);
-    expect(await screen.findByText(/arrives in a later update/)).toBeInTheDocument();
+    const documents = await screen.findByRole('group', { name: 'Supporting documents' });
+    expect(within(documents).getByLabelText('Required')).toBeChecked();
+    expect(screen.getByLabelText(/Keep documents for/)).toHaveValue(90);
+    expect(screen.queryByText(/arrives in a later update/)).not.toBeInTheDocument();
+  });
+
+  it('flags a retention period out of range and does not save', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<SessionWaiverSettingsPanel />);
+    const days = await screen.findByLabelText(/Keep documents for/);
+    await user.clear(days);
+    await user.type(days, '0');
+    await user.click(save());
+    expect(screen.getByText('Enter a whole number of days from 1 to 3650.', { selector: 'p' })).toBeInTheDocument();
+    expect(mockSavePolicy).not.toHaveBeenCalled();
   });
 
   it('shows the server’s refusal', async () => {

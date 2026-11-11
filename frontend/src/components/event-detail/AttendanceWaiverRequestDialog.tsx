@@ -7,9 +7,13 @@
  * turned on and the server will accept. The server checks everything again on
  * submit; a refusal it sends back (a deadline passed while the dialog was open,
  * a check-in recorded in the meantime) is shown as it was worded.
+ *
+ * When the policy takes documents, the upload field follows the explanation.
+ * Files chosen there go with the request in one multipart call, so a request
+ * the department requires a document for is never saved without one.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Modal } from '../Modal';
 import { ErrorSummary, FormField } from '../ux';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../hooks/useFieldErrors';
@@ -18,6 +22,8 @@ import { AttendanceWaiverReasonText } from '../../constants/enums';
 import type { AttendanceWaiverEligibility, AttendanceWaiverRequest } from '../../types/attendanceWaiver';
 import { formatDateTime } from '../../utils/dateFormatting';
 import { capSummary, WAIVER_TEXT_MAX_LENGTH } from '../../utils/attendanceWaivers';
+import { WaiverAttachmentField, type WaiverAttachmentSelection } from '../waivers/WaiverAttachmentField';
+import { WaiverAttachmentMode } from '../../services/waiverAttachmentService';
 
 type Field = 'category' | 'reason';
 
@@ -44,6 +50,8 @@ export const AttendanceWaiverRequestDialog: React.FC<AttendanceWaiverRequestDial
   const [category, setCategory] = useState('');
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [documents, setDocuments] = useState<WaiverAttachmentSelection>({ files: [], valid: true });
+  const [documentMissing, setDocumentMissing] = useState(false);
   const [summaryFocus, setSummaryFocus] = useState(0);
   const { errors, formError, setErrors, setFromApiError, summary, clear } = useFieldErrors(FIELDS);
 
@@ -51,6 +59,12 @@ export const AttendanceWaiverRequestDialog: React.FC<AttendanceWaiverRequestDial
   const showReason = eligibility.reason_text !== AttendanceWaiverReasonText.OFF;
   const reasonRequired = eligibility.reason_text === AttendanceWaiverReasonText.REQUIRED;
   const cap = useMemo(() => capSummary(eligibility), [eligibility]);
+  const attachmentMode = eligibility.attachment ?? WaiverAttachmentMode.OFF;
+  const documentRequired = attachmentMode === WaiverAttachmentMode.REQUIRED;
+  const handleDocuments = useCallback((next: WaiverAttachmentSelection) => {
+    setDocuments(next);
+    if (next.files.length > 0) setDocumentMissing(false);
+  }, []);
 
   const validate = (): FieldErrors<Field> => {
     const found: FieldErrors<Field> = {};
@@ -62,9 +76,15 @@ export const AttendanceWaiverRequestDialog: React.FC<AttendanceWaiverRequestDial
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const found = validate();
+    const missing = documentRequired && documents.files.length === 0;
+    setDocumentMissing(missing);
     if (Object.keys(found).length > 0) {
       setErrors(found);
       setSummaryFocus((n) => n + 1);
+      return;
+    }
+    // The field states its own problems (type, size, count) beside itself.
+    if (missing || (attachmentMode !== WaiverAttachmentMode.OFF && !documents.valid && documents.files.length > 0)) {
       return;
     }
     clear();
@@ -72,11 +92,16 @@ export const AttendanceWaiverRequestDialog: React.FC<AttendanceWaiverRequestDial
     try {
       // `|| undefined` omits a blank field (pitfall #1): the backend refuses a
       // category it does not list, and an empty string is not one.
-      const request = await attendanceWaiverService.submit({
+      const body = {
         event_id: eligibility.event_id,
         category: (showCategory && category) || undefined,
         reason: (showReason && reason.trim()) || undefined,
-      });
+      };
+      const files = attachmentMode === WaiverAttachmentMode.OFF ? [] : documents.files;
+      const request =
+        files.length > 0
+          ? await attendanceWaiverService.submitWithAttachments(body, files)
+          : await attendanceWaiverService.submit(body);
       onSubmitted(request);
     } catch (err: unknown) {
       setFromApiError(err, 'Your request could not be sent. Try again.');
@@ -95,7 +120,7 @@ export const AttendanceWaiverRequestDialog: React.FC<AttendanceWaiverRequestDial
       aria-describedby="attendance-waiver-description"
       onSubmit={(e) => void handleSubmit(e)}
       noValidate
-      isDirty={Boolean(category || reason.trim())}
+      isDirty={Boolean(category || reason.trim() || documents.files.length > 0)}
       footer={
         <>
           <button
@@ -179,6 +204,10 @@ export const AttendanceWaiverRequestDialog: React.FC<AttendanceWaiverRequestDial
               />
             )}
           </FormField>
+        )}
+
+        {attachmentMode !== WaiverAttachmentMode.OFF && (
+          <WaiverAttachmentField mode={attachmentMode} onChange={handleDocuments} showRequiredError={documentMissing} />
         )}
       </div>
     </Modal>
