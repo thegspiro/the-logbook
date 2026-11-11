@@ -8,7 +8,7 @@ import copy
 import uuid as uuid_lib
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 from uuid import UUID
 
 from fastapi import (
@@ -97,6 +97,7 @@ from app.schemas.event import (
     VisibleEventTypesResponse,
 )
 from app.schemas.organization import MembershipTierSettings
+from app.schemas.training_session import TrainingSessionAttach
 from app.services import file_storage_service as file_storage
 from app.services.documents_service import DocumentsService
 from app.services.event_organizer_service import (
@@ -352,6 +353,38 @@ def _refuse_type_change_off_training(access: str, update_fields: dict) -> None:
                 "Ask an event manager."
             ),
         )
+
+
+async def _audit_training_details_created(
+    db: AsyncSession,
+    current_user: User,
+    events: List[Event],
+    details: TrainingSessionAttach,
+) -> None:
+    """Record the training details an event (or series) was created with.
+
+    Which sessions count toward an attendance requirement moves members'
+    attendance percentages, and any events.manage holder may choose it
+    (TR14-2, accepted 2026-11-10), so the choice is kept on the audit trail.
+    """
+    if not events:
+        return
+    await log_audit_event(
+        db=db,
+        event_type="training_session_created",
+        event_category="training",
+        severity="info",
+        event_data={
+            "event_id": str(events[0].id),
+            "occurrences": len(events),
+            "fields": sorted(details.model_dump(exclude_unset=True).keys()),
+            "attendance_requirement_ids": [
+                str(r) for r in details.attendance_requirement_ids or []
+            ],
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 def _build_event_response(event: Event, **extra_fields) -> EventResponse:
@@ -773,6 +806,10 @@ async def create_event(
             user_id=str(current_user.id),
             username=current_user.username,
         )
+        if event_data.training_details is not None:
+            await _audit_training_details_created(
+                db, current_user, [event], event_data.training_details
+            )
 
         # Fan the new event out to the org's chat integrations (Slack/Discord/
         # Teams) after the response — best-effort, runs in its own DB session.
@@ -3436,6 +3473,11 @@ async def create_recurring_event(
 
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    if recurring_data.training_details is not None:
+        await _audit_training_details_created(
+            db, current_user, events, recurring_data.training_details
+        )
 
     return [_build_event_response(event) for event in events]
 

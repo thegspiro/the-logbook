@@ -22,6 +22,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import pytest
+from pydantic import ValidationError
+
 from app.models.event import EventType
 from app.models.training import RequirementType, TrainingSession, TrainingType
 from app.schemas.training_session import (
@@ -669,3 +672,22 @@ class TestASessionAttendanceRequirementIsNotASatisfiedRequirement:
 
         assert error is None
         assert session.requirement_id == str(requirement_id)
+
+
+class TestTheAttachSchema:
+    def test_an_unknown_key_is_refused_rather_than_dropped(self):
+        # A client sending a field this schema does not carry would otherwise
+        # get a 201 and silently lose it.
+        with pytest.raises(ValidationError, match="extra_forbidden|Extra inputs"):
+            TrainingSessionAttach(course_id=uuid4(), prerequisites="none")
+
+    def test_a_library_course_and_a_one_off_name_are_not_both_accepted(self):
+        with pytest.raises(ValidationError, match="not both"):
+            TrainingSessionAttach(course_id=uuid4(), course_name="Pump Ops")
+
+    def test_every_field_is_optional(self):
+        details = TrainingSessionAttach()
+        assert details.auto_create_records is True
+        assert details.require_completion_confirmation is False
+        assert details.counts_toward_certification is True
+        assert details.approval_deadline_days == 7

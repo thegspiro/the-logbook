@@ -75,17 +75,24 @@ class TrainingSessionCreate(BaseModel):
         ),
     )
 
-    # New course details (if not using existing)
+    # New course details (if not using existing). With neither a course nor a
+    # name, the session is filed under the event's title, as a Training event
+    # created from Events is.
     course_name: Optional[str] = Field(None, max_length=255)
     course_code: Optional[str] = Field(None, max_length=50)
     training_type: str = Field(
-        ...,
+        default=ModelTrainingType.CONTINUING_EDUCATION.value,
         description=(
             "certification, continuing_education, skills_practice, orientation, "
             "refresher, specialty, policy_acknowledgment"
         ),
     )
-    credit_hours: float = Field(..., ge=0, le=FLOAT32_MAX)
+    credit_hours: Optional[float] = Field(
+        None,
+        ge=0,
+        le=FLOAT32_MAX,
+        description="Hours credited; empty means the scheduled length",
+    )
     instructor: Optional[str] = Field(None, max_length=255)
     instructor_id: Optional[UUID] = Field(
         None, description="Member teaching this session (enables qualification checks)"
@@ -231,21 +238,56 @@ class TrainingSessionAttendanceRequirements(BaseModel):
 
 
 class TrainingSessionAttach(BaseModel):
-    """Training details picked for a Training event created from Events.
+    """The training details a Training event is created with.
 
-    Picking any of these attaches a training session to the event, which is
-    what files its attendance credit under a course and category and feeds a
-    program requirement. Every field is optional: a Training event with no
-    details at all still credits its attendees, filed under the event's title
-    as Continuing Education.
+    Sent with ``POST /events`` and ``POST /events/recurring`` (one session per
+    occurrence), or to attach details to an existing Training event. They
+    become the event's training session, which files its attendance credit
+    under a course and category, feeds a program requirement, and decides
+    which session-attendance requirements the event counts toward.
+
+    Every field is optional. With no course and no one-off name the session is
+    filed under the event's title; with no type it is Continuing Education;
+    with no hours it credits the scheduled length, the same as a Training
+    event with no details at all.
+
+    Unknown keys are refused rather than dropped: a client sending a field
+    this schema does not carry would otherwise get a 201 and lose it.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     course_id: Optional[UUID] = None
+    # A one-off course name, not added to the Course Library.
+    course_name: Optional[str] = Field(None, max_length=255)
+    course_code: Optional[str] = Field(None, max_length=50)
     category_id: Optional[UUID] = None
     program_id: Optional[UUID] = None
     phase_id: Optional[UUID] = None
     requirement_id: Optional[UUID] = None
     training_type: Optional[str] = None
+    credit_hours: Optional[float] = Field(None, ge=0, le=FLOAT32_MAX)
+    instructor: Optional[str] = Field(None, max_length=255)
+    instructor_id: Optional[UUID] = None
+
+    issues_certification: bool = False
+    certification_number_prefix: Optional[str] = Field(None, max_length=50)
+    issuing_agency: Optional[str] = Field(None, max_length=255)
+    expiration_months: Optional[int] = Field(None, ge=1, le=INT32_MAX)
+
+    counts_toward_certification: bool = True
+    auto_create_records: bool = True
+    require_completion_confirmation: bool = False
+    approval_deadline_days: int = Field(default=7, ge=1, le=30)
+
+    attendance_requirement_ids: Optional[List[UUID]] = Field(
+        None,
+        max_length=50,
+        description=(
+            "Session-attendance requirements this session counts toward; "
+            "members they grade are charged with attending it"
+        ),
+    )
 
     @field_validator("training_type")
     @classmethod
@@ -253,6 +295,14 @@ class TrainingSessionAttach(BaseModel):
         if v is None:
             return v
         return validate_enum_value(v, ModelTrainingType, "training_type")
+
+    @model_validator(mode="after")
+    def _one_course_source(self) -> "TrainingSessionAttach":
+        if self.course_id is not None and (self.course_name or self.course_code):
+            raise ValueError(
+                "Pick a course from the library or name a one-off course, not both"
+            )
+        return self
 
 
 class TrainingSessionResponse(UTCResponseBase):

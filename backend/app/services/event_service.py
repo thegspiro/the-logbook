@@ -564,13 +564,10 @@ class EventService:
 
         self.db.add(event)
         if training is not None and training_details is not None:
-            # One commit for both, so an event is never left behind without
-            # the details the officer picked for it.
-            await self.db.flush()
-            self.db.add(
-                training.build_session_for_event(
-                    event, training_details, course, organization_id, created_by
-                )
+            # One commit for all of it, so an event is never left behind
+            # without the details the officer picked for it.
+            await training.add_sessions_for_events(
+                [event], training_details, course, organization_id, created_by
             )
         await self.db.commit()
         await self.db.refresh(event)
@@ -5809,17 +5806,9 @@ class EventService:
             created_events.append(child_event)
 
         if training is not None and training_details is not None:
-            await self.db.flush()
-            for occurrence in created_events:
-                self.db.add(
-                    training.build_session_for_event(
-                        occurrence,
-                        training_details,
-                        course,
-                        organization_id,
-                        created_by,
-                    )
-                )
+            await training.add_sessions_for_events(
+                created_events, training_details, course, organization_id, created_by
+            )
 
         await self.db.commit()
 

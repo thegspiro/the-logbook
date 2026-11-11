@@ -99,6 +99,14 @@ def _display_name(user: User) -> str:
     return user.display_name or (user.username or "Member")
 
 
+def scheduled_hours(start: Optional[datetime], end: Optional[datetime]) -> float:
+    """An event's scheduled length in hours: the credit a session with no hours
+    of its own, and no course giving it some, files under."""
+    if start is None or end is None:
+        return 0.0
+    return round(max(0.0, (end - start).total_seconds()) / 3600, 2)
+
+
 @dataclass
 class EventTrainingCredit:
     """What finalizing a Training event's attendance credited.
@@ -480,13 +488,13 @@ class TrainingSessionService:
         organization_id: UUID | str,
         created_by: UUID | str | None,
     ) -> TrainingSession:
-        """The session that files an Events-created Training event's credit.
+        """The session that files a Training event's credit.
 
-        Mirrors what the Create Training Session wizard pre-fills from a course
-        (name, code, type, credit hours, instructor), falling back to the event
-        itself when no course was picked. Created only because an officer picked
-        a detail, so it keeps the wizard's defaults: records complete when
-        attendance is finalized, with no separate officer confirmation.
+        What the officer entered wins. A library course fills what they left
+        blank (its name, code, type, hours, instructor and expiry), and with
+        no course the session is filed under a one-off name, or else the
+        event's title, crediting the scheduled length as Continuing Education
+        — exactly what a Training event with no session credits.
         """
         if details.training_type:
             training_type = TrainingType(details.training_type)
@@ -497,14 +505,25 @@ class TrainingSessionService:
         else:
             training_type = TrainingType.CONTINUING_EDUCATION
 
-        # credit_hours is NOT NULL on the session. A course's own figure wins;
-        # otherwise the scheduled length stands in, as the wizard's default does.
-        credit_hours = course.credit_hours if course is not None else None
+        # credit_hours is NOT NULL on the session.
+        credit_hours = details.credit_hours
+        if credit_hours is None and course is not None:
+            credit_hours = course.credit_hours
         if credit_hours is None:
-            credit_hours = 0.0
-            if event.start_datetime and event.end_datetime:
-                span = (event.end_datetime - event.start_datetime).total_seconds()
-                credit_hours = round(max(0.0, span) / 3600, 2)
+            credit_hours = scheduled_hours(event.start_datetime, event.end_datetime)
+
+        if course is not None:
+            course_name, course_code = course.name, course.code
+        else:
+            course_name = (details.course_name or "").strip() or event.title
+            course_code = (details.course_code or "").strip() or None
+
+        instructor = (details.instructor or "").strip() or (
+            course.instructor if course is not None else None
+        )
+        expiration_months = details.expiration_months
+        if expiration_months is None and course is not None:
+            expiration_months = course.expiration_months
 
         return TrainingSession(
             organization_id=str(organization_id),
@@ -516,16 +535,56 @@ class TrainingSessionService:
             requirement_id=(
                 str(details.requirement_id) if details.requirement_id else None
             ),
-            course_name=course.name if course is not None else event.title,
-            course_code=course.code if course is not None else None,
+            course_name=course_name,
+            course_code=course_code,
             training_type=training_type,
             credit_hours=float(credit_hours),
-            instructor=course.instructor if course is not None else None,
-            auto_create_records=True,
-            require_completion_confirmation=False,
-            counts_toward_certification=True,
+            instructor=instructor,
+            instructor_id=(
+                str(details.instructor_id) if details.instructor_id else None
+            ),
+            issues_certification=details.issues_certification,
+            certification_number_prefix=(
+                (details.certification_number_prefix or "").strip() or None
+            ),
+            issuing_agency=(details.issuing_agency or "").strip() or None,
+            expiration_months=expiration_months,
+            counts_toward_certification=details.counts_toward_certification,
+            auto_create_records=details.auto_create_records,
+            require_completion_confirmation=details.require_completion_confirmation,
+            approval_deadline_days=details.approval_deadline_days,
             created_by=str(created_by) if created_by else None,
         )
+
+    async def add_sessions_for_events(
+        self,
+        events: Sequence[Event],
+        details: TrainingSessionAttach,
+        course: Optional[TrainingCourse],
+        organization_id: UUID | str,
+        created_by: UUID | str | None,
+    ) -> List[TrainingSession]:
+        """Give each event its session and attendance links. Does not commit.
+
+        The events must already be added to the session. Flushes, so the
+        events have ids for their sessions and the sessions for their links;
+        the caller's commit writes all three together.
+        """
+        await self.db.flush()
+        sessions = [
+            self.build_session_for_event(
+                event, details, course, organization_id, created_by
+            )
+            for event in events
+        ]
+        for training_session in sessions:
+            self.db.add(training_session)
+        await self.db.flush()
+        for training_session in sessions:
+            self._link_attendance_requirements(
+                training_session, details.attendance_requirement_ids or []
+            )
+        return sessions
 
     async def attach_session_to_event(
         self,
@@ -568,11 +627,10 @@ class TrainingSessionService:
         if error:
             return None, error
 
-        training_session = self.build_session_for_event(
-            event, details, course, organization_id, created_by
-        )
-        self.db.add(training_session)
         try:
+            [training_session] = await self.add_sessions_for_events(
+                [event], details, course, organization_id, created_by
+            )
             await self.db.commit()
         except IntegrityError:
             # training_sessions.event_id is unique: another request attached
@@ -644,12 +702,15 @@ class TrainingSessionService:
             course_code = course.code
             course_id = course.id
         else:
-            if not session_data.course_name:
-                return None, "course_name is required when creating a new course"
-
-            course_name = session_data.course_name
+            # No course: filed under a one-off name, or the event's title.
+            course_name = session_data.course_name or session_data.title
             course_code = session_data.course_code
             course_id = None
+        credit_hours = session_data.credit_hours
+        if credit_hours is None:
+            credit_hours = scheduled_hours(
+                session_data.start_datetime, session_data.end_datetime
+            )
 
         # Check for location double-booking
         if session_data.location_id:
@@ -694,7 +755,7 @@ class TrainingSessionService:
                 "course_name": course_name,
                 "course_code": course_code,
                 "training_type": session_data.training_type,
-                "credit_hours": session_data.credit_hours,
+                "credit_hours": credit_hours,
                 "instructor": session_data.instructor,
                 "issues_certification": session_data.issues_certification,
                 "issuing_agency": session_data.issuing_agency,
@@ -727,7 +788,7 @@ class TrainingSessionService:
             course_name=course_name,
             course_code=course_code,
             training_type=TrainingType(session_data.training_type),
-            credit_hours=session_data.credit_hours,
+            credit_hours=credit_hours,
             instructor=session_data.instructor,
             instructor_id=(
                 str(session_data.instructor_id) if session_data.instructor_id else None
@@ -803,12 +864,15 @@ class TrainingSessionService:
             course_code = course.code
             course_id = course.id
         else:
-            if not session_data.course_name:
-                return [], "course_name is required when creating a new course"
-
-            course_name = session_data.course_name
+            # No course: filed under a one-off name, or the event's title.
+            course_name = session_data.course_name or session_data.title
             course_code = session_data.course_code
             course_id = None
+        credit_hours = session_data.credit_hours
+        if credit_hours is None:
+            credit_hours = scheduled_hours(
+                session_data.start_datetime, session_data.end_datetime
+            )
 
         # Build event data dict for EventService.create_recurring_event
         event_data = {
@@ -840,7 +904,7 @@ class TrainingSessionService:
                 "course_name": course_name,
                 "course_code": course_code,
                 "training_type": session_data.training_type,
-                "credit_hours": session_data.credit_hours,
+                "credit_hours": credit_hours,
                 "instructor": session_data.instructor,
                 "issues_certification": session_data.issues_certification,
                 "issuing_agency": session_data.issuing_agency,
@@ -891,7 +955,7 @@ class TrainingSessionService:
                 course_name=course_name,
                 course_code=course_code,
                 training_type=TrainingType(session_data.training_type),
-                credit_hours=session_data.credit_hours,
+                credit_hours=credit_hours,
                 instructor=session_data.instructor,
                 instructor_id=(
                     str(session_data.instructor_id)
