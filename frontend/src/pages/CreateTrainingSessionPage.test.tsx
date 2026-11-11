@@ -11,6 +11,7 @@ const getVisibleEventTypesWithCategories = vi.fn();
 const createEvent = vi.fn();
 const createRecurringEvent = vi.fn();
 const getMandatoryTiers = vi.fn();
+const getTemplates = vi.fn();
 
 vi.mock('../services/api', () => ({
   userService: { getUsers: (...args: unknown[]) => getUsers(...args) as unknown },
@@ -24,6 +25,7 @@ vi.mock('../services/api', () => ({
     getVisibleEventTypesWithCategories: (...args: unknown[]) => getVisibleEventTypesWithCategories(...args) as unknown,
     createEvent: (...args: unknown[]) => createEvent(...args) as unknown,
     createRecurringEvent: (...args: unknown[]) => createRecurringEvent(...args) as unknown,
+    getTemplates: (...args: unknown[]) => getTemplates(...args) as unknown,
   },
 }));
 
@@ -93,6 +95,7 @@ function resetApi() {
     createEvent,
     createRecurringEvent,
     getMandatoryTiers,
+    getTemplates,
     navigate,
     toastError,
   ]) {
@@ -111,6 +114,7 @@ function resetApi() {
   createEvent.mockResolvedValue({ id: 'event-1' });
   createRecurringEvent.mockResolvedValue([{ id: 'event-1' }, { id: 'event-2' }]);
   getMandatoryTiers.mockResolvedValue({ everyone: false, tier_ids: [], unmapped: [] });
+  getTemplates.mockResolvedValue([]);
 }
 
 /** Title and a start date; the end follows two hours later. */
@@ -155,6 +159,73 @@ describe('CreateTrainingSessionPage permission', () => {
     expect(screen.getByLabelText(/^Title/)).toBeInTheDocument();
     expect(screen.getByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
     await waitFor(() => expect(getEvents).toHaveBeenCalledTimes(1));
+  });
+});
+
+// Training Admin gains the Events page's templates, Training ones only.
+describe('CreateTrainingSessionPage templates', () => {
+  const template = (id: string, name: string, event_type: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    organization_id: 'org',
+    name,
+    event_type,
+    default_title: name,
+    default_duration_minutes: 120,
+    requires_rsvp: false,
+    is_mandatory: false,
+    allow_guests: false,
+    require_checkout: false,
+    send_reminders: true,
+    reminder_target: 'going',
+    reminder_schedule: [24],
+    is_active: true,
+    created_at: '',
+    updated_at: '',
+    ...extra,
+  });
+
+  beforeEach(() => {
+    resetApi();
+    getTemplates.mockResolvedValue([
+      template('tpl-drill', 'Company Drill', 'training', { default_description: 'Weekly training drill' }),
+      template('tpl-meeting', 'Business Meeting', 'business_meeting'),
+      template('tpl-old', 'Old Drill', 'training', { is_active: false }),
+    ]);
+  });
+
+  it('offers the active Training templates, first, and fills the form from one', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    const picker = await screen.findByRole('combobox', { name: 'Start from a template' });
+    expect(
+      within(picker)
+        .getAllByRole('option')
+        .map((o) => o.textContent)
+    ).toEqual(['— No template —', 'Company Drill']);
+    expect(picker).toHaveAccessibleDescription(
+      "Training templates only. A template fills the event's own fields, replacing what is already typed."
+    );
+    await user.selectOptions(picker, 'tpl-drill');
+
+    expect(screen.getByLabelText(/^Title/)).toHaveValue('Company Drill');
+    expect(screen.getByLabelText(/^Description/)).toHaveValue('Weekly training drill');
+    expect(screen.getByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
+  });
+
+  it('records the template a series was created from', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Start from a template' }), 'tpl-drill');
+    await user.click(screen.getByRole('checkbox', { name: /Make this a recurring event/ }));
+    await user.click(screen.getByRole('checkbox', { name: 'Rolling 12-month cycle' }));
+    await next(user);
+    await toReview(user);
+    await submit(user);
+
+    await waitFor(() => expect(createRecurringEvent).toHaveBeenCalledTimes(1));
+    expect(createRecurringEvent).toHaveBeenCalledWith(expect.objectContaining({ template_id: 'tpl-drill' }));
   });
 });
 

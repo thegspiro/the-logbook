@@ -9,21 +9,32 @@
  * handed a form whose save would be refused.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { eventService } from '../services/api';
-import type { EventCreate, RecurringEventCreate } from '../types/event';
+import type { EventCreate, EventTemplate, RecurringEventCreate } from '../types/event';
 import type { ConflictEvent } from '../components/event-form/eventFormTypes';
 import { EventComposer } from '../components/event-form/EventComposer';
 import { EventType as EventTypeEnum } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
+import { useTimezone } from '../hooks/useTimezone';
+import { templateToInitialData } from '../utils/eventTemplates';
+import { EventTemplatePicker } from '../components/event-form/EventTemplatePicker';
 
 const CreateTrainingSessionPage: React.FC = () => {
   const navigate = useNavigate();
   const canManageEvents = useAuthStore((state) => state.checkPermission('events.manage'));
+  const tz = useTimezone();
   const [userEvents, setUserEvents] = useState<ConflictEvent[]>([]);
+  // Training templates only: the type here is fixed to Training.
+  const [templates, setTemplates] = useState<EventTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const templateInitialData = useMemo(() => {
+    const template = templates.find((t) => t.id === selectedTemplateId);
+    return template ? templateToInitialData(template, tz) : undefined;
+  }, [templates, selectedTemplateId, tz]);
 
   useEffect(() => {
     if (!canManageEvents) return;
@@ -45,6 +56,22 @@ const CreateTrainingSessionPage: React.FC = () => {
       });
   }, [canManageEvents]);
 
+  useEffect(() => {
+    if (!canManageEvents) return;
+    let cancelled = false;
+    eventService
+      .getTemplates()
+      .then((data) => {
+        if (!cancelled) setTemplates(data.filter((t) => t.is_active && t.event_type === EventTypeEnum.TRAINING));
+      })
+      .catch(() => {
+        /* templates are optional */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManageEvents]);
+
   const handleSubmit = async (data: EventCreate) => {
     const event = await eventService.createEvent(data);
     toast.success('Training session created');
@@ -52,7 +79,8 @@ const CreateTrainingSessionPage: React.FC = () => {
   };
 
   const handleSubmitRecurring = async (data: RecurringEventCreate) => {
-    const events = await eventService.createRecurringEvent(data);
+    // Records which template the series came from; a single event has no such field.
+    const events = await eventService.createRecurringEvent({ ...data, template_id: selectedTemplateId || undefined });
     toast.success(`Created ${events.length} recurring training session${events.length === 1 ? '' : 's'}`);
     // The first occurrence, where the series' own page begins.
     const first = events[0];
@@ -72,7 +100,18 @@ const CreateTrainingSessionPage: React.FC = () => {
             <p className="text-theme-text-muted mb-6">
               Schedule a training event with automatic attendance tracking via QR code
             </p>
+            {templates.length > 0 && (
+              <EventTemplatePicker
+                templates={templates}
+                value={selectedTemplateId}
+                onChange={setSelectedTemplateId}
+                hint="Training templates only. A template fills the event's own fields, replacing what is already typed."
+              />
+            )}
+            {/* A template starts the form afresh from its values. */}
             <EventComposer
+              key={selectedTemplateId || 'no-template'}
+              initialData={templateInitialData}
               lockedType={EventTypeEnum.TRAINING}
               onSubmit={handleSubmit}
               onSubmitRecurring={handleSubmitRecurring}

@@ -144,11 +144,9 @@ describe('EventCreatePage', () => {
       // Submit
       await user.click(screen.getByRole('button', { name: /create event/i }));
 
-      await waitFor(() => {
-        // Error appears in both EventCreatePage and EventForm error displays
-        const errors = screen.getAllByText('Title is already taken');
-        expect(errors.length).toBeGreaterThanOrEqual(1);
-      });
+      // Once: the form reports its own failed save, as on the edit page.
+      expect(await screen.findByText('Title is already taken')).toBeInTheDocument();
+      expect(screen.getAllByText('Title is already taken')).toHaveLength(1);
     });
   });
 
@@ -420,6 +418,21 @@ describe('EventCreatePage templates', () => {
     expect(await screen.findByText('Step 1 of 4 · Event Details')).toBeInTheDocument();
     expect(screen.getByLabelText(/^Title/)).toHaveValue('CPR Renewal');
     expect(screen.queryByText('Switched to the training form')).not.toBeInTheDocument();
+  });
+
+  // The page drew its own banner as well as the training form's.
+  it("says once that a Training event's save failed", async () => {
+    vi.mocked(eventService.createEvent).mockRejectedValue(new Error('Network Error'));
+    window.history.pushState({}, '', '/events/admin?tab=create&template=tpl-cpr');
+    const user = userEvent.setup();
+    renderWithRouter(<EventCreatePage />);
+
+    await screen.findByText('Step 1 of 4 · Event Details');
+    for (let step = 0; step < 3; step += 1) await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Create Event' }));
+
+    expect(await screen.findByText('Failed to create event. Try again.')).toBeInTheDocument();
+    expect(screen.getAllByText('Failed to create event. Try again.')).toHaveLength(1);
   });
 
   it('opens the training form from a link to a Training template', async () => {
