@@ -45,7 +45,7 @@ export const SeriesScopeBanner: React.FC<SeriesScopeChoiceProps> = ({ value, onC
               value="single"
               checked={value === 'single'}
               onChange={() => onChange('single')}
-              className="text-indigo-600 focus:ring-indigo-500"
+              className="form-checkbox"
             />
             <span>This event only</span>
           </label>
@@ -56,7 +56,7 @@ export const SeriesScopeBanner: React.FC<SeriesScopeChoiceProps> = ({ value, onC
               value="future"
               checked={value === 'future'}
               onChange={() => onChange('future')}
-              className="text-indigo-600 focus:ring-indigo-500"
+              className="form-checkbox"
             />
             <span>This and all future events</span>
           </label>
@@ -92,7 +92,7 @@ export const SeriesScopeReview: React.FC<SeriesScopeChoiceProps> = ({
                 value="single"
                 checked={value === 'single'}
                 onChange={() => onChange('single')}
-                className="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                className="form-checkbox mt-0.5 shrink-0"
               />
               <span>
                 <span className="block">This event only</span>
@@ -106,7 +106,7 @@ export const SeriesScopeReview: React.FC<SeriesScopeChoiceProps> = ({
                 value="future"
                 checked={value === 'future'}
                 onChange={() => onChange('future')}
-                className="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                className="form-checkbox mt-0.5 shrink-0"
               />
               <span>
                 <span className="block">This and all future events{through}</span>
