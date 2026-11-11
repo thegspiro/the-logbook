@@ -107,6 +107,8 @@ _PLAIN_COLUMNS = [
     ),
     ("member_leaves_of_absence", "id", ["reason"]),
     ("training_waivers", "id", ["reason"]),
+    ("attendance_waiver_requests", "id", ["reason"]),
+    ("attendance_waiver_request_actions", "id", ["note"]),
     ("training_requirement_overrides", "id", ["reason"]),
     (
         "prospects",
@@ -296,12 +298,12 @@ async def _rotate_fingerprints(session, stats, commit: bool) -> None:
             stats["unreadable"] += 1
             continue
         held = set(json.loads(prints) if isinstance(prints, str) else prints or [])
-        expected = [
+        expected_prints = [
             fp
             for fp in (email_fingerprint(a) for a in _summary_addresses(summary))
             if fp
         ]
-        if set(expected) <= held:
+        if set(expected_prints) <= held:
             stats["current"] += 1
             continue
         stats["rotated"] += 1
@@ -311,7 +313,10 @@ async def _rotate_fingerprints(session, stats, commit: bool) -> None:
                     "UPDATE message_history SET recipient_fingerprints = :fps "
                     "WHERE id = :pk"
                 ),
-                {"fps": json.dumps(list(dict.fromkeys(expected))), "pk": row_id},
+                {
+                    "fps": json.dumps(list(dict.fromkeys(expected_prints))),
+                    "pk": row_id,
+                },
             )
 
 
