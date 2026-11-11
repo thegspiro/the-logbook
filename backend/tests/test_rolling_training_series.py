@@ -292,3 +292,40 @@ class TestADuplicate:
         assert session["course_name"] == "Ladder Throws"
         assert session["links"] == drills
         assert not session["is_finalized"]
+
+    async def test_an_inert_session_attendance_link_is_not_copied(
+        self, db_session, dept
+    ):
+        """A session's requirement_id naming a session-attendance requirement
+        does nothing, and a new session may not take one; a session that
+        still carries one from before keeps it, but its copies do not."""
+        org, officer = dept
+        drills = await _attendance_requirement(db_session, org)
+        start, end = _started_weeks_ago(-1)
+        source = await EventService(db_session).create_event(
+            EventCreate(
+                title="Ladder Night",
+                event_type="training",
+                start_datetime=start,
+                end_datetime=end,
+                requires_rsvp=False,
+                training_details=TrainingSessionAttach(),
+            ),
+            org,
+            officer,
+        )
+        source_id = str(source.id)
+        await db_session.execute(
+            text(
+                "UPDATE training_sessions SET requirement_id = :r WHERE event_id = :e"
+            ),
+            {"r": drills, "e": source_id},
+        )
+
+        copy = await EventService(db_session).duplicate_event(source_id, org, officer)
+
+        result = await db_session.execute(
+            text("SELECT requirement_id FROM training_sessions WHERE event_id = :e"),
+            {"e": str(copy.id)},
+        )
+        assert result.scalar_one() is None

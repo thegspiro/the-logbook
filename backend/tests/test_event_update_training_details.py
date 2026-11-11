@@ -10,6 +10,7 @@ Against real rows, read back with raw SQL so an identity map cannot report a
 write that never landed.
 """
 
+import re
 import uuid
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
@@ -42,6 +43,8 @@ from app.services.training_session_service import (
 )
 
 pytestmark = [pytest.mark.integration]
+
+ATTENDANCE_LOCKED_PATTERN = "^" + re.escape(ATTENDANCE_LOCKED_PREFIX)
 
 
 def _uid() -> str:
@@ -395,7 +398,7 @@ class TestASingleEvent:
     ):
         event_id = await _event(db_session, dept, {})
 
-        with pytest.raises(ValueError) as refused:
+        with pytest.raises(ValueError, match="graded by session attendance") as refused:
             await _edit(
                 db_session,
                 dept,
@@ -485,7 +488,7 @@ class TestAnEventMadeWithoutDetails:
         event_id = await _event(db_session, dept)
         await _finalize(db_session, event_id)
 
-        with pytest.raises(ValueError) as refused:
+        with pytest.raises(ValueError, match=ATTENDANCE_LOCKED_PATTERN) as refused:
             await _edit(
                 db_session,
                 dept,
@@ -558,7 +561,7 @@ class TestAFinalizedEvent:
         event_id = await _event(db_session, dept, {"instructor": "Lt. Okafor"})
         await _finalize(db_session, event_id)
 
-        with pytest.raises(ValueError) as refused:
+        with pytest.raises(ValueError, match=ATTENDANCE_LOCKED_PATTERN) as refused:
             await _edit(
                 db_session,
                 dept,
@@ -573,6 +576,121 @@ class TestAFinalizedEvent:
         assert "instructor" in str(refused.value)
         assert (await _session(db_session, event_id))["instructor"] == "Lt. Okafor"
         assert await _links(db_session, event_id) == set()
+
+
+class TestAFormThatRestatesWhatItRead:
+    """The form sends the course name it loaded. On a save that also renames
+    the event, a session filed under the title has already followed the new
+    title, so the old name it restates must not read as a change."""
+
+    async def test_a_finalized_event_s_title_fix_saves(self, db_session, dept):
+        event_id = await _event(db_session, dept, {})
+        await _finalize(db_session, event_id)
+
+        await _edit(
+            db_session,
+            dept,
+            event_id,
+            title="Monday Drill (Station 2)",
+            training_details=TrainingSessionDetailsUpdate(course_name="Monday Drill"),
+        )
+
+        session = await _session(db_session, event_id)
+        assert session["course_name"] == "Monday Drill (Station 2)"
+
+    async def test_an_open_event_s_session_keeps_following_the_title(
+        self, db_session, dept
+    ):
+        event_id = await _event(db_session, dept, {})
+
+        await _edit(
+            db_session,
+            dept,
+            event_id,
+            title="Monday Drill (Station 2)",
+            training_details=TrainingSessionDetailsUpdate(course_name="Monday Drill"),
+        )
+
+        session = await _session(db_session, event_id)
+        assert session["course_name"] == "Monday Drill (Station 2)"
+
+    async def test_a_new_one_off_name_is_still_taken(self, db_session, dept):
+        event_id = await _event(db_session, dept, {})
+
+        await _edit(
+            db_session,
+            dept,
+            event_id,
+            title="Monday Drill (Station 2)",
+            training_details=TrainingSessionDetailsUpdate(course_name="Ladder Throws"),
+        )
+
+        session = await _session(db_session, event_id)
+        assert session["course_name"] == "Ladder Throws"
+
+
+class TestABlankMeansWhatItMeansOnCreate:
+    """A blank hours, instructor or expiry is filled from the session's library
+    course on create; an update's null must mean the same, or re-sending a
+    blank the form read would change the credit."""
+
+    async def _event_with_course(self, db, dept) -> str:
+        course = TrainingCourse(
+            id=_uid(),
+            organization_id=dept["org"],
+            name="Pump Operations I",
+            code="PO1",
+            training_type=TrainingType.CERTIFICATION,
+            credit_hours=6.0,
+            instructor="Capt. Reyes",
+            expiration_months=24,
+        )
+        db.add(course)
+        await db.flush()
+        return await _event(
+            db, dept, {"course_id": str(course.id)}, window=_window(hours=3)
+        )
+
+    async def test_blank_hours_instructor_and_expiry_stay_the_course_s(
+        self, db_session, dept
+    ):
+        event_id = await self._event_with_course(db_session, dept)
+
+        await _edit(
+            db_session,
+            dept,
+            event_id,
+            training_details=TrainingSessionDetailsUpdate(
+                credit_hours=None, instructor=None, expiration_months=None
+            ),
+        )
+
+        result = await db_session.execute(
+            text(
+                "SELECT credit_hours, instructor, expiration_months "
+                "FROM training_sessions WHERE event_id = :e"
+            ),
+            {"e": event_id},
+        )
+        assert tuple(result.one()) == (6.0, "Capt. Reyes", 24)
+
+    async def test_a_finalized_event_re_sending_blanks_still_saves(
+        self, db_session, dept
+    ):
+        event_id = await self._event_with_course(db_session, dept)
+        await _finalize(db_session, event_id)
+
+        await _edit(
+            db_session,
+            dept,
+            event_id,
+            description="Bring gloves",
+            training_details=TrainingSessionDetailsUpdate(
+                credit_hours=None, instructor=None, expiration_months=None
+            ),
+        )
+
+        assert (await _session(db_session, event_id))["credit_hours"] == 6.0
 
 
 class TestASeries:
@@ -659,7 +777,7 @@ class TestASeries:
         ids = await self._series(db_session, dept, {})
         await _finalize(db_session, ids[2])
 
-        with pytest.raises(ValueError) as refused:
+        with pytest.raises(ValueError, match=ATTENDANCE_LOCKED_PATTERN) as refused:
             await self._edit_future(
                 db_session,
                 dept,

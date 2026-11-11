@@ -133,6 +133,30 @@ def _display_name(user: User) -> str:
     return user.display_name or (user.username or "Member")
 
 
+def _course_fills_blanks(
+    session_data: TrainingSessionCreate, course: Optional[TrainingCourse]
+) -> Tuple[float, str]:
+    """The hours and type a POST /training/sessions create credits.
+
+    As ``build_session_for_event`` reads them for POST /events: what was sent
+    wins, a library course fills a blank, and with neither the session
+    credits the scheduled length as Continuing Education (the schema's
+    default type).
+    """
+    credit_hours = session_data.credit_hours
+    if credit_hours is None and course is not None:
+        credit_hours = course.credit_hours
+    if credit_hours is None:
+        credit_hours = scheduled_hours(
+            session_data.start_datetime, session_data.end_datetime
+        )
+    training_type = session_data.training_type
+    sent_type = "training_type" in session_data.model_fields_set
+    if not sent_type and course is not None and course.training_type is not None:
+        training_type = getattr(course.training_type, "value", course.training_type)
+    return float(credit_hours), str(training_type)
+
+
 def scheduled_hours(start: Optional[datetime], end: Optional[datetime]) -> float:
     """An event's scheduled length in hours: the credit a session with no hours
     of its own, and no course giving it some, files under."""
@@ -684,6 +708,7 @@ class TrainingSessionService:
         events: Sequence[Event],
         details: TrainingSessionDetailsUpdate,
         organization_id: UUID | str,
+        previous_titles: Optional[Dict[str, str]] = None,
     ) -> List[SessionDetailsPlan]:
         """Work out what ``details`` does to each Training event's session.
 
@@ -692,7 +717,9 @@ class TrainingSessionService:
         ``locked_fields``, so a series edit can name every occurrence it
         would change. Run after the event's own fields are applied, so a
         session filed under the event's title is judged against the title
-        the save leaves it with.
+        the save leaves it with; ``previous_titles`` (event id to its title
+        before the save) lets a form that restates the name it read, the old
+        title, be read as following the title rather than as a change.
         """
         payload = details.model_dump(exclude_unset=True)
         links_sent = "attendance_requirement_ids" in payload
@@ -733,6 +760,16 @@ class TrainingSessionService:
         stored_links = await self.attendance_requirement_ids(
             [str(s.id) for s in sessions.values()]
         )
+        stored_course_ids = {s.course_id for s in sessions.values() if s.course_id}
+        stored_courses: Dict[str, TrainingCourse] = {}
+        if stored_course_ids:
+            course_result = await self.db.execute(
+                select(TrainingCourse).where(
+                    TrainingCourse.id.in_(stored_course_ids),
+                    TrainingCourse.organization_id == str(organization_id),
+                )
+            )
+            stored_courses = {str(c.id): c for c in course_result.scalars().all()}
 
         plans = []
         for event in events:
@@ -746,7 +783,14 @@ class TrainingSessionService:
             if session is None:
                 plan = self._plan_new_session(event, payload, link_ids, course)
             else:
-                plan = self._plan_session_changes(event, session, payload, course)
+                plan = self._plan_session_changes(
+                    event,
+                    session,
+                    payload,
+                    course,
+                    stored_courses.get(session.course_id or ""),
+                    (previous_titles or {}).get(str(event.id)),
+                )
                 if link_ids is not None and set(link_ids) != set(
                     stored_links[str(session.id)]
                 ):
@@ -761,6 +805,8 @@ class TrainingSessionService:
         session: TrainingSession,
         payload: Dict[str, Any],
         course: Optional[TrainingCourse],
+        stored_course: Optional[TrainingCourse],
+        previous_title: Optional[str],
     ) -> SessionDetailsPlan:
         target: Dict[str, Any] = {}
         # Re-sending the stored course is no change, even if the library
@@ -781,9 +827,17 @@ class TrainingSessionService:
         if course_after is None:
             refiled = "course_id" in target
             if refiled or "course_name" in payload:
-                target["course_name"] = (
-                    payload.get("course_name") or ""
-                ).strip() or event.title
+                name = (payload.get("course_name") or "").strip() or event.title
+                # The name the form read, restated on a save that also renamed
+                # the event: the session already followed the new title, and
+                # the old one is what it was filed under, not a new name.
+                if (
+                    previous_title is not None
+                    and name == previous_title
+                    and session.course_name == event.title
+                ):
+                    name = event.title
+                target["course_name"] = name
             if refiled or "course_code" in payload:
                 target["course_code"] = (payload.get("course_code") or "").strip() or (
                     None
@@ -793,19 +847,38 @@ class TrainingSessionService:
                 "Pick a course from the library or name a one-off course, not both"
             )
 
+        # A blank hours, instructor or expiry means what it means on create:
+        # the session's library course fills it (build_session_for_event).
+        if "course_id" in target:
+            course_for_blanks = course if target["course_id"] else None
+        else:
+            course_for_blanks = stored_course
+
         for name in _DETAIL_ID_FIELDS:
             if name in payload:
                 target[name] = str(payload[name]) if payload[name] else None
         for name in _DETAIL_TEXT_FIELDS:
             if name in payload:
                 target[name] = (payload[name] or "").strip() or None
+        if "instructor" in target and target["instructor"] is None:
+            target["instructor"] = (
+                course_for_blanks.instructor if course_for_blanks else None
+            )
         for name in _DETAIL_VALUE_FIELDS:
             if name in payload:
                 target[name] = payload[name]
+        if (
+            "expiration_months" in target
+            and target["expiration_months"] is None
+            and course_for_blanks is not None
+        ):
+            target["expiration_months"] = course_for_blanks.expiration_months
         if "training_type" in payload:
             target["training_type"] = TrainingType(payload["training_type"])
         if "credit_hours" in payload:
             hours = payload["credit_hours"]
+            if hours is None and course_for_blanks is not None:
+                hours = course_for_blanks.credit_hours
             target["credit_hours"] = (
                 float(hours)
                 if hours is not None
@@ -947,6 +1020,15 @@ class TrainingSessionService:
         files_under_title = (
             source.course_id is None and source.course_name == source_title
         )
+        # A session-attendance requirement_id does nothing, and a new session
+        # may not take one (ATTENDANCE_REQUIREMENT_NOT_LINKABLE). One a source
+        # still carries from before that rule stays on the source only.
+        drop_requirement = source.requirement_id is not None and (
+            await self._requirement_link_error(
+                source.requirement_id, source.organization_id, None
+            )
+            == ATTENDANCE_REQUIREMENT_NOT_LINKABLE
+        )
         clones = []
         for event in events:
             clone = TrainingSession(
@@ -958,6 +1040,8 @@ class TrainingSessionService:
                 setattr(clone, name, copy.deepcopy(getattr(source, name)))
             if files_under_title:
                 clone.course_name = event.title
+            if drop_requirement:
+                clone.requirement_id = None
             self.db.add(clone)
             clones.append(clone)
         await self.db.flush()
@@ -1056,6 +1140,7 @@ class TrainingSessionService:
             return None, linkage_error
 
         # Validate course data
+        course: Optional[TrainingCourse] = None
         if session_data.use_existing_course:
             if not session_data.course_id:
                 return None, "course_id is required when use_existing_course is true"
@@ -1085,11 +1170,7 @@ class TrainingSessionService:
             course_name = session_data.course_name or session_data.title
             course_code = session_data.course_code
             course_id = None
-        credit_hours = session_data.credit_hours
-        if credit_hours is None:
-            credit_hours = scheduled_hours(
-                session_data.start_datetime, session_data.end_datetime
-            )
+        credit_hours, training_type = _course_fills_blanks(session_data, course)
 
         # Check for location double-booking
         if session_data.location_id:
@@ -1133,7 +1214,7 @@ class TrainingSessionService:
             custom_fields={
                 "course_name": course_name,
                 "course_code": course_code,
-                "training_type": session_data.training_type,
+                "training_type": training_type,
                 "credit_hours": credit_hours,
                 "instructor": session_data.instructor,
                 "issues_certification": session_data.issues_certification,
@@ -1166,7 +1247,7 @@ class TrainingSessionService:
             ),
             course_name=course_name,
             course_code=course_code,
-            training_type=TrainingType(session_data.training_type),
+            training_type=TrainingType(training_type),
             credit_hours=credit_hours,
             instructor=session_data.instructor,
             instructor_id=(
@@ -1224,6 +1305,7 @@ class TrainingSessionService:
             return [], linkage_error
 
         # Validate course data
+        course: Optional[TrainingCourse] = None
         if session_data.use_existing_course:
             if not session_data.course_id:
                 return [], "course_id is required when use_existing_course is true"
@@ -1247,11 +1329,7 @@ class TrainingSessionService:
             course_name = session_data.course_name or session_data.title
             course_code = session_data.course_code
             course_id = None
-        credit_hours = session_data.credit_hours
-        if credit_hours is None:
-            credit_hours = scheduled_hours(
-                session_data.start_datetime, session_data.end_datetime
-            )
+        credit_hours, training_type = _course_fills_blanks(session_data, course)
 
         # Build event data dict for EventService.create_recurring_event
         event_data = {
@@ -1282,7 +1360,7 @@ class TrainingSessionService:
             "custom_fields": {
                 "course_name": course_name,
                 "course_code": course_code,
-                "training_type": session_data.training_type,
+                "training_type": training_type,
                 "credit_hours": credit_hours,
                 "instructor": session_data.instructor,
                 "issues_certification": session_data.issues_certification,
@@ -1333,7 +1411,7 @@ class TrainingSessionService:
                 ),
                 course_name=course_name,
                 course_code=course_code,
-                training_type=TrainingType(session_data.training_type),
+                training_type=TrainingType(training_type),
                 credit_hours=credit_hours,
                 instructor=session_data.instructor,
                 instructor_id=(

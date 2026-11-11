@@ -30,7 +30,11 @@ from app.models.training import (
 )
 from app.models.user import User
 from app.schemas.event import EventCreate, RecurringEventCreate, RSVPOverride
-from app.schemas.training_session import TrainingSessionAttach, TrainingSessionCreate
+from app.schemas.training_session import (
+    RecurringTrainingSessionCreate,
+    TrainingSessionAttach,
+    TrainingSessionCreate,
+)
 from app.services.event_service import EventService
 from app.services.training_session_service import TrainingSessionService
 
@@ -402,6 +406,88 @@ class TestTheTrainingAdminCreatePathNeedsNoCourse:
         assert row["course_name"] == "Saturday Drill"
         assert row["training_type"] == "continuing_education"
         assert row["credit_hours"] == 2.0
+
+
+class TestBothCreatePathsReadACourseTheSameWay:
+    """POST /training/sessions and POST /events take the same course and the
+    same blanks; the course fills the blank hours and type on both."""
+
+    async def test_a_library_course_fills_blank_hours_and_type(self, db_session, dept):
+        org, officer, _ = dept
+        course = await _course(db_session, org)
+        start, end = _window(hours=3)
+
+        session, error = await TrainingSessionService(
+            db_session
+        ).create_training_session(
+            TrainingSessionCreate(
+                title="Pump Night",
+                start_datetime=start,
+                end_datetime=end,
+                requires_rsvp=False,
+                use_existing_course=True,
+                course_id=course,
+            ),
+            org,
+            officer,
+        )
+
+        assert error is None
+        row = await _session_row(db_session, str(session.event_id))
+        assert (row["credit_hours"], row["training_type"]) == (6.0, "certification")
+
+    async def test_the_recurring_path_too(self, db_session, dept):
+        org, officer, _ = dept
+        course = await _course(db_session, org)
+        start, end = _window(hours=3)
+
+        sessions, error = await TrainingSessionService(
+            db_session
+        ).create_recurring_training_session(
+            RecurringTrainingSessionCreate(
+                title="Pump Night",
+                start_datetime=start,
+                end_datetime=end,
+                requires_rsvp=False,
+                use_existing_course=True,
+                course_id=course,
+                recurrence_pattern="weekly",
+                recurrence_end_date=start + timedelta(days=7),
+            ),
+            org,
+            officer,
+        )
+
+        assert error is None
+        for session in sessions:
+            row = await _session_row(db_session, str(session.event_id))
+            assert (row["credit_hours"], row["training_type"]) == (
+                6.0,
+                "certification",
+            )
+
+    async def test_hours_and_type_sent_still_win(self, db_session, dept):
+        org, officer, _ = dept
+        course = await _course(db_session, org)
+        start, end = _window(hours=3)
+
+        session, _ = await TrainingSessionService(db_session).create_training_session(
+            TrainingSessionCreate(
+                title="Pump Night",
+                start_datetime=start,
+                end_datetime=end,
+                requires_rsvp=False,
+                use_existing_course=True,
+                course_id=course,
+                credit_hours=2.0,
+                training_type="refresher",
+            ),
+            org,
+            officer,
+        )
+
+        row = await _session_row(db_session, str(session.event_id))
+        assert (row["credit_hours"], row["training_type"]) == (2.0, "refresher")
 
 
 class TestACourselessSessionCreditsLikeNoSession:

@@ -1309,7 +1309,11 @@ class EventService:
         )
         if training_details is not None:
             await self._apply_training_details(
-                [event], training_details, organization_id, updated_by
+                [event],
+                training_details,
+                organization_id,
+                updated_by,
+                previous_titles={str(event.id): old_title},
             )
 
         if updated_by:
@@ -1337,6 +1341,7 @@ class EventService:
         details: TrainingSessionDetailsUpdate,
         organization_id: UUID | str,
         updated_by: UUID | str | None,
+        previous_titles: Optional[Dict[str, str]] = None,
     ) -> None:
         """Apply an edit's training details to each event's session.
 
@@ -1356,7 +1361,7 @@ class EventService:
             raise ValueError("Training details can only be added to a Training event")
         training = TrainingSessionService(self.db)
         plans = await training.plan_session_details(
-            training_events, details, organization_id
+            training_events, details, organization_id, previous_titles
         )
         locked = [plan for plan in plans if plan.locked_fields]
         if locked:
@@ -1651,9 +1656,11 @@ class EventService:
         updated_count = 0
 
         training_follow_ups = []
+        previous_titles: Dict[str, str] = {}
         for event in future_events:
             was_training = self.event_credits_training(event)
             old_title = event.title
+            previous_titles[str(event.id)] = old_title
             old_start = event.start_datetime
             for field, value in update_data.items():
                 if field == "custom_fields":
@@ -1686,7 +1693,11 @@ class EventService:
         # any other change to one refuses the whole save, before the commit.
         if training_details is not None and future_events:
             await self._apply_training_details(
-                list(future_events), training_details, organization_id, updated_by
+                list(future_events),
+                training_details,
+                organization_id,
+                updated_by,
+                previous_titles=previous_titles,
             )
 
         if updated_count > 0:
@@ -2189,10 +2200,10 @@ class EventService:
             custom_fields.pop("series_end_reminder_sent", None)
         successor.custom_fields = custom_fields or None
 
-        # The parent's organizer pair is the one a rolling series copies onto
-        # new occurrences (a "this and future" handover always writes it), so
-        # an upcoming successor takes it. A successor that already happened
-        # keeps the organizer who ran it: past occurrences are a record.
+        # The parent's organizer pair is the series' current one (a "this and
+        # future" handover always writes it), so an upcoming successor takes
+        # it. A successor that already happened keeps the organizer who ran
+        # it: past occurrences are a record.
         if _utc_instant(successor.start_datetime) >= now:
             successor.organizer_id = old_parent.organizer_id
             successor.alternate_organizer_id = old_parent.alternate_organizer_id
