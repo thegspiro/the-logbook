@@ -229,6 +229,7 @@ describe('EventCreatePage', () => {
         visible_event_types: ['business_meeting', 'training'],
         custom_event_categories: [],
         visible_custom_categories: [],
+        membership_types: [],
       });
       vi.mocked(eventService.createEvent).mockReset();
       vi.mocked(eventService.createEvent).mockResolvedValue({ id: 'evt-new' } as unknown as Event);
@@ -371,6 +372,7 @@ describe('EventCreatePage templates', () => {
       visible_event_types: ['business_meeting', 'training'],
       custom_event_categories: [],
       visible_custom_categories: [],
+      membership_types: [],
     });
     vi.mocked(apiModule.trainingService.getCourses).mockReset();
     vi.mocked(apiModule.trainingService.getCourses).mockResolvedValue([]);

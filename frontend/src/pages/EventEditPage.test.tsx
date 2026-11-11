@@ -936,7 +936,6 @@ describe('EventEditPage', () => {
         ...trainingEvent,
         recurrence_parent_id: 'series-1',
         recurrence_pattern: 'weekly',
-        recurrence_end_date: undefined,
         rolling_recurrence: false,
       };
       const parent: Event = {

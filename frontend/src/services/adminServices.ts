@@ -113,14 +113,16 @@ export interface TrainingSessionResponse {
   course_code?: string;
   training_type: string;
   credit_hours: number;
-  instructor?: string;
+  // Null on a session the old Events form attached, which wrote these to the
+  // event's custom fields instead (TrainingSessionLinkageCard reads them).
+  instructor?: string | null;
   instructor_id?: string;
   co_instructors?: string[];
   apparatus_id?: string;
   issues_certification: boolean;
   certification_number_prefix?: string;
-  issuing_agency?: string;
-  expiration_months?: number;
+  issuing_agency?: string | null;
+  expiration_months?: number | null;
   // False when the session's hours must not advance linked certificate
   // requirements (delivery a certifying body wouldn't accept).
   counts_toward_certification: boolean;
