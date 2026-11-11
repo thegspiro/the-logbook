@@ -235,12 +235,19 @@ export const TrainingAdminPage: React.FC = () => {
       moduleKey="training"
       title="Training Administration"
       description="Manage training submissions, requirements, sessions, and more"
-      primaryAction={{
-        key: 'create-session',
-        label: 'Create Session',
-        icon: Plus,
-        onClick: () => navigateTo('records', 'sessions'),
-      }}
+      // The sessions tab creates through the events endpoints, which need
+      // events.manage. A training manager without it would be led to a notice
+      // saying so, so the button is left out for them rather than shown.
+      primaryAction={
+        canManageEvents
+          ? {
+              key: 'create-session',
+              label: 'Create Session',
+              icon: Plus,
+              onClick: () => navigateTo('records', 'sessions'),
+            }
+          : undefined
+      }
       headerAside={
         <HelpLink
           topic="training"

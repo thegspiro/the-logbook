@@ -281,6 +281,7 @@ describe('TrainingAdminPage', () => {
   });
 
   it('sends Create Session to the sessions destination', async () => {
+    useAuthStore.setState({ user: signedInWith(['training.manage', 'events.manage']) });
     const user = userEvent.setup();
     renderWithRouter(<TrainingAdminPage />);
 
@@ -288,6 +289,12 @@ describe('TrainingAdminPage', () => {
 
     expect(window.location.search).toBe('?page=records&tab=sessions');
     expect(screen.getByRole('tab', { name: 'Sessions' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('leaves Create Session out of the header for a viewer who cannot create a session', () => {
+    renderWithRouter(<TrainingAdminPage />);
+
+    expect(screen.queryByRole('button', { name: 'Create Session' })).not.toBeInTheDocument();
   });
 
   it('titles the sessions page Create Training Session for an event manager', () => {
