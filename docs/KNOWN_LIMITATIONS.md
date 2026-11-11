@@ -1,5 +1,39 @@
 # Known Limitations & Open Decisions
 
+## Training Waiver Requests — What the Screens Leave Open (2026-11-11)
+
+The member, approver and settings screens for session waiver requests (the
+backend is #4225) made four conservative choices where the approved design left
+a gap. None blocks the feature; each is the owner's to revisit.
+
+- **The hub count is the viewer's own queue, not the department's.** The
+  Training Admin hub badges its Waiver Requests destination with the pending
+  requests the signed-in officer may decide, read from
+  `GET /training/waivers/requests?status=pending`. It is not an item in the
+  hub's attention queue (`admin_hub_service._training_attention`), which counts
+  org-wide for every `training.manage` holder: a training manager who is not
+  a routed approver would have been shown requests they cannot open. Adding a
+  department-wide item means a backend change and a decision on who should see
+  it.
+- **No attachment setting yet.** The policy model forbids unknown keys and has
+  no attachment field, because nothing reads one (pitfall #19). The settings
+  panel says attachments arrive later instead of offering a switch. The
+  attachments work adds the field, the upload control in the request dialog and
+  the list on the decision page.
+- **The overlap warning reads membership types only.** Saving a
+  session-attendance requirement warns when another active one grades the same
+  membership types (or both grade every type), the rule
+  `governing_attendance_requirement` narrows by. Position, rank and profile
+  scoping can still keep two such requirements apart, so it may warn where the
+  backend would pick one; it never stays silent where membership types alone
+  make the choice ambiguous. The warning is non-blocking.
+- **The decided list pages through the unfiltered list.** The list endpoint
+  filters by one status at a time, so the queue loads every pending request in
+  one call (up to the endpoint's 200) and pages the unfiltered list for the
+  decided ones, leaving out the pending rows it repeats. A page can therefore
+  show fewer than 50 decided rows. More than 200 pending requests for one
+  approver are reported as a count rather than listed.
+
 ## PDF Reports — What the Generated PDFs Do Not Yet Meet (2026-11-09)
 
 A review of every server-rendered PDF (see `docs/PDF_REPORTS.md`) fixed the
