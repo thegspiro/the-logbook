@@ -1,41 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Link2, Pencil, Lock, Plus, ShieldCheck, Clock } from 'lucide-react';
-import toast from 'react-hot-toast';
-import type {
-  TrainingApprovalSummary,
-  TrainingSessionResponse,
-  TrainingSessionLinkageUpdate,
-} from '../../services/api';
+import { GraduationCap, Pencil, Lock, Plus, ShieldCheck, Clock } from 'lucide-react';
+import type { TrainingApprovalSummary, TrainingSessionResponse } from '../../services/api';
 import { trainingSessionService } from '../../services/api';
-import { getErrorMessage } from '../../utils/errorHandling';
-import { blankToNull } from '../../utils/formValues';
 import { useTrainingLinkageData } from '../../hooks/useTrainingLinkageData';
 import { formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { TRAINING_TYPE_LABELS } from '../../constants/enums';
-import { TrainingDetailsFields } from '../training/TrainingDetailsFields';
 import SessionAttendanceRequirements from './SessionAttendanceRequirements';
-import {
-  EMPTY_TRAINING_DETAILS,
-  hasExplicitTrainingDetails,
-  toTrainingDetailsPayload,
-  type TrainingDetailsValue,
-} from '../training/trainingDetailsValue';
 
 interface TrainingSessionLinkageCardProps {
   eventId: string;
   /** What attendance is filed under when the event has no training details. */
   eventTitle: string;
-  /** Officers with events.manage may add or edit details; everyone else sees them read-only. */
+  /** Holder of events.manage: offered the training form, where the details are changed. */
   canManage: boolean;
   /** Holder of training.manage: may see the approval and follow its link. */
   canApprove: boolean;
   /**
    * The event's attendance lock. It, not the session's own flag, decides
-   * whether details may change: finalizing credits members under them, so a
-   * change needs attendance reopened first and is applied by the next
-   * finalize (the backend refuses the write with 409 otherwise).
+   * what may still change: finalizing credits members under the details, so
+   * only Counts toward attendance can change until attendance is reopened
+   * (the backend refuses anything else with 409), and a session cannot be
+   * added.
    */
   attendanceFinalized: boolean;
   /** Bumped by the page after anything that can change the session or its approval. */
@@ -44,28 +31,30 @@ interface TrainingSessionLinkageCardProps {
   onSessionChange?: ((session: TrainingSessionResponse | null) => void) | undefined;
 }
 
-const toDetailsValue = (session: TrainingSessionResponse): TrainingDetailsValue => ({
-  course_id: session.course_id ?? '',
-  category_id: session.category_id ?? '',
-  program_id: session.program_id ?? '',
-  phase_id: session.phase_id ?? '',
-  requirement_id: session.requirement_id ?? '',
-  training_type: session.training_type,
-});
-
 const plural = (count: number, noun: string): string => `${count} ${noun}${count === 1 ? '' : 's'}`;
 
-const secondaryButtonClass =
+const linkClass =
   'touch-target-phone text-theme-text-secondary border-theme-surface-border hover:bg-theme-surface-secondary focus:ring-theme-focus-ring inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden';
 
+/** A label and its value in the card's summary. */
+const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div>
+    <dt className="text-theme-text-secondary text-sm font-medium">{label}</dt>
+    <dd className="text-theme-text-primary text-sm">{children}</dd>
+  </div>
+);
+
 /**
- * Training details for a Training event, on the event detail page.
+ * Training details for a Training event, on the event detail page: a
+ * read-only summary of the session (owner decision, 2026-11-10).
  *
  * Every Training event credits its attendees when attendance is finalized;
- * the details decide what that credit is filed under (course, type, category)
- * and which program requirement it advances. An event created from Events has
- * none until an officer adds them here. After finalizing, the card reports
- * where the training officer's approval stands, when the session needs one.
+ * the details decide what that credit is filed under (course, type), who
+ * taught it, what certification it issues and which requirements it
+ * advances. Each is read from the session (pitfall #29), not from the copies
+ * the event was created with. They are changed in the training form, which
+ * "Edit training details" opens on its Training Info step. After finalizing,
+ * the card reports where the sign-off stands, when the session needs one.
  */
 const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
   eventId,
@@ -79,10 +68,6 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
   const [session, setSession] = useState<TrainingSessionResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<TrainingApprovalSummary | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState<TrainingDetailsValue>(EMPTY_TRAINING_DETAILS);
-  const [saveError, setSaveError] = useState<string | null>(null);
   // The last fetch failed for a reason other than "no session" (which the
   // service reports as null). Without this the card would tell an officer the
   // event has no details and offer to add some, which the backend then
@@ -143,103 +128,15 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
     };
   }, [eventId, sessionId, wantsSummary, refreshKey]);
 
-  const openEditor = (initial: TrainingDetailsValue) => {
-    setDraft(initial);
-    setSaveError(null);
-    setEditing(true);
-  };
-
-  const handleAttach = async () => {
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const created = await trainingSessionService.attachSession(eventId, toTrainingDetailsPayload(draft));
-      setSession(created);
-      setEditing(false);
-      toast.success('Training details added');
-    } catch (err: unknown) {
-      // A 409 names its reason — attendance finalized meanwhile, or somebody
-      // else added details first — and that reason is what the officer needs.
-      setSaveError(getErrorMessage(err, 'Failed to add training details'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!session) return;
-    setSaving(true);
-    setSaveError(null);
-    try {
-      // Every field the form owns goes on every save, blanks as explicit null —
-      // an omitted key means "leave this alone" to the backend, so a cleared
-      // link would silently survive behind a success toast (CLAUDE.md #1). The
-      // type is the exception: it cannot be cleared, so it is sent only when set.
-      const payload: TrainingSessionLinkageUpdate = {
-        course_id: blankToNull(draft.course_id),
-        category_id: blankToNull(draft.category_id),
-        program_id: blankToNull(draft.program_id),
-        phase_id: blankToNull(draft.phase_id),
-        requirement_id: blankToNull(draft.requirement_id),
-      };
-      if (draft.training_type) payload.training_type = draft.training_type;
-      const updated = await trainingSessionService.updateSessionLinkage(session.id, payload);
-      setSession(updated);
-      setEditing(false);
-      toast.success('Training details updated');
-    } catch (err: unknown) {
-      setSaveError(getErrorMessage(err, 'Failed to update training details'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) return null;
   if (!session && (loadFailed || (!canManage && !canApprove))) return null;
 
-  const showEditor = editing && !attendanceFinalized;
-
-  const editor = (onSave: () => void, saveLabel: string, canSave: boolean) => (
-    <>
-      <p className="text-theme-text-muted mb-4 text-sm">Changes apply when attendance is next finalized.</p>
-      {saveError && (
-        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3" role="alert">
-          <p className="text-sm text-red-700 dark:text-red-300">{saveError}</p>
-        </div>
-      )}
-      <TrainingDetailsFields
-        value={draft}
-        onChange={setDraft}
-        disabled={saving}
-        typeRequired={Boolean(session)}
-        currentCourseName={session?.course_name}
-      />
-      <div className="border-theme-surface-border mt-6 flex flex-wrap justify-end gap-3 border-t pt-4">
-        <button
-          type="button"
-          onClick={() => setEditing(false)}
-          disabled={saving}
-          className="bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary touch-target-phone rounded-lg px-4 py-2 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={saving || !canSave}
-          className="btn-primary px-4 py-2 font-medium disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : saveLabel}
-        </button>
-      </div>
-    </>
-  );
-
+  const editPath = `/events/${eventId}/edit?step=training`;
   const header = (action: React.ReactNode) => (
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div className="flex items-center gap-2">
-        <Link2 className="h-5 w-5" aria-hidden="true" />
-        <h2 className="text-theme-text-primary text-lg font-medium">Requirements & Programs</h2>
+        <GraduationCap className="h-5 w-5" aria-hidden="true" />
+        <h2 className="text-theme-text-primary text-lg font-medium">Training details</h2>
       </div>
       {action}
     </div>
@@ -251,16 +148,14 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
     return (
       <div className={cardClass}>
         {header(
-          canManage && !attendanceFinalized && !showEditor ? (
-            <button type="button" onClick={() => openEditor(EMPTY_TRAINING_DETAILS)} className={secondaryButtonClass}>
+          canManage && !attendanceFinalized ? (
+            <Link to={editPath} className={linkClass}>
               <Plus className="h-4 w-4" aria-hidden="true" />
               Add training details
-            </button>
+            </Link>
           ) : null
         )}
-        {showEditor ? (
-          editor(() => void handleAttach(), 'Add details', hasExplicitTrainingDetails(draft))
-        ) : attendanceFinalized ? (
+        {attendanceFinalized ? (
           <>
             <p className="text-theme-text-secondary text-sm">
               No training details: attendance is filed under &lsquo;{eventTitle}&rsquo; as Continuing Education.
@@ -280,9 +175,40 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
 
   const categoryName = categories.find((c) => c.id === session.category_id)?.name;
   const programName = programs.find((p) => p.id === session.program_id)?.name;
-  const requirementName = requirements.find((r) => r.id === session.requirement_id)?.name;
+  const requirement = requirements.find((r) => r.id === session.requirement_id);
   const phase = phases.find((p) => p.id === session.phase_id);
   const typeLabel = TRAINING_TYPE_LABELS[session.training_type] ?? session.training_type;
+
+  // A session with no course carries the event's title as its course name;
+  // naming it as a course would read as one the department never made.
+  const courseLabel =
+    !session.course_id && session.course_name === eventTitle
+      ? 'No course yet (filed under the event title)'
+      : `${session.course_code ? `${session.course_code} - ` : ''}${session.course_name}`;
+
+  const instructorLabel = session.instructor
+    ? session.instructor_id
+      ? session.instructor
+      : `${session.instructor} (${session.course_id ? 'from the course, ' : ''}not a member)`
+    : null;
+
+  const certificationLabel = session.issues_certification
+    ? [
+        session.issuing_agency ? `Issued by ${session.issuing_agency}` : 'Issued',
+        session.certification_number_prefix ? `prefix ${session.certification_number_prefix}` : null,
+        session.expiration_months ? `expires after ${session.expiration_months} months` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : 'None';
+
+  // A session-attendance requirement is graded through Counts toward
+  // attendance now; one linked here before that stays until someone changes it.
+  const requirementLabel = requirement
+    ? requirement.requirement_type === 'session_attendance'
+      ? `${requirement.name} (currently linked, no longer offered)`
+      : requirement.name
+    : '—';
 
   const approvalLine = (() => {
     if (!summary || !wantsSummary) return null;
@@ -306,7 +232,7 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-theme-text-secondary flex items-center gap-2 text-sm">
             <Clock className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
-            Waiting for training officer approval ({plural(summary.attendee_count, 'member')})
+            Waiting for sign-off by the instructor or a training officer ({plural(summary.attendee_count, 'member')})
           </p>
           {canApprove && summary.token && (
             <Link to={`/training/approve/${summary.token}`} className="btn-primary px-3 py-1.5 text-sm font-medium">
@@ -322,11 +248,12 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
   return (
     <div className={cardClass}>
       {header(
-        canManage && !attendanceFinalized && !showEditor ? (
-          <button type="button" onClick={() => openEditor(toDetailsValue(session))} className={secondaryButtonClass}>
+        // Offered after finalizing too: Counts toward attendance can still change.
+        canManage ? (
+          <Link to={editPath} className={linkClass}>
             <Pencil className="h-4 w-4" aria-hidden="true" />
-            Edit details
-          </button>
+            Edit training details
+          </Link>
         ) : null
       )}
 
@@ -335,73 +262,44 @@ const TrainingSessionLinkageCard: React.FC<TrainingSessionLinkageCardProps> = ({
           <Lock className="text-theme-text-muted mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
           <div className="space-y-2">
             <p className="text-theme-text-secondary text-sm">
-              Attendance is finalized. Use Reopen Attendance on this event to make corrections.
+              {canManage
+                ? 'Attendance is finalized. Counts toward attendance can still be changed with Edit training details; anything else needs Reopen Attendance first.'
+                : 'Attendance is finalized. Use Reopen Attendance on this event to make corrections.'}
             </p>
             {approvalLine}
           </div>
         </div>
       )}
 
-      {showEditor ? (
-        editor(() => void handleSave(), 'Save details', true)
-      ) : (
-        <>
-          {session.require_completion_confirmation && (
-            <p className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-800 dark:text-amber-300">
-              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-              Requires training officer approval
-            </p>
-          )}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <p className="text-theme-text-secondary text-sm font-medium">Course</p>
-              <p className="text-theme-text-primary text-sm">{session.course_name}</p>
-            </div>
-            <div>
-              <p className="text-theme-text-secondary text-sm font-medium">Training Type</p>
-              <p className="text-theme-text-primary text-sm">{typeLabel}</p>
-            </div>
-            {session.credit_hours > 0 && (
-              <div>
-                <p className="text-theme-text-secondary text-sm font-medium">Credit Hours</p>
-                <p className="text-theme-text-primary text-sm">{session.credit_hours} hours</p>
-              </div>
-            )}
-            {session.category_id && (
-              <div>
-                <p className="text-theme-text-secondary text-sm font-medium">Category</p>
-                <p className="text-theme-text-primary text-sm">{categoryName ?? '—'}</p>
-              </div>
-            )}
-            {session.requirement_id && (
-              <div>
-                <p className="text-theme-text-secondary text-sm font-medium">Requirement</p>
-                <p className="text-theme-text-primary text-sm">{requirementName ?? '—'}</p>
-              </div>
-            )}
-            {session.program_id && (
-              <div>
-                <p className="text-theme-text-secondary text-sm font-medium">Program</p>
-                <p className="text-theme-text-primary text-sm">{programName ?? '—'}</p>
-              </div>
-            )}
-            {session.phase_id && (
-              <div>
-                <p className="text-theme-text-secondary text-sm font-medium">Phase</p>
-                <p className="text-theme-text-primary text-sm">
-                  {phase ? `Phase ${phase.phase_number}: ${phase.name}` : '—'}
-                </p>
-              </div>
-            )}
-          </div>
-          <SessionAttendanceRequirements
-            session={session}
-            requirements={requirements}
-            canManage={canManage}
-            onChange={setSession}
-          />
-        </>
+      {session.require_completion_confirmation && (
+        <p className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-800 dark:text-amber-300">
+          <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+          Requires sign-off by the instructor or a training officer
+        </p>
       )}
+      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Row label="Course">{courseLabel}</Row>
+        <Row label="Training Type">{typeLabel}</Row>
+        {instructorLabel && <Row label="Lead Instructor">{instructorLabel}</Row>}
+        {session.credit_hours > 0 && <Row label="Credit Hours">{plural(session.credit_hours, 'hour')}</Row>}
+        <Row label="Certification">{certificationLabel}</Row>
+        <Row label="Training records">
+          {session.auto_create_records
+            ? 'Started at check-in, completed when attendance is finalized'
+            : 'Completed when attendance is finalized'}
+        </Row>
+        <Row label="Counts toward certification">{session.counts_toward_certification ? 'Yes' : 'No'}</Row>
+        {session.category_id && <Row label="Training category">{categoryName ?? '—'}</Row>}
+        {session.requirement_id && <Row label="Requirement">{requirementLabel}</Row>}
+        {session.program_id && (
+          <Row label="Program">
+            {[programName ?? '—', phase ? `Phase ${phase.phase_number}: ${phase.name}` : null]
+              .filter(Boolean)
+              .join(' · ')}
+          </Row>
+        )}
+      </dl>
+      <SessionAttendanceRequirements session={session} requirements={requirements} />
     </div>
   );
 };
