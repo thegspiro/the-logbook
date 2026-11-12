@@ -82,6 +82,7 @@ from app.models.user import (
     UserStatus,
 )
 from app.services import file_storage_service as file_storage
+from app.services.attendance_waiver_attachments import remove_member_attachments
 from app.services.membership_pipeline_service import prospect_document_path
 from app.services.passkey_service import delete_all_passkeys
 from app.utils.sql_results import rows_affected
@@ -254,6 +255,11 @@ class MemberAnonymizationService:
             .values(note=None)
         )
         counts["attendance_waiver_notes_scrubbed"] = rows_affected(result) or 0
+        # The documents filed with those requests (doctor's notes, mostly):
+        # files and rows both go, the requests stay.
+        counts["attendance_waiver_attachments_deleted"] = (
+            await remove_member_attachments(self.db, user)
+        )
 
         # --- RSVP quasi-health fields ----------------------------------
         result = await self.db.execute(

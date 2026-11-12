@@ -523,6 +523,12 @@ SCHEDULE = {
         "recommended_time": "03:45",
         "cron": "45 3 * * *",
     },
+    "attendance_waiver_attachment_retention": {
+        "description": "Delete documents filed with attendance waiver requests once the request has been closed (decided, withdrawn or voided) for longer than the department's retention period (the waiver policy's attachment_retention_days, a year by default). The request and its decision log are kept.",
+        "frequency": "daily",
+        "recommended_time": "03:50",
+        "cron": "50 3 * * *",
+    },
     "stored_file_malware_scan": {
         "description": "Malware-scan files and images stored before upload scanning covered them (owner decision 2026-11-01), a bounded batch per run, until each has been scanned once. Does nothing while CLAMAV_ENABLED is false; an infected file is removed and audited as upload_malware_detected.",
         "frequency": "hourly",
@@ -4616,6 +4622,25 @@ async def run_self_report_attachment_retention(db: AsyncSession) -> Dict[str, An
     return result
 
 
+async def run_attendance_waiver_attachment_retention(
+    db: AsyncSession,
+) -> Dict[str, Any]:
+    """Expire waiver request documents per each department's waiver policy.
+
+    The reader of ``AttendanceWaiverPolicy.attachment_retention_days``; see
+    app/services/attendance_waiver_attachments.py. Commits per organization
+    itself, so one department's failure does not discard another's sweep, and
+    a second run finds nothing left to delete.
+    """
+    from app.services.attendance_waiver_attachments import (
+        AttendanceWaiverAttachmentService,
+    )
+
+    result = await AttendanceWaiverAttachmentService(db).sweep()
+    result["task"] = "attendance_waiver_attachment_retention"
+    return result
+
+
 async def run_stored_file_malware_scan(db: AsyncSession) -> Dict[str, Any]:
     """Scan stored files and images that never met the upload scanner.
 
@@ -8556,6 +8581,9 @@ TASK_RUNNERS = {
     "audit_log_ship": run_audit_log_ship,
     "retention_enforcement": run_retention_enforcement,
     "self_report_attachment_retention": run_self_report_attachment_retention,
+    "attendance_waiver_attachment_retention": (
+        run_attendance_waiver_attachment_retention
+    ),
     "stored_file_malware_scan": run_stored_file_malware_scan,
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
@@ -8738,6 +8766,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Daily — org-configured records retention
     "retention_enforcement": 86400,
     "self_report_attachment_retention": 86400,
+    # Idempotent: the file goes first, then its row, and a missing file
+    # counts as deleted (attendance_waiver_attachments.sweep).
+    "attendance_waiver_attachment_retention": 86400,
     # Hourly, a bounded batch per run; once every stored object has a ledger
     # row a run only compares references (stored_file_rescan).
     "stored_file_malware_scan": 3600,

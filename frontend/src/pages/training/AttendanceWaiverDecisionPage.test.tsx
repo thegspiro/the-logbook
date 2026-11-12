@@ -20,6 +20,18 @@ vi.mock('../../services/attendanceWaiverService', () => ({
   },
 }));
 
+const mockDownload = vi.fn();
+vi.mock('../../services/waiverAttachmentService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/waiverAttachmentService')>();
+  return {
+    ...actual,
+    waiverAttachmentService: {
+      downloadAttachment: (...args: unknown[]) => mockDownload(...args) as unknown,
+      addAttachments: vi.fn(),
+    },
+  };
+});
+
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
@@ -73,6 +85,29 @@ describe('AttendanceWaiverDecisionPage', () => {
   beforeEach(() => {
     for (const mock of [mockGet, mockApprove, mockDeny, mockOverride, mockWithdraw]) mock.mockReset();
     mockGet.mockResolvedValue(request());
+  });
+
+  it('lists the filed documents under their neutral names, for download', async () => {
+    const document = {
+      id: 'att-1',
+      ordinal: 1,
+      filename: 'waiver-attachment-1.pdf',
+      mime_type: 'application/pdf',
+      file_size: 2048,
+      uploaded_at: '2026-11-11T15:00:00Z',
+    };
+    mockGet.mockResolvedValue(request({ attachments: [document] }));
+    const user = userEvent.setup();
+    renderAt('/attendance-waivers/req-1');
+    await user.click(await screen.findByRole('button', { name: 'Download waiver-attachment-1.pdf' }));
+    expect(mockDownload).toHaveBeenCalledWith('req-1', document);
+  });
+
+  it('shows no documents section when none are filed and none can be', async () => {
+    mockGet.mockResolvedValue(request({ attachments: [], can_attach: false }));
+    renderAt('/attendance-waivers/req-1');
+    expect(await screen.findByText('Pat Doe asks to be excused')).toBeInTheDocument();
+    expect(screen.queryByText('Supporting documents')).not.toBeInTheDocument();
   });
 
   it('pre-selects the emailed choice and decides nothing on load', async () => {

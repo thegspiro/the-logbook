@@ -9877,6 +9877,35 @@ was not among the questions the owner answered on 2026-11-01. Options:
 3. **Remove only the three made-up fields**, keeping the counts that are real.
    This changes the response shape for any caller.
 
+## Training — Waiver Request Documents: What Was Left Out (2026-11-11)
+
+**Open, chosen conservatively; the owner may revisit any of these.** Documents
+on session waiver requests (PDF, JPEG, PNG or HEIC, 10 MB each, three per
+request, kept 365 days) shipped with these gaps, each the narrower choice:
+
+- **A filed document cannot be removed by the member.** Once filed it stays
+  until the retention task deletes it. A member who filed the wrong file can
+  withdraw a pending request and ask again; the withdrawn request's documents
+  then age out with it. Allowing removal would have needed a rule for removing
+  the last document under a `required` policy, which nothing decided.
+- **The uploader's filename is not kept at all**, not only hidden from
+  downloads: a doctor's note's name can say what it is about. A decider sees
+  `waiver-attachment-1.pdf`, its type, size and date.
+- **A withdrawn or voided request is timed from its last change**
+  (`updated_at`), since it has no decision time; an approved or denied one
+  from its decision.
+- **The request page does not say documents were once filed** after retention
+  removes them. The `attendance_waiver_attachment_retention` audit entry
+  records which documents of which requests were deleted.
+- **Retention covers the training workflow only.** The business-meeting
+  workflow files no documents; when it does, its own policy needs to be read
+  by the sweep.
+- **HEIC is stored as filed, not converted.** A decider on Windows may need
+  the HEIF extension to open an iPhone photo; nothing previews it in the page.
+- **The upload field sits in the request dialog and the document list on the
+  decision page; the policy screen sets both new settings.** There is no
+  preview of a document in the page: a decider downloads it.
+
 ## Meetings — Business-Meeting Waiver Requests: Choices Made Without An Owner Ruling (2026-11-11)
 
 The business-meeting waiver workflow (owner decisions, 2026-11-10) shares the

@@ -14,6 +14,7 @@ import type {
   AttendanceWaiverReasonText,
   AttendanceWaiverStatus,
 } from '../constants/enums';
+import type { WaiverAttachment, WaiverAttachmentMode } from '../services/waiverAttachmentService';
 
 /** The department's policy for the training-session workflow. */
 export interface AttendanceWaiverPolicy {
@@ -25,6 +26,10 @@ export interface AttendanceWaiverPolicy {
   categories: string[];
   category_required: boolean;
   reason_text: AttendanceWaiverReasonText;
+  /** Whether a member may, or must, file a document (off by default). */
+  attachment: WaiverAttachmentMode;
+  /** Days a closed request's documents are kept, 1–3650 (365 by default). */
+  attachment_retention_days: number;
   approver_position_ids: string[];
 }
 
@@ -45,6 +50,10 @@ export interface AttendanceWaiverEligibility {
   categories: string[];
   category_required: boolean;
   reason_text: AttendanceWaiverReasonText;
+  /** Absent from a backend older than documents; read as `off`. */
+  attachment?: WaiverAttachmentMode;
+  attachment_max_count?: number;
+  attachment_max_bytes?: number;
   existing_request_id: string | null;
   existing_request_status: AttendanceWaiverStatus | null;
 }
@@ -83,6 +92,10 @@ export interface AttendanceWaiverRequest {
   can_withdraw: boolean;
   can_decide: boolean;
   can_override: boolean;
+  /** The member may file another document now (pending, policy takes them, under the limit). */
+  can_attach?: boolean;
+  /** The documents filed with the request; the service always sets this. */
+  attachments?: WaiverAttachment[];
   actions: AttendanceWaiverActionEntry[];
 }
 

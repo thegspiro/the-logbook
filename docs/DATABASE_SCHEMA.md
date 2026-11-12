@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**367 tables · 5944 columns · 1230 foreign keys**
+**368 tables · 5954 columns · 1233 foreign keys**
 
 ---
 
@@ -110,6 +110,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`attendance_waiver_attachments`](#attendance_waiver_attachments) | `AttendanceWaiverAttachment` | 10 | A file a member filed with their request, when the policy takes them. |
 | [`attendance_waiver_request_actions`](#attendance_waiver_request_actions) | `AttendanceWaiverRequestAction` | 7 | The decision log: one row per thing that happened to a request. |
 | [`attendance_waiver_requests`](#attendance_waiver_requests) | `AttendanceWaiverRequest` | 18 | One member's request to be excused from one session. |
 
@@ -1975,6 +1976,33 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_tmpl_changelog_template` (`template_id`)
 
 ## Attendance Waiver Requests
+
+### `attendance_waiver_attachments`
+
+**AttendanceWaiverAttachment** · `app/models/attendance_waiver.py`
+
+> A file a member filed with their request, when the policy takes them. The bytes live in ``FileStorageService``'s ``attendance-waivers`` area under the request's id and are served only through the request routes, to its member and to the people who may decide it. They are often medical (a doctor's note), which is why the uploader's filename is not kept at all: a download is always named ``waiver-attachment-<ordinal>.<ext>``. **``ordinal`` is the request's 1st, 2nd or 3rd file**, and the unique ``(request_id, ordinal)`` key is the database's half of the three-file limit: two uploads racing past the count both reach for the same next ordinal and only one insert succeeds. A row means the file is on file. The retention task deletes the file and then the row, so the request (the decision record) outlives both, and anonymising the member does the same.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `request_id` | VARCHAR(36) | no | FK |  | → `attendance_waiver_requests.id` ON DELETE CASCADE |
+| `ordinal` | SMALLINT | no |  |  |  |
+| `file_path` | VARCHAR(500) | no |  |  |  |
+| `mime_type` | VARCHAR(100) | no |  |  |  |
+| `file_size` | INTEGER | no |  |  |  |
+| `sha256` | VARCHAR(64) | no |  |  |  |
+| `uploaded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `uploaded_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_attendance_waiver_attachments_org_request` (`organization_id`, `request_id`)
+
+**Constraints**
+
+- UNIQUE `uq_attendance_waiver_attachments_request_ordinal` (`request_id`, `ordinal`)
 
 ### `attendance_waiver_request_actions`
 
@@ -12709,7 +12737,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (450 references)
+### → `users` (451 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12746,6 +12774,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `approval_chains` | `created_by` | RESTRICT | no |
 | `approval_step_records` | `acted_by` | SET NULL | yes |
 | `approval_step_records` | `assigned_to` | SET NULL | yes |
+| `attendance_waiver_attachments` | `uploaded_by` | SET NULL | yes |
 | `attendance_waiver_request_actions` | `actor_id` | SET NULL | yes |
 | `attendance_waiver_requests` | `decided_by` | SET NULL | yes |
 | `attendance_waiver_requests` | `user_id` | CASCADE | no |
@@ -13164,7 +13193,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (302 references)
+### → `organizations` (303 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13192,6 +13221,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `apparatus_statuses` | `organization_id` | CASCADE | yes |
 | `apparatus_types` | `organization_id` | CASCADE | yes |
 | `approval_chains` | `organization_id` | CASCADE | no |
+| `attendance_waiver_attachments` | `organization_id` | CASCADE | no |
 | `attendance_waiver_request_actions` | `organization_id` | CASCADE | no |
 | `attendance_waiver_requests` | `organization_id` | CASCADE | no |
 | `ballot_send_jobs` | `organization_id` | CASCADE | no |
@@ -14005,6 +14035,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `suggestions` | `box_id` | CASCADE | no |
 | `suggestions` | `routed_from_box_id` | SET NULL | yes |
 
+### → `attendance_waiver_requests` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `attendance_waiver_attachments` | `request_id` | CASCADE | no |
+| `attendance_waiver_request_actions` | `request_id` | CASCADE | no |
+| `meeting_attendees` | `waiver_request_id` | SET NULL | yes |
+
 ### → `check_requests` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -14135,13 +14173,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `approval_chain_steps` | `chain_id` | CASCADE | no |
 | `approval_step_records` | `chain_id` | CASCADE | no |
-
-### → `attendance_waiver_requests` (2 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `attendance_waiver_request_actions` | `request_id` | CASCADE | no |
-| `meeting_attendees` | `waiver_request_id` | SET NULL | yes |
 
 ### → `check_template_items` (2 references)
 
