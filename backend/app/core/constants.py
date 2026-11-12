@@ -262,6 +262,10 @@ TRAINING_OFFICER_ROLE_SLUGS: list[str] = position_slugs_for_offices(
 # which named only the one spelling no department is ever given.
 CHIEF_POSITION_SLUGS: list[str] = position_slugs_for_offices("chief")
 
+# Every spelling of the Secretary: the business-meeting waiver routing falls
+# back to it when the department's chosen positions leave nobody to ask.
+SECRETARY_POSITION_SLUGS: list[str] = position_slugs_for_offices("secretary")
+
 
 # Per-office variable suffixes, paired with the description shown in the
 # template editor's variable palette ("{label}" is the office label).

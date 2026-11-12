@@ -1125,6 +1125,11 @@ jobs:
   # image, a Playwright bump that changes the dependency list) still goes to
   # the network: a stall fails this job in minutes rather than hanging it.
   #
+  # Until 2026-11-11 that cache had never once been saved, so every run went to
+  # the mirror. See the step that hands the archive directory back after the
+  # install. Without a saved cache, the Ubuntu mirrors' DNS outage of that day
+  # failed every leg of this job, run after run, before any test started.
+  #
   # 45, raised from 30 on 2026-11-05. The table-fit specs merged that day
   # (#4068-#4077) check each table at the six TABLE_FIT_VIEWPORTS, and this
   # project runs them too: main's whole-job time went from 16-26 min on
@@ -1138,32 +1143,32 @@ jobs:
   # about 35-38 minutes plus ~2 minutes of setup (PR #4082, cancelled twice at
   # 30 with every test passing), which leaves 45 too little headroom.
   #
-  # Split in three on 2026-11-10 rather than raised a third time. The test
-  # step ran 42-48 minutes, so #4179 and #4190 were cancelled at 50 with
-  # every test so far passing, and main had grown to 744 tests by then —
-  # about 65 minutes serially at the ~5.2 s a test WebKit measures here.
-  # Each limit raise bought one batch of new specs; a shard divides the test
-  # step and keeps dividing as the suite grows.
+  # Two shards, 2026-11-09, instead of a third raise. More table-fit specs took
+  # the project to 744 tests (from ~450 four days earlier), and main's run on
+  # f2f54d9a and two PR runs (#4125, #4177) were cancelled at 50 minutes with
+  # every test so far passing, 654 in. A limit chasing a growing suite only moves
+  # the cancellation later. Split by count, unlike the Chromium legs above:
+  # `fullyParallel` makes `--shard` divide tests rather than files, and with
+  # `@sweep` excluded every test here takes the same 4-5 s, so `--list` puts 372
+  # in each leg, about 28 minutes plus setup. 45 is a hang guard with room for
+  # growth, not a target; when a leg nears it, add a shard (`[1, 2, 3]` and
+  # `/3` below) rather than raise it. The job id is unchanged, so `ci-success`
+  # still needs it: a matrix job's `needs` result is failure when any leg fails.
   #
-  # Three, not two, because the budget has to hold the library install's own
-  # 20-minute deadline as well as the tests. The first two-way run measured
-  # it: each half's tests took 31-33 minutes, and one leg's `install-deps`
-  # took 16.5 minutes on a slow mirror against 4.5 on the other — that leg was
-  # cancelled five tests from the end. Two legs is 2 + 20 + 33 = 55 minutes in
-  # the worst case; three is 248 tests a leg, about 22 minutes, so
-  # 2 + 20 + 22 = 44 fits under 50 with the install at its own limit.
-  # `--shard=i/3` splits this project evenly by test count, and no one spec
-  # file dominates it the way the sweep dominates the Chromium legs.
-  #
-  # Renaming the check is safe: branch protection requires only `CI Success`,
-  # which `needs:` this job by id and so waits on every leg.
+  # Three shards, 2026-11-10, as the note above says to. The 372-test leg ran
+  # about 34 minutes on its own, and "Install WebKit system libraries" varies
+  # between 7 and 15 minutes from runner to runner despite the apt cache: on
+  # #4125 (36365c27) leg 1/2 spent 15 minutes there and was cancelled at 45
+  # with 29 minutes of tests behind it, every test so far passing; on #4202
+  # (89811d54) the same leg passed at 43 minutes. A third leg brings the tests
+  # to about 23 minutes, so the slowest install observed still finishes near 40.
   frontend-e2e-safari:
     name: Frontend E2E (Mobile Safari ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 45
     strategy:
-      # One leg failing must not cancel the other: its passes and failures
-      # are still worth having.
+      # One leg failing must not cancel the other, for the reason given on the
+      # Chromium legs above.
       fail-fast: false
       matrix:
         shard: [1, 2, 3]
@@ -1197,9 +1202,11 @@ jobs:
         run: npx playwright install webkit
 
       # /var/cache/apt/archives is root-owned on this image, so a non-root
-      # cache restore/save can't write into it without this. apt itself still
+      # cache restore can't write into it without this. apt itself still
       # installs via sudo (as root) regardless of who owns the directory, so
-      # the chown only has to satisfy actions/cache, not apt.
+      # the chown only has to satisfy actions/cache, not apt. It covers the
+      # restore only: the install takes part of it back, which the step after
+      # the install undoes for the save.
       - name: Allow apt cache restore/save to write the archive directory
         run: sudo mkdir -p /var/cache/apt/archives/partial && sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
 
@@ -1220,6 +1227,18 @@ jobs:
         timeout-minutes: 20
         run: npx playwright install-deps webkit
 
+      # apt hands archives/partial back to its own `_apt` user, mode 0700,
+      # while it installs, and leaves root's `lock` file at 0640. The cache's
+      # post-job save runs tar as the runner user, which then cannot read
+      # partial/. The save is dropped with a warning that does not fail the job
+      # ("tar: .../archives/partial: Cannot open: Permission denied", "Failed to
+      # save"), so the cache above had never been written and every run fetched
+      # all ~114 MB from the mirror. Taking the directory back once apt is done
+      # with it lets the save read everything under it. The next install has
+      # apt reclaim partial/ as before.
+      - name: Let the post-job cache save read the apt archive directory
+        run: sudo chown -R "$(id -u):$(id -g)" /var/cache/apt/archives
+
       - name: Run Mobile Safari E2E tests
         run: npx playwright test --project="Mobile Safari" --grep-invert '@screenshots|@sweep' --shard=${{ matrix.shard }}/3
 
@@ -1227,6 +1246,8 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
+          # Per shard: two legs uploading one name collide, and the second
+          # upload fails the step.
           name: playwright-report-safari-${{ matrix.shard }}
           path: frontend/playwright-report/
           retention-days: 7

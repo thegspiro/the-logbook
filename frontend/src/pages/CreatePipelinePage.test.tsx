@@ -652,3 +652,55 @@ describe('CreatePipelinePage — saving a draft in this browser', () => {
     expect(localStorage.length).toBe(0);
   });
 });
+
+// Forms review F-3: Next stayed greyed out until a name was typed, and the
+// field's native required never fired outside a form, so nothing said why.
+describe('CreatePipelinePage — the required program name', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockListShiftEvaluationTemplates.mockReset();
+    mockListShiftEvaluationTemplates.mockResolvedValue([]);
+    mockGetRequirementsEnhanced.mockReset();
+    mockGetRequirementsEnhanced.mockResolvedValue([]);
+    mockGetCourses.mockReset();
+    mockGetCourses.mockResolvedValue([]);
+    mockGetPrograms.mockReset();
+    mockGetPrograms.mockResolvedValue([]);
+    mockBuildProgram.mockReset();
+    mockBuildProgram.mockResolvedValue({ id: 'prog-5' });
+  });
+
+  it('names a missing program name under the field when Next is pressed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.click(screen.getByRole('button', { name: /Next/ }));
+
+    const name = screen.getByRole('textbox', { name: 'Program Name' });
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Enter a name for the program.');
+    expect(name).toHaveFocus();
+    expect(screen.queryByRole('button', { name: /Add Phase/ })).not.toBeInTheDocument();
+    expect(mockBuildProgram).not.toHaveBeenCalled();
+  });
+
+  it('returns to the name with a 422 the server put on it', async () => {
+    mockBuildProgram.mockRejectedValue({
+      response: { status: 422, data: { detail: [{ field: 'program.name', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<CreatePipelinePage />);
+
+    await user.type(screen.getByLabelText(/Program Name/), 'Annual CE');
+    await user.selectOptions(screen.getByLabelText(/Structure Type/), 'flexible');
+    await user.click(screen.getByRole('button', { name: /Next/ })); // requirements
+    await user.click(screen.getByRole('button', { name: /Next/ })); // milestones
+    await user.click(screen.getByRole('button', { name: /Next/ })); // review
+    await user.click(screen.getByRole('button', { name: /Create Pipeline/ }));
+
+    const name = await screen.findByRole('textbox', { description: 'Value is too long.' });
+    expect(name).toHaveAccessibleName('Program Name');
+    await waitFor(() => expect(name).toHaveFocus());
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+});

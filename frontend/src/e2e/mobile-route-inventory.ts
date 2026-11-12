@@ -1803,6 +1803,20 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
       'token-parameterized officer review reached from an emailed approval link or the event page; a token exists only after a Training event with officer confirmation is finalized, and the roster reflows through the shared rwd-table and 44px form utilities',
   },
   {
+    path: '/attendance-waivers',
+    source: 'src/modules/training/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'approver queue that lists only requests routed to the viewer, so it is empty for the e2e member; rows are full-width links and the page uses the shared card, badge and button utilities',
+  },
+  {
+    path: '/attendance-waivers/:id',
+    source: 'src/modules/training/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'parameterized decision page reached from the approver email; a request exists only after a member asks to be excused from a counting training session, and its controls use the shared 44px form utilities',
+  },
+  {
     path: '/training/cohorts',
     source: 'src/modules/training/routes.tsx',
     coverage: 'exempt',

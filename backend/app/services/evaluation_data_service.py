@@ -9,11 +9,12 @@ leaves of absence are excluded.
 
 Wherever another screen already decides a figure, this module asks that
 screen's code rather than re-deriving it (CLAUDE.md pitfall #29): training
-compliance uses the dashboard's grading, meeting attendance the voting
-check's tally, shift hours and calls the member's own hours page. Three
-sources have no existing calculation (training-session attendance, events
-attended, skills tests passed); they apply the rules the neighbouring
-screens apply, named at each.
+compliance uses the dashboard's grading, training-session attendance the
+session-attendance requirement's tally, meeting attendance the voting
+check's tally, shift hours and calls the member's own hours page. Two
+sources have no existing calculation (events attended, skills tests
+passed); they apply the rules the neighbouring screens apply, named at
+each.
 
 A figure that cannot honestly be given is reported unavailable with a note,
 never as zero or 100%: an empty denominator is "nothing to measure", not a
@@ -24,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -32,17 +33,24 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.attendance_waiver import (
+    AttendanceWaiverAction,
+    AttendanceWaiverRequest,
+    AttendanceWaiverRequestAction,
+    AttendanceWaiverStatus,
+    AttendanceWaiverWorkflow,
+)
 from app.models.call_tracking import CallTrackingMode
-from app.models.event import Event, EventRSVP, EventType
+from app.models.event import Event, EventRSVP
 from app.models.meeting import Meeting, MeetingAttendee, MeetingType
+from app.models.member_position_term import MemberPositionTerm
 from app.models.skills_testing import SkillTest, SkillTestResult, SkillTestStatus
-from app.models.training import TrainingRequirement
+from app.models.training import TrainingRecord, TrainingRequirement
 from app.models.user import (
     MemberLeaveOfAbsence,
     MemberServicePeriod,
     Position,
     User,
-    user_positions,
 )
 from app.schemas.evaluation import TemplateDefinition
 from app.services.admin_hours_service import AdminHoursService
@@ -64,10 +72,12 @@ from app.services.training_compliance import (
     ComplianceGrading,
     _load_compliance_config,
     evaluate_member_requirement_detail,
+    governing_attendance_requirement,
     load_credited_shift_dates,
     load_graded_records,
     load_held_sessions,
     member_join_date,
+    tally_session_attendance,
     tally_standing,
 )
 from app.services.training_service import TrainingService
@@ -81,7 +91,11 @@ from app.utils.org_timezone import (
 
 #: Bumped when the stored shape changes, so a reader can tell an old snapshot
 #: from a new one rather than guessing from the keys present.
-SNAPSHOT_VERSION = 1
+#: 2: ``training.session_attendance_pct`` is graded by the member's
+#: session-attendance requirement (designated sessions, finalized attendance,
+#: every waiver) instead of counting every training event's check-ins, and
+#: its extras changed. A version-1 snapshot holds the old figure.
+SNAPSHOT_VERSION = 2
 
 #: Sources answered from the member's monthly shift totals.
 _SHIFT_SOURCES = frozenset(
@@ -92,6 +106,57 @@ _SHIFT_SOURCES = frozenset(
 #: platform's own (the baseline member position, the rank mirrors) and say
 #: nothing about what the member did.
 _LISTED_POSITION_KINDS = ("office", "committee")
+
+#: The waiver-request sources, each to the workflow whose requests it reads.
+#: A summary and a history of the same workflow read the same rows, once.
+_WAIVER_SUMMARY_SOURCES = {
+    "training.session_waivers_summary": AttendanceWaiverWorkflow.TRAINING_SESSION,
+    "meetings.waivers_summary": AttendanceWaiverWorkflow.BUSINESS_MEETING,
+}
+_WAIVER_HISTORY_SOURCES = {
+    "training.session_waiver_history": AttendanceWaiverWorkflow.TRAINING_SESSION,
+    "meetings.waiver_history": AttendanceWaiverWorkflow.BUSINESS_MEETING,
+}
+
+#: How each logged action reads in a request's outcome history.
+_WAIVER_ACTION_TEXT = {
+    AttendanceWaiverAction.WITHDRAWN: "withdrawn",
+    AttendanceWaiverAction.APPROVED: "approved",
+    AttendanceWaiverAction.DENIED: "denied",
+    AttendanceWaiverAction.CHIEF_OVERRIDE: "approved on the Chief's override",
+    AttendanceWaiverAction.VOIDED: "voided",
+}
+
+#: Where each action falls in a request's life, to order a log whose times
+#: tie (DATETIME keeps whole seconds). The request screens order it the same
+#: way (``attendance_waiver_service._ACTION_ORDER``).
+_WAIVER_ACTION_ORDER = {
+    AttendanceWaiverAction.SUBMITTED: 0,
+    AttendanceWaiverAction.WITHDRAWN: 1,
+    AttendanceWaiverAction.APPROVED: 1,
+    AttendanceWaiverAction.DENIED: 1,
+    AttendanceWaiverAction.CHIEF_OVERRIDE: 2,
+    AttendanceWaiverAction.VOIDED: 3,
+}
+
+
+@dataclass(frozen=True)
+class _WaiverRow:
+    """One waiver request as the evaluation may show it.
+
+    Deliberately has no reason and no decider's note: an evaluation is
+    permanent and the member reads it, and either may be medical (owner
+    decision, 2026-11-10). The rows are loaded column by column so neither
+    is ever read from the database here.
+    """
+
+    id: str
+    session_date: date
+    event_title: str
+    status: AttendanceWaiverStatus
+    category: Optional[str]
+    decided_by: Optional[str]
+    chief_override: bool
 
 
 # ------------------------------------------------------------------ coverage
@@ -114,6 +179,17 @@ class Coverage:
 
     def excludes(self, day: date) -> bool:
         return any(r.start <= day <= r.end for r in self.excluded)
+
+    def separated_on(self, day: date) -> bool:
+        """Whether ``day`` falls in a gap between stints of membership.
+
+        Narrower than :meth:`excludes`, which also covers leaves: a source
+        whose own rule already excuses leave, and credits a member who came
+        in anyway, drops only the days they were not a member at all.
+        """
+        return any(
+            r.reason == "separation" and r.start <= day <= r.end for r in self.excluded
+        )
 
     def as_json(self) -> Dict[str, Any]:
         return {
@@ -304,11 +380,18 @@ class EvaluationDataService:
         values: Dict[str, Dict[str, Any]] = {}
         # Four sources read the same month totals; load them once.
         shift_cache: Dict[str, Dict[str, float]] = {}
+        waiver_cache: Dict[AttendanceWaiverWorkflow, List[_WaiverRow]] = {}
         for key in keys:
-            if key in DATA_SOURCES_BY_KEY:
-                values[key] = await self._compute_one(
-                    key, organization_id, member, coverage, tz, shift_cache
+            if key not in DATA_SOURCES_BY_KEY:
+                continue
+            if key in _WAIVER_SUMMARY_SOURCES or key in _WAIVER_HISTORY_SOURCES:
+                values[key] = await self._compute_waiver_source(
+                    key, organization_id, member, coverage, tz, waiver_cache
                 )
+                continue
+            values[key] = await self._compute_one(
+                key, organization_id, member, coverage, tz, shift_cache
+            )
         return values
 
     async def _compute_one(
@@ -331,7 +414,7 @@ class EvaluationDataService:
         if key == "training.requirements_met_pct":
             return await self._requirements_met(org_id, member, coverage)
         if key == "training.session_attendance_pct":
-            return await self._session_attendance(org_id, member, coverage, tz)
+            return await self._session_attendance(org_id, member, coverage)
         if key == "events.meeting_attendance_pct":
             return await self._meeting_attendance(org_id, member, coverage)
         if key == "events.attended_count":
@@ -371,18 +454,15 @@ class EvaluationDataService:
         )
         return _value(round(sum(float(t.total_hours or 0) for t in by_type), 2))
 
-    async def _requirements_met(
-        self, org_id: str, member: User, coverage: Coverage
-    ) -> Dict[str, Any]:
-        """The compliance dashboard's percentage, graded as of coverage end.
+    async def _grading_inputs(
+        self, org_id: str, member: User
+    ) -> Tuple[User, List[TrainingRequirement], ComplianceGrading]:
+        """The member (positions loaded), the department's active requirements
+        and its grading config: what ``ComplianceGrading.for_member`` needs.
 
-        The same steps as ``grade_org_members`` for one member: the
-        department's grading config and profiles, its records, credited
-        shifts and waivers, each requirement's own window ending on
-        ``coverage.end``.
+        Shared by both training sources so they decide which requirements
+        grade the member the same way.
         """
-        if member.compliance_exempt:
-            return _unavailable("Exempt from training requirements.")
         loaded = (
             await self.db.execute(
                 select(User)
@@ -402,11 +482,26 @@ class EvaluationDataService:
             .scalars()
             .all()
         )
-        if not requirements:
-            return _unavailable("The department has no active training requirements.")
         grading = ComplianceGrading.from_config(
             await _load_compliance_config(self.db, org_id)
         )
+        return loaded, requirements, grading
+
+    async def _requirements_met(
+        self, org_id: str, member: User, coverage: Coverage
+    ) -> Dict[str, Any]:
+        """The compliance dashboard's percentage, graded as of coverage end.
+
+        The same steps as ``grade_org_members`` for one member: the
+        department's grading config and profiles, its records, credited
+        shifts and waivers, each requirement's own window ending on
+        ``coverage.end``.
+        """
+        if member.compliance_exempt:
+            return _unavailable("Exempt from training requirements.")
+        loaded, requirements, grading = await self._grading_inputs(org_id, member)
+        if not requirements:
+            return _unavailable("The department has no active training requirements.")
         as_of = coverage.end
         records = await load_graded_records(
             self.db,
@@ -447,49 +542,95 @@ class EvaluationDataService:
         return _value(pct, met=met, total=total)
 
     async def _session_attendance(
-        self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
+        self, org_id: str, member: User, coverage: Coverage
     ) -> Dict[str, Any]:
-        """Training events attended out of those held.
+        """Attendance at the sessions the member's requirement counts.
 
-        Attended is a check-in or an officer's after-the-fact override, the
-        rule ``EventService`` applies to attendance (an override sets only
-        ``override_check_in_at``). Sessions on days the member was excused
-        from all training by a waiver, or outside their coverage, are dropped
-        from both counts; working from id sets drops a session that is both
-        exactly once, as ``tally_attendance`` does for meetings.
+        The requirement's own rule, ``tally_session_attendance`` (CLAUDE.md
+        pitfall #29), over the review period rather than the requirement's
+        window (owner decision, 2026-11-10). Only the sessions
+        linked to the member's session-attendance requirement are counted, a
+        member attended one when finalizing it wrote their record, and every
+        waiver and leave the training screens apply excuses a session the
+        member missed, as does an approved request to be excused from that one
+        session, while one they came to anyway still counts. The
+        requirement is the one for the member's membership type when several
+        apply, and none is guessed at when that does not decide.
+
+        The figure is the counts, not a pass or fail: whether the requirement
+        is met is the dashboard's question, answered by
+        ``training.requirements_met_pct``, and a Chief's override is judged on
+        one cut-off day, which says nothing about a whole review period.
+
+        Days between stints of membership are dropped: the member owed
+        nothing then. Leave is not dropped here; the tally excuses it.
         """
-        start_utc, end_utc = local_range_utc(coverage.start, coverage.end, tz)
-        events = (
-            await self.db.execute(
-                select(Event.id, Event.start_datetime).where(
-                    Event.organization_id == org_id,
-                    Event.event_type == EventType.TRAINING,
-                    Event.is_cancelled.is_(False),
-                    Event.start_datetime >= start_utc,
-                    Event.start_datetime < end_utc,
+        if member.compliance_exempt:
+            return _unavailable("Exempt from training requirements.")
+        loaded, requirements, grading = await self._grading_inputs(org_id, member)
+        choice = governing_attendance_requirement(
+            loaded, grading.for_member(loaded, requirements).requirements
+        )
+        if choice.ambiguous:
+            return _unavailable(
+                "More than one session-attendance requirement applies to this "
+                "member, and their membership type does not single one out."
+            )
+        req = choice.requirement
+        if req is None:
+            return _unavailable(
+                "No session-attendance requirement applies to this member."
+            )
+        held = [
+            session
+            for session in (await load_held_sessions(self.db, str(org_id), [req])).get(
+                str(req.id), []
+            )
+            if not coverage.separated_on(session.held_on)
+        ]
+        records = (
+            (
+                await self.db.execute(
+                    select(TrainingRecord).where(
+                        TrainingRecord.organization_id == org_id,
+                        TrainingRecord.user_id == loaded.id,
+                        TrainingRecord.source_event_id.in_(
+                            [session.event_id for session in held]
+                        ),
+                    )
                 )
             )
-        ).all()
-        waivers = [
-            w
-            for w in await fetch_user_waivers(self.db, org_id, member.id)
-            if w.requirement_ids is None
-        ]
-        eligible = set()
-        for event_id, starts_at in events:
-            day = local_date(starts_at, tz)
-            if coverage.excludes(day):
-                continue
-            if any(w.start_date <= day <= w.end_date for w in waivers):
-                continue
-            eligible.add(event_id)
-        if not eligible:
-            return _unavailable("No training sessions were held in the period.")
-        attended = await self._attended_event_ids(org_id, member.id, eligible)
+            .scalars()
+            .all()
+            if held
+            else []
+        )
+        tally = tally_session_attendance(
+            req,
+            records,
+            held,
+            coverage.end,
+            waivers=await fetch_user_waivers(self.db, org_id, loaded.id),
+            join_date=member_join_date(loaded),
+            window=(coverage.start, coverage.end),
+        )
+        if tally.held == 0:
+            return _unavailable(
+                f"No sessions counting toward {req.name} were held in the period."
+            )
+        # Excused from all of them is nothing to measure, not a perfect record.
+        if tally.charged == 0:
+            return _unavailable(
+                f"Excused from every session counting toward {req.name} "
+                "in the period."
+            )
         return _value(
-            _pct(len(attended), len(eligible)),
-            attended=len(attended),
-            held=len(eligible),
+            _pct(tally.attended, tally.charged),
+            attended=tally.attended,
+            held=tally.held,
+            excused=tally.held - tally.charged,
+            required_pct=float(req.required_attendance_pct or 0),
+            requirement=req.name,
         )
 
     async def _attended_event_ids(
@@ -554,7 +695,6 @@ class EvaluationDataService:
                     select(MeetingAttendee.meeting_id).where(
                         MeetingAttendee.user_id == member.id,
                         MeetingAttendee.present.is_(True),
-                        MeetingAttendee.waiver_reason.is_(None),
                         MeetingAttendee.meeting_id.in_(in_window),
                     )
                 )
@@ -720,32 +860,289 @@ class EvaluationDataService:
     async def _positions(
         self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
     ) -> Dict[str, Any]:
-        """Offices and committee seats held now and assigned by period end.
+        """Offices and committee seats held at any time during the period.
 
-        The application keeps no history of positions: removing one deletes
-        its row. A position held earlier in the period and since given up
-        cannot be listed (docs/KNOWN_LIMITATIONS.md).
+        Read from ``member_position_terms`` (owner decision 2026-11-06): a term
+        counts when ``[started_at, ended_at)`` overlaps the period's
+        ``[start, end)``, so a seat given up mid-period is listed and one taken
+        after it ended is not. A position held twice in the period is listed
+        once. The position's current name is shown, or the name it had when it
+        was held if it has since been deleted. History starts when the terms
+        table was created: a position given up before then is not known
+        (docs/KNOWN_LIMITATIONS.md).
         """
-        _, end_utc = local_range_utc(coverage.start, coverage.end, tz)
-        rows = await self.db.execute(
-            select(Position.name)
-            .join(user_positions, user_positions.c.position_id == Position.id)
+        start_utc, end_utc = local_range_utc(coverage.start, coverage.end, tz)
+        name = func.coalesce(Position.name, MemberPositionTerm.position_name)
+        kind = func.coalesce(Position.kind, MemberPositionTerm.position_kind)
+        query = (
+            select(name)
+            .select_from(MemberPositionTerm)
+            .outerjoin(Position, Position.id == MemberPositionTerm.position_id)
             .where(
-                user_positions.c.user_id == member.id,
-                Position.organization_id == org_id,
-                Position.kind.in_(_LISTED_POSITION_KINDS),
-                or_(
-                    user_positions.c.assigned_at.is_(None),
-                    user_positions.c.assigned_at < end_utc,
-                ),
+                MemberPositionTerm.user_id == member.id,
+                MemberPositionTerm.organization_id == org_id,
+                kind.in_(_LISTED_POSITION_KINDS),
             )
-            .order_by(Position.name)
+            .distinct()
+            .order_by(name)
         )
+        if end_utc is not None:
+            query = query.where(MemberPositionTerm.started_at < end_utc)
+        if start_utc is not None:
+            query = query.where(
+                or_(
+                    MemberPositionTerm.ended_at.is_(None),
+                    MemberPositionTerm.ended_at > start_utc,
+                )
+            )
+        rows = await self.db.execute(query)
         names = [row[0] for row in rows.all()]
         return _value(
-            [{"label": name} for name in names],
-            note="Positions held when the figures were taken.",
+            [{"label": label} for label in names],
+            note="Positions held at any time during the period.",
         )
+
+    # ------------------------------------------------------- waiver requests
+
+    async def _compute_waiver_source(
+        self,
+        key: str,
+        org_id: str,
+        member: User,
+        coverage: Coverage,
+        tz: ZoneInfo,
+        cache: Dict[AttendanceWaiverWorkflow, List[_WaiverRow]],
+    ) -> Dict[str, Any]:
+        workflow = _WAIVER_SUMMARY_SOURCES.get(key) or _WAIVER_HISTORY_SOURCES[key]
+        if workflow not in cache:
+            cache[workflow] = await self._waiver_rows(
+                org_id, member, coverage, workflow
+            )
+        rows = cache[workflow]
+        if key in _WAIVER_SUMMARY_SOURCES:
+            return _waiver_summary(rows)
+        return await self._waiver_history(org_id, rows, tz)
+
+    async def _waiver_rows(
+        self,
+        org_id: str,
+        member: User,
+        coverage: Coverage,
+        workflow: AttendanceWaiverWorkflow,
+    ) -> List[_WaiverRow]:
+        """The member's requests in ``workflow`` for sessions held in the
+        review period, oldest session first.
+
+        Measured by the session's date, not by when the member asked (owner
+        decision, 2026-11-10: "use the evaluation period"), so a request made
+        in December for a January drill belongs to January's review. Sessions
+        held between stints of membership are dropped, as the attendance
+        figure drops them; a session during a leave is kept, because the
+        member still asked and someone still decided.
+        """
+        result = await self.db.execute(
+            select(
+                AttendanceWaiverRequest.id,
+                AttendanceWaiverRequest.session_date,
+                AttendanceWaiverRequest.event_title_snapshot,
+                AttendanceWaiverRequest.status,
+                AttendanceWaiverRequest.category,
+                AttendanceWaiverRequest.decided_by,
+                AttendanceWaiverRequest.chief_override,
+            )
+            .where(
+                AttendanceWaiverRequest.organization_id == org_id,
+                AttendanceWaiverRequest.user_id == member.id,
+                AttendanceWaiverRequest.workflow == workflow,
+                AttendanceWaiverRequest.session_date >= coverage.start,
+                AttendanceWaiverRequest.session_date <= coverage.end,
+            )
+            .order_by(
+                AttendanceWaiverRequest.session_date,
+                AttendanceWaiverRequest.submitted_at,
+                AttendanceWaiverRequest.id,
+            )
+        )
+        return [
+            _WaiverRow(
+                id=str(row.id),
+                session_date=row.session_date,
+                event_title=row.event_title_snapshot,
+                status=row.status,
+                category=row.category,
+                decided_by=str(row.decided_by) if row.decided_by else None,
+                chief_override=bool(row.chief_override),
+            )
+            for row in result.all()
+            if not coverage.separated_on(row.session_date)
+        ]
+
+    async def _waiver_history(
+        self, org_id: str, rows: Sequence[_WaiverRow], tz: ZoneInfo
+    ) -> Dict[str, Any]:
+        """One line per request, with each step of its decision log.
+
+        The log's notes are not read: they are the deciders' own words and
+        may repeat the member's reason.
+        """
+        log: Dict[str, List[Tuple[AttendanceWaiverAction, Optional[str], datetime]]]
+        log = {row.id: [] for row in rows}
+        if rows:
+            result = await self.db.execute(
+                select(
+                    AttendanceWaiverRequestAction.request_id,
+                    AttendanceWaiverRequestAction.action,
+                    AttendanceWaiverRequestAction.actor_id,
+                    AttendanceWaiverRequestAction.created_at,
+                ).where(
+                    AttendanceWaiverRequestAction.organization_id == org_id,
+                    AttendanceWaiverRequestAction.request_id.in_(list(log)),
+                )
+            )
+            for request_id, action, actor_id, at in result.all():
+                log[str(request_id)].append(
+                    (action, str(actor_id) if actor_id else None, at)
+                )
+            for steps in log.values():
+                steps.sort(key=lambda s: (_as_utc(s[2]), _WAIVER_ACTION_ORDER[s[0]]))
+        names = await self._member_names(
+            org_id,
+            [row.decided_by for row in rows if row.decided_by]
+            + [actor for steps in log.values() for _, actor, _ in steps if actor],
+        )
+        attached = await self._waiver_attachments_on_file(
+            org_id, [row.id for row in rows]
+        )
+
+        def name_of(user_id: Optional[str]) -> Optional[str]:
+            # An actor whose account is gone (the FK is SET NULL) or who is
+            # not in this department reads as such rather than as nobody.
+            if user_id is None:
+                return None
+            return names.get(user_id, "a former member")
+
+        items: List[Dict[str, Any]] = []
+        for row in rows:
+            history = [
+                {
+                    "action": action.value,
+                    "on": local_date(at, tz).isoformat(),
+                    "by": name_of(actor),
+                }
+                for action, actor, at in log[row.id]
+            ]
+            outcome = _waiver_outcome(row, log[row.id], name_of)
+            on_file = row.id in attached
+            label = f"{row.session_date.isoformat()} {row.event_title}: {outcome}"
+            if row.category:
+                label += f" (category: {row.category})"
+            if on_file:
+                label += "; attachment on file"
+            items.append(
+                {
+                    "label": label,
+                    "session_date": row.session_date.isoformat(),
+                    "event_title": row.event_title,
+                    "status": row.status.value,
+                    "outcome": outcome,
+                    "category": row.category,
+                    "decided_by": name_of(row.decided_by),
+                    "chief_override": row.chief_override,
+                    "attachment_on_file": on_file,
+                    "history": history,
+                }
+            )
+        return _value(items)
+
+    async def _member_names(
+        self, org_id: str, user_ids: Iterable[str]
+    ) -> Dict[str, str]:
+        ids = sorted({u for u in user_ids if u})
+        if not ids:
+            return {}
+        result = await self.db.execute(
+            select(User).where(User.id.in_(ids), User.organization_id == org_id)
+        )
+        return {str(u.id): u.display_name for u in result.scalars().all()}
+
+    async def _waiver_attachments_on_file(
+        self, org_id: str, request_ids: Sequence[str]
+    ) -> set:
+        """The requests with at least one attachment on file.
+
+        Attachments are being added by a separate change and have no table on
+        this branch, so nothing is on file yet and every line reads no. When
+        that table lands, return the ids of ``request_ids`` with a row in it
+        for ``org_id``. Only the fact is reported, never the file or its
+        name: an attachment is the member's evidence, often medical.
+        """
+        return set()
+
+
+def _as_utc(value: datetime) -> datetime:
+    """MySQL hands back naive DATETIMEs; they are stored in UTC."""
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def _waiver_summary(rows: Sequence[_WaiverRow]) -> Dict[str, Any]:
+    """How many requests were made in the period, and what became of them.
+
+    ``approved`` is what counts toward the department's cap: approved
+    requests, a Chief's override of a denial included (owner decision,
+    2026-11-10). ``overridden`` is the part of ``approved`` that came by the
+    override, and ``denied`` is denials still standing.
+    """
+    statuses = [row.status for row in rows]
+    approved = statuses.count(AttendanceWaiverStatus.APPROVED)
+    overridden = sum(
+        1
+        for row in rows
+        if row.chief_override and row.status == AttendanceWaiverStatus.APPROVED
+    )
+    counts = {
+        "requested": len(rows),
+        "approved": approved,
+        "overridden": overridden,
+        "denied": statuses.count(AttendanceWaiverStatus.DENIED),
+        "withdrawn": statuses.count(AttendanceWaiverStatus.WITHDRAWN),
+        "pending": statuses.count(AttendanceWaiverStatus.PENDING),
+        "voided": statuses.count(AttendanceWaiverStatus.VOIDED),
+    }
+    approved_text = f"{approved} approved"
+    if overridden:
+        approved_text += f" ({overridden} on the Chief's override)"
+    parts = [approved_text] + [
+        f"{counts[field]} {field}"
+        for field in ("denied", "withdrawn", "pending", "voided")
+        if counts[field] or field in ("denied", "withdrawn")
+    ]
+    return _value(len(rows), **counts, breakdown=", ".join(parts))
+
+
+def _waiver_outcome(
+    row: _WaiverRow,
+    steps: Sequence[Tuple[AttendanceWaiverAction, Optional[str], datetime]],
+    name_of: Callable[[Optional[str]], Optional[str]],
+) -> str:
+    """What happened to a request, in order: "denied by A, then approved on
+    the Chief's override by B"."""
+    parts = []
+    for action, actor, _ in steps:
+        text = _WAIVER_ACTION_TEXT.get(action)
+        if text is None:
+            continue
+        # A withdrawal is always the member's own; naming them adds nothing.
+        who = name_of(actor) if action != AttendanceWaiverAction.WITHDRAWN else None
+        parts.append(f"{text} by {who}" if who else text)
+    if not parts:
+        return (
+            "pending"
+            if row.status == AttendanceWaiverStatus.PENDING
+            else row.status.value
+        )
+    if row.status == AttendanceWaiverStatus.PENDING:
+        parts.append("pending")
+    return ", then ".join(parts)
 
 
 @dataclass(frozen=True)

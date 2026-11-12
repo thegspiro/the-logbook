@@ -918,6 +918,12 @@ correctly. A date fewer members logged stays an ordinary record. The step runs
 after the training commit and is safe to run again. Its confirmation is a plain
 confirmation, not a red delete warning, because it only creates sessions.
 
+_Added 2026-11-10._ On the administrative-hours, training and staffing steps,
+the members list shows a person to be created by the name they will get (for
+example "James Fortner"), not "Former member 1005". Members already set to be
+created as archived former members sit in a collapsed section, so the few still
+to decide stay in view; open it to change any of them.
+
 Running the same file twice is safe. Full detail is in the wiki page
 [Historical Data Import](../../wiki/Integration-Historical-Data-Import.md).
 

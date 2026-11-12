@@ -4,6 +4,7 @@ Training Session Service
 Business logic for training session management, approval workflows, and notifications.
 """
 
+import copy
 import secrets
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -45,12 +46,14 @@ from app.models.training import (
     TrainingStatus,
     TrainingType,
 )
-from app.models.user import Role, User
+from app.models.user import Organization, Role, User
+from app.schemas.organization import mandatory_for_tiers
 from app.schemas.training_session import (
     AttendeeApprovalData,
     RecurringTrainingSessionCreate,
     TrainingSessionAttach,
     TrainingSessionCreate,
+    TrainingSessionDetailsUpdate,
     TrainingSessionLinkageUpdate,
 )
 from app.services.admin_hours_service import AdminHoursService
@@ -60,14 +63,55 @@ from app.services.event_service import (
     attendance_locked_error,
 )
 from app.services.location_service import LocationService
+from app.services.training_compliance import (
+    MandatoryTiers,
+    mandatory_tiers_for_requirements,
+)
 from app.utils.json_ids import json_array_contains
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 from app.utils.org_timezone import local_and_utc_dates, resolve_scheduling_timezone
 
+# What a copied session takes from its source: the course, filing and credit
+# settings. Not its id, event, finalized state or timestamps — the copy is a
+# new session for a new occurrence that has not been held.
+SESSION_CLONE_FIELDS = (
+    "course_id",
+    "category_id",
+    "program_id",
+    "phase_id",
+    "requirement_id",
+    "course_name",
+    "course_code",
+    "training_type",
+    "credit_hours",
+    "instructor",
+    "instructor_id",
+    "co_instructors",
+    "apparatus_id",
+    "issues_certification",
+    "certification_number_prefix",
+    "issuing_agency",
+    "expiration_months",
+    "counts_toward_certification",
+    "auto_create_records",
+    "require_completion_confirmation",
+    "approval_deadline_days",
+)
+
 # A second set of training details for one event. training_sessions.event_id
 # is unique; the endpoint answers this with a 409, not a 400.
 TRAINING_DETAILS_EXIST = "This event already has training details"
+
+# A session's requirement_id feeds a program requirement's progress; a
+# session-attendance requirement is graded from training_session_requirements
+# instead, so linking one here does nothing. Refused as a new or changed value
+# only: a session stored with one before this rule keeps saving when an
+# every-field form re-sends it.
+ATTENDANCE_REQUIREMENT_NOT_LINKABLE = (
+    "That requirement is graded by session attendance. "
+    'Choose it under "Counts toward attendance" instead.'
+)
 
 # How far out an approval link stays usable, from when it is issued.
 APPROVAL_TOKEN_TTL = timedelta(days=30)
@@ -87,6 +131,38 @@ _APPROVER_EDITABLE_FIELDS = frozenset(
 
 def _display_name(user: User) -> str:
     return user.display_name or (user.username or "Member")
+
+
+def _course_fills_blanks(
+    session_data: TrainingSessionCreate, course: Optional[TrainingCourse]
+) -> Tuple[float, str]:
+    """The hours and type a POST /training/sessions create credits.
+
+    As ``build_session_for_event`` reads them for POST /events: what was sent
+    wins, a library course fills a blank, and with neither the session
+    credits the scheduled length as Continuing Education (the schema's
+    default type).
+    """
+    credit_hours = session_data.credit_hours
+    if credit_hours is None and course is not None:
+        credit_hours = course.credit_hours
+    if credit_hours is None:
+        credit_hours = scheduled_hours(
+            session_data.start_datetime, session_data.end_datetime
+        )
+    training_type = session_data.training_type
+    sent_type = "training_type" in session_data.model_fields_set
+    if not sent_type and course is not None and course.training_type is not None:
+        training_type = getattr(course.training_type, "value", course.training_type)
+    return float(credit_hours), str(training_type)
+
+
+def scheduled_hours(start: Optional[datetime], end: Optional[datetime]) -> float:
+    """An event's scheduled length in hours: the credit a session with no hours
+    of its own, and no course giving it some, files under."""
+    if start is None or end is None:
+        return 0.0
+    return round(max(0.0, (end - start).total_seconds()) / 3600, 2)
 
 
 @dataclass
@@ -115,6 +191,62 @@ class EventTrainingCredit:
     notify: Optional[Dict[str, Any]] = None
 
 
+# How an event edit's training details reach the session's columns.
+_DETAIL_ID_FIELDS = (
+    "category_id",
+    "program_id",
+    "phase_id",
+    "requirement_id",
+    "instructor_id",
+)
+_DETAIL_TEXT_FIELDS = ("instructor", "certification_number_prefix", "issuing_agency")
+_DETAIL_VALUE_FIELDS = (
+    "issues_certification",
+    "expiration_months",
+    "counts_toward_certification",
+    "auto_create_records",
+    "require_completion_confirmation",
+    "approval_deadline_days",
+)
+# A null means nothing for these, so it is refused rather than stored.
+_DETAIL_NOT_CLEARABLE = (
+    "training_type",
+    "issues_certification",
+    "counts_toward_certification",
+    "auto_create_records",
+    "require_completion_confirmation",
+    "approval_deadline_days",
+)
+
+
+@dataclass
+class SessionDetailsPlan:
+    """What an event edit does to one event's training session.
+
+    Worked out for every event first, so a series edit refuses before it
+    writes anything; then applied with ``apply_session_details``.
+    """
+
+    event: Event
+    session: Optional[TrainingSession]
+    # Columns of the existing session that change, and to what.
+    changes: Dict[str, Any] = field(default_factory=dict)
+    # The replacement attendance links, when they change.
+    link_ids: Optional[List[str]] = None
+    # A session to create, for a Training event that has none.
+    attach: Optional[TrainingSessionAttach] = None
+    course: Optional[TrainingCourse] = None
+
+    @property
+    def locked_fields(self) -> Set[str]:
+        """What a finalized event refuses: everything but the links."""
+        if not attendance_is_finalized(self.event):
+            return set()
+        if self.attach is not None:
+            return {"training details"}
+        return set(self.changes)
+
+
 class TrainingSessionService:
     """Service for training session management"""
 
@@ -123,8 +255,12 @@ class TrainingSessionService:
 
     async def _validate_linkage_ids(
         self,
-        session_data: "TrainingSessionCreate | TrainingSessionLinkageUpdate | TrainingSessionAttach",
+        session_data: (
+            "TrainingSessionCreate | TrainingSessionLinkageUpdate"
+            " | TrainingSessionAttach | TrainingSessionDetailsUpdate"
+        ),
         organization_id: UUID | str,
+        stored_requirement_id: UUID | str | None = None,
     ) -> Optional[str]:
         """Verify client-supplied linkage FKs belong to the caller's org (XC-1).
 
@@ -132,6 +268,10 @@ class TrainingSessionService:
         deliberately generic so they cannot be used as a cross-tenant existence
         oracle. ProgramPhase has no organization_id of its own, so it is scoped
         through its (already-validated) program instead.
+
+        ``stored_requirement_id`` is the requirement the session already
+        carries, if any: re-sending it unchanged is accepted even when its type
+        would be refused as a new link.
         """
         if session_data.category_id and not await is_in_org(
             self.db, TrainingCategory, session_data.category_id, organization_id
@@ -143,10 +283,12 @@ class TrainingSessionService:
         ):
             return "Invalid training program"
 
-        if session_data.requirement_id and not await is_in_org(
-            self.db, TrainingRequirement, session_data.requirement_id, organization_id
-        ):
-            return "Invalid training requirement"
+        if session_data.requirement_id:
+            requirement_error = await self._requirement_link_error(
+                session_data.requirement_id, organization_id, stored_requirement_id
+            )
+            if requirement_error:
+                return requirement_error
 
         if session_data.phase_id:
             # ProgramPhase carries no organization_id, so scope it through its
@@ -188,6 +330,28 @@ class TrainingSessionService:
         ):
             return "Invalid location"
 
+        return None
+
+    async def _requirement_link_error(
+        self,
+        requirement_id: UUID | str,
+        organization_id: UUID | str,
+        stored_requirement_id: UUID | str | None,
+    ) -> Optional[str]:
+        result = await self.db.execute(
+            select(TrainingRequirement.requirement_type).where(
+                TrainingRequirement.id == str(requirement_id),
+                TrainingRequirement.organization_id == str(organization_id),
+            )
+        )
+        requirement_type = result.scalar_one_or_none()
+        if requirement_type is None:
+            return "Invalid training requirement"
+        unchanged = stored_requirement_id is not None and str(requirement_id) == str(
+            stored_requirement_id
+        )
+        if requirement_type == RequirementType.SESSION_ATTENDANCE and not unchanged:
+            return ATTENDANCE_REQUIREMENT_NOT_LINKABLE
         return None
 
     async def _attendance_requirements_valid(
@@ -363,7 +527,9 @@ class TrainingSessionService:
         if attendance_is_finalized(event):
             return None, attendance_locked_error("changing its training details")
 
-        linkage_error = await self._validate_linkage_ids(updates, organization_id)
+        linkage_error = await self._validate_linkage_ids(
+            updates, organization_id, training_session.requirement_id
+        )
         if linkage_error:
             return None, linkage_error
 
@@ -439,13 +605,13 @@ class TrainingSessionService:
         organization_id: UUID | str,
         created_by: UUID | str | None,
     ) -> TrainingSession:
-        """The session that files an Events-created Training event's credit.
+        """The session that files a Training event's credit.
 
-        Mirrors what the Create Training Session wizard pre-fills from a course
-        (name, code, type, credit hours, instructor), falling back to the event
-        itself when no course was picked. Created only because an officer picked
-        a detail, so it keeps the wizard's defaults: records complete when
-        attendance is finalized, with no separate officer confirmation.
+        What the officer entered wins. A library course fills what they left
+        blank (its name, code, type, hours, instructor and expiry), and with
+        no course the session is filed under a one-off name, or else the
+        event's title, crediting the scheduled length as Continuing Education
+        — exactly what a Training event with no session credits.
         """
         if details.training_type:
             training_type = TrainingType(details.training_type)
@@ -456,14 +622,25 @@ class TrainingSessionService:
         else:
             training_type = TrainingType.CONTINUING_EDUCATION
 
-        # credit_hours is NOT NULL on the session. A course's own figure wins;
-        # otherwise the scheduled length stands in, as the wizard's default does.
-        credit_hours = course.credit_hours if course is not None else None
+        # credit_hours is NOT NULL on the session.
+        credit_hours = details.credit_hours
+        if credit_hours is None and course is not None:
+            credit_hours = course.credit_hours
         if credit_hours is None:
-            credit_hours = 0.0
-            if event.start_datetime and event.end_datetime:
-                span = (event.end_datetime - event.start_datetime).total_seconds()
-                credit_hours = round(max(0.0, span) / 3600, 2)
+            credit_hours = scheduled_hours(event.start_datetime, event.end_datetime)
+
+        if course is not None:
+            course_name, course_code = course.name, course.code
+        else:
+            course_name = (details.course_name or "").strip() or event.title
+            course_code = (details.course_code or "").strip() or None
+
+        instructor = (details.instructor or "").strip() or (
+            course.instructor if course is not None else None
+        )
+        expiration_months = details.expiration_months
+        if expiration_months is None and course is not None:
+            expiration_months = course.expiration_months
 
         return TrainingSession(
             organization_id=str(organization_id),
@@ -475,16 +652,402 @@ class TrainingSessionService:
             requirement_id=(
                 str(details.requirement_id) if details.requirement_id else None
             ),
-            course_name=course.name if course is not None else event.title,
-            course_code=course.code if course is not None else None,
+            course_name=course_name,
+            course_code=course_code,
             training_type=training_type,
             credit_hours=float(credit_hours),
-            instructor=course.instructor if course is not None else None,
-            auto_create_records=True,
-            require_completion_confirmation=False,
-            counts_toward_certification=True,
+            instructor=instructor,
+            instructor_id=(
+                str(details.instructor_id) if details.instructor_id else None
+            ),
+            issues_certification=details.issues_certification,
+            certification_number_prefix=(
+                (details.certification_number_prefix or "").strip() or None
+            ),
+            issuing_agency=(details.issuing_agency or "").strip() or None,
+            expiration_months=expiration_months,
+            counts_toward_certification=details.counts_toward_certification,
+            auto_create_records=details.auto_create_records,
+            require_completion_confirmation=details.require_completion_confirmation,
+            approval_deadline_days=details.approval_deadline_days,
             created_by=str(created_by) if created_by else None,
         )
+
+    async def add_sessions_for_events(
+        self,
+        events: Sequence[Event],
+        details: TrainingSessionAttach,
+        course: Optional[TrainingCourse],
+        organization_id: UUID | str,
+        created_by: UUID | str | None,
+    ) -> List[TrainingSession]:
+        """Give each event its session and attendance links. Does not commit.
+
+        The events must already be added to the session. Flushes, so the
+        events have ids for their sessions and the sessions for their links;
+        the caller's commit writes all three together.
+        """
+        await self.db.flush()
+        sessions = [
+            self.build_session_for_event(
+                event, details, course, organization_id, created_by
+            )
+            for event in events
+        ]
+        for training_session in sessions:
+            self.db.add(training_session)
+        await self.db.flush()
+        for training_session in sessions:
+            self._link_attendance_requirements(
+                training_session, details.attendance_requirement_ids or []
+            )
+        return sessions
+
+    async def plan_session_details(
+        self,
+        events: Sequence[Event],
+        details: TrainingSessionDetailsUpdate,
+        organization_id: UUID | str,
+        previous_titles: Optional[Dict[str, str]] = None,
+    ) -> List[SessionDetailsPlan]:
+        """Work out what ``details`` does to each Training event's session.
+
+        Raises ``ValueError`` for a field that fails validation. Does not
+        refuse a finalized event: the caller reads each plan's
+        ``locked_fields``, so a series edit can name every occurrence it
+        would change. Run after the event's own fields are applied, so a
+        session filed under the event's title is judged against the title
+        the save leaves it with; ``previous_titles`` (event id to its title
+        before the save) lets a form that restates the name it read, the old
+        title, be read as following the title rather than as a change.
+        """
+        payload = details.model_dump(exclude_unset=True)
+        links_sent = "attendance_requirement_ids" in payload
+        raw_links = payload.pop("attendance_requirement_ids", None) or []
+        link_ids = [str(r) for r in dict.fromkeys(raw_links)] if links_sent else None
+        if not events or (not payload and not links_sent):
+            return []
+        for name in _DETAIL_NOT_CLEARABLE:
+            if name in payload and payload[name] is None:
+                raise ValueError(f"{name.replace('_', ' ').capitalize()} is required")
+
+        # Org scope for every id, once for the whole batch. The requirement's
+        # type is judged per session below, against what each one stores.
+        error = await self._validate_linkage_ids(
+            details, organization_id, stored_requirement_id=details.requirement_id
+        )
+        if error:
+            raise ValueError(error)
+        requirement_is_attendance = details.requirement_id is not None and (
+            await self._requirement_link_error(
+                details.requirement_id, organization_id, stored_requirement_id=None
+            )
+            == ATTENDANCE_REQUIREMENT_NOT_LINKABLE
+        )
+        course = None
+        if details.course_id is not None:
+            course = await self._course_in_org(details.course_id, organization_id)
+            if course is None:
+                raise ValueError("Training course not found")
+
+        result = await self.db.execute(
+            select(TrainingSession).where(
+                TrainingSession.event_id.in_([str(e.id) for e in events]),
+                TrainingSession.organization_id == str(organization_id),
+            )
+        )
+        sessions = {str(s.event_id): s for s in result.scalars().all()}
+        stored_links = await self.attendance_requirement_ids(
+            [str(s.id) for s in sessions.values()]
+        )
+        stored_course_ids = {s.course_id for s in sessions.values() if s.course_id}
+        stored_courses: Dict[str, TrainingCourse] = {}
+        if stored_course_ids:
+            course_result = await self.db.execute(
+                select(TrainingCourse).where(
+                    TrainingCourse.id.in_(stored_course_ids),
+                    TrainingCourse.organization_id == str(organization_id),
+                )
+            )
+            stored_courses = {str(c.id): c for c in course_result.scalars().all()}
+
+        plans = []
+        for event in events:
+            session = sessions.get(str(event.id))
+            stored_requirement = session.requirement_id if session else None
+            if (
+                requirement_is_attendance
+                and str(details.requirement_id) != stored_requirement
+            ):
+                raise ValueError(ATTENDANCE_REQUIREMENT_NOT_LINKABLE)
+            if session is None:
+                plan = self._plan_new_session(event, payload, link_ids, course)
+            else:
+                plan = self._plan_session_changes(
+                    event,
+                    session,
+                    payload,
+                    course,
+                    stored_courses.get(session.course_id or ""),
+                    (previous_titles or {}).get(str(event.id)),
+                )
+                if link_ids is not None and set(link_ids) != set(
+                    stored_links[str(session.id)]
+                ):
+                    plan.link_ids = link_ids
+            if plan is not None:
+                plans.append(plan)
+        return plans
+
+    def _plan_session_changes(
+        self,
+        event: Event,
+        session: TrainingSession,
+        payload: Dict[str, Any],
+        course: Optional[TrainingCourse],
+        stored_course: Optional[TrainingCourse],
+        previous_title: Optional[str],
+    ) -> SessionDetailsPlan:
+        target: Dict[str, Any] = {}
+        # Re-sending the stored course is no change, even if the library
+        # course was renamed since: refiling would rewrite a finalized
+        # session's name.
+        if "course_id" in payload:
+            sent = str(payload["course_id"]) if payload["course_id"] else None
+            if sent != session.course_id:
+                if course is not None:
+                    target.update(
+                        course_id=str(course.id),
+                        course_name=course.name,
+                        course_code=course.code,
+                    )
+                else:
+                    target["course_id"] = None
+        course_after = target.get("course_id", session.course_id)
+        if course_after is None:
+            refiled = "course_id" in target
+            if refiled or "course_name" in payload:
+                name = (payload.get("course_name") or "").strip() or event.title
+                # The name the form read, restated on a save that also renamed
+                # the event: the session already followed the new title, and
+                # the old one is what it was filed under, not a new name.
+                if (
+                    previous_title is not None
+                    and name == previous_title
+                    and session.course_name == event.title
+                ):
+                    name = event.title
+                target["course_name"] = name
+            if refiled or "course_code" in payload:
+                target["course_code"] = (payload.get("course_code") or "").strip() or (
+                    None
+                )
+        elif payload.get("course_name") or payload.get("course_code"):
+            raise ValueError(
+                "Pick a course from the library or name a one-off course, not both"
+            )
+
+        # A blank hours, instructor or expiry means what it means on create:
+        # the session's library course fills it (build_session_for_event).
+        if "course_id" in target:
+            course_for_blanks = course if target["course_id"] else None
+        else:
+            course_for_blanks = stored_course
+
+        for name in _DETAIL_ID_FIELDS:
+            if name in payload:
+                target[name] = str(payload[name]) if payload[name] else None
+        for name in _DETAIL_TEXT_FIELDS:
+            if name in payload:
+                target[name] = (payload[name] or "").strip() or None
+        if "instructor" in target and target["instructor"] is None:
+            target["instructor"] = (
+                course_for_blanks.instructor if course_for_blanks else None
+            )
+        for name in _DETAIL_VALUE_FIELDS:
+            if name in payload:
+                target[name] = payload[name]
+        if (
+            "expiration_months" in target
+            and target["expiration_months"] is None
+            and course_for_blanks is not None
+        ):
+            target["expiration_months"] = course_for_blanks.expiration_months
+        if "training_type" in payload:
+            target["training_type"] = TrainingType(payload["training_type"])
+        if "credit_hours" in payload:
+            hours = payload["credit_hours"]
+            if hours is None and course_for_blanks is not None:
+                hours = course_for_blanks.credit_hours
+            target["credit_hours"] = (
+                float(hours)
+                if hours is not None
+                else scheduled_hours(event.start_datetime, event.end_datetime)
+            )
+
+        changes = {
+            name: value
+            for name, value in target.items()
+            if getattr(session, name) != value
+        }
+        return SessionDetailsPlan(
+            event=event, session=session, changes=changes, course=course
+        )
+
+    def _plan_new_session(
+        self,
+        event: Event,
+        payload: Dict[str, Any],
+        link_ids: Optional[List[str]],
+        course: Optional[TrainingCourse],
+    ) -> Optional[SessionDetailsPlan]:
+        """A session for a Training event that has none, or None when the
+        details credit exactly what the event already credits without one.
+
+        The edit form sends every field, so an event made without details
+        sends its defaults back on every save; that must not attach a
+        session, least of all on a finalized event, where it is refused.
+        """
+        attach = TrainingSessionAttach(
+            **{k: v for k, v in payload.items() if v is not None},
+            attendance_requirement_ids=link_ids or None,
+        )
+        built = self.build_session_for_event(
+            event, attach, course, event.organization_id, None
+        )
+        baseline = self.build_session_for_event(
+            event, TrainingSessionAttach(), None, event.organization_id, None
+        )
+        if not link_ids and all(
+            getattr(built, name) == getattr(baseline, name)
+            for name in SESSION_CLONE_FIELDS
+        ):
+            return None
+        return SessionDetailsPlan(
+            event=event, session=None, attach=attach, course=course
+        )
+
+    async def apply_session_details(
+        self,
+        plans: Sequence[SessionDetailsPlan],
+        organization_id: UUID | str,
+        created_by: UUID | str | None,
+    ) -> None:
+        """Write what ``plan_session_details`` worked out. Does not commit."""
+        for plan in plans:
+            if plan.session is not None:
+                if plan.changes:
+                    apply_updates(plan.session, plan.changes)
+                if plan.link_ids is not None:
+                    await self.db.execute(
+                        delete(TrainingSessionRequirement).where(
+                            TrainingSessionRequirement.session_id
+                            == str(plan.session.id)
+                        )
+                    )
+                    self._link_attendance_requirements(plan.session, plan.link_ids)
+            elif plan.attach is not None:
+                await self.add_sessions_for_events(
+                    [plan.event], plan.attach, plan.course, organization_id, created_by
+                )
+
+    async def mandatory_tiers(
+        self, requirement_ids: Sequence[UUID | str], organization_id: UUID | str
+    ) -> Tuple[Optional[MandatoryTiers], Optional[str]]:
+        """Who the given session-attendance requirements grade, as the tiers
+        an event counting toward them is mandatory for.
+
+        Every id must name a session-attendance requirement in the caller's
+        organization; the tiers are the ones the event forms' "Mandatory
+        for" offers.
+        """
+        wanted = list(dict.fromkeys(str(r) for r in requirement_ids))
+        if not wanted:
+            return MandatoryTiers(everyone=False, tier_ids=[], unmapped=[]), None
+        result = await self.db.execute(
+            select(TrainingRequirement).where(
+                TrainingRequirement.id.in_(wanted),
+                TrainingRequirement.organization_id == str(organization_id),
+                TrainingRequirement.requirement_type
+                == RequirementType.SESSION_ATTENDANCE,
+            )
+        )
+        found = {str(r.id): r for r in result.scalars().all()}
+        if set(found) != set(wanted):
+            return None, "Invalid attendance requirement"
+        settings_result = await self.db.execute(
+            select(Organization.settings).where(Organization.id == str(organization_id))
+        )
+        ladder = [
+            tier.id
+            for tier in mandatory_for_tiers(settings_result.scalar_one_or_none())
+        ]
+        return (
+            mandatory_tiers_for_requirements([found[r] for r in wanted], ladder),
+            None,
+        )
+
+    async def source_for_cloning(
+        self, event: Event
+    ) -> Tuple[Optional[TrainingSession], List[str]]:
+        """An event's session and its attendance links, to copy onto another.
+
+        ``(None, [])`` when the event has no session.
+        """
+        session = await self.get_session_by_event(event.id, event.organization_id)
+        if session is None:
+            return None, []
+        links = await self.attendance_requirement_ids([str(session.id)])
+        return session, links[str(session.id)]
+
+    async def clone_sessions_for_events(
+        self,
+        source: TrainingSession,
+        link_ids: Sequence[str],
+        source_title: str,
+        events: Sequence[Event],
+        created_by: UUID | str | None,
+    ) -> List[TrainingSession]:
+        """Give each event a copy of ``source`` and its attendance links.
+
+        For the next occurrences of a rolling series and for a duplicated
+        event. A session filed under its own event's title (no course, no
+        one-off name) is filed under each new event's title instead, as the
+        source would have been. Does not commit; the events must already be
+        added to the session.
+        """
+        await self.db.flush()
+        files_under_title = (
+            source.course_id is None and source.course_name == source_title
+        )
+        # A session-attendance requirement_id does nothing, and a new session
+        # may not take one (ATTENDANCE_REQUIREMENT_NOT_LINKABLE). One a source
+        # still carries from before that rule stays on the source only.
+        drop_requirement = source.requirement_id is not None and (
+            await self._requirement_link_error(
+                source.requirement_id, source.organization_id, None
+            )
+            == ATTENDANCE_REQUIREMENT_NOT_LINKABLE
+        )
+        clones = []
+        for event in events:
+            clone = TrainingSession(
+                organization_id=str(source.organization_id),
+                event_id=str(event.id),
+                created_by=str(created_by) if created_by else None,
+            )
+            for name in SESSION_CLONE_FIELDS:
+                setattr(clone, name, copy.deepcopy(getattr(source, name)))
+            if files_under_title:
+                clone.course_name = event.title
+            if drop_requirement:
+                clone.requirement_id = None
+            self.db.add(clone)
+            clones.append(clone)
+        await self.db.flush()
+        for clone in clones:
+            self._link_attendance_requirements(clone, link_ids)
+        return clones
 
     async def attach_session_to_event(
         self,
@@ -527,11 +1090,10 @@ class TrainingSessionService:
         if error:
             return None, error
 
-        training_session = self.build_session_for_event(
-            event, details, course, organization_id, created_by
-        )
-        self.db.add(training_session)
         try:
+            [training_session] = await self.add_sessions_for_events(
+                [event], details, course, organization_id, created_by
+            )
             await self.db.commit()
         except IntegrityError:
             # training_sessions.event_id is unique: another request attached
@@ -547,6 +1109,7 @@ class TrainingSessionService:
         organization_id: UUID | str,
         created_by: UUID | str,
         commit: bool = True,
+        stored_requirement_id: UUID | str | None = None,
     ) -> Tuple[Optional[TrainingSession], Optional[str]]:
         """
         Create a training session (Event + TrainingSession link)
@@ -556,6 +1119,9 @@ class TrainingSessionService:
                 caller creating several sessions (course cohort generation)
                 can wrap them all in one transaction and roll the whole batch
                 back on failure rather than leaving a half-built cohort.
+            stored_requirement_id: a requirement the caller already holds on
+                record and is copying across (a cohort class's own link), so
+                it is accepted as unchanged rather than judged as a new link.
 
         Returns: (training_session, error_message)
         """
@@ -567,11 +1133,14 @@ class TrainingSessionService:
             if session_data.rsvp_deadline >= session_data.start_datetime:
                 return None, "RSVP deadline must be before event start"
 
-        linkage_error = await self._validate_linkage_ids(session_data, organization_id)
+        linkage_error = await self._validate_linkage_ids(
+            session_data, organization_id, stored_requirement_id
+        )
         if linkage_error:
             return None, linkage_error
 
         # Validate course data
+        course: Optional[TrainingCourse] = None
         if session_data.use_existing_course:
             if not session_data.course_id:
                 return None, "course_id is required when use_existing_course is true"
@@ -597,12 +1166,11 @@ class TrainingSessionService:
             course_code = course.code
             course_id = course.id
         else:
-            if not session_data.course_name:
-                return None, "course_name is required when creating a new course"
-
-            course_name = session_data.course_name
+            # No course: filed under a one-off name, or the event's title.
+            course_name = session_data.course_name or session_data.title
             course_code = session_data.course_code
             course_id = None
+        credit_hours, training_type = _course_fills_blanks(session_data, course)
 
         # Check for location double-booking
         if session_data.location_id:
@@ -646,8 +1214,8 @@ class TrainingSessionService:
             custom_fields={
                 "course_name": course_name,
                 "course_code": course_code,
-                "training_type": session_data.training_type,
-                "credit_hours": session_data.credit_hours,
+                "training_type": training_type,
+                "credit_hours": credit_hours,
                 "instructor": session_data.instructor,
                 "issues_certification": session_data.issues_certification,
                 "issuing_agency": session_data.issuing_agency,
@@ -679,8 +1247,8 @@ class TrainingSessionService:
             ),
             course_name=course_name,
             course_code=course_code,
-            training_type=TrainingType(session_data.training_type),
-            credit_hours=session_data.credit_hours,
+            training_type=TrainingType(training_type),
+            credit_hours=credit_hours,
             instructor=session_data.instructor,
             instructor_id=(
                 str(session_data.instructor_id) if session_data.instructor_id else None
@@ -737,6 +1305,7 @@ class TrainingSessionService:
             return [], linkage_error
 
         # Validate course data
+        course: Optional[TrainingCourse] = None
         if session_data.use_existing_course:
             if not session_data.course_id:
                 return [], "course_id is required when use_existing_course is true"
@@ -756,12 +1325,11 @@ class TrainingSessionService:
             course_code = course.code
             course_id = course.id
         else:
-            if not session_data.course_name:
-                return [], "course_name is required when creating a new course"
-
-            course_name = session_data.course_name
+            # No course: filed under a one-off name, or the event's title.
+            course_name = session_data.course_name or session_data.title
             course_code = session_data.course_code
             course_id = None
+        credit_hours, training_type = _course_fills_blanks(session_data, course)
 
         # Build event data dict for EventService.create_recurring_event
         event_data = {
@@ -792,8 +1360,8 @@ class TrainingSessionService:
             "custom_fields": {
                 "course_name": course_name,
                 "course_code": course_code,
-                "training_type": session_data.training_type,
-                "credit_hours": session_data.credit_hours,
+                "training_type": training_type,
+                "credit_hours": credit_hours,
                 "instructor": session_data.instructor,
                 "issues_certification": session_data.issues_certification,
                 "issuing_agency": session_data.issuing_agency,
@@ -843,8 +1411,8 @@ class TrainingSessionService:
                 ),
                 course_name=course_name,
                 course_code=course_code,
-                training_type=TrainingType(session_data.training_type),
-                credit_hours=session_data.credit_hours,
+                training_type=TrainingType(training_type),
+                credit_hours=credit_hours,
                 instructor=session_data.instructor,
                 instructor_id=(
                     str(session_data.instructor_id)
@@ -2255,6 +2823,18 @@ class TrainingSessionService:
             for entry in (approval.attendee_data or [])
             if isinstance(entry, dict) and entry.get("user_id")
         }
+        # An approver may not sign off a roster they appear on. Approved
+        # minutes are free-form, so approving one's own entry is awarding
+        # oneself whatever credit one types (owner decision, 2026-11-08:
+        # instructors may attend, but another officer or the Chief approves).
+        # Refused whole rather than per entry: the approval completes every
+        # record at once, and leaving one entry pending would strand it.
+        if str(approved_by) in roster:
+            return (
+                False,
+                "You are on this roster, so you cannot approve it. Another "
+                "training officer or the Chief must approve this training credit.",
+            )
         submitted_ids = [str(a.user_id) for a in attendees]
         if any(uid not in roster for uid in submitted_ids):
             return False, "Attendee is not part of this approval"

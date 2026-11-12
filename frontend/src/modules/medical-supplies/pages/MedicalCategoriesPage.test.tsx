@@ -8,14 +8,16 @@ const mockGetCategories = vi.fn();
 const mockGetItems = vi.fn();
 const mockDeleteCategory = vi.fn();
 const mockCheckPermission = vi.fn();
+const mockCreateCategory = vi.fn();
+const mockUpdateCategory = vi.fn();
 
 vi.mock('../../../services/medicalSuppliesService', () => ({
   medicalSuppliesService: {
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
     getItems: (...args: unknown[]) => mockGetItems(...args) as unknown,
     deleteCategory: (...args: unknown[]) => mockDeleteCategory(...args) as unknown,
-    createCategory: vi.fn(),
-    updateCategory: vi.fn(),
+    createCategory: (...args: unknown[]) => mockCreateCategory(...args) as unknown,
+    updateCategory: (...args: unknown[]) => mockUpdateCategory(...args) as unknown,
   },
 }));
 
@@ -306,5 +308,73 @@ describe('MedicalCategoriesPage duplicate names', () => {
     expect(airwayCard).toHaveTextContent('Airway');
     expect(airwayCard).toHaveTextContent('Duplicate name');
     expect(traumaCard).not.toHaveTextContent('Duplicate name');
+  });
+});
+
+describe('MedicalCategoriesPage category form', () => {
+  beforeEach(() => {
+    mockGetCategories.mockReset();
+    mockGetItems.mockReset();
+    mockCreateCategory.mockReset();
+    mockUpdateCategory.mockReset();
+    mockCheckPermission.mockReset();
+    mockGetCategories.mockResolvedValue([AIRWAY, TRAUMA]);
+    mockGetItems.mockResolvedValue(itemsPage(0));
+    mockCheckPermission.mockImplementation((permission: string) => permission === 'inventory.manage_medical');
+  });
+
+  it('names a missing name on its field and creates nothing', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: /New category/ }));
+    await user.click(screen.getByRole('button', { name: 'Create category' }));
+
+    expect(screen.getByRole('textbox', { name: /^Name/ })).toHaveAccessibleDescription('Give the category a name.');
+    expect(mockCreateCategory).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the field it names', async () => {
+    mockCreateCategory.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'description', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: /New category/ }));
+    await user.type(screen.getByRole('textbox', { name: /^Name/ }), 'Burns');
+    await user.click(screen.getByRole('button', { name: 'Create category' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: /^Description/ })).toHaveAccessibleDescription(
+        expect.stringContaining('Value is too long.')
+      )
+    );
+  });
+
+  it('saves the rest of an edit and keeps a refused field flagged, open', async () => {
+    mockUpdateCategory
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'name', message: 'That name is taken.' }] } },
+      })
+      .mockResolvedValueOnce(AIRWAY);
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: 'Edit Airway' }));
+    await user.type(screen.getByRole('spinbutton', { name: /^Low stock threshold/ }), '4');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() => expect(mockUpdateCategory).toHaveBeenCalledTimes(2));
+    expect(mockUpdateCategory.mock.calls[1]?.[1]).not.toHaveProperty('name');
+    expect(mockUpdateCategory.mock.calls[1]?.[1]).toMatchObject({ low_stock_threshold: 4 });
+    expect(screen.getByRole('alert')).toHaveTextContent('Category saved, except name.');
+  });
+
+  it('asks before Cancel discards a typed name', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    await user.click(screen.getByRole('button', { name: /New category/ }));
+    await user.type(screen.getByRole('textbox', { name: /^Name/ }), 'Burns');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('textbox', { name: /^Name/ })).toHaveValue('Burns');
   });
 });

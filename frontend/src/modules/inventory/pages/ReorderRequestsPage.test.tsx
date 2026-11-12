@@ -242,6 +242,39 @@ describe('ReorderRequestsPage', () => {
     expect(mockUpdateReorderRequest.mock.calls[0]?.[0]).toBe('r-1');
   });
 
+  it('saves the rest of an edit and keeps a refused field flagged, open', async () => {
+    mockGetReorderRequests.mockResolvedValue([makeReq({ status: 'pending' })]);
+    mockUpdateReorderRequest
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'vendor', message: 'Value is too long.' }] } },
+      })
+      .mockResolvedValueOnce({});
+    const user = userEvent.setup();
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findAllByText('SCBA Cylinders');
+    await user.click(firstButton('Edit'));
+    await user.type(await screen.findByRole('textbox', { name: 'Notes' }), 'Rush');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateReorderRequest).toHaveBeenCalledTimes(2));
+    const second = mockUpdateReorderRequest.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(second).not.toHaveProperty('vendor');
+    expect(second).not.toHaveProperty('vendor_id');
+    expect(second).toMatchObject({ notes: expect.stringContaining('Rush') as string });
+    expect(screen.getByRole('alert')).toHaveTextContent('Reorder request saved, except vendor.');
+    expect(mockToastSuccess).not.toHaveBeenCalledWith('Reorder request updated');
+  });
+
+  it('asks before Cancel discards a new request', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ReorderRequestsPage />);
+    await user.click((await screen.findAllByRole('button', { name: /New Request/ }))[0] as HTMLElement);
+    await user.type(await screen.findByPlaceholderText('e.g. SCBA Air Cylinders'), 'Gloves');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByPlaceholderText('e.g. SCBA Air Cylinders')).toHaveValue('Gloves');
+  });
+
   it('shows and invokes only the contextual next-state action', async () => {
     mockGetReorderRequests.mockResolvedValue([makeReq({ status: 'approved' })]);
     const user = userEvent.setup();
@@ -425,13 +458,20 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
   // The server refuses a receipt for an order with no linked item (W41-5), so
   // an unlinked order is linked here, at receipt, before any stock posts.
   it('asks for the item before an unlinked request can be received', async () => {
+    const user = userEvent.setup();
     window.history.pushState({}, '', '/inventory/admin/reorder?request=ro-7');
     renderWithRouter(<ReorderRequestsPage />);
 
     const dialog = await screen.findByRole('dialog', { name: 'Receive stock' });
     expect(within(dialog).getByText(/isn.t linked to an inventory item yet/)).toBeInTheDocument();
     expect(within(dialog).queryByRole('textbox', { name: /Storage location/ })).not.toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: 'Receive stock' })).toBeDisabled();
+    // The button stays pressable and says what is missing (forms review F-3).
+    await user.click(within(dialog).getByRole('button', { name: 'Receive stock' }));
+    const item = within(dialog).getByRole('group', { name: 'Inventory item' });
+    expect(item).toHaveAccessibleDescription('Choose the inventory item the stock goes onto.');
+    expect(item).toHaveFocus();
+    expect(mockReceiveReorderStock).not.toHaveBeenCalled();
+    expect(mockUpdateReorderRequest).not.toHaveBeenCalled();
   });
 
   it('links the picked item and then receives against it', async () => {
@@ -441,8 +481,8 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Receive stock' });
     await user.click(within(dialog).getByRole('button', { name: 'Pick Nitrile Gloves L' }));
-    await user.type(within(dialog).getByRole('textbox', { name: 'Storage location *' }), 'Shelf A');
-    await user.type(within(dialog).getByRole('spinbutton', { name: 'Unit cost ($) *' }), '9.99');
+    await user.type(within(dialog).getByRole('textbox', { name: 'Storage location' }), 'Shelf A');
+    await user.type(within(dialog).getByRole('spinbutton', { name: 'Unit cost ($)' }), '9.99');
     await user.click(within(dialog).getByRole('button', { name: 'Receive stock' }));
 
     await waitFor(() => expect(mockReceiveReorderStock).toHaveBeenCalledTimes(1));
@@ -464,10 +504,144 @@ describe('ReorderRequestsPage — opened from the attention queue', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Receive stock' });
     // The dialog opens before its effect seeds the outstanding quantity, so a
     // loaded run can catch it between the two with the field still empty.
-    await waitFor(() => expect(within(dialog).getByRole('spinbutton', { name: 'Quantity received *' })).toHaveValue(4));
-    expect(within(dialog).getByRole('textbox', { name: 'Storage location *' })).toBeRequired();
-    expect(within(dialog).getByRole('spinbutton', { name: 'Unit cost ($) *' })).toBeRequired();
+    await waitFor(() => expect(within(dialog).getByRole('spinbutton', { name: 'Quantity received' })).toHaveValue(4));
+    expect(within(dialog).getByRole('textbox', { name: 'Storage location' })).toBeRequired();
+    expect(within(dialog).getByRole('spinbutton', { name: 'Unit cost ($)' })).toBeRequired();
     expect(within(dialog).getByRole('button', { name: 'Receive stock' })).toBeEnabled();
+  });
+
+  describe('receive stock dialog refusing a save', () => {
+    beforeEach(() => {
+      mockGetReorderRequests.mockReset();
+      mockGetReorderRequests.mockResolvedValue([
+        makeReq({ id: 'ro-7', item_name: 'SCBA Cylinders', status: 'ordered', item_id: 'it-1' }),
+      ]);
+      mockReceiveReorderStock.mockReset();
+      mockReceiveReorderStock.mockResolvedValue({});
+      mockToastError.mockReset();
+      window.history.pushState({}, '', '/inventory/admin/reorder?request=ro-7');
+    });
+
+    const openReceive = async () => {
+      renderWithRouter(<ReorderRequestsPage />);
+      const dialog = await screen.findByRole('dialog', { name: 'Receive stock' });
+      await waitFor(() =>
+        expect(within(dialog).getByRole('spinbutton', { name: /^Quantity received/ })).toHaveValue(4)
+      );
+      return dialog;
+    };
+
+    it('names each missing receipt field under it and focuses the first', async () => {
+      const user = userEvent.setup();
+      const dialog = await openReceive();
+      await user.clear(within(dialog).getByRole('spinbutton', { name: /^Quantity received/ }));
+      await user.click(within(dialog).getByRole('button', { name: 'Receive stock' }));
+
+      const qty = within(dialog).getByRole('spinbutton', { name: /^Quantity received/ });
+      expect(qty).toHaveAttribute('aria-invalid', 'true');
+      expect(qty).toHaveAccessibleDescription('Enter a quantity above 0.');
+      expect(qty).toHaveFocus();
+      const location = within(dialog).getByRole('textbox', { name: /^Storage location/ });
+      expect(location).toHaveAttribute('aria-invalid', 'true');
+      expect(location).toHaveAccessibleDescription('Enter where the stock is being put away.');
+      expect(within(dialog).getByRole('spinbutton', { name: /^Unit cost/ })).toHaveAccessibleDescription(
+        'Enter a unit cost of 0 or more.'
+      );
+      expect(mockReceiveReorderStock).not.toHaveBeenCalled();
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+
+    it('puts a 422 on the field the server names', async () => {
+      mockReceiveReorderStock.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'storage_location', message: 'Value is too long.' }] } },
+      });
+      const user = userEvent.setup();
+      const dialog = await openReceive();
+      await user.type(within(dialog).getByRole('textbox', { name: /^Storage location/ }), 'Shelf A');
+      await user.type(within(dialog).getByRole('spinbutton', { name: /^Unit cost/ }), '9.99');
+      await user.click(within(dialog).getByRole('button', { name: 'Receive stock' }));
+
+      const location = await within(dialog).findByRole('textbox', {
+        name: /^Storage location/,
+        description: 'Value is too long.',
+      });
+      expect(location).toHaveFocus();
+    });
+
+    it('shows a server failure inside the dialog rather than as a toast', async () => {
+      mockReceiveReorderStock.mockRejectedValue(new Error('Order changed since you opened it'));
+      const user = userEvent.setup();
+      const dialog = await openReceive();
+      await user.type(within(dialog).getByRole('textbox', { name: /^Storage location/ }), 'Shelf A');
+      await user.type(within(dialog).getByRole('spinbutton', { name: /^Unit cost/ }), '9.99');
+      await user.click(within(dialog).getByRole('button', { name: 'Receive stock' }));
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Order changed since you opened it');
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('new reorder request dialog refusing a save', () => {
+    beforeEach(() => {
+      mockGetReorderRequests.mockReset();
+      mockGetReorderRequests.mockResolvedValue([]);
+      window.history.pushState({}, '', '/inventory/admin/reorder');
+      mockCreateReorderRequest.mockReset();
+      mockCreateReorderRequest.mockResolvedValue({});
+      mockToastError.mockReset();
+    });
+
+    const openCreate = async (user: ReturnType<typeof userEvent.setup>) => {
+      renderWithRouter(<ReorderRequestsPage />);
+      await screen.findByText('No reorder requests found');
+      await user.click(screen.getByRole('button', { name: /New Request/ }));
+      return screen.findByRole('dialog', { name: 'New Reorder Request' });
+    };
+
+    it('names the missing item name and quantity under their fields and focuses the first', async () => {
+      const user = userEvent.setup();
+      const dialog = await openCreate(user);
+      await user.clear(within(dialog).getByRole('spinbutton', { name: /^Quantity/ }));
+      await user.click(within(dialog).getByRole('button', { name: 'Create Request' }));
+
+      const name = within(dialog).getByRole('textbox', { name: /^Item Name/ });
+      expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toHaveAttribute('aria-required', 'true');
+      expect(name).toHaveAccessibleDescription('Enter the item name.');
+      expect(name).toHaveFocus();
+      expect(within(dialog).getByRole('spinbutton', { name: /^Quantity/ })).toHaveAccessibleDescription(
+        'Enter a quantity of at least 1.'
+      );
+      expect(mockCreateReorderRequest).not.toHaveBeenCalled();
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+
+    it('puts a 422 on the field the server names', async () => {
+      mockCreateReorderRequest.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'vendor_contact', message: 'Value is too long.' }] } },
+      });
+      const user = userEvent.setup();
+      const dialog = await openCreate(user);
+      await user.type(within(dialog).getByRole('textbox', { name: /^Item Name/ }), 'Hose Couplings');
+      await user.click(within(dialog).getByRole('button', { name: 'Create Request' }));
+
+      const contact = await within(dialog).findByRole('textbox', {
+        name: /^Vendor Contact/,
+        description: 'Value is too long.',
+      });
+      expect(contact).toHaveFocus();
+    });
+
+    it('shows a server failure inside the dialog rather than as a toast', async () => {
+      mockCreateReorderRequest.mockRejectedValue(new Error('Reorder service unavailable'));
+      const user = userEvent.setup();
+      const dialog = await openCreate(user);
+      await user.type(within(dialog).getByRole('textbox', { name: /^Item Name/ }), 'Hose Couplings');
+      await user.click(within(dialog).getByRole('button', { name: 'Create Request' }));
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Reorder service unavailable');
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
   });
 
   it('does nothing for a request that is no longer listed', async () => {

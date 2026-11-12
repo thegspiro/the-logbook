@@ -541,6 +541,40 @@ describe('setupGlobalErrorHandlers', () => {
     expect((mockFetch.mock.calls[0]?.[1] as RequestInit).keepalive).toBe(true);
   });
 
+  it('settles a keepalive flush that fails instead of leaving it unhandled', async () => {
+    // The flush's try/catch only caught a synchronous throw. A rejected
+    // request — offline, or cancelled by the navigation that fired pagehide —
+    // became an unhandled rejection, which the window handler above reports:
+    // the log endpoint's failure filed as one more report to that endpoint.
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      mockFetch.mockImplementation(() => Promise.reject(new TypeError('Load failed')));
+      reportError({ errorType: 'API_SERVER_ERROR', errorMessage: 'HTTP 500' });
+      await settle();
+
+      // A plain function rather than the vi.fn: a spy subscribes to every
+      // promise it returns in order to record how it settled, which marks the
+      // rejection handled and would let this test pass against the bug.
+      const flushes: RequestInit[] = [];
+      vi.stubGlobal('fetch', (_url: string, init: RequestInit) => {
+        flushes.push(init);
+        return Promise.reject(new TypeError('Load failed'));
+      });
+
+      window.dispatchEvent(new Event('pagehide'));
+
+      expect(flushes).toHaveLength(1);
+      expect(flushes[0]?.keepalive).toBe(true);
+      // Node reports an unhandled rejection after the microtask queue drains.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
   it('keeps reports it could not flush, since the page may come back', async () => {
     vi.useFakeTimers();
     mockFetch.mockImplementation(() => Promise.reject(new Error('offline')));

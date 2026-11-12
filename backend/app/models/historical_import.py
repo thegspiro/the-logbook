@@ -68,6 +68,13 @@ class ImportedRecordKind(str, Enum):
     # A drill date the import turned into a held training session; its
     # source_id is engine.drill_source_id(date) and record_id the session.
     TRAINING_SESSION = "training_session"
+    # The staffing roster: a duty shift or outreach sheet it filled or made,
+    # a member's seat on one, a calendar event, and a check-in at one. The
+    # source ids are historical_staffing_plan's staff-* keys.
+    SHIFT = "shift"
+    SHIFT_ASSIGNMENT = "shift_assignment"
+    EVENT = "event"
+    EVENT_RSVP = "event_rsvp"
 
 
 class HistoricalImport(Base):

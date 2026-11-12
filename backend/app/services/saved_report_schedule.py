@@ -322,14 +322,20 @@ async def _email(
     return sent
 
 
-async def _owner_may_run(db: AsyncSession, saved: SavedReport) -> bool:
+async def _owner_may_run(db: AsyncSession, saved: SavedReport) -> Optional[User]:
     """The PII gate's first half: the schedule's owner still holds the
     permission the report type needs (non-PII types need none beyond
-    reports.view, checked here too)."""
+    reports.view, checked here too).
+
+    Returns the owner (so the caller can also pass it to ``generate_report``
+    as the acting user, RPT6-29-5 — a scheduled send has no live request, and
+    the schedule's own creator is the closest thing to one), or ``None`` when
+    the schedule may not run.
+    """
     from app.api.dependencies import user_has_permission
 
     if not saved.created_by:
-        return False
+        return None
     owner = (
         await db.execute(
             select(User)
@@ -343,9 +349,11 @@ async def _owner_may_run(db: AsyncSession, saved: SavedReport) -> bool:
         )
     ).scalar_one_or_none()
     if owner is None or not user_has_permission(owner, "reports.view"):
-        return False
+        return None
     permission = PII_REPORT_PERMISSIONS.get(saved.report_type)
-    return permission is None or user_has_permission(owner, permission)
+    if permission is not None and not user_has_permission(owner, permission):
+        return None
+    return owner
 
 
 async def _settle_without_sending(
@@ -386,7 +394,8 @@ async def _send_one(
     org_id = str(org.id)
     frequency = str(saved.schedule_frequency)
     recipients = dedupe_addresses(saved.email_recipients)
-    if not await _owner_may_run(db, saved):
+    owner = await _owner_may_run(db, saved)
+    if owner is None:
         logger.warning(
             "Saved report {}: its owner can no longer run {}; not sent",
             saved.id,
@@ -423,6 +432,11 @@ async def _send_one(
         # Only counts reach the email (module docstring), so no
         # recipient's own applicant record is listed to them.
         hidden_prospect_ids=set(),
+        # No live request to read an actor from; the owner already verified
+        # above stands in (RPT6-29-5), so department_overview's action-item
+        # counts respect their meetings/minutes visibility rather than
+        # falling back to the fully-restricted default.
+        current_user=owner,
     )
     if "error" in report:
         logger.warning("Saved report {}: {}; not sent", saved.id, report["error"])

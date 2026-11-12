@@ -135,10 +135,11 @@ export const rowsInScope = (rows: PastShiftRow[], scope: string): PastShiftRow[]
   scope === ALL_TIME ? rows : rows.filter((row) => row.year !== null && String(row.year) === scope);
 
 /**
- * Month sections, newest first, with undated shifts last. Rows keep the order
- * they arrive in, which the caller has already sorted newest first.
+ * Month sections, with undated shifts last. `newest` (history) puts the latest
+ * month first; `soonest` (the Upcoming list) puts the next month first. Rows
+ * keep the order they arrive in, which the caller has already sorted to match.
  */
-export const groupByMonth = (rows: PastShiftRow[]): MonthGroup[] => {
+export const groupByMonth = (rows: PastShiftRow[], order: 'newest' | 'soonest' = 'newest'): MonthGroup[] => {
   const groups = new Map<string, { year: number | null; month: number | null; rows: PastShiftRow[] }>();
   for (const row of rows) {
     const dated = row.year !== null && row.month !== null;
@@ -151,10 +152,14 @@ export const groupByMonth = (rows: PastShiftRow[]): MonthGroup[] => {
     .sort(([a], [b]) => {
       if (a === UNDATED_KEY) return 1;
       if (b === UNDATED_KEY) return -1;
-      return b.localeCompare(a);
+      return order === 'newest' ? b.localeCompare(a) : a.localeCompare(b);
     })
     .map(([key, group]) => ({ key, ...group, ...totalsFor(group.rows) }));
 };
+
+/** "October 2026" — the year is always named, so December and January read apart. */
+export const monthHeading = (group: Pick<MonthGroup, 'year' | 'month'>): string =>
+  group.year !== null && group.month !== null ? `${MONTH_NAMES[group.month - 1] ?? ''} ${group.year}` : 'No shift date';
 
 /**
  * The scope to show when the member has not picked one, or has picked a year

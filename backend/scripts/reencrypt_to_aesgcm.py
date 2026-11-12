@@ -121,6 +121,8 @@ _PLAIN_COLUMNS = [
     ),
     ("member_leaves_of_absence", "id", ["reason"]),
     ("training_waivers", "id", ["reason"]),
+    ("attendance_waiver_requests", "id", ["reason"]),
+    ("attendance_waiver_request_actions", "id", ["note"]),
     ("training_requirement_overrides", "id", ["reason"]),
     (
         "prospects",
@@ -167,7 +169,15 @@ _PLAIN_COLUMNS = [
     (
         "screening_records",
         "id",
-        ["provider_name", "result_summary", "notes", "result_data", "status"],
+        [
+            "provider_name",
+            "result_summary",
+            "notes",
+            "result_data",
+            "status",
+            "screening_type",
+            "requirement_id",
+        ],
     ),
     (
         "historical_members",

@@ -547,6 +547,8 @@ export const MinutesDetailPage: React.FC = () => {
       setShowAdopt(false);
       toast.success('Minutes adopted');
     } catch (err: unknown) {
+      // A validation refusal belongs on the dialog's field, which reads it.
+      if (toAppError(err).status === 422) throw err;
       toast.error(getErrorMessage(err, 'Failed to adopt minutes'));
     } finally {
       setAdopting(false);
@@ -1860,9 +1862,7 @@ export const MinutesDetailPage: React.FC = () => {
           attendees={minutes.attendees ?? []}
           busy={adopting}
           onClose={() => setShowAdopt(false)}
-          onAdopt={(details) => {
-            void handleAdopt(details);
-          }}
+          onAdopt={handleAdopt}
         />
 
         <OutlinePickerDialog

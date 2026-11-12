@@ -215,6 +215,14 @@ class MeetingAttendee(Base):
     waiver_granted_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True)
     )
+    # The approved member request this waiver came from, when it came from
+    # one; NULL for a waiver the Secretary granted by hand. SET NULL: the
+    # waiver stands if the request row is ever removed.
+    waiver_request_id: Mapped[Optional[str]] = mapped_column(
+        String(36),
+        ForeignKey("attendance_waiver_requests.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     # Timestamps
     created_at: Mapped[Optional[datetime]] = mapped_column(
@@ -232,6 +240,15 @@ class MeetingAttendee(Base):
         Index("idx_meeting_attendees_meeting", "meeting_id"),
         Index("idx_meeting_attendees_user", "user_id"),
         Index("idx_meeting_attendees_organization", "organization_id"),
+        # One row per member per meeting: a second row let a member be both
+        # present and waived, or counted twice (owner decision, 2026-11-10).
+        Index(
+            "uq_meeting_attendees_meeting_user",
+            "meeting_id",
+            "user_id",
+            unique=True,
+        ),
+        Index("idx_meeting_attendees_waiver_request", "waiver_request_id"),
     )
 
     def __repr__(self):

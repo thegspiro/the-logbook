@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, generate_uuid, safe_error_detail
 from app.models.training import TrainingRequirement, TrainingWaiver, TrainingWaiverType
@@ -125,6 +126,16 @@ async def create_training_waiver(
         active=True,
     )
     db.add(waiver)
+    await _audit(
+        db,
+        "training_waiver_created",
+        waiver,
+        current_user,
+        waiver_type=waiver_type.value,
+        start_date=waiver.start_date.isoformat(),
+        end_date=waiver.end_date.isoformat() if waiver.end_date else None,
+        requirement_ids=waiver.requirement_ids,
+    )
     await db.commit()
     await db.refresh(waiver)
 
@@ -215,6 +226,13 @@ async def update_training_waiver(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     waiver.updated_at = datetime.now(timezone.utc)
+    await _audit(
+        db,
+        "training_waiver_updated",
+        waiver,
+        current_user,
+        changed_fields=sorted(updates),
+    )
     await db.commit()
     await db.refresh(waiver)
 
@@ -238,7 +256,38 @@ async def delete_training_waiver(
 
     waiver.active = False
     waiver.updated_at = datetime.now(timezone.utc)
+    await _audit(db, "training_waiver_deactivated", waiver, current_user)
     await db.commit()
+
+
+async def _audit(
+    db: AsyncSession,
+    event_type: str,
+    waiver: TrainingWaiver,
+    actor: User,
+    **details: object,
+) -> None:
+    """Record a waiver change in the caller's transaction, so the entry
+    commits or rolls back with the change it describes.
+
+    Ids and field names only. The reason is free text that is often medical
+    and is encrypted at rest; copying it into the audit trail would store it
+    a second time, in plain JSON, in a table kept far longer than the waiver.
+    """
+    await log_audit_event(
+        db=db,
+        event_type=event_type,
+        event_category="training",
+        severity="info",
+        event_data={
+            "waiver_id": str(waiver.id),
+            "member_id": str(waiver.user_id),
+            **details,
+        },
+        user_id=str(actor.id),
+        username=actor.username,
+        organization_id=str(actor.organization_id),
+    )
 
 
 def _to_response(waiver: TrainingWaiver) -> TrainingWaiverResponse:

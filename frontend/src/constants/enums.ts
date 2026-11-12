@@ -656,6 +656,20 @@ export const PracticalSkillsMethod = {
 export type PracticalSkillsMethod = (typeof PracticalSkillsMethod)[keyof typeof PracticalSkillsMethod];
 
 // ============================================
+// Training — Record Source
+// ============================================
+/**
+ * Where a training record came from. The server decides it
+ * (`app/services/training_record_source.py`) and sends the label to show.
+ */
+export const TrainingRecordSource = {
+  PROVIDER: 'provider',
+  IMPORTED: 'imported',
+  LOGBOOK: 'logbook',
+} as const;
+export type TrainingRecordSource = (typeof TrainingRecordSource)[keyof typeof TrainingRecordSource];
+
+// ============================================
 // Scheduling — Assignment Status
 // ============================================
 export const AssignmentStatus = {
@@ -1358,3 +1372,58 @@ export const LeaveMonthRule = {
   HALF: 'half',
 } as const;
 export type LeaveMonthRule = (typeof LeaveMonthRule)[keyof typeof LeaveMonthRule];
+
+// ============================================
+// Session Waiver Requests (backend/app/models/attendance_waiver.py)
+// ============================================
+export const AttendanceWaiverStatus = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  DENIED: 'denied',
+  WITHDRAWN: 'withdrawn',
+  VOIDED: 'voided',
+} as const;
+export type AttendanceWaiverStatus = (typeof AttendanceWaiverStatus)[keyof typeof AttendanceWaiverStatus];
+
+export const ATTENDANCE_WAIVER_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  approved: 'Approved',
+  denied: 'Denied',
+  withdrawn: 'Withdrawn',
+  voided: 'Voided',
+};
+
+export const ATTENDANCE_WAIVER_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30',
+  approved: 'bg-green-500/10 text-green-800 dark:text-green-300 border-green-500/30',
+  denied: 'bg-red-500/10 text-red-800 dark:text-red-300 border-red-500/30',
+  withdrawn: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
+  voided: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
+};
+
+/** When a request must arrive by (`AttendanceWaiverPolicy.deadline`). */
+export const AttendanceWaiverDeadline = {
+  BEFORE_START: 'before_start',
+  HOURS_24_AFTER_END: '24h_after_end',
+  DAYS_7_AFTER_END: '7d_after_end',
+} as const;
+export type AttendanceWaiverDeadline = (typeof AttendanceWaiverDeadline)[keyof typeof AttendanceWaiverDeadline];
+
+export const ATTENDANCE_WAIVER_DEADLINE_LABELS: Record<AttendanceWaiverDeadline, string> = {
+  before_start: 'Before the session starts',
+  '24h_after_end': 'Up to 24 hours after it ends',
+  '7d_after_end': 'Up to 7 days after it ends',
+};
+
+export const AttendanceWaiverCapPeriod = {
+  CALENDAR_YEAR: 'calendar_year',
+  ROLLING_12_MONTHS: 'rolling_12_months',
+} as const;
+export type AttendanceWaiverCapPeriod = (typeof AttendanceWaiverCapPeriod)[keyof typeof AttendanceWaiverCapPeriod];
+
+export const AttendanceWaiverReasonText = {
+  OFF: 'off',
+  OPTIONAL: 'optional',
+  REQUIRED: 'required',
+} as const;
+export type AttendanceWaiverReasonText = (typeof AttendanceWaiverReasonText)[keyof typeof AttendanceWaiverReasonText];

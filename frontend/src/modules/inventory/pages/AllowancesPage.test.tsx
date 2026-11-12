@@ -86,9 +86,9 @@ describe('AllowancesPage', () => {
     });
     await user.click(screen.getByText('Create your first allowance'));
 
-    await user.selectOptions(await screen.findByLabelText('Category'), 'cat-1');
-    await user.clear(screen.getByLabelText('Max Quantity'));
-    await user.type(screen.getByLabelText('Max Quantity'), '5');
+    await user.selectOptions(await screen.findByLabelText(/^Category/), 'cat-1');
+    await user.clear(screen.getByLabelText(/^Max Quantity/));
+    await user.type(screen.getByLabelText(/^Max Quantity/), '5');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() => {
@@ -108,14 +108,14 @@ describe('AllowancesPage', () => {
     mockCreateAllowance.mockResolvedValue({ id: 'a2' });
     renderWithRouter(<AllowancesPage />);
     await user.click(await screen.findByText('Create your first allowance'));
-    await user.selectOptions(await screen.findByLabelText('Category'), 'cat-1');
-    await user.clear(screen.getByLabelText('Max Quantity'));
+    await user.selectOptions(await screen.findByLabelText(/^Category/), 'cat-1');
+    await user.clear(screen.getByLabelText(/^Max Quantity/));
   };
 
   it('accepts a maximum of 0', async () => {
     const user = userEvent.setup();
     await openCreateForm(user);
-    await user.type(screen.getByLabelText('Max Quantity'), '0');
+    await user.type(screen.getByLabelText(/^Max Quantity/), '0');
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
     await waitFor(() => {
@@ -134,8 +134,59 @@ describe('AllowancesPage', () => {
     await openCreateForm(user);
     await user.click(screen.getByRole('button', { name: 'Create' }));
 
-    expect(mockToastError).toHaveBeenCalledWith('Enter a whole number of 0 or more for max quantity');
+    // Said on the field now rather than in a toast (forms review F-3/F-4).
+    expect(screen.getByLabelText(/^Max Quantity/)).toHaveAccessibleDescription('Enter a whole number of 0 or more.');
     expect(mockCreateAllowance).not.toHaveBeenCalled();
+  });
+
+  it('puts a refused maximum on its field when creating', async () => {
+    const user = userEvent.setup();
+    await openCreateForm(user);
+    mockCreateAllowance.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'max_quantity', message: 'Input should be less than or equal to 2147483647' }] },
+      },
+    });
+    await user.type(screen.getByLabelText(/^Max Quantity/), '9');
+    await user.click(screen.getByRole('button', { name: 'Create' }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/^Max Quantity/)).toHaveAccessibleDescription(
+        'Input should be less than or equal to 2147483647'
+      )
+    );
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('saves the period on an edit whose maximum is refused, and stays open', async () => {
+    const user = userEvent.setup();
+    mockUpdateAllowance
+      .mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'max_quantity', message: 'Input should be greater than or equal to 0' }] },
+        },
+      })
+      .mockResolvedValueOnce({});
+    renderWithRouter(<AllowancesPage />);
+    await user.click(await screen.findByLabelText('Edit allowance'));
+    await user.selectOptions(screen.getByLabelText('Period'), 'career');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(mockUpdateAllowance).toHaveBeenCalledTimes(2));
+    expect(mockUpdateAllowance.mock.calls[1]?.[1]).toEqual({ period_type: 'career' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Allowance saved, except max quantity.');
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel discards a typed maximum', async () => {
+    const user = userEvent.setup();
+    await openCreateForm(user);
+    await user.type(screen.getByLabelText(/^Max Quantity/), '4');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText(/^Max Quantity/)).toHaveValue(4);
   });
 
   it('says a zero allowance permits none', async () => {

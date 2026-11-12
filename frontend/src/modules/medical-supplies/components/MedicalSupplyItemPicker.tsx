@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { medicalSuppliesService } from '../../../services/medicalSuppliesService';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { supplyLabel } from '../types';
+import type { FieldControlProps } from '../../../components/ux/FormField';
 
 const PAGE = 20;
 
@@ -12,6 +13,8 @@ interface MedicalSupplyItemPickerProps {
   value: string;
   selectedName?: string | undefined;
   onChange: (id: string, name?: string) => void;
+  /** Error and required wiring from a surrounding `FormField`, put on the search box. */
+  controlProps?: Partial<FieldControlProps> | undefined;
 }
 
 /** Server-backed medical catalog picker; table pagination never limits its results. */
@@ -20,6 +23,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
   value,
   selectedName,
   onChange,
+  controlProps,
 }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ id: string; name: string; size?: string | undefined }[]>([]);
@@ -246,6 +250,7 @@ export const MedicalSupplyItemPicker: React.FC<MedicalSupplyItemPickerProps> = (
       <div className="relative">
         <Search className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
         <input
+          {...controlProps}
           id={id}
           type="search"
           role="combobox"

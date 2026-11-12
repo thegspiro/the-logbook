@@ -57,6 +57,8 @@ from app.services.training_compliance import (
     requirement_applies_to_user,
     tally_standing,
 )
+from app.services.training_record_source import RecordSource, record_sources
+from app.services.training_waiver_service import WaiverPeriod, fetch_org_waivers
 from app.utils.csv_export import SafeCsvChunks, collect_csv
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_all_in_org, assert_in_org
@@ -134,6 +136,7 @@ def _requirement_cells(
     today: date,
     shift_dates: List[date],
     held_sessions: Mapping[str, Sequence[HeldSession]],
+    waivers: Sequence[WaiverPeriod],
 ) -> List[str]:
     """One export cell per requirement column for ``user``.
 
@@ -154,6 +157,7 @@ def _requirement_cells(
             req,
             records,
             today,
+            waivers=list(waivers),
             join_date=join_date,
             shift_dates=shift_dates,
             held_sessions=held_sessions,
@@ -1225,6 +1229,10 @@ class ReportExportService:
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
         )
+        # The waivers, leaves, overrides and excused sessions the compliance
+        # screens grade with, so an export cannot print "Not Met" for a member
+        # the matrix shows as met (Pitfall #29).
+        waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
         # Written and sent one member at a time (AH-16).
         async def chunks() -> AsyncIterator[str]:
@@ -1263,6 +1271,7 @@ class ReportExportService:
                         today,
                         shifts_by_user.get(str(user.id), []),
                         held_sessions,
+                        waivers_by_user.get(str(user.id), []),
                     )
                 )
 
@@ -1323,6 +1332,7 @@ class ReportExportService:
 
         records_result = await self.db.execute(query)
         records = records_result.scalars().all()
+        sources = await record_sources(self.db, organization_id, records)
 
         cert_headers = ["Certification #", "Issuing Agency", "Expiration Date"]
 
@@ -1340,6 +1350,9 @@ class ReportExportService:
                     "Score",
                     "Instructor",
                     "Location",
+                    # Last, so a sheet that reads the columns by position
+                    # keeps working.
+                    "Source",
                 ]
             )
 
@@ -1366,6 +1379,7 @@ class ReportExportService:
                         f"{r.score:.1f}" if r.score else "",
                         r.instructor or "",
                         r.location or "",
+                        sources[str(r.id)].label,
                     ]
                 )
 
@@ -1413,6 +1427,7 @@ class ReportExportService:
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), all_requirements
         )
+        waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
         for user in users:
             # Only what grades this member — by type, role, and grandfathering.
@@ -1443,6 +1458,7 @@ class ReportExportService:
                     req,
                     records,
                     today,
+                    waivers=waivers_by_user.get(str(user.id), []),
                     join_date=join_date,
                     shift_dates=shifts_by_user.get(str(user.id), []),
                     held_sessions=held_sessions,
@@ -1575,6 +1591,7 @@ class ReportExportService:
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
         )
+        waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
         # One query for the whole window, grouped here, instead of one query
         # per member inside the layout loop.
@@ -1605,6 +1622,7 @@ class ReportExportService:
                         generated_on,
                         shifts_by_user.get(str(user.id), []),
                         held_sessions,
+                        waivers_by_user.get(str(user.id), []),
                     ),
                 )
             )
@@ -1717,7 +1735,9 @@ class ReportExportService:
         return io.BytesIO(pdf)
 
     @staticmethod
-    def _individual_rows(records: Sequence[TrainingRecord]) -> List[Dict[str, str]]:
+    def _individual_rows(
+        records: Sequence[TrainingRecord], sources: Dict[str, RecordSource]
+    ) -> List[Dict[str, str]]:
         """A member's records as plain strings, ready for layout."""
         rows = []
         for r in records:
@@ -1733,6 +1753,7 @@ class ReportExportService:
                     "hours": f"{r.hours_completed:.1f}" if r.hours_completed else "0",
                     "cert": r.certification_number or "",
                     "expires": str(r.expiration_date) if r.expiration_date else "",
+                    "source": sources[str(r.id)].label,
                 }
             )
         return rows
@@ -1753,7 +1774,11 @@ class ReportExportService:
 
         if not rows:
             return [Paragraph("No completed training in this period.", styles["body"])]
-        headers = ["Course", "Type", "Completed", "Hours"]
+        # Source sits under the course name rather than in a column of its
+        # own: every column here is already at the width its longest value
+        # needs (a certificate number must print on one line), and the course
+        # column is the only one that wraps gracefully.
+        headers = ["Course / Source", "Type", "Completed", "Hours"]
         widths = [1.25 * inch, 0.8 * inch, 0.55 * inch]
         if include_certifications:
             headers += ["Cert #", "Expires"]
@@ -1761,7 +1786,10 @@ class ReportExportService:
         table_rows = []
         for row in rows:
             cells = [
-                pdf_cell(row["course"]),
+                [
+                    pdf_cell(row["course"]),
+                    pdf_cell(row["source"], styles["cell_muted"]),
+                ],
                 pdf_cell(row["type"]),
                 pdf_cell(row["completed"]),
                 pdf_num(row["hours"]),
@@ -1827,7 +1855,9 @@ class ReportExportService:
             query = query.where(TrainingRecord.completion_date >= start_date)
 
         records = (await self.db.execute(query)).scalars().all()
-        rows = self._individual_rows(records)
+        rows = self._individual_rows(
+            records, await record_sources(self.db, organization_id, records)
+        )
         total_hours = sum(r.hours_completed or 0 for r in records)
         period_label = (
             f"{start_date} to {end_date}"
@@ -2001,8 +2031,10 @@ class ReportExportService:
         )
         if start_date:
             query = query.where(TrainingRecord.completion_date >= start_date)
+        all_records = (await self.db.execute(query)).scalars().all()
+        sources = await record_sources(self.db, organization_id, all_records)
         records_by_user: Dict[str, List[TrainingRecord]] = {}
-        for record in (await self.db.execute(query)).scalars().all():
+        for record in all_records:
             records_by_user.setdefault(str(record.user_id), []).append(record)
 
         ordered_users = []
@@ -2019,7 +2051,7 @@ class ReportExportService:
             _MemberRecords(
                 id=str(user.id),
                 name=f"{user.first_name} {user.last_name}",
-                rows=self._individual_rows(records_by_user[str(user.id)]),
+                rows=self._individual_rows(records_by_user[str(user.id)], sources),
                 hours=float(
                     sum(r.hours_completed or 0 for r in records_by_user[str(user.id)])
                 ),

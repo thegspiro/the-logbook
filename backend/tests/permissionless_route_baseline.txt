@@ -41,6 +41,36 @@ app/api/v1/endpoints/analytics.py::track_event
 
 app/api/v1/endpoints/apparatus.py::list_driver_exception_approvers
 
+# Attendance waiver requests (2026-11-10). Who decides is a matter of holding a
+# position the department chose, or the Chief's, or (when those are vacant)
+# training.manage, so no route-level permission can express it and
+# AttendanceWaiverService decides in the body. Every query filters the
+# caller's organization. The policy is read by every member because the
+# request form is built from it; it carries settings and position ids, no
+# member data. Eligibility, submit and /mine act only on current_user.
+# The queue lists only requests the caller may decide or has decided. A
+# request by id is shown only to its member or someone who may decide it,
+# and is a 404 to anyone else; withdraw is the member's alone, approve and
+# deny need may_decide (never the requester), override needs a Chief
+# position (never on the Chief's own request).
+# Documents (2026-11-11): adding them is the member's alone, on their own
+# pending request (403 for a decider, 404 for anyone else); a download needs
+# the member or may_decide, is a 404 to anyone who may not see the request,
+# and submit-with-attachments acts only on current_user like submit.
+app/api/v1/endpoints/attendance_waiver_requests.py::add_attendance_waiver_attachments
+app/api/v1/endpoints/attendance_waiver_requests.py::approve_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::deny_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::download_attendance_waiver_attachment
+app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_eligibility
+app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_policy
+app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::list_attendance_waiver_requests
+app/api/v1/endpoints/attendance_waiver_requests.py::list_my_attendance_waiver_requests
+app/api/v1/endpoints/attendance_waiver_requests.py::override_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::submit_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::submit_attendance_waiver_request_with_attachments
+app/api/v1/endpoints/attendance_waiver_requests.py::withdraw_attendance_waiver_request
+
 app/api/v1/endpoints/auth.py::change_password
 app/api/v1/endpoints/auth.py::check_authentication
 app/api/v1/endpoints/auth.py::disable_kiosk_session
@@ -181,6 +211,10 @@ app/api/v1/endpoints/events.py::remove_attendee
 # occurrence it reaches is not Training.
 app/api/v1/endpoints/events.py::end_event
 app/api/v1/endpoints/events.py::finalize_attendance
+# Postpone (2026-11-09, W80-11): same gate as update_event, which it moves the
+# event like. _authorize_event_admin runs first with events.manage, so a
+# training officer can postpone a Training event and nothing else.
+app/api/v1/endpoints/events.py::postpone_event
 app/api/v1/endpoints/events.py::record_actual_times
 app/api/v1/endpoints/events.py::reopen_attendance
 app/api/v1/endpoints/events.py::update_event
@@ -274,6 +308,27 @@ app/api/v1/endpoints/mcp_oauth.py::list_my_connections
 app/api/v1/endpoints/mcp_oauth.py::revoke_my_connection
 
 app/api/v1/endpoints/medical_screening.py::get_my_compliance
+
+# Business-meeting waiver requests (2026-11-11): the same engine and the same
+# scoping as attendance_waiver_requests.py above, bound to the meeting
+# workflow. Deciders are the chosen positions, then the Secretary, then
+# meetings.manage holders, with a Chief always able to decide, so no
+# route-level permission can express it and AttendanceWaiverService decides in
+# the body. Every query filters the caller's organization and the workflow.
+# The policy carries settings and position ids, no member data (its save
+# requires meetings.manage). Eligibility, submit and /mine act only on
+# current_user; the queue and a request by id follow may_decide or ownership,
+# 404 otherwise; withdraw is the member's alone; override needs a Chief.
+app/api/v1/endpoints/meeting_waiver_requests.py::approve_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::deny_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_eligibility
+app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_policy
+app/api/v1/endpoints/meeting_waiver_requests.py::get_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::list_meeting_waiver_requests
+app/api/v1/endpoints/meeting_waiver_requests.py::list_my_meeting_waiver_requests
+app/api/v1/endpoints/meeting_waiver_requests.py::override_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::submit_meeting_waiver_request
+app/api/v1/endpoints/meeting_waiver_requests.py::withdraw_meeting_waiver_request
 
 app/api/v1/endpoints/member_badges.py::get_member_badge
 

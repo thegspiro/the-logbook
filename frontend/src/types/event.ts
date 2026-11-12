@@ -60,6 +60,10 @@ export interface Event {
   is_cancelled: boolean;
   cancellation_reason?: string;
   cancelled_at?: string;
+  /** Set when the event was postponed; postponed_from_start is its start before the first postponement. */
+  postponed_at?: string | null;
+  postponed_from_start?: string | null;
+  postponement_reason?: string | null;
   /**
    * Attendance lock. Set means the event is closed: check-in, attendee edits,
    * time corrections and deletion are all refused by the API until someone
@@ -89,6 +93,10 @@ export interface Event {
   /** Server-decided: may this caller decide the event's attendance requests
    * and hand it over. Detail endpoint only; false elsewhere. */
   can_manage_organizers?: boolean;
+  /** Server-decided: may this caller see and decide the event's attendance
+   * requests — the above, plus a fallback position holder a request was
+   * sent to. Detail endpoint only; false elsewhere. */
+  can_review_attendance_requests?: boolean;
   /** Server-decided: how this caller may use the attendance tools — the
    * roster, adding, checking in and removing members — or null. An
    * `organizer` may not write their own row. Detail endpoint only. */
@@ -271,6 +279,8 @@ export interface EventListItem {
   counts_toward_attendance?: boolean;
   is_draft?: boolean;
   is_cancelled: boolean;
+  /** The start before the first postponement; absent for an event never postponed. */
+  postponed_from_start?: string | null;
   is_recurring?: boolean;
   recurrence_parent_id?: string;
   rsvp_count?: number;
@@ -428,6 +438,13 @@ export interface EventUpdate {
 
 export interface EventCancel {
   cancellation_reason: string;
+  send_notifications?: boolean;
+}
+
+export interface EventPostpone {
+  new_start_datetime: string;
+  new_end_datetime: string;
+  reason: string;
   send_notifications?: boolean;
 }
 
@@ -774,7 +791,8 @@ export interface RecurringEventCreate {
   attachments?: EventAttachment[] | undefined;
   allowed_rsvp_statuses?: RSVPStatus[] | undefined;
   template_id?: string | undefined;
-  /** Attached to every occurrence; refused on a rolling series. */
+  /** Attached to every occurrence. A rolling series copies them on to the
+   *  occurrences it adds later. */
   training_details?: EventTrainingDetails | undefined;
 }
 

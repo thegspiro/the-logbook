@@ -537,6 +537,15 @@ export const ALL_ROUTES: RouteCheck[] = [
     // request happens there, so it is measured at phone width like the list.
     states: [{ selector: 'li button[aria-haspopup="dialog"]', label: 'Request drawer', max: 1 }],
   },
+  // The outreach report: KPI row, two charts and the events list, which a
+  // phone draws as a stacked list rather than the desktop table.
+  {
+    path: '/events/admin?tab=community',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['events.manage'],
+    expectText: 'People reached',
+  },
   { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 0 },

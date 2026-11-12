@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 import userEvent from '@testing-library/user-event';
 
 const { getApparatusOptions, cloneEquipmentCheckTemplate, toastSuccess, toastError } = vi.hoisted(() => ({
@@ -29,7 +30,10 @@ const TEMPLATE = { id: 'tpl-1', name: 'Engine 1 start of shift' };
 function renderDialog(overrides: Partial<React.ComponentProps<typeof CloneChecklistDialog>> = {}) {
   const onClose = vi.fn();
   const onCloned = vi.fn();
-  render(<CloneChecklistDialog template={TEMPLATE} onClose={onClose} onCloned={onCloned} {...overrides} />);
+  // The app shell mounts ConfirmProvider; the dialog needs it to ask before discarding a choice.
+  render(<CloneChecklistDialog template={TEMPLATE} onClose={onClose} onCloned={onCloned} {...overrides} />, {
+    wrapper: ConfirmProvider,
+  });
   return { onClose, onCloned };
 }
 
@@ -109,6 +113,54 @@ describe('CloneChecklistDialog', () => {
     await waitFor(() => expect(toastError).toHaveBeenCalled());
     expect(onCloned).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Copy onto')).toBeInTheDocument();
+  });
+
+  it('puts a refusal of the target on the field, announced', async () => {
+    const user = userEvent.setup();
+    cloneEquipmentCheckTemplate.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'query.target_apparatus_id', message: 'Invalid ID format' }] },
+      },
+    });
+    renderDialog();
+
+    await user.selectOptions(await screen.findByLabelText('Copy onto'), 'app-t1');
+    await user.click(screen.getByRole('button', { name: 'Copy checklist' }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Copy onto')).toHaveAccessibleDescription(
+        "Copy onto isn't a value this form accepts."
+      )
+    );
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('is a form whose submit copies', async () => {
+    const user = userEvent.setup();
+    cloneEquipmentCheckTemplate.mockResolvedValue({ id: 'tpl-2', name: 'Copy' });
+    renderDialog();
+
+    const select = await screen.findByLabelText('Copy onto');
+    await user.selectOptions(select, 'app-e2');
+    // A <select> has no implicit Enter submission; the form's submit is what Enter on its button fires.
+    fireEvent.submit(screen.getByTestId('modal-panel'));
+
+    await waitFor(() => expect(cloneEquipmentCheckTemplate).toHaveBeenCalledWith('tpl-1', 'app-e2'));
+  });
+
+  it('asks before Cancel drops a chosen apparatus', async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderDialog();
+
+    await user.selectOptions(await screen.findByLabelText('Copy onto'), 'app-t1');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('renders nothing while no template is set', () => {

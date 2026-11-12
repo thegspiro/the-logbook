@@ -193,6 +193,7 @@ describe('destinations needing more than training.manage', () => {
     expect(settingsIds(grantsOnly('training.manage'))).toEqual([
       'manual-entry',
       'practical-skills',
+      'session-waivers',
       'shift-evaluations',
       'requirements-link',
       'integrations',

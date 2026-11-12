@@ -28,6 +28,9 @@ import { Breadcrumbs } from '../components/ux';
 import { MemberClassificationFields } from '../components/members/MemberClassificationFields';
 import { useMembershipTierOptions } from '../hooks/useMembershipTierOptions';
 import { MemberClass, MemberStatus } from '../constants/enums';
+import { FormField } from '../components/ux/FormField';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
 
 interface FormData {
   first_name: string;
@@ -90,6 +93,62 @@ function buildInitialForm(
   };
 }
 
+type TextField =
+  | 'first_name'
+  | 'middle_name'
+  | 'last_name'
+  | 'preferred_name'
+  | 'date_of_birth'
+  | 'personal_email'
+  | 'membership_number'
+  | 'rank'
+  | 'station'
+  | 'platoon'
+  | 'hire_date'
+  | 'phone'
+  | 'mobile'
+  | 'address_street'
+  | 'address_city'
+  | 'address_state'
+  | 'address_zip'
+  | 'address_country';
+
+// Labels and limits from UserUpdate and EmergencyContact
+// (backend/app/schemas/user.py), which PATCH /users/{id}/profile validates.
+const PROFILE_FIELDS: Record<TextField, ServerFieldSpec & { id: string }> = {
+  first_name: { label: 'First name', maxLength: 100, id: 'member-first-name' },
+  middle_name: { label: 'Middle name', maxLength: 100, id: 'member-middle-name' },
+  last_name: { label: 'Last name', maxLength: 100, id: 'member-last-name' },
+  preferred_name: { label: 'Preferred name', maxLength: 100, id: 'member-preferred-name' },
+  date_of_birth: { label: 'Date of birth', id: 'member-date-of-birth' },
+  personal_email: { label: 'Personal email', maxLength: 255, id: 'member-personal-email' },
+  membership_number: { label: 'Membership number', maxLength: 50, id: 'member-membership-number' },
+  rank: { label: 'Rank', maxLength: 100, id: 'member-rank' },
+  station: { label: 'Station', maxLength: 100, id: 'member-station' },
+  platoon: { label: 'Platoon', maxLength: 20, id: 'member-platoon' },
+  hire_date: { label: 'Hire date', id: 'member-hire-date' },
+  phone: { label: 'Phone', maxLength: 20, id: 'member-phone' },
+  mobile: { label: 'Mobile', maxLength: 20, id: 'member-mobile' },
+  address_street: { label: 'Street address', maxLength: 255, id: 'member-address-street' },
+  address_city: { label: 'City', maxLength: 100, id: 'member-address-city' },
+  address_state: { label: 'State', maxLength: 50, id: 'member-address-state' },
+  address_zip: { label: 'ZIP code', maxLength: 20, id: 'member-address-zip' },
+  address_country: { label: 'Country', maxLength: 100, id: 'member-address-country' },
+};
+const TEXT_FIELDS = Object.keys(PROFILE_FIELDS) as TextField[];
+
+type ContactField = 'name' | 'relationship' | 'phone' | 'email';
+const CONTACT_FIELDS: Record<ContactField, ServerFieldSpec> = {
+  name: { label: 'Name', maxLength: 100 },
+  relationship: { label: 'Relationship', maxLength: 50 },
+  phone: { label: 'Phone', maxLength: 20 },
+  email: { label: 'Email' },
+};
+const contactKey = (index: number, field: ContactField) => `contact-${index}-${field}`;
+
+const LABEL_CLASS = 'text-theme-text-muted mb-1 block text-xs font-medium uppercase';
+const INPUT_CLASS = 'form-input bg-theme-surface-secondary px-3 text-sm';
+
 function createEmptyContact(): EmergencyContact {
   return {
     name: '',
@@ -115,6 +174,9 @@ export const MemberAdminEditPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Keyed by profile field name, or by `contact-<index>-<field>` for a contact.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
+  const clearFieldError = (key: string) => setFieldErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
 
   const fetchUser = useCallback(async () => {
     if (!userId) return;
@@ -176,12 +238,14 @@ export const MemberAdminEditPage: React.FC = () => {
   const handleFieldChange = (field: keyof Omit<FormData, 'emergency_contacts'>, value: string) => {
     if (!form) return;
     setSuccessMessage(null);
+    clearFieldError(field);
     setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
   const handleEmergencyContactChange = (index: number, field: keyof EmergencyContact, value: string | boolean) => {
     if (!form) return;
     setSuccessMessage(null);
+    clearFieldError(contactKey(index, field as ContactField));
     setForm((prev) => {
       if (!prev) return prev;
       const updatedContacts = [...prev.emergency_contacts];
@@ -207,6 +271,8 @@ export const MemberAdminEditPage: React.FC = () => {
       const updatedContacts = prev.emergency_contacts.filter((_, i) => i !== index);
       return { ...prev, emergency_contacts: updatedContacts };
     });
+    // The indexes shift, so a flag would land on the wrong contact.
+    setFieldErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => !key.startsWith('contact-'))));
   };
 
   const handleSave = async () => {
@@ -216,6 +282,12 @@ export const MemberAdminEditPage: React.FC = () => {
       setSaving(true);
       setError(null);
       setSuccessMessage(null);
+      setFieldErrors({});
+      // Single-save rule (owner, 2026-11-05): what the member record cannot
+      // hold is left out, everything else saves, and each refused field keeps
+      // the stored value on the server and its flag here until it is fixed.
+      const refused: Record<string, string> = {};
+      let contactMessage: string | undefined;
 
       // Build the profile update with only changed fields
       const profileUpdate: UserProfileUpdate = {};
@@ -326,11 +398,17 @@ export const MemberAdminEditPage: React.FC = () => {
         }));
         const incomplete = contacts.findIndex((c) => !c.name || !c.relationship);
         if (incomplete >= 0) {
-          setError(`Emergency contact ${incomplete + 1} needs a name and a relationship.`);
-          return;
+          // The list is one value on the server, so it is left out whole and
+          // the stored contacts are kept until this one is complete.
+          contactMessage = `Emergency contact ${incomplete + 1} needs a name and a relationship.`;
+          contacts.forEach((c, i) => {
+            if (!c.name) refused[contactKey(i, 'name')] = 'Enter a name.';
+            if (!c.relationship) refused[contactKey(i, 'relationship')] = 'Enter a relationship.';
+          });
+        } else {
+          profileUpdate.emergency_contacts = contacts;
+          hasProfileChanges = true;
         }
-        profileUpdate.emergency_contacts = contacts;
-        hasProfileChanges = true;
       }
 
       // Class and status travel together, always both: the backend reads a
@@ -350,13 +428,29 @@ export const MemberAdminEditPage: React.FC = () => {
       const complianceExemptChanged = form.compliance_exempt !== initialForm.compliance_exempt;
 
       if (!hasProfileChanges && !complianceExemptChanged) {
-        setSuccessMessage('No changes to save.');
+        if (Object.keys(refused).length > 0) {
+          showRefused(refused, form.emergency_contacts.length, false, contactMessage);
+        } else {
+          setSuccessMessage('No changes to save.');
+        }
         return;
       }
 
       // Save profile fields
       if (hasProfileChanges) {
-        await userService.updateUserProfile(userId, profileUpdate);
+        try {
+          await userService.updateUserProfile(userId, profileUpdate);
+        } catch (err: unknown) {
+          const specs = profileFieldSpecs(form.emergency_contacts.length);
+          const mapped = mapServerFieldErrors(err, specs);
+          const keys = mapped ? Object.keys(mapped.fieldErrors) : [];
+          // A refusal the page has no field for fails the save as before.
+          if (!mapped || keys.length === 0 || mapped.unmatched.length > 0) throw err;
+          Object.assign(refused, mapped.fieldErrors);
+          const rest: Record<string, unknown> = { ...profileUpdate };
+          for (const key of keys) delete rest[key.startsWith('contact-') ? 'emergency_contacts' : key];
+          if (Object.keys(rest).length > 0) await userService.updateUserProfile(userId, rest);
+        }
       }
 
       // Save compliance exemption separately if changed
@@ -373,8 +467,20 @@ export const MemberAdminEditPage: React.FC = () => {
       };
       setUser(extendedUser);
       const newFormData = buildInitialForm(extendedUser);
-      setForm(newFormData);
+      // A refused field keeps what was typed, so it can be corrected, while
+      // the baseline is what was stored; the page stays changed until it is.
+      const shown: FormData = { ...newFormData };
+      for (const key of TEXT_FIELDS) if (refused[key] !== undefined) shown[key] = form[key];
+      if (Object.keys(refused).some((key) => key.startsWith('contact-'))) {
+        shown.emergency_contacts = form.emergency_contacts;
+      }
+      setForm(shown);
       setInitialForm(newFormData);
+
+      if (Object.keys(refused).length > 0) {
+        showRefused(refused, form.emergency_contacts.length, true, contactMessage);
+        return;
+      }
 
       const missing = [
         ...(newFormData.first_name.trim() ? [] : ['first name']),
@@ -409,9 +515,46 @@ export const MemberAdminEditPage: React.FC = () => {
     }
   };
 
-  const handleCancel = () => {
-    void navigate('/members/admin');
+  const profileFieldSpecs = (contactCount: number): Record<string, ServerFieldSpec> => {
+    const specs: Record<string, ServerFieldSpec> = {};
+    for (const key of TEXT_FIELDS)
+      specs[key] = { label: PROFILE_FIELDS[key].label, maxLength: PROFILE_FIELDS[key].maxLength, api: key };
+    for (let i = 0; i < contactCount; i += 1) {
+      for (const field of Object.keys(CONTACT_FIELDS) as ContactField[]) {
+        specs[contactKey(i, field)] = { ...CONTACT_FIELDS[field], api: `emergency_contacts.${i}.${field}` };
+      }
+    }
+    return specs;
   };
+
+  const showRefused = (refused: Record<string, string>, contactCount: number, savedRest: boolean, message?: string) => {
+    setFieldErrors(refused);
+    const order = [
+      ...TEXT_FIELDS,
+      ...Array.from({ length: contactCount }, (_, i) =>
+        (Object.keys(CONTACT_FIELDS) as ContactField[]).map((f) => contactKey(i, f))
+      ).flat(),
+    ];
+    const first = order.find((key) => refused[key]);
+    const contact = /^contact-(\d+)-/.exec(first ?? '');
+    setError(
+      message ??
+        (contact
+          ? `Emergency contact ${Number(contact[1]) + 1} was not saved. Fix the flagged field and save again.`
+          : `${PROFILE_FIELDS[first as TextField]?.label ?? 'One field'} was not saved. Fix it and save again.`)
+    );
+    if (savedRest) setSuccessMessage('The rest of the member information was saved.');
+    if (first) document.getElementById(PROFILE_FIELDS[first as TextField]?.id ?? first)?.focus();
+  };
+
+  const isDirty = form !== null && initialForm !== null && JSON.stringify(form) !== JSON.stringify(initialForm);
+  // Cancel leaves the page, which throws away what was typed into it.
+  const handleCancel = useDiscardGuard({
+    isDirty,
+    onClose: () => {
+      void navigate('/members/admin');
+    },
+  });
 
   if (loading) {
     return (
@@ -432,7 +575,7 @@ export const MemberAdminEditPage: React.FC = () => {
       <div className="min-h-screen">
         <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4" role="alert" aria-live="assertive">
-            <p className="text-sm text-red-700 dark:text-red-400">{error || 'Member not found.'}</p>
+            <p className="text-sm text-red-800 dark:text-red-300">{error || 'Member not found.'}</p>
             <Link
               to="/members/admin"
               className="mt-2 inline-block text-sm text-blue-800 underline hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
@@ -446,6 +589,50 @@ export const MemberAdminEditPage: React.FC = () => {
   }
 
   const memberDisplayName = formatMemberName(user) || user.username;
+
+  // Every text, date, email and phone box on the page is the same shape.
+  // Autofill is off: the person filling this in is an officer editing someone
+  // else's record, and the browser would offer the officer's own details.
+  const textField = (
+    key: TextField,
+    label: string,
+    opts: {
+      type?: 'text' | 'email' | 'tel' | 'date';
+      required?: boolean;
+      hint?: React.ReactNode;
+      placeholder?: string;
+      className?: string;
+    } = {}
+  ) => {
+    const value = form[key];
+    const blankRequired = opts.required && !value.trim() ? `Enter a ${label.toLowerCase()}.` : undefined;
+    return (
+      <FormField
+        label={label}
+        id={PROFILE_FIELDS[key].id}
+        required={opts.required}
+        error={fieldErrors[key] ?? blankRequired}
+        hint={opts.hint}
+        maxLength={opts.type === 'date' ? undefined : PROFILE_FIELDS[key].maxLength}
+        count={value.length}
+        labelClassName={LABEL_CLASS}
+        className={opts.className}
+      >
+        {(field) => (
+          <input
+            {...field}
+            type={opts.type ?? 'text'}
+            autoComplete="off"
+            value={value}
+            onChange={(e) => handleFieldChange(key, e.target.value)}
+            placeholder={opts.placeholder}
+            className={INPUT_CLASS}
+            disabled={saving}
+          />
+        )}
+      </FormField>
+    );
+  };
 
   return (
     <div className="min-h-screen">
@@ -487,146 +674,38 @@ export const MemberAdminEditPage: React.FC = () => {
             role="alert"
             aria-live="assertive"
           >
-            <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
+            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
           </div>
         )}
 
-        <div className="space-y-6">
+        <form
+          className="space-y-6"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleSave();
+          }}
+        >
           {/* Personal Information */}
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Personal Information</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <label
-                  htmlFor="member-first-name"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  First Name{' '}
-                  <span aria-hidden="true" className="text-red-800 dark:text-red-300">
-                    *
-                  </span>
-                </label>
-                <input
-                  id="member-first-name"
-                  type="text"
-                  required
-                  aria-invalid={!form.first_name.trim() || undefined}
-                  aria-describedby={form.first_name.trim() ? undefined : 'member-first-name-error'}
-                  value={form.first_name}
-                  onChange={(e) => handleFieldChange('first_name', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                />
-                {!form.first_name.trim() && (
-                  <p id="member-first-name-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
-                    Enter a first name.
-                  </p>
-                )}
-              </div>
-              <div>
-                <label
-                  htmlFor="member-middle-name"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Middle Name
-                </label>
-                <input
-                  id="member-middle-name"
-                  type="text"
-                  value={form.middle_name}
-                  onChange={(e) => handleFieldChange('middle_name', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="member-last-name"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Last Name{' '}
-                  <span aria-hidden="true" className="text-red-800 dark:text-red-300">
-                    *
-                  </span>
-                </label>
-                <input
-                  id="member-last-name"
-                  type="text"
-                  required
-                  aria-invalid={!form.last_name.trim() || undefined}
-                  aria-describedby={form.last_name.trim() ? undefined : 'member-last-name-error'}
-                  value={form.last_name}
-                  onChange={(e) => handleFieldChange('last_name', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                />
-                {!form.last_name.trim() && (
-                  <p id="member-last-name-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
-                    Enter a last name.
-                  </p>
-                )}
-              </div>
+              {textField('first_name', 'First Name', { required: true })}
+              {textField('middle_name', 'Middle Name')}
+              {textField('last_name', 'Last Name', { required: true })}
             </div>
 
-            <div className="mt-4 sm:max-w-sm">
-              <label
-                htmlFor="member-preferred-name"
-                className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-              >
-                Preferred Name
-              </label>
-              <input
-                id="member-preferred-name"
-                type="text"
-                maxLength={100}
-                value={form.preferred_name}
-                onChange={(e) => handleFieldChange('preferred_name', e.target.value)}
-                className="form-input bg-theme-surface-secondary px-3 text-sm"
-                disabled={saving}
-                aria-describedby="member-preferred-name-help"
-              />
-              <p id="member-preferred-name-help" className="text-theme-text-muted mt-1 text-xs">
-                Shown in place of the first name on shifts, events and rosters. Reports and official records keep the
-                legal first name.
-              </p>
-            </div>
+            {textField('preferred_name', 'Preferred Name', {
+              className: 'mt-4 sm:max-w-sm',
+              hint: 'Shown in place of the first name on shifts, events and rosters. Reports and official records keep the legal first name.',
+            })}
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="member-date-of-birth"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Date of Birth
-                </label>
-                <input
-                  id="member-date-of-birth"
-                  type="date"
-                  value={form.date_of_birth}
-                  onChange={(e) => handleFieldChange('date_of_birth', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                />
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  This field is typically set once. Changes are logged.
-                </p>
-              </div>
-              <div>
-                <label
-                  htmlFor="member-personal-email"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Personal Email
-                </label>
-                <input
-                  id="member-personal-email"
-                  type="email"
-                  value={form.personal_email}
-                  onChange={(e) => handleFieldChange('personal_email', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                />
-              </div>
+              {textField('date_of_birth', 'Date of Birth', {
+                type: 'date',
+                hint: 'This field is typically set once. Changes are logged.',
+              })}
+              {textField('personal_email', 'Personal Email', { type: 'email' })}
             </div>
           </div>
 
@@ -634,107 +713,65 @@ export const MemberAdminEditPage: React.FC = () => {
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Department Information</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <label
-                  htmlFor="member-membership-number"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Membership Number
-                </label>
-                <input
-                  id="member-membership-number"
-                  type="text"
-                  value={form.membership_number}
-                  onChange={(e) => handleFieldChange('membership_number', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                />
-              </div>
-              <div>
-                <label htmlFor="member-rank" className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">
-                  Rank
-                </label>
-                <select
-                  id="member-rank"
-                  value={form.rank}
-                  onChange={(e) => handleFieldChange('rank', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving || isAdministrative}
-                >
-                  <option value="">Select Rank</option>
-                  {rankOptions.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-                {isAdministrative && (
-                  <p className="text-theme-text-muted mt-1 text-[11px]">{ADMINISTRATIVE_RANK_HINT}</p>
+              {textField('membership_number', 'Membership Number')}
+              <FormField
+                label="Rank"
+                id={PROFILE_FIELDS.rank.id}
+                error={fieldErrors.rank}
+                hint={isAdministrative ? ADMINISTRATIVE_RANK_HINT : undefined}
+                labelClassName={LABEL_CLASS}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={form.rank}
+                    onChange={(e) => handleFieldChange('rank', e.target.value)}
+                    className={INPUT_CLASS}
+                    disabled={saving || isAdministrative}
+                  >
+                    <option value="">Select Rank</option>
+                    {rankOptions.map((r) => (
+                      <option key={r.value} value={r.value}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
                 )}
-              </div>
-              <div>
-                <label
-                  htmlFor="member-station"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Station
-                </label>
-                <select
-                  id="member-station"
-                  value={form.station}
-                  onChange={(e) => handleFieldChange('station', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                >
-                  <option value="">Select Station</option>
-                  {availableStations.map((s) => (
-                    <option key={s.id} value={s.name}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label
-                  htmlFor="member-platoon"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Platoon
-                </label>
-                <input
-                  id="member-platoon"
-                  type="text"
-                  value={form.platoon}
-                  onChange={(e) => handleFieldChange('platoon', e.target.value)}
-                  placeholder="e.g. A, B, C"
-                  maxLength={20}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                />
-                <p className="text-theme-text-muted mt-1 text-[11px]">Duty platoon for shift rotations</p>
-              </div>
+              </FormField>
+              <FormField
+                label="Station"
+                id={PROFILE_FIELDS.station.id}
+                error={fieldErrors.station}
+                labelClassName={LABEL_CLASS}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={form.station}
+                    onChange={(e) => handleFieldChange('station', e.target.value)}
+                    className={INPUT_CLASS}
+                    disabled={saving}
+                  >
+                    <option value="">Select Station</option>
+                    {availableStations.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              {textField('platoon', 'Platoon', {
+                placeholder: 'e.g. A, B, C',
+                hint: 'Duty platoon for shift rotations',
+              })}
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="member-hire-date"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Hire Date
-                </label>
-                <input
-                  id="member-hire-date"
-                  type="date"
-                  value={form.hire_date}
-                  onChange={(e) => handleFieldChange('hire_date', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                />
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  This field is typically set once. Changes are logged.
-                </p>
-              </div>
+              {textField('hire_date', 'Hire Date', {
+                type: 'date',
+                hint: 'This field is typically set once. Changes are logged.',
+              })}
               <MemberClassificationFields
                 idPrefix="edit"
                 memberClass={form.member_class}
@@ -785,57 +822,25 @@ export const MemberAdminEditPage: React.FC = () => {
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Contact Information</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <label
-                  htmlFor="member-email"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Email (Organization)
-                </label>
-                <input
-                  id="member-email"
-                  type="email"
-                  value={form.email}
-                  readOnly
-                  className="form-input text-theme-text-muted bg-theme-surface-secondary cursor-not-allowed px-3 text-sm"
-                  title="Change this email from Contact Information on the member's profile."
-                />
-                <p className="text-theme-text-muted mt-1 text-xs">
-                  Change this from Contact Information on the member&apos;s profile.
-                </p>
-              </div>
-              <div>
-                <label
-                  htmlFor="member-phone"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Phone
-                </label>
-                <input
-                  id="member-phone"
-                  type="tel"
-                  value={form.phone}
-                  onChange={(e) => handleFieldChange('phone', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="member-mobile"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Mobile
-                </label>
-                <input
-                  id="member-mobile"
-                  type="tel"
-                  value={form.mobile}
-                  onChange={(e) => handleFieldChange('mobile', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                />
-              </div>
+              <FormField
+                label="Email (Organization)"
+                id="member-email"
+                hint="Change this from Contact Information on the member's profile."
+                labelClassName={LABEL_CLASS}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="email"
+                    value={form.email}
+                    readOnly
+                    className="form-input text-theme-text-muted bg-theme-surface-secondary cursor-not-allowed px-3 text-sm"
+                    title="Change this email from Contact Information on the member's profile."
+                  />
+                )}
+              </FormField>
+              {textField('phone', 'Phone', { type: 'tel' })}
+              {textField('mobile', 'Mobile', { type: 'tel' })}
             </div>
           </div>
 
@@ -843,87 +848,12 @@ export const MemberAdminEditPage: React.FC = () => {
           <div className="card p-6">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Address</h2>
             <div className="space-y-4">
-              <div>
-                <label
-                  htmlFor="member-address-street"
-                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                >
-                  Street Address
-                </label>
-                <input
-                  id="member-address-street"
-                  type="text"
-                  value={form.address_street}
-                  onChange={(e) => handleFieldChange('address_street', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
-                />
-              </div>
+              {textField('address_street', 'Street Address')}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-                <div>
-                  <label
-                    htmlFor="member-address-city"
-                    className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                  >
-                    City
-                  </label>
-                  <input
-                    id="member-address-city"
-                    type="text"
-                    value={form.address_city}
-                    onChange={(e) => handleFieldChange('address_city', e.target.value)}
-                    className="form-input bg-theme-surface-secondary px-3 text-sm"
-                    disabled={saving}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="member-address-state"
-                    className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                  >
-                    State
-                  </label>
-                  <input
-                    id="member-address-state"
-                    type="text"
-                    value={form.address_state}
-                    onChange={(e) => handleFieldChange('address_state', e.target.value)}
-                    className="form-input bg-theme-surface-secondary px-3 text-sm"
-                    disabled={saving}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="member-address-zip"
-                    className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                  >
-                    ZIP Code
-                  </label>
-                  <input
-                    id="member-address-zip"
-                    type="text"
-                    value={form.address_zip}
-                    onChange={(e) => handleFieldChange('address_zip', e.target.value)}
-                    className="form-input bg-theme-surface-secondary px-3 text-sm"
-                    disabled={saving}
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="member-address-country"
-                    className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                  >
-                    Country
-                  </label>
-                  <input
-                    id="member-address-country"
-                    type="text"
-                    value={form.address_country}
-                    onChange={(e) => handleFieldChange('address_country', e.target.value)}
-                    className="form-input bg-theme-surface-secondary px-3 text-sm"
-                    disabled={saving}
-                  />
-                </div>
+                {textField('address_city', 'City')}
+                {textField('address_state', 'State')}
+                {textField('address_zip', 'ZIP Code')}
+                {textField('address_country', 'Country')}
               </div>
             </div>
           </div>
@@ -956,77 +886,47 @@ export const MemberAdminEditPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleRemoveEmergencyContact(index)}
-                      className="touch-target-phone text-xs font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+                      className="touch-target-phone text-xs font-medium text-red-800 hover:text-red-900 dark:text-red-300 dark:hover:text-red-200"
                       disabled={saving}
                     >
                       Remove
                     </button>
                   </div>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                      <label
-                        htmlFor={`contact-${index}-name`}
-                        className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                      >
-                        Name
-                      </label>
-                      <input
-                        id={`contact-${index}-name`}
-                        type="text"
-                        value={contact.name}
-                        onChange={(e) => handleEmergencyContactChange(index, 'name', e.target.value)}
-                        className="form-input px-3 text-sm"
-                        disabled={saving}
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor={`contact-${index}-relationship`}
-                        className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                      >
-                        Relationship
-                      </label>
-                      <input
-                        id={`contact-${index}-relationship`}
-                        type="text"
-                        value={contact.relationship}
-                        onChange={(e) => handleEmergencyContactChange(index, 'relationship', e.target.value)}
-                        className="form-input px-3 text-sm"
-                        disabled={saving}
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor={`contact-${index}-phone`}
-                        className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                      >
-                        Phone
-                      </label>
-                      <input
-                        id={`contact-${index}-phone`}
-                        type="tel"
-                        value={contact.phone}
-                        onChange={(e) => handleEmergencyContactChange(index, 'phone', e.target.value)}
-                        className="form-input px-3 text-sm"
-                        disabled={saving}
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor={`contact-${index}-email`}
-                        className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
-                      >
-                        Email
-                      </label>
-                      <input
-                        id={`contact-${index}-email`}
-                        type="email"
-                        value={contact.email || ''}
-                        onChange={(e) => handleEmergencyContactChange(index, 'email', e.target.value)}
-                        className="form-input px-3 text-sm"
-                        disabled={saving}
-                      />
-                    </div>
+                    {(
+                      [
+                        ['name', 'Name', 'text'],
+                        ['relationship', 'Relationship', 'text'],
+                        ['phone', 'Phone', 'tel'],
+                        ['email', 'Email', 'email'],
+                      ] as const
+                    ).map(([field, label, type]) => {
+                      const value = (field === 'email' ? contact.email : contact[field]) || '';
+                      return (
+                        <FormField
+                          key={field}
+                          label={label}
+                          id={contactKey(index, field)}
+                          required={field === 'name' || field === 'relationship'}
+                          error={fieldErrors[contactKey(index, field)]}
+                          maxLength={CONTACT_FIELDS[field].maxLength}
+                          count={value.length}
+                          labelClassName={LABEL_CLASS}
+                        >
+                          {(control) => (
+                            <input
+                              {...control}
+                              type={type}
+                              autoComplete="off"
+                              value={value}
+                              onChange={(e) => handleEmergencyContactChange(index, field, e.target.value)}
+                              className="form-input px-3 text-sm"
+                              disabled={saving}
+                            />
+                          )}
+                        </FormField>
+                      );
+                    })}
                   </div>
                   <div className="mt-3">
                     <label className="flex cursor-pointer items-center gap-2">
@@ -1065,20 +965,13 @@ export const MemberAdminEditPage: React.FC = () => {
                 >
                   Cancel
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleSave();
-                  }}
-                  className="btn-info rounded-md text-sm font-medium"
-                  disabled={saving}
-                >
+                <button type="submit" className="btn-info rounded-md text-sm font-medium" disabled={saving}>
                   {saving ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </div>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

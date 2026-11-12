@@ -230,10 +230,16 @@ record for you.
    for the rest.
 3. **Search courses** filters by course name. **Type** filters by training
    type. Both narrow the years and the lists together.
-4. A record **with no completion date** is grouped under **No completion date**,
-   above the years, whatever you filter by. This includes a record still waiting
-   for approval and a completed record imported without a date; each row shows
-   its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
+
+_Added 2026-11-10._ **Where a record came from.** Training lists, the print page
+and the individual CSV and PDF exports say whether a record was **synced from a
+training provider** (for example "Target Solutions"), written by the **Historical
+Data Import** ("Imported"), or entered in The Logbook. The CSV adds a **Source**
+column at the end; the PDF prints it under the course name. Records added by the
+older CSV importers leave no mark and read "The Logbook". 4. A record **with no completion date** is grouped under **No completion date**,
+above the years, whatever you filter by. This includes a record still waiting
+for approval and a completed record imported without a date; each row shows
+its own status. (The group was headed "Awaiting approval" before 2026-10-21.)
 
 The top of the tab shows your **all-time** courses and hours and how many years
 are on record. The History tab reads your whole record, however long it is.
@@ -722,6 +728,16 @@ step**. Its steps are:
    achievements.
 5. **Review** — check everything, then select **Create Pipeline**. The
    program, its phases, requirements and milestones are created together.
+
+   _(2026-11-09)_ The wizard keeps your progress as a **draft in this browser**,
+   saved about a second after your last change. **Save draft** saves it on
+   demand. When you come back you resume on the same step with a notice offering
+   **Start over**. The draft is removed when the program is created (kept if
+   creating it fails) and when you sign out, because station computers are
+   shared. It lives only in this browser, so it does not follow you to another
+   device. Milestones can now also wait on courses, skills tests and knowledge
+   tests and choose who is told; see
+   [Training Programs](../TRAINING_PROGRAMS.md).
 
 ![Training pipeline wizard with program details and phase list](./images/02-11-pipeline-wizard.png)
 
@@ -2125,6 +2141,17 @@ the same rules, so their figures agree:
   matrix. Reports and CSVs show **N/A**. They are left out of the percentage
   altogether: "X of Y members current" counts only members who are graded.
   When nobody is graded, the percentage reads N/A rather than 100%.
+- **A session-attendance requirement with no session held is not graded**
+  _(2026-11-10)_. It reads **No sessions held yet** and is left out of the
+  percentage until a linked session is held in the member's window, instead of
+  "0/0 sessions, Complete". If sessions were held and every one was excused, it
+  still counts as met.
+- **Session wizard review and credit** _(2026-11-10)_: the final step lists the
+  requirements ticked on step 2 as **Counts toward attendance**; the Credit Hours
+  hint says attendees are credited the time each attended. An officer checking a
+  member in starts the same in-progress record a self check-in does. Credit taken
+  back (event deleted or cancelled, member removed) shows a reason, such as
+  "Credit withdrawn: removed from 'Drill' attendance.", beside the cancelled record.
 - **The dashboard's Department Compliance card is graded like the matrix it
   opens.** It uses compliance profiles (a profile's own list of requirements
   and thresholds) and your department's compliant and at-risk thresholds.
@@ -2492,6 +2519,17 @@ This one page covers:
 - **Training waivers** — adjust training requirements for members on leave;
 - **Meeting and shift waivers** — leave meetings out of attendance figures,
   and keep members off the schedule, during leave.
+
+> **Coming next: members asking to be excused** _(2026-11-10)_. The Logbook
+> can now take a member's request to be excused from one training session that
+> counts toward a session-attendance requirement, and route it to the positions
+> your department chooses (falling back to the Chief). An approved request
+> takes that one session out of the member's held and attended counts. **There
+> is no screen for it yet**, and it is off until a training officer saves a
+> request policy (deadline, yearly cap, categories, whether a reason is
+> required, who decides). Until the screens ship, nothing changes for members.
+> The rules are in `backend/app/docs/TRAINING_WAIVERS.md`, under "Session
+> Waiver Requests".
 
 ### Creating a Waiver
 
@@ -4770,7 +4808,13 @@ neither includes an officer-only section, since that needs your own ranks.
 2. **Self-evaluation, evaluator, calibration.** Each part is filled in on the
    evaluation page. Every item shows the member's figure and a suggested rating;
    a rating that departs from the suggestion needs a reason, and some levels need
-   an example. At calibration the reviewer may **tick the evaluator's items to
+   an example. _Updated 2026-11-10:_ the **Training session attendance** figure
+   now counts only the sessions linked to the member's session-attendance
+   requirement, uses finalized attendance, and leaves out every session a
+   waiver or leave excuses (a member who came anyway is credited). It is a
+   percentage for the review period, no longer a met / not met verdict, and
+   reads "unavailable" when no single requirement applies to the member. Evaluations opened before the change keep
+   the old figure until someone selects **Update figures**. At calibration the reviewer may **tick the evaluator's items to
    revisit** (ticks only, no notes). The evaluator is told items are flagged;
    the member sees the ticks once the evaluation is released to them.
 3. **Approvals and signing.** The approving position signs; the member

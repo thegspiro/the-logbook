@@ -100,11 +100,11 @@ describe('MyExternalShifts', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Log outside shift' }));
     // Picking a date alone starts the shift at 09:00, the picker's default.
-    await user.type(screen.getByLabelText('Start'), '2026-01-10');
+    await user.type(screen.getByLabelText(/^Start \*$/), '2026-01-10');
     await user.click(screen.getByRole('button', { name: '+12 hours' }));
     expect(screen.getByText('12 hours')).toBeInTheDocument();
-    await user.selectOptions(await screen.findByLabelText('Department'), 'a-county');
-    await user.selectOptions(screen.getByLabelText('Apparatus'), 'u-9');
+    await user.selectOptions(await screen.findByLabelText(/^Department \*$/), 'a-county');
+    await user.selectOptions(screen.getByLabelText(/^Apparatus \*$/), 'u-9');
     await user.click(screen.getByRole('button', { name: 'Log shift' }));
 
     await waitFor(() => expect(mockLog).toHaveBeenCalledTimes(1));
@@ -125,10 +125,10 @@ describe('MyExternalShifts', () => {
     renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
 
     await user.click(await screen.findByRole('button', { name: 'Log outside shift' }));
-    await user.type(screen.getByLabelText('Start'), '2026-01-10');
+    await user.type(screen.getByLabelText(/^Start \*$/), '2026-01-10');
     await user.click(screen.getByRole('button', { name: '+24 hours' }));
 
-    expect(screen.getByLabelText('End')).toHaveValue('2026-01-11');
+    expect(screen.getByLabelText(/^End \*$/)).toHaveValue('2026-01-11');
     expect(screen.getByText('24 hours')).toBeInTheDocument();
   });
 
@@ -149,15 +149,18 @@ describe('MyExternalShifts', () => {
     renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
 
     await user.click(await screen.findByRole('button', { name: 'Log outside shift' }));
-    await user.type(screen.getByLabelText('Start'), '2026-01-10');
-    const endDate = screen.getByLabelText('End');
+    await user.type(screen.getByLabelText(/^Start \*$/), '2026-01-10');
+    const endDate = screen.getByLabelText(/^End \*$/);
     await user.clear(endDate);
     await user.type(endDate, '2026-01-09');
-    await user.selectOptions(await screen.findByLabelText('Department'), 'a-county');
-    await user.selectOptions(screen.getByLabelText('Apparatus'), 'u-9');
+    await user.selectOptions(await screen.findByLabelText(/^Department \*$/), 'a-county');
+    await user.selectOptions(screen.getByLabelText(/^Apparatus \*$/), 'u-9');
 
-    expect(screen.getByRole('alert')).toHaveTextContent('The shift must end after it starts');
-    expect(screen.getByRole('button', { name: 'Log shift' })).toBeDisabled();
+    // Stated on the End field, live, and still refused when Log shift is pressed.
+    expect(endDate).toHaveAccessibleDescription('The shift must end after it starts');
+    expect(endDate).toHaveAttribute('aria-invalid', 'true');
+    await user.click(screen.getByRole('button', { name: 'Log shift' }));
+    expect(mockLog).not.toHaveBeenCalled();
   });
 
   it('shows and re-sends the times of an entry that has them', async () => {
@@ -171,8 +174,8 @@ describe('MyExternalShifts', () => {
     expect(await screen.findByText(/Mar 4, 2026 · 7:00 AM – 7:00 PM · 12 hrs/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Edit shift with Township Fire Company/ }));
-    await waitFor(() => expect(screen.getByLabelText('Apparatus')).toHaveValue('u-42'));
-    expect(screen.getByLabelText('Start')).toHaveValue('2026-03-04');
+    await waitFor(() => expect(screen.getByLabelText(/^Apparatus \*$/)).toHaveValue('u-42'));
+    expect(screen.getByLabelText(/^Start \*$/)).toHaveValue('2026-03-04');
     expect(screen.queryByLabelText('Hours')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
@@ -189,11 +192,11 @@ describe('MyExternalShifts', () => {
     renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
 
     await user.click(await screen.findByRole('button', { name: /Edit shift with Township Fire Company/ }));
-    expect(screen.getByLabelText('Hours')).toHaveValue(12);
+    expect(screen.getByLabelText(/^Hours \*$/)).toHaveValue(12);
     await user.click(screen.getByRole('button', { name: 'Enter start and end times instead' }));
 
     expect(screen.queryByLabelText('Hours')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Start')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Start \*$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '+24 hours' })).toBeInTheDocument();
   });
 
@@ -203,15 +206,56 @@ describe('MyExternalShifts', () => {
     renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
 
     await user.click(await screen.findByRole('button', { name: 'Log outside shift' }));
-    await user.type(screen.getByLabelText('Start'), '2026-01-10');
+    await user.type(screen.getByLabelText(/^Start \*$/), '2026-01-10');
     await user.click(screen.getByRole('button', { name: '+12 hours' }));
-    await user.selectOptions(await screen.findByLabelText('Department'), 'a-township');
+    await user.selectOptions(await screen.findByLabelText(/^Department \*$/), 'a-township');
 
-    const unitSelect = screen.getByLabelText('Apparatus');
+    const unitSelect = screen.getByLabelText(/^Apparatus \*$/);
     expect(within(unitSelect).getByRole('option', { name: 'Engine 42 (engine)' })).toBeInTheDocument();
     expect(within(unitSelect).getByRole('option', { name: 'Tower 7' })).toBeInTheDocument();
     expect(within(unitSelect).queryByRole('option', { name: 'Rescue 9' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Log shift' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Log shift' }));
+    expect(unitSelect).toHaveAccessibleDescription('Choose the apparatus.');
+    await waitFor(() => expect(unitSelect).toHaveFocus());
+    expect(mockLog).not.toHaveBeenCalled();
+  });
+
+  it('puts a server refusal on the field it names and logs nothing', async () => {
+    mockGetMine.mockResolvedValue({ items: [], total: 0 });
+    mockLog.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'role', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Log outside shift' }));
+    await user.type(screen.getByLabelText(/^Start \*$/), '2026-01-10');
+    await user.click(screen.getByRole('button', { name: '+12 hours' }));
+    await user.selectOptions(await screen.findByLabelText(/^Department \*$/), 'a-county');
+    await user.selectOptions(screen.getByLabelText(/^Apparatus \*$/), 'u-9');
+    await user.type(screen.getByLabelText(/^Position/), 'Driver');
+    await user.click(screen.getByRole('button', { name: 'Log shift' }));
+
+    const position = screen.getByLabelText(/^Position/);
+    await waitFor(() =>
+      expect(position).toHaveAccessibleDescription('Position is too long — keep it to 100 characters.')
+    );
+    expect(position).toHaveAttribute('aria-invalid', 'true');
+    expect(mockLog).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('dialog', { name: 'Log a shift with another department' })).toBeInTheDocument();
+  });
+
+  it('asks before Escape discards a half-filled outside shift', async () => {
+    mockGetMine.mockResolvedValue({ items: [], total: 0 });
+    const user = userEvent.setup();
+    renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Log outside shift' }));
+    await user.type(screen.getByLabelText(/^Position/), 'Driver');
+    await user.keyboard('{Escape}');
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText(/^Position/)).toHaveValue('Driver');
   });
 
   it('tells the member who can add a missing unit when the list is empty', async () => {
@@ -232,7 +276,7 @@ describe('MyExternalShifts', () => {
     renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
 
     await user.click(await screen.findByRole('button', { name: /Edit shift with Township Fire Company/ }));
-    await waitFor(() => expect(screen.getByLabelText('Apparatus')).toHaveValue('u-42'));
+    await waitFor(() => expect(screen.getByLabelText(/^Apparatus \*$/)).toHaveValue('u-42'));
     await user.clear(screen.getByLabelText(/Notes/));
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
@@ -251,8 +295,8 @@ describe('MyExternalShifts', () => {
     renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
 
     await user.click(await screen.findByRole('button', { name: /Edit shift with Township Fire Company/ }));
-    await waitFor(() => expect(screen.getByLabelText('Apparatus')).toHaveValue('u-42'));
-    await user.selectOptions(screen.getByLabelText('Apparatus'), 'u-7');
+    await waitFor(() => expect(screen.getByLabelText(/^Apparatus \*$/)).toHaveValue('u-42'));
+    await user.selectOptions(screen.getByLabelText(/^Apparatus \*$/), 'u-7');
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
@@ -269,8 +313,8 @@ describe('MyExternalShifts', () => {
 
     await user.click(await screen.findByRole('button', { name: /Edit shift with Township Fire Company/ }));
     expect(await screen.findByRole('option', { name: 'Engine 1 (no longer listed)' })).toBeInTheDocument();
-    await user.clear(screen.getByLabelText('Hours'));
-    await user.type(screen.getByLabelText('Hours'), '9');
+    await user.clear(screen.getByLabelText(/^Hours \*$/));
+    await user.type(screen.getByLabelText(/^Hours \*$/), '9');
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));

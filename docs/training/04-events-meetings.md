@@ -627,6 +627,23 @@ Monitoring Dashboard**. It shows:
 > **Yes / No** are full-size touch targets.
 
 An officer-edited time is marked "(times edited)" on the attendance list.
+
+_Added 2026-11-10._ **Recording one member after check-in has closed.** On an
+event whose check-in window is over (and that is neither finalized nor
+cancelled), **Check In** offers **Add a member**. Pick the member, enter when they
+arrived and left (prefilled with the event's actual or scheduled span), and select
+**Record attendance**. They appear on the attendance list and the approval page
+like any other correction. Times outside the event are warned about, not refused.
+
+**Reminders after a reschedule.** Changing an event's start time, on one event or
+a whole series, lets its reminders go out again for the new time. Any other edit
+keeps the reminders already sent, so fixing a title does not re-send them. A small
+correction to the start can therefore send one reminder twice; that is accepted.
+
+**Excused drills leave "missed".** A drill covered by an active training waiver
+no longer shows under a member's missed mandatory events: a blanket waiver, or one
+naming a requirement the session counts toward, excuses it for the waiver's dates.
+A waiver naming other requirements leaves the drill listed.
 **Edit Times** shows the exact minutes it will save: a member who tapped in at
 9:07 shows as 9:07. Pick the quarter hour you mean, and the duration under the
 pickers shows what will be credited.
@@ -1332,6 +1349,11 @@ adding occurrences so it always runs 12 months ahead, ready for RSVPs. Ticking
 alternatives. The note beneath reads "New occurrences are added automatically
 so the series always runs 12 months ahead."
 
+Each new occurrence copies the latest one, so a "this and all future events"
+edit carries on into the occurrences added after it. For a Training series
+that includes the training details and the requirements the sessions count
+toward.
+
 ![The recurrence controls with the rolling 12-month cycle ticked](./images/04-38-rolling-recurrence.png)
 
 **Dates and times stay put.** A series is laid out in your department's own
@@ -1496,7 +1518,9 @@ instead — see
 
 **More → Duplicate Event** on an event's page makes a copy with the same
 settings, date and time, and opens it for editing so you can change the date.
-RSVPs, attendance, cancellation and recurrence are not copied.
+RSVPs, attendance, cancellation and recurrence are not copied. A Training
+event's copy keeps its training details and the requirements it counts
+toward, and starts with attendance open.
 
 ### Selecting several events
 
@@ -1534,11 +1558,49 @@ either.
 **Changing an event.** When you change an event's title, start or end time, or
 location, members who answered **Going** or **Maybe** are told in the app and
 by an "Event Updated" email showing the new time and place. The email follows
-the same **Event changes and cancellations** switch.
+the same **Event changes and cancellations** switch. To move an event that has
+already started taking check-ins, use
+[Postpone](#postponing-an-event-to-a-new-time-2026-11-10) instead: it clears
+the attendance recorded for the old time.
 
 A cancelled event stays on the calendar with its attendance intact, and reads
 "This event has been cancelled. Reason: …". A finalized event cannot be
 cancelled.
+
+### Postponing an event to a new time _(2026-11-10)_
+
+**Who can do this:** whoever can edit the event (a training officer can
+postpone a Training event).
+
+Use **More → Postpone Event** when the event is still going to happen, just
+later. It is not offered on a cancelled event or one whose attendance is
+finalized.
+
+1. Choose the **New start** and **New end**.
+2. Give a **Reason** (10 to 500 characters).
+3. Leave **Tell members who RSVP'd Going or Maybe, with the old and new time**
+   ticked to send them an in-app notice and an email with the reason.
+4. Select **Postpone Event**.
+
+What happens:
+
+- **RSVPs are kept.** Check-ins, check-outs, **Edit Times** corrections and
+  guest check-ins are cleared, and the admin hours and training credit they
+  produced are removed, so attendance starts afresh at the new time. If anyone
+  is checked in, the dialog says how many will need to check in again.
+- Reminders go out again for the new time.
+- The event's page shows a **Postponed** badge and "Postponed from _original
+  time_ — _reason_". The events list shows a **Postponed** badge too; its
+  tooltip gives the original date. A cancelled event shows only **Cancelled**.
+- Postponing twice keeps the **first** original time.
+
+> **What if Postpone is refused?** The message says why: the new start is in
+> the past, it is the event's current time, the room is booked then, or
+> attendance requests are still waiting for a decision. Settle those requests
+> first.
+
+> **Screenshots needed:** the Postpone Event dialog; an event card with the
+> **Postponed** badge; the event page's "Postponed from" line.
 
 ### Deleting an event or a series
 
@@ -1672,6 +1734,11 @@ approval** and **Approved**; see
 [Circulating and adopting minutes](#circulating-and-adopting-minutes).)
 
 Who sees which minutes is decided for you: members see circulated and adopted minutes, never drafts or executive sessions.
+_(2026-11-09)_ The **Meetings** list and a meeting's detail follow the same
+rule: without Manage Meetings or Manage Minutes you see only approved,
+non-executive meetings. Opening a hidden meeting reads as not found, and open
+action items from hidden meetings are left out. Before, a member could read an
+executive session's notes and motions through the Meetings list.
 The **Pending Approval** tile counts minutes awaiting approval.
 
 **Search the minutes themselves.** _(2026-10-19)_ The search box above the list
@@ -2362,6 +2429,47 @@ so a half-written schedule or comment is never lost to a stray click.
 
 > **What if scheduling or postponing is refused?** The message gives the real
 > reason — for example, that the event's attendance is already closed.
+
+### Measuring Outreach: Community Engagement
+
+**Who can do this:** officers who can manage events.
+
+**Manage Events → Community Outreach → Community Engagement** reports what the
+department's public outreach reached. Choose a period across the top: **This
+month**, **This quarter**, **This year** (the default), **Last 12 months** or
+**All time**. The **Community engagement** card on the dashboard opens this
+page on the dashboard's own period.
+
+| Figure             | What it counts                                                                 |
+| ------------------ | ------------------------------------------------------------------------------ |
+| **Events held**    | Outreach events that have started; the line below says how many are scheduled  |
+| **People reached** | Guests who signed in, plus estimates for events nobody signed in at (below)    |
+| **Member hours**   | Credited attendance time of members checked in, the same hours training uses   |
+| **Requests**       | Public requests received in the period, and how many of those are completed    |
+
+An outreach event is any **Public Education**, **Fundraiser**, **Ceremony** or
+**Social** event, or any event a public request was scheduled onto, whatever
+its type. Cancelled events are left out.
+
+**Signed in, or estimated.** A school assembly rarely passes round a sign-in
+sheet, so for an event with no guest sign-ins **People reached** uses the
+audience size the requester gave on the request, and marks it **est.** An
+event that did record sign-ins counts them and nothing else. Members on duty
+are never counted as people reached. Where an event has both, the table shows
+the gap — **25 signed in, of ~30 expected** — and the chart heading totals it:
+how many signed in against how many requesters expected.
+
+**Change since last time.** Beside each figure is its change against the
+same stretch of the previous period — the first forty days of this quarter
+against the first forty of the last — so a period still under way is not
+compared with a finished one. **All time** has nothing to compare with.
+
+Under the figures, **People reached by month** stacks signed-in guests under
+estimates (by year for an all-time span over three years; hover or tap a bar
+for its numbers, or open **Show the figures**), **By type of outreach** ranks
+the three largest types and folds the rest into **Other**, and **Recent
+outreach events** lists the latest fifty with their crew and hours. **Export
+CSV** downloads that list.
 
 ### Public Request Form
 

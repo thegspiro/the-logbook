@@ -8,6 +8,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import type { FundraisingEvent, Pledge } from '../types';
@@ -98,7 +99,14 @@ const fundraiser = (overrides: Partial<FundraisingEvent> = {}): FundraisingEvent
   ...overrides,
 });
 
-const renderPage = (ui: React.ReactElement) => render(<MemoryRouter>{ui}</MemoryRouter>);
+// The pledge dialog asks before discarding a changed form, so it needs the
+// ConfirmProvider the app shell mounts.
+const renderPage = (ui: React.ReactElement) =>
+  render(
+    <ConfirmProvider>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </ConfirmProvider>
+  );
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -154,9 +162,9 @@ describe('PledgesPage', () => {
     const dialog = screen.getByRole('dialog');
     await within(dialog).findByRole('option', { name: 'Ann Lee' });
     await user.selectOptions(within(dialog).getByLabelText(/^donor/i), 'donor-1');
-    await user.type(within(dialog).getByLabelText('Amount pledged'), '1000');
-    await user.clear(within(dialog).getByLabelText('Pledge date'));
-    await user.type(within(dialog).getByLabelText('Pledge date'), '2026-10-01');
+    await user.type(within(dialog).getByLabelText(/^Amount pledged/), '1000');
+    await user.clear(within(dialog).getByLabelText(/^Pledge date/));
+    await user.type(within(dialog).getByLabelText(/^Pledge date/), '2026-10-01');
     await user.click(within(dialog).getByRole('button', { name: 'Record pledge' }));
 
     await waitFor(() =>
@@ -256,9 +264,9 @@ describe('FundraisingEventsPage', () => {
 
     await user.click(await screen.findByRole('button', { name: /add event/i }));
     const dialog = screen.getByRole('dialog');
-    await user.type(within(dialog).getByLabelText('Name'), 'Golf Classic');
-    await user.selectOptions(within(dialog).getByLabelText('Type'), 'golf_outing');
-    await user.type(within(dialog).getByLabelText('Date and time'), '2027-05-15T08:00');
+    await user.type(within(dialog).getByLabelText(/^Name/), 'Golf Classic');
+    await user.selectOptions(within(dialog).getByLabelText(/^Type/), 'golf_outing');
+    await user.type(within(dialog).getByLabelText(/^Date and time/), '2027-05-15T08:00');
     await user.type(within(dialog).getByLabelText(/revenue goal/i), '15000');
     await user.click(within(dialog).getByRole('button', { name: 'Add event' }));
 

@@ -13,7 +13,7 @@
  * Requires: training.manage permission
  */
 
-import React, { Suspense, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { Plus } from 'lucide-react';
 import { HelpLink } from '../components/HelpLink';
@@ -32,6 +32,8 @@ import {
   type TrainingAdminAreaId,
 } from '../components/training/trainingAdminAreas';
 import type { AdminHubSummary } from '../types/adminHub';
+import { attendanceWaiverService } from '../services/attendanceWaiverService';
+import { AttendanceWaiverStatus } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
 import { usePracticalSkillsMethod } from '../stores/practicalSkillsStore';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
@@ -43,11 +45,13 @@ const ExpiringCertsTab = lazyWithRetry(() => import('./ExpiringCertsTab'));
 const TrainingWaiversTab = lazyWithRetry(() => import('./TrainingWaiversTab'));
 
 const ReviewSubmissionsPage = lazyWithRetry(() => import('./ReviewSubmissionsPage'));
+const AttendanceWaiverQueuePage = lazyWithRetry(() => import('./training/AttendanceWaiverQueuePage'));
 const CreateTrainingSessionPage = lazyWithRetry(() => import('./CreateTrainingSessionPage'));
 const ShiftReportPage = lazyWithRetry(() => import('./ShiftReportPage'));
 const ManualEntrySettingsPanel = lazyWithRetry(() => import('./training/ManualEntrySettingsPanel'));
 const PracticalSkillsSettingsPanel = lazyWithRetry(() => import('./training/PracticalSkillsSettingsPanel'));
 const ShiftEvaluationSettingsPanel = lazyWithRetry(() => import('./training/ShiftEvaluationSettingsPanel'));
+const SessionWaiverSettingsPanel = lazyWithRetry(() => import('./training/SessionWaiverSettingsPanel'));
 const ComplianceSettingsPanel = lazyWithRetry(() => import('./training/ComplianceSettingsPanel'));
 const RequirementsLinkPanel = lazyWithRetry(() => import('./training/RequirementsLinkPanel'));
 const SkillEvaluationsTab = lazyWithRetry(() => import('./training/SkillEvaluationsTab'));
@@ -101,6 +105,8 @@ const TabContent: React.FC<{
       return <TrainingWaiversTab />;
     case 'submissions':
       return <ReviewSubmissionsPage />;
+    case 'waiver-requests':
+      return <AttendanceWaiverQueuePage embedded />;
     case 'sessions':
       return <CreateTrainingSessionPage />;
     case 'cohorts':
@@ -129,6 +135,8 @@ const TabContent: React.FC<{
       return <PracticalSkillsSettingsPanel />;
     case 'shift-evaluations':
       return <ShiftEvaluationSettingsPanel />;
+    case 'session-waivers':
+      return <SessionWaiverSettingsPanel />;
     case 'requirements-link':
       return <RequirementsLinkPanel />;
     case 'compliance-settings':
@@ -194,6 +202,33 @@ export const TrainingAdminPage: React.FC = () => {
   const handleSummaryChange = (summary: AdminHubSummary | null) =>
     setAttentionCounts(attentionCountsByTab(summary?.attention ?? []));
 
+  // Waiver requests are decided by whoever holds the positions the
+  // department routes them to, not by training.manage, so the hub summary
+  // (an org-wide count for the module's managers) is not the right number.
+  // The badge is the caller's own pending queue, as the list endpoint scopes
+  // it; it is re-read on each move between destinations so a decision made
+  // in the queue clears it.
+  const [pendingWaivers, setPendingWaivers] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    attendanceWaiverService
+      .list({ status: AttendanceWaiverStatus.PENDING, limit: 1 })
+      .then((page) => {
+        if (!cancelled) setPendingWaivers(page.total);
+      })
+      .catch(() => {
+        // A badge, not a page: with no answer it is simply not shown.
+        if (!cancelled) setPendingWaivers(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
+  const navCounts = useMemo(
+    () => (pendingWaivers > 0 ? { ...attentionCounts, 'waiver-requests': pendingWaivers } : attentionCounts),
+    [attentionCounts, pendingWaivers]
+  );
+
   return (
     <AdminHubFrame
       moduleKey="training"
@@ -218,7 +253,7 @@ export const TrainingAdminPage: React.FC = () => {
           activeTab={activeTab}
           onAreaChange={handleAreaChange}
           onTabChange={(tab) => navigateTo(activeAreaId, tab)}
-          attentionCounts={attentionCounts}
+          attentionCounts={navCounts}
           hintOf={(destination) => destination.hint}
           label="Training admin areas"
           // Matches `areaTabId` / `areaPanelId`, under which the page renders the area's panel.

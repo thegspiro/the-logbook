@@ -39,7 +39,9 @@ async def discard_committed_audit_rows(where: str, params: Mapping[str, Any]) ->
     values bound through ``params``.
     """
     await settle_background_sealer()
-    async with database_manager.engine.connect() as conn:
+    engine = database_manager.engine
+    assert engine is not None, "the database is not connected"
+    async with engine.connect() as conn:
         async with conn.begin():
             await conn.execute(text(f"DELETE FROM audit_logs WHERE {where}"), params)
             await conn.execute(text("DELETE FROM audit_chain_head"))

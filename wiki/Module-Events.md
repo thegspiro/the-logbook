@@ -230,6 +230,16 @@ overflow link narrows the grid to what needs a response.
 - **Bulk actions** — a selection mode entered from the overflow menu (e.g. bulk
   cancel); **Duplicate** copies an event in one click
   (`POST /events/{id}/duplicate`).
+- **Postpone** _(2026-11-10)_ — **More → Postpone Event**
+  (`POST /events/{id}/postpone`, authorized like Edit) moves an event to a new
+  start and end with a reason of 10–500 characters. RSVPs are kept; check-ins,
+  corrections, guest check-ins and the hours and training credit they produced
+  are cleared; reminders resend for the new time; Going/Maybe members are told
+  in-app and by email when the box is ticked. The first original start is kept
+  in `postponed_from_start`, and the list card shows a **Postponed** badge.
+  Refused for a cancelled or finalized event, a past or unchanged start, a
+  booked room, or pending attendance requests. Migration `09f0171ccf5e` adds
+  three nullable columns.
 - **CSV import** (`POST /events/import-csv`) — validates required fields,
   skips invalid rows with error reporting, and still imports the valid rows.
 - **Calendar export** — iCal (`.ics`) export, in the user's timezone.
@@ -851,9 +861,13 @@ responsible for an event (the organizer defaults to the creator).
   (**Event settings → Attendance → Attendance requests**, default
   "Secretary"; options from `GET /events/settings/position-options`), then the
   `secretary` position, then every `events.manage` holder — never nobody.
-- **Decision rights:** organizer, alternate, or `events.manage`. The creator
-  does not decide once the event is handed over. The page gates on the
-  server's `can_manage_organizers` rather than comparing ids.
+- **Decision rights:** organizer, alternate, `events.manage`, or whoever the
+  request is currently routed to — a fallback position holder without
+  `events.manage` may decide the request they were sent
+  (`EventOrganizerService.may_decide_attendance_request`, which reuses the
+  routing above). The creator does not decide once the event is handed over.
+  The page shows the requests card on the server's
+  `can_review_attendance_requests` rather than comparing ids.
 - **Attendance:** the organizer pair also run their own event's attendance —
   see [Manager tools on the detail page](#manager-tools-on-the-detail-page).
 - **`POST /events/{id}/transfer`**, scope `this` or `future` (upcoming
@@ -967,7 +981,11 @@ modal (`EventTemplateForm`), active toggle and delete confirmation.
   table, with date range filtering (`GET /events/analytics/summary`).
 - **`/events/:id/analytics`** — per-event analytics dashboard.
 - **QR Code Analytics** and **Community Engagement** tabs in the Events admin
-  hub.
+  hub. Community Engagement (`GET /dashboard/community-engagement?period=`,
+  `events.manage`) reports events held, people reached — signed-in guests, or
+  the request's audience size where nobody signed in, reported separately —
+  member hours, requests received and completed, a monthly and by-type
+  breakdown and recent events, against the same span of the previous period.
 
 ---
 

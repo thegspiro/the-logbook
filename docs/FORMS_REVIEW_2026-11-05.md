@@ -4,7 +4,9 @@ A sweep of every form in the application, driven in a real browser with
 Playwright against a freshly onboarded department (the
 `scripts/workflow-review/` harness, database `logbook_workflow_review`). This is
 a findings report: **the review itself changed nothing in the application.** F-1
-was fixed afterwards, in the same pull request (see its status line).
+was fixed afterwards, in the same pull request; F-6 was decided by the owner on
+2026-11-06 and built, and F-2 to F-5 and F-7 to F-9 are fixed on the first five
+forms (see each status line).
 Each finding says what was driven, as whom, and what happened, so the owner can
 decide what to fix and in what order.
 
@@ -97,6 +99,14 @@ needed for the rule; any rows already blanked would need a data check.
 
 ### F-2 — MED — Over-long input is caught only by the server, and the error names the API field
 
+**Status: fixed on the first five forms** (Submit Training, `/account`, Add Member, Scheduling › Create Shift and Events › Create Event), 2026-11-06. Each
+text input carries `maxLength` from its schema's `max_length` (`UserUpdate`,
+`AdminUserCreate`, `EmergencyContact`, `TrainingSubmissionCreate`, `EventBase`;
+`ShiftCreate` has none), with a counter once the value nears the limit, and a
+422 is mapped onto the field it names in that field's own words — "First Name is
+too long — keep it to 100 characters." — instead of `first_name: Value is too
+long.` in a toast. The shared field is `components/ux/FormField.tsx` and the 422 mapper is `utils/serverFieldErrors.ts`; the rest of the app's forms adopt them module by module. **Pending** on the other forms.
+
 **Driven:** a 300-character First Name on `/account` (as `member`) and a
 400-character Station Name in Locations › Add Station (as `chief`). Neither
 field stopped the typing. The server answered 422, shown as
@@ -118,11 +128,24 @@ backend's snake_case key, no limit stated, and no field highlighted.
 ### F-3 — MED — Seventy create dialogs refuse an empty submit four different ways
 
 **Status: in progress.** The shared pattern is built (`FormField`,
-`ErrorSummary`, `useFieldErrors`) and Scheduling's Create Shift is on it: the
-button stays enabled, a missing value is named on its field, and a 422 lands on
-the field it names. Since followed by the shift template and pattern dialogs,
-which had relied on the browser's `required` bubble. The other dialogs move
-over module by module.
+`ErrorSummary`, `useFieldErrors`). The first five forms (Create Shift, Submit
+Training, `/account`, Add Member, Create Event) follow it: submit always
+enabled (Create Shift's button no longer waits for a date), validated on
+submit, a message under each failing field with `aria-invalid` and
+`aria-describedby`, and a 422 on the field it names. Create Event and Add
+Member are `noValidate`, so the browser bubble no longer stands in for the
+message. Since followed by the shift template and pattern dialogs, which had
+relied on the browser's `required` bubble. The other dialogs move over module
+by module.
+
+Two sessions built this pattern in parallel (#4121 and #4130/#4157). Their two
+`FormField` components were combined into one on 2026-11-09: `id` is optional
+(generated when left out), it takes `maxLength` with a counter near the limit,
+`labelClassName`, `optional` (written "(optional)"), and still exports
+`FIELD_ERROR_CLASS` and `FormFieldControlProps`. Create Shift, Submit
+Training, `/account` and Add Member use `useFieldErrors` (with
+`ErrorSummary` on the long forms); Create Event and the later rollout use
+`utils/serverFieldErrors.ts`. No field runs both.
 
 Every dialog in the table's first row — a button disabled until valid, with no
 message — has now moved: Create Shift with the shared pieces, New Pattern and
@@ -131,6 +154,16 @@ Add Room, Add Facility, the facility type / status / maintenance type dialog,
 New Folder, Create Form, Add supply, Add several items, Request Equipment, the
 suggestion box form and Apparatus (basic)). Each keeps its button enabled,
 names what is missing on its field, and puts a 422 on the field it names.
+
+The second row — the browser's own `required` bubble — has moved too: Create
+Election, the event template form, Create Custom Role, Create Pipeline,
+Inventory's Add Item, Add Kit, Add Category, Add Group, Add Vendor, Add Storage
+Area and both reorder dialogs, and Notifications › Add Rule. Three of them
+(Custom Role, Create Pipeline, Add Rule) had no `<form>`, so their `required`
+never fired at all. Still open on this row: the vendor Contacts dialog keeps a
+native `required`, and dialogs built on the shared `Modal` keep native `min` and
+`type="email"` checks, which can still raise the browser bubble because `Modal`
+offers no `noValidate`.
 
 Pressing the primary button of an empty create dialog was probed 70 times
 (about 40 distinct dialogs). The outcomes:
@@ -156,11 +189,11 @@ template.
 
 ### F-4 — MED — Error messages are visible but not connected to their fields
 
-**Status: in progress.** Submit Training now shows a message under each missing
+**Status: in progress.** Submit Training shows a message under each missing
 field, tied by `aria-describedby`, plus a summary at the top linking to each
-one; `/account` and Create Shift tie theirs the same way. Add Member now ties
-each message to its field and moves focus to a summary at the top on a refused
-save.
+one; `/account` and Create Shift tie theirs the same way. Add Member ties each
+message to its field and moves focus to a summary at the top on a refused
+save. **Pending** elsewhere.
 
 **Add Member** (`/members/admin?tab=add`, as `membership_coordinator`): an empty
 Save Member shows a toast and a red message under every required field — good —
@@ -185,6 +218,13 @@ markup, and only the three Finance request forms use react-hook-form + zod
 
 ### F-5 — MED — The asterisk and the `required` state disagree
 
+**Status: fixed on the first five forms**, 2026-11-06: in `FormField` the
+asterisk and `aria-required` are one prop, so they cannot disagree (Add Member's
+sixteen; the second emergency contact's three are marked once it is begun, as
+its validation already required). Native `required` is deliberately not used,
+because under the owner's rule of 2026-11-05 a draft must always save. **Pending**
+on the other surfaces listed.
+
 - **79 controls on 26 surfaces show `*` but carry neither `required` nor
   `aria-required`**, so assistive technology announces them as optional. Largest:
   Add Member (16 fields), Finance expense items (6), Skills-test template builder
@@ -196,6 +236,23 @@ markup, and only the three Finance request forms use react-hook-form + zod
   Street Address, but only Street Address is `required`.
 
 ### F-6 — MED (owner decision) — Leaving a half-filled form discards it without a word
+
+**Status: decided and built.** The owner chose options 2 and 3 on 2026-11-06
+and rejected option 1 (the data router). See `docs/KNOWN_LIMITATIONS.md`.
+
+- **Escape asks first.** `Modal` and `DialogPanel` take `isDirty`; a dialog
+  that passes it asks "Keep editing" / "Discard changes" before Escape or the
+  header X closes it with changes in it, and a clean dialog still closes at once
+  (`hooks/useDiscardGuard.ts`, whose result a dialog also gives its Cancel
+  button). Adopted on Inventory › Add / Edit Item and Scheduling › Create Shift.
+- **Local drafts** (`hooks/useSessionDraft.ts`, `components/ux/DraftRestoredNotice.tsx`):
+  sessionStorage, keyed by the signed-in member and the form, restored on return
+  with "Restored your unsaved draft — Discard draft", cleared on a successful
+  save or a discard, and purged at sign-out with the other device-local drafts.
+  Adopted on Training › Submit Training (new submissions), Log Shift Report
+  (the manual one; Scheduling's shift reports already kept a draft), Finance ›
+  New Expense Report and Add Member — whose draft leaves out the emergency
+  contacts and the date of birth, which are never stored client-side.
 
 **Driven:** as `member`, typed a course name and a paragraph of notes into
 Training › Submit Training, then tapped Dashboard in the navigation. The app
@@ -223,6 +280,9 @@ This needs a decision rather than a patch, because the options differ in cost:
 
 ### F-7 — LOW — 69 form surfaces are not `<form>` elements, so Enter does nothing
 
+**Status: fixed on `/account` and Create Shift**, 2026-11-06 (the other three
+of the first five were already forms). **Pending** on the rest.
+
 **385 controls on 69 surfaces** sit outside any `<form>`: pressing Enter in a
 field neither submits nor validates. Verified on `/account` (typed a Middle
 Name, pressed Enter, reloaded — not saved). Largest surfaces: History settings
@@ -237,6 +297,10 @@ native `required` checks somewhere to run.
 
 ### F-8 — LOW — Unlabelled and placeholder-labelled controls
 
+**Status: the first five forms checked, 2026-11-06** — every control on them is
+labelled through `FormField` or its own label. None of the nine controls listed
+below is on those forms; they are **pending**.
+
 - **No accessible name (5):** the CSV file inputs on Members › Import CSV,
   Scheduling › History import and Integrations › Historical import, and both
   file inputs on the inventory checklist template builder. Each has visible
@@ -247,6 +311,12 @@ native `required` checks somewhere to run.
   label vanishes as soon as the member types.
 
 ### F-9 — LOW — Input types and autofill hints
+
+**Status: fixed on the first five forms**, 2026-11-06: `/account` carries
+`given-name`, `additional-name`, `family-name`, `nickname`, `tel`, `mobile tel`,
+`street-address`, `address-level2`, `address-level1` and `postal-code`; Add
+Member's fields about the new member carry `autocomplete="off"`. The three
+plain-text phone fields below are on other forms and are **pending**.
 
 - **`/account` has no `autocomplete` tokens** on the member's own name, phone
   and address. `given-name`, `family-name`, `tel`, `street-address`,
@@ -260,6 +330,15 @@ native `required` checks somewhere to run.
 
 ### F-10 — LOW — A must-change-password sign-in renders the dashboard first
 
+**Status: fixed**, 2026-11-08. The login page decides where a sign-in lands
+from the user record the login response carries (`signInLanding` in
+`utils/postLoginRedirect.ts`): a member who must change their password, or
+whose password has expired, lands on `/account` with the forced-change state,
+and one who must enrol in MFA lands there with the MFA state, without passing
+through the dashboard. ProtectedRoute still enforces both, in the same order;
+the landing only removes the detour, and with it the seed script's
+intermittent "landed on /dashboard".
+
 **Driven:** four accounts with `must_change_password = 1` signed in. Each went
 `/login → /dashboard → /account`: the dashboard mounts and fires its requests,
 then the redirect lands once the user record loads. The change is enforced —
@@ -271,6 +350,13 @@ landing from the login response's `must_change_password` would remove both.
 
 ### F-11 — NIT
 
+**Status: two of three fixed**, 2026-11-08. A failed sign-in now returns focus
+to the password with its text selected, so it can be retyped at once. On
+Training › Requirements (`/training/requirements`), each registry card's
+"Source" link sits beside its import button instead of inside it, and the
+link's target is at least 24px tall. Add Member's example placeholders are
+left for the change that is rewriting that page's fields.
+
 - **Add Member's example placeholders read as filled values.** "Bob Doe",
   "bob.doe@example.com" and "(555) 987-6543" in the optional secondary-contact
   block are dark enough at a glance to look entered.
@@ -278,6 +364,156 @@ landing from the login response's `must_change_password` would remove both.
   field and focus is not returned to it.
 - **`/training/requirements`** — axe `nested-interactive` and `target-size` on
   six rows: an external link sits inside a clickable row.
+
+## Rollout status, 2026-11-08 (batch 16)
+
+Steps 2 to 4 below, and F-6's discard protection, were carried from the first
+five forms to these. Each converted form puts a 422 on its field, takes
+`maxLength` from its schema, is a `<form>` that submits on Enter, and follows
+the owner's save-with-an-error rule; each dialog asks before Escape, its X or
+Cancel throws typed values away.
+
+| Area                                     | Converted                                                                                                                                                                                       |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Top-level pages                          | Action Items › Update; Locations › Station and Room; basic Apparatus; Role Management; Documents › Create Folder and Upload; Scheduling › outside shift                                         |
+| Inventory and assets                     | Inventory › Add / Edit Item; Apparatus › Fuel Log, Maintenance Record, Equipment, Operator; Facilities › Add Facility; Medical Supplies › Add / Edit; Store › item, order window                |
+| Finance and grants                       | purchase, check and expense requests; budget line; dues schedule; pledge; fundraising event; donation; grant opportunity; grant application; Admin Hours › category, manual entry, entry editor |
+| Minutes, communications, smaller modules | medical screening record and requirement; message compose; shift pattern; Generate Shifts; Record Meeting Minutes; IP exception request; meeting action item; legal revision; Add Applicant     |
+
+Shared changes that came with it: `FormField` writes "(optional)" in brackets
+as the rest of the app does; `Modal` takes `noValidate` for a dialog that
+checks its own fields; `TimeQuarterHour` and `TargetRolePicker` announce a
+refusal on their controls; Edit Pattern and the meeting action item save the
+rest of an edit and stay open, with their pages refreshing behind them.
+
+Five of these dialogs were also converted by main's forms batch 3 (#4178):
+Add Station and Add Room, Add Facility, Create Folder, Add / Edit supply and
+basic Apparatus. They keep #4178's error handling (`useFieldErrors`, its
+messages, a 422 shown in the server's own words, a refusal no field answers for
+said in the dialog) with this batch's additions on top: the shared `Modal` or a
+real `<form>` with `noValidate`, discard protection, counters near the limit,
+autofill off, and the single-save rule on edits (supply, apparatus, station and
+room). A supply's refusal now lands on any of its fields, not only the name and
+category, and a basic apparatus's on its type.
+
+## Rollout status, 2026-11-09 (batch 17)
+
+The same steps, on these:
+
+| Area                                     | Converted                                                                                                                                                                                                                                             |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Top-level pages                          | Elections › Create Election; the member admin edit page; Create Training Session                                                                                                                                                                      |
+| Inventory and assets                     | Receive Stock; Request Equipment; Vendors › vendor and contact; Add several items; Unassign; Assign terms; Apparatus › Archive, NFPA item; Facilities › emergency contacts; Medical Supplies › Receive delivery                                       |
+| Finance and grants                       | expense line, dues payment, advance return, reimbursement, pay by check, mark paid, budget request, amendment, reversal, budget adoption, fiscal-year lock, leadership, decision, approvals-admin override, approval chain and export mapping dialogs |
+| Minutes, communications, smaller modules | minutes sign, adopt, carry-forward, agenda, outline and suggestion; minutes reminder and signer settings; evaluation sign / acknowledge / refuse, amend and delete; saved reports; suggestion boxes; Schedule Email                                   |
+
+Shared changes that came with it: `FormField`'s `labelClassName` keeps the
+member admin page's uppercase labels; the inventory and medical item pickers
+take a field's label and error wiring (`controlProps`); `PersonPicker` and
+the agenda editor take an `error`. The dues payment's
+method and reference and the export mapping's account number gained schema
+`max_length`s matching their columns, so an over-long value is a 422 on the
+field rather than a database error. The training wizard's toast names the step
+it went back to rather than repeating the refusal, which the focused field
+already reads out.
+
+Five of these forms were also converted by main's own forms work (F-3, "say
+what is missing"): Create Election, Request Equipment, Add several items, Add /
+Edit Vendor and the suggestion box. They keep main's `useFieldErrors` and its
+messages (a 422 in the server's own words, anything no field answers for said
+in the dialog, Submit never greyed out) with this batch's additions on top:
+Create Election's six further fields and its end-after-start check, the
+discard question, counters, the single-save rule on vendor, contact and
+suggestion-box edits, and Add several items naming a refused line by its place
+in the list. The training wizard keeps main's end-after-start check on leaving
+the first step, now also written on the End field.
+
+Two departures were recorded in `docs/KNOWN_LIMITATIONS.md`, and both were
+closed by owner decisions of 2026-11-11. A budget request draft now saves
+without an amount or a justification: both columns are nullable (migration
+`0136dd6d4144`) and Submit, not Save Draft, requires them, refusing on the
+missing fields. The shared `PromptDialog` gained two opt-ins, a discard
+question (`askBeforeDiscard`) and a server refusal shown on its field
+(`error`); the Approvals approve / deny prompt uses both, and every other
+`PromptDialog` behaves as before until it opts in.
+
+## Rollout status, 2026-11-11 (batch 18)
+
+The same steps, on these:
+
+| Area                 | Converted                                                                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inventory and assets | categories, variant groups, storage areas, equipment kits, allowances, reorder requests (new / edit), write-off review, Copy checklist, Move NFC tag |
+| Finance and grants   | donors, campaigns, the Zeffy link dialog                                                                                                             |
+| Communications       | officers, footers                                                                                                                                    |
+
+Shared change that came with it: `utils/saveExceptRefused.ts`, the single-save
+loop batches 16 and 17 wrote inline in each dialog (send without the refused
+keys; on a 422 that only fields answer for, resend without those as well;
+throw anything else).
+
+Five of these already had main's field-level errors (categories, variant
+groups, storage areas, kits, reorder requests). They keep `useFieldErrors` and
+its messages, with this batch's additions on top: the discard question,
+`noValidate`, counters, the single-save rule on edit, and their number and
+picker fields through `FormField`. Three are replaced whole on every save and
+refuse rather than save part of it: the Zeffy link, an officer assignment and
+the footer library, whose refusals name the card (`footers.N.field`). The
+write-off review is an approve-type step and refuses; its buttons are no longer
+greyed out.
+
+**Not yet converted** (F-2 to F-9 still apply to them):
+
+- **Top-level pages:** the locations setup wizard; skill template, course
+  library, external training, training enhancements, knowledge tests and crew
+  training pages; the pipeline create and edit pages; integrations; forms;
+  members admin; the manual shift report and shift detail, reports and
+  patterns tabs.
+- **Inventory and assets:** bulk add, size preferences, catalog quick add, the
+  medical create panel, stock lots and seals, and the checklist builder and
+  settings pages; the full apparatus form and documents; the facility detail
+  sections other than emergency contacts, settings and list; medical supply
+  lots, import/export and categories; store settings, order detail and
+  checkout.
+- **Finance and grants:** the approval step dialog and the Approvals approve /
+  deny prompt; the dual approval, fund overspend, advance return, reminder,
+  mileage and substantiation cards; charge access, dues and advance exports;
+  fiscal-year settings and the QuickBooks page; the grant detail page's inline
+  forms.
+- **Minutes, communications, smaller modules:** the minutes editor and the
+  rest of its settings; the remaining report dialogs; communications
+  templates, intake questions, photo consent and email templates; scheduling
+  template and settings; applicant conversion, stage configuration, detail
+  dialog, interviews and pipeline settings; onboarding, the public portal,
+  membership, history, the org chart node and IP security admin.
+
+## Rollout status, 2026-11-11 (batch 19)
+
+The same steps, on these:
+
+| Area                 | Converted                                                                                                                                                                                                |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inventory and assets | Facilities › systems, rooms, compliance checklists; the maintenance and inspection dialogs (a facility's sections and the cross-facility pages); Medical Supplies › categories; the medical create panel |
+
+Shared change that came with it: the maintenance and inspection dialogs were
+two copies each, one per screen; each is now one component
+(`MaintenanceRecordDialog`, `InspectionRecordDialog`) driven by its existing
+hook, which gained the field errors, the dirty flag and an `idPrefix` so each
+screen keeps its field ids.
+
+Two screens on the list were looked at and left, because they hold no form of
+their own: Inventory › NFC Tags is one switch that saves as it is flipped, and
+the tamper seal panel answers into the equipment check it sits in, which saves
+it. The medical create panel holds one choice and nothing typed, so its Cancel
+does not ask first; its Create & link now names a missing category on the
+field rather than sitting greyed out.
+
+**Still not converted**, from the inventory-and-assets row above: size
+preferences, catalog quick add, stock lots, the checklist builder and settings
+pages; the full apparatus form and documents; the facility
+overview, files and settings sections and list; medical supply lots and
+import/export; store settings, order detail and checkout. The other rows of the
+batch 18 list are unchanged.
 
 ## Suggested order
 
@@ -289,7 +525,8 @@ landing from the login response's `must_change_password` would remove both.
 3. **`maxLength` from the schema** (F-2 part 1) — mechanical, can ride along
    with step 2 per form.
 4. **`<form>` wrappers** (F-7) and the F-8 / F-9 attributes — mechanical.
-5. **F-6** once the owner picks an option.
+5. **F-6** once the owner picks an option. _(Decided 2026-11-06 and built; steps
+   2 to 4 are done on the first five forms and continue module by module.)_
 
 ## Reproducing
 

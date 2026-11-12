@@ -9,6 +9,7 @@ a refused request, and an entity create answered as ``{"<Entity>": {...}}``.
 
 import base64
 import json
+from decimal import Decimal
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -312,3 +313,118 @@ class TestAccountingCalls:
     def test_request_ids_longer_than_intuit_allows_are_refused(self):
         with pytest.raises(ValueError, match="1 to 50 characters"):
             qbo._request_id("x" * 51)
+
+
+class TestPurchaseBody:
+    """The Purchase each payment type becomes. The values are Intuit's v3
+    schema's (see the client module docstring): PaymentType Cash, Check or
+    CreditCard; a check's number in DocNumber; PrintStatus NotSet on a check
+    so it does not wait in QuickBooks' print queue; Credit false on a card
+    charge."""
+
+    LINES = [("60", Decimal("240.50")), ("61", Decimal("15.00"))]
+
+    def _lines(self):
+        return [
+            {
+                "Amount": 240.5,
+                "DetailType": "AccountBasedExpenseLineDetail",
+                "AccountBasedExpenseLineDetail": {"AccountRef": {"value": "60"}},
+            },
+            {
+                "Amount": 15.0,
+                "DetailType": "AccountBasedExpenseLineDetail",
+                "AccountBasedExpenseLineDetail": {"AccountRef": {"value": "61"}},
+            },
+        ]
+
+    def test_cash_is_unchanged(self):
+        body = qbo.purchase_body(
+            payment_type=qbo.PAYMENT_TYPE_CASH,
+            account_id="35",
+            txn_date="2026-03-10",
+            doc_number="PR-2026-0001",
+            lines=self.LINES,
+        )
+        assert body == {
+            "PaymentType": "Cash",
+            "AccountRef": {"value": "35"},
+            "TxnDate": "2026-03-10",
+            "DocNumber": "PR-2026-0001",
+            "Line": self._lines(),
+        }
+
+    def test_a_check_carries_its_number_and_is_not_queued_to_print(self):
+        body = qbo.purchase_body(
+            payment_type=qbo.PAYMENT_TYPE_CHECK,
+            account_id="35",
+            txn_date="2026-03-11",
+            doc_number="1042",
+            private_note="CR-2026-0001",
+            lines=self.LINES,
+        )
+        assert body == {
+            "PaymentType": "Check",
+            "AccountRef": {"value": "35"},
+            "TxnDate": "2026-03-11",
+            "DocNumber": "1042",
+            "PrivateNote": "CR-2026-0001",
+            "PrintStatus": "NotSet",
+            "Line": self._lines(),
+        }
+
+    def test_a_check_with_no_number_sends_none(self):
+        body = qbo.purchase_body(
+            payment_type=qbo.PAYMENT_TYPE_CHECK,
+            account_id="35",
+            txn_date="2026-03-11",
+            doc_number=None,
+            private_note="CR-2026-0001",
+            lines=self.LINES,
+        )
+        assert "DocNumber" not in body
+        assert body["PaymentType"] == "Check"
+
+    def test_a_card_payment_is_a_charge_on_the_card_account(self):
+        body = qbo.purchase_body(
+            payment_type=qbo.PAYMENT_TYPE_CREDIT_CARD,
+            account_id="40",
+            txn_date="2026-03-12",
+            doc_number="ER-2026-0001",
+            lines=self.LINES,
+        )
+        assert body == {
+            "PaymentType": "CreditCard",
+            "AccountRef": {"value": "40"},
+            "TxnDate": "2026-03-12",
+            "DocNumber": "ER-2026-0001",
+            "Credit": False,
+            "Line": self._lines(),
+        }
+
+    def test_each_payment_type_names_the_account_type_it_is_paid_from(self):
+        assert qbo.PAID_FROM_ACCOUNT_TYPE == {
+            "Cash": "Bank",
+            "Check": "Bank",
+            "CreditCard": "Credit Card",
+        }
+
+    def test_a_number_longer_than_quickbooks_allows_is_refused(self):
+        with pytest.raises(ValueError, match="21 characters"):
+            qbo.purchase_body(
+                payment_type=qbo.PAYMENT_TYPE_CHECK,
+                account_id="35",
+                txn_date="2026-03-11",
+                doc_number="1" * 22,
+                lines=self.LINES,
+            )
+
+    def test_an_unknown_payment_type_is_refused(self):
+        with pytest.raises(ValueError, match="payment type"):
+            qbo.purchase_body(
+                payment_type="Expense",
+                account_id="35",
+                txn_date="2026-03-11",
+                doc_number="X",
+                lines=self.LINES,
+            )

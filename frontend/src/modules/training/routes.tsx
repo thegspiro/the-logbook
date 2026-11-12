@@ -36,6 +36,11 @@ const CohortDetailPage = lazyWithRetry(() => import('../../pages/training/Cohort
 // Training Module - Officer approval of a Training event's credit (emailed link)
 const TrainingApprovalPage = lazyWithRetry(() => import('../../pages/training/TrainingApprovalPage'));
 
+// Training Module - Session waiver requests (approver queue and the decision
+// page the approver's email links to)
+const AttendanceWaiverQueuePage = lazyWithRetry(() => import('../../pages/training/AttendanceWaiverQueuePage'));
+const AttendanceWaiverDecisionPage = lazyWithRetry(() => import('../../pages/training/AttendanceWaiverDecisionPage'));
+
 // Training Module - Admin
 const TrainingAdminPage = lazyWithRetry(() =>
   import('../../pages/TrainingAdminPage').then((m) => ({
@@ -183,6 +188,30 @@ export const getTrainingRoutes = () => {
         element={
           <ProtectedRoute requiredModule="training" moduleLabel="Training" requiredPermission="training.manage">
             <TrainingApprovalPage />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Session waiver requests. No permission gate, on purpose: who decides
+          is the positions the department chose, the Chief and the
+          training-manager fallback, not a permission the route could name.
+          The API scopes the queue to the requests the caller may decide and
+          answers 404 for a request they may not see, and the decision page
+          shows the member their own request. The path is fixed by the
+          backend's decider_action_url, which the approver's email links to. */}
+      <Route
+        path="/attendance-waivers"
+        element={
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
+            <AttendanceWaiverQueuePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/attendance-waivers/:id"
+        element={
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
+            <AttendanceWaiverDecisionPage />
           </ProtectedRoute>
         }
       />

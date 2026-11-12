@@ -96,3 +96,32 @@ export function loginPathReturningTo(current: { pathname: string; search?: strin
   const target = `${pathname}${current.search ?? ''}${current.hash ?? ''}`;
   return `/login?${new URLSearchParams({ [RETURN_TO_PARAM]: target }).toString()}`;
 }
+
+/** The account flags that decide where a sign-in lands; a CurrentUser satisfies it. */
+export interface SignInFlags {
+  must_change_password?: boolean | undefined;
+  password_expired?: boolean | undefined;
+  mfa_enrollment_required?: boolean | undefined;
+}
+
+export interface SignInLanding {
+  to: string;
+  state?: { forcePasswordChange: true } | { forceMfaSetup: true };
+}
+
+/**
+ * Where a completed sign-in should go (forms review F-10). A member who must
+ * change their password, or enrol in MFA, lands on /account at once instead of
+ * passing through the dashboard until ProtectedRoute redirects them: the
+ * detour mounted the dashboard and fired its requests first. ProtectedRoute
+ * still enforces both, in the same order — this only spares the detour.
+ */
+export function signInLanding(user: SignInFlags | null | undefined, state: unknown, search = ''): SignInLanding {
+  if (user?.must_change_password || user?.password_expired) {
+    return { to: '/account', state: { forcePasswordChange: true } };
+  }
+  if (user?.mfa_enrollment_required) {
+    return { to: '/account', state: { forceMfaSetup: true } };
+  }
+  return { to: postLoginRedirect(state, search) };
+}

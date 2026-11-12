@@ -435,6 +435,61 @@ describe('DocumentsPage', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('shut you out');
   });
 
+  it('puts a server refusal on the folder name and creates nothing', async () => {
+    const user = userEvent.setup();
+    mockCreateFolder.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'name', message: 'Value is too long.' }] } },
+    });
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /new folder/i }));
+    const dialog = screen.getByRole('dialog');
+    // Enter submits: the dialog is a real form (forms review F-7).
+    await user.type(within(dialog).getByLabelText(/folder name/i), 'Stores{Enter}');
+
+    const name = within(dialog).getByLabelText(/folder name/i);
+    await waitFor(() => expect(name).toHaveAccessibleDescription('Value is too long.'));
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAttribute('maxLength', '255');
+    expect(within(dialog).queryByText(/name: Value/)).not.toBeInTheDocument();
+  });
+
+  it('flags an empty folder name on the field instead of a greyed-out button', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /new folder/i }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^create folder$/i }));
+
+    const name = within(dialog).getByLabelText(/folder name/i);
+    expect(name).toHaveAccessibleDescription('Enter a name for the folder.');
+    await waitFor(() => expect(name).toHaveFocus());
+    expect(mockCreateFolder).not.toHaveBeenCalled();
+  });
+
+  it('asks before Escape discards a half-typed folder', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /new folder/i }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/folder name/i), 'Stores');
+    await user.keyboard('{Escape}');
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByLabelText(/folder name/i)).toHaveValue('Stores');
+  });
+
+  it('asks before Cancel discards an upload with a document name typed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<DocumentsPage />);
+    await user.click(await screen.findByRole('button', { name: /upload document/i }));
+    const dialog = screen.getByRole('dialog', { name: 'Upload Document' });
+    await user.type(within(dialog).getByLabelText('Document Name'), 'Hose test log');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(within(dialog).getByLabelText('Document Name')).toHaveValue('Hose test log');
+  });
+
   it('shows the current folder as the selected upload destination', async () => {
     const user = userEvent.setup();
     renderWithRouter(<DocumentsPage />);

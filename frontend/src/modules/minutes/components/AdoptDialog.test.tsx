@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockAll = vi.fn();
@@ -171,7 +171,10 @@ describe('AdoptDialog', () => {
       await user.type(screen.getByLabelText('Seconded by, typed name'), 'guest person');
       await user.click(screen.getByRole('button', { name: 'Adopt Minutes' }));
 
-      expect(await screen.findByRole('alert')).toHaveTextContent('cannot also second');
+      expect(screen.getByLabelText('Seconded by')).toHaveAccessibleDescription(
+        'The person who moved cannot also second.'
+      );
+      expect(screen.getByLabelText('Seconded by, typed name')).toHaveAttribute('aria-invalid', 'true');
       expect(onAdopt).not.toHaveBeenCalled();
     });
 
@@ -195,5 +198,37 @@ describe('AdoptDialog', () => {
       expect(sent.moved_by).toBeUndefined();
       expect(sent.seconded_by).toBeUndefined();
     });
+  });
+
+  it('puts a 422 the page rethrows on its field and announces it', async () => {
+    onAdopt.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'moved_by', message: 'String should have at most 200 characters' }] },
+      },
+    });
+    const user = userEvent.setup();
+    open();
+    await screen.findByRole('option', { name: /November business meeting/ });
+
+    await user.selectOptions(screen.getByLabelText('Moved by'), 'Pat Chief');
+    await user.click(screen.getByRole('button', { name: 'Adopt Minutes' }));
+
+    const moved = screen.getByLabelText('Moved by');
+    await waitFor(() => expect(moved).toHaveAccessibleDescription('Moved by is too long — keep it to 200 characters.'));
+    expect(moved).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('asks before Cancel discards a change', async () => {
+    const user = userEvent.setup();
+    open();
+    await screen.findByRole('option', { name: /November business meeting/ });
+
+    await user.selectOptions(screen.getByLabelText('At which meeting'), 'm2');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('At which meeting')).toHaveValue('m2');
   });
 });

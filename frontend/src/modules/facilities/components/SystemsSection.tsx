@@ -2,7 +2,7 @@
  * SystemsSection — Manage building systems for a facility.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Archive, Settings, Plus, Loader2, Pencil, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
@@ -14,8 +14,45 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, isPastDate } from '../../../utils/dateFormatting';
 import { formCoercions } from '../../../utils/formValues';
 import { getErrorMessage } from '../../../utils/errorHandling';
-
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 import { useConfirm } from '../../../contexts/ConfirmContext';
+
+const EMPTY_FORM = {
+  name: '',
+  system_type: 'other',
+  description: '',
+  manufacturer: '',
+  model_number: '',
+  serial_number: '',
+  install_date: '',
+  warranty_expiration: '',
+  condition: 'good',
+  notes: '',
+  test_frequency_days: '',
+};
+type SystemForm = typeof EMPTY_FORM;
+type SystemField = Exclude<keyof SystemForm, 'description'>;
+
+// Ordered as on screen, so the first refusal takes focus. Limits mirror
+// FacilitySystemBase.
+const SYSTEM_FIELDS: FieldSpecs<SystemField> = {
+  name: { id: 'facility-system-name', label: 'Name' },
+  system_type: { id: 'facility-system-type', label: 'Type' },
+  condition: { id: 'facility-system-condition', label: 'Condition' },
+  manufacturer: { id: 'facility-system-manufacturer', label: 'Manufacturer' },
+  model_number: { id: 'facility-system-model', label: 'Model number' },
+  serial_number: { id: 'facility-system-serial', label: 'Serial number' },
+  install_date: { id: 'facility-system-install', label: 'Install date' },
+  warranty_expiration: { id: 'facility-system-warranty', label: 'Warranty expiration' },
+  test_frequency_days: { id: 'facility-system-test-frequency', label: 'Test frequency (days)' },
+  notes: { id: 'facility-system-notes', label: 'Notes' },
+};
+const SYSTEM_ORDER = Object.keys(SYSTEM_FIELDS) as SystemField[];
+const SYSTEM_LIMITS = { name: 200, manufacturer: 200, model_number: 100, serial_number: 100 } as const;
+
 interface Props {
   facilityId: string;
   canCreate: boolean;
@@ -31,19 +68,15 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
   const [showForm, setShowForm] = useState(false);
   const [editingSystem, setEditingSystem] = useState<FacilitySystem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    system_type: 'other',
-    description: '',
-    manufacturer: '',
-    model_number: '',
-    serial_number: '',
-    install_date: '',
-    warranty_expiration: '',
-    condition: 'good',
-    notes: '',
-    test_frequency_days: '',
-  });
+  const [formData, setFormData] = useState<SystemForm>(EMPTY_FORM);
+  // What the form held when it opened (or last saved), so Cancel asks before
+  // throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<SystemForm>(EMPTY_FORM);
+  const systemErrors = useFieldErrors(SYSTEM_FIELDS);
+  const set = (patch: Partial<SystemForm>) => {
+    setFormData((p) => ({ ...p, ...patch }));
+    for (const key of Object.keys(patch)) systemErrors.setError(key as SystemField, null);
+  };
 
   const loadSystems = useCallback(async () => {
     setIsLoading(true);
@@ -62,26 +95,20 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
   }, [loadSystems]);
 
   const resetForm = () => {
-    setFormData({
-      name: '',
-      system_type: 'other',
-      description: '',
-      manufacturer: '',
-      model_number: '',
-      serial_number: '',
-      install_date: '',
-      warranty_expiration: '',
-      condition: 'good',
-      notes: '',
-      test_frequency_days: '',
-    });
+    setFormData(EMPTY_FORM);
+    setBaseline(EMPTY_FORM);
+    systemErrors.clear();
     setEditingSystem(null);
     setShowForm(false);
   };
+  const requestCancel = useDiscardGuard({
+    isDirty: showForm && JSON.stringify(formData) !== JSON.stringify(baseline),
+    onClose: resetForm,
+  });
 
   const openEdit = (sys: FacilitySystem) => {
     setEditingSystem(sys);
-    setFormData({
+    const seeded: SystemForm = {
       name: sys.name || '',
       system_type: sys.systemType || 'other',
       description: sys.description || '',
@@ -93,13 +120,27 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
       condition: sys.condition || 'good',
       notes: sys.notes || '',
       test_frequency_days: sys.testFrequencyDays != null ? String(sys.testFrequencyDays) : '',
-    });
+    };
+    setFormData(seeded);
+    setBaseline(seeded);
+    systemErrors.clear();
     setShowForm(true);
   };
 
-  const handleSave = async () => {
-    if (!formData.name.trim()) {
-      toast.error('System name is required');
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    // Named on the field rather than in a toast that vanished (forms review F-3).
+    const problems: FieldErrors<SystemField> = {};
+    if (!formData.name.trim()) problems.name = 'Enter a name for the system.';
+    const freq = formData.test_frequency_days.trim();
+    if (freq && !(Number.isInteger(Number(freq)) && Number(freq) >= 1))
+      problems.test_frequency_days = 'Enter a whole number of days, 1 or more, or leave it empty.';
+    systemErrors.setFormError(null);
+    systemErrors.setErrors(problems);
+    // A new system is not added until every field is fixed; an edit saves the
+    // rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!editingSystem && Object.keys(problems).length > 0) {
+      systemErrors.focusFirst(problems);
       return;
     }
     setIsSaving(true);
@@ -123,7 +164,26 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
       };
 
       if (editingSystem) {
-        await facilitiesService.updateSystem(editingSystem.id, payload);
+        const { refused } = await saveExceptRefused<SystemField, unknown>({
+          payload: { ...payload },
+          refused: problems,
+          send: (body) => facilitiesService.updateSystem(editingSystem.id, body),
+          place: (err) => placeApiError(SYSTEM_FIELDS, err),
+        });
+        const first = firstRefused(SYSTEM_ORDER, refused);
+        if (first) {
+          // The list refreshes behind the form, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          void loadSystems();
+          systemErrors.setErrors(refused);
+          systemErrors.setFormError(
+            `System saved, except ${SYSTEM_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+          );
+          systemErrors.focusFirst(refused);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as SystemField]]));
+          setBaseline({ ...formData, ...keep });
+          return;
+        }
         toast.success('System updated');
       } else {
         await facilitiesService.createSystem(payload);
@@ -131,8 +191,11 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
       }
       resetForm();
       void loadSystems();
-    } catch {
-      toast.error('Failed to save system');
+    } catch (err: unknown) {
+      // A refused field is flagged on that field (forms review F-2); anything
+      // no field answers for is said in the form.
+      const placed = systemErrors.setFromApiError(err, 'Failed to save system');
+      systemErrors.focusFirst(placed);
     } finally {
       setIsSaving(false);
     }
@@ -180,119 +243,172 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
 
       <div className="p-4">
         {showForm && (editingSystem ? canEdit : canCreate) && (
-          <div className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4">
+          <form
+            onSubmit={(e) => void handleSave(e)}
+            noValidate
+            className="bg-theme-surface-hover/50 mb-5 space-y-3 rounded-lg p-4"
+          >
             <h3 className="text-theme-text-primary text-sm font-medium">
               {editingSystem ? 'Edit System' : 'Add System'}
             </h3>
+            {systemErrors.formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {systemErrors.formError}
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div>
-                <label className={labelCls}>Name *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g., Main HVAC Unit"
-                  className={inputCls}
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Type</label>
-                <select
-                  value={formData.system_type}
-                  onChange={(e) => setFormData((p) => ({ ...p, system_type: e.target.value }))}
-                  className={inputCls}
+              <FormField
+                id={SYSTEM_FIELDS.name.id}
+                label="Name"
+                required
+                error={systemErrors.errors.name}
+                labelClassName={labelCls}
+                maxLength={SYSTEM_LIMITS.name}
+                count={formData.name.length}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => set({ name: e.target.value })}
+                    placeholder="e.g., Main HVAC Unit"
+                    className={inputCls}
+                    autoFocus
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={SYSTEM_FIELDS.system_type.id}
+                label="Type"
+                error={systemErrors.errors.system_type}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={formData.system_type}
+                    onChange={(e) => set({ system_type: e.target.value })}
+                    className={inputCls}
+                  >
+                    {SYSTEM_TYPES.map((st) => (
+                      <option key={st} value={st}>
+                        {enumLabel(st)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              <FormField
+                id={SYSTEM_FIELDS.condition.id}
+                label="Condition"
+                error={systemErrors.errors.condition}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={formData.condition}
+                    onChange={(e) => set({ condition: e.target.value })}
+                    className={inputCls}
+                  >
+                    {CONDITION_OPTIONS.map((c) => (
+                      <option key={c} value={c}>
+                        {enumLabel(c)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
+              {(
+                [
+                  ['manufacturer', 'Manufacturer'],
+                  ['model_number', 'Model Number'],
+                  ['serial_number', 'Serial Number'],
+                ] as const
+              ).map(([key, label]) => (
+                <FormField
+                  key={key}
+                  id={SYSTEM_FIELDS[key].id}
+                  label={label}
+                  error={systemErrors.errors[key]}
+                  labelClassName={labelCls}
+                  maxLength={SYSTEM_LIMITS[key]}
+                  count={formData[key].length}
                 >
-                  {SYSTEM_TYPES.map((st) => (
-                    <option key={st} value={st}>
-                      {enumLabel(st)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelCls}>Condition</label>
-                <select
-                  value={formData.condition}
-                  onChange={(e) => setFormData((p) => ({ ...p, condition: e.target.value }))}
-                  className={inputCls}
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="text"
+                      value={formData[key]}
+                      onChange={(e) => set({ [key]: e.target.value })}
+                      className={inputCls}
+                    />
+                  )}
+                </FormField>
+              ))}
+              {(
+                [
+                  ['install_date', 'Install Date'],
+                  ['warranty_expiration', 'Warranty Expiration'],
+                ] as const
+              ).map(([key, label]) => (
+                <FormField
+                  key={key}
+                  id={SYSTEM_FIELDS[key].id}
+                  label={label}
+                  error={systemErrors.errors[key]}
+                  labelClassName={labelCls}
                 >
-                  {CONDITION_OPTIONS.map((c) => (
-                    <option key={c} value={c}>
-                      {enumLabel(c)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelCls}>Manufacturer</label>
-                <input
-                  type="text"
-                  value={formData.manufacturer}
-                  onChange={(e) => setFormData((p) => ({ ...p, manufacturer: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Model Number</label>
-                <input
-                  type="text"
-                  value={formData.model_number}
-                  onChange={(e) => setFormData((p) => ({ ...p, model_number: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Serial Number</label>
-                <input
-                  type="text"
-                  value={formData.serial_number}
-                  onChange={(e) => setFormData((p) => ({ ...p, serial_number: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Install Date</label>
-                <input
-                  type="date"
-                  value={formData.install_date}
-                  onChange={(e) => setFormData((p) => ({ ...p, install_date: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Warranty Expiration</label>
-                <input
-                  type="date"
-                  value={formData.warranty_expiration}
-                  onChange={(e) => setFormData((p) => ({ ...p, warranty_expiration: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Test Frequency (days)</label>
-                <input
-                  type="number"
-                  value={formData.test_frequency_days}
-                  onChange={(e) => setFormData((p) => ({ ...p, test_frequency_days: e.target.value }))}
-                  className={inputCls}
-                />
-              </div>
+                  {(field) => (
+                    <input
+                      {...field}
+                      type="date"
+                      value={formData[key]}
+                      onChange={(e) => set({ [key]: e.target.value })}
+                      className={inputCls}
+                    />
+                  )}
+                </FormField>
+              ))}
+              <FormField
+                id={SYSTEM_FIELDS.test_frequency_days.id}
+                label="Test Frequency (days)"
+                error={systemErrors.errors.test_frequency_days}
+                labelClassName={labelCls}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={formData.test_frequency_days}
+                    onChange={(e) => set({ test_frequency_days: e.target.value })}
+                    className={inputCls}
+                  />
+                )}
+              </FormField>
             </div>
-            <div>
-              <label className={labelCls}>Notes</label>
-              <textarea
-                value={formData.notes}
-                onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
-                rows={2}
-                className={inputCls + ' resize-none'}
-              />
-            </div>
+            <FormField
+              id={SYSTEM_FIELDS.notes.id}
+              label="Notes"
+              error={systemErrors.errors.notes}
+              labelClassName={labelCls}
+            >
+              {(field) => (
+                <textarea
+                  {...field}
+                  value={formData.notes}
+                  onChange={(e) => set({ notes: e.target.value })}
+                  rows={2}
+                  className={inputCls + ' resize-none'}
+                />
+              )}
+            </FormField>
             <div className="flex gap-2 pt-1">
               <button
-                onClick={() => {
-                  void handleSave();
-                }}
+                type="submit"
                 disabled={isSaving}
                 className="btn-primary flex items-center gap-1.5 px-3 py-1.5 text-xs"
               >
@@ -300,13 +416,14 @@ export default function SystemsSection({ facilityId, canCreate, canEdit, canDele
                 {editingSystem ? 'Save Changes' : 'Save System'}
               </button>
               <button
-                onClick={resetForm}
-                className="text-theme-text-muted hover:text-theme-text-primary px-3 py-1.5 text-xs transition-colors"
+                type="button"
+                onClick={requestCancel}
+                className="text-theme-text-muted hover:text-theme-text-primary touch:min-h-11 px-3 py-1.5 text-xs transition-colors"
               >
                 Cancel
               </button>
             </div>
-          </div>
+          </form>
         )}
 
         {isLoading ? (

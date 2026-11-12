@@ -735,8 +735,13 @@ class BudgetRequest(Base):
         nullable=True,
         index=True,
     )
-    requested_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    justification: Mapped[str] = mapped_column(Text, nullable=False)
+    # Null only while the request is a draft: a draft saves without either
+    # (owner decision, 2026-11-11), and submitting needs both
+    # (``FinanceBudgetRequestService.submit_request``).
+    requested_amount: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
+    justification: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     status: Mapped[BudgetRequestStatus] = mapped_column(
         SQLEnum(
             BudgetRequestStatus,

@@ -228,8 +228,15 @@ class TestNginxAcceptsTheConfigs:
         ports: dict[str, str] = {}
 
         def move_port(match: re.Match) -> str:
-            port = ports.setdefault(match[2], str(self._free_port()))
-            return f"{match[1]}{port}"
+            if match[2] not in ports:
+                # _free_port can return a port it returned a moment ago, and
+                # two listen ports moved onto one number merge their servers
+                # into one listener. Draw again until the port is unused here.
+                port = str(self._free_port())
+                while port in ports.values():
+                    port = str(self._free_port())
+                ports[match[2]] = port
+            return f"{match[1]}{ports[match[2]]}"
 
         for i, config in enumerate(configs):
             # Point at throwaway certificates, and drop IPv6 listeners, which
@@ -278,6 +285,27 @@ class TestNginxAcceptsTheConfigs:
         assert result.returncode == 0, result.stderr
 
     def test_docker_config(self, tmp_path, certs):
+        site = _render("render_site_config", "docker", "logbook.example.org", str(REPO))
+        result = self._nginx_t(tmp_path, certs, site)
+        assert result.returncode == 0, result.stderr
+
+    def test_a_port_handed_out_twice_does_not_merge_two_listeners(
+        self, tmp_path, certs, monkeypatch
+    ):
+        # Binding port 0 and closing the socket, as _free_port does, can hand
+        # the same port back on the next call; measured at about one pair in
+        # 25,000. Port 80 and port 443 then moved to one number, the HTTP
+        # server sat on the TLS listener, and nginx refused it with
+        # 'no "ssl_certificate" is defined for the "listen ... ssl"
+        # directive' -- a red Backend Unit Tests run on a PR that touched
+        # nothing here. This hands out a duplicate on purpose, every time.
+        with socket.socket() as first, socket.socket() as second:
+            first.bind(("127.0.0.1", 0))
+            second.bind(("127.0.0.1", 0))
+            a, b = first.getsockname()[1], second.getsockname()[1]
+        handed_out = iter([a, a, b, b])
+        monkeypatch.setattr(self, "_free_port", lambda: next(handed_out))
+
         site = _render("render_site_config", "docker", "logbook.example.org", str(REPO))
         result = self._nginx_t(tmp_path, certs, site)
         assert result.returncode == 0, result.stderr

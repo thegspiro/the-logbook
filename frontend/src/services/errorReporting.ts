@@ -646,11 +646,18 @@ function flushOnHide(): void {
   // user switching apps, a tab restored from the back/forward cache — so
   // clearing the whole queue here would discard everything past the flush cap
   // in exactly the situation where it could still have been delivered.
+  // Nothing further to try if a flush fails: the page is going away. The
+  // rejection still has to be settled here. A try/catch around `void fetch()`
+  // catches only a synchronous throw, so a request that failed offline or was
+  // cancelled by the navigation became an unhandled rejection — which the
+  // `unhandledrejection` handler then reported, filing the log endpoint's own
+  // failure as one more report to it (see the header on routing reports).
   for (const item of queue.splice(0, MAX_KEEPALIVE_REPORTS)) {
     try {
-      void fetch(ERROR_LOG_ENDPOINT, buildRequestInit(item.payload, true));
+      fetch(ERROR_LOG_ENDPOINT, buildRequestInit(item.payload, true)).catch(() => undefined);
     } catch {
-      // Nothing further to try — the page is going away.
+      // fetch() reports failure by rejecting; this is for one that throws
+      // before returning a promise, as a stub or polyfill may.
     }
   }
 }

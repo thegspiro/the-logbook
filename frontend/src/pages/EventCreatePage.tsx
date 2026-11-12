@@ -14,6 +14,14 @@ import { EventForm } from '../components/EventForm';
 import type { ConflictEvent } from '../components/EventForm';
 import toast from 'react-hot-toast';
 import { getErrorDetail } from '../utils/errorHandling';
+import { mapServerFieldErrors } from '../utils/serverFieldErrors';
+
+/**
+ * A validation failure is shown by EventForm, on the fields it names; this
+ * page's banner would repeat it with the API's field names ("title: Value is
+ * too long.") — the message forms review F-2 set out to retire.
+ */
+const isFieldValidationError = (err: unknown) => mapServerFieldErrors(err, {}) !== null;
 import { formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 
@@ -107,7 +115,7 @@ export const EventCreatePage: React.FC = () => {
       const event = await eventService.createEvent(data);
       void navigate(`/events/${event.id}`);
     } catch (err: unknown) {
-      setError(getErrorDetail(err) || 'Failed to create event. Try again.');
+      if (!isFieldValidationError(err)) setError(getErrorDetail(err) || 'Failed to create event. Try again.');
       setIsSubmitting(false);
       throw err; // Re-throw so EventForm knows submission failed
     }
@@ -122,7 +130,8 @@ export const EventCreatePage: React.FC = () => {
       toast.success(`Created ${count} recurring event${count !== 1 ? 's' : ''}`);
       void navigate('/events');
     } catch (err: unknown) {
-      setError(getErrorDetail(err) || 'Failed to create recurring events. Try again.');
+      if (!isFieldValidationError(err))
+        setError(getErrorDetail(err) || 'Failed to create recurring events. Try again.');
       setIsSubmitting(false);
       throw err;
     }

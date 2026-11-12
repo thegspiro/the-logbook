@@ -45,12 +45,16 @@ from app.schemas.historical_import import (
     MemberMappingsUpdate,
     OpenBatchesDiscarded,
     ShiftBatchesCreated,
+    StaffingCommitPreview,
     StaffingDecisionsUpdate,
     StaffingFileKind,
     StaffingMappingList,
     StaffingMappingUpdate,
     StaffingMappingView,
+    StaffingOptionsUpdate,
     StaffingPreview,
+    StaffingUnfilledUpdate,
+    StaffingUnfilledView,
     SuggestionsAccepted,
     TrainingPreview,
     TrainingSettingsUpdate,
@@ -63,6 +67,7 @@ from app.services.historical_import_service import (
     batch_view,
     summary_view,
 )
+from app.services.historical_staffing_commit import HistoricalStaffingCommitService
 from app.services.historical_staffing_service import (
     HistoricalStaffingService,
     file_audit_data,
@@ -769,3 +774,131 @@ async def accept_staffing_suggestions(
     except Exception as exc:
         raise _http_error(exc)
     return {"mapped": accepted}
+
+
+@router.get("/{import_id}/staffing/commit", response_model=StaffingCommitPreview)
+async def staffing_commit_preview(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """What writing the roster would do, what it leaves out and why, and the
+    members still to decide."""
+    try:
+        return await HistoricalStaffingCommitService(db).preview(
+            str(current_user.organization_id), str(import_id)
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.patch("/{import_id}/staffing/options", response_model=StaffingCommitPreview)
+async def update_staffing_options(
+    import_id: UUID,
+    payload: StaffingOptionsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Whether events with no seats become calendar events."""
+    org = str(current_user.organization_id)
+    service = HistoricalStaffingCommitService(db)
+    try:
+        await service.set_include_unstaffed(
+            org, str(import_id), payload.include_unstaffed
+        )
+        return await service.preview(org, str(import_id))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.put("/{import_id}/staffing/members", response_model=StaffingCommitPreview)
+async def update_staffing_members(
+    import_id: UUID,
+    payload: MemberMappingsUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Decide who a member the roster names is. Shared with the import's
+    other steps."""
+    org = str(current_user.organization_id)
+    service = HistoricalStaffingCommitService(db)
+    members = {
+        key: (value.model_dump(exclude_none=True) if value is not None else None)
+        for key, value in payload.members.items()
+    }
+    try:
+        await service.update_members(org, str(import_id), members)
+        return await service.preview(org, str(import_id))
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.get("/{import_id}/staffing/unfilled", response_model=StaffingUnfilledView)
+async def staffing_unfilled(
+    import_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Unfilled seats, newest first: skipped unless a member is assigned."""
+    try:
+        return await HistoricalStaffingCommitService(db).unfilled_view(
+            str(current_user.organization_id),
+            str(import_id),
+            offset=offset,
+            limit=limit,
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.patch("/{import_id}/staffing/unfilled", response_model=StaffingUnfilledView)
+async def assign_staffing_unfilled(
+    import_id: UUID,
+    payload: StaffingUnfilledUpdate,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Assign members of this department to unfilled seats."""
+    org = str(current_user.organization_id)
+    service = HistoricalStaffingCommitService(db)
+    try:
+        await service.assign_unfilled(org, str(import_id), payload.assignments)
+        return await service.unfilled_view(
+            org, str(import_id), offset=offset, limit=limit
+        )
+    except Exception as exc:
+        raise _http_error(exc)
+
+
+@router.post("/{import_id}/staffing/commit", response_model=StaffingCommitPreview)
+async def commit_staffing(
+    import_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("integrations.historical_import")),
+):
+    """Write the roster: crew seats on shifts, check-ins and outreach roles at
+    calendar events. Credits no hours. Safe to run again; there is no batch
+    undo."""
+    org = str(current_user.organization_id)
+    service = HistoricalStaffingCommitService(db)
+    try:
+        counts = await service.commit(org, str(import_id), str(current_user.id))
+    except Exception as exc:
+        raise _http_error(exc)
+    await log_audit_event(
+        db=db,
+        event_type="historical_import_staffing_committed",
+        event_category="integrations",
+        severity="INFO",
+        event_data={"organization_id": org, "import_id": str(import_id), **counts},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    try:
+        return await service.preview(org, str(import_id))
+    except Exception as exc:
+        raise _http_error(exc)

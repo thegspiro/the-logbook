@@ -1,5 +1,71 @@
 # Known Limitations & Open Decisions
 
+## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
+
+The annual review can show a member's requests to be excused from training
+sessions and business meetings (`training.session_waivers_summary`,
+`training.session_waiver_history`, `meetings.waivers_summary`,
+`meetings.waiver_history`; see `docs/EVALUATIONS_MODULE.md`). Gaps the owner's
+decisions did not settle, each answered conservatively:
+
+- **"Attachment on file" always reads no.** Attachments are being added by a
+  parallel change and have no table on `main` yet. The flag is wired through
+  `EvaluationDataService._waiver_attachments_on_file`, which returns nothing
+  until that table lands; switching it on is a query in that one method. An
+  evaluation drafted before then records "no" permanently, as every snapshot
+  records what was true when it was taken.
+- **A voided request is listed, and counted only as voided.** Nothing voids a
+  request yet. When something does, the history shows the request and that it
+  was voided, and the summary counts it under `voided` rather than as approved
+  or denied, since a voided approval no longer counts toward the cap.
+- **The screens show the summary's count, not its breakdown.** The evaluation
+  pages and PDF print a count source as its number; the approved / denied /
+  withdrawn split is stored beside it (`breakdown`) and every request's
+  outcome is on the history lines, but nothing shows the split on its own.
+  Showing it would mean teaching the frontend's `formatFigure` and the PDF's
+  `format_figure` about an extra field. **Open:** whether to.
+- **Deciders are named by their current name**, or "a former member" when the
+  account is gone, as the request screens name them. A decision log step
+  carries no name snapshot.
+- **The category is shown.** It is the department's own label, chosen from its
+  policy list, and the owner exposed "all waiver data … but not reasons or
+  attachments". A department whose categories are themselves medical ("Cardiac
+  follow-up") will see them in the review; name categories accordingly.
+
+## Training Waiver Requests — What the Screens Leave Open (2026-11-11)
+
+The member, approver and settings screens for session waiver requests (the
+backend is #4225) made four conservative choices where the approved design left
+a gap. None blocks the feature; each is the owner's to revisit.
+
+- **The hub count is the viewer's own queue, not the department's.** The
+  Training Admin hub badges its Waiver Requests destination with the pending
+  requests the signed-in officer may decide, read from
+  `GET /training/waivers/requests?status=pending`. It is not an item in the
+  hub's attention queue (`admin_hub_service._training_attention`), which counts
+  org-wide for every `training.manage` holder: a training manager who is not
+  a routed approver would have been shown requests they cannot open. Adding a
+  department-wide item means a backend change and a decision on who should see
+  it.
+- **No attachment setting yet.** The policy model forbids unknown keys and has
+  no attachment field, because nothing reads one (pitfall #19). The settings
+  panel says attachments arrive later instead of offering a switch. The
+  attachments work adds the field, the upload control in the request dialog and
+  the list on the decision page.
+- **The overlap warning reads membership types only.** Saving a
+  session-attendance requirement warns when another active one grades the same
+  membership types (or both grade every type), the rule
+  `governing_attendance_requirement` narrows by. Position, rank and profile
+  scoping can still keep two such requirements apart, so it may warn where the
+  backend would pick one; it never stays silent where membership types alone
+  make the choice ambiguous. The warning is non-blocking.
+- **The decided list pages through the unfiltered list.** The list endpoint
+  filters by one status at a time, so the queue loads every pending request in
+  one call (up to the endpoint's 200) and pages the unfiltered list for the
+  decided ones, leaving out the pending rows it repeats. A page can therefore
+  show fewer than 50 decided rows. More than 200 pending requests for one
+  approver are reported as a count rather than listed.
+
 ## PDF Reports — What the Generated PDFs Do Not Yet Meet (2026-11-09)
 
 A review of every server-rendered PDF (see `docs/PDF_REPORTS.md`) fixed the
@@ -13,12 +79,19 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
   HTML-to-PDF engine with PDF/UA output, such as WeasyPrint, would mean
   rewriting every renderer and bringing that engine's SSRF hardening with it
   (CVE-2025-68616, CVE-2026-55073).
-- **Latin-1 only, fonts not embedded, no PDF/A.** Every PDF uses the built-in
-  Helvetica family. A member's name in Cyrillic, Greek or CJK script does not
-  render, and minutes, certified results and evaluations cannot be archived as
-  PDF/A. **Decided, to build (owner, 2026-11-09):** bundle Noto Sans (SIL OFL)
-  in the kit, then add XMP metadata and an ICC output intent for the record
-  documents.
+- ~~**Latin-1 only, fonts not embedded, no PDF/A.**~~ **Resolved
+  2026-11-10:** documents embed Noto Sans, and certified results,
+  evaluations and minutes are PDF/A-2b. What remains:
+  - **Scripts outside Latin, Greek and Cyrillic** (CJK, Arabic, Hebrew,
+    emoji) still print as empty boxes; Noto Sans CJK is CFF-based and
+    ReportLab cannot embed it. **Accepted** until a member needs it.
+  - **Label sheets and ID cards stay on Helvetica** by owner decision
+    (2026-11-09): their text is fitted to physical stock.
+  - **Minutes that append attachment PDFs make no PDF/A claim** (owner
+    decision, 2026-11-09): outside pages cannot be vouched for.
+  - **CI does not run veraPDF.** Conformance was confirmed with veraPDF 1.28
+    on 2026-11-10; `tests/test_pdfa.py` guards the structure it checked, not
+    every rule.
 - **The Reports page prints from the browser.** "Print / PDF" has no page
   numbers, no repeated header, the browser's own time zone and no audit row.
   **Decided, to build (owner, 2026-11-09):** a server-side PDF on the kit,
@@ -39,32 +112,41 @@ now use the shared layout in `app/utils/pdf_report_kit.py`. What remains:
 
 ## Medical Screening — What Is Still Plaintext at Rest (MS-18, 2026-11-05)
 
-**Decided 2026-11-04: encrypt the status first.** `screening_records.status` is
-now AES-256-GCM ciphertext (`EncryptedEnum`, migration `80fa2c83bf9d`), so a
+**Decided 2026-11-04: encrypt the status first.** `screening_records.status`
+is AES-256-GCM ciphertext (`EncryptedEnum`, migration `80fa2c83bf9d`), so a
 dump no longer says which member _failed_ a screening. The provider, results
 and notes were already encrypted (MS-1). Searchable fingerprints were ruled
 out: with seven statuses and six types, a keyed hash puts every "failed"
 record under one value, and one known record reveals the rest.
 
-Still plaintext, and each waiting on its own decision:
+✅ **Decided 2026-11-06: "type + link + audit", built.** Migration
+`ac1687769b62`:
 
-- **The screening type.** A dump still reads "this member — psychological
-  evaluation — 25 Oct 2026", without the outcome. Encrypting it is the same
-  shape of change as the status: the pipeline gate's lookup by type, the
-  Members hub's grouping by type and the records list's type filter move to
-  Python, and `screening_type` leaves `enum_normalization`.
-- **The requirement link reveals the type anyway.** `requirement_id` is a
-  plain foreign key to a requirement whose name and type are plaintext (for
-  example "Pre-membership Drug Screen"), and the record form links most
-  records. Encrypting the type without it protects only unlinked records.
-  Encrypting the link means giving up the database foreign key, so deleting a
-  requirement would clear its records' links in code instead.
-- **The audit log names the type.** Creating a record writes `screening_type`
-  into the audit entry, and the records-list filters are logged too. New
-  entries could stop doing that. Existing ones cannot be scrubbed: the audit
-  log is hash-chained, so rewriting a row breaks the chain.
-- **The dates and the member link** stay plaintext: grading, the expiring list
-  and every screen filter and join on them.
+- **The screening type is ciphertext** (`EncryptedEnum`). The pipeline gate's
+  lookup by type, the records list's type filter and the Members hub's
+  grouping by type match the decrypted value in Python, org-scoped;
+  `screening_records.screening_type` left `enum_normalization`. The
+  requirement's own type stays plaintext: it is the department's policy, not
+  a person's history.
+- **The requirement link is ciphertext** (`EncryptedReference`). The database
+  foreign key is gone; deleting a requirement clears its records' links in
+  `MedicalScreeningService.delete_requirement`, over the deleting
+  organization's records only. Grading and the expiring list match the link
+  after decryption. `tests/test_medical_screening_type_encrypted.py`.
+- **New audit entries do not name the type.** The record-created entry no
+  longer carries `screening_type`, and the records-list entry says only
+  whether a type filter was used (`screening_type_filtered`).
+
+Still plaintext, and staying that way unless decided otherwise:
+
+- **The dates and the member link.** Grading, the expiring list, the expiry
+  reminders and every screen filter and join on them.
+- **Audit entries written before 2026-11-06** still name the type of each
+  record created, and the type filter used on the records list. The audit log
+  is hash-chained, so rewriting a row breaks the chain.
+- **The records-list status filter** is still written into the audit entry,
+  as before; only the type was in scope.
+- **Backups taken before the upgrade** hold every one of these in plaintext.
 
 ## Owner Decisions of 2026-11-01
 
@@ -302,22 +384,161 @@ finalizing is.
 Built so far: the legal-name fields on `/account` and the officer's
 edit-member page (forms review F-1, `docs/FORMS_REVIEW_2026-11-05.md`), and
 the shared pieces the rest move onto — `FormField` and `ErrorSummary` in
-`components/ux/` and `useFieldErrors` in `hooks/` — piloted on Submit
-Training, `/account` and Scheduling's Create Shift, then extended to the
-shift template and pattern dialogs, the scheduling notification CC lists and
-Add Member. The rest of the app's
-forms still refuse a save on error in various ways (F-3 in that review) and
-come into line module by module.
+`components/ux/`, `useFieldErrors` in `hooks/` and the 422 mapping in
+`utils/serverFieldErrors.ts` — on Submit Training, `/account`, Add Member,
+Create Shift and Create Event, then extended to the shift template and
+pattern dialogs and the scheduling notification CC lists. Two sessions built
+these in parallel; their two `FormField` components were combined into one on
+2026-11-09, keeping both feature sets. On `/account` any field the server
+refuses is handled the way a blank name was: the request is resent without
+it, the rest of the profile saves, and the field keeps what was typed, flagged
+with the server's reason, until it is changed. The rest of the app's forms
+still refuse a save on error in various ways (F-3 in that review) and come
+into line module by module.
 
 Also on the shared pieces since: every create dialog the review found with a
 button greyed out until valid (Locations, Facilities, Documents' New Folder,
 Forms' Create Form, Medical Supplies' Add supply, Inventory's Add several
 items and Request Equipment, the suggestion box form, Apparatus (basic)).
+Then the dialogs that relied on the browser's `required` bubble: Create
+Election, event templates, custom roles, Create Pipeline, Inventory's item,
+kit, category, variant group, vendor, storage area and reorder dialogs, and
+notification rules.
 
 Training drafts keep a minimum (owner decision, 2026-11-08): a draft still
 needs a course name and a completion date, because both are NOT NULL
 columns, and making them nullable was declined. Every other field follows
 the rule above.
+
+**Create forms do not partially save.** Add Member, Create Shift and Create
+Event put each refusal on its field and create nothing until it is fixed:
+creating a record without the refused value and then flagging it would leave
+the flag on a form that has already navigated away. An event saved as a draft
+is still refused for the rules the server enforces on every event (an end after
+the start, an RSVP deadline before it).
+
+**Rolled out further on 2026-11-08** (batch 16). The shared field, 422s on
+their fields, schema `maxLength`, `<form>` with Enter, and discard protection
+now also cover:
+
+- **Top-level pages:** Action Items › Update, Locations › Station and Room,
+  basic Apparatus, Role Management, Documents › Create Folder and Upload, and
+  Scheduling's outside-shift form.
+- **Inventory and assets:** Inventory › Add / Edit Item, Apparatus › Fuel Log,
+  Maintenance Record, Equipment and Operator, Facilities › Add Facility,
+  Medical Supplies › Add / Edit, and the Store's item and order-window dialogs.
+- **Finance and grants:** purchase, check and expense requests (the server
+  draft and the expense session draft still work), the budget line and dues
+  schedule dialogs, pledges, fundraising events, donations, grant
+  opportunities and applications, and Admin Hours' category, manual entry and
+  entry editor.
+- **Minutes, communications and the smaller modules:** medical screening
+  records and requirements, messages, shift patterns and Generate Shifts,
+  Record Meeting Minutes, IP exception requests, meeting action items, legal
+  revisions and Add Applicant.
+
+Edits on these follow the single-save rule above, including Edit Pattern and
+the meeting action item, whose pages now refresh behind a dialog left open on a
+refused field. **One exception: Admin Hours' entry editor does not partially
+save.** It resubmits the whole entry and checks the start and end together, so
+saving one time without the other could leave an entry whose duration makes no
+sense; it saves nothing until every refusal is fixed. Dialogs that check their
+own fields turn off the browser's validation bubbles (`noValidate`), so the
+reason appears on the field instead of a native popup.
+
+**Rolled out further on 2026-11-09** (batch 17): Create Election, the member
+admin edit page (its uppercase labels kept through `FormField`'s
+`labelClassName`), the Create Training Session wizard, Inventory's Receive
+Stock, Request Equipment, vendors and contacts, Add several items, Unassign and
+Assign terms, Apparatus › Archive and NFPA items, the facility emergency
+contacts, medical supply deliveries, sixteen Finance dialogs (expense line,
+dues payment, advance return, reimbursement, pay by check, mark paid, budget
+request, amendment and reversal, adoption, fiscal-year lock, leadership and
+decision, the approvals-admin override, approval chain, export mapping), and
+the minutes sign, adopt, carry-forward, agenda, outline and suggestion forms,
+minutes reminder and signer settings, evaluation sign / amend / delete, saved
+reports, suggestion boxes and Schedule Email. The same rules apply: a create
+form creates nothing until fixed, an edit saves the rest, and a step that
+approves (adopt, sign, adopt a budget) refuses. Where main's own forms work had
+already converted a form (Create Election, Request Equipment, Add several items,
+Add / Edit Vendor, the suggestion box), it keeps main's `useFieldErrors`
+messages, with this batch's additions on top.
+
+**Owner decision (2026-11-11) — a budget request draft saves blank. Built.**
+The owner rule says Save Draft always succeeds, and `BudgetRequestCreate` used
+to require `requested_amount` and a non-blank `justification` on every request,
+so a blank draft was refused. Migration `0136dd6d4144` makes both columns
+nullable and the check moved to Submit: `submit_request` refuses an unfinished
+draft with a 422 naming the missing fields, and an edit of a submitted request
+may not clear either. On the owner's screen, Submit on an unfinished draft
+opens it with those fields flagged instead of sending it; the Treasurer's list
+shows a blank amount as _Not entered yet_. Downgrading fills a blank draft with
+0.00 and an empty justification (see `docs/UPGRADING.md`).
+
+**Owner decision (2026-11-11) — the Approvals approve / deny prompt asks
+before discarding. Built.** It is a `PromptDialog`, which had no discard
+question and no place for a server field error. Both are now opt-in props on
+the shared dialog: `askBeforeDiscard` asks "Keep editing" / "Discard changes"
+when the typed value differs from the one it opened with, and `error` shows the
+server's refusal on the field until it is edited, with the dialog left open.
+Approvals uses both; the approvals-admin override form beside it already did.
+The other `PromptDialog` callers are unchanged until they opt in.
+
+Still to come, module by module: the locations setup wizard, the other training
+builders and pipeline pages, the rest of Inventory (settings, stock lots, the
+checklist builder and the smaller dialogs), the full apparatus form, the
+facility overview, files and settings, medical supply lots and imports, store
+checkout, the finance cards and settings, the minutes editor,
+the remaining report dialogs, communications templates and intake, scheduling
+templates and settings, applicant conversion and stage settings, the org chart
+node and IP security admin, and onboarding, history, membership and the public
+portal. Each is listed in `docs/FORMS_REVIEW_2026-11-05.md`.
+
+**Rolled out further on 2026-11-11** (batch 18): Inventory's categories,
+variant groups, storage areas, kits, allowances, reorder requests, the
+write-off review, Copy checklist and Move NFC tag; Grants & Fundraising's
+donors, campaigns and the Zeffy link; Communications' officers and footers.
+The same rules apply. The edit loop the earlier batches wrote inline in each
+dialog is now one helper, `utils/saveExceptRefused.ts`. Three of these are
+replaced whole on every save and so refuse rather than save part: the Zeffy
+link, an officer assignment and the footer library (a refusal there names the
+card and field it belongs to). The write-off review is an approve-type step:
+Deny and Approve stay pressable and say what is missing (the note, the
+acknowledgement) on its field rather than sitting greyed out.
+
+**Rolled out further on 2026-11-11** (batch 19): a facility's systems,
+rooms and compliance checklists; the maintenance and inspection dialogs, on a
+facility's own sections and on the cross-facility Maintenance and Inspections
+pages; the medical supply category dialog; and the medical create panel the
+checklist builder and the item picker open. The same rules apply. The
+maintenance and inspection dialogs had been written out twice each, once per
+screen, and are now one component each, so a change lands on both. A save that
+failed with a reason no field answers for ("due date cannot be before the
+scheduled date", a room nesting rule, a duplicate name) is said in the form,
+where it stays until the next save, rather than in a toast.
+
+**Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
+Two of the three options, and not the third:
+
+- **Escape asks first — built.** A dialog that tracks whether its fields have
+  changed asks "Keep editing" / "Discard changes" before Escape, its X or its
+  Cancel throws them away; a clean dialog closes at once, so Escape stays the
+  way out (Pitfall #31). It is opt-in per dialog (`isDirty` on `Modal` /
+  `DialogPanel`, or `useDiscardGuard`), adopted on Inventory › Add / Edit Item
+  and Scheduling › Create Shift on 2026-11-06 and on every dialog the 2026-11-08
+  rollout converted (above); other dialogs still close without asking until
+  they pass the flag.
+- **Local drafts — built** for training submission (new ones; an edit is
+  already stored on the server), the manual shift report (Scheduling's shift
+  reports already kept their own draft), the expense report and Add Member.
+  sessionStorage, keyed by member and form, so a draft lasts as long as the tab
+  and never reaches another member; purged at sign-out. **PHI is never
+  drafted:** Add Member's draft leaves out the emergency contacts and the date
+  of birth, and no medical-screening form drafts. Attached files are not
+  drafted. Finance's purchase request keeps its existing server-side draft.
+- **A data router — rejected.** Navigating away inside the app (a sidebar
+  link) still leaves a page without asking; the drafts are what bring the work
+  back. `hooks/useUnsavedChanges.ts` still covers closing the tab.
 
 ## Fundraising — The Donations List's Receipt Column Is Never Filled (2026-11-05)
 
@@ -413,19 +634,35 @@ each changes saved members' standing, writes PHI rows, or adds behaviour.
   changes what the tile counts. Separately, decide whether a lapsed
   screening should in fact block scheduling, or the claim should go.
 - **Nothing reminds anyone a screening is about to expire (W71b-4, MED).**
-  Certifications get tiered 90/60/30/7-day emails, and screenings get none.
-  A lapse is visible only on the Compliance tab and the member's dashboard.
-  If added, reminders would be email-first (pitfall #18).
-- **A new requirement starts as one-time (W71b-5, LOW).** The One-time box
-  starts ticked, though the hidden frequency is pre-filled with 12, so an
-  annual physical added in a hurry never falls due. The fix is one line,
-  `ScreeningRequirementForm.tsx:32`.
+  ✅ **Resolved 2026-11-08 (owner decision 2026-11-06: the same as
+  certifications).** A daily task emails the member 90, 60, 30 and 7 days
+  before a screening falls due, once per tier per screening and due date
+  (`screening_reminder_sends`, unique on that key). Email only, gated by the
+  Medical Screening module, the `medical_screening_expiry` notification rule
+  (on with no rule) and the member's "Training and certification reminders"
+  choice. The email names the requirement and the due date only; there is no
+  bell entry, which would store the requirement name beside the member in
+  plaintext. Officers are not copied, unlike the certification 30- and 7-day
+  tiers: the owner's decision named the member, and a copy to officers would
+  tell them which screening a member owes. `tests/test_screening_expiry_reminders.py`.
+  Original finding: certifications get tiered 90/60/30/7-day emails, and
+  screenings got none; a lapse was visible only on the Compliance tab and the
+  member's dashboard.
+- **A new requirement starts as one-time (W71b-5, LOW).** ✅ **Resolved
+  2026-11-08 (owner decision 2026-11-06: recurring by default).** A new
+  requirement starts with One-time unticked and recurs every 12 months;
+  existing requirements open as they were saved.
+  `ScreeningRequirementForm.recurringDefault.test.tsx`. Original finding: the
+  box started ticked though the hidden frequency was pre-filled with 12, so an
+  annual physical added in a hurry never fell due.
 
 ## Zeffy — What the Integration Leaves to the Treasurer (2026-10-31)
 
 The Zeffy integration ([ZEFFY_INTEGRATION.md](ZEFFY_INTEGRATION.md)) applies
 Zeffy payments to donations, fundraising-event revenue and member dues. These
-were chosen deliberately and are open for the owner to confirm or change:
+were chosen deliberately and are open for the owner to confirm or change.
+**Owner decision (2026-11-06): all five confirmed as built.** The list is kept
+as the record of what the integration leaves to the treasurer:
 
 - **A refund of dues already credited is flagged, not reversed.** The dues
   ledger has no reversal entry, so the payment shows **Needs review** and the
@@ -617,6 +854,36 @@ assignment; none existed in the development database when this was built.
 **Still open:** an org chart does not read the relationship.
 
 ## Members — No History of Positions Held (2026-11-01)
+
+**✅ Resolved (owner decision 2026-11-06: keep a dated history; built
+2026-11-08).** `member_position_terms` (migration `67ad01c43434`) records each
+stretch a member held a position: `started_at`, `ended_at` (NULL while held),
+and who assigned and removed it when the path knows (the position endpoints and
+the position service do; onboarding and the membership pipeline's conversion
+record no one). A session hook keeps it in step with `user_positions` on every
+path that goes through the relationship, in the same transaction; the paths
+that write `user_positions` with Core statements (member creation, the position
+service, the onboarding position step's bulk delete, the test-user seed) call
+the same reconciliation. One open term per member and position is held by a
+generated `open_marker` column under a unique key, and a repeated assignment or
+a removal of a position not held opens or closes nothing.
+
+What is kept and what is not:
+
+- A position deleted outright closes its open terms, and the terms survive
+  under the name and kind it had (`position_id` becomes NULL). A hard-deleted
+  member's terms go with them, as their `user_positions` rows do.
+- History starts at each member's current `assigned_at` when the migration
+  ran. Earlier changes are **not** reconstructed from the audit log's
+  `user_role_assigned` / `user_role_removed` events.
+- "Positions held" on an evaluation now lists every office and committee seat
+  held at any time during the review period (a term overlapping it), not only
+  those held when the figures were taken.
+- The member profile lists earlier offices and committee seats with their
+  dates, to everyone who sees the current ones, without the baseline Member
+  position or the rank mirrors.
+
+The original entry follows.
 
 `user_positions` records only who holds each position now: assigning one adds
 a row stamped `assigned_at`, and removing one deletes the row. Nothing keeps a
@@ -3304,15 +3571,29 @@ documentation (the list and URLs are in
 was left out rather than guessed, and is listed here with the other gaps. Each
 needs a decision or a follow-up change:
 
-- **Every payment posts as a cash expense from a bank account.** Intuit's
-  pages show a Purchase with `PaymentType` `Cash` paid from a Bank account,
-  and name check and credit card purchases without showing their
-  `PaymentType` values or the account type each needs. So a check is recorded
-  as an expense, not a QuickBooks Check (no check number on it), and a
-  category paid from a credit card account is refused live ("not a Bank
-  account") and goes in the CSV export instead. Posting checks as Checks and
-  card payments as credit card expenses needs Intuit's Purchase reference page
-  read and those two values confirmed.
+- **✅ Resolved 2026-11-08 — checks post as checks, card payments as credit
+  card expenses.** Owner decision (2026-11-06): "checks and cards". An issued
+  check posts as a QuickBooks Check with its check number (`DocNumber`; the
+  request number goes in the private note) and is not queued to print; a
+  payment from a category whose paid-from account is a QuickBooks Credit Card
+  account posts as a credit card expense instead of being refused; the rest
+  stay cash expenses from a bank account. The values were confirmed against
+  what Intuit publishes beside its Purchase reference (its v3 schema in the
+  PHP and Java SDKs, the .NET SDK's tests, and its Java "Data services
+  extensions" page; sources in `quickbooks_online_client.py`), because the
+  reference page itself renders only in a browser. What remains:
+  - Purchase requests and expense reports record no payment method, so one
+    paid by check from a bank account posts as a cash expense, not a Check.
+    Recording how a request was paid would be its own change.
+  - A check whose paid-from account is a credit card account is refused
+    live and goes in the CSV export; a check number longer than QuickBooks'
+    21 characters likewise. A check number QuickBooks already holds is
+    refused by QuickBooks (it is not sent with `allowduplicatedocnum`), and
+    the posting shows QuickBooks' reason.
+  - A check posted before this change stays in QuickBooks as the cash expense
+    it was posted as. A payment refused as "not a Bank account" before it
+    stays refused until the Treasurer presses **Send again**, or sends it in
+    the CSV export.
 - **Some payments still need the CSV export.** Cash advances, expense reports
   and reimbursement checks that account for an advance (a Purchase is paid from
   one account, and those are paid partly from the advance), dues, returned
@@ -3321,7 +3602,8 @@ needs a decision or a follow-up change:
 - **Voiding a posted check does not reverse it in QuickBooks.** The CSV export
   reverses a voided check; the live connection makes no change to a Purchase
   it created (the scope it holds can, but deleting records was not part of the
-  decision). Void it in QuickBooks too.
+  decision). Void it in QuickBooks too. Owner decision (2026-11-06): not built
+  now.
 - **Vendors are matched by display name**, ignoring case. A vendor renamed in
   QuickBooks gets a new one created under the old name on the next payment to
   it; a name used by a QuickBooks customer or employee is refused (Intuit error 6240) and the posting says so. An inactive vendor is refused, not
@@ -3333,9 +3615,10 @@ needs a decision or a follow-up change:
   with "QuickBooks has no account named …". Matching is exact, case included,
   as the CSV export's chart check is.
 - **`TxnDate` and `DocNumber`** are set from the payment's day on the
-  department's calendar and its request number. Intuit documents both on
-  transaction entities generally and shows them on other transactions' examples;
-  they were not seen on a Purchase example.
+  department's calendar and its request number (a check's `DocNumber` is its
+  check number). _(2026-11-08)_ Both are confirmed on Purchase: Intuit's schema
+  puts them on the Transaction type Purchase extends, and its own SDK tests set
+  them on a Purchase.
 - **A payment waiting on a retry when the department disconnects stays out of
   the CSV export**: QuickBooks may already hold it. Reconnecting to the same
   company sends it again under the same request id, which Intuit answers with
@@ -3344,7 +3627,8 @@ needs a decision or a follow-up change:
 - **Posting starts from the moment of connecting.** Earlier payments stay on
   the CSV export; the Treasurer can move the date (**Post payments made on or
   after**), and a payment already sent in a file is never posted.
-- **Reading budgets and actuals back from QuickBooks** is not built.
+- **Reading budgets and actuals back from QuickBooks** is not built. Owner
+  decision (2026-11-06): not built now.
 
 ## Finance — Nobody Could Approve Anything (2026-08-12, narrowed 2026-09-06)
 
@@ -7618,9 +7902,60 @@ ones skipped.
   scheduled or started.
 - **The NFPA completeness report flags a missing instructor** on records from
   events without a course.
-- **A rolling recurring series cannot carry training details** — the nightly
-  job that extends it copies events, not sessions. Its occurrences are still
-  credited, as their titles.
+- **A rolling recurring series cannot carry training details — ✅ resolved
+  2026-11-11** (owner decision 2026-11-10: rolling series inherit training
+  details and links). The nightly job now copies the latest occurrence, its
+  training session and the session's attendance links on to each new
+  occurrence. See "Training — One Form for Training Events, Backend" below.
+
+## Training — One Form for Training Events, Backend (2026-11-11)
+
+The owner chose one training-event form for both Training Admin and Events
+(2026-11-10). This is its backend: `POST /events` and `/events/recurring`
+take every training field, including "Counts toward attendance"; an event
+edit carries `training_details`, for one event or "this and all future"; a
+rolling series and a duplicate keep their session and links; and
+`POST /training/sessions/mandatory-tiers` pre-fills "Mandatory for". The form
+itself follows in later pull requests.
+
+**Defaults assumed on the owner's "Yes" (2026-11-11), and what they cost:**
+
+- **A rolling series copies its latest occurrence, not its parent.** This
+  fixed a "this and all future events" edit being lost: it never reached the
+  parent, so every occurrence the job added reverted to the old values. The
+  cost is that a "this event only" edit to the very last generated
+  occurrence, about twelve months out, now carries forward too.
+- **A training manager cannot change training details through an event
+  edit** (403). Every session write already needs `events.manage`. A training
+  manager still edits the event's own fields. TR14-2 is unchanged.
+- **A requirement no membership tier stands for is named, not guessed**, when
+  "Mandatory for" is pre-filled. That means administrative and honorary
+  (member classes, not rungs), a membership word with no tier on the ladder
+  (Retired, on the default ladder), and a requirement scoped only by rank or
+  position. If nothing maps, "Mandatory for" is left as it was rather than
+  falling back to everyone.
+
+**Known gaps, not fixed here:**
+
+- **The pre-fill is an approximation.**
+  - A requirement grades by legacy membership type; an event's "Mandatory
+    for" matches by membership tier.
+  - An administrative or social member on a mapped tier is listed as missing
+    a session the requirement never graded them on.
+  - A requirement cannot name the default ladder's Senior tier, so no
+    pre-fill ever selects it.
+  - Grandfathering and compliance profiles are ignored.
+  - The officer can edit the result.
+- **A finalized Training event with no session cannot be given attendance
+  links** from the event edit. Attaching a session to a finalized event is
+  refused, as it always was; reopen attendance first. An event with a
+  session takes new links at any time.
+- **The Events form still hides training details on a rolling series** until
+  the single form replaces that block.
+- **`TrainingSessionAttach` and `TrainingSessionDetailsUpdate` refuse unknown
+  keys** (422). Before, an unknown key was dropped and the request still
+  answered 201. Nothing in this repository sends one; an outside API client
+  that does will now see the refusal.
 
 ## Events — Attendance-Lock Refusals (2026-09-30)
 
@@ -9250,7 +9585,13 @@ recorded yet.
 
 ## Training — Event Organizers Decide Which Sessions Count Toward a Session-Attendance Requirement (2026-11-08, security review TR14-2)
 
-**Open, awaiting an owner decision.** A training officer (`training.manage`)
+**Accepted by the owner (2026-11-10): keep it.** Whoever creates the session
+(`events.manage`) decides which sessions count toward a session-attendance
+requirement, and linking past sessions after the fact stays allowed. The audit
+entry described below remains the control. The text below is the finding as
+it was raised.
+
+~~**Open, awaiting an owner decision.**~~ A training officer (`training.manage`)
 creates a session-attendance requirement, for example "attend 60% of the
 company drills this year". The decision about _which_ sessions count toward it
 is made with `events.manage` alone:
@@ -9274,6 +9615,26 @@ was flagged rather than changed. The options are to keep it, to require
 `training.manage` for the link (an organizer could still schedule and finalize
 the drill, and a training officer would link it), or to require both grants.
 Found by `docs/security-review/TR-17-training-core.md` pass 14.
+
+## Training — Records From the Older CSV Importers Read "The Logbook" (2026-11-10)
+
+**Accepted (owner decision 2026-11-10).** Training lists, the print page and
+the individual CSV and PDF exports show where each record came from:
+
+- the provider for a sync ("Target Solutions");
+- "Imported" for the Historical Data Import;
+- "The Logbook" for everything else.
+
+The server decides the label in `app/services/training_record_source.py`. It
+needs nothing stored: a sync carries `external_provider_id` and
+`external_record_id`, and the Historical Data Import ledgers every record it
+writes in `imported_source_records`.
+
+The two older importers on the Training screens, the CSV import wizard
+(`POST /training/import/confirm`) and `POST /training/records/import-csv`,
+leave no such mark. Their records therefore read "The Logbook". The owner chose
+this over adding a stored source column, which could only have labelled records
+imported after the change.
 
 ## Training — Online Knowledge Tests Have No Owning Feature In The Security Rotation (2026-10-06, resolved 2026-10-29)
 
@@ -9426,9 +9787,168 @@ edit only drafts; this governs `PUT /shift-reports/{id}`. Covered by
 `tests/test_shift_completion.py::TestAnEditedReportGoesBackToReview`; history
 in `docs/security-review/EC-14-equipment-check-shifts.md`.
 
+## W80 — Training Event Decisions (2026-11-08, resolved 2026-11-11)
+
+From the training-event lifecycle pass
+([`workflow-review/W80-training-event-lifecycle.md`](./workflow-review/W80-training-event-lifecycle.md)).
+Decided and fixed in the same pass (#4169): over-credit is warned, not capped;
+an approver on a roster cannot approve it; a schedule change that strands
+check-ins is refused; a training-only waiver can name its requirements. The
+items left open were decided by the owner on 2026-11-08 and are now fixed:
+
+- **W80-11 — Postpone** (#4179, list badge #4188). `POST
+/events/{id}/postpone`, three nullable columns on `events` (migration
+  `09f0171ccf5e`), and a Postpone Event action on the event page. It clears
+  check-ins and the credit they produced, keeps RSVPs, and notifies Going and
+  Maybe with the old and new time.
+- **W80-16 — Editing an event's time and its reminders** (#4181). Decision:
+  reset them when the start moves. An edit that moves the start lets the
+  reminders go out again; one that keeps it does not.
+- **W80-8 — Recording one member on a past drill** (#4187). Decision: add the
+  member, with times. Once check-in has closed, an attendance manager can add a
+  member with arrival and departure times from the event page.
+- **W80-9 — "0/0 sessions — Complete"** (#4185). Decision: not applicable. A
+  session-attendance requirement with no session held in a member's window is
+  not graded, and is left out of every compliance count rather than counted
+  met. Departments with such members will see their percentages move.
+- **W80-10 — Training waivers and "missed mandatory"** (#4182). Decision: yes,
+  when the waiver covers the event. An active training waiver covering the
+  event's date, and its linked requirements when the waiver names any, takes it
+  off the list.
+
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
 mirrored here so they're visible outside the log. The parallel module-by-module
 security audit tracks its rotation and per-module findings under
 [`docs/module-audit/`](./module-audit/PROGRESS.md); its open decisions are
 mirrored in the Multi-Tenant Isolation section above.
+
+## LIFE-11 — Anonymizing a Member Leaves Their Separation Letter, With Home Address, in Documents (2026-11-10, app review A6 pass 6)
+
+Anonymization (`POST /users/{id}/anonymize`, `MemberAnonymizationService`)
+scrubs the member's personal data from a long list of tables but touches no
+`Document`. The property-return letter generated when the member was dropped is
+filed in the leadership-only **Member Separations** folder, and its body states
+the member's home address and the reason given for the separation. After an
+erasure both remain readable to anyone with access to that folder.
+
+A separation letter may be a record the department must keep: it states a
+chargeable liability for property not returned. So this is a decision, not a
+fix. Options:
+
+1. **Redact on anonymization** — rewrite stored letters with the address and
+   reason removed, keeping the item list and values.
+2. **Delete** the letters with the rest of the member's personal data.
+3. **Keep them as they are** and say so in the anonymization docstring and
+   `docs/COMPLIANCE.md`, so a privacy reviewer is not told the member is fully
+   scrubbed.
+
+## LIFE-2 — A Pool Issuance Is Valued Three Ways, and the Departure Clearance's Figure Is Wrong (2026-08-05, evidence added 2026-11-10, app review A6)
+
+A departing member's unreturned pool issuance (uniform pieces and the like) is
+valued differently by the three places that state what the member owes:
+
+| Where                                                  | Formula                                                          |
+| ------------------------------------------------------ | ---------------------------------------------------------------- |
+| Member charges (`inventory_service.py:8550`)           | `unit_cost_at_issuance × quantity issued`                        |
+| Property-return letter (`property_return_service.py`)  | `current_value × quantity issued`                                |
+| Departure clearance (`departure_clearance_service.py`) | `current_value ÷ (quantity + quantity_issued) × quantity issued` |
+
+`current_value` is a per-unit value: every inventory valuation total sums
+`current_value * quantity`. So the clearance divides a per-unit value by the
+pool's whole size and **understates the item by that factor**. A pool of 40
+shirts at $25 each, two of them issued, shows $1.25 outstanding on the clearance and
+$50 on the letter.
+
+Which basis is right — today's value, or the cost recorded at issuance that
+charges already use — is an accounting decision. Whichever is chosen, the
+clearance and the letter should both use it; the clearance's current formula
+is wrong under either. Existing clearances store their line values, so a
+change applies to new clearances unless the owner also wants open ones
+recomputed.
+
+## DASH-2 — `GET /dashboard/stats` Returns Three Made-Up Figures, and Nothing Calls It (2026-08-05, recorded here 2026-11-10, app review A7)
+
+`GET /api/v1/dashboard/stats` counts members, active members and events created
+in the last 30 days, and returns three more fields as constants:
+`total_documents` is always `0`, `pending_tasks_count` always `0`, and
+`setup_percentage` always `100`. The last is the risk: it tells any client that
+the department's setup is complete whatever its state. The frontend's
+`dashboardService.getStats` has no caller, so no screen shows these figures
+today; an external client or a future screen could.
+
+Flagged in every app-review pass since the first, but never recorded here, so it
+was not among the questions the owner answered on 2026-11-01. Options:
+
+1. **Remove the route** and `dashboardService.getStats`. Nothing in the app
+   uses them; a third-party client that does would get 404.
+2. **Compute the three figures** — documents from the Documents module,
+   pending tasks from the action-item feed's open count, and setup from the
+   onboarding checklist the Organization Setup widget already reads.
+3. **Remove only the three made-up fields**, keeping the counts that are real.
+   This changes the response shape for any caller.
+
+## Training — Waiver Request Documents: What Was Left Out (2026-11-11)
+
+**Open, chosen conservatively; the owner may revisit any of these.** Documents
+on session waiver requests (PDF, JPEG, PNG or HEIC, 10 MB each, three per
+request, kept 365 days) shipped with these gaps, each the narrower choice:
+
+- **A filed document cannot be removed by the member.** Once filed it stays
+  until the retention task deletes it. A member who filed the wrong file can
+  withdraw a pending request and ask again; the withdrawn request's documents
+  then age out with it. Allowing removal would have needed a rule for removing
+  the last document under a `required` policy, which nothing decided.
+- **The uploader's filename is not kept at all**, not only hidden from
+  downloads: a doctor's note's name can say what it is about. A decider sees
+  `waiver-attachment-1.pdf`, its type, size and date.
+- **A withdrawn or voided request is timed from its last change**
+  (`updated_at`), since it has no decision time; an approved or denied one
+  from its decision.
+- **The request page does not say documents were once filed** after retention
+  removes them. The `attendance_waiver_attachment_retention` audit entry
+  records which documents of which requests were deleted.
+- **Retention covers the training workflow only.** The business-meeting
+  workflow files no documents; when it does, its own policy needs to be read
+  by the sweep.
+- **HEIC is stored as filed, not converted.** A decider on Windows may need
+  the HEIF extension to open an iPhone photo; nothing previews it in the page.
+- **The upload field sits in the request dialog and the document list on the
+  decision page; the policy screen sets both new settings.** There is no
+  preview of a document in the page: a decider downloads it.
+
+## Meetings — Business-Meeting Waiver Requests: Choices Made Without An Owner Ruling (2026-11-11)
+
+The business-meeting waiver workflow (owner decisions, 2026-11-10) shares the
+training workflow's engine. Where the decisions left a gap, the conservative
+option was taken; each is open for the owner to revisit.
+
+- **Cancelling or deleting an event closes only pending requests.** The brief
+  asked for requests to be voided "as the training workflow does", but the
+  training workflow voided nothing. A pending request is now voided (its slot
+  freed, the deciders' prompts archived, the member told in the app), for both
+  workflows. An **approved** request is kept: the model already keeps an
+  approved request as the member's record when its event is deleted. So an
+  approval for a meeting that was then cancelled still counts toward the
+  member's cap. Voiding approved requests as well would give the waiver back.
+- **A member on a leave of absence that covers the meeting cannot ask**
+  ("on_leave"): the voting tally already excludes such a meeting, so there is
+  nothing to excuse.
+- **A Chief may decide any meeting request**, as in training, although the
+  meeting routing's fallback is the Secretary, then `meetings.manage` holders.
+  The Secretary decides only when the chosen positions leave nobody, like the
+  Chief in training.
+- **An approval does not overwrite a waiver the Secretary already granted by
+  hand** for that member and meeting; the request is approved, the Secretary's
+  wording stands, and the attendee row is not linked to the request. A
+  Secretary's grant over a waiver an approval wrote replaces the standard text
+  and drops the link, so the waiver is the Secretary's.
+- **The meeting screens are not built yet.** A decider's in-app prompt links
+  to `/meetings/waiver-requests/{id}`, which the frontend does not have until
+  the meeting screens land; the member's notice links to the event. Until then
+  the policy can be saved only through the API, so no prompt is sent.
+- **Postponing an event does not touch its waiver requests.** A request keeps
+  the session date it was made for (training and meetings alike).
+- **`idx_meeting_attendees_meeting` is now a prefix of the new unique
+  `(meeting_id, user_id)` index** and could be dropped; it was left to keep
+  the migration to what the feature needs.

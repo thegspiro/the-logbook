@@ -22,15 +22,22 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import pytest
+from pydantic import ValidationError
+
 from app.models.event import EventType
-from app.models.training import TrainingSession, TrainingType
+from app.models.training import RequirementType, TrainingSession, TrainingType
+from app.schemas.event import RecurringEventCreate
 from app.schemas.training_session import (
     TrainingSessionAttach,
     TrainingSessionCreate,
     TrainingSessionLinkageUpdate,
 )
 from app.services.event_service import ATTENDANCE_LOCKED_PREFIX, EventService
-from app.services.training_session_service import TrainingSessionService
+from app.services.training_session_service import (
+    ATTENDANCE_REQUIREMENT_NOT_LINKABLE,
+    TrainingSessionService,
+)
 
 ORG = uuid4()
 ACTOR = uuid4()
@@ -554,19 +561,18 @@ class TestRecurringTrainingDetails:
         )
         assert db.added == []
 
-    async def test_a_rolling_series_is_refused(self):
-        """The job that extends a rolling series copies events, not sessions.
-        The schema refuses it first; the service holds the line for any other
-        caller."""
-        db = RecordingSession()
-        events, error = await EventService(db).create_recurring_event(
-            self._data(rolling_recurrence=True, recurrence_end_date=None), ORG, ACTOR
-        )
-        assert (events, error) == (
-            [],
-            "Training details can't be added to a rolling series",
-        )
-        assert db.added == []
+    def test_a_rolling_series_may_carry_them(self):
+        """The job that extends a rolling series copies the latest
+        occurrence's session and attendance links on to each new one, so the
+        schema no longer refuses details on one. The integration tests in
+        test_rolling_training_series.py cover the series end to end."""
+        data = self._data(rolling_recurrence=True, recurrence_end_date=None)
+        data["recurrence_pattern"] = "weekly"
+
+        created = RecurringEventCreate(**data)
+
+        assert created.rolling_recurrence is True
+        assert created.training_details is not None
 
     async def test_a_foreign_category_is_refused(self):
         db = RecordingSession([_one(None)])
@@ -575,3 +581,113 @@ class TestRecurringTrainingDetails:
         )
         assert (events, error) == ([], "Invalid training category")
         assert db.added == []
+
+
+class TestASessionAttendanceRequirementIsNotASatisfiedRequirement:
+    """A session's ``requirement_id`` feeds a program requirement's progress.
+    A session-attendance requirement is graded from the session's attendance
+    links instead, so the "requirement this session satisfies" picker refuses
+    one as a new or changed value. One already stored keeps saving, because
+    the event forms re-send every field on save (pitfall #1)."""
+
+    async def test_refused_on_create(self):
+        db = RecordingSession([_one(RequirementType.SESSION_ATTENDANCE)])
+
+        session, error = await TrainingSessionService(db).create_training_session(
+            _payload(requirement_id=uuid4()), ORG, ACTOR
+        )
+
+        assert session is None
+        assert error == ATTENDANCE_REQUIREMENT_NOT_LINKABLE
+        assert db.added == []
+
+    async def test_refused_when_attaching_details_to_an_event(self):
+        db = RecordingSession([_one(RequirementType.SESSION_ATTENDANCE)])
+
+        course, error = await TrainingSessionService(db).resolve_attach_details(
+            TrainingSessionAttach(requirement_id=uuid4()), ORG
+        )
+
+        assert (course, error) == (None, ATTENDANCE_REQUIREMENT_NOT_LINKABLE)
+
+    async def test_refused_when_changed_on_an_existing_session(self):
+        session = _session(requirement_id=str(uuid4()))
+        db = RecordingSession(
+            [
+                _one(session),
+                _one(_open_event()),
+                _one(RequirementType.SESSION_ATTENDANCE),
+            ]
+        )
+
+        updated, error = await TrainingSessionService(db).update_session_linkage(
+            session.id, TrainingSessionLinkageUpdate(requirement_id=uuid4()), ORG
+        )
+
+        assert (updated, error) == (None, ATTENDANCE_REQUIREMENT_NOT_LINKABLE)
+        assert db.commit.await_count == 0
+
+    async def test_one_already_stored_is_accepted_when_re_sent(self):
+        stored = uuid4()
+        session = _session(requirement_id=str(stored))
+        db = RecordingSession(
+            [
+                _one(session),
+                _one(_open_event()),
+                _one(RequirementType.SESSION_ATTENDANCE),
+            ]
+        )
+
+        updated, error = await TrainingSessionService(db).update_session_linkage(
+            session.id,
+            TrainingSessionLinkageUpdate(requirement_id=stored, category_id=None),
+            ORG,
+        )
+
+        assert error is None
+        assert updated.requirement_id == str(stored)
+        assert db.commit.await_count == 1
+
+    async def test_a_cohort_class_s_own_link_is_copied_across(self):
+        stored = uuid4()
+        db = RecordingSession([_one(RequirementType.SESSION_ATTENDANCE)])
+
+        session, error = await TrainingSessionService(db).create_training_session(
+            _payload(requirement_id=stored),
+            ORG,
+            ACTOR,
+            stored_requirement_id=str(stored),
+        )
+
+        assert error is None
+        assert session.requirement_id == str(stored)
+
+    async def test_other_requirement_types_are_still_linked(self):
+        requirement_id = uuid4()
+        db = RecordingSession([_one(RequirementType.HOURS)])
+
+        session, error = await TrainingSessionService(db).create_training_session(
+            _payload(requirement_id=requirement_id), ORG, ACTOR
+        )
+
+        assert error is None
+        assert session.requirement_id == str(requirement_id)
+
+
+class TestTheAttachSchema:
+    def test_an_unknown_key_is_refused_rather_than_dropped(self):
+        # A client sending a field this schema does not carry would otherwise
+        # get a 201 and silently lose it.
+        with pytest.raises(ValidationError, match="extra_forbidden|Extra inputs"):
+            TrainingSessionAttach(course_id=uuid4(), prerequisites="none")
+
+    def test_a_library_course_and_a_one_off_name_are_not_both_accepted(self):
+        with pytest.raises(ValidationError, match="not both"):
+            TrainingSessionAttach(course_id=uuid4(), course_name="Pump Ops")
+
+    def test_every_field_is_optional(self):
+        details = TrainingSessionAttach()
+        assert details.auto_create_records is True
+        assert details.require_completion_confirmation is False
+        assert details.counts_toward_certification is True
+        assert details.approval_deadline_days == 7

@@ -48,6 +48,7 @@ vi.mock('@/services/api', () => ({
   organizationService: { updateSettings: (...args: unknown[]) => mockUpdateSettings(...args) as unknown },
 }));
 
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import { ExpenseLineDialog } from '../components/ExpenseLineDialog';
 import { SharedReceiptActions } from '../components/SharedReceiptActions';
 import { MileageRateSettingsCard } from '../components/MileageRateSettingsCard';
@@ -87,7 +88,9 @@ const fillTrip = (index: number, trip: { date: string; from: string; to: string;
 describe('a mileage line with a trip log', () => {
   it('previews the price and sends the trips instead of an amount', async () => {
     const user = userEvent.setup();
-    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" onClose={vi.fn()} onSaved={vi.fn()} />);
+    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" onClose={vi.fn()} onSaved={vi.fn()} />, {
+      wrapper: ConfirmProvider,
+    });
 
     await user.type(screen.getByLabelText('Description *'), 'October mileage');
     await user.selectOptions(screen.getByLabelText('Type *'), 'mileage');
@@ -119,7 +122,9 @@ describe('a mileage line with a trip log', () => {
 
   it('says what an unfinished trip is missing rather than sending it', async () => {
     const user = userEvent.setup();
-    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" onClose={vi.fn()} onSaved={vi.fn()} />);
+    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" onClose={vi.fn()} onSaved={vi.fn()} />, {
+      wrapper: ConfirmProvider,
+    });
 
     await user.type(screen.getByLabelText('Description *'), 'Mileage');
     await user.selectOptions(screen.getByLabelText('Type *'), 'mileage');
@@ -134,7 +139,9 @@ describe('a mileage line with a trip log', () => {
   it('with no rate set, says so and keeps the amount', async () => {
     mockGetSettings.mockResolvedValue(settings(null));
     const user = userEvent.setup();
-    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" onClose={vi.fn()} onSaved={vi.fn()} />);
+    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" onClose={vi.fn()} onSaved={vi.fn()} />, {
+      wrapper: ConfirmProvider,
+    });
 
     await user.selectOptions(screen.getByLabelText('Type *'), 'mileage');
 
@@ -158,7 +165,9 @@ describe('a mileage line with a trip log', () => {
       mileageRate: '0.700',
       createdAt: '2026-10-01T12:00:00Z',
     } as ExpenseLineItem;
-    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" line={line} onClose={vi.fn()} onSaved={vi.fn()} />);
+    render(<ExpenseLineDialog reportId="er-1" fiscalYearId="fy-1" line={line} onClose={vi.fn()} onSaved={vi.fn()} />, {
+      wrapper: ConfirmProvider,
+    });
 
     await user.click(await screen.findByRole('button', { name: 'Remove trip 1' }));
     fireEvent.change(screen.getByLabelText('Amount *'), { target: { value: '9' } });

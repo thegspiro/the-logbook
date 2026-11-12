@@ -27,6 +27,8 @@ from app.models.event import Event
 from app.models.training import TrainingApproval, TrainingSession
 from app.models.user import User
 from app.schemas.training_session import (
+    MandatoryTiersRequest,
+    MandatoryTiersResponse,
     RecurringTrainingSessionCreate,
     TrainingApprovalRequest,
     TrainingApprovalResponse,
@@ -36,6 +38,7 @@ from app.schemas.training_session import (
     TrainingSessionCreate,
     TrainingSessionLinkageUpdate,
     TrainingSessionResponse,
+    UnmappedRequirementResponse,
 )
 from app.services.training_session_service import (
     TRAINING_DETAILS_EXIST,
@@ -299,6 +302,45 @@ async def attach_training_details(
     )
 
     return await _session_payload(service, training_session)
+
+
+@router.post("/mandatory-tiers", response_model=MandatoryTiersResponse)
+async def get_mandatory_tiers(
+    body: MandatoryTiersRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("events.manage", "training.manage")
+    ),
+):
+    """
+    Who an event counting toward these attendance requirements is mandatory for
+
+    The training-event form's pre-fill for "Mandatory for": the membership
+    tiers whose members the requirements grade, "All members" when one
+    applies to everyone, and a note for each requirement no tier stands for.
+    Reads only; a POST because the requirement list is a body.
+
+    **Authentication required**
+    **Requires permission: events.manage or training.manage**
+    """
+    tiers, error = await TrainingSessionService(db).mandatory_tiers(
+        body.requirement_ids, current_user.organization_id
+    )
+    if error or tiers is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error or "An unexpected error occurred",
+        )
+    return MandatoryTiersResponse(
+        everyone=tiers.everyone,
+        tier_ids=tiers.tier_ids,
+        unmapped=[
+            UnmappedRequirementResponse(
+                requirement_id=u.requirement_id, name=u.name, reason=u.reason
+            )
+            for u in tiers.unmapped
+        ],
+    )
 
 
 @router.get(

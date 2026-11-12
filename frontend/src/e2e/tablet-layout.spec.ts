@@ -163,7 +163,12 @@ test.describe('Form fields line up on a touch tablet', () => {
             ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
             // A native select draws its arrow inside the content box.
             const arrow = el instanceof HTMLSelectElement && cs.appearance !== 'none' ? 20 : 0;
-            const room = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - arrow;
+            // From the rendered box, not clientWidth: Chromium 158 reports an
+            // input's clientWidth without its padding, so subtracting the
+            // padding from it again undercounted the room on that engine.
+            const box =
+              el.getBoundingClientRect().width - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth);
+            const room = box - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - arrow;
             return { text: ctx.measureText(text).width, room };
           };
 

@@ -483,6 +483,16 @@ class MeetingsService:
             if user_result.scalar_one_or_none() is None:
                 return None, "User not found in organization"
 
+            already = await self.db.execute(
+                select(MeetingAttendee.id).where(
+                    MeetingAttendee.meeting_id == str(meeting_id),
+                    MeetingAttendee.user_id == str(attendee_user_id),
+                    MeetingAttendee.organization_id == str(organization_id),
+                )
+            )
+            if already.scalar_one_or_none() is not None:
+                return None, "This member is already an attendee of this meeting"
+
             attendee = MeetingAttendee(
                 organization_id=organization_id,
                 meeting_id=meeting_id,
@@ -732,6 +742,11 @@ class MeetingsService:
         from app.core.utils import generate_uuid
         from app.models.event import Event, EventRSVP, RSVPStatus
 
+        # Local: the waiver engine reaches the meetings models, notifications
+        # and the permission helpers, which a module-level import here would
+        # load with every meetings import.
+        from app.services.attendance_waiver_service import carry_over_meeting_waivers
+
         # Get the event, locked: two coordinators bridging the same event at
         # nearly the same instant would otherwise both read "no meeting yet"
         # below and both insert one (Pitfall #27 — a TOCTOU race on the
@@ -799,27 +814,52 @@ class MeetingsService:
             self.db.add(meeting)
             await self.db.flush()
 
-            # Import attendees from EventRSVP check-ins
+            # Import attendees from EventRSVP check-ins. One row per member:
+            # meeting_attendees is unique on (meeting, member), so a second
+            # RSVP row for a member is folded into the first, a check-in on
+            # either counting.
             rsvps_result = await self.db.execute(
                 select(EventRSVP).where(
                     EventRSVP.event_id == str(event_id),
                     EventRSVP.organization_id == str(organization_id),
                 )
             )
+            attendees: Dict[str, MeetingAttendee] = {}
             for rsvp in rsvps_result.scalars().all():
+                checked_in = bool(rsvp.checked_in)
+                excused = (
+                    not checked_in and rsvp.status == RSVPStatus.NOT_GOING
+                    if hasattr(rsvp.status, "value")
+                    else False
+                )
+                existing_attendee = attendees.get(str(rsvp.user_id))
+                if existing_attendee is not None:
+                    existing_attendee.present = existing_attendee.present or checked_in
+                    existing_attendee.excused = not existing_attendee.present and (
+                        existing_attendee.excused or excused
+                    )
+                    continue
                 attendee = MeetingAttendee(
                     id=generate_uuid(),
                     organization_id=str(organization_id),
                     meeting_id=meeting.id,
                     user_id=rsvp.user_id,
-                    present=rsvp.checked_in,
-                    excused=(
-                        not rsvp.checked_in and rsvp.status == RSVPStatus.NOT_GOING
-                        if hasattr(rsvp.status, "value")
-                        else False
-                    ),
+                    present=checked_in,
+                    excused=excused,
                 )
+                attendees[str(rsvp.user_id)] = attendee
                 self.db.add(attendee)
+
+            # Members whose request to be excused was approved before this
+            # record existed: their waiver comes across now, inside the lock
+            # on the event an approval also takes (attendance_waiver_service).
+            await carry_over_meeting_waivers(
+                self.db,
+                str(organization_id),
+                str(event_id),
+                str(meeting.id),
+                attendees,
+            )
 
             await self.db.commit()
             await self.db.refresh(meeting)

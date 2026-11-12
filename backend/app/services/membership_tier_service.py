@@ -29,11 +29,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import (
+    ACTIVE_ACCOUNT_STATUSES,
     MemberLeaveOfAbsence,
     MemberServicePeriod,
     Organization,
     User,
-    UserStatus,
     sync_account_status_with_membership,
 )
 from app.services.member_service_history_service import (
@@ -143,6 +143,12 @@ def tally_attendance(
     percentage above 100%. Attendance is counted only within the eligible set
     for the same reason: a member marked present at a meeting during their
     leave must not count toward the percentage.
+
+    **Check-in wins** (owner decision, 2026-11-10): a meeting the member was
+    present at is attended even when they also hold a waiver for it, so a
+    waiver excuses only a meeting they missed. Callers therefore pass every
+    meeting the member was marked present at as ``present_ids``, waiver or
+    not; this is the one place the two are reconciled.
     """
     start, end = window
     dated = [(mid, md) for mid, md in meetings if start <= md <= end]
@@ -158,14 +164,15 @@ def tally_attendance(
                 on_leave.add(mid)
                 break
 
-    waived = in_window & frozenset(waived_ids)
+    present = frozenset(present_ids)
+    waived = (in_window & frozenset(waived_ids)) - present
     eligible = in_window - waived - on_leave
     return AttendanceTally(
         in_window=in_window,
         waived=waived,
         on_leave=frozenset(on_leave),
         eligible=eligible,
-        attended=eligible & frozenset(present_ids),
+        attended=eligible & present,
     )
 
 
@@ -504,7 +511,6 @@ class MembershipTierService:
             select(MeetingAttendee.meeting_id).where(
                 MeetingAttendee.user_id == user_id,
                 MeetingAttendee.present.is_(True),
-                MeetingAttendee.waiver_reason.is_(None),
                 MeetingAttendee.meeting_id.in_(window_meetings_subq),
             )
         )
@@ -744,7 +750,7 @@ class MembershipTierService:
         result = await self.db.execute(
             select(User).where(
                 User.organization_id == organization_id,
-                User.status.in_([UserStatus.ACTIVE, UserStatus.PROBATIONARY]),
+                User.status.in_(ACTIVE_ACCOUNT_STATUSES),
                 User.deleted_at.is_(None),
             )
         )

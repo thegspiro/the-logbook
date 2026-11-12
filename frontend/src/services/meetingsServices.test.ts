@@ -11,10 +11,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockGet = vi.fn();
+const mockPost = vi.fn();
 
 vi.mock('./apiClient', () => ({
   default: {
     get: (...args: unknown[]) => mockGet(...args) as unknown,
+    post: (...args: unknown[]) => mockPost(...args) as unknown,
   },
 }));
 
@@ -47,5 +49,29 @@ describe('meetingsService.getMeetings', () => {
     const result = await meetingsService.getMeetings();
 
     expect(result.meetings).toEqual([]);
+  });
+});
+
+/**
+ * D7: the waiver reason may be medical. It travels in the JSON body the
+ * endpoint reads, never as query parameters, which land in access logs and
+ * URL history.
+ */
+describe('meetingsService.grantAttendanceWaiver', () => {
+  beforeEach(() => {
+    mockPost.mockReset();
+    mockPost.mockResolvedValue({ data: { attendee_id: 'a1' } });
+  });
+
+  it('sends the member and the reason as a JSON body, with no query string', async () => {
+    await meetingsService.grantAttendanceWaiver('m1', { user_id: 'u1', reason: 'Hospital stay' });
+
+    expect(mockPost).toHaveBeenCalledTimes(1);
+    const call: unknown[] = (mockPost.mock.calls[0] as unknown[] | undefined) ?? [];
+    const [url, body, config] = call;
+    expect(url).toBe('/meetings/m1/attendance-waiver');
+    expect(String(url)).not.toContain('Hospital');
+    expect(body).toEqual({ user_id: 'u1', reason: 'Hospital stay' });
+    expect(config).toBeUndefined();
   });
 });
