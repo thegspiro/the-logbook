@@ -487,6 +487,34 @@ greyed out.
   dialog, interviews and pipeline settings; onboarding, the public portal,
   membership, history, the org chart node and IP security admin.
 
+## Rollout status, 2026-11-11 (batch 19)
+
+The same steps, on these:
+
+| Area                 | Converted                                                                                                                                                                                                |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inventory and assets | Facilities › systems, rooms, compliance checklists; the maintenance and inspection dialogs (a facility's sections and the cross-facility pages); Medical Supplies › categories; the medical create panel |
+
+Shared change that came with it: the maintenance and inspection dialogs were
+two copies each, one per screen; each is now one component
+(`MaintenanceRecordDialog`, `InspectionRecordDialog`) driven by its existing
+hook, which gained the field errors, the dirty flag and an `idPrefix` so each
+screen keeps its field ids.
+
+Two screens on the list were looked at and left, because they hold no form of
+their own: Inventory › NFC Tags is one switch that saves as it is flipped, and
+the tamper seal panel answers into the equipment check it sits in, which saves
+it. The medical create panel holds one choice and nothing typed, so its Cancel
+does not ask first; its Create & link now names a missing category on the
+field rather than sitting greyed out.
+
+**Still not converted**, from the inventory-and-assets row above: size
+preferences, catalog quick add, stock lots, the checklist builder and settings
+pages; the full apparatus form and documents; the facility
+overview, files and settings sections and list; medical supply lots and
+import/export; store settings, order detail and checkout. The other rows of the
+batch 18 list are unchanged.
+
 ## Suggested order
 
 1. **F-1** — small, backend-led, stops a data-integrity hole.

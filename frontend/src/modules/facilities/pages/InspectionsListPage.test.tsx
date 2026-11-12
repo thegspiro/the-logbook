@@ -111,7 +111,7 @@ describe('InspectionsListPage dueWithin filter', () => {
 
     renderWithRouter(<InspectionsListPage />);
 
-    expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: 30 });
+    expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: 30, idPrefix: 'inspection-list' });
     expect(screen.getByText(/Showing only inspections next due in the next 30 days/)).toBeInTheDocument();
     expect(screen.getByText('Annual sprinkler test')).toBeInTheDocument();
   });
@@ -122,7 +122,9 @@ describe('InspectionsListPage dueWithin filter', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Show all inspections' }));
 
-    await waitFor(() => expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: undefined }));
+    await waitFor(() =>
+      expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: undefined, idPrefix: 'inspection-list' })
+    );
     expect(mockSetPage).toHaveBeenCalledExactlyOnceWith(1);
     expect(window.location.search).toBe('');
     expect(screen.queryByText(/Showing only inspections/)).not.toBeInTheDocument();
@@ -133,14 +135,14 @@ describe('InspectionsListPage dueWithin filter', () => {
 
     renderWithRouter(<InspectionsListPage />);
 
-    expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: undefined });
+    expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: undefined, idPrefix: 'inspection-list' });
     expect(screen.queryByText(/Showing only inspections/)).not.toBeInTheDocument();
   });
 
   it('behaves as before with no parameter', () => {
     renderWithRouter(<InspectionsListPage />);
 
-    expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: undefined });
+    expect(mockUseInspectionForm).toHaveBeenLastCalledWith({ dueWithinDays: undefined, idPrefix: 'inspection-list' });
     expect(screen.queryByRole('button', { name: 'Show all inspections' })).not.toBeInTheDocument();
   });
 });

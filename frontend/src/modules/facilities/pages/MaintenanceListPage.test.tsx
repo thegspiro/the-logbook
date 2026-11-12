@@ -73,7 +73,10 @@ describe('MaintenanceListPage status from the URL', () => {
 
     renderWithRouter(<MaintenanceListPage />);
 
-    expect(mockUseMaintenanceForm).toHaveBeenLastCalledWith({ initialStatusFilter: 'due' });
+    expect(mockUseMaintenanceForm).toHaveBeenLastCalledWith({
+      initialStatusFilter: 'due',
+      idPrefix: 'maintenance-list',
+    });
     expect(screen.getByRole('button', { name: 'Due soon' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText(/Open work due in the next 30 days/)).toBeInTheDocument();
   });
@@ -83,7 +86,10 @@ describe('MaintenanceListPage status from the URL', () => {
 
     renderWithRouter(<MaintenanceListPage />);
 
-    expect(mockUseMaintenanceForm).toHaveBeenLastCalledWith({ initialStatusFilter: 'overdue' });
+    expect(mockUseMaintenanceForm).toHaveBeenLastCalledWith({
+      initialStatusFilter: 'overdue',
+      idPrefix: 'maintenance-list',
+    });
   });
 
   it('ignores a status it does not know', () => {
@@ -91,7 +97,10 @@ describe('MaintenanceListPage status from the URL', () => {
 
     renderWithRouter(<MaintenanceListPage />);
 
-    expect(mockUseMaintenanceForm).toHaveBeenLastCalledWith({ initialStatusFilter: 'all' });
+    expect(mockUseMaintenanceForm).toHaveBeenLastCalledWith({
+      initialStatusFilter: 'all',
+      idPrefix: 'maintenance-list',
+    });
     expect(screen.queryByText(/Open work due in the next 30 days/)).not.toBeInTheDocument();
   });
 });
