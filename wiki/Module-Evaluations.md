@@ -113,6 +113,13 @@ responded to, call response rate (hidden when call tracking is off),
 administrative hours, skills tests passed, certifications held, and positions
 held.
 
+_Updated 2026-11-10._ **Training session attendance** follows the
+session-attendance requirement that applies to the member: only the sessions
+linked to it, attendance as finalized, every waiver and leave excusing a
+session. It reads "unavailable" when no single requirement applies (including
+departments with no session-attendance requirement). Evaluations already open
+keep the old figure until **Update figures**. See `docs/UPGRADING.md`.
+
 **Overall rating** — one of:
 
 - **Graded by section** (the Annual starter uses this). Each section gets a

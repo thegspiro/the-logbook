@@ -5,6 +5,41 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 10 – 11, 2026
+
+Merged to `main` after `69d32dc1` (2026-11-10 13:56 UTC, the previous pass)
+through `dcc32fe2` (2026-11-11 13:58 UTC), 38 first-parent merges. Sixteen are
+security-review passes, recorded in `docs/security-review/PROGRESS.md`; the
+forms batches (#4206, #4211, #4239) are recorded in
+`docs/FORMS_REVIEW_2026-11-05.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                             | Guide | Disposition                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Members Administration: **Former Members** page (`?tab=former`) for archived and dropped members; Member Management lists everyone else (#4215)                                                                    | 01    | Added under Member Management Row Actions; Roster row of the hub table and the reactivate note updated                        |
+| Member row says each thing once: no base Member chip, no chip repeating the status or class, Status folded into Membership, Reset Password / Unlock / Reset MFA / Delete in a **More actions** menu (#4218, #4222) | 01    | Added; delete steps now point at the menu                                                                                     |
+| **Postpone Event** (W80-11): new start and end, reason, clears check-ins and credit, keeps RSVPs, **Postponed** badge on the list (#4179)                                                                          | 04    | New section after Cancelling; wiki `Module-Events` gains the endpoint. Migration `09f0171ccf5e` (three nullable columns)      |
+| Evaluations: training-session attendance graded by the member's session-attendance requirement (#4208)                                                                                                             | 02    | Note added to the evaluation steps; wiki `Module-Evaluations` updated. Already in `UPGRADING.md` and `EVALUATIONS_MODULE.md`  |
+| Session waiver requests (members ask to be excused), backend only, off until a policy is saved (#4225)                                                                                                             | 02    | "Coming next" note under Waivers. Rules in `backend/app/docs/TRAINING_WAIVERS.md`; migration `8b1cf6f55425` in `UPGRADING.md` |
+| Shift history import: overlapping rows get **Save times** in the Times cell (#4190)                                                                                                                                | 03    | Added to the import steps                                                                                                     |
+| Training event created and edited with its training details in one save; rolling series and Duplicate carry them (#4231, backend part 1)                                                                           | 04    | Already written by the PR                                                                                                     |
+| Community Engagement period report (#4221)                                                                                                                                                                         | 04    | Already written by the PR, also in wiki `Module-Events`                                                                       |
+| Noto Sans embedded; certified results, evaluations and minutes as PDF/A-2b (#4207)                                                                                                                                 | none  | Already in `PDF_REPORTS.md`                                                                                                   |
+| Sign-in lands straight on **My Account** when a password change or MFA enrolment is due; failed sign-in reselects the password; registry Source link beside Import (#4227)                                         | 00    | Guide 00 already says "straight to the Password tab"; no edit                                                                 |
+| Forms batches 4, 16, 17: named missing fields, 422s shown on the field, discard protection                                                                                                                         | none  | Behaviour general across forms; recorded in the forms review                                                                  |
+| Dashboard pulse default: audit rows carry IP and browser; buttons offered on either settings permission (A7, #4223)                                                                                                | none  | Recorded in `docs/app-review/`                                                                                                |
+| CI: `failOnFlakyTests` (#4219, Pitfall #38), Mobile Safari spec fixes (#4216, #4229), dependency bumps (#4195 pypdf 7.0.0, #4197)                                                                                  | none  | Internal or CI only                                                                                                           |
+
+**Screenshots to create:** Roster strip with **Former Members**; a Member
+Management row with the **More actions** menu open; a row reading **No other
+positions**; the **Postpone Event** dialog; an event card with **Postponed**;
+the event page's "Postponed from" line; a history-import row with **Save
+times**. **Replace:** `01-22-member-lifecycle` (shows the old Roster strip and
+a separate Status column). Queued in `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Not covered:** YouTube scripts, flagged in
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`, not edited. No script names the
+moved row actions or the evaluation figure by label.
+
 ## Change audit: November 8 – 10, 2026
 
 Merged to `main` after `51e6e1b5` (2026-11-08 08:59 UTC, the previous pass)

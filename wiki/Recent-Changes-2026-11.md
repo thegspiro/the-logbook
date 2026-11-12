@@ -5,6 +5,34 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 10 – 11, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-10--11-2026).
+
+- **Members Administration**: archived and dropped members move to a new
+  **Former Members** page. Each row says things once: no repeated Member,
+  status or class chips, no separate Status column, and Reset Password,
+  Unlock, Reset MFA and Delete live in a **More actions** (⋯) menu.
+- **Events**: **More → Postpone Event** moves an event to a new time with a
+  reason. RSVPs stay; check-ins and credit for the old time are cleared;
+  members who said Going or Maybe are told; the list shows a **Postponed**
+  badge.
+- **Evaluations**: the training-session attendance figure follows the
+  member's session-attendance requirement, so its percentage may change, and
+  it reads "unavailable" when no requirement applies.
+- **Training**: the groundwork for members asking to be excused from a
+  session is in place. It has no screen yet and is off until a policy is
+  saved.
+- **Shift history import**: an overlapping row's times can be fixed in the
+  table with **Save times**.
+- **Training events** keep their training details through Duplicate and
+  rolling series; **Community Engagement** reports what outreach reached.
+- **Documents**: generated PDFs embed Noto Sans; certified results,
+  evaluations and minutes are PDF/A-2b.
+- **Sign-in**: a member who must change their password goes straight to My
+  Account.
+
 ## Recent changes: November 8 – 10, 2026
 
 The engineering audit is
