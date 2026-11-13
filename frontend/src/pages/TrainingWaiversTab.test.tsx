@@ -82,8 +82,7 @@ describe('TrainingWaiversTab status rule', () => {
   });
 
   const rowFor = (memberLabel: string) => {
-    const link = screen.getByRole('link', { name: memberLabel });
-    const row = link.closest('tr');
+    const row = screen.getAllByRole('row').find((r) => within(r).queryByRole('link', { name: memberLabel }) !== null);
     if (!row) throw new Error(`no row for ${memberLabel}`);
     return within(row);
   };
