@@ -11,10 +11,11 @@
 
 import React, { useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import type { EligibilityDefaults } from '../../../types/election';
+import type { EligibilityDefaults, VoterRow } from '../../../types/election';
 import { SettingsToggle } from '../../../components/settings/SettingsToggle';
-import { VOTER_TYPE_OPTIONS } from '../eligibilityRules';
+import { VOTER_TYPE_OPTIONS, rowsForRules } from '../eligibilityRules';
 import { EligibilityRulesEditor } from './EligibilityRulesEditor';
+import { TypeRulesEditor } from './TypeRulesEditor';
 
 interface PositionRow {
   /** Stable React key; a position's name is what the secretary is editing. */
@@ -48,9 +49,16 @@ interface EligibilityDefaultsEditorProps {
   onChange: (next: EligibilityDefaults) => void;
   /** Prefixes element ids so two sets on one page cannot collide. */
   idPrefix: string;
+  /** The department's per-type rows (`ElectionSettings.voter_rows`). */
+  voterRows?: VoterRow[] | undefined;
 }
 
-export const EligibilityDefaultsEditor: React.FC<EligibilityDefaultsEditorProps> = ({ value, onChange, idPrefix }) => {
+export const EligibilityDefaultsEditor: React.FC<EligibilityDefaultsEditorProps> = ({
+  value,
+  onChange,
+  idPrefix,
+  voterRows,
+}) => {
   const [nextKey, setNextKey] = useState(() => Object.keys(value.position_voter_types).length);
   const [positionRows, setPositionRows] = useState<PositionRow[]>(() =>
     Object.entries(value.position_voter_types).map(([name, voterTypes], key) => ({ key, name, voterTypes }))
@@ -82,9 +90,18 @@ export const EligibilityDefaultsEditor: React.FC<EligibilityDefaultsEditorProps>
     <div className="space-y-8">
       <section aria-labelledby={id('rules-heading')} className="space-y-4">
         <h3 id={id('rules-heading')} className="text-theme-text-primary text-base font-semibold">
-          Rules every voter must meet
+          {value.rules.version === 2 ? 'Rules by member type' : 'Rules every voter must meet'}
         </h3>
-        <EligibilityRulesEditor idPrefix={id('rules')} value={value.rules} onChange={(rules) => patch({ rules })} />
+        {value.rules.version === 2 ? (
+          <TypeRulesEditor
+            idPrefix={id('rules')}
+            value={value.rules}
+            rows={rowsForRules(value.rules, voterRows)}
+            onChange={(rules) => patch({ rules })}
+          />
+        ) : (
+          <EligibilityRulesEditor idPrefix={id('rules')} value={value.rules} onChange={(rules) => patch({ rules })} />
+        )}
       </section>
 
       <section aria-labelledby={id('items-heading')} className="space-y-4">

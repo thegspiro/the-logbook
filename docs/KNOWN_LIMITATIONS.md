@@ -1,5 +1,52 @@
 # Known Limitations & Open Decisions
 
+## Elections — Voter Rules by Member Type (Owner Decisions, 2026-11-13)
+
+Election Settings › Voter Eligibility now sets who may vote as one row per
+member type (version 2 rules, `app/services/voter_rules.py`): may vote, a
+waiting period counted from joining the department or from becoming the type,
+and any number of meeting-attendance rules, up to four, all of which must pass.
+Four kinds of vote carry their own set — regular business meeting, annual
+meeting, bylaws amendment, special meeting — and each but the first uses the
+regular set until given one.
+
+### Decided
+
+- **Administrative and social members are judged by two rows.** Their status
+  row (Regular, Probationary, Life, a department tier…) and their class row
+  both apply. This is what the membership tiers already did, since a tier
+  follows status whatever the class, so converting a department's tier rules
+  takes no vote away from anyone on that basis. It can take one away: a
+  status row's waiting period now reaches administrative and social members,
+  who before waited only on their class.
+- **Version 2 rules replace the tiers' voting benefits.** The tier screen no
+  longer offers "Can vote" or the attendance threshold; it points to Election
+  Settings. The stored values are kept, not deleted, and seed a department's
+  rows until the secretary first saves this screen.
+- **No data migration.** Stored rules and tier benefits are converted when
+  they are read (`rules_from_v1`), never rewritten, so a department that never
+  opens the screen keeps exactly the electorate it had.
+- **Elections created before this keep version 1 rules,** and are judged as
+  they were — tier benefits included — until they close.
+
+### Left open
+
+- **A tier's attendance threshold now stops the ballot being sent.** Before, it
+  was checked only when the member tried to vote, so a member who fell short
+  received a ballot link and was then refused. As a row rule it applies
+  everywhere the other rules do: the roster, the ballot send and the vote.
+- **Minutes › Attendance still reads the tier benefits** for its "Voting"
+  column, and so stops agreeing with the ballots once a secretary edits the
+  rows. Fixed by the attendance work that follows (it adds the election-aware
+  Meeting Attendance page and moves both onto `voter_rules`).
+- **A version 1 election's tier rules can no longer be edited,** because the
+  tier screen dropped the fields. Its own election-wide rules still can, until
+  voting opens.
+- **A tier added after the rows were saved** has no row of its own and is
+  judged by the row of the status it counts as (or by no row at all, if it
+  counts as none) until the secretary gives it one; the screen says so on that
+  row.
+
 ## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
 
 The annual review can show a member's requests to be excused from training
