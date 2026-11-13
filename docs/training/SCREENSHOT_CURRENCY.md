@@ -209,14 +209,25 @@ Nothing was captured by this pass.
 ## Queued by the November 2 Zeffy documentation pass
 
 Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-zeffy-integration-november-2-2026).
-Nothing was captured by this pass.
+Captured 2026-11-13, on a demo department seeded from `main` at `9f73cec7`
+with malware scanning on.
 
-| Guide | Screen | Action |
-| --- | --- | --- |
-| 16 | Integrations catalog with the **Zeffy** card, and its connect dialog (API key, signing secret, webhook address) | Create |
-| 12 | **Grants & Fundraising → Zeffy**: connection panel, campaign cards and the payments list | Create |
-| 12 | **Link Zeffy campaign** dialog | Create |
-| 12 | Grants & Fundraising menu with the **Zeffy** entry | Replace |
+| Guide | Screen | Action | Captured |
+| --- | --- | --- | --- |
+| 16 | Integrations catalog with the **Zeffy** card, and its connect dialog (API key, signing secret, webhook address) | Create | `16-24-zeffy-connect` new; `16-01-integrations-catalog` re-shot, now carrying the Zeffy card |
+| 12 | **Grants & Fundraising → Zeffy**: connection panel, campaign cards and the payments list | Create | `12-19-zeffy-page` |
+| 12 | **Link Zeffy campaign** dialog | Create | `12-20-zeffy-link-dialog` |
+| 12 | Grants & Fundraising menu with the **Zeffy** entry | Replace | `12-18-grants-menu-zeffy` new; no earlier image pictured this menu |
+
+**The Zeffy page is pictured from a route mock.** Every row on it comes from
+Zeffy: campaigns are read live with the department's API key, and a payment
+exists only once Zeffy's webhook or the hourly sync reports it. The demo has no
+Zeffy account, so `mockZeffyConnected()` in `scripts/screenshots/manifest.mjs`
+answers the page's status, links, campaigns and payments reads, and nothing is
+written. The links point at the seeded Fill the Boot campaign and the year's
+Annual Member Dues. The link dialog's choice of campaign comes from the real
+API. A change to `app/schemas/zeffy.py` or to the page's statuses needs the mock
+updated before these three images are re-shot.
 
 ## The October 16 – November 1 queues, captured 2026-11-02
 
@@ -803,7 +814,7 @@ integration, and an approval chain no request has used.
 
 | Image                                  | Disposition            | Notes                                                                                                                               |
 | -------------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `16-01-integrations-catalog` (re-shot) | **CURRENT** 2026-10-17 | Google Calendar and Microsoft Outlook read **Coming Soon** with their one-way publishing chips; the iCalendar card is connected     |
+| `16-01-integrations-catalog` (re-shot) | **CURRENT** 2026-11-13 | Google Calendar and Microsoft Outlook read **Coming Soon** with their one-way publishing chips; the iCalendar card is connected; re-shot 2026-11-13 to add the Zeffy card |
 | `16-16-ical-department-feed`           | **CURRENT** 2026-10-17 | New: the connected iCalendar card with the department feed link, copy button and **Reset link**                                     |
 | `12-04-create-application` (re-shot)   | **CURRENT** 2026-10-17 | Funding Details carries **Amount Awarded**, and the form's subtitle is the "Only the program name and agency are required" line     |
 | `12-15-record-pledge-reminders`        | **CURRENT** 2026-10-17 | New: **Record pledge** with **Send reminders** ticked and its help text; filled in, never saved                                     |

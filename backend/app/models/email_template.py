@@ -90,6 +90,16 @@ class EmailTemplateType(str, enum.Enum):
     EVALUATION_AMENDED = "evaluation_amended"
     EVALUATION_RESPONSE = "evaluation_response"
     APPLICATION_INTERVIEW_REQUESTED = "application_interview_requested"
+    # Attendance waiver requests (owner decisions 2026-11-10): asked of the
+    # routed approvers, decided for the member, withdrawn by the member. One
+    # set per workflow, so a department words the training and the meeting
+    # notices separately.
+    SESSION_WAIVER_REQUESTED = "session_waiver_requested"
+    SESSION_WAIVER_DECIDED = "session_waiver_decided"
+    SESSION_WAIVER_WITHDRAWN = "session_waiver_withdrawn"
+    MEETING_WAIVER_REQUESTED = "meeting_waiver_requested"
+    MEETING_WAIVER_DECIDED = "meeting_waiver_decided"
+    MEETING_WAIVER_WITHDRAWN = "meeting_waiver_withdrawn"
     CUSTOM = "custom"
 
 
@@ -160,6 +170,13 @@ class EmailTemplate(Base):
     default_bcc: Mapped[Optional[list[str]]] = mapped_column(
         JSON, nullable=True
     )  # Optional List[str]
+    # Positions whose current holders are copied, so a department can CC "the
+    # Secretary" and have it follow whoever holds the post. Resolved at send
+    # time by ``EmailTemplateService.template_copy_recipients``; NULL or empty
+    # copies nobody, which is every row written before the column existed.
+    default_cc_position_ids: Mapped[Optional[list[str]]] = mapped_column(
+        JSON, nullable=True
+    )
 
     # Available template variables (JSON list of {name, description} objects)
     # e.g. [{"name": "first_name", "description": "Recipient's first name"}]

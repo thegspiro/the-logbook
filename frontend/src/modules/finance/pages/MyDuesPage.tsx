@@ -62,7 +62,7 @@ const DuesCard: React.FC<{ dues: MyDues; tz: string }> = ({ dues, tz }) => {
         </div>
         <div>
           <dt className="text-theme-text-secondary">Still owed</dt>
-          <dd className={`font-medium ${owing ? 'text-red-700 dark:text-red-400' : 'text-theme-text-primary'}`}>
+          <dd className={`font-medium ${owing ? 'text-red-800 dark:text-red-300' : 'text-theme-text-primary'}`}>
             {formatCurrency(dues.balance)}
           </dd>
         </div>

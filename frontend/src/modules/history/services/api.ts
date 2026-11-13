@@ -26,6 +26,13 @@ import type {
   ServicePeriodWrite,
   EditKind,
   ClearanceDecisionKind,
+  ImportDetail,
+  ImportRowUpdate,
+  ImportSummary,
+  ImportTitleChoice,
+  MergeChoice,
+  MergePreview,
+  RemoveRecordsResult,
 } from '../types';
 
 const api = createApiClient();
@@ -200,4 +207,94 @@ export const historyService = {
     const { data } = await api.get<ClearanceRequest[]>(`${BASE}/clearance/queue`);
     return asArray(data);
   },
+
+  // --- Import ---
+
+  async downloadImportTemplate(): Promise<Blob> {
+    const { data } = await api.get<Blob>(`${BASE}/imports/template`, { responseType: 'blob' });
+    return data;
+  },
+
+  async listImports(): Promise<ImportSummary[]> {
+    const { data } = await api.get<ImportSummary[]>(`${BASE}/imports`);
+    return asArray(data);
+  },
+
+  async uploadImport(file: File): Promise<ImportDetail> {
+    const form = new FormData();
+    form.append('file', file);
+    const { data } = await api.post<ImportDetail>(`${BASE}/imports`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return normalizeImport(data);
+  },
+
+  async getImport(id: string): Promise<ImportDetail> {
+    const { data } = await api.get<ImportDetail>(`${BASE}/imports/${id}`);
+    return normalizeImport(data);
+  },
+
+  async updateImportRow(id: string, rowId: string, payload: ImportRowUpdate): Promise<ImportDetail> {
+    const { data } = await api.patch<ImportDetail>(`${BASE}/imports/${id}/rows/${rowId}`, payload);
+    return normalizeImport(data);
+  },
+
+  async acceptSuggestions(id: string): Promise<number> {
+    const { data } = await api.post<{ decided: number }>(`${BASE}/imports/${id}/accept-suggestions`);
+    return data.decided;
+  },
+
+  async setImportTitles(id: string, choices: ImportTitleChoice[]): Promise<ImportDetail> {
+    const { data } = await api.put<ImportDetail>(`${BASE}/imports/${id}/titles`, { choices });
+    return normalizeImport(data);
+  },
+
+  async commitImport(id: string): Promise<ImportSummary> {
+    const { data } = await api.post<ImportSummary>(`${BASE}/imports/${id}/commit`);
+    return data;
+  },
+
+  async discardImport(id: string): Promise<void> {
+    await api.delete(`${BASE}/imports/${id}`);
+  },
+
+  async removeImportRecords(id: string): Promise<RemoveRecordsResult> {
+    const { data } = await api.post<RemoveRecordsResult>(`${BASE}/imports/${id}/remove-records`);
+    return { removed: data.removed, kept: asArray(data.kept) };
+  },
+
+  // --- Merge ---
+
+  async mergePreview(keepId: string, otherId: string): Promise<MergePreview> {
+    const { data } = await api.get<MergePreview>(`${BASE}/people/${keepId}/merge-preview`, {
+      params: { other_id: otherId },
+    });
+    return { ...data, fields: asArray(data.fields), warnings: asArray(data.warnings) };
+  },
+
+  async mergePerson(
+    keepId: string,
+    otherId: string,
+    choices: Record<string, MergeChoice>
+  ): Promise<HistoricalMemberFullView> {
+    const { data } = await api.post<HistoricalMemberFullView>(`${BASE}/people/${keepId}/merge`, {
+      other_id: otherId,
+      choices,
+    });
+    return data;
+  },
 };
+
+function normalizeImport(data: ImportDetail): ImportDetail {
+  return {
+    ...data,
+    rows: asArray(data.rows).map((row) => ({
+      ...row,
+      problems: asArray(row.problems),
+      suggestions: asArray(row.suggestions),
+      edited_fields: asArray(row.edited_fields),
+    })),
+    titles: asArray(data.titles),
+    blockers: asArray(data.blockers),
+  };
+}

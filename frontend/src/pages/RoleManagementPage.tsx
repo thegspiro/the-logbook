@@ -381,8 +381,12 @@ export const RoleManagementPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex gap-2">
+                    {/* Named after the position: thirty cards each read only
+                        "Edit" to a screen reader (W05-10). The visible word
+                        leads the name, so voice control still finds it. */}
                     <button
                       onClick={() => handleEdit(role)}
+                      aria-label={`Edit ${role.name}`}
                       className="touch-target-phone text-sm font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                     >
                       Edit
@@ -392,6 +396,7 @@ export const RoleManagementPage: React.FC = () => {
                         onClick={() => {
                           void handleDelete(role);
                         }}
+                        aria-label={`Delete ${role.name}`}
                         className="touch-target-phone text-sm font-medium text-red-700 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                       >
                         Delete

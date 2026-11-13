@@ -636,6 +636,560 @@ const lengthen = (value: unknown, key = ''): unknown => {
   return value;
 };
 
+// Finance. Fourteen finance screens sat in the route inventory as exempt, and
+// a visit could not have measured them: the catch-all's `{}` drew every list as
+// empty and took /finance/budget-amendments down through the ErrorBoundary,
+// which maps the pending list. Camel-cased, as schemas/finance.py serializes,
+// with money as a string, as its Decimal fields do. Statuses vary so the badges
+// a reviewer reads all render.
+const FINANCE_STAMP = {
+  organizationId: 'e2e-org',
+  createdBy: 'e2e-user-id',
+  createdAt: '2026-01-02T15:00:00Z',
+  updatedAt: '2026-02-10T15:00:00Z',
+};
+
+interface FiscalYearFixture {
+  id: string;
+  name: string;
+  status: string;
+  requestDeadline?: string;
+  requestsOpen?: boolean;
+  planningStage?: string;
+}
+
+const FY_2026 = {
+  id: 'e2e-fy-2026',
+  name: 'FY 2026',
+  startDate: '2026-01-01',
+  endDate: '2026-12-31',
+  status: 'active',
+  isLocked: false,
+  ...FINANCE_STAMP,
+};
+
+// Next year's, open for budget requests: what the request and review screens list.
+const FY_2027 = {
+  id: 'e2e-fy-2027',
+  name: 'FY 2027',
+  startDate: '2027-01-01',
+  endDate: '2027-12-31',
+  status: 'draft',
+  isLocked: false,
+  requestDeadline: '2026-12-01',
+  requestsOpen: true,
+  planningStage: 'requests',
+  ...FINANCE_STAMP,
+};
+
+const FISCAL_YEARS = [FY_2026, FY_2027];
+
+const BUDGET_CATEGORIES = [
+  ['e2e-cat-apparatus', 'Apparatus Maintenance'],
+  ['e2e-cat-ppe', 'Personal Protective Equipment'],
+  ['e2e-cat-training', 'Training & Certification'],
+].map(([id, name], i) => ({ id, name, sortOrder: i, isActive: true, ...FINANCE_STAMP }));
+
+const BUDGETS = (
+  [
+    ['e2e-budget-1', 'e2e-cat-apparatus', 'Apparatus Maintenance', '48000.00', '31250.40', '6200.00'],
+    ['e2e-budget-2', 'e2e-cat-ppe', 'Personal Protective Equipment', '125000.00', '98410.15', '18900.00'],
+    ['e2e-budget-3', 'e2e-cat-training', 'Training & Certification', '22500.00', '4180.00', '0.00'],
+  ] as const
+).map(([id, categoryId, categoryName, amountBudgeted, amountSpent, amountEncumbered]) => ({
+  id,
+  fiscalYearId: 'e2e-fy-2026',
+  fiscalYearName: 'FY 2026',
+  fiscalYearStatus: 'active',
+  categoryId,
+  categoryName,
+  amountBudgeted,
+  amountSpent,
+  amountEncumbered,
+  ...FINANCE_STAMP,
+}));
+
+const approvalStep = (entityType: string, entityId: string, status: string) => ({
+  id: `${entityId}-step`,
+  chainId: 'e2e-chain',
+  stepId: 'e2e-chain-step-1',
+  entityType,
+  entityId,
+  status,
+  stepName: 'Chief approval',
+  stepOrder: 1,
+  assigneeLabel: 'Fire Chief',
+  createdAt: '2026-02-01T15:00:00Z',
+});
+
+const PURCHASE_REQUESTS = (
+  [
+    [
+      'e2e-pr-1',
+      'PR-2026-0012',
+      'Replacement SCBA cylinders (6)',
+      'MSA Safety',
+      '14820.00',
+      'pending_approval',
+      'high',
+    ],
+    ['e2e-pr-2', 'PR-2026-0009', 'Hose testing and repair', 'Northeast Hose Co.', '2350.00', 'approved', 'medium'],
+    ['e2e-pr-3', 'PR-2026-0004', 'Station 2 kitchen range', 'City Appliance', '1899.99', 'paid', 'low'],
+  ] as const
+).map(([id, requestNumber, title, vendor, estimatedAmount, status, priority]) => ({
+  id,
+  requestNumber,
+  fiscalYearId: 'e2e-fy-2026',
+  budgetId: 'e2e-budget-1',
+  requestedBy: 'e2e-user-id',
+  title,
+  vendor,
+  estimatedAmount,
+  status,
+  priority,
+  ...FINANCE_STAMP,
+  approvalSteps: [approvalStep('purchase_request', id, status === 'pending_approval' ? 'pending' : 'approved')],
+}));
+
+const EXPENSE_REPORTS = (
+  [
+    ['e2e-er-1', 'ER-2026-0031', 'State fire academy — Instructor II', '486.20', 'submitted'],
+    ['e2e-er-2', 'ER-2026-0027', 'Mileage to regional drill', '112.56', 'approved'],
+    ['e2e-er-3', 'ER-2026-0018', 'Boot allowance', '175.00', 'paid'],
+  ] as const
+).map(([id, reportNumber, title, totalAmount, status]) => ({
+  id,
+  reportNumber,
+  submittedBy: 'e2e-user-id',
+  fiscalYearId: 'e2e-fy-2026',
+  title,
+  totalAmount,
+  status,
+  submittedAt: '2026-02-05T15:00:00Z',
+  ...FINANCE_STAMP,
+  lineItems: [],
+  approvalSteps: [approvalStep('expense_report', id, status === 'submitted' ? 'pending' : 'approved')],
+}));
+
+const CHECK_REQUESTS = (
+  [
+    ['e2e-cr-1', 'CR-2026-0008', 'Oakville Ladies Auxiliary', '750.00', 'pending_approval'],
+    ['e2e-cr-2', 'CR-2026-0006', 'County Fire Training Council', '1200.00', 'issued'],
+    ['e2e-cr-3', 'CR-2026-0002', 'Valley Septic Services', '385.00', 'voided'],
+  ] as const
+).map(([id, requestNumber, payeeName, amount, status]) => ({
+  id,
+  requestNumber,
+  requestedBy: 'e2e-user-id',
+  fiscalYearId: 'e2e-fy-2026',
+  payeeName,
+  amount,
+  purpose: 'Department operating expense',
+  status,
+  ...(status === 'issued' ? { checkNumber: '10482', checkDate: '2026-02-12' } : {}),
+  ...FINANCE_STAMP,
+  approvalSteps: [approvalStep('check_request', id, status === 'pending_approval' ? 'pending' : 'approved')],
+}));
+
+const PENDING_APPROVALS = [
+  {
+    stepRecordId: 'e2e-pr-1-step',
+    entityType: 'purchase_request',
+    entityId: 'e2e-pr-1',
+    entityTitle: 'Replacement SCBA cylinders (6)',
+    entityAmount: '14820.00',
+    requesterName: 'Alex Tester',
+    stepName: 'Chief approval',
+    stepOrder: 1,
+    submittedAt: '2026-02-03T15:00:00Z',
+    approverType: 'position',
+    assigneeLabel: 'Fire Chief',
+    canAct: true,
+    requiresOverride: false,
+  },
+  {
+    stepRecordId: 'e2e-er-1-step',
+    entityType: 'expense_report',
+    entityId: 'e2e-er-1',
+    entityTitle: 'State fire academy — Instructor II',
+    entityAmount: '486.20',
+    requesterName: 'Jordan Captain',
+    stepName: 'Treasurer review',
+    stepOrder: 1,
+    submittedAt: '2026-02-05T15:00:00Z',
+    approverType: 'position',
+    assigneeLabel: 'Treasurer',
+    canAct: false,
+    requiresOverride: true,
+  },
+];
+
+const BUDGET_REQUESTS = (
+  [
+    [
+      'e2e-breq-1',
+      'e2e-cat-apparatus',
+      'Apparatus Maintenance',
+      '52000.00',
+      'submitted',
+      'Engine 2 pump overhaul is due in the spring.',
+    ],
+    ['e2e-breq-2', 'e2e-cat-ppe', 'Personal Protective Equipment', '131500.00', 'draft', null],
+  ] as const
+).map(([id, categoryId, lineLabel, requestedAmount, status, justification]) => ({
+  id,
+  fiscalYearId: 'e2e-fy-2027',
+  fiscalYearName: 'FY 2027',
+  categoryId,
+  categoryName: lineLabel,
+  lineLabel,
+  isProposedLine: false,
+  requestedAmount,
+  status,
+  justification,
+  submittedByName: status === 'submitted' ? 'Alex Tester' : null,
+  lastYearFiscalYearName: 'FY 2026',
+  lastYearBudgeted: categoryId === 'e2e-cat-ppe' ? '125000.00' : '48000.00',
+  ...FINANCE_STAMP,
+}));
+
+const fiscalYearOption = ({ id, name, status, requestDeadline, requestsOpen, planningStage }: FiscalYearFixture) => ({
+  id,
+  name,
+  status,
+  requestDeadline: requestDeadline ?? null,
+  requestsOpen: requestsOpen ?? false,
+  planningStage: planningStage ?? null,
+});
+
+// Grants & fundraising, on the same footing as Finance above: nine screens sat
+// in the inventory as exempt, seven drew as empty, and Zeffy and Reports threw
+// into the ErrorBoundary. Camel-cased, as schemas/grant.py serializes. Its money
+// fields are Decimal, which goes over the wire as a string, so money is a
+// string here even where the frontend type says number — that is what a page
+// receives, and what it has to cope with.
+const GRANT_STAMP = {
+  organizationId: 'e2e-org',
+  createdBy: 'e2e-user-id',
+  createdAt: '2026-01-05T15:00:00Z',
+  updatedAt: '2026-02-12T15:00:00Z',
+};
+
+const GRANT_OPPORTUNITIES = (
+  [
+    [
+      'e2e-opp-afg',
+      'Assistance to Firefighters Grant (AFG)',
+      'FEMA',
+      'equipment',
+      '10000.00',
+      '1000000.00',
+      10,
+      'fixed',
+      '2026-12-15',
+    ],
+    [
+      'e2e-opp-safer',
+      'Staffing for Adequate Fire & Emergency Response (SAFER)',
+      'FEMA',
+      'staffing',
+      '50000.00',
+      '2000000.00',
+      null,
+      'fixed',
+      '2027-02-28',
+    ],
+    [
+      'e2e-opp-state',
+      'State Volunteer Fire Assistance',
+      'State Forestry Division',
+      'training',
+      '1000.00',
+      '20000.00',
+      50,
+      'rolling',
+      null,
+    ],
+  ] as const
+).map(
+  ([id, name, agency, category, typicalAwardMin, typicalAwardMax, matchPercentage, deadlineType, deadlineDate]) => ({
+    id,
+    name,
+    agency,
+    description: `${agency} funding for fire departments`,
+    eligibleUses: null,
+    typicalAwardMin,
+    typicalAwardMax,
+    eligibilityCriteria: null,
+    applicationUrl: null,
+    programUrl: null,
+    matchRequired: matchPercentage !== null,
+    matchPercentage: matchPercentage === null ? null : String(matchPercentage),
+    matchDescription: null,
+    deadlineType,
+    deadlineDate,
+    recurringSchedule: null,
+    requiredDocuments: [],
+    tags: [],
+    category,
+    federalProgramCode: null,
+    isActive: true,
+    notes: null,
+    ...GRANT_STAMP,
+  })
+);
+
+const GRANT_APPLICATIONS = (
+  [
+    [
+      'e2e-app-1',
+      'e2e-opp-afg',
+      'Assistance to Firefighters Grant (AFG)',
+      'FEMA',
+      'submitted',
+      '342000.00',
+      null,
+      'high',
+    ],
+    [
+      'e2e-app-2',
+      'e2e-opp-safer',
+      'Staffing for Adequate Fire & Emergency Response (SAFER)',
+      'FEMA',
+      'preparing',
+      '780000.00',
+      null,
+      'critical',
+    ],
+    [
+      'e2e-app-3',
+      'e2e-opp-state',
+      'State Volunteer Fire Assistance',
+      'State Forestry Division',
+      'active',
+      '18500.00',
+      '15000.00',
+      'medium',
+    ],
+    [
+      'e2e-app-4',
+      null,
+      'Community Foundation Safety Grant',
+      'Oakville Community Foundation',
+      'denied',
+      '7500.00',
+      null,
+      'low',
+    ],
+  ] as const
+).map(
+  ([
+    id,
+    opportunityId,
+    grantProgramName,
+    grantAgency,
+    applicationStatus,
+    amountRequested,
+    amountAwarded,
+    priority,
+  ]) => ({
+    id,
+    opportunityId,
+    grantProgramName,
+    grantAgency,
+    applicationStatus,
+    amountRequested,
+    amountAwarded,
+    matchAmount: null,
+    matchSource: null,
+    applicationDeadline: '2026-12-15',
+    submittedDate: applicationStatus === 'preparing' ? null : '2026-02-01',
+    awardDate: amountAwarded ? '2026-04-10' : null,
+    grantStartDate: amountAwarded ? '2026-05-01' : null,
+    grantEndDate: amountAwarded ? '2027-04-30' : null,
+    projectDescription: null,
+    narrativeSummary: null,
+    budgetSummary: null,
+    keyContacts: null,
+    federalAwardId: null,
+    nfirsCompliant: null,
+    performancePeriodMonths: null,
+    reportingFrequency: null,
+    nextReportDue: amountAwarded ? '2026-11-30' : null,
+    finalReportDue: null,
+    assignedTo: null,
+    priority,
+    linkedCampaignId: null,
+    notes: null,
+    ...GRANT_STAMP,
+  })
+);
+
+const FUNDRAISING_CAMPAIGNS = (
+  [
+    ['e2e-camp-1', 'Thermal Imaging Camera Drive', 'equipment', '24000.00', '17350.00', 'active'],
+    ['e2e-camp-2', 'Annual Fund 2026', 'general', '60000.00', '41275.50', 'active'],
+    ['e2e-camp-3', 'Fallen Firefighters Memorial', 'memorial', '15000.00', '15000.00', 'completed'],
+  ] as const
+).map(([id, name, campaignType, goalAmount, currentAmount, status]) => ({
+  id,
+  name,
+  description: null,
+  campaignType,
+  goalAmount,
+  currentAmount,
+  startDate: '2026-01-15',
+  endDate: status === 'completed' ? '2026-05-30' : '2026-12-31',
+  status,
+  publicPageEnabled: false,
+  publicPageUrl: null,
+  heroImageUrl: null,
+  thankYouMessage: null,
+  allowAnonymous: true,
+  minimumDonation: null,
+  suggestedAmounts: null,
+  ...GRANT_STAMP,
+}));
+
+const DONORS = (
+  [
+    ['e2e-donor-1', 'individual', 'Margaret', 'Okafor', null, '2500.00', 6],
+    ['e2e-donor-2', 'business', null, null, 'Oakville Hardware & Supply', '8000.00', 3],
+    ['e2e-donor-3', 'foundation', null, null, 'Harrington Family Foundation', '15000.00', 1],
+  ] as const
+).map(([id, donorType, firstName, lastName, companyName, totalDonated, donationCount]) => ({
+  id,
+  userId: null,
+  firstName,
+  lastName,
+  email: null,
+  phone: null,
+  addressLine1: null,
+  addressLine2: null,
+  city: 'Oakville',
+  state: 'NY',
+  postalCode: null,
+  country: null,
+  donorType,
+  companyName,
+  totalDonated,
+  donationCount,
+  firstDonationDate: '2024-03-02',
+  lastDonationDate: '2026-02-10',
+  notes: null,
+  tags: null,
+  communicationPreferences: null,
+  isAnonymous: false,
+  active: true,
+  organizationId: 'e2e-org',
+  createdAt: '2024-03-02T15:00:00Z',
+  updatedAt: '2026-02-10T15:00:00Z',
+}));
+
+const DONATIONS = (
+  [
+    ['e2e-don-1', 'e2e-camp-1', 'e2e-donor-1', '500.00', 'check', '2026-02-10', 'Margaret Okafor'],
+    ['e2e-don-2', 'e2e-camp-1', 'e2e-donor-2', '2500.00', 'bank_transfer', '2026-02-03', 'Oakville Hardware & Supply'],
+    ['e2e-don-3', 'e2e-camp-2', 'e2e-donor-3', '15000.00', 'check', '2026-01-28', 'Harrington Family Foundation'],
+    ['e2e-don-4', 'e2e-camp-2', null, '75.00', 'cash', '2026-01-20', null],
+  ] as const
+).map(([id, campaignId, donorId, amount, paymentMethod, donationDate, donorName]) => ({
+  id,
+  organizationId: 'e2e-org',
+  campaignId,
+  donorId,
+  pledgeId: null,
+  amount,
+  currency: 'USD',
+  donationDate,
+  paymentMethod,
+  paymentStatus: 'completed',
+  transactionId: null,
+  checkNumber: paymentMethod === 'check' ? '2214' : null,
+  isRecurring: false,
+  recurringFrequency: null,
+  isAnonymous: donorName === null,
+  donorName,
+  donorEmail: null,
+  dedicationType: null,
+  dedicationName: null,
+  notes: null,
+  receiptSent: true,
+  thankYouSent: donorName !== null,
+  taxDeductible: true,
+  recordedBy: 'e2e-user-id',
+  createdAt: `${donationDate}T15:00:00Z`,
+  updatedAt: `${donationDate}T15:00:00Z`,
+}));
+
+const PLEDGES = (
+  [
+    ['e2e-pledge-1', 'e2e-camp-1', 'e2e-donor-2', '5000.00', '2500.00', 'partial', '2026-06-30'],
+    ['e2e-pledge-2', 'e2e-camp-2', 'e2e-donor-1', '1200.00', '0.00', 'pending', '2026-12-31'],
+    ['e2e-pledge-3', 'e2e-camp-2', 'e2e-donor-3', '10000.00', '0.00', 'overdue', '2026-03-31'],
+  ] as const
+).map(([id, campaignId, donorId, pledgedAmount, fulfilledAmount, status, dueDate]) => ({
+  id,
+  campaignId,
+  donorId,
+  pledgedAmount,
+  fulfilledAmount,
+  pledgeDate: '2026-01-10',
+  dueDate,
+  status,
+  paymentSchedule: null,
+  reminderEnabled: true,
+  notes: null,
+  ...GRANT_STAMP,
+}));
+
+const FUNDRAISING_EVENTS = (
+  [
+    [
+      'e2e-fevent-1',
+      'e2e-camp-2',
+      'Pancake Breakfast',
+      'dinner',
+      '2026-03-14',
+      '12.00',
+      '3480.00',
+      '640.00',
+      'completed',
+    ],
+    [
+      'e2e-fevent-2',
+      'e2e-camp-1',
+      'Fire Prevention Week Golf Outing',
+      'golf_outing',
+      '2026-10-04',
+      '150.00',
+      '0.00',
+      '0.00',
+      'open',
+    ],
+  ] as const
+).map(([id, campaignId, name, eventType, eventDate, ticketPrice, actualRevenue, expenses, status]) => ({
+  id,
+  campaignId,
+  eventId: null,
+  name,
+  description: null,
+  eventType,
+  eventDate,
+  location: 'Station 1',
+  ticketPrice,
+  maxAttendees: 200,
+  currentAttendees: status === 'completed' ? 290 : 64,
+  revenueGoal: '5000.00',
+  actualRevenue,
+  expenses,
+  status,
+  registrationUrl: null,
+  sponsors: null,
+  notes: null,
+  ...GRANT_STAMP,
+}));
+
 /**
  * Route glob → response body. Ordered least to most specific; `mockApi`
  * registers them in order and Playwright matches the last registration first,
@@ -861,6 +1415,360 @@ const routes = ({
       membersPaid: 1,
       membersOverdue: 1,
       membersWaived: 1,
+    }),
+  ],
+
+  // Finance, with the fixtures declared above `routes`. Each general glob also
+  // matches its own sub-paths (`fiscal-years**` matches `fiscal-years/options`),
+  // so it is registered before the specific one that has to win.
+  ['**/api/v1/finance/fiscal-years**', () => (empty ? [] : FISCAL_YEARS)],
+  ['**/api/v1/finance/fiscal-years/options**', () => (empty ? [] : FISCAL_YEARS.map(fiscalYearOption))],
+  ['**/api/v1/finance/budget-categories**', () => (empty ? [] : BUDGET_CATEGORIES)],
+  ['**/api/v1/finance/budgets**', () => (empty ? [] : BUDGETS)],
+  [
+    '**/api/v1/finance/budgets/summary**',
+    () => ({
+      totalBudgeted: empty ? '0.00' : '195500.00',
+      totalSpent: empty ? '0.00' : '133840.55',
+      totalEncumbered: empty ? '0.00' : '25100.00',
+      totalRemaining: empty ? '0.00' : '36559.45',
+      percentUsed: empty ? 0 : 68.5,
+      categoryBreakdown: [],
+    }),
+  ],
+  [
+    '**/api/v1/finance/my-budgets**',
+    () =>
+      empty
+        ? []
+        : BUDGETS.map((budget) => {
+            const remaining =
+              Number(budget.amountBudgeted) - Number(budget.amountSpent) - Number(budget.amountEncumbered);
+            return {
+              ...budget,
+              amountRemaining: remaining.toFixed(2),
+              percentUsed: Math.round((1 - remaining / Number(budget.amountBudgeted)) * 1000) / 10,
+            };
+          }),
+  ],
+  // Every page's navigation asks this, so it keeps the catch-all's answer:
+  // owning a line would add a navigation entry to every route the sweeps measure.
+  ['**/api/v1/finance/my-budgets/summary**', () => ({})],
+  ['**/api/v1/finance/charge-access**', () => ({ categories: empty ? [] : BUDGET_CATEGORIES, positions: [] })],
+  [
+    '**/api/v1/finance/budget-amendments/pending**',
+    () =>
+      empty
+        ? []
+        : [
+            {
+              id: 'e2e-amend-1',
+              organizationId: 'e2e-org',
+              budgetId: 'e2e-budget-2',
+              amount: '8500.00',
+              reason: 'Grant award for turnout gear replacement',
+              approvedBy: 'Board of Commissioners',
+              approvedOn: '2026-02-09',
+              enteredByName: 'Alex Tester',
+              status: 'pending',
+              categoryName: 'Personal Protective Equipment',
+              fiscalYearId: 'e2e-fy-2026',
+              fiscalYearName: 'FY 2026',
+              yearLocked: false,
+              createdAt: '2026-02-10T15:00:00Z',
+            },
+          ],
+  ],
+  ['**/api/v1/finance/budget-requests**', () => (empty ? [] : BUDGET_REQUESTS)],
+  [
+    '**/api/v1/finance/budget-requests/proposal-options**',
+    () => ({
+      positions: [{ id: 'e2e-position-chief', name: 'Fire Chief' }],
+      categories: BUDGET_CATEGORIES.map(({ id, name }) => ({ id, name })),
+      stations: [{ id: 'e2e-station-1', name: 'Station 1' }],
+    }),
+  ],
+  [
+    '**/api/v1/finance/budget-requests/my-lines**',
+    () => ({
+      fiscalYear: fiscalYearOption(FY_2027),
+      // Two lines the member's position owns, one already requested and one
+      // not, so both the submitted card and the blank request form are drawn.
+      lines: empty
+        ? []
+        : BUDGETS.slice(0, 2).map((budget) => ({
+            budget: {
+              ...budget,
+              fiscalYearId: FY_2027.id,
+              fiscalYearName: FY_2027.name,
+              fiscalYearStatus: FY_2027.status,
+            },
+            request:
+              BUDGET_REQUESTS.find(
+                (request) => request.categoryId === budget.categoryId && request.status === 'submitted'
+              ) ?? null,
+            lastYearFiscalYearName: FY_2026.name,
+            lastYearBudgeted: budget.amountBudgeted,
+            lastYearSpent: budget.amountSpent,
+          })),
+    }),
+  ],
+  ['**/api/v1/finance/purchase-requests**', () => (empty ? [] : PURCHASE_REQUESTS)],
+  ['**/api/v1/finance/expense-reports**', () => (empty ? [] : EXPENSE_REPORTS)],
+  ['**/api/v1/finance/check-requests**', () => (empty ? [] : CHECK_REQUESTS)],
+  [
+    '**/api/v1/finance/my-dues**',
+    () =>
+      empty
+        ? []
+        : [
+            {
+              id: 'e2e-mydues-1',
+              scheduleName: '2026 Annual Membership Dues',
+              amountDue: '150.00',
+              amountPaid: '75.00',
+              balance: '75.00',
+              status: 'partial',
+              dueDate: '2026-03-01T05:00:00Z',
+              payments: [
+                { id: 'e2e-mydues-pay-1', amount: '75.00', paymentMethod: 'check', receivedAt: '2026-02-01T15:00:00Z' },
+              ],
+            },
+            {
+              id: 'e2e-mydues-2',
+              scheduleName: '2025 Annual Membership Dues',
+              amountDue: '150.00',
+              amountPaid: '150.00',
+              balance: '0.00',
+              status: 'paid',
+              dueDate: '2025-03-01T05:00:00Z',
+              paidDate: '2025-02-14T15:00:00Z',
+              payments: [
+                { id: 'e2e-mydues-pay-2', amount: '150.00', paymentMethod: 'cash', receivedAt: '2025-02-14T15:00:00Z' },
+              ],
+            },
+          ],
+  ],
+  ['**/api/v1/finance/approvals/pending**', () => (empty ? [] : PENDING_APPROVALS)],
+  [
+    '**/api/v1/finance/approvals/unrouted**',
+    () =>
+      empty
+        ? []
+        : [
+            {
+              entityType: 'check_request',
+              entityId: 'e2e-cr-1',
+              entityTitle: 'Oakville Ladies Auxiliary',
+              entityAmount: '750.00',
+              requesterName: 'Alex Tester',
+              submittedAt: '2026-02-06T15:00:00Z',
+            },
+          ],
+  ],
+  [
+    '**/api/v1/finance/approval-chains**',
+    () =>
+      empty
+        ? []
+        : [
+            {
+              id: 'e2e-chain',
+              name: 'Purchases over $1,000',
+              description: 'Chief, then the treasurer, for anything over a thousand dollars',
+              appliesTo: 'purchase_request',
+              minAmount: '1000.00',
+              isDefault: false,
+              isActive: true,
+              ...FINANCE_STAMP,
+              steps: [
+                ['e2e-chain-step-1', 1, 'Chief approval', 'Fire Chief'],
+                ['e2e-chain-step-2', 2, 'Treasurer review', 'Treasurer'],
+              ].map(([id, stepOrder, name, approverValue]) => ({
+                id,
+                chainId: 'e2e-chain',
+                stepOrder,
+                name,
+                stepType: 'approval',
+                approverType: 'position',
+                approverValue,
+                allowSelfApproval: false,
+                required: true,
+                createdAt: '2026-01-02T15:00:00Z',
+              })),
+            },
+          ],
+  ],
+  ['**/api/v1/finance/approval-chains/approver-coverage**', () => []],
+  // The reports screen opens on this one for the active year; the others run
+  // only when picked. Built from BUDGETS so its lines agree with /finance/budgets.
+  [
+    '**/api/v1/finance/reports/budget-vs-actual**',
+    (request) => {
+      const rows = empty
+        ? []
+        : BUDGETS.map((budget) => {
+            const spent = Number(budget.amountSpent);
+            const committed = Number(budget.amountEncumbered);
+            const total = Number(budget.amountBudgeted);
+            return {
+              budgetId: budget.id,
+              categoryName: budget.categoryName,
+              originalBudget: budget.amountBudgeted,
+              amendments: '0.00',
+              budget: budget.amountBudgeted,
+              spent: budget.amountSpent,
+              committed: budget.amountEncumbered,
+              remaining: (total - spent - committed).toFixed(2),
+              percentUsed: Math.round(((spent + committed) / total) * 1000) / 10,
+              runningSpentDiffers: false,
+            };
+          });
+      const sum = (key: 'originalBudget' | 'budget' | 'spent' | 'committed' | 'remaining') =>
+        rows.reduce((total, row) => total + Number(row[key]), 0).toFixed(2);
+      return {
+        fiscalYearId: FY_2026.id,
+        fiscalYearName: FY_2026.name,
+        asOf: new URL(request.url()).searchParams.get('as_of') ?? FY_2026.endDate,
+        includesCommitted: true,
+        rows,
+        totals: {
+          originalBudget: sum('originalBudget'),
+          amendments: '0.00',
+          budget: sum('budget'),
+          spent: sum('spent'),
+          committed: sum('committed'),
+          remaining: sum('remaining'),
+        },
+      };
+    },
+  ],
+  [
+    '**/api/v1/finance/settings/budget-request-reminders**',
+    () => ({ offsetsDays: [30, 7, 1], bellNotices: true, isDefault: true }),
+  ],
+
+  // Grants & fundraising, with the fixtures declared above `routes`. The
+  // opportunity list is `/grants?…`; the applications screen asks once per
+  // status, so the answer is filtered by the request's own `status`.
+  ['**/api/v1/grants?**', () => (empty ? [] : GRANT_OPPORTUNITIES)],
+  [
+    '**/api/v1/grants/applications**',
+    (request) => {
+      const status = new URL(request.url()).searchParams.get('status');
+      return empty ? [] : GRANT_APPLICATIONS.filter((app) => !status || app.applicationStatus === status);
+    },
+  ],
+  ['**/api/v1/grants/campaigns**', () => (empty ? [] : FUNDRAISING_CAMPAIGNS)],
+  ['**/api/v1/grants/donors**', () => (empty ? [] : DONORS)],
+  ['**/api/v1/grants/donations**', () => (empty ? [] : DONATIONS)],
+  ['**/api/v1/grants/pledges**', () => (empty ? [] : PLEDGES)],
+  ['**/api/v1/grants/fundraising-events**', () => (empty ? [] : FUNDRAISING_EVENTS)],
+  // Zeffy connected, with one campaign linked and one payment of each kind a
+  // reviewer sorts: applied, and waiting on a decision.
+  [
+    '**/api/v1/grants/zeffy/status**',
+    () => ({
+      connected: !empty,
+      integrationId: empty ? null : 'e2e-zeffy',
+      webhookConfigured: !empty,
+      lastSyncAt: empty ? null : '2026-02-12T14:00:00Z',
+      stateCounts: empty ? {} : { applied: 1, needs_review: 1 },
+    }),
+  ],
+  ['**/api/v1/grants/zeffy/campaigns**', () => []],
+  [
+    '**/api/v1/grants/zeffy/links**',
+    () =>
+      empty
+        ? []
+        : [
+            {
+              id: 'e2e-zlink-1',
+              zeffyCampaignId: 'zf-camp-1',
+              zeffyCampaignTitle: 'Thermal Imaging Camera Drive',
+              targetType: 'fundraising_campaign',
+              targetId: 'e2e-camp-1',
+              targetName: 'Thermal Imaging Camera Drive',
+              applyFrom: '2026-01-15',
+              syncedThrough: '2026-02-12T14:00:00Z',
+              createdAt: '2026-01-15T15:00:00Z',
+              updatedAt: '2026-02-12T14:00:00Z',
+            },
+          ],
+  ],
+  [
+    '**/api/v1/grants/zeffy/payments**',
+    () => {
+      const payment = (id: string, payerName: string, amount: string, state: string, donationId: string | null) => ({
+        id,
+        zeffyPaymentId: `zf-${id}`,
+        zeffyCampaignId: 'zf-camp-1',
+        campaignTitle: 'Thermal Imaging Camera Drive',
+        campaignCategory: 'donation',
+        paymentType: 'donation',
+        zeffyStatus: 'succeeded',
+        refundStatus: null,
+        amount,
+        refundedAmount: '0.00',
+        currency: 'USD',
+        ticketCount: 0,
+        paidAt: '2026-02-11T18:30:00Z',
+        payerName,
+        receiptUrl: null,
+        state,
+        stateDetail: state === 'needs_review' ? 'More than one donor matches this payer' : null,
+        appliedTargetType: donationId ? 'fundraising_campaign' : null,
+        donationId,
+        fundraisingEventId: null,
+        memberDuesId: null,
+        appliedAmount: donationId ? amount : '0.00',
+        updatedAt: '2026-02-12T14:00:00Z',
+      });
+      const items = empty
+        ? []
+        : [
+            payment('zpay-1', 'Margaret Okafor', '250.00', 'applied', 'e2e-don-1'),
+            payment('zpay-2', 'D. Alvarez', '100.00', 'needs_review', null),
+          ];
+      return { items, total: items.length };
+    },
+  ],
+  // Reports: money is Decimal, so a string, except monthlyTotals, which the
+  // service builds as an untyped list of floats.
+  [
+    '**/api/v1/grants/reports/grants**',
+    () => ({
+      totalApplications: empty ? 0 : GRANT_APPLICATIONS.length,
+      totalRequested: empty ? '0' : '1148000.00',
+      totalAwarded: empty ? '0' : '15000.00',
+      totalSpent: empty ? '0' : '9420.75',
+      successRate: empty ? '0' : '50.0',
+      awardedCount: empty ? 0 : 1,
+      deniedCount: empty ? 0 : 1,
+      complianceSummary: {
+        totalTasks: empty ? 0 : 4,
+        completed: empty ? 0 : 2,
+        overdue: empty ? 0 : 1,
+        pending: empty ? 0 : 1,
+      },
+      spendingByCategory: empty ? {} : { equipment: '7800.00', training: '1620.75' },
+    }),
+  ],
+  [
+    '**/api/v1/grants/reports/fundraising**',
+    () => ({
+      totalDonations: empty ? '0' : '18075.00',
+      donationCount: empty ? 0 : DONATIONS.length,
+      uniqueDonors: empty ? 0 : 3,
+      averageGift: empty ? '0' : '4518.75',
+      donationsByMethod: empty ? {} : { check: '15500.00', bank_transfer: '2500.00', cash: '75.00' },
+      monthlyTotals: empty
+        ? []
+        : [
+            { month: '2026-01', total: 15075.0 },
+            { month: '2026-02', total: 3000.0 },
+          ],
     }),
   ],
 

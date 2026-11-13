@@ -44,6 +44,7 @@ from app.models.apparatus import (
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
     AttendanceWaiverAttachment,
+    AttendanceWaiverEmailSend,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
     AttendanceWaiverStatus,
@@ -262,6 +263,10 @@ from app.models.history import (
     HistoryClearanceDecision,
     HistoryClearanceRequest,
     HistoryClearanceStep,
+    HistoryImport,
+    HistoryImportRow,
+    HistoryImportTitleMapping,
+    HistoryRecordRedirect,
     HistoryRevision,
     HistoryTitle,
 )
@@ -640,6 +645,7 @@ __all__ = [
     "AttendanceWaiverAttachment",
     "AttendanceWaiverRequest",
     "AttendanceWaiverRequestAction",
+    "AttendanceWaiverEmailSend",
     "AttendanceWaiverStatus",
     "AttendanceWaiverWorkflow",
     # Error log models
@@ -883,6 +889,10 @@ __all__ = [
     "HistoryClearanceDecision",
     "HistoryClearanceRequest",
     "HistoryClearanceStep",
+    "HistoryImport",
+    "HistoryImportRow",
+    "HistoryImportTitleMapping",
+    "HistoryRecordRedirect",
     "HistoryRevision",
     "HistoryTitle",
     # Medical screening models

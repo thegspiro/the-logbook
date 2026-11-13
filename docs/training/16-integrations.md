@@ -553,6 +553,8 @@ saved. The new key or secret is used from the next sync or webhook message, and
 the linked campaigns and the webhook address do not change. Zeffy stays
 connected throughout, so nothing is missed.
 
+![Zeffy connect dialog: the read-only note linking to Grants & Fundraising, the API Key and Webhook Signing Secret (optional) fields, and the webhook address to add in Zeffy](./images/16-24-zeffy-connect.png)
+
 **Test** reads one campaign from Zeffy to prove the key works. It adds a note if
 no signing secret is set, because payments will then arrive only once an hour.
 

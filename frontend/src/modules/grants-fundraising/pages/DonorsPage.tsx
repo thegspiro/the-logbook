@@ -34,10 +34,10 @@ const DONOR_TYPE_LABELS: Record<string, string> = {
 };
 
 const DONOR_TYPE_COLORS: Record<string, string> = {
-  individual: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  business: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
-  foundation: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  government: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
+  individual: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  business: 'bg-purple-100 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300',
+  foundation: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  government: 'bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-300',
   other: 'bg-theme-surface-secondary text-theme-text-secondary',
 };
 

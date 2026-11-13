@@ -1318,6 +1318,248 @@ export async function selectStorageRoom(page) {
  * state with no URL of its own, so the click has to be scoped to the card by
  * the provider's name.
  */
+/**
+ * Answer the Zeffy page's own reads with a connected department's picture.
+ *
+ * Every row on that page comes from Zeffy: the campaign list is read live with
+ * the department's API key, and a payment row exists only once Zeffy's
+ * webhook or the hourly sync has reported it. The demo has no Zeffy account,
+ * so nothing can put those rows in its database, and storing a made-up key
+ * would only make the live read fail. The reads are answered here instead,
+ * in the shapes `app/schemas/zeffy.py` serializes; nothing is written.
+ *
+ * The records the links point at are the seeded ones -- the Fill the Boot
+ * campaign and the year's Annual Member Dues -- and the link dialog's own
+ * reads of campaigns, events and dues schedules go to the real API, so a
+ * campaign chosen in that dialog is one the department actually has.
+ */
+async function mockZeffyConnected(page) {
+  const year = new Date().getFullYear();
+  const now = Date.now();
+  const ago = (hours) => new Date(now - hours * 3_600_000).toISOString();
+  const linkStart = new Date(now - 40 * 86_400_000).toISOString();
+  const link = (id, zeffyId, title, targetType, targetName) => ({
+    id,
+    zeffyCampaignId: zeffyId,
+    zeffyCampaignTitle: title,
+    targetType,
+    targetId: id,
+    targetName,
+    applyFrom: linkStart,
+    syncedThrough: ago(0.2),
+    createdAt: linkStart,
+    updatedAt: linkStart,
+  });
+  const boot = link(
+    "c1d2e3f4-0000-4000-8000-000000000001",
+    "zf-boot",
+    `Fill the Boot ${year}`,
+    "fundraising_campaign",
+    "Fill the Boot",
+  );
+  const dues = link(
+    "c1d2e3f4-0000-4000-8000-000000000002",
+    "zf-membership",
+    `Annual Membership ${year}`,
+    "dues_schedule",
+    `${year} Annual Member Dues`,
+  );
+  const campaigns = [
+    {
+      id: "zf-boot",
+      title: `Fill the Boot ${year}`,
+      campaignType: "donation_form",
+      category: "donation",
+      status: "active",
+      url: null,
+      isArchived: false,
+      raised: "4860.00",
+      currency: "USD",
+      link: boot,
+    },
+    {
+      id: "zf-membership",
+      title: `Annual Membership ${year}`,
+      campaignType: "membership",
+      category: "membership",
+      status: "active",
+      url: null,
+      isArchived: false,
+      raised: "2400.00",
+      currency: "USD",
+      link: dues,
+    },
+    {
+      id: "zf-breakfast",
+      title: "Pancake Breakfast Tickets",
+      campaignType: "ticketing",
+      category: "event",
+      status: "active",
+      url: null,
+      isArchived: false,
+      raised: "1215.00",
+      currency: "USD",
+      link: null,
+    },
+    {
+      id: "zf-equipment",
+      title: "Equipment Fund Appeal",
+      campaignType: "donation_form",
+      category: "donation",
+      status: "active",
+      url: null,
+      isArchived: false,
+      raised: "3150.00",
+      currency: "USD",
+      link: null,
+    },
+  ];
+  const payment = (n, fields) => ({
+    id: `d0e1f2a3-0000-4000-8000-00000000000${n}`,
+    zeffyPaymentId: `zp-${n}`,
+    campaignCategory: null,
+    paymentType: "card",
+    zeffyStatus: "succeeded",
+    refundStatus: null,
+    refundedAmount: "0.00",
+    currency: "USD",
+    ticketCount: 0,
+    receiptUrl: null,
+    stateDetail: null,
+    appliedTargetType: null,
+    donationId: null,
+    fundraisingEventId: null,
+    memberDuesId: null,
+    appliedAmount: "0.00",
+    updatedAt: fields.paidAt,
+    ...fields,
+  });
+  const notLinked = "This Zeffy campaign is not linked to a Logbook record.";
+  const payments = [
+    payment(1, {
+      paidAt: ago(2),
+      payerName: "Marcus Webb",
+      zeffyCampaignId: "zf-breakfast",
+      campaignTitle: "Pancake Breakfast Tickets",
+      amount: "40.00",
+      ticketCount: 4,
+      state: "unlinked",
+      stateDetail: notLinked,
+    }),
+    payment(2, {
+      paidAt: ago(5),
+      payerName: "Nadia Belhaj",
+      zeffyCampaignId: "zf-membership",
+      campaignTitle: `Annual Membership ${year}`,
+      amount: "120.00",
+      state: "applied",
+      appliedTargetType: "dues_schedule",
+      appliedAmount: "120.00",
+    }),
+    payment(3, {
+      paidAt: ago(20),
+      payerName: "Linda Okafor",
+      zeffyCampaignId: "zf-boot",
+      campaignTitle: `Fill the Boot ${year}`,
+      amount: "50.00",
+      state: "applied",
+      appliedTargetType: "fundraising_campaign",
+      appliedAmount: "50.00",
+    }),
+    payment(4, {
+      paidAt: ago(27),
+      payerName: "J. Alvarez",
+      zeffyCampaignId: "zf-membership",
+      campaignTitle: `Annual Membership ${year}`,
+      amount: "120.00",
+      state: "unmatched",
+      stateDetail: "No member has the email address the payer used.",
+    }),
+    payment(5, {
+      paidAt: ago(49),
+      payerName: "Harbor Hardware",
+      zeffyCampaignId: "zf-boot",
+      campaignTitle: `Fill the Boot ${year}`,
+      amount: "250.00",
+      state: "applied",
+      appliedTargetType: "fundraising_campaign",
+      appliedAmount: "250.00",
+    }),
+    payment(6, {
+      paidAt: ago(74),
+      payerName: "Tom Reilly",
+      zeffyCampaignId: "zf-boot",
+      campaignTitle: `Fill the Boot ${year}`,
+      amount: "25.00",
+      zeffyStatus: "pending",
+      state: "pending",
+      stateDetail: "Zeffy has not finished processing this payment.",
+    }),
+    payment(7, {
+      paidAt: ago(98),
+      payerName: "Grace Kim",
+      zeffyCampaignId: "zf-boot",
+      campaignTitle: `Fill the Boot ${year}`,
+      amount: "100.00",
+      refundStatus: "full",
+      refundedAmount: "100.00",
+      state: "reversed",
+      appliedTargetType: "fundraising_campaign",
+      stateDetail: "Marked refunded after Zeffy refunded or removed it.",
+    }),
+    payment(8, {
+      paidAt: ago(140),
+      payerName: "Diane Foster",
+      zeffyCampaignId: "zf-breakfast",
+      campaignTitle: "Pancake Breakfast Tickets",
+      amount: "20.00",
+      ticketCount: 2,
+      state: "unlinked",
+      stateDetail: notLinked,
+    }),
+  ];
+  const status = {
+    connected: true,
+    integrationId: "c1d2e3f4-0000-4000-8000-0000000000ff",
+    webhookConfigured: true,
+    lastSyncAt: ago(0.2),
+    stateCounts: {
+      applied: 3,
+      unlinked: 2,
+      unmatched: 1,
+      pending: 1,
+      reversed: 1,
+    },
+  };
+  const json = (route, body) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(body),
+    });
+  await page.route("**/api/v1/grants/zeffy/status", (route) =>
+    json(route, status),
+  );
+  await page.route("**/api/v1/grants/zeffy/links", (route) =>
+    route.request().method() === "GET"
+      ? json(route, [boot, dues])
+      : route.abort(),
+  );
+  await page.route("**/api/v1/grants/zeffy/campaigns", (route) =>
+    json(route, campaigns),
+  );
+  await page.route("**/api/v1/grants/zeffy/payments?**", (route) => {
+    const state = new URL(route.request().url()).searchParams.get("state");
+    const items = state ? payments.filter((p) => p.state === state) : payments;
+    return json(route, { items, total: items.length });
+  });
+  // Saving a link or running a sync would reach for Zeffy or write a link to
+  // a campaign the demo does not have; neither shot submits, and this keeps
+  // a stray click from doing either.
+  await page.route("**/api/v1/grants/zeffy/links/**", (route) => route.abort());
+  await page.route("**/api/v1/grants/zeffy/sync", (route) => route.abort());
+}
+
 export function openIntegrationConnect(providerName) {
   return async (page) => {
     const card = page
@@ -11657,6 +11899,75 @@ export const SHOTS = [
     route: "/grants/reports",
     fullPage: true,
   },
+  {
+    id: "12-18-grants-menu-zeffy",
+    doc: "12-grants-fundraising.md",
+    line: 42,
+    anchor:
+      "The sidebar with Grants & Fundraising expanded, as an administrator",
+    alt: "The sidebar with Grants & Fundraising expanded: Dashboard, Opportunities, Applications, Campaigns, Donors, Donations, Pledges, Events, Zeffy and Reports, with Zeffy selected",
+    // Opened from the Zeffy page: the group expands itself on a page under
+    // it and marks Zeffy current, which is the menu the guide lists. Clicking
+    // the group here would collapse it.
+    route: "/grants/zeffy",
+    beforeNavigate: mockZeffyConnected,
+    viewport: { width: 1440, height: 2100 },
+    selector: "nav#side-navigation",
+    expect: {
+      selector:
+        'nav#side-navigation button[aria-current="page"]:has-text("Zeffy")',
+    },
+    prepare: async (page) => {
+      await page
+        .locator(
+          'nav#side-navigation button[aria-current="page"]:has-text("Zeffy")',
+        )
+        .waitFor({ timeout: 20_000 });
+    },
+  },
+  {
+    id: "12-19-zeffy-page",
+    doc: "12-grants-fundraising.md",
+    line: 773,
+    anchor:
+      "Grants & Fundraising, Zeffy page as a fundraising manager with Zeffy connected",
+    alt: "The Zeffy page: the Connection panel with Instant updates on, the last sync and one payment needing attention; four Zeffy campaigns, two linked (Fill the Boot to the Fill the Boot campaign, Annual Membership to the year's Annual Member Dues) and two Not linked; and the Payments list with its status filter and payments that are Applied, Campaign not linked, No member match, Processing and Reversed",
+    route: "/grants/zeffy",
+    beforeNavigate: mockZeffyConnected,
+    expect: "Needs attention",
+    allowEmptyState:
+      '"No member match" is a status filter above the payments list, not ' +
+      "an empty page; eight payments are listed below it.",
+    viewport: { width: 1440, height: 1100 },
+    fullPage: true,
+    prepare: async (page) => {
+      await page.getByText("Grace Kim", { exact: true }).waitFor({
+        timeout: 20_000,
+      });
+    },
+  },
+  {
+    id: "12-20-zeffy-link-dialog",
+    doc: "12-grants-fundraising.md",
+    line: 818,
+    anchor: "The Link Zeffy campaign dialog for a donation campaign",
+    alt: "Link Zeffy campaign for the Equipment Fund Appeal: Record payments as Fundraising campaign, with the note that each payment becomes a donation from a donor matched by email; the year's Equipment Fund chosen; and Apply payments made on or after left blank, with its warning that an earlier date can count hand-entered gifts twice",
+    route: "/grants/zeffy",
+    beforeNavigate: mockZeffyConnected,
+    expect: "Apply payments made on or after",
+    // Filled in and never saved: the mock refuses a save in any case.
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: "Link Equipment Fund Appeal" })
+        .click({ timeout: 20_000 });
+      const target = page.locator("#zeffy-target");
+      await target.waitFor({ timeout: 10_000 });
+      await target.selectOption({
+        label: `${new Date().getFullYear()} Equipment Fund`,
+      });
+    },
+    selector: '[aria-labelledby="zeffy-link-title"] .modal-panel',
+  },
 
   // ── 13 Medical Screening ────────────────────────────────────────────
   {
@@ -17697,6 +18008,21 @@ export const SHOTS = [
     route: "/integrations",
     prepare: openIntegrationConnect("PayPal"),
     expect: "Connecting turns this integration on",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1100 },
+    fullPage: false,
+  },
+  {
+    id: "16-24-zeffy-connect",
+    doc: "16-integrations.md",
+    line: 552,
+    anchor: "The Zeffy connect window opened from the Zeffy card",
+    alt: "Zeffy connect dialog: the read-only note linking to Grants & Fundraising, the API Key and Webhook Signing Secret (optional) fields, and the webhook address to add in Zeffy",
+    route: "/integrations",
+    prepare: openIntegrationConnect("Zeffy"),
+    expect: "Webhook Signing Secret (optional)",
     // "No personal information" is a chip on the Claude card behind the
     // dialog, not an empty page.
     allowEmptyState: true,

@@ -274,9 +274,12 @@ const SetupCard: React.FC<SetupCardProps> = ({ item, onNavigate, onAcknowledge, 
 
       {item.kind === 'review' && (
         <div className="-mt-1 flex items-center gap-3 px-4 pb-3 pl-18">
+          {/* Named after the step: two cards each read only "Mark as
+              reviewed" to a screen reader (W06-5). */}
           <button
             onClick={() => onAcknowledge(item)}
             disabled={isAcknowledging}
+            aria-label={`Mark ${item.title} as ${item.is_complete ? 'not reviewed' : 'reviewed'}`}
             className="text-theme-text-secondary mobile-touch-target text-xs font-medium underline underline-offset-2 hover:text-red-500 disabled:opacity-50"
           >
             {item.is_complete ? 'Mark as not reviewed' : 'Mark as reviewed'}

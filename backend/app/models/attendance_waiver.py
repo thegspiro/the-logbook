@@ -272,3 +272,64 @@ class AttendanceWaiverAttachment(Base):
         the file was stored under, which comes from its detected content."""
         extension = os.path.splitext(self.file_path or "")[1].lower()
         return f"{self.DOWNLOAD_STEM}-{self.ordinal}{extension}"
+
+
+class AttendanceWaiverEmailSend(Base):
+    """One email sent, or being sent, about one decision-log row.
+
+    **The idempotency key is ``(action_id, recipient_key)``**, unique: the
+    log row says what happened (submitted, decided, withdrawn), and the
+    recipient key who was told. A send claims its row before the email goes
+    out, so a second run for the same action, and a second worker racing the
+    first, finds the claim and sends nothing (CLAUDE.md pitfall #36).
+
+    ``recipient_key`` is ``user:<member id>`` for a member and
+    ``addr:<fingerprint>`` for an address a template CCs, so no address is
+    stored in plain text here. ``sent_at`` is NULL while the send is in
+    flight; a send that fails releases its claim so a retry can try again,
+    and a process that dies between claiming and sending leaves the claim in
+    place: that email is not sent (at most once). A duplicate approval prompt
+    is a nuisance, but the in-app prompt already reaches every approver, so a
+    lost email loses nothing the member depends on.
+    """
+
+    __tablename__ = "attendance_waiver_email_sends"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("attendance_waiver_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    action_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("attendance_waiver_request_actions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recipient_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    # A template's CC copy rather than the notice its recipient acts on.
+    is_copy: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "action_id",
+            "recipient_key",
+            name="uq_attendance_waiver_email_sends_action_recipient",
+        ),
+        Index(
+            "ix_attendance_waiver_email_sends_org_request",
+            "organization_id",
+            "request_id",
+        ),
+    )

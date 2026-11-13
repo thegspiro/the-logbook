@@ -118,7 +118,7 @@ const ExpenseReportsPage: React.FC = () => {
             key={tab.value}
             type="button"
             onClick={() => setStatusFilter(tab.value)}
-            className={`touch:min-h-11 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`touch:min-h-11 touch:min-w-11 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               statusFilter === tab.value
                 ? 'bg-red-800 text-white'
                 : 'text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface-hover'
@@ -230,7 +230,10 @@ const ExpenseReportsPage: React.FC = () => {
                     onClick={() => void navigate(`/finance/expenses/${er.id}`)}
                     className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
                   >
-                    <td data-label="Report #" className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-600">
+                    <td
+                      data-label="Report #"
+                      className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-800 dark:text-red-300"
+                    >
                       {er.reportNumber}
                     </td>
                     <td data-label="Title" className="text-theme-text-primary px-4 py-3 text-sm">

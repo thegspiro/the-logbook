@@ -24,7 +24,7 @@ export const MfaGraceBanner: React.FC = () => {
       <p className="text-sm">
         Your access requires two-factor authentication. Set it up by {formatDate(endsAt, tz)}, after which you will only
         be able to reach the setup screens.{' '}
-        <Link to="/account" className="font-medium underline">
+        <Link to="/account?tab=security" className="font-medium underline">
           Set it up now
         </Link>
       </p>

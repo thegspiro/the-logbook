@@ -723,7 +723,15 @@ export const GrantApplicationsPage: React.FC = () => {
           /* ================================================================ */
           <>
             {pipelineEmpty && emptyState}
-            <div className="-mx-4 mt-6 overflow-x-auto px-4 pb-4">
+            {/* Ten status columns, each w-72: the board scrolls sideways at
+                every width, and the marker declares that intentional to the
+                mobile presentation sweep. Its cards are buttons, so a keyboard
+                reaches the far columns without the strip taking focus. */}
+            <div
+              className="-mx-4 mt-6 overflow-x-auto px-4 pb-4"
+              data-mobile-scroll-region
+              aria-label="Applications by status"
+            >
               <div className="inline-flex gap-3" style={{ minHeight: '60vh' }}>
                 {PIPELINE_COLUMNS.map((status) => (
                   <PipelineColumn
