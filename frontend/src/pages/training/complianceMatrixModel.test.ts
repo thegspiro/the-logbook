@@ -183,7 +183,9 @@ describe('evaluateCell', () => {
   });
 
   it('labels the row with the date that decides it', () => {
-    const expiring = evaluateCell(cell({ expiry_date: '2026-11-12' }), requirement(), AS_OF);
+    // A fixed cutoff before the expiry: measured from today, this date lapsed
+    // on 2026-11-13 and the label turned to "Lapsed".
+    const expiring = evaluateCell(cell({ expiry_date: '2026-11-12' }), requirement(), '2026-10-01');
     const windowed = evaluateCell(
       cell({ status: 'not_started', window_start: '2026-01-01', window_end: '2026-12-31' }),
       requirement(),
