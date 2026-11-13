@@ -566,6 +566,17 @@ export const ALL_ROUTES: RouteCheck[] = [
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory/my-equipment', maxSmallTargets: 0, maxTinyText: 0 },
+  // Measured once helpers.ts served an item list, the storage areas and the
+  // summaries; before, the first two drew their empty states. inventory.manage
+  // is in the base grant.
+  {
+    path: '/inventory/items',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    expectText: 'Globe G-Xtreme Turnout Coat, Size 44 Regular',
+  },
+  { path: '/inventory/storage-areas', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Radio Charging Cabinet' },
+  { path: '/inventory/import', maxSmallTargets: 0, maxTinyText: 0, expectText: 'Import Inventory from CSV' },
   // inventory.check_manage is a distinct grant from inventory.manage, and
   // checkPermission compares literally — without it this hub renders Access
   // Denied, which passes both budgets while measuring an error page.
@@ -697,6 +708,61 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['inventory.check_manage'],
+  },
+  // The equipment-check screens a crew and its officers use day to day. Each
+  // was exempt until helpers.ts served the equipment-check reads; four of them
+  // threw on the catch-all's `{}`. One grant set for all six, so they share a
+  // sign-in, and an `expectText` only the populated page renders.
+  {
+    path: '/inventory/admin/checklists/reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Jordan Okonkwo-Fitzgerald',
+  },
+  {
+    path: '/inventory/admin/checklists/supply',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Epinephrine Auto-Injector, Adult 0.3 mg',
+  },
+  {
+    path: '/inventory/admin/checklists/catalog-links',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Halligan Bar',
+  },
+  {
+    path: '/inventory/checklists',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Out of service since 11 Nov: hydraulic leak on the aerial turntable',
+  },
+  {
+    path: '/inventory/checklists/log',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Every expected check, including the ones that did not happen',
+  },
+  {
+    path: '/inventory/checklists/my',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Engine Weekly SCBA and Tool Inventory',
+  },
+  // The page picks no apparatus on its own; `?apparatus=` is how a crew lands
+  // on one from the fleet board, and it is what puts a body on the page here.
+  {
+    path: '/inventory/checklists/apparatus-inventory?apparatus=e2e-app-m2',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'inventory.check_view'],
+    expectText: 'Dextrose 50% Syringe',
   },
   // Also needs settings.manage: its four values are written through the
   // organization-settings endpoint, so the checklist grant is not enough.
