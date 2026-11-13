@@ -1378,7 +1378,12 @@ const CHECK_LOG = (empty: boolean) => {
       completed: u.completed,
       completionRate: u.completionRate,
     })),
-    entries: units.flatMap((u) => CHECK_DATES.flatMap((_, d) => (u.strip[d] === null ? [] : [checkLogEntry(u, d)]))),
+    // Newest day first, filed before unfiled within a day, as
+    // _log_entries in equipment_readiness_service.py sorts them. The log view
+    // groups consecutive runs by day, so any other order splits a day in two.
+    entries: units
+      .flatMap((u) => CHECK_DATES.flatMap((_, d) => (u.strip[d] === null ? [] : [checkLogEntry(u, d)])))
+      .sort((a, b) => b.shiftDate.localeCompare(a.shiftDate) || Number('checkedAt' in b) - Number('checkedAt' in a)),
     summary: {
       expected: empty ? 0 : 20,
       completed: empty ? 0 : 16,
