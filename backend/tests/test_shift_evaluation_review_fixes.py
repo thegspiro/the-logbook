@@ -135,3 +135,142 @@ class TestOnlyProgramsJoinedByTheShiftDate:
 
         assert await _value(db_session, emt_transports) == 4
         assert await _value(db_session, driver_transports) == 0
+
+
+async def _save(db, scene, body):
+    return await ShiftEvaluationService(db).save(
+        scene.shift,
+        scene.trainee.id,
+        scene.enrollment.id,
+        scene.org_id,
+        body,
+        scene.officer,
+    )
+
+
+class TestASubmittedEvaluationStaysComplete:
+    """Re-saving a submitted evaluation cannot strip it below a submission."""
+
+    async def test_a_draft_save_cannot_empty_it(self, db_session):
+        scene = await _scene(db_session)
+        submitted = await _save(db_session, scene, _complete())
+        rated = submitted.rated_count
+
+        with pytest.raises(ValueError, match="Finish the evaluation"):
+            await _save(
+                db_session,
+                scene,
+                _complete(submit=False, responses={}, statistics={}),
+            )
+
+        await db_session.refresh(submitted)
+        assert submitted.status == "submitted"
+        assert submitted.rated_count == rated
+        assert submitted.statistics["transports"] == 4
+
+    async def test_a_complete_draft_save_still_updates_it(self, db_session):
+        scene = await _scene(db_session)
+        await _save(db_session, scene, _complete())
+
+        again = await _save(
+            db_session,
+            scene,
+            _complete(
+                submit=False, statistics={"calls": 7, "transports": 5, "refusals": 1}
+            ),
+        )
+
+        assert again.status == "submitted"
+        assert again.statistics["transports"] == 5
+
+
+class TestCountsAreCheckedAtSubmission:
+    """A draft may hold counts the officer has not finished entering."""
+
+    async def test_a_draft_keeps_counts_that_do_not_add_up_yet(self, db_session):
+        scene = await _scene(db_session)
+        counts = {"calls": 1, "transports": 4, "refusals": 2}
+
+        draft = await _save(
+            db_session, scene, _complete(submit=False, statistics=counts)
+        )
+
+        assert draft.status == "draft"
+        assert draft.statistics == counts
+
+    async def test_a_submission_is_refused(self, db_session):
+        scene = await _scene(db_session)
+
+        with pytest.raises(ValueError, match="cannot exceed the number of calls"):
+            await _save(
+                db_session,
+                scene,
+                _complete(statistics={"calls": 1, "transports": 4, "refusals": 2}),
+            )
+
+
+class TestAConflictIsRetriedOnce:
+    async def test_a_conflict_that_persists_is_raised_not_recursed(
+        self, db_session, monkeypatch
+    ):
+        from sqlalchemy.exc import IntegrityError
+
+        scene = await _scene(db_session)
+        await _save(db_session, scene, _complete(submit=False))
+        commits = 0
+
+        async def always_conflict():
+            nonlocal commits
+            commits += 1
+            raise IntegrityError("INSERT", {}, Exception("duplicate"))
+
+        async def keep_loaded():
+            # The retry limit is what is under test; a real rollback would
+            # expire the loaded rows this test then reads.
+            return None
+
+        monkeypatch.setattr(db_session, "commit", always_conflict)
+        monkeypatch.setattr(db_session, "rollback", keep_loaded)
+
+        with pytest.raises(IntegrityError):
+            await _save(db_session, scene, _complete(submit=False))
+        assert commits == 2
+
+
+class TestARacingFirstSaveLandsOnTheRow:
+    async def test_the_retry_reads_nothing_the_rollback_expired(
+        self, db_session, monkeypatch
+    ):
+        from sqlalchemy.exc import IntegrityError
+
+        scene = await _scene(db_session)
+        await _save(db_session, scene, _complete(submit=False))
+        real_commit = db_session.commit
+        failed = False
+
+        async def conflict_once():
+            nonlocal failed
+            if not failed:
+                failed = True
+                raise IntegrityError("INSERT", {}, Exception("duplicate"))
+            await real_commit()
+
+        async def expire_like_a_rollback():
+            # What a rollback does to every loaded row, without undoing the
+            # fixture's own transaction.
+            db_session.expire_all()
+
+        monkeypatch.setattr(db_session, "commit", conflict_once)
+        monkeypatch.setattr(db_session, "rollback", expire_like_a_rollback)
+
+        saved = await ShiftEvaluationService(db_session).save(
+            scene.shift,
+            str(scene.trainee.id),
+            str(scene.enrollment.id),
+            scene.org_id,
+            _complete(),
+            scene.officer,
+        )
+
+        assert failed
+        assert saved.status == "submitted"

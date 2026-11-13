@@ -951,8 +951,10 @@ class ShiftEvaluationService:
         if "calls" in statistics:
             outcomes = statistics.get("transports", 0) + statistics.get("refusals", 0)
             if outcomes > statistics["calls"]:
-                raise ValueError(
-                    "Transports and refusals together cannot exceed the number of calls"
+                # A submission's rule, not a draft's: refusing the draft would
+                # stop every later autosave until the counts were fixed.
+                problems.append(
+                    "Transports and refusals together cannot exceed the number of calls."
                 )
 
         responses: dict[str, dict[str, Any]] = {}
@@ -1058,10 +1060,13 @@ class ShiftEvaluationService:
         organization_id: UUID | str,
         body: ShiftEvaluationSave,
         evaluator: Optional[User],
+        *,
+        retry_conflict: bool = True,
     ) -> ShiftEvaluation:
         # No evaluator: an outside preceptor submitting through a link, who
         # has no account here (ShiftEvaluationLinkService.submit).
-        if evaluator is not None and str(member_id) == str(evaluator.id):
+        evaluator_id = str(evaluator.id) if evaluator is not None else None
+        if evaluator_id is not None and str(member_id) == evaluator_id:
             raise ValueError("You cannot evaluate yourself")
         requirement = await self._find_requirement(
             occasion, member_id, scope_key, organization_id
@@ -1086,6 +1091,21 @@ class ShiftEvaluationService:
             template_id = evaluation.template_id
             version = evaluation.template_version
 
+        if (
+            evaluation is not None
+            and evaluation.status == "submitted"
+            and not body.submit
+        ):
+            # A submitted evaluation stays one: an edit to it is held to the
+            # submission's rules, or a draft save could empty it while it
+            # still counted for close-out and credit.
+            body = body.model_copy(update={"submit": True})
+        if (
+            occasion.kind == EXTERNAL_OCCASION
+            and body.submit
+            and not body.preceptor_name
+        ):
+            raise ValueError("Enter the name of the preceptor who evaluated the shift")
         answers = self._settle_answers(snapshot, body)
 
         if evaluation is None:
@@ -1107,7 +1127,7 @@ class ShiftEvaluationService:
         evaluation.unit_label = occasion.unit_label
         if occasion.kind == EXTERNAL_OCCASION:
             evaluation.preceptor_name = body.preceptor_name
-        evaluation.evaluator_id = str(evaluator.id) if evaluator is not None else None
+        evaluation.evaluator_id = evaluator_id
         evaluation.enrollment_ids = list(requirement.enrollment_ids)
         evaluation.program_names = list(requirement.program_names)
         evaluation.template_id = template_id
@@ -1128,19 +1148,66 @@ class ShiftEvaluationService:
             # Two officers opened the same evaluation and both created it: the
             # unique key kept one row; apply this save to it (Pitfall #36).
             await self.db.rollback()
+            # Once: a conflict that survives the retry is not the race this
+            # handles, and retrying it again would only recurse.
+            if not retry_conflict:
+                raise
+            # The rollback expired every loaded row, the shift, entry and
+            # evaluator included, and an expired row cannot be read lazily
+            # here: reload what the retry needs from plain ids.
+            occasion = await self._reload_occasion(
+                occasion.kind, occasion.id, organization_id
+            )
+            evaluator = (
+                await self._reload_user(evaluator_id, organization_id)
+                if evaluator_id is not None
+                else None
+            )
+            if occasion is None or (evaluator_id is not None and evaluator is None):
+                raise
             requirement = await self._find_requirement(
                 occasion, member_id, scope_key, organization_id
             )
             if requirement.evaluation is None:
                 raise
             return await self._save(
-                occasion, member_id, scope_key, organization_id, body, evaluator
+                occasion,
+                member_id,
+                scope_key,
+                organization_id,
+                body,
+                evaluator,
+                retry_conflict=False,
             )
         await self.db.refresh(evaluation)
         if evaluation.status == "submitted":
             await self.sync_credit(evaluation, organization_id)
             await self.db.refresh(evaluation)
         return evaluation
+
+    async def _reload_occasion(
+        self, kind: str, occasion_id: str, organization_id: UUID | str
+    ) -> Optional[_Occasion]:
+        if kind == EXTERNAL_OCCASION:
+            entry = await self.get_entry(occasion_id, organization_id)
+            return self.occasion_for_entry(entry) if entry is not None else None
+        shift = await self.get_shift(occasion_id, organization_id)
+        return (
+            await self.occasion_for_shift(shift, organization_id)
+            if shift is not None
+            else None
+        )
+
+    async def _reload_user(
+        self, user_id: str, organization_id: UUID | str
+    ) -> Optional[User]:
+        return (
+            await self.db.execute(
+                select(User).where(
+                    User.id == user_id, User.organization_id == str(organization_id)
+                )
+            )
+        ).scalar_one_or_none()
 
     # -- Program credit ------------------------------------------------------
 
