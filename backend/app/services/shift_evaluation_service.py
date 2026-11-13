@@ -143,7 +143,9 @@ def _met_by_value(progress: Any, requirement: Any) -> bool:
     """
     column = EVALUATION_REQUIREMENT_TARGETS.get(requirement.requirement_type)
     target = getattr(requirement, column, None) if column else None
-    return bool(target) and float(progress.progress_value or 0) >= float(target)
+    if not target:
+        return False
+    return float(progress.progress_value or 0) >= float(target)
 
 
 def _is_viewer(member_id: Any, viewer_id: Optional[str]) -> bool:
@@ -1205,7 +1207,7 @@ class ShiftEvaluationService:
             # The rollback expired every loaded row, the shift, entry and
             # evaluator included, and an expired row cannot be read lazily
             # here: reload what the retry needs from plain ids.
-            occasion = await self._reload_occasion(
+            reloaded = await self._reload_occasion(
                 occasion.kind, occasion.id, organization_id
             )
             evaluator = (
@@ -1213,8 +1215,9 @@ class ShiftEvaluationService:
                 if evaluator_id is not None
                 else None
             )
-            if occasion is None or (evaluator_id is not None and evaluator is None):
+            if reloaded is None or (evaluator_id is not None and evaluator is None):
                 raise
+            occasion = reloaded
             requirement = await self._find_requirement(
                 occasion, member_id, scope_key, organization_id
             )
