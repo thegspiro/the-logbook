@@ -53,6 +53,7 @@ import {
   programRequirementSettingsError,
   toProgramRequirementSettingsCreate,
 } from '../utils/programRequirementSettings';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // ==================== Types ====================
 
@@ -1379,7 +1380,7 @@ const StepReview: React.FC<{
       </InfoCallout>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
+      <StatGrid columns={4} gap={4}>
         <div className="bg-theme-surface rounded-lg p-4 text-center">
           <p className="text-2xl font-bold text-red-700 dark:text-red-400">{phases.length}</p>
           <p className="text-theme-text-muted text-sm">Phases</p>
@@ -1396,7 +1397,7 @@ const StepReview: React.FC<{
           <p className="text-2xl font-bold text-green-700 dark:text-green-400">{info.time_limit_days || '\u2014'}</p>
           <p className="text-theme-text-muted text-sm">Days Limit</p>
         </div>
-      </div>
+      </StatGrid>
 
       {/* Program info */}
       <div className="bg-theme-surface rounded-lg p-4">

@@ -49,6 +49,7 @@ import { useConfirm } from '../contexts/ConfirmContext';
 import { getErrorDetail } from '../utils/errorHandling';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import { fileTypeLabel } from '../utils/fileTypeLabel';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 type ViewMode = 'grid' | 'list';
 
@@ -636,7 +637,7 @@ const DocumentsPage: React.FC = () => {
           </div>
         )}
         {summary && (
-          <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+          <StatGrid columns={4} className="mb-8">
             <div className="card p-4">
               <p className="text-theme-text-muted text-xs font-medium uppercase">Total Documents</p>
               <p className="text-theme-text-primary mt-1 text-2xl font-bold">{summary.total_documents}</p>
@@ -657,7 +658,7 @@ const DocumentsPage: React.FC = () => {
                 {summary.documents_this_month}
               </p>
             </div>
-          </div>
+          </StatGrid>
         )}
 
         {/* Search & View Toggle */}
