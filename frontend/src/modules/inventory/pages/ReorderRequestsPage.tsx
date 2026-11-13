@@ -26,6 +26,9 @@ import { Modal } from '../../../components/Modal';
 import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { placeApiError } from '../../../hooks/useFieldErrors';
 import { VendorName } from '../components/VendorName';
 import InventoryItemPicker from '../components/InventoryItemPicker';
 import type {
@@ -36,6 +39,7 @@ import type {
   InventoryVendor,
   LowStockAlert,
 } from '../../../services/eventServices';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 const STATUS_OPTIONS = ['pending', 'approved', 'ordered', 'partially_received', 'received', 'cancelled'] as const;
 const URGENCY_OPTIONS = ['low', 'normal', 'high', 'critical'] as const;
@@ -114,6 +118,11 @@ const REORDER_FIELDS: FieldSpecs<ReorderField> = {
   notes: { id: 'reorder-notes', label: 'Notes' },
 };
 
+const REORDER_ORDER = Object.keys(REORDER_FIELDS) as ReorderField[];
+/** The request keys each field writes; the vendor picker writes the id and the typed name both. */
+const reorderKeysFor = (field: ReorderField): readonly string[] =>
+  field === 'vendor_id' ? ['vendor_id', 'vendor'] : [field];
+
 // Limits mirror ReorderRequestCreate / ReorderRequestUpdate (notes is
 // FreeText, capped at 2000).
 const REORDER_LIMITS = { item_name: 255, vendor: 255, vendor_contact: 255, notes: 2000 } as const;
@@ -148,12 +157,23 @@ const ReorderFormModal: React.FC<{
   const [saving, setSaving] = useState(false);
   const fieldErrors = useFieldErrors(REORDER_FIELDS);
   const { clear: clearErrors } = fieldErrors;
+  // What the dialog held when it opened (or last saved), so Escape, the X and
+  // Cancel ask before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<CreateFD>(EMPTY_CREATE);
+  const requestClose = useDiscardGuard({
+    isDirty: isOpen && JSON.stringify(f) !== JSON.stringify(baseline),
+    onClose,
+  });
 
   useEffect(() => {
     if (!isOpen) return;
     clearErrors();
+    const seed = (next: CreateFD) => {
+      setF(next);
+      setBaseline(next);
+    };
     if (editRequest) {
-      setF({
+      seed({
         item_name: editRequest.item_name,
         item_id: editRequest.item_id ?? '',
         category_id: editRequest.category_id ?? '',
@@ -171,7 +191,7 @@ const ReorderFormModal: React.FC<{
       // reader who arrived from the hub already knowing which category is
       // short — that is what their click said.
       const firstItem = prefillAlert.items?.[0];
-      setF({
+      seed({
         ...EMPTY_CREATE,
         item_name: firstItem?.name ?? prefillAlert.category_name,
         item_id: firstItem?.id ?? '',
@@ -179,7 +199,7 @@ const ReorderFormModal: React.FC<{
         quantity_requested: String(Math.max(1, prefillAlert.threshold - prefillAlert.current_stock)),
       });
     } else {
-      setF(EMPTY_CREATE);
+      seed(EMPTY_CREATE);
     }
   }, [editRequest, isOpen, prefillAlert, clearErrors]);
 
@@ -199,7 +219,9 @@ const ReorderFormModal: React.FC<{
     }
     fieldErrors.setFormError(null);
     fieldErrors.setErrors(problems);
-    if (Object.keys(problems).length > 0) {
+    // A new request is not created until every field is fixed; an edit saves
+    // the rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!editRequest && Object.keys(problems).length > 0) {
       fieldErrors.focusFirst(problems);
       return;
     }
@@ -228,7 +250,32 @@ const ReorderFormModal: React.FC<{
           // a blank select must leave the stored value alone rather than clear it.
           urgency: f.urgency || undefined,
         };
-        await inventoryService.updateReorderRequest(editRequest.id, updateData);
+        const { refused } = await saveExceptRefused<ReorderField, unknown>({
+          payload: { ...updateData },
+          refused: problems,
+          keysFor: reorderKeysFor,
+          send: (body) => inventoryService.updateReorderRequest(editRequest.id, body),
+          place: (err) => placeApiError(REORDER_FIELDS, err),
+        });
+        const first = firstRefused(REORDER_ORDER, refused);
+        if (first) {
+          // The list refreshes behind the dialog, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          onSaved();
+          fieldErrors.setErrors(refused);
+          fieldErrors.setFormError(
+            `Reorder request saved, except ${REORDER_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+          );
+          fieldErrors.focusFirst(refused);
+          const keep: Partial<CreateFD> = {};
+          for (const field of Object.keys(refused) as ReorderField[]) {
+            for (const key of reorderKeysFor(field)) {
+              if (key in baseline) keep[key as keyof CreateFD] = baseline[key as keyof CreateFD];
+            }
+          }
+          setBaseline({ ...f, ...keep });
+          return;
+        }
         toast.success('Reorder request updated');
       } else {
         const createData: ReorderRequestCreate = {
@@ -259,18 +306,19 @@ const ReorderFormModal: React.FC<{
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={editRequest ? 'Edit Reorder Request' : 'New Reorder Request'}
       size="lg"
       onSubmit={(e) => {
         void submit(e);
       }}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-info btn-md text-center disabled:opacity-50">
             {saving ? 'Saving...' : editRequest ? 'Update' : 'Create Request'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary btn-md">
+          <button type="button" onClick={requestClose} className="btn-secondary btn-md">
             Cancel
           </button>
         </>
@@ -342,12 +390,13 @@ const ReorderFormModal: React.FC<{
             error={fieldErrors.errors.item_name}
             labelClassName={lbl}
             className="sm:col-span-2"
+            maxLength={REORDER_LIMITS.item_name}
+            count={f.item_name.length}
           >
             {(field) => (
               <input
                 {...field}
                 className={inp}
-                maxLength={REORDER_LIMITS.item_name}
                 value={f.item_name}
                 onChange={(e) => up('item_name', e.target.value)}
                 placeholder="e.g. SCBA Air Cylinders"
@@ -459,12 +508,13 @@ const ReorderFormModal: React.FC<{
               label="Vendor Contact"
               error={fieldErrors.errors.vendor_contact}
               labelClassName={lbl}
+              maxLength={REORDER_LIMITS.vendor_contact}
+              count={f.vendor_contact.length}
             >
               {(field) => (
                 <input
                   {...field}
                   className={inp}
-                  maxLength={REORDER_LIMITS.vendor_contact}
                   value={f.vendor_contact}
                   onChange={(e) => up('vendor_contact', e.target.value)}
                   placeholder="Email or phone"
@@ -531,13 +581,14 @@ const ReorderFormModal: React.FC<{
             error={fieldErrors.errors.notes}
             labelClassName={lbl}
             className="sm:col-span-1"
+            maxLength={REORDER_LIMITS.notes}
+            count={f.notes.length}
           >
             {(field) => (
               <textarea
                 {...field}
                 className={inp}
                 rows={2}
-                maxLength={REORDER_LIMITS.notes}
                 value={f.notes}
                 onChange={(e) => up('notes', e.target.value)}
                 placeholder="Additional details..."
@@ -1011,7 +1062,7 @@ export const ReorderRequestsPage: React.FC = () => {
         </div>
 
         {/* Stats */}
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatGrid columns={4} className="mb-6">
           <div className="card-secondary p-3 text-center">
             <p className="text-theme-text-primary text-2xl font-bold">{requests.length}</p>
             <p className="text-theme-text-muted text-xs">Total Requests</p>
@@ -1031,7 +1082,7 @@ export const ReorderRequestsPage: React.FC = () => {
             </p>
             <p className="text-theme-text-muted text-xs">Est. Outstanding</p>
           </div>
-        </div>
+        </StatGrid>
 
         {/* Low stock banner */}
         {lowStockAlerts.length > 0 && (

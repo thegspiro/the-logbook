@@ -37,6 +37,53 @@ taken; each is listed so the owner can confirm or reverse it.
   `_TEMPLATES` in `attendance_waiver_email_service.py` and choose the
   approvers' `EmailKind` (training uses `TRAINING_DUTIES`).
 
+## Elections — Voter Rules by Member Type (Owner Decisions, 2026-11-13)
+
+Election Settings › Voter Eligibility now sets who may vote as one row per
+member type (version 2 rules, `app/services/voter_rules.py`): may vote, a
+waiting period counted from joining the department or from becoming the type,
+and any number of meeting-attendance rules, up to four, all of which must pass.
+Four kinds of vote carry their own set — regular business meeting, annual
+meeting, bylaws amendment, special meeting — and each but the first uses the
+regular set until given one.
+
+### Decided
+
+- **Administrative and social members are judged by two rows.** Their status
+  row (Regular, Probationary, Life, a department tier…) and their class row
+  both apply. This is what the membership tiers already did, since a tier
+  follows status whatever the class, so converting a department's tier rules
+  takes no vote away from anyone on that basis. It can take one away: a
+  status row's waiting period now reaches administrative and social members,
+  who before waited only on their class.
+- **Version 2 rules replace the tiers' voting benefits.** The tier screen no
+  longer offers "Can vote" or the attendance threshold; it points to Election
+  Settings. The stored values are kept, not deleted, and seed a department's
+  rows until the secretary first saves this screen.
+- **No data migration.** Stored rules and tier benefits are converted when
+  they are read (`rules_from_v1`), never rewritten, so a department that never
+  opens the screen keeps exactly the electorate it had.
+- **Elections created before this keep version 1 rules,** and are judged as
+  they were — tier benefits included — until they close.
+
+### Left open
+
+- **A tier's attendance threshold now stops the ballot being sent.** Before, it
+  was checked only when the member tried to vote, so a member who fell short
+  received a ballot link and was then refused. As a row rule it applies
+  everywhere the other rules do: the roster, the ballot send and the vote.
+- **Minutes › Attendance still reads the tier benefits** for its "Voting"
+  column, and so stops agreeing with the ballots once a secretary edits the
+  rows. Fixed by the attendance work that follows (it adds the election-aware
+  Meeting Attendance page and moves both onto `voter_rules`).
+- **A version 1 election's tier rules can no longer be edited,** because the
+  tier screen dropped the fields. Its own election-wide rules still can, until
+  voting opens.
+- **A tier added after the rows were saved** has no row of its own and is
+  judged by the row of the status it counts as (or by no row at all, if it
+  counts as none) until the secretary gives it one; the screen says so on that
+  row.
+
 ## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
 
 The annual review can show a member's requests to be excused from training
@@ -522,14 +569,37 @@ Approvals uses both; the approvals-admin override form beside it already did.
 The other `PromptDialog` callers are unchanged until they opt in.
 
 Still to come, module by module: the locations setup wizard, the other training
-builders and pipeline pages, the rest of Inventory (kits, storage areas,
-categories, settings, stock lots and seals), the full apparatus form, the
-facility detail sections other than emergency contacts, medical supply lots and
-imports, store checkout, the finance cards and settings, the minutes editor,
-the remaining report dialogs, communications templates, scheduling templates
-and settings, applicant conversion and stage settings, and onboarding,
-history, membership and the public portal. Each is listed in
-`docs/FORMS_REVIEW_2026-11-05.md`.
+builders and pipeline pages, the rest of Inventory (settings, stock lots, the
+checklist builder and the smaller dialogs), the full apparatus form, the
+facility overview, files and settings, medical supply lots and imports, store
+checkout, the finance cards and settings, the minutes editor,
+the remaining report dialogs, communications templates and intake, scheduling
+templates and settings, applicant conversion and stage settings, the org chart
+node and IP security admin, and onboarding, history, membership and the public
+portal. Each is listed in `docs/FORMS_REVIEW_2026-11-05.md`.
+
+**Rolled out further on 2026-11-11** (batch 18): Inventory's categories,
+variant groups, storage areas, kits, allowances, reorder requests, the
+write-off review, Copy checklist and Move NFC tag; Grants & Fundraising's
+donors, campaigns and the Zeffy link; Communications' officers and footers.
+The same rules apply. The edit loop the earlier batches wrote inline in each
+dialog is now one helper, `utils/saveExceptRefused.ts`. Three of these are
+replaced whole on every save and so refuse rather than save part: the Zeffy
+link, an officer assignment and the footer library (a refusal there names the
+card and field it belongs to). The write-off review is an approve-type step:
+Deny and Approve stay pressable and say what is missing (the note, the
+acknowledgement) on its field rather than sitting greyed out.
+
+**Rolled out further on 2026-11-11** (batch 19): a facility's systems,
+rooms and compliance checklists; the maintenance and inspection dialogs, on a
+facility's own sections and on the cross-facility Maintenance and Inspections
+pages; the medical supply category dialog; and the medical create panel the
+checklist builder and the item picker open. The same rules apply. The
+maintenance and inspection dialogs had been written out twice each, once per
+screen, and are now one component each, so a change lands on both. A save that
+failed with a reason no field answers for ("due date cannot be before the
+scheduled date", a room nesting rule, a duplicate name) is said in the form,
+where it stays until the next save, rather than in a toast.
 
 **Owner decision (2026-11-06), forms review F-6 — leaving a half-filled form.**
 Two of the three options, and not the third:
@@ -9901,6 +9971,35 @@ was not among the questions the owner answered on 2026-11-01. Options:
    onboarding checklist the Organization Setup widget already reads.
 3. **Remove only the three made-up fields**, keeping the counts that are real.
    This changes the response shape for any caller.
+
+## Training — Waiver Request Documents: What Was Left Out (2026-11-11)
+
+**Open, chosen conservatively; the owner may revisit any of these.** Documents
+on session waiver requests (PDF, JPEG, PNG or HEIC, 10 MB each, three per
+request, kept 365 days) shipped with these gaps, each the narrower choice:
+
+- **A filed document cannot be removed by the member.** Once filed it stays
+  until the retention task deletes it. A member who filed the wrong file can
+  withdraw a pending request and ask again; the withdrawn request's documents
+  then age out with it. Allowing removal would have needed a rule for removing
+  the last document under a `required` policy, which nothing decided.
+- **The uploader's filename is not kept at all**, not only hidden from
+  downloads: a doctor's note's name can say what it is about. A decider sees
+  `waiver-attachment-1.pdf`, its type, size and date.
+- **A withdrawn or voided request is timed from its last change**
+  (`updated_at`), since it has no decision time; an approved or denied one
+  from its decision.
+- **The request page does not say documents were once filed** after retention
+  removes them. The `attendance_waiver_attachment_retention` audit entry
+  records which documents of which requests were deleted.
+- **Retention covers the training workflow only.** The business-meeting
+  workflow files no documents; when it does, its own policy needs to be read
+  by the sweep.
+- **HEIC is stored as filed, not converted.** A decider on Windows may need
+  the HEIF extension to open an iPhone photo; nothing previews it in the page.
+- **The upload field sits in the request dialog and the document list on the
+  decision page; the policy screen sets both new settings.** There is no
+  preview of a document in the page: a decider downloads it.
 
 ## Meetings — Business-Meeting Waiver Requests: Choices Made Without An Owner Ruling (2026-11-11)
 

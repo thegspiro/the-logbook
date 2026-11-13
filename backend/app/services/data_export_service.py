@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_hours import AdminHoursEntry
 from app.models.attendance_waiver import (
+    AttendanceWaiverAttachment,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
 )
@@ -180,6 +181,28 @@ class DataExportService:
         )
         export["attendance_waiver_request_actions"] = [
             _row_to_dict(row) for row in actions_result.scalars().all()
+        ]
+        # What the member filed with those requests: the record of each
+        # document, not its bytes (the member downloads those from the
+        # request), and not where it is stored on the server.
+        files_result = await self.db.execute(
+            select(AttendanceWaiverAttachment)
+            .join(
+                AttendanceWaiverRequest,
+                AttendanceWaiverRequest.id == AttendanceWaiverAttachment.request_id,
+            )
+            .where(
+                AttendanceWaiverRequest.user_id == user.id,
+                AttendanceWaiverAttachment.organization_id == str(user.organization_id),
+            )
+            .order_by(
+                AttendanceWaiverAttachment.request_id,
+                AttendanceWaiverAttachment.ordinal,
+            )
+        )
+        export["attendance_waiver_attachments"] = [
+            _row_to_dict(row, frozenset({"file_path"}))
+            for row in files_result.scalars().all()
         ]
 
         # An export must not provide a second path around the trainee-facing

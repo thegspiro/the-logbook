@@ -214,13 +214,15 @@ session that counts against them (owner decisions, 2026-11-10).
 policy saved, or one that cannot be read, members cannot ask and nothing else
 changes. The policy chooses:
 
-| Setting                 | Choices                                                                 |
-| ----------------------- | ----------------------------------------------------------------------- |
-| `deadline`              | before the session starts; 24 hours after it ends; 7 days after it ends |
-| `cap` / `cap_period`    | no cap, or 1–365 approved requests per calendar year or any 12 months   |
-| `categories`            | up to 20 labels a member picks from, optionally required                |
-| `reason_text`           | off, optional or required                                               |
-| `approver_position_ids` | the positions whose holders decide                                      |
+| Setting                     | Choices                                                                 |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `deadline`                  | before the session starts; 24 hours after it ends; 7 days after it ends |
+| `cap` / `cap_period`        | no cap, or 1–365 approved requests per calendar year or any 12 months   |
+| `categories`                | up to 20 labels a member picks from, optionally required                |
+| `reason_text`               | off, optional or required                                               |
+| `attachment`                | supporting documents off, optional or required (default off)            |
+| `attachment_retention_days` | days a request's documents are kept once it is closed (default 365)     |
+| `approver_position_ids`     | the positions whose holders decide                                      |
 
 **Who may ask.** A member may ask about a training session that is not
 cancelled and is linked to a session-attendance requirement that applies to
@@ -287,6 +289,25 @@ The meeting templates (_Meeting Waiver Requested / Decided / Withdrawn_)
 exist so a department can word them ahead of time; the meeting workflow sends
 them once its screens are built.
 
+**Supporting documents.** When the policy's `attachment` is `optional` or
+`required`, a member may file up to three documents with a request: PDF,
+JPEG, PNG or HEIC, 10 MB each, judged by the file's contents, not its name.
+They can be filed with the request (`POST .../with-attachments`, multipart)
+or added while it is pending; nothing is added once it is decided or
+withdrawn. Under `required`, a request without one is refused. Only the
+member and the people who may decide the request can open a document; a
+former decider who no longer holds the position cannot. Each download is
+audited (`attendance_waiver_attachment_downloaded`, ids only), is sent
+uncacheable, and is named `waiver-attachment-1.pdf` and so on: the uploader's
+filename is never kept, because a doctor's note's name can say what it is
+about. The daily `attendance_waiver_attachment_retention` task deletes a
+request's documents `attachment_retention_days` after it was decided (or, for
+one withdrawn or voided, after it closed) and audits the ids it removed; the
+request and its decision log are kept. Anonymizing the member deletes them at
+once. The data export lists each document's record (type, size, checksum,
+date) but not the file. Documents never appear in the annual review or in a
+notification.
+
 **In the annual review.** An evaluation template can show a member's requests
 for the review period, by session date: `training.session_waivers_summary`
 (how many were made, approved, overridden, denied, withdrawn, pending and
@@ -297,11 +318,11 @@ note or an attachment, and neither can be scored. See
 
 **Where it is in the app.**
 
-| Who              | Where                                                                                                                                                                                                           |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Training officer | **Training Admin > Settings & Data > Session Waivers** turns requests on and sets the policy above                                                                                                              |
-| Member           | A training session's page offers **Request to be excused** when the session counts against them, shows how many waivers are left, then the request's state; **My Training > My Waiver Requests** lists them all |
-| Approver         | **Training Admin > Records > Waiver Requests**, or `/attendance-waivers`, lists what they decide; `/attendance-waivers/{id}` is the page their email opens                                                      |
+| Who              | Where                                                                                                                                                                                                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Training officer | **Training Admin > Settings & Data > Session Waivers** turns requests on and sets the policy above, including **Supporting documents** and how many days they are kept                                                                                                            |
+| Member           | A training session's page offers **Request to be excused** when the session counts against them, shows how many waivers are left, then the request's state; the request form has a document field when the policy takes them; **My Training > My Waiver Requests** lists them all |
+| Approver         | **Training Admin > Records > Waiver Requests**, or `/attendance-waivers`, lists what they decide; `/attendance-waivers/{id}` is the page their email opens, with the filed documents to download (and, for the member, to add while pending)                                      |
 
 The email's approve and deny buttons only pre-select a choice
 (`?action=approve|deny`). The page never decides on load, because mail scanners
@@ -309,19 +330,22 @@ open every link; the approver presses the button and confirms. A denial needs a
 note to the member. The Chief's override appears only on a denied request and
 only to a Chief.
 
-| Method | Endpoint                                          | Who                                           |
-| ------ | ------------------------------------------------- | --------------------------------------------- |
-| `GET`  | `/api/v1/training/waivers/requests/policy`        | Any authenticated user                        |
-| `PUT`  | `/api/v1/training/waivers/requests/policy`        | `training.manage`                             |
-| `GET`  | `/api/v1/training/waivers/requests/eligibility`   | Any authenticated user, about themselves      |
-| `POST` | `/api/v1/training/waivers/requests`               | Any authenticated user, for themselves        |
-| `GET`  | `/api/v1/training/waivers/requests/mine`          | Any authenticated user                        |
-| `GET`  | `/api/v1/training/waivers/requests`               | The requests the caller may decide or decided |
-| `GET`  | `/api/v1/training/waivers/requests/{id}`          | The member, or someone who may decide         |
-| `POST` | `/api/v1/training/waivers/requests/{id}/withdraw` | The member, while pending                     |
-| `POST` | `/api/v1/training/waivers/requests/{id}/approve`  | Someone who may decide, while pending         |
-| `POST` | `/api/v1/training/waivers/requests/{id}/deny`     | Someone who may decide, while pending         |
-| `POST` | `/api/v1/training/waivers/requests/{id}/override` | A Chief, on a denied request                  |
+| Method | Endpoint                                                             | Who                                           |
+| ------ | -------------------------------------------------------------------- | --------------------------------------------- |
+| `GET`  | `/api/v1/training/waivers/requests/policy`                           | Any authenticated user                        |
+| `PUT`  | `/api/v1/training/waivers/requests/policy`                           | `training.manage`                             |
+| `GET`  | `/api/v1/training/waivers/requests/eligibility`                      | Any authenticated user, about themselves      |
+| `POST` | `/api/v1/training/waivers/requests`                                  | Any authenticated user, for themselves        |
+| `GET`  | `/api/v1/training/waivers/requests/mine`                             | Any authenticated user                        |
+| `GET`  | `/api/v1/training/waivers/requests`                                  | The requests the caller may decide or decided |
+| `GET`  | `/api/v1/training/waivers/requests/{id}`                             | The member, or someone who may decide         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/withdraw`                    | The member, while pending                     |
+| `POST` | `/api/v1/training/waivers/requests/{id}/approve`                     | Someone who may decide, while pending         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/deny`                        | Someone who may decide, while pending         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/override`                    | A Chief, on a denied request                  |
+| `POST` | `/api/v1/training/waivers/requests/with-attachments`                 | Any authenticated user, for themselves        |
+| `POST` | `/api/v1/training/waivers/requests/{id}/attachments`                 | The member, while pending                     |
+| `GET`  | `/api/v1/training/waivers/requests/{id}/attachments/{attachment_id}` | The member, or someone who may decide         |
 
 ---
 

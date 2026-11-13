@@ -138,3 +138,72 @@ describe('SystemsSection removing a system', () => {
     await waitFor(() => expect(deleteSystem).toHaveBeenCalledWith('sys-1'));
   });
 });
+
+describe('SystemsSection refusals and discarding', () => {
+  beforeEach(() => {
+    getSystems.mockReset();
+    createSystem.mockReset();
+    updateSystem.mockReset();
+    getSystems.mockResolvedValue([hvac]);
+  });
+
+  it('names a missing name on its field and adds nothing', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await screen.findByText('Main HVAC Unit');
+    await user.click(screen.getByRole('button', { name: /Add System/ }));
+    await user.click(screen.getByRole('button', { name: /Save System/ }));
+
+    expect(screen.getByRole('textbox', { name: /^Name/ })).toHaveAccessibleDescription('Enter a name for the system.');
+    expect(createSystem).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the field it names', async () => {
+    createSystem.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'serial_number', message: 'Value is too long.' }] } },
+    });
+    const user = userEvent.setup();
+    renderSection();
+    await screen.findByText('Main HVAC Unit');
+    await user.click(screen.getByRole('button', { name: /Add System/ }));
+    await user.type(screen.getByPlaceholderText('e.g., Main HVAC Unit'), 'Panel');
+    await user.click(screen.getByRole('button', { name: /Save System/ }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: /^Serial Number/ })).toHaveAccessibleDescription(
+        expect.stringContaining('Value is too long.')
+      )
+    );
+  });
+
+  it('saves the rest of an edit and keeps a refused field flagged, open', async () => {
+    updateSystem
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'manufacturer', message: 'Value is too long.' }] } },
+      })
+      .mockResolvedValueOnce(hvac);
+    const user = userEvent.setup();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: 'Edit Main HVAC Unit' }));
+    await user.click(screen.getByRole('button', { name: /Save Changes/ }));
+
+    await waitFor(() => expect(updateSystem).toHaveBeenCalledTimes(2));
+    expect(updateSystem.mock.calls[1]?.[1]).not.toHaveProperty('manufacturer');
+    expect(updateSystem.mock.calls[1]?.[1]).toMatchObject({ name: 'Main HVAC Unit' });
+    expect(screen.getByRole('alert')).toHaveTextContent('System saved, except manufacturer.');
+    expect(screen.getByRole('textbox', { name: /^Manufacturer/ })).toHaveAccessibleDescription(
+      expect.stringContaining('Value is too long.')
+    );
+  });
+
+  it('asks before Cancel discards a typed name', async () => {
+    const user = userEvent.setup();
+    renderSection();
+    await screen.findByText('Main HVAC Unit');
+    await user.click(screen.getByRole('button', { name: /Add System/ }));
+    await user.type(screen.getByPlaceholderText('e.g., Main HVAC Unit'), 'Panel');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByPlaceholderText('e.g., Main HVAC Unit')).toHaveValue('Panel');
+  });
+});

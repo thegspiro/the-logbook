@@ -242,6 +242,39 @@ describe('ReorderRequestsPage', () => {
     expect(mockUpdateReorderRequest.mock.calls[0]?.[0]).toBe('r-1');
   });
 
+  it('saves the rest of an edit and keeps a refused field flagged, open', async () => {
+    mockGetReorderRequests.mockResolvedValue([makeReq({ status: 'pending' })]);
+    mockUpdateReorderRequest
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'vendor', message: 'Value is too long.' }] } },
+      })
+      .mockResolvedValueOnce({});
+    const user = userEvent.setup();
+    renderWithRouter(<ReorderRequestsPage />);
+    await screen.findAllByText('SCBA Cylinders');
+    await user.click(firstButton('Edit'));
+    await user.type(await screen.findByRole('textbox', { name: 'Notes' }), 'Rush');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateReorderRequest).toHaveBeenCalledTimes(2));
+    const second = mockUpdateReorderRequest.mock.calls[1]?.[1] as Record<string, unknown>;
+    expect(second).not.toHaveProperty('vendor');
+    expect(second).not.toHaveProperty('vendor_id');
+    expect(second).toMatchObject({ notes: expect.stringContaining('Rush') as string });
+    expect(screen.getByRole('alert')).toHaveTextContent('Reorder request saved, except vendor.');
+    expect(mockToastSuccess).not.toHaveBeenCalledWith('Reorder request updated');
+  });
+
+  it('asks before Cancel discards a new request', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ReorderRequestsPage />);
+    await user.click((await screen.findAllByRole('button', { name: /New Request/ }))[0] as HTMLElement);
+    await user.type(await screen.findByPlaceholderText('e.g. SCBA Air Cylinders'), 'Gloves');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByPlaceholderText('e.g. SCBA Air Cylinders')).toHaveValue('Gloves');
+  });
+
   it('shows and invokes only the contextual next-state action', async () => {
     mockGetReorderRequests.mockResolvedValue([makeReq({ status: 'approved' })]);
     const user = userEvent.setup();

@@ -16,8 +16,15 @@ import type { Election, ElectionEligibilityRules } from '../../../types/election
 import { ElectionStatus, MeetingKind } from '../../../constants/enums';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useConfirm } from '../../../contexts/ConfirmContext';
-import { EMPTY_ELIGIBILITY_RULES, MEETING_KIND_LABELS, describeEligibilityRules } from '../eligibilityRules';
+import {
+  EMPTY_ELIGIBILITY_RULES,
+  MEETING_KINDS,
+  MEETING_KIND_LABELS,
+  describeEligibilityRules,
+  rowsForRules,
+} from '../eligibilityRules';
 import { EligibilityRulesEditor } from './EligibilityRulesEditor';
+import { TypeRulesEditor } from './TypeRulesEditor';
 
 /**
  * Render with a `key` derived from the election's stored rules, so a save or
@@ -42,7 +49,7 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
 
   const changeKind = async (next: MeetingKind) => {
     const replace = await confirm({
-      title: `Hold this election at the ${MEETING_KIND_LABELS[next].toLowerCase()}?`,
+      title: `Make this election a ${MEETING_KIND_LABELS[next].toLowerCase()}?`,
       message: `Its voter rules and position voter types will be replaced with the ${MEETING_KIND_LABELS[
         next
       ].toLowerCase()} defaults from Election Settings${dirty ? ', and your unsaved changes below will be lost' : ''}.`,
@@ -55,7 +62,7 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
       setSaving(true);
       const updated = await electionService.updateElection(election.id, { meeting_kind: next });
       onUpdate(updated);
-      toast.success(`Now held at the ${MEETING_KIND_LABELS[next].toLowerCase()}`);
+      toast.success(`Now a ${MEETING_KIND_LABELS[next].toLowerCase()}`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to change the meeting'));
     } finally {
@@ -81,7 +88,7 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
   return (
     <section className="card p-6" aria-labelledby="election-eligibility-rules-heading">
       <h2 id="election-eligibility-rules-heading" className="text-theme-text-primary text-lg font-semibold">
-        Rules every voter must meet
+        {election.eligibility_rules?.version === 2 ? 'Voter rules by member type' : 'Rules every voter must meet'}
       </h2>
       {editable ? (
         <>
@@ -91,7 +98,7 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
           </p>
           <div className="mb-5 max-w-xs">
             <label htmlFor={`election-${election.id}-meeting-kind`} className="form-label">
-              Held at
+              Kind of vote
             </label>
             <select
               id={`election-${election.id}-meeting-kind`}
@@ -100,19 +107,29 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
               disabled={saving}
               onChange={(e) => void changeKind(e.target.value as MeetingKind)}
             >
-              {[MeetingKind.REGULAR, MeetingKind.ANNUAL].map((option) => (
+              {MEETING_KINDS.map((option) => (
                 <option key={option} value={option}>
                   {MEETING_KIND_LABELS[option]}
                 </option>
               ))}
             </select>
           </div>
-          <EligibilityRulesEditor
-            key={editorKey}
-            idPrefix={`election-${election.id}-eligibility`}
-            value={rules}
-            onChange={setRules}
-          />
+          {rules.version === 2 ? (
+            <TypeRulesEditor
+              key={editorKey}
+              idPrefix={`election-${election.id}-eligibility`}
+              value={rules}
+              rows={rowsForRules(rules)}
+              onChange={setRules}
+            />
+          ) : (
+            <EligibilityRulesEditor
+              key={editorKey}
+              idPrefix={`election-${election.id}-eligibility`}
+              value={rules}
+              onChange={setRules}
+            />
+          )}
           <div className="mt-5 flex flex-wrap gap-3">
             <button
               type="button"
@@ -141,8 +158,8 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
       ) : (
         <>
           <p className="text-theme-text-muted mt-1 mb-3 text-sm">
-            Held at the {MEETING_KIND_LABELS[kind].toLowerCase()}. Fixed when voting opened. A voter override still lets
-            a member vote who fails them.
+            {MEETING_KIND_LABELS[kind]}. Fixed when voting opened. A voter override still lets a member vote who fails
+            them.
           </p>
           {summary.length === 0 ? (
             <p className="text-theme-text-secondary text-sm">No election-wide rules apply to this election.</p>

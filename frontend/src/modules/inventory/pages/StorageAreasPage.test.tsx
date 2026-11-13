@@ -356,6 +356,41 @@ describe('StorageAreasPage', () => {
     });
   });
 
+  it('saves the rest of an edit and keeps a refused field flagged, open', async () => {
+    mockGetStorageAreas.mockResolvedValue([makeArea()]);
+    mockUpdateStorageArea.mockReset();
+    mockUpdateStorageArea
+      .mockRejectedValueOnce({
+        response: { status: 422, data: { detail: [{ field: 'label', message: 'Value is too long.' }] } },
+      })
+      .mockResolvedValueOnce({});
+    mockToastSuccess.mockReset();
+    const user = userEvent.setup();
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Rack A');
+    await user.click(screen.getByRole('button', { name: 'Edit Rack A' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Description' }), 'Top shelf');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateStorageArea).toHaveBeenCalledTimes(2));
+    expect(mockUpdateStorageArea.mock.calls[1]?.[1]).not.toHaveProperty('label');
+    expect(mockUpdateStorageArea.mock.calls[1]?.[1]).toMatchObject({ description: 'Top shelf' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Storage area saved, except label.');
+    expect(screen.getByRole('textbox', { name: 'Label' })).toHaveAccessibleDescription('Value is too long.');
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel discards a typed name', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('No storage areas yet.');
+    await user.click(screen.getAllByRole('button', { name: /Add Storage Area/ })[0] as HTMLElement);
+    await user.type(await screen.findByPlaceholderText('e.g. Rack A-1'), 'New Rack');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByPlaceholderText('e.g. Rack A-1')).toHaveValue('New Rack');
+  });
+
   it('shows the assigned barcode read-only when editing', async () => {
     mockGetStorageAreas.mockResolvedValue([makeArea({ barcode: 'SA-000007' })]);
     const user = userEvent.setup();

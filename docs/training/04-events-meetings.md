@@ -1558,11 +1558,49 @@ either.
 **Changing an event.** When you change an event's title, start or end time, or
 location, members who answered **Going** or **Maybe** are told in the app and
 by an "Event Updated" email showing the new time and place. The email follows
-the same **Event changes and cancellations** switch.
+the same **Event changes and cancellations** switch. To move an event that has
+already started taking check-ins, use
+[Postpone](#postponing-an-event-to-a-new-time-2026-11-10) instead: it clears
+the attendance recorded for the old time.
 
 A cancelled event stays on the calendar with its attendance intact, and reads
 "This event has been cancelled. Reason: …". A finalized event cannot be
 cancelled.
+
+### Postponing an event to a new time _(2026-11-10)_
+
+**Who can do this:** whoever can edit the event (a training officer can
+postpone a Training event).
+
+Use **More → Postpone Event** when the event is still going to happen, just
+later. It is not offered on a cancelled event or one whose attendance is
+finalized.
+
+1. Choose the **New start** and **New end**.
+2. Give a **Reason** (10 to 500 characters).
+3. Leave **Tell members who RSVP'd Going or Maybe, with the old and new time**
+   ticked to send them an in-app notice and an email with the reason.
+4. Select **Postpone Event**.
+
+What happens:
+
+- **RSVPs are kept.** Check-ins, check-outs, **Edit Times** corrections and
+  guest check-ins are cleared, and the admin hours and training credit they
+  produced are removed, so attendance starts afresh at the new time. If anyone
+  is checked in, the dialog says how many will need to check in again.
+- Reminders go out again for the new time.
+- The event's page shows a **Postponed** badge and "Postponed from _original
+  time_ — _reason_". The events list shows a **Postponed** badge too; its
+  tooltip gives the original date. A cancelled event shows only **Cancelled**.
+- Postponing twice keeps the **first** original time.
+
+> **What if Postpone is refused?** The message says why: the new start is in
+> the past, it is the event's current time, the room is booked then, or
+> attendance requests are still waiting for a decision. Settle those requests
+> first.
+
+> **Screenshots needed:** the Postpone Event dialog; an event card with the
+> **Postponed** badge; the event page's "Postponed from" line.
 
 ### Deleting an event or a series
 

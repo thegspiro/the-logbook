@@ -118,3 +118,50 @@ describe('ComplianceSection', () => {
     expect([...COMPLIANCE_TYPE_OPTIONS].sort()).toEqual([...BACKEND_COMPLIANCE_TYPES].sort());
   });
 });
+
+describe('ComplianceSection refusals and discarding', () => {
+  beforeEach(() => {
+    getComplianceChecklists.mockReset();
+    createComplianceChecklist.mockReset();
+    getComplianceChecklists.mockResolvedValue([storedChecklist]);
+  });
+
+  it('names a missing title on its field and creates nothing', async () => {
+    renderSection();
+    await screen.findByText('Compliance Checklists (1)');
+    fireEvent.click(screen.getByRole('button', { name: /Add Checklist/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Checklist' }));
+
+    expect(screen.getByRole('textbox', { name: /^Title/ })).toHaveAccessibleDescription(
+      'Enter a title for the checklist.'
+    );
+    expect(createComplianceChecklist).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the field it names', async () => {
+    createComplianceChecklist.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'checklist_name', message: 'Value is too long.' }] } },
+    });
+    renderSection();
+    await screen.findByText('Compliance Checklists (1)');
+    fireEvent.click(screen.getByRole('button', { name: /Add Checklist/i }));
+    fireEvent.change(screen.getByPlaceholderText('e.g., NFPA 1500 Annual Review'), { target: { value: 'Long' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Checklist' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: /^Title/ })).toHaveAccessibleDescription(
+        expect.stringContaining('Value is too long.')
+      )
+    );
+  });
+
+  it('asks before Cancel discards a typed title', async () => {
+    renderSection();
+    await screen.findByText('Compliance Checklists (1)');
+    fireEvent.click(screen.getByRole('button', { name: /Add Checklist/i }));
+    fireEvent.change(screen.getByPlaceholderText('e.g., NFPA 1500 Annual Review'), { target: { value: 'OSHA' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByPlaceholderText('e.g., NFPA 1500 Annual Review')).toHaveValue('OSHA');
+  });
+});

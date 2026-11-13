@@ -449,3 +449,69 @@ describe('EquipmentKitsPage add dialog validation', () => {
     expect(screen.getByText('Add Equipment Kit')).toBeInTheDocument();
   });
 });
+
+describe('EquipmentKitsPage dialog: edits and discarding', () => {
+  beforeEach(() => {
+    mockGetEquipmentKits.mockReset();
+    mockGetKitProductOptions.mockReset();
+    mockGetCategories.mockReset();
+    mockGetEquipmentKit.mockReset();
+    mockUpdateEquipmentKit.mockReset();
+    mockCheckPermission.mockReset();
+    mockToastSuccess.mockReset();
+    mockGetEquipmentKits.mockResolvedValue([makeKit()]);
+    mockGetKitProductOptions.mockResolvedValue([]);
+    mockGetCategories.mockResolvedValue([]);
+    mockGetEquipmentKit.mockResolvedValue(
+      makeKit({
+        line_items: [
+          {
+            id: 'li-1',
+            kit_id: 'k-1',
+            item_name: 'Helmet',
+            quantity: 1,
+            size_selectable: false,
+            optional: false,
+            sort_order: 0,
+          },
+        ],
+      })
+    );
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  it('saves the name of an edit whose line items are refused, keeping the stored lines', async () => {
+    mockUpdateEquipmentKit
+      .mockRejectedValueOnce({
+        response: {
+          status: 422,
+          data: { detail: [{ field: 'line_items', message: 'List should have at most 100 items' }] },
+        },
+      })
+      .mockResolvedValueOnce({});
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentKitsPage />);
+    await screen.findByText('Recruit Kit');
+    await user.click(screen.getByRole('button', { name: 'Edit Recruit Kit' }));
+    const name = await screen.findByRole('textbox', { name: 'Name' });
+    await user.type(name, ' 2027');
+    await user.click(screen.getByRole('button', { name: 'Update Kit' }));
+
+    await waitFor(() => expect(mockUpdateEquipmentKit).toHaveBeenCalledTimes(2));
+    expect(mockUpdateEquipmentKit.mock.calls[1]?.[1]).not.toHaveProperty('line_items');
+    expect(mockUpdateEquipmentKit.mock.calls[1]?.[1]).toMatchObject({ name: 'Recruit Kit 2027' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Kit saved, except line items.');
+    expect(mockToastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel discards an edit', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<EquipmentKitsPage />);
+    await screen.findByText('Recruit Kit');
+    await user.click(screen.getByRole('button', { name: 'Edit Recruit Kit' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Name' }), ' 2027');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Recruit Kit 2027');
+  });
+});

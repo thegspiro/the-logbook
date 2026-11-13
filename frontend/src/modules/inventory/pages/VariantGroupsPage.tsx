@@ -12,6 +12,9 @@ import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { placeApiError } from '../../../hooks/useFieldErrors';
 
 interface GroupFormData {
   name: string;
@@ -31,15 +34,31 @@ const EMPTY_FORM: GroupFormData = {
   unit_of_measure: '',
 };
 
-type GroupField = 'name' | 'description' | 'unit_of_measure';
+type GroupField = 'name' | 'description' | 'category_id' | 'base_price' | 'base_replacement_cost' | 'unit_of_measure';
 
 // snake_case keys: schemas/inventory.py carries no alias generator, so a 422
-// names the request body's own keys.
+// names the request body's own keys. Ordered as on screen.
 const GROUP_FIELDS: FieldSpecs<GroupField> = {
   name: { id: 'vg-name', label: 'Name' },
   description: { id: 'vg-desc', label: 'Description' },
+  category_id: { id: 'vg-category', label: 'Category' },
+  base_price: { id: 'vg-price', label: 'Base Price' },
+  base_replacement_cost: { id: 'vg-replacement', label: 'Replacement Cost' },
   unit_of_measure: { id: 'vg-uom', label: 'Unit of Measure' },
 };
+const GROUP_ORDER = Object.keys(GROUP_FIELDS) as GroupField[];
+
+/** `ItemVariantGroupCreate` in schemas/inventory.py. */
+const NAME_MAX = 255;
+const DESCRIPTION_MAX = 2000;
+const UNIT_MAX = 50;
+
+/** A money amount of 0 or more, null for a blank box, `undefined` when the text is not one. */
+function parseAmount(text: string): number | null | undefined {
+  if (!text.trim()) return null;
+  const n = Number(text);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
 
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
@@ -201,6 +220,10 @@ const VariantGroupsPage: React.FC = () => {
   const [formData, setFormData] = useState<GroupFormData>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const groupErrors = useFieldErrors(GROUP_FIELDS);
+  // What the dialog held when it opened (or last saved), so Escape, the X and
+  // Cancel ask before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<GroupFormData>(EMPTY_FORM);
+  const isDirty = showModal && JSON.stringify(formData) !== JSON.stringify(baseline);
   const [detailGroup, setDetailGroup] = useState<ItemVariantGroup | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
@@ -236,20 +259,23 @@ const VariantGroupsPage: React.FC = () => {
   const openCreateModal = () => {
     setEditingGroup(null);
     setFormData(EMPTY_FORM);
+    setBaseline(EMPTY_FORM);
     groupErrors.clear();
     setShowModal(true);
   };
 
   const openEditModal = (group: ItemVariantGroup) => {
     setEditingGroup(group);
-    setFormData({
+    const seeded: GroupFormData = {
       name: group.name,
       description: group.description ?? '',
       category_id: group.category_id ?? '',
       base_price: group.base_price != null ? String(group.base_price) : '',
       base_replacement_cost: group.base_replacement_cost != null ? String(group.base_replacement_cost) : '',
       unit_of_measure: group.unit_of_measure ?? '',
-    });
+    };
+    setFormData(seeded);
+    setBaseline(seeded);
     groupErrors.clear();
     setShowModal(true);
   };
@@ -268,6 +294,13 @@ const VariantGroupsPage: React.FC = () => {
     setShowModal(false);
     setEditingGroup(null);
     setFormData(EMPTY_FORM);
+    setBaseline(EMPTY_FORM);
+  };
+  const requestClose = useDiscardGuard({ isDirty, onClose: closeModal });
+
+  const update = (key: keyof GroupFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    groupErrors.setError(key, null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -277,9 +310,17 @@ const VariantGroupsPage: React.FC = () => {
     // could find again (forms review F-3).
     const problems: FieldErrors<GroupField> = {};
     if (!formData.name.trim()) problems.name = 'Enter a name for the group.';
+    const basePrice = parseAmount(formData.base_price);
+    if (basePrice === undefined) problems.base_price = 'Enter an amount of 0 or more, or leave it empty.';
+    const replacementCost = parseAmount(formData.base_replacement_cost);
+    if (replacementCost === undefined) {
+      problems.base_replacement_cost = 'Enter an amount of 0 or more, or leave it empty.';
+    }
     groupErrors.setFormError(null);
     groupErrors.setErrors(problems);
-    if (Object.keys(problems).length > 0) {
+    // A new group is not created until every field is fixed; an edit saves the
+    // rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!editingGroup && Object.keys(problems).length > 0) {
       groupErrors.focusFirst(problems);
       return;
     }
@@ -291,18 +332,35 @@ const VariantGroupsPage: React.FC = () => {
       // `exclude_unset` and an omitted key means "leave this alone" — the clear
       // was being lost behind a success toast (CLAUDE.md pitfall #1).
       const { text, pick, num } = formCoercions(Boolean(editingGroup));
-      const basePrice = parseFloat(formData.base_price);
-      const replacementCost = parseFloat(formData.base_replacement_cost);
       const payload: ItemVariantGroupCreate = {
         name: formData.name.trim(),
         description: text(formData.description),
         category_id: pick(formData.category_id),
-        base_price: isNaN(basePrice) ? num('') : basePrice,
-        base_replacement_cost: isNaN(replacementCost) ? num('') : replacementCost,
+        base_price: basePrice ?? num(''),
+        base_replacement_cost: replacementCost ?? num(''),
         unit_of_measure: text(formData.unit_of_measure),
       };
       if (editingGroup) {
-        await inventoryService.updateVariantGroup(editingGroup.id, payload);
+        const { refused } = await saveExceptRefused<GroupField, unknown>({
+          payload: { ...payload },
+          refused: problems,
+          send: (body) => inventoryService.updateVariantGroup(editingGroup.id, body),
+          place: (err) => placeApiError(GROUP_FIELDS, err),
+        });
+        const first = firstRefused(GROUP_ORDER, refused);
+        if (first) {
+          // The list refreshes behind the dialog, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          void loadGroups();
+          groupErrors.setErrors(refused);
+          groupErrors.setFormError(
+            `Variant group saved, except ${GROUP_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+          );
+          groupErrors.focusFirst(refused);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as keyof GroupFormData]]));
+          setBaseline({ ...formData, ...keep });
+          return;
+        }
         toast.success('Variant group updated');
       } else {
         await inventoryService.createVariantGroup(payload);
@@ -345,7 +403,7 @@ const VariantGroupsPage: React.FC = () => {
       </button>
       <button
         type="button"
-        onClick={closeModal}
+        onClick={requestClose}
         className="text-theme-text-secondary hover:text-theme-text-primary mr-2 inline-flex items-center px-4 py-2 text-sm font-medium sm:mr-3"
       >
         Cancel
@@ -487,12 +545,12 @@ const VariantGroupsPage: React.FC = () => {
       {/* Create/Edit Modal */}
       <Modal
         isOpen={showModal}
-        onClose={closeModal}
+        onClose={requestClose}
         title={editingGroup ? 'Edit Variant Group' : 'Add Variant Group'}
         footer={modalFooter}
         size="md"
       >
-        <form id="variant-group-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
+        <form id="variant-group-form" onSubmit={(e) => void handleSubmit(e)} noValidate className="space-y-4">
           {groupErrors.formError && (
             <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
               {groupErrors.formError}
@@ -504,6 +562,8 @@ const VariantGroupsPage: React.FC = () => {
             required
             error={groupErrors.errors.name}
             labelClassName={labelClass}
+            maxLength={NAME_MAX}
+            count={formData.name.length}
             hint={
               editingGroup
                 ? 'Renaming also renames every item in this group. Each item keeps its size, colour and style.'
@@ -514,12 +574,9 @@ const VariantGroupsPage: React.FC = () => {
               <input
                 {...field}
                 type="text"
-                maxLength={255}
+                autoComplete="off"
                 value={formData.name}
-                onChange={(e) => {
-                  setFormData((prev) => ({ ...prev, name: e.target.value }));
-                  groupErrors.setError('name', null);
-                }}
+                onChange={(e) => update('name', e.target.value)}
                 className={inputClass}
                 placeholder="e.g. Class A Dress Uniform"
               />
@@ -530,88 +587,98 @@ const VariantGroupsPage: React.FC = () => {
             label="Description"
             error={groupErrors.errors.description}
             labelClassName={labelClass}
+            maxLength={DESCRIPTION_MAX}
+            count={formData.description.length}
           >
             {(field) => (
               <textarea
                 {...field}
                 rows={2}
-                maxLength={2000}
                 value={formData.description}
-                onChange={(e) => {
-                  setFormData((prev) => ({ ...prev, description: e.target.value }));
-                  groupErrors.setError('description', null);
-                }}
+                onChange={(e) => update('description', e.target.value)}
                 className={inputClass}
                 placeholder="Optional description"
               />
             )}
           </FormField>
-          <div>
-            <label htmlFor="vg-category" className={labelClass}>
-              Category
-            </label>
-            <select
-              id="vg-category"
-              value={formData.category_id}
-              onChange={(e) => setFormData((prev) => ({ ...prev, category_id: e.target.value }))}
-              className={selectClass}
-            >
-              <option value="">None</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FormField
+            id={GROUP_FIELDS.category_id.id}
+            label="Category"
+            error={groupErrors.errors.category_id}
+            labelClassName={labelClass}
+          >
+            {(field) => (
+              <select
+                {...field}
+                value={formData.category_id}
+                onChange={(e) => update('category_id', e.target.value)}
+                className={selectClass}
+              >
+                <option value="">None</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label htmlFor="vg-price" className={labelClass}>
-                Base Price
-              </label>
-              <input
-                id="vg-price"
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.base_price}
-                onChange={(e) => setFormData((prev) => ({ ...prev, base_price: e.target.value }))}
-                className={inputClass}
-                placeholder="0.00"
-              />
-            </div>
-            <div>
-              <label htmlFor="vg-replacement" className={labelClass}>
-                Replacement Cost
-              </label>
-              <input
-                id="vg-replacement"
-                type="number"
-                min="0"
-                step="0.01"
-                value={formData.base_replacement_cost}
-                onChange={(e) => setFormData((prev) => ({ ...prev, base_replacement_cost: e.target.value }))}
-                className={inputClass}
-                placeholder="0.00"
-              />
-            </div>
+            <FormField
+              id={GROUP_FIELDS.base_price.id}
+              label="Base Price"
+              error={groupErrors.errors.base_price}
+              labelClassName={labelClass}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={formData.base_price}
+                  onChange={(e) => update('base_price', e.target.value)}
+                  className={inputClass}
+                  placeholder="0.00"
+                />
+              )}
+            </FormField>
+            <FormField
+              id={GROUP_FIELDS.base_replacement_cost.id}
+              label="Replacement Cost"
+              error={groupErrors.errors.base_replacement_cost}
+              labelClassName={labelClass}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  value={formData.base_replacement_cost}
+                  onChange={(e) => update('base_replacement_cost', e.target.value)}
+                  className={inputClass}
+                  placeholder="0.00"
+                />
+              )}
+            </FormField>
           </div>
           <FormField
             id={GROUP_FIELDS.unit_of_measure.id}
             label="Unit of Measure"
             error={groupErrors.errors.unit_of_measure}
             labelClassName={labelClass}
+            maxLength={UNIT_MAX}
+            count={formData.unit_of_measure.length}
           >
             {(field) => (
               <input
                 {...field}
                 type="text"
-                maxLength={50}
                 value={formData.unit_of_measure}
-                onChange={(e) => {
-                  setFormData((prev) => ({ ...prev, unit_of_measure: e.target.value }));
-                  groupErrors.setError('unit_of_measure', null);
-                }}
+                onChange={(e) => update('unit_of_measure', e.target.value)}
                 className={inputClass}
                 placeholder="e.g. each, pair, set"
               />

@@ -12,6 +12,7 @@ Chief's override of a denial.
 """
 
 import enum
+import os
 from datetime import date, datetime
 from typing import Optional
 
@@ -22,6 +23,8 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    Integer,
+    SmallInteger,
     String,
     UniqueConstraint,
 )
@@ -201,6 +204,74 @@ class AttendanceWaiverRequestAction(Base):
             "request_id",
         ),
     )
+
+
+class AttendanceWaiverAttachment(Base):
+    """A file a member filed with their request, when the policy takes them.
+
+    The bytes live in ``FileStorageService``'s ``attendance-waivers`` area
+    under the request's id and are served only through the request routes, to
+    its member and to the people who may decide it. They are often medical (a
+    doctor's note), which is why the uploader's filename is not kept at all: a
+    download is always named ``waiver-attachment-<ordinal>.<ext>``.
+
+    **``ordinal`` is the request's 1st, 2nd or 3rd file**, and the unique
+    ``(request_id, ordinal)`` key is the database's half of the three-file
+    limit: two uploads racing past the count both reach for the same next
+    ordinal and only one insert succeeds.
+
+    A row means the file is on file. The retention task deletes the file and
+    then the row, so the request (the decision record) outlives both, and
+    anonymising the member does the same.
+    """
+
+    __tablename__ = "attendance_waiver_attachments"
+
+    # The neutral name every download carries.
+    DOWNLOAD_STEM = "waiver-attachment"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("attendance_waiver_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    ordinal: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    uploaded_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "request_id",
+            "ordinal",
+            name="uq_attendance_waiver_attachments_request_ordinal",
+        ),
+        Index(
+            "ix_attendance_waiver_attachments_org_request",
+            "organization_id",
+            "request_id",
+        ),
+    )
+
+    @property
+    def download_name(self) -> str:
+        """``waiver-attachment-1.pdf``: never the uploader's filename, which
+        for a doctor's note can name the condition, and would show in a
+        download bar or a shared Downloads folder. The extension is the one
+        the file was stored under, which comes from its detected content."""
+        extension = os.path.splitext(self.file_path or "")[1].lower()
+        return f"{self.DOWNLOAD_STEM}-{self.ordinal}{extension}"
 
 
 class AttendanceWaiverEmailSend(Base):

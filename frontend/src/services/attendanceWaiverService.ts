@@ -8,6 +8,7 @@
 
 import api from './apiClient';
 import { asArray } from '../utils/asArray';
+import { WaiverAttachmentMode, waiverAttachmentService } from './waiverAttachmentService';
 import type { AttendanceWaiverStatus } from '../constants/enums';
 import type {
   AttendanceWaiverEligibility,
@@ -25,17 +26,23 @@ const BASE = '/training/waivers/requests';
 const normalizeRequest = (request: AttendanceWaiverRequest): AttendanceWaiverRequest => ({
   ...request,
   actions: asArray(request.actions),
+  attachments: asArray(request.attachments ?? []),
+  can_attach: request.can_attach === true,
 });
 
 const normalizePolicy = (policy: AttendanceWaiverPolicy): AttendanceWaiverPolicy => ({
   ...policy,
   categories: asArray(policy.categories),
   approver_position_ids: asArray(policy.approver_position_ids),
+  attachment: policy.attachment ?? WaiverAttachmentMode.OFF,
+  attachment_retention_days:
+    typeof policy.attachment_retention_days === 'number' ? policy.attachment_retention_days : 365,
 });
 
 const normalizeEligibility = (answer: AttendanceWaiverEligibility): AttendanceWaiverEligibility => ({
   ...answer,
   categories: asArray(answer.categories),
+  attachment: answer.attachment ?? WaiverAttachmentMode.OFF,
 });
 
 const normalizePage = (page: AttendanceWaiverRequestPage): AttendanceWaiverRequestPage => ({
@@ -65,6 +72,16 @@ export const attendanceWaiverService = {
   async submit(data: AttendanceWaiverSubmit): Promise<AttendanceWaiverRequest> {
     const response = await api.post<AttendanceWaiverRequest>(BASE, data);
     return normalizeRequest(response.data);
+  },
+
+  /** Ask to be excused with documents: the request and its files are saved together or not at all. */
+  async submitWithAttachments(data: AttendanceWaiverSubmit, files: readonly File[]): Promise<AttendanceWaiverRequest> {
+    return normalizeRequest(await waiverAttachmentService.submitWithAttachments<AttendanceWaiverRequest>(data, files));
+  },
+
+  /** File more documents with the caller's own pending request. */
+  async addAttachments(requestId: string, files: readonly File[]): Promise<AttendanceWaiverRequest> {
+    return normalizeRequest(await waiverAttachmentService.addAttachments<AttendanceWaiverRequest>(requestId, files));
   },
 
   async listMine(): Promise<AttendanceWaiverRequest[]> {

@@ -92,10 +92,13 @@ describe('Donors: Edit (W69)', () => {
 
   it('opens the donor in the form and saves every field, clearing an emptied one', async () => {
     const user = userEvent.setup();
+    // The open form asks before discarding, which needs the app shell's ConfirmProvider.
     render(
-      <MemoryRouter>
-        <DonorsPage />
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter>
+          <DonorsPage />
+        </MemoryRouter>
+      </ConfirmProvider>
     );
 
     await user.click(await screen.findByRole('button', { name: 'Edit Ann Lee' }));

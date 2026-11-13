@@ -20,11 +20,54 @@ import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useFootersStore } from '../store/footersStore';
 import DepartmentContactCard from './DepartmentContactCard';
 import type { EmailFooter, EmailFooterContactDetails } from '../types';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
 
 /** Mirrors the backend's key pattern, so a bad key is caught before the save. */
 const KEY_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 const MAX_FOOTERS = 12;
 const MAX_LINES = 6;
+
+/** `EmailFooter` in schemas/email_template.py. */
+const NAME_MAX = 100;
+const DESCRIPTION_MAX = 300;
+const LINE_MAX = 300;
+
+type FooterField = 'name' | 'description' | 'key' | 'lines';
+type FooterErrors = Partial<Record<FooterField, string>>;
+const FOOTER_FIELD_ORDER: FooterField[] = ['name', 'description', 'key', 'lines'];
+const FOOTER_LABELS: Record<FooterField, string> = {
+  name: 'Footer name',
+  description: 'Footer description',
+  key: 'Key',
+  lines: 'Lines',
+};
+
+const footerFieldId = (index: number, field: FooterField) => `footer-${index}-${field}`;
+
+/**
+ * The library saves whole, so a refusal names a card by its place in the list
+ * (`footers.2.name`, `footers.0.lines.3`). These specs let mapServerFieldErrors
+ * put each one on the card and field it belongs to.
+ */
+function footerServerFields(count: number): Record<string, ServerFieldSpec> {
+  const specs: Record<string, ServerFieldSpec> = {};
+  for (let i = 0; i < count; i += 1) {
+    specs[`${i}.name`] = { label: FOOTER_LABELS.name, maxLength: NAME_MAX, api: `footers.${i}.name` };
+    specs[`${i}.description`] = {
+      label: FOOTER_LABELS.description,
+      maxLength: DESCRIPTION_MAX,
+      api: `footers.${i}.description`,
+    };
+    specs[`${i}.key`] = { label: FOOTER_LABELS.key, maxLength: 32, api: `footers.${i}.key` };
+    specs[`${i}.lines`] = {
+      label: 'A line',
+      maxLength: LINE_MAX,
+      api: [`footers.${i}.lines`, ...Array.from({ length: MAX_LINES }, (_, m) => `footers.${i}.lines.${m}`)],
+    };
+  }
+  return specs;
+}
 
 type ContactFlag = 'show_phone' | 'show_email' | 'show_website';
 
@@ -81,7 +124,10 @@ const ContactToggle: React.FC<ContactToggleProps> = ({ label, value, checked, on
 );
 
 interface FooterCardProps {
+  index: number;
   footer: EmailFooter;
+  /** Refusals from the last save attempt, by field. */
+  errors: FooterErrors;
   contactDetails: EmailFooterContactDetails;
   isDefault: boolean;
   usageCount: number;
@@ -93,7 +139,9 @@ interface FooterCardProps {
 }
 
 const FooterCard: React.FC<FooterCardProps> = ({
+  index: cardIndex,
   footer,
+  errors,
   contactDetails,
   isDefault,
   usageCount,
@@ -119,23 +167,46 @@ const FooterCard: React.FC<FooterCardProps> = ({
     <div className="card space-y-3 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-2">
-          <input
-            type="text"
-            value={footer.name}
-            onChange={(e) => onChange({ ...footer, name: e.target.value })}
-            className="form-input font-semibold"
-            aria-label="Footer name"
-            maxLength={100}
-          />
-          <input
-            type="text"
-            value={footer.description ?? ''}
-            onChange={(e) => onChange({ ...footer, description: e.target.value })}
-            className="form-input-sm"
-            placeholder="When to use this one (optional)"
-            aria-label="Footer description"
-            maxLength={300}
-          />
+          <FormField
+            id={footerFieldId(cardIndex, 'name')}
+            label={<span className="sr-only">Footer name</span>}
+            labelClassName=""
+            required
+            error={errors.name}
+            maxLength={NAME_MAX}
+            count={footer.name.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                autoComplete="off"
+                value={footer.name}
+                onChange={(e) => onChange({ ...footer, name: e.target.value })}
+                className="form-input font-semibold"
+              />
+            )}
+          </FormField>
+          <FormField
+            id={footerFieldId(cardIndex, 'description')}
+            label={<span className="sr-only">Footer description</span>}
+            labelClassName=""
+            error={errors.description}
+            maxLength={DESCRIPTION_MAX}
+            count={(footer.description ?? '').length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                autoComplete="off"
+                value={footer.description ?? ''}
+                onChange={(e) => onChange({ ...footer, description: e.target.value })}
+                className="form-input-sm"
+                placeholder="When to use this one (optional)"
+              />
+            )}
+          </FormField>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {isDefault ? (
@@ -167,27 +238,24 @@ const FooterCard: React.FC<FooterCardProps> = ({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="form-label" htmlFor={`footer-key-${footer.key}`}>
-            Key
-          </label>
-          <input
-            id={`footer-key-${footer.key}`}
-            type="text"
-            value={footer.key}
-            onChange={(e) => onChange({ ...footer, key: e.target.value })}
-            className={`form-input font-mono ${keyError ? 'border-red-500' : ''}`}
-            maxLength={32}
-            aria-invalid={!!keyError}
-          />
-          {keyError ? (
-            <p className="mt-1 text-xs text-red-500">{keyError}</p>
-          ) : (
-            <p className="text-theme-text-muted mt-1 text-xs">
-              How templates refer to this footer. Recipients never see it.
-            </p>
+        <FormField
+          id={footerFieldId(cardIndex, 'key')}
+          label="Key"
+          error={keyError ?? errors.key}
+          hint={(keyError ?? errors.key) ? undefined : 'How templates refer to this footer. Recipients never see it.'}
+          maxLength={32}
+        >
+          {(field) => (
+            <input
+              {...field}
+              type="text"
+              autoComplete="off"
+              value={footer.key}
+              onChange={(e) => onChange({ ...footer, key: e.target.value })}
+              className="form-input font-mono"
+            />
           )}
-        </div>
+        </FormField>
         <div className="flex items-end">
           <p className="text-theme-text-muted text-xs">
             {usageCount === 0
@@ -197,19 +265,26 @@ const FooterCard: React.FC<FooterCardProps> = ({
         </div>
       </div>
 
-      <div>
-        <span className="form-label">Lines</span>
+      <div
+        role="group"
+        aria-labelledby={`${footerFieldId(cardIndex, 'lines')}-label`}
+        {...(errors.lines ? { 'aria-describedby': `${footerFieldId(cardIndex, 'lines')}-error` } : {})}
+      >
+        <span id={`${footerFieldId(cardIndex, 'lines')}-label`} className="form-label">
+          Lines
+        </span>
         <div className="space-y-2">
           {footer.lines.map((line, index) => (
             <div key={index} className="flex items-center gap-2">
               <input
+                id={index === 0 ? footerFieldId(cardIndex, 'lines') : undefined}
                 type="text"
                 value={line}
                 onChange={(e) => setLine(index, e.target.value)}
                 className="form-input flex-1"
                 placeholder="A sentence to close with"
                 aria-label={`Footer line ${index + 1}`}
-                maxLength={300}
+                maxLength={LINE_MAX}
               />
               <button
                 type="button"
@@ -222,6 +297,11 @@ const FooterCard: React.FC<FooterCardProps> = ({
             </div>
           ))}
         </div>
+        {errors.lines && (
+          <p id={`${footerFieldId(cardIndex, 'lines')}-error`} className={`mt-1 text-sm ${FIELD_ERROR_CLASS}`}>
+            {errors.lines}
+          </p>
+        )}
         {footer.lines.length < MAX_LINES && (
           <button
             type="button"
@@ -281,6 +361,9 @@ const FootersPanel: React.FC = () => {
 
   const [draft, setDraft] = useState<EmailFooter[]>([]);
   const [draftDefault, setDraftDefault] = useState('');
+  // Refusals from the last save attempt, one entry per card; cleared on the
+  // card's next edit, so a fixed field stops showing its old reason.
+  const [cardErrors, setCardErrors] = useState<FooterErrors[]>([]);
 
   useEffect(() => {
     if (!hasLoaded) void fetchFooters();
@@ -304,15 +387,52 @@ const FootersPanel: React.FC = () => {
   }, [draft]);
 
   const isDirty = draftDefault !== defaultKey || JSON.stringify(draft) !== JSON.stringify(footers);
-  const hasErrors = keyErrors.some(Boolean) || draft.some((f) => !f.name.trim());
+
+  const focusFirst = (errors: FooterErrors[]) => {
+    for (let i = 0; i < errors.length; i += 1) {
+      const field = FOOTER_FIELD_ORDER.find((f) => errors[i]?.[f]);
+      if (field) {
+        window.setTimeout(() => document.getElementById(footerFieldId(i, field))?.focus(), 0);
+        return;
+      }
+    }
+  };
 
   const handleSave = async () => {
-    if (hasErrors) return;
+    // The library is one value, saved whole, so nothing saves until every
+    // card is right; each reason is said on its card's field rather than by
+    // a Save button greyed out with no word why (forms review F-3).
+    const local: FooterErrors[] = draft.map((footer, i) => ({
+      ...(footer.name.trim() ? {} : { name: 'Name this footer.' }),
+      ...(keyErrors[i] ? { key: keyErrors[i] } : {}),
+    }));
+    if (local.some((e) => Object.keys(e).length > 0)) {
+      setCardErrors(local);
+      focusFirst(local);
+      return;
+    }
     try {
       await saveFooters(draftDefault, draft);
+      setCardErrors([]);
       toast.success('Footers saved');
-    } catch {
-      toast.error('Failed to save footers');
+    } catch (err: unknown) {
+      const mapped = mapServerFieldErrors(err, footerServerFields(draft.length));
+      const placed = mapped ? Object.keys(mapped.fieldErrors) : [];
+      if (mapped && placed.length > 0) {
+        const next: FooterErrors[] = draft.map(() => ({}));
+        for (const key of placed) {
+          const [i, field] = key.split('.') as [string, FooterField];
+          const card = next[Number(i)];
+          const message = mapped.fieldErrors[key];
+          if (card && message && !card[field]) card[field] = message;
+        }
+        setCardErrors(next);
+        focusFirst(next);
+        // The store's banner would repeat what the fields now say.
+        if (mapped.unmatched.length === 0) clearError();
+      } else {
+        toast.error('Failed to save footers');
+      }
     }
   };
 
@@ -333,6 +453,7 @@ const FootersPanel: React.FC = () => {
     });
     if (!ok) return;
     setDraft((prev) => prev.filter((_, i) => i !== index));
+    setCardErrors((prev) => prev.filter((_, i) => i !== index));
   };
 
   if (isLoading && !hasLoaded) {
@@ -356,6 +477,7 @@ const FootersPanel: React.FC = () => {
               onClick={() => {
                 setDraft(footers);
                 setDraftDefault(defaultKey);
+                setCardErrors([]);
               }}
               disabled={isSaving}
               className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-50"
@@ -368,7 +490,7 @@ const FootersPanel: React.FC = () => {
             onClick={() => {
               void handleSave();
             }}
-            disabled={!isDirty || isSaving || hasErrors}
+            disabled={!isDirty || isSaving}
             className="btn-primary flex items-center gap-2 disabled:cursor-not-allowed"
           >
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -409,7 +531,9 @@ const FootersPanel: React.FC = () => {
         {draft.map((footer, index) => (
           <FooterCard
             key={index}
+            index={index}
             footer={footer}
+            errors={cardErrors[index] ?? {}}
             contactDetails={contactDetails}
             isDefault={footer.key === draftDefault}
             usageCount={usage[footer.key] ?? 0}
@@ -417,6 +541,7 @@ const FootersPanel: React.FC = () => {
             canDelete={draft.length > 1 && footer.key !== draftDefault}
             onChange={(next) => {
               setDraft((prev) => prev.map((f, i) => (i === index ? next : f)));
+              setCardErrors((prev) => prev.map((e, i) => (i === index ? {} : e)));
               // Keep the default pointing at this footer when its key is
               // renamed, otherwise the save is rejected for naming a footer
               // that no longer exists.

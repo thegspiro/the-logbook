@@ -1,5 +1,15 @@
 # Script currency
 
+## Flagged 2026-11-11 (not edited)
+
+Worth a beat or a re-record note when next touched: 03 IT and 04 Chief
+(Former Members page; Reset Password, Unlock, Reset MFA and Delete now in a
+row's **More actions** menu); 04 Chief and 07 Secretary (**Postpone Event**,
+which keeps RSVPs and clears check-ins); 04 Chief, 05 and 09 (the evaluation's
+training-session attendance figure follows the attendance requirement). No
+script quotes these labels today, so nothing on screen is wrong yet. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-10--11-2026).
+
 ## Flagged 2026-11-09 (not edited)
 
 Worth a beat or a re-record note when next touched: 03 and 06 (My Shifts Past

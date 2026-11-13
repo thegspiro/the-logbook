@@ -6,7 +6,6 @@
  */
 
 import { useEffect } from 'react';
-import { DialogPanel } from '../../../components/ux/DialogPanel';
 import { useSearchParams } from 'react-router';
 import {
   Wrench,
@@ -22,15 +21,10 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import ListPager from '../components/ListPager';
-import {
-  inputCls,
-  labelCls,
-  MAINTENANCE_DUE_WINDOW_DAYS,
-  MAINTENANCE_STATUS_FILTERS,
-  type MaintenanceStatusFilter,
-} from '../constants';
+import { MAINTENANCE_DUE_WINDOW_DAYS, MAINTENANCE_STATUS_FILTERS, type MaintenanceStatusFilter } from '../constants';
 import { useMaintenanceForm } from '../hooks/useMaintenanceForm';
 import MaintenanceDueLabel from '../components/MaintenanceDueLabel';
+import MaintenanceRecordDialog from '../components/MaintenanceRecordDialog';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
@@ -66,13 +60,13 @@ export default function MaintenanceListPage() {
 
   const initialStatus = parseStatus(searchParams.get('status'));
 
+  const form = useMaintenanceForm({ initialStatusFilter: initialStatus, idPrefix: 'maintenance-list' });
   const {
     records: filtered,
     page,
     setPage,
     total,
     pageSize,
-    maintenanceTypes,
     isLoading,
     loadError,
     reload,
@@ -81,17 +75,11 @@ export default function MaintenanceListPage() {
     statusFilter,
     setStatusFilter,
     showModal,
-    setShowModal,
-    editingRecord,
-    isSaving,
-    formData,
-    setFormData,
     openCreate,
     openEdit,
-    handleSave,
     handleComplete,
     handleDelete,
-  } = useMaintenanceForm({ initialStatusFilter: initialStatus });
+  } = form;
 
   const getFacilityName = (facilityId: string) =>
     facilities.find((f) => f.id === facilityId)?.name || 'Unknown facility';
@@ -264,197 +252,7 @@ export default function MaintenanceListPage() {
       <ListPager page={page} total={total} pageSize={pageSize} onPageChange={setPage} />
 
       {canMaintenance && showModal && (
-        <div
-          className="modal-overlay z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-labelledby="maintenance-list-dialog-title"
-          aria-modal="true"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowModal(false);
-          }}
-        >
-          <DialogPanel onClose={() => setShowModal(false)} className="max-h-[90dvh] w-full max-w-lg overflow-y-auto">
-            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 id="maintenance-list-dialog-title" className="text-theme-text-primary text-lg font-bold">
-                {editingRecord ? 'Edit Maintenance Record' : 'New Maintenance Record'}
-              </h2>
-              <button
-                data-dialog-close
-                onClick={() => setShowModal(false)}
-                aria-label="Close dialog"
-                className="text-theme-text-muted hover:text-theme-text-primary"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-4 p-6">
-              <div>
-                <label htmlFor="maintenance-list-facility-id" className={labelCls}>
-                  Facility *
-                </label>
-                <select
-                  id="maintenance-list-facility-id"
-                  value={formData.facility_id}
-                  onChange={(e) => setFormData((p) => ({ ...p, facility_id: e.target.value }))}
-                  className={inputCls}
-                >
-                  <option value="">Select facility...</option>
-                  {facilities
-                    .filter((f) => !f.isArchived)
-                    .map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="maintenance-list-description" className={labelCls}>
-                  Description *
-                </label>
-                <textarea
-                  id="maintenance-list-description"
-                  value={formData.description}
-                  onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                  rows={3}
-                  className={inputCls + ' resize-none'}
-                  placeholder="Describe the maintenance work..."
-                />
-              </div>
-              {maintenanceTypes.length > 0 && (
-                <div>
-                  <label htmlFor="maintenance-list-maintenance-type-id" className={labelCls}>
-                    Maintenance Type *
-                  </label>
-                  <select
-                    id="maintenance-list-maintenance-type-id"
-                    required
-                    aria-required="true"
-                    value={formData.maintenance_type_id}
-                    onChange={(e) => setFormData((p) => ({ ...p, maintenance_type_id: e.target.value }))}
-                    className={inputCls}
-                  >
-                    <option value="">Select type...</option>
-                    {maintenanceTypes.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="maintenance-list-scheduled-date" className={labelCls}>
-                    Scheduled Date
-                  </label>
-                  <input
-                    id="maintenance-list-scheduled-date"
-                    type="date"
-                    value={formData.scheduled_date}
-                    onChange={(e) => setFormData((p) => ({ ...p, scheduled_date: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="maintenance-list-due-date" className={labelCls}>
-                    Due Date
-                  </label>
-                  <input
-                    id="maintenance-list-due-date"
-                    type="date"
-                    value={formData.due_date}
-                    onChange={(e) => setFormData((p) => ({ ...p, due_date: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="maintenance-list-performed-by" className={labelCls}>
-                    Performed By
-                  </label>
-                  <input
-                    id="maintenance-list-performed-by"
-                    type="text"
-                    value={formData.performed_by}
-                    onChange={(e) => setFormData((p) => ({ ...p, performed_by: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="maintenance-list-vendor" className={labelCls}>
-                    Vendor
-                  </label>
-                  <input
-                    id="maintenance-list-vendor"
-                    type="text"
-                    value={formData.vendor}
-                    onChange={(e) => setFormData((p) => ({ ...p, vendor: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="maintenance-list-cost" className={labelCls}>
-                    Cost ($)
-                  </label>
-                  <input
-                    id="maintenance-list-cost"
-                    type="number"
-                    value={formData.cost}
-                    onChange={(e) => setFormData((p) => ({ ...p, cost: e.target.value }))}
-                    className={inputCls}
-                    placeholder="0.00"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="maintenance-list-work-order-number" className={labelCls}>
-                    Work Order #
-                  </label>
-                  <input
-                    id="maintenance-list-work-order-number"
-                    type="text"
-                    value={formData.work_order_number}
-                    onChange={(e) => setFormData((p) => ({ ...p, work_order_number: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="maintenance-list-notes" className={labelCls}>
-                  Notes
-                </label>
-                <textarea
-                  id="maintenance-list-notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
-                  rows={2}
-                  className={inputCls + ' resize-none'}
-                />
-              </div>
-            </div>
-            <div className="border-theme-surface-border flex flex-wrap items-center justify-end gap-3 border-t p-6">
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 text-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  void handleSave();
-                }}
-                disabled={isSaving}
-                className="btn-primary flex items-center gap-2 px-5 text-sm"
-              >
-                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {editingRecord ? 'Save Changes' : 'Create Record'}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
+        <MaintenanceRecordDialog form={form} titleId="maintenance-list-dialog-title" facilities={facilities} />
       )}
     </div>
   );

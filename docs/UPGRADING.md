@@ -837,6 +837,28 @@ row) and creates the empty `attendance_waiver_email_sends` table.
 - **Downgrading** deletes the six waiver templates' rows (a department's edits
   included), the position CC choices and the send log.
 
+### Training: documents on waiver requests, kept a year (2026-11-11)
+
+Nothing blocks a restart. Migration `86722d75b5a2` creates one empty table,
+`attendance_waiver_attachments`. No existing row changes.
+
+- **Off until a department turns it on.** The waiver policy gains
+  `attachment` (`off` by default) and `attachment_retention_days` (365 by
+  default); a policy saved before the upgrade reads both at their defaults,
+  so no member can file a document until a training officer chooses
+  `optional` or `required`.
+- **Files go under `<org>/attendance-waivers/`** on the uploads volume (or the
+  department's bucket), through the same storage service, scanning and
+  encryption as every other upload. Back that directory up with the rest of
+  the volume.
+- **A new daily task, `attendance_waiver_attachment_retention`, permanently
+  deletes documents** once their request has been closed longer than the
+  retention period. It deletes nothing on the day of the upgrade: no document
+  exists yet. A department whose records policy needs them longer should raise
+  `attachment_retention_days` before the first anniversary.
+- **Downgrading past `86722d75b5a2`** drops the table; the files stay on the
+  volume with nothing pointing at them.
+
 ### Meetings: a member who was present counts as attending, waiver or not; members can ask to be excused (2026-11-11)
 
 - **Attendance figures and voting eligibility can rise on upgrade, with no

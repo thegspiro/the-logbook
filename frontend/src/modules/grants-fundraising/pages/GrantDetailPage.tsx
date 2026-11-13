@@ -62,6 +62,7 @@ import { formatCurrency, formatCurrencyWhole } from '@/utils/currencyFormatting'
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useAuthStore } from '../../../stores/authStore';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // =============================================================================
 // Constants
@@ -671,7 +672,7 @@ export const GrantDetailPage: React.FC = () => {
           </div>
 
           {/* Key stats */}
-          <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatGrid columns={4} gap={4} className="mt-6">
             <div className="border-theme-surface-border bg-theme-surface-secondary rounded-lg border p-4">
               <div className="text-theme-text-secondary flex items-center gap-2 text-sm">
                 <DollarSign className="h-4 w-4" />
@@ -709,7 +710,7 @@ export const GrantDetailPage: React.FC = () => {
                 {application.grantEndDate ? formatDate(application.grantEndDate, tz) : '--'}
               </p>
             </div>
-          </div>
+          </StatGrid>
         </div>
       </div>
 

@@ -437,6 +437,31 @@ question (`askBeforeDiscard`) and a server refusal shown on its field
 (`error`); the Approvals approve / deny prompt uses both, and every other
 `PromptDialog` behaves as before until it opts in.
 
+## Rollout status, 2026-11-11 (batch 18)
+
+The same steps, on these:
+
+| Area                 | Converted                                                                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inventory and assets | categories, variant groups, storage areas, equipment kits, allowances, reorder requests (new / edit), write-off review, Copy checklist, Move NFC tag |
+| Finance and grants   | donors, campaigns, the Zeffy link dialog                                                                                                             |
+| Communications       | officers, footers                                                                                                                                    |
+
+Shared change that came with it: `utils/saveExceptRefused.ts`, the single-save
+loop batches 16 and 17 wrote inline in each dialog (send without the refused
+keys; on a 422 that only fields answer for, resend without those as well;
+throw anything else).
+
+Five of these already had main's field-level errors (categories, variant
+groups, storage areas, kits, reorder requests). They keep `useFieldErrors` and
+its messages, with this batch's additions on top: the discard question,
+`noValidate`, counters, the single-save rule on edit, and their number and
+picker fields through `FormField`. Three are replaced whole on every save and
+refuse rather than save part of it: the Zeffy link, an officer assignment and
+the footer library, whose refusals name the card (`footers.N.field`). The
+write-off review is an approve-type step and refuses; its buttons are no longer
+greyed out.
+
 **Not yet converted** (F-2 to F-9 still apply to them):
 
 - **Top-level pages:** the locations setup wizard; skill template, course
@@ -444,25 +469,51 @@ question (`askBeforeDiscard`) and a server refusal shown on its field
   training pages; the pipeline create and edit pages; integrations; forms;
   members admin; the manual shift report and shift detail, reports and
   patterns tabs.
-- **Inventory and assets:** bulk add, size preferences, clone checklist, move
-  NFC tag, catalog quick add, the medical create panel, stock lots and seals,
-  and the category, storage area, kit, variant group, allowance, write-off,
-  reorder, checklist builder and settings pages; the full apparatus form and
-  documents; the facility detail sections other than emergency contacts,
-  settings and list; medical supply lots, import/export and categories; store
-  settings, order detail and checkout.
+- **Inventory and assets:** bulk add, size preferences, catalog quick add, the
+  medical create panel, stock lots and seals, and the checklist builder and
+  settings pages; the full apparatus form and documents; the facility detail
+  sections other than emergency contacts, settings and list; medical supply
+  lots, import/export and categories; store settings, order detail and
+  checkout.
 - **Finance and grants:** the approval step dialog and the Approvals approve /
   deny prompt; the dual approval, fund overspend, advance return, reminder,
   mileage and substantiation cards; charge access, dues and advance exports;
-  fiscal-year settings and the QuickBooks page; the Zeffy link dialog, donors,
-  campaigns and the grant detail page's inline forms.
+  fiscal-year settings and the QuickBooks page; the grant detail page's inline
+  forms.
 - **Minutes, communications, smaller modules:** the minutes editor and the
   rest of its settings; the remaining report dialogs; communications
-  templates, officers, footers, intake questions, photo consent and email
-  templates; scheduling template and settings; applicant conversion, stage
-  configuration, detail dialog, interviews and pipeline settings; onboarding,
-  the public portal, membership, history, the org chart node and IP security
-  admin.
+  templates, intake questions, photo consent and email templates; scheduling
+  template and settings; applicant conversion, stage configuration, detail
+  dialog, interviews and pipeline settings; onboarding, the public portal,
+  membership, history, the org chart node and IP security admin.
+
+## Rollout status, 2026-11-11 (batch 19)
+
+The same steps, on these:
+
+| Area                 | Converted                                                                                                                                                                                                |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inventory and assets | Facilities › systems, rooms, compliance checklists; the maintenance and inspection dialogs (a facility's sections and the cross-facility pages); Medical Supplies › categories; the medical create panel |
+
+Shared change that came with it: the maintenance and inspection dialogs were
+two copies each, one per screen; each is now one component
+(`MaintenanceRecordDialog`, `InspectionRecordDialog`) driven by its existing
+hook, which gained the field errors, the dirty flag and an `idPrefix` so each
+screen keeps its field ids.
+
+Two screens on the list were looked at and left, because they hold no form of
+their own: Inventory › NFC Tags is one switch that saves as it is flipped, and
+the tamper seal panel answers into the equipment check it sits in, which saves
+it. The medical create panel holds one choice and nothing typed, so its Cancel
+does not ask first; its Create & link now names a missing category on the
+field rather than sitting greyed out.
+
+**Still not converted**, from the inventory-and-assets row above: size
+preferences, catalog quick add, stock lots, the checklist builder and settings
+pages; the full apparatus form and documents; the facility
+overview, files and settings sections and list; medical supply lots and
+import/export; store settings, order detail and checkout. The other rows of the
+batch 18 list are unchanged.
 
 ## Suggested order
 

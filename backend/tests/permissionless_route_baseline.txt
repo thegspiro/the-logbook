@@ -53,8 +53,14 @@ app/api/v1/endpoints/apparatus.py::list_driver_exception_approvers
 # and is a 404 to anyone else; withdraw is the member's alone, approve and
 # deny need may_decide (never the requester), override needs a Chief
 # position (never on the Chief's own request).
+# Documents (2026-11-11): adding them is the member's alone, on their own
+# pending request (403 for a decider, 404 for anyone else); a download needs
+# the member or may_decide, is a 404 to anyone who may not see the request,
+# and submit-with-attachments acts only on current_user like submit.
+app/api/v1/endpoints/attendance_waiver_requests.py::add_attendance_waiver_attachments
 app/api/v1/endpoints/attendance_waiver_requests.py::approve_attendance_waiver_request
 app/api/v1/endpoints/attendance_waiver_requests.py::deny_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::download_attendance_waiver_attachment
 app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_eligibility
 app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_policy
 app/api/v1/endpoints/attendance_waiver_requests.py::get_attendance_waiver_request
@@ -62,6 +68,7 @@ app/api/v1/endpoints/attendance_waiver_requests.py::list_attendance_waiver_reque
 app/api/v1/endpoints/attendance_waiver_requests.py::list_my_attendance_waiver_requests
 app/api/v1/endpoints/attendance_waiver_requests.py::override_attendance_waiver_request
 app/api/v1/endpoints/attendance_waiver_requests.py::submit_attendance_waiver_request
+app/api/v1/endpoints/attendance_waiver_requests.py::submit_attendance_waiver_request_with_attachments
 app/api/v1/endpoints/attendance_waiver_requests.py::withdraw_attendance_waiver_request
 
 app/api/v1/endpoints/auth.py::change_password
