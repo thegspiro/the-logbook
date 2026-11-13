@@ -399,12 +399,7 @@ describe('ShiftEvaluationPage — keeping the officer’s work', () => {
       await user.type(transports, '2');
       await vi.advanceTimersByTimeAsync(12_000);
 
-      expect(mockSave).toHaveBeenCalledWith(
-        'sh1',
-        'u2',
-        'en-1',
-        expect.objectContaining({ submit: false })
-      );
+      expect(mockSave).toHaveBeenCalledWith('sh1', 'u2', 'en-1', expect.objectContaining({ submit: false }));
     } finally {
       vi.useRealTimers();
     }

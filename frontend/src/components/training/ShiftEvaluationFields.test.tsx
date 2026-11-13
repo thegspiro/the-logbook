@@ -28,10 +28,7 @@ const form = (levels = 4): ShiftEvaluationFormSnapshot => ({
 
 const empty: ShiftEvaluationDraft = { header_values: {}, statistics: {}, responses: {}, closing_comments: '' };
 
-const Harness: React.FC<{ levels?: number; onChange?: (d: ShiftEvaluationDraft) => void }> = ({
-  levels,
-  onChange,
-}) => {
+const Harness: React.FC<{ levels?: number; onChange?: (d: ShiftEvaluationDraft) => void }> = ({ levels, onChange }) => {
   const [draft, setDraft] = useState(empty);
   return (
     <ShiftEvaluationFields
@@ -55,7 +52,11 @@ describe('ShiftEvaluationFields rating controls', () => {
 
     await user.tab();
     expect(within(group).getByRole('radio', { name: '1 – Level 1' })).toHaveFocus();
-    expect(within(group).getAllByRole('radio').filter((r) => r.tabIndex === 0)).toHaveLength(1);
+    expect(
+      within(group)
+        .getAllByRole('radio')
+        .filter((r) => r.tabIndex === 0)
+    ).toHaveLength(1);
 
     await user.keyboard('{ArrowRight}');
     const two = within(group).getByRole('radio', { name: '2 – Level 2' });
@@ -67,7 +68,11 @@ describe('ShiftEvaluationFields rating controls', () => {
     const na = within(group).getByRole('radio', { name: 'N/A – Not Observed' });
     expect(na).toHaveFocus();
     expect(na).toHaveAttribute('aria-checked', 'true');
-    expect(within(group).getAllByRole('radio').filter((r) => r.tabIndex === 0)).toEqual([na]);
+    expect(
+      within(group)
+        .getAllByRole('radio')
+        .filter((r) => r.tabIndex === 0)
+    ).toEqual([na]);
   });
 
   it('wraps a long scale onto another row instead of clipping it', () => {

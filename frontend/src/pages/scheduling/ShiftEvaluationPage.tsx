@@ -178,7 +178,12 @@ const ShiftEvaluationPage: React.FC = () => {
               scopeKey,
               shiftEvaluationBody(body, submit, chosen, preceptor)
             )
-          : await shiftEvaluationService.save(shiftId, memberParam, scopeKey, shiftEvaluationBody(body, submit, chosen, null));
+          : await shiftEvaluationService.save(
+              shiftId,
+              memberParam,
+              scopeKey,
+              shiftEvaluationBody(body, submit, chosen, null)
+            );
         // The page has moved on to another evaluation: this one is saved,
         // and none of it belongs on the screen now showing.
         if (currentRoute.current !== savedRoute) return true;
@@ -204,7 +209,8 @@ const ShiftEvaluationPage: React.FC = () => {
   // A draft the officer may save: not their own evaluation, and not one
   // already submitted, which is saved only on purpose so an edit to it is
   // never committed by a timer.
-  const draftSavable = !!form && form.evaluation?.status !== 'submitted' && currentUserId !== form.requirement.member_id;
+  const draftSavable =
+    !!form && form.evaluation?.status !== 'submitted' && currentUserId !== form.requirement.member_id;
   const draftSavableRef = useRef(draftSavable);
   draftSavableRef.current = draftSavable;
 
@@ -455,12 +461,7 @@ const ShiftEvaluationPage: React.FC = () => {
       </fieldset>
 
       {problems.length > 0 && (
-        <div
-          ref={problemsRef}
-          tabIndex={-1}
-          role="alert"
-          className="alert-danger text-theme-alert-danger-text text-sm"
-        >
+        <div ref={problemsRef} tabIndex={-1} role="alert" className="alert-danger text-theme-alert-danger-text text-sm">
           <p className="font-semibold">Before submitting:</p>
           <ul className="ml-5 list-disc">
             {problems.slice(0, 8).map((problem) => (

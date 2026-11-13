@@ -358,9 +358,7 @@ describe('ShiftEvaluationSettingsPanel — preceptor link window', () => {
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
 
     await waitFor(() =>
-      expect(mockUpdateSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ shift_evaluation_link_days: 30 })
-      )
+      expect(mockUpdateSettings).toHaveBeenCalledWith(expect.objectContaining({ shift_evaluation_link_days: 30 }))
     );
   });
 
