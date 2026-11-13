@@ -66,8 +66,17 @@ class TestTheShapeIsTheModels:
             c.name for c in AttendanceWaiverEmailSend.__table__.constraints
         }
 
-    def test_the_widened_enum_is_the_models(self):
-        assert set(MIGRATION.ALL_TYPES) == {t.value for t in EmailTemplateType}
+    def test_the_widened_enum_is_in_the_models(self):
+        # A subset, not equality: ALL_TYPES is frozen at this revision, and a
+        # later revision may widen the enum again (as 533f8aba187e does), so
+        # the models can only grow past it. What must hold is that this
+        # revision adds its own types, keeps every one it found, and names
+        # nothing the models do not have.
+        models = {t.value for t in EmailTemplateType}
+        assert set(MIGRATION.ALL_TYPES) <= models
+        assert set(MIGRATION._NEW_TEMPLATE_TYPES) <= set(MIGRATION.ALL_TYPES)
+        assert set(MIGRATION._EXISTING_TEMPLATE_TYPES) <= set(MIGRATION.ALL_TYPES)
+        assert len(MIGRATION.ALL_TYPES) == len(set(MIGRATION.ALL_TYPES))
         assert MIGRATION.ALL_TYPES[-1] == "custom"
 
 

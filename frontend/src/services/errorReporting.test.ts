@@ -456,8 +456,16 @@ describe('sanitizePath', () => {
     // /application-form/..., the API it calls is plural /follow-up-forms/....
     ['/application-form/form-secret', '/application-form/[REDACTED]'],
     ['/api/public/v1/follow-up-forms/form-secret/submit', '/api/public/v1/follow-up-forms/[REDACTED]/submit'],
+    // A preceptor link token: the page /shift-evaluation/..., the public API
+    // /public/v1/shift-evaluations/....
+    ['/shift-evaluation/qr-secret', '/shift-evaluation/[REDACTED]'],
+    ['/api/public/v1/shift-evaluations/qr-secret/submit', '/api/public/v1/shift-evaluations/[REDACTED]/submit'],
   ])('redacts tokenized path %s', (path, expected) => {
     expect(sanitizePath(path)).toBe(expected);
+  });
+
+  it('keeps a signed-in shift evaluation id, which is not a credential', () => {
+    expect(sanitizePath('/api/v1/training/shift-evaluations/eval-1')).toBe('/api/v1/training/shift-evaluations/eval-1');
   });
 
   it('leaves ordinary resource paths intact', () => {

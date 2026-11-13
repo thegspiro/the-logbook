@@ -196,6 +196,22 @@ class TestSanitizePath:
             "/api/public/v1/follow-up-forms/emailed-secret/submit"
         ) == ("/api/public/v1/follow-up-forms/[REDACTED]/submit")
 
+    def test_redacts_the_preceptor_link_token_but_not_evaluation_ids(self):
+        """A preceptor link's token is a bearer credential: the page is
+        /shift-evaluation/{token}, the public API
+        /public/v1/shift-evaluations/{token}/.... The signed-in
+        /training/shift-evaluations/{id} routes carry a row id, not a
+        credential, and keep it so a report still says which evaluation."""
+        assert sanitize_path("/shift-evaluation/qr-secret") == (
+            "/shift-evaluation/[REDACTED]"
+        )
+        assert sanitize_path("/api/public/v1/shift-evaluations/qr-secret/submit") == (
+            "/api/public/v1/shift-evaluations/[REDACTED]/submit"
+        )
+        assert sanitize_path("/api/v1/training/shift-evaluations/eval-1") == (
+            "/api/v1/training/shift-evaluations/eval-1"
+        )
+
 
 class TestBuildErrorType:
     def test_prefixes_and_uppercases(self):

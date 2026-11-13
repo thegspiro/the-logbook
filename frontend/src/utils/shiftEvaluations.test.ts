@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { ShiftEvaluationFormSnapshot } from '../types/training';
-import { commentRequired, parseCount, shiftEvaluationPagePath, shiftEvaluationProblems } from './shiftEvaluations';
+import {
+  commentRequired,
+  evaluatedByLabel,
+  parseCount,
+  shiftEvaluationPagePath,
+  shiftEvaluationProblems,
+} from './shiftEvaluations';
 
 const form: ShiftEvaluationFormSnapshot = {
   name: 'EMT Shift Evaluation',
@@ -106,5 +112,38 @@ describe('parseCount and paths', () => {
     expect(shiftEvaluationPagePath('sh1', 'u2', 'combined')).toBe(
       '/scheduling/shift-reports/sh1/evaluations/u2/combined'
     );
+  });
+});
+
+describe('evaluatedByLabel', () => {
+  const base = {
+    evaluator_name: null,
+    preceptor_name: null,
+    via_preceptor_link: false,
+    link_created_by_member: false,
+  };
+
+  it('names the officer who evaluated', () => {
+    expect(evaluatedByLabel({ ...base, evaluator_name: 'Olive Officer' })).toBe('Olive Officer');
+  });
+
+  it('names an outside preceptor and who entered their form', () => {
+    expect(evaluatedByLabel({ ...base, evaluator_name: 'Olive Officer', preceptor_name: 'Pat Preceptor' })).toBe(
+      'Pat Preceptor, outside preceptor, entered by Olive Officer'
+    );
+  });
+
+  it('says a preceptor used a link, and when the member made it', () => {
+    expect(evaluatedByLabel({ ...base, preceptor_name: 'Pat Preceptor', via_preceptor_link: true })).toBe(
+      'Pat Preceptor, outside preceptor, through a preceptor link'
+    );
+    expect(
+      evaluatedByLabel({
+        ...base,
+        preceptor_name: 'Pat Preceptor',
+        via_preceptor_link: true,
+        link_created_by_member: true,
+      })
+    ).toBe('Pat Preceptor, outside preceptor, through a preceptor link the member made');
   });
 });

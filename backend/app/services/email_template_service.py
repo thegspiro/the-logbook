@@ -790,6 +790,19 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Link to the applicant's Interview page",
         },
     ],
+    "shift_evaluation_preceptor_link": [
+        {"name": "member_name", "description": "The evaluated member's name"},
+        {"name": "shift_date", "description": "The date of the shift"},
+        {
+            "name": "unit_label",
+            "description": "The outside agency and unit the shift was on",
+        },
+        {
+            "name": "evaluation_url",
+            "description": "The no-login link to the evaluation form",
+        },
+        {"name": "expires_on", "description": "When the link stops working"},
+    ],
     "suggestion_submitted": [
         {"name": "recipient_name", "description": "Reviewer's display name"},
         {"name": "box_name", "description": "Name of the suggestion box"},
@@ -1562,6 +1575,15 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             ),
         }
     ),
+    "shift_evaluation_preceptor_link": _sample(
+        {
+            "member_name": "Terry Jones",
+            "shift_date": "November 10, 2026",
+            "unit_label": "ACFD Medic 101",
+            "evaluation_url": "https://example.org/shift-evaluation/sample",
+            "expires_on": "November 17, 2026 at 07:00 PM",
+        }
+    ),
     "suggestion_submitted": _sample(
         {
             "recipient_name": "Captain Maria Lopez",
@@ -1889,6 +1911,10 @@ TEST_SAMPLE_DATES: Dict[
         "event_day": (1, time(19, 0), _day_of_month),
     },
     "series_end_reminder": {"series_end_date": (14, None, _strf(_DATE))},
+    "shift_evaluation_preceptor_link": {
+        "shift_date": (-1, None, _strf(_DATE)),
+        "expires_on": (6, time(19, 0), _strf(_DATE_TIME)),
+    },
     "event_cancellation": {"event_date": (3, None, _strf(_DATE))},
     "event_waitlist_promotion": {"event_start": (2, time(19, 0), _strf(_DATE_TIME))},
     "training_approval": {
@@ -3097,6 +3123,38 @@ Open the Interview page: {{interview_url}}
 DEFAULT_APPLICATION_INTERVIEW_REQUESTED_SUBJECT = (
     "Interview requested: {{applicant_name}}"
 )
+
+# Sent to an outside agency's preceptor so they can fill out a member's shift
+# evaluation without an account. The link is the only credential, and the
+# email carries the member's name, the shift and the unit and nothing else
+# from the member's record.
+DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_HTML = build_shell(
+    "Shift Evaluation Requested",
+    """        <p>Hello,</p>
+        <p>{{organization_name}} asks you to evaluate {{member_name}} for the
+        shift on {{shift_date}} on {{unit_label}}.</p>
+        <p>The link opens the evaluation form. No account is needed. It can be
+        submitted once and works until {{expires_on}}.</p>
+""" + action("{{evaluation_url}}", "Open the evaluation"),
+    accent=ACCENT_BLUE,
+    chip="Training",
+)
+
+DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_TEXT = """Shift Evaluation Requested
+
+Hello,
+
+{{organization_name}} asks you to evaluate {{member_name}} for the shift on
+{{shift_date}} on {{unit_label}}.
+
+The link opens the evaluation form. No account is needed. It can be submitted
+once and works until {{expires_on}}.
+
+Open the evaluation: {{evaluation_url}}
+
+{{footer_text}}"""
+
+DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_SUBJECT = "Shift evaluation for {{member_name}}"
 
 # Sent to a box's reviewers when a submission arrives. Deliberately carries no
 # submission content: a complaint copied into mailboxes is out of the
@@ -5564,6 +5622,17 @@ class EmailTemplateService:
                 "Sent to an applicant's assigned interviewers when the "
                 "applicant reaches an Interview Requirement stage, with a link "
                 "to the Interview page."
+            ),
+        },
+        {
+            "type": EmailTemplateType.SHIFT_EVALUATION_PRECEPTOR_LINK,
+            "name": "Shift Evaluation Preceptor Link",
+            "subject": DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_SUBJECT,
+            "html": DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_HTML,
+            "text": DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_TEXT,
+            "description": (
+                "Sent to an outside agency's preceptor with the no-login link "
+                "to a member's shift evaluation."
             ),
         },
         {

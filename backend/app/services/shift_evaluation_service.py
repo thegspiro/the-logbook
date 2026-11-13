@@ -53,6 +53,7 @@ from app.models.shift_evaluation import (
     GENERAL_SCOPE,
     SHIFT_OCCASION,
     ShiftEvaluation,
+    ShiftEvaluationLink,
     ShiftEvaluationTemplate,
 )
 from app.models.training import (
@@ -106,6 +107,13 @@ _SNAPSHOT_FIELDS = (
     "closing_comments_hint",
 )
 
+
+# Logged outside shifts that call for an evaluation: counted ones, and ones
+# awaiting an officer's approval. A rejected one calls for none.
+_EVALUATED_ENTRY_STATUSES = (
+    ExternalShiftHoursStatus.COUNTED.value,
+    ExternalShiftHoursStatus.PENDING.value,
+)
 
 # The requirement types an evaluation credits.
 _CREDITED_TYPES = (
@@ -461,9 +469,12 @@ class ShiftEvaluationService:
             entry = occasion.entry
             if entry is None:
                 raise ValueError("An outside-shift occasion needs its entry")
-            # An outside shift is evaluated only while it counts and only on
-            # an agency the department asked to evaluate.
-            if entry.status == ExternalShiftHoursStatus.COUNTED.value and (
+            # An outside shift is evaluated only while it counts, or awaits an
+            # officer's approval, and only on an agency the department asked
+            # to evaluate. A pending one is evaluated without waiting, since a
+            # preceptor's link closes days after the shift; the member sees it,
+            # and credit lands, once the shift is approved (visible_to_member).
+            if entry.status in _EVALUATED_ENTRY_STATUSES and (
                 str(entry.external_apparatus_id or "")
                 in await self._evaluated_apparatus_ids(org)
             ):
@@ -708,6 +719,14 @@ class ShiftEvaluationService:
             for key, value in (evaluation.responses or {}).items()
             if isinstance(value, dict)
         }
+        link = (
+            await self.db.execute(
+                select(ShiftEvaluationLink).where(
+                    ShiftEvaluationLink.evaluation_id == evaluation.id,
+                    ShiftEvaluationLink.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
         return ShiftEvaluationDetail(
             id=evaluation.id,
             member_id=str(evaluation.member_id),
@@ -720,6 +739,8 @@ class ShiftEvaluationService:
             shift_id=evaluation.shift_id,
             external_shift_id=evaluation.external_shift_id,
             preceptor_name=evaluation.preceptor_name,
+            via_preceptor_link=link is not None,
+            link_created_by_member=bool(link is not None and link.created_by_member),
             shift_date=evaluation.shift_date,
             shift_start=evaluation.shift_start,
             shift_end=evaluation.shift_end,
@@ -988,7 +1009,7 @@ class ShiftEvaluationService:
         scope_key: str,
         organization_id: UUID | str,
         body: ShiftEvaluationSave,
-        evaluator: User,
+        evaluator: Optional[User],
     ) -> ShiftEvaluation:
         """Enter the outside preceptor's evaluation of a logged outside shift.
 
@@ -1014,9 +1035,11 @@ class ShiftEvaluationService:
         scope_key: str,
         organization_id: UUID | str,
         body: ShiftEvaluationSave,
-        evaluator: User,
+        evaluator: Optional[User],
     ) -> ShiftEvaluation:
-        if str(member_id) == str(evaluator.id):
+        # No evaluator: an outside preceptor submitting through a link, who
+        # has no account here (ShiftEvaluationLinkService.submit).
+        if evaluator is not None and str(member_id) == str(evaluator.id):
             raise ValueError("You cannot evaluate yourself")
         requirement = await self._find_requirement(
             occasion, member_id, scope_key, organization_id
@@ -1062,7 +1085,7 @@ class ShiftEvaluationService:
         evaluation.unit_label = occasion.unit_label
         if occasion.kind == EXTERNAL_OCCASION:
             evaluation.preceptor_name = body.preceptor_name
-        evaluation.evaluator_id = str(evaluator.id)
+        evaluation.evaluator_id = str(evaluator.id) if evaluator is not None else None
         evaluation.enrollment_ids = list(requirement.enrollment_ids)
         evaluation.program_names = list(requirement.program_names)
         evaluation.template_id = template_id
@@ -1306,7 +1329,7 @@ class ShiftEvaluationService:
         candidates = [
             e
             for e in entries
-            if e.status == ExternalShiftHoursStatus.COUNTED.value
+            if e.status in _EVALUATED_ENTRY_STATUSES
             and str(e.external_apparatus_id or "") in evaluated
         ]
         scopes = (
@@ -1390,8 +1413,7 @@ class ShiftEvaluationService:
                     select(ExternalShiftHours)
                     .where(
                         ExternalShiftHours.organization_id == org,
-                        ExternalShiftHours.status
-                        == ExternalShiftHoursStatus.COUNTED.value,
+                        ExternalShiftHours.status.in_(_EVALUATED_ENTRY_STATUSES),
                         ExternalShiftHours.external_apparatus_id.in_(evaluated),
                         ExternalShiftHours.user_id.in_(member_ids),
                     )

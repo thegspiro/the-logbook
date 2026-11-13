@@ -375,4 +375,18 @@ describe('MyExternalShifts', () => {
     expect(screen.getByText('Evaluated')).toBeInTheDocument();
     expect(screen.getAllByText(/Evaluation needed|Evaluated|Evaluation started/)).toHaveLength(2);
   });
+
+  it('offers a preceptor link only while a shift is waiting on its evaluation', async () => {
+    mockGetMine.mockResolvedValue({
+      items: [
+        entry({ id: 'e-needed', evaluation_status: 'needed' }),
+        entry({ id: 'e-done', evaluation_status: 'submitted' }),
+        entry({ id: 'e-none', evaluation_status: null }),
+      ],
+      total: 3,
+    });
+    renderWithRouter(<MyExternalShifts onChanged={onChanged} />);
+
+    expect(await screen.findAllByRole('button', { name: /Preceptor link/ })).toHaveLength(1);
+  });
 });

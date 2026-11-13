@@ -230,6 +230,8 @@ export function scrubSensitive(text: string): string {
  * own guest QR code token, the same credential for the same flow. The
  * /application-form/ and /follow-up-forms/ patterns redact a follow-up
  * form's personal link token: the page is singular, the API it calls plural.
+ * /shift-evaluation/ and /public/v1/shift-evaluations/ do the same for a
+ * preceptor link; the signed-in /training/shift-evaluations/{id} keeps its id.
  */
 export function sanitizePath(path: string): string {
   return path
@@ -240,7 +242,9 @@ export function sanitizePath(path: string): string {
     .replace(/(\/display\/)[^/?#]+/gi, '$1[REDACTED]')
     .replace(/(\/event-guest\/)[^/?#]+/gi, '$1[REDACTED]')
     .replace(/(\/application-form\/)[^/?#]+/gi, '$1[REDACTED]')
-    .replace(/(\/follow-up-forms\/)[^/?#]+/gi, '$1[REDACTED]');
+    .replace(/(\/follow-up-forms\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/shift-evaluation\/)[^/?#]+/gi, '$1[REDACTED]')
+    .replace(/(\/public\/v1\/shift-evaluations\/)[^/?#]+/gi, '$1[REDACTED]');
 }
 
 // ---------------------------------------------------------------------------

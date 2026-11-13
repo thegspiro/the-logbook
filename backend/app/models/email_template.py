@@ -100,6 +100,7 @@ class EmailTemplateType(str, enum.Enum):
     MEETING_WAIVER_REQUESTED = "meeting_waiver_requested"
     MEETING_WAIVER_DECIDED = "meeting_waiver_decided"
     MEETING_WAIVER_WITHDRAWN = "meeting_waiver_withdrawn"
+    SHIFT_EVALUATION_PRECEPTOR_LINK = "shift_evaluation_preceptor_link"
     CUSTOM = "custom"
 
 

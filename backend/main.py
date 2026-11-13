@@ -40,6 +40,7 @@ from app.api.public.paypal_webhook import router as paypal_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
 from app.api.public.security_txt import router as security_txt_router
+from app.api.public.shift_evaluations import router as public_shift_evaluations_router
 from app.api.public.zeffy_webhook import router as zeffy_webhook_router
 from app.api.v1.api import api_router
 from app.core.cache import cache_manager
@@ -2436,6 +2437,18 @@ app.include_router(
 # by a Follow-up Form stage, is the credential; 409 once a form is submitted).
 app.include_router(
     public_follow_up_forms_router,
+    prefix="/api",
+    responses={
+        **public_responses.TOKEN_ADDRESSED,
+        **public_responses.BAD_REQUEST,
+        **public_responses.CONFLICT,
+    },
+)
+
+# Include the preceptor shift evaluation API (no auth — the path's token, from
+# a preceptor link's QR code or email, is the credential; 409 once submitted).
+app.include_router(
+    public_shift_evaluations_router,
     prefix="/api",
     responses={
         **public_responses.TOKEN_ADDRESSED,
