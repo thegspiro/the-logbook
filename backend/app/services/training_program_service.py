@@ -4057,12 +4057,22 @@ class TrainingProgramService:
                         user_waivers,
                         str(requirement.id),
                         period_months=get_rolling_period_months(requirement),
+                        # Evaluated shifts, transports and refusals are counts,
+                        # prorated like shifts and calls: never part of one.
+                        whole_units=True,
                     )
                     if user_waivers
                     else (evaluation_target, 0, 0)
                 )
                 progress.progress_percentage = min(
-                    100.0, (updates.progress_value / adj_required) * 100
+                    100.0,
+                    (
+                        (updates.progress_value / adj_required) * 100
+                        # A prorated count can round down to zero, which the
+                        # member has already met.
+                        if adj_required > 0
+                        else 100.0
+                    ),
                 )
             elif (
                 requirement.requirement_type == RequirementType.COURSES

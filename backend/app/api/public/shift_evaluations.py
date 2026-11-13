@@ -34,25 +34,42 @@ router = APIRouter(
     prefix="/public/v1/shift-evaluations", tags=["public-shift-evaluations"]
 )
 
-# secrets.token_urlsafe(32): 43 base64url characters. Declared so the schema
-# states the shape; the service answers anything else with the same 404.
-LinkToken = Path(
-    ...,
-    min_length=43,
-    max_length=43,
-    pattern=r"^[A-Za-z0-9_-]+$",
-    description="The preceptor link token.",
-)
+# The shape (secrets.token_urlsafe(32), 43 base64url characters) is checked
+# by the service, not here: a path constraint answered a malformed token with
+# FastAPI's 422, echoing the token back, where every unusable link must read
+# the same 404.
+LinkToken = Path(..., description="The preceptor link token.")
 
 _NOT_AVAILABLE = "This evaluation link is not available. It may have expired."
 _ALREADY_SUBMITTED = "This evaluation has already been submitted. Thank you."
 
+_PRIVATE_HEADERS = {
+    "Cache-Control": "no-store, private",
+    "Pragma": "no-cache",
+    "Referrer-Policy": "no-referrer",
+    "X-Robots-Tag": "noindex, nofollow, noarchive",
+}
+
 
 def _private(response: Response) -> None:
-    response.headers["Cache-Control"] = "no-store, private"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Referrer-Policy"] = "no-referrer"
-    response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    response.headers.update(_PRIVATE_HEADERS)
+
+
+def _refuse(status_code: int, detail: str) -> HTTPException:
+    """An error that keeps the private headers: FastAPI drops the ones set on
+    the injected Response once an HTTPException is raised."""
+    return HTTPException(status_code, detail=detail, headers=dict(_PRIVATE_HEADERS))
+
+
+async def _rate_limited(request: Request) -> None:
+    try:
+        await validate_ip_rate_limit(request)
+    except HTTPException as e:
+        raise HTTPException(
+            e.status_code,
+            detail=e.detail,
+            headers={**(e.headers or {}), **_PRIVATE_HEADERS},
+        ) from None
 
 
 @router.get("/{token}", response_model=PublicShiftEvaluationView)
@@ -67,14 +84,14 @@ async def get_preceptor_evaluation(
     404 for a link that is unknown, revoked, expired, or whose evaluation is
     no longer called for; 409 once it has been submitted.
     """
-    await validate_ip_rate_limit(request)
+    await _rate_limited(request)
     _private(response)
     try:
         view = await ShiftEvaluationLinkService(db).public_view(token)
     except LinkAlreadyUsed:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail=_ALREADY_SUBMITTED)
+        raise _refuse(status.HTTP_409_CONFLICT, _ALREADY_SUBMITTED)
     if view is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=_NOT_AVAILABLE)
+        raise _refuse(status.HTTP_404_NOT_FOUND, _NOT_AVAILABLE)
     return view
 
 
@@ -87,7 +104,7 @@ async def submit_preceptor_evaluation(
     db: AsyncSession = Depends(get_db),
 ):
     """Submit the evaluation. 400 names an answer the preceptor must correct."""
-    await validate_ip_rate_limit(request)
+    await _rate_limited(request)
     _private(response)
     service = ShiftEvaluationLinkService(db)
     try:
@@ -98,11 +115,11 @@ async def submit_preceptor_evaluation(
             user_agent=request.headers.get("user-agent", ""),
         )
     except LinkAlreadyUsed:
-        raise HTTPException(status.HTTP_409_CONFLICT, detail=_ALREADY_SUBMITTED)
+        raise _refuse(status.HTTP_409_CONFLICT, _ALREADY_SUBMITTED)
     except ValueError as e:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise _refuse(status.HTTP_400_BAD_REQUEST, str(e))
     if evaluation is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail=_NOT_AVAILABLE)
+        raise _refuse(status.HTTP_404_NOT_FOUND, _NOT_AVAILABLE)
     await log_audit_event(
         db=db,
         event_type="shift_evaluation_submitted",

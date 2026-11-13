@@ -10162,3 +10162,58 @@ option was taken; each is open for the owner to revisit.
 - **`idx_meeting_attendees_meeting` is now a prefix of the new unique
   `(meeting_id, user_id)` index** and could be dropped; it was left to keep
   the migration to what the feature needs.
+
+## Training — Shift Evaluations: What the 2026-11-13 Review Left Open
+
+A review of the five shift-evaluation pull requests (#3884, #3902, #3922,
+#3956, #4264) fixed the defects listed in its pull request. These were found
+and deliberately not changed, because each needs an owner ruling or reaches
+beyond the feature.
+
+**For the owner to decide**
+
+- **The evaluations a shift calls for follow today's settings, not the
+  shift's.** Who needs which evaluation is worked out on every read from the
+  current "one evaluation for several programs" setting and the member's
+  current enrollments. Switching that setting, or enrolling a member in a
+  second program, while a shift is still open re-scopes it: evaluations
+  already submitted are kept but no longer required, new ones are required,
+  and close-out waits for them. Freezing the set at close-out would need a
+  stored snapshot.
+- **No-show and pending crew are asked for an evaluation.** The rule mirrors
+  the trainee-report gate (only declined and cancelled seats are left out),
+  so the two agree; excusing no-shows would mean changing both.
+- **No requirement type counts the calls an evaluation records.** Evaluated
+  shifts, transports and refusals are credited; the existing Calls type is
+  still fed by shift reports.
+- **A department requirement of an evaluation type, linked into a program
+  with "Link existing", is not credited by evaluations.** A linked row is
+  graded by the compliance engine, which has no branch for these types and
+  falls back to matching training records by type.
+
+**Accepted for now**
+
+- **Going to an evaluation from the Shift Completion Report loses most of the
+  report's unsaved fields.** The report's draft restore keeps crew selections,
+  remarks and the narrative; calls, ratings and the rest reload empty. The
+  restore logic predates evaluations, which now make leaving the report
+  routine.
+- **Two evaluation credits to the same requirement at the same moment can
+  lose one.** The shared credit primitive computes the new value from an
+  unlocked read. It is shared by every credit source, so it is not changed
+  here.
+- **Credit is not re-stated when a requirement's crediting rule changes**
+  (its type, or "leave out the lowest rating"), **when an evaluation's
+  combined scope shrinks**, or **when its shift is deleted, an outside entry
+  moves to an agency that does not evaluate, or the member is removed from the
+  shift.** Each leaves earlier credit standing until the evaluation is saved
+  again.
+- **A deactivated evaluation form is still offered and required** where a
+  program or the department settings still name it.
+- **Two administrators creating forms with the same name at the same moment
+  get a 500** rather than the duplicate-name 400.
+- **A preceptor-link submission that collides with an officer creating the
+  same evaluation** retries once; the retry keeps the link marked used but
+  loses the submitting device's address and browser from the record.
+- **Restoring a pending outside shift approves it**, without approve's
+  pending-only check (it still needs `scheduling.manage`).
