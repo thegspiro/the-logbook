@@ -21,6 +21,8 @@ GET    /meetings/waiver-requests/policy             - The department's policy
 PUT    /meetings/waiver-requests/policy             - Save it (meetings.manage)
 GET    /meetings/waiver-requests/policy/alternate   - Who may be the officers'
                                                       alternate (meetings.manage)
+GET    /meetings/waiver-requests/policy/positions   - The positions to choose
+                                                      from (meetings.manage)
 GET    /meetings/waiver-requests/eligibility        - May I ask about this meeting?
 POST   /meetings/waiver-requests                    - Ask to be excused
 GET    /meetings/waiver-requests/mine               - My requests
@@ -61,11 +63,13 @@ from app.schemas.attendance_waiver import (
     AttendanceWaiverMessage,
     AttendanceWaiverOverride,
     AttendanceWaiverPolicy,
+    AttendanceWaiverPositionOptions,
     AttendanceWaiverRequestPage,
     AttendanceWaiverRequestResponse,
     AttendanceWaiverSubmit,
 )
 from app.services.attendance_waiver_service import AttendanceWaiverService
+from app.services.compliance_config_service import ComplianceConfigService
 
 router = APIRouter()
 
@@ -105,6 +109,23 @@ async def save_meeting_waiver_policy(
         return await _service(db).save_policy(
             str(current_user.organization_id), body, current_user
         )
+
+
+@router.get("/policy/positions", response_model=AttendanceWaiverPositionOptions)
+async def get_meeting_waiver_position_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """
+    For the settings screen: the department's positions, by id and name, to
+    choose who decides and who is copied on decisions.
+
+    **Requires permission: meetings.manage**
+    """
+    positions = await ComplianceConfigService(db).get_available_positions(
+        str(current_user.organization_id)
+    )
+    return {"positions": positions}
 
 
 @router.get("/policy/alternate", response_model=AttendanceWaiverAlternateOptions)

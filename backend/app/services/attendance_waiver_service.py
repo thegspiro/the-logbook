@@ -2566,8 +2566,8 @@ def member_action_url(request: AttendanceWaiverRequest) -> str:
 
 def member_answer_url(request: AttendanceWaiverRequest) -> str:
     """Where the member answers a question: My Training's list of their
-    requests holds the answer form. The meeting workflow has no screen of its
-    own, so its member is sent where its other notices go."""
+    requests holds the answer form. The meeting workflow has no such list: its
+    member answers on the meeting's event page, where its other notices go."""
     if request.workflow == TRAINING_WORKFLOW:
         return TRAINING_SPEC.member_fallback_url
     return member_action_url(request)

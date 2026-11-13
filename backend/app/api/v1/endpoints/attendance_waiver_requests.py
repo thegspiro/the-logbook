@@ -13,6 +13,8 @@ GET    /training/waivers/requests/policy             - The department's policy
 PUT    /training/waivers/requests/policy             - Save it (training.manage)
 GET    /training/waivers/requests/policy/alternate   - Who may be the officers'
                                                        alternate (training.manage)
+GET    /training/waivers/requests/policy/positions   - The positions to choose
+                                                       from (training.manage)
 GET    /training/waivers/requests/eligibility        - May I ask about this session?
 POST   /training/waivers/requests                    - Ask to be excused
 POST   /training/waivers/requests/with-attachments   - Ask, filing documents
@@ -68,6 +70,7 @@ from app.schemas.attendance_waiver import (
     AttendanceWaiverMessage,
     AttendanceWaiverOverride,
     AttendanceWaiverPolicy,
+    AttendanceWaiverPositionOptions,
     AttendanceWaiverRequestPage,
     AttendanceWaiverRequestResponse,
     AttendanceWaiverSubmit,
@@ -79,6 +82,7 @@ from app.services.attendance_waiver_service import (
     AttendanceWaiverNotFound,
     AttendanceWaiverService,
 )
+from app.services.compliance_config_service import ComplianceConfigService
 
 router = APIRouter()
 
@@ -145,6 +149,23 @@ async def save_attendance_waiver_policy(
         return await AttendanceWaiverService(db).save_policy(
             str(current_user.organization_id), body, current_user
         )
+
+
+@router.get("/policy/positions", response_model=AttendanceWaiverPositionOptions)
+async def get_attendance_waiver_position_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    For the settings screen: the department's positions, by id and name, to
+    choose who decides and who is copied on decisions.
+
+    **Requires permission: training.manage**
+    """
+    positions = await ComplianceConfigService(db).get_available_positions(
+        str(current_user.organization_id)
+    )
+    return {"positions": positions}
 
 
 @router.get("/policy/alternate", response_model=AttendanceWaiverAlternateOptions)

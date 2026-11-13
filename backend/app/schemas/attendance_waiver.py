@@ -314,6 +314,20 @@ class AttendanceWaiverAlternateStored(BaseModel):
     current: bool
 
 
+class AttendanceWaiverPositionOption(BaseModel):
+    id: str
+    name: str
+
+
+class AttendanceWaiverPositionOptions(BaseModel):
+    """The department's positions, for the settings screen's "who decides" and
+    "copy decisions to" pickers. Served under each workflow's own manage
+    permission, so a Secretary who holds meetings.manage but not
+    training.manage or compliance.manage can still set the meeting policy."""
+
+    positions: List[AttendanceWaiverPositionOption]
+
+
 class AttendanceWaiverAlternateOptions(BaseModel):
     """What the settings screen's alternate picker offers: the department's
     current members, and how the stored choice stands."""
