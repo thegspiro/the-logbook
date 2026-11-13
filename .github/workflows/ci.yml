@@ -996,10 +996,11 @@ jobs:
     # the exact loss the note at the top of this file warns about and the thing
     # that cancelled #2890 twice.
     #
-    # The largest budget is mobile-accessibility's 2_880_000 (48 min). Setup
-    # measured 0.4-0.6 min across all five legs on 2026-10-04 (the Playwright
-    # cache hits); 51 leaves room for the cold-cache install the lockfile hash
-    # invalidates, the same 3 min the previous 35-over-32 left. Re-derive this
+    # The largest budget is mobile-accessibility's 4_620_000 (77 min, raised
+    # from 48 on 2026-11-13 to 2x its measured run). Setup measured 0.4-0.6
+    # min across all five legs on 2026-10-04 (the Playwright cache hits); 80
+    # leaves room for the cold-cache install the lockfile hash invalidates, the
+    # same 3 min the previous 51-over-48 left. Re-derive this
     # if a @sweep budget changes — the spec files are the source, this is the
     # consequence.
     #
@@ -1008,8 +1009,8 @@ jobs:
     # 8.1-8.3 dialogs. The accessibility leg's job time over 377 passing runs
     # of 2026-10-12 to 10-15 was median 25.7 min, p90 27.0, worst 29.2. The
     # cap is a hang guard, not a target; the spec's comment has the samples
-    # behind the 48.
-    timeout-minutes: 51
+    # behind the 77.
+    timeout-minutes: 80
     # No `needs:` — see the note on backend-test-integration.
     defaults:
       run:

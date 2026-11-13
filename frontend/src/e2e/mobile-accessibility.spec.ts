@@ -262,9 +262,14 @@ test.describe('mobile accessibility', () => {
     // 1.11x the worst — headroom a busy runner used up. Quoted against the
     // worst rather than the mean for the same reason as before.
     //
+    // Raised on 2026-11-13, by owner decision, to 2x the measured run rather
+    // than 1.66x the worst: 28.8 min on `main` (run 43208484077, 2026-11-12);
+    // 36.5 min once the finance screens joined (#4267, run 43415858920); the
+    // nine grants screens add ~5%, so ~38.3 min, and 2x that is 77.
+    //
     // The job cap in ci.yml is derived from this number; re-derive it with
     // any change here. Add a sample before narrowing either.
-    test.setTimeout(2_880_000);
+    test.setTimeout(4_620_000);
 
     // Contrast is measured on the settled page, not mid-animation. `EmptyState`
     // fades in over one second (`animate-fade-in`, opacity 0 -> 1) and the audit

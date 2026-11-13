@@ -64,7 +64,13 @@ test.describe('mobile dialogs', () => {
     // Measured at 7.5 min on a dedicated CI runner (2026-10-04); 2x that, the
     // multiple every @sweep test uses. The previous 30 min was 4x and predated
     // the matrix split, when this shared a runner with the whole suite.
-    test.setTimeout(900_000);
+    //
+    // Raised on 2026-11-13, by owner decision, to 2x the measured run as the
+    // route list grows. 9.8 min on `main` (run 43208484077, 2026-11-12); 12.1
+    // min once the finance screens joined (#4267, run 43415858920); the nine
+    // grants screens add ~5% (0.78 of 14.9 min, timed per route locally), so
+    // ~12.7 min, and 2x that is 26.
+    test.setTimeout(1_560_000);
 
     // A dialog still fading in when axe runs is measured through a partial
     // opacity: on a slow runner the Create Shift dialog reported 38 contrast
