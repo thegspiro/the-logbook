@@ -46,6 +46,20 @@ _EXTENSIONS_FOR_MIME: dict[str, frozenset[str]] = {
     "image/bmp": frozenset({".bmp"}),
     "image/webp": frozenset({".webp"}),
     "image/svg+xml": frozenset({".svg"}),
+    # History photos and media. Only the History media upload allows these
+    # types, so listing them here opens nothing anywhere else.
+    "image/tiff": frozenset({".tif", ".tiff"}),
+    "audio/mpeg": frozenset({".mp3"}),
+    "audio/x-m4a": frozenset({".m4a"}),
+    "audio/mp4": frozenset({".m4a"}),
+    "audio/x-wav": frozenset({".wav"}),
+    "audio/wav": frozenset({".wav"}),
+    "audio/flac": frozenset({".flac"}),
+    "audio/x-flac": frozenset({".flac"}),
+    # Some libmagic builds report an M4A as video/mp4: the container is the
+    # same, only the brand differs.
+    "video/mp4": frozenset({".mp4", ".m4a"}),
+    "video/webm": frozenset({".webm"}),
 }
 
 

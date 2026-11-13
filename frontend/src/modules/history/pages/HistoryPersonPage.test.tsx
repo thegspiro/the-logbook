@@ -8,12 +8,18 @@ const mockGetPerson = vi.fn();
 const mockListTitles = vi.fn();
 const mockListRevisions = vi.fn();
 
+const mockPersonMedia = vi.fn();
+
 vi.mock('../services/api', () => ({
   historyService: {
     getPerson: (...args: unknown[]) => mockGetPerson(...args) as unknown,
     listTitles: (...args: unknown[]) => mockListTitles(...args) as unknown,
     listRevisions: (...args: unknown[]) => mockListRevisions(...args) as unknown,
   },
+  historyMediaService: {
+    personMedia: (...args: unknown[]) => mockPersonMedia(...args) as unknown,
+  },
+  mediaFileUrl: (id: string, which: string) => `/api/v1/history/media/${id}/${which}`,
 }));
 
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
@@ -112,6 +118,8 @@ describe('HistoryPersonPage', () => {
     mockListTitles.mockResolvedValue([]);
     mockListRevisions.mockReset();
     mockListRevisions.mockResolvedValue([]);
+    mockPersonMedia.mockReset();
+    mockPersonMedia.mockResolvedValue([]);
   });
 
   it('shows a member the published record and nothing of the Historian’s', async () => {
@@ -171,6 +179,25 @@ describe('HistoryPersonPage', () => {
     renderPage();
     expect(await screen.findByRole('heading', { name: 'John Smith' })).toBeInTheDocument();
     expect(mockGetPerson).toHaveBeenLastCalledWith('p2');
+  });
+
+  it('shows the photos the person is tagged in', async () => {
+    mockGetPerson.mockResolvedValue(memberView());
+    mockPersonMedia.mockResolvedValue([
+      {
+        id: 'm1',
+        kind: 'photo',
+        title: 'Engine 3, 1962',
+        taken_date: '1962-01-01',
+        taken_date_precision: 'year',
+        taken_date_circa: false,
+        has_thumbnail: true,
+        publication_level: 'members',
+      },
+    ]);
+    renderPage();
+    expect(await screen.findByRole('link', { name: /Engine 3, 1962/ })).toHaveAttribute('href', '/history/media/m1');
+    expect(mockPersonMedia).toHaveBeenCalledWith('p1');
   });
 
   it('says plainly when a record cannot be read', async () => {

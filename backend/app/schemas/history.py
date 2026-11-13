@@ -14,6 +14,7 @@ from typing import Literal, Optional, Union
 from pydantic import BaseModel, Field, model_validator
 
 from app.models.history import (
+    AlbumLevel,
     ClearanceDecisionKind,
     ClearancePurpose,
     ClearanceStatus,
@@ -22,6 +23,7 @@ from app.models.history import (
     HistoryImportDecision,
     HistoryImportStatus,
     HistoryTitleAction,
+    MediaKind,
     PublicationLevel,
     RelationType,
     RevisionKind,
@@ -367,7 +369,7 @@ class PositionOption(BaseModel):
 
 
 class ClearanceSubmit(BaseModel):
-    record_type: Literal["member"]
+    record_type: Literal["member", "media"]
     record_id: str
     purpose: ClearancePurpose = ClearancePurpose.PUBLIC
 
@@ -390,7 +392,9 @@ class ClearanceReview(BaseModel):
     """A request with the record as members would read it, for its reviewers."""
 
     request: ClearanceRequestResponse
-    record: HistoricalMemberMemberView
+    #: A person or a photo/media item, as members would read it; which one
+    #: is ``request.record_type``.
+    record: Union[HistoricalMemberMemberView, "MediaMemberView"]
 
 
 class MarkdownRender(BaseModel):
@@ -548,3 +552,195 @@ class MergeRequest(BaseModel):
     other_id: str = Field(min_length=1, max_length=36)
     #: {field: "keep" | "other" | "both"} for each field that differs.
     choices: dict[str, Literal["keep", "other", "both"]] = Field(default_factory=dict)
+
+
+# ----------------------------------------------------------------------
+# Photos and media
+# ----------------------------------------------------------------------
+
+ConsentState = Literal["granted", "declined", "not_answered", "no_account"]
+
+
+class MediaTagMember(BaseModel):
+    member_id: str
+    display_name: str
+
+
+class MediaTagFull(MediaTagMember):
+    #: The tagged person's photo-use answer, read from their linked account.
+    #: A warning for the archive's keepers only; it never blocks.
+    consent: ConsentState
+
+
+class _MediaCatalogue(BaseModel):
+    id: str
+    kind: MediaKind
+    title: str
+    description: Optional[str]
+    taken_date: Optional[date]
+    taken_date_precision: DatePrecision
+    taken_date_circa: bool
+    place: Optional[str]
+    creator: Optional[str]
+    source_id: Optional[str]
+    source_name: Optional[str]
+    rights_note: Optional[str]
+    accession_number: Optional[str]
+    original_location: Optional[str]
+    width: Optional[int]
+    height: Optional[int]
+    has_thumbnail: bool
+    #: The type of what ``/view`` returns: the WebP viewing copy of a photo,
+    #: or the audio/video file itself.
+    mime_type: Optional[str]
+    publication_level: PublicationLevel
+
+
+class MediaMemberView(_MediaCatalogue):
+    """What a member reading published history receives: no research notes,
+    no original file, and tags only for people they may read."""
+
+    view: Literal["member"] = "member"
+    tags: list[MediaTagMember]
+
+
+class MediaFullView(_MediaCatalogue):
+    view: Literal["full"] = "full"
+    research_notes: Optional[str]
+    original_filename: str
+    original_mime_type: Optional[str]
+    original_size_bytes: Optional[int]
+    original_sha256: Optional[str]
+    batch_id: Optional[str]
+    tags: list[MediaTagFull]
+    published_at: Optional[datetime]
+    revision_number: int
+    public_revision_number: Optional[int]
+    public_changes_pending: bool
+    clearance_required: bool
+    cleared_for_public: bool
+    clearance: Optional[ClearanceRequestResponse]
+    can_edit: bool
+    can_publish: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+MediaView = Union[MediaFullView, MediaMemberView]
+
+
+class MediaSummary(BaseModel):
+    id: str
+    kind: MediaKind
+    title: str
+    taken_date: Optional[date]
+    taken_date_precision: DatePrecision
+    taken_date_circa: bool
+    has_thumbnail: bool
+    publication_level: PublicationLevel
+
+
+class MediaList(BaseModel):
+    items: list[MediaSummary]
+    total: int
+
+
+class _MediaFields(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = _TEXT
+    taken_date: Optional[date] = None
+    taken_date_precision: Optional[DatePrecision] = None
+    taken_date_circa: Optional[bool] = None
+    place: Optional[str] = Field(default=None, max_length=255)
+    creator: Optional[str] = Field(default=None, max_length=255)
+    source_id: Optional[str] = Field(default=None, max_length=36)
+    rights_note: Optional[str] = _TEXT
+    accession_number: Optional[str] = Field(default=None, max_length=100)
+    original_location: Optional[str] = Field(default=None, max_length=255)
+    research_notes: Optional[str] = _TEXT
+
+
+class MediaUploadFields(_MediaFields):
+    """The catalogue sent with each file of a batch, as a JSON form field."""
+
+    tag_member_ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+class MediaUpdate(_MediaFields):
+    #: Forced to substantial when the title, description or date changes.
+    edit_kind: EditKind = "minor"
+    edit_note: Optional[str] = Field(default=None, max_length=2000)
+
+
+class MediaTagsReplace(BaseModel):
+    member_ids: list[str] = Field(max_length=200)
+
+
+class MediaPublishResult(BaseModel):
+    item: MediaFullView
+    #: Tagged people whose photo-use answer was not "granted" when it was
+    #: published. Recorded with the publication; never a refusal.
+    consent_warnings: list[MediaTagFull]
+
+
+# --- Sources ---
+
+
+class HistorySourceResponse(BaseModel):
+    id: str
+    name: str
+    sort_order: int
+    is_retired: bool
+    usage_count: int = 0
+
+
+class HistorySourceCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=150)
+
+
+class HistorySourceUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=150)
+    is_retired: Optional[bool] = None
+
+
+class HistorySourceMerge(BaseModel):
+    into_source_id: str
+
+
+# --- Albums ---
+
+
+class AlbumSummary(BaseModel):
+    id: str
+    name: str
+    description: Optional[str]
+    level: AlbumLevel
+    #: Only when the viewer may read the cover item.
+    cover_media_id: Optional[str]
+    #: Items the viewer may read.
+    item_count: int
+
+
+class AlbumDetail(AlbumSummary):
+    items: list[MediaSummary]
+    can_edit: bool
+
+
+class AlbumCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: Optional[str] = _TEXT
+    level: AlbumLevel = AlbumLevel.DRAFT
+
+
+class AlbumUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    description: Optional[str] = _TEXT
+    level: Optional[AlbumLevel] = None
+    cover_media_id: Optional[str] = None
+
+
+class AlbumItemsReplace(BaseModel):
+    media_ids: list[str] = Field(max_length=1000)
+
+
+ClearanceReview.model_rebuild()

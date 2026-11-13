@@ -139,6 +139,33 @@ class HistoryImportDecision(str, enum.Enum):
     SAME_AS = "same_as"
 
 
+class MediaKind(str, enum.Enum):
+    PHOTO = "photo"
+    AUDIO = "audio"
+    VIDEO = "video"
+
+
+class MediaFileRole(str, enum.Enum):
+    """One stored file of a media item.
+
+    The original is kept exactly as received and only the archive's keepers
+    download it; everyone else sees the viewing copy, which has its location
+    and camera data stripped (owner decision, 2026-11-13).
+    """
+
+    ORIGINAL = "original"
+    DISPLAY = "display"
+    THUMBNAIL = "thumbnail"
+
+
+class AlbumLevel(str, enum.Enum):
+    """Albums are draft or shown to members; public album pages arrive with
+    the public feed."""
+
+    DRAFT = "draft"
+    MEMBERS = "members"
+
+
 class HistoryTitleAction(str, enum.Enum):
     """What an import does with a title it does not recognize."""
 
@@ -831,3 +858,258 @@ class HistoryRecordRedirect(Base):
         ),
         Index("ix_history_redirects_new", "organization_id", "record_type", "new_id"),
     )
+
+
+# --- Sources ---
+
+
+class HistorySource(Base):
+    """One entry in a department's managed list of sources and donors.
+
+    Managed like the title list (owner decision): records point at the entry,
+    an entry in use is retired or merged, never deleted.
+    """
+
+    __tablename__ = "history_sources"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    name_key: Mapped[str] = mapped_column(String(150), nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_retired: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name_key", name="uq_history_source_key"),
+    )
+
+
+# --- Photos and media ---
+
+
+class HistoryMedia(Base):
+    """A photo, audio recording or video in the archive, with its catalogue.
+
+    Published like a person record: draft, members or public, the clearance
+    list standing between it and the public, and a change history under
+    ``record_type = "media"``.
+    """
+
+    __tablename__ = "history_media"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[MediaKind] = mapped_column(_enum(MediaKind), nullable=False)
+
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    taken_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    taken_date_precision: Mapped[DatePrecision] = mapped_column(
+        _enum(DatePrecision), nullable=False, default=DatePrecision.YEAR
+    )
+    taken_date_circa: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    place: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    creator: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    source_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("history_sources.id", ondelete="SET NULL"), nullable=True
+    )
+    rights_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    accession_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    original_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    research_notes: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+
+    #: The uploader's file name, shown to keepers; never a path component.
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    #: Groups the files of one batch upload. No foreign key: a batch has no
+    #: record of its own.
+    batch_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+
+    publication_level: Mapped[PublicationLevel] = mapped_column(
+        _enum(PublicationLevel), nullable=False, default=PublicationLevel.DRAFT
+    )
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    published_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    public_snapshot: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
+    public_revision_number: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )
+    substantial_revision_number: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    revision_number: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    source: Mapped[Optional["HistorySource"]] = relationship("HistorySource")
+    files: Mapped[list["HistoryMediaFile"]] = relationship(
+        "HistoryMediaFile", back_populates="media", cascade="all, delete-orphan"
+    )
+    tags: Mapped[list["HistoryMediaTag"]] = relationship(
+        "HistoryMediaTag", back_populates="media", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("ix_history_media_org_level", "organization_id", "publication_level"),
+        Index("ix_history_media_org_kind", "organization_id", "kind"),
+        Index("ix_history_media_org_date", "organization_id", "taken_date"),
+        Index("ix_history_media_source", "source_id"),
+    )
+
+
+class HistoryMediaFile(Base):
+    """One stored file of a media item: its original, viewing copy or
+    thumbnail. A row per file, so every stored path sits in one column that
+    the storage tools (rescan, relocation, remote migration) can rewrite.
+
+    No ``organization_id``: reached only through its media item, which is.
+    """
+
+    __tablename__ = "history_media_files"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    media_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("history_media.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[MediaFileRole] = mapped_column(_enum(MediaFileRole), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    media: Mapped["HistoryMedia"] = relationship("HistoryMedia", back_populates="files")
+
+    __table_args__ = (
+        UniqueConstraint("media_id", "role", name="uq_history_media_file_role"),
+    )
+
+
+class HistoryMediaTag(Base):
+    """A person shown or heard in a media item."""
+
+    __tablename__ = "history_media_tags"
+
+    media_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_media.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    member_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("historical_members.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    media: Mapped["HistoryMedia"] = relationship("HistoryMedia", back_populates="tags")
+    member: Mapped["HistoricalMember"] = relationship("HistoricalMember")
+
+    __table_args__ = (Index("ix_history_media_tags_member", "member_id"),)
+
+
+class HistoryAlbum(Base):
+    """A named group of media items, in an order the Historian sets."""
+
+    __tablename__ = "history_albums"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cover_media_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("history_media.id", ondelete="SET NULL"), nullable=True
+    )
+    level: Mapped[AlbumLevel] = mapped_column(
+        _enum(AlbumLevel), nullable=False, default=AlbumLevel.DRAFT
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    __table_args__ = (Index("ix_history_albums_org_level", "organization_id", "level"),)
+
+
+class HistoryAlbumItem(Base):
+    """One media item's place in one album."""
+
+    __tablename__ = "history_album_items"
+
+    album_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_albums.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    media_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("history_media.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (Index("ix_history_album_items_media", "media_id"),)

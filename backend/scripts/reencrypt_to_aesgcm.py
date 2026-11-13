@@ -192,6 +192,7 @@ _PLAIN_COLUMNS = [
     ),
     ("history_revisions", "id", ["snapshot"]),
     ("history_import_rows", "id", ["cells", "edits"]),
+    ("history_media", "id", ["research_notes"]),
     ("integrations", "id", ["encrypted_config"]),
     (
         "quickbooks_connections",

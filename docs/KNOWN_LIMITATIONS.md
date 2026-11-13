@@ -652,10 +652,10 @@ an erasure request, a public-website question or a large upload knows it.
   decision: the public feed ships in phase 7).** Publishing to the public
   writes a cleared snapshot and the clearance list is enforced, but no public
   portal endpoint reads it yet. The person page says so beside the button.
-- **Video and large audio are not accepted yet.** Phase 1 stores no files.
-  When photos and media arrive (phase 3) uploads stay under the 60 MB proxy
-  limit every nginx configuration sets (`client_max_body_size 60M`) — 55 MB
-  per file was agreed; long recordings wait for chunked uploads.
+- **Audio and video are limited to 55 MB a file.** ✅ Photos and media
+  shipped 2026-11-13 (phase 3). Uploads stay under the 60 MB proxy limit every
+  nginx configuration sets (`client_max_body_size 60M`) — 55 MB per file was
+  agreed; long recordings wait for chunked uploads.
 - **Person merge and bulk import are phase 2.** ✅ **Shipped 2026-11-13.**
   Until then a duplicate was warned about at entry but two records for one
   person were combined by hand. The decisions they ship with are below.
@@ -701,6 +701,33 @@ an erasure request, a public-website question or a large upload knows it.
   chosen over a `history.view` grant on every position, which would have
   needed a positions migration for every department; `history.view` instead
   reads drafts and research.
+
+Phase 3, photos and media (2026-11-13), ships with these:
+
+- **Audio and video are shown to members exactly as uploaded (owner
+  decision).** There is no ffmpeg in the image, so a recording has no
+  re-encoded copy with its metadata removed, and no poster frame (it shows a
+  generic icon). A recording made on a phone can carry the place it was made.
+  The upload page, the item page and the publish confirmation say so; the
+  Historian checks before publishing. Photos are different: members and the
+  public only ever get a re-encoded copy with EXIF and GPS removed.
+- **The original is downloadable by `history.manage` only.** It is kept
+  byte for byte, including a TIFF master, which has no in-browser view of its
+  own — members see its WebP copy.
+- **A photo-use consent warning never blocks.** A tagged person who declined
+  photo use, or never answered, is named on the item page and in a
+  confirmation before publishing; the Historian may publish anyway. A past
+  member with no account has no answer to show.
+- **Tags point at past-member records, not member accounts.** A current member
+  is tagged through their history record, which the Historian creates first
+  (`POST /people/from-member/{user_id}`).
+- **An item can be deleted only while it is a draft.** A published one is
+  returned to draft first, so deleting it is a deliberate second step.
+- **A batch upload is not one transaction.** Each file is its own request; if
+  the browser is closed part way, the files already sent stay as drafts and
+  the rest were never uploaded. The shared `batch_id` identifies the set.
+- **Documents (letters, minutes, scanned PDFs) are phase 4.** The media
+  upload refuses PDF and office files.
 
 ## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
 

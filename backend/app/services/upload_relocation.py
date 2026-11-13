@@ -44,6 +44,7 @@ from app.models.document import Document
 from app.models.email_template import EmailAttachment, EmailTemplate
 from app.models.evaluation import EvaluationDocument
 from app.models.event import Event
+from app.models.history import HistoryMedia, HistoryMediaFile
 from app.models.membership_pipeline import ProspectDocument, ProspectiveMember
 from app.models.minute import MinutesAttachment
 from app.models.suggestion import SuggestionAttachment
@@ -427,6 +428,32 @@ async def collect_references(
                 row.file_path,
             )
         )
+    # History photos and media, born org-first: an original, its viewing copy
+    # and its thumbnail, a row each. The row has no organization of its own;
+    # its media item does.
+    for row in (
+        await db.execute(
+            scoped(
+                select(
+                    HistoryMediaFile.id,
+                    HistoryMedia.organization_id,
+                    HistoryMediaFile.media_id,
+                    HistoryMediaFile.file_path,
+                ).join(HistoryMedia, HistoryMedia.id == HistoryMediaFile.media_id),
+                HistoryMedia.organization_id,
+            )
+        )
+    ).all():
+        refs.append(
+            Reference(
+                "history_media_files",
+                str(row.id),
+                str(row.organization_id),
+                StorageArea.HISTORY_MEDIA,
+                str(row.media_id),
+                row.file_path,
+            )
+        )
     return refs
 
 
@@ -516,6 +543,7 @@ _SCALAR_TABLES: dict[str, tuple[type[Any], str]] = {
     "minutes_attachments": (MinutesAttachment, "file_path"),
     "evaluation_documents": (EvaluationDocument, "file_path"),
     "attendance_waiver_attachments": (AttendanceWaiverAttachment, "file_path"),
+    "history_media_files": (HistoryMediaFile, "file_path"),
 }
 
 

@@ -15,6 +15,7 @@ import { getErrorMessage, toAppError } from '../../../utils/errorHandling';
 import { historyService } from '../services/api';
 import { ClearanceSteps } from '../components/ClearanceSteps';
 import { PersonDetails } from '../components/PersonDetails';
+import { PersonMediaStrip } from '../components/PersonMediaStrip';
 import { PublicationBadge } from '../components/PublicationBadge';
 import { RelationsEditor } from '../components/RelationsEditor';
 import { RevisionList } from '../components/RevisionList';
@@ -178,6 +179,7 @@ export const HistoryPersonPage: React.FC = () => {
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="card space-y-6 p-4">
           <PersonDetails person={person} />
+          <PersonMediaStrip personId={person.id} />
 
           {full?.can_edit && (
             <section aria-labelledby="edit-service-heading" className="border-theme-surface-border border-t pt-4">
