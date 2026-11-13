@@ -11,6 +11,7 @@ import { contextText, errorAction, errorPage } from '../utils/errorContext';
 import toast from 'react-hot-toast';
 
 import { useConfirm } from '../contexts/ConfirmContext';
+import { StatGrid } from '@/components/ux/StatGrid';
 /**
  * Where the error was raised. Rows written before the `source` context key
  * existed carry neither marker, so they fall back to "Client".
@@ -177,7 +178,7 @@ const ErrorMonitoringPage: React.FC = () => {
 
       {/* Statistics Cards */}
       {stats && (
-        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+        <StatGrid columns={4} gap={4} className="mb-6">
           <div className="bg-theme-surface rounded-lg p-6 shadow-md backdrop-blur-xs">
             <div className="text-theme-text-muted mb-1 text-sm font-medium">Total Errors</div>
             <div className="text-theme-text-primary text-3xl font-bold">{stats.total}</div>
@@ -192,7 +193,7 @@ const ErrorMonitoringPage: React.FC = () => {
                 <div className="text-3xl font-bold text-red-600">{count}</div>
               </div>
             ))}
-        </div>
+        </StatGrid>
       )}
 
       {/* Actions Bar */}
