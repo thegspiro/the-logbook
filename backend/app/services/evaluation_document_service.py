@@ -108,6 +108,59 @@ def format_figure(entry: Optional[Dict[str, Any]], unit: str) -> str:
     return f"{value:g}"
 
 
+def _plural(count: Any, one: str, many: str) -> str:
+    return f"{count:g} {one if count == 1 else many}"
+
+
+def figure_detail(key: str, entry: Optional[Dict[str, Any]]) -> Optional[str]:
+    """The counts behind a measured figure, in words, or None.
+
+    The headline value alone hides what an evaluator and member need to
+    weigh it: 75% of four meetings is not 75% of twenty, and a waiver count
+    says nothing of what became of the requests. Read from the extras each
+    source already stores beside its value, so an older snapshot without
+    them simply shows no detail. The evaluation screens word the same
+    details in ``figureDetail`` (frontend ``utils/evaluationRecord.ts``);
+    change both together.
+    """
+    if not entry or not entry.get("available"):
+        return None
+    extra = entry.get
+    if key == "training.requirements_met_pct" and extra("total") is not None:
+        return f"{extra('met'):g} of {_plural(extra('total'), 'requirement', 'requirements')} met"
+    if key == "training.session_attendance_pct" and extra("held") is not None:
+        held, excused = extra("held"), extra("excused") or 0
+        text = f"{extra('attended'):g} of {_plural(held - excused, 'session', 'sessions')} attended"
+        if excused:
+            text += f" ({excused:g} excused)"
+        if extra("requirement"):
+            text += f"; {extra('requirement')} requires {extra('required_pct') or 0:g}%"
+        return text
+    if key == "events.meeting_attendance_pct" and extra("held") is not None:
+        return f"{extra('attended'):g} of {_plural(extra('held'), 'meeting', 'meetings')} attended"
+    if key == "calls.response_pct" and extra("department_calls") is not None:
+        text = (
+            f"{_plural(extra('responses'), 'response', 'responses')} to "
+            f"{_plural(extra('department_calls'), 'department call', 'department calls')}"
+        )
+        if extra("capped"):
+            text += (
+                "; shown as 100% because shift call credit exceeds the "
+                "department's call log"
+            )
+        return text
+    if key == "shifts.hours" and extra("external_hours"):
+        return f"Not included: {extra('external_hours'):g} h for other agencies"
+    if key == "shifts.count" and extra("external_shifts"):
+        return (
+            "Not included: "
+            f"{_plural(extra('external_shifts'), 'shift', 'shifts')} for other agencies"
+        )
+    if extra("breakdown"):
+        return str(extra("breakdown"))
+    return None
+
+
 def _answer(
     item: TemplateItem, content: PartContent, evaluator: bool
 ) -> Optional[Dict[str, Any]]:
@@ -355,11 +408,13 @@ class EvaluationDocumentService:
 
         snapshot = evaluation.data_snapshot or {}
         values = snapshot.get("values") or {}
-        figures = [
-            (source.label, format_figure(values.get(source.key), source.unit))
-            for source in DATA_SOURCES
-            if source.key in values
-        ]
+        figures = []
+        for source in DATA_SOURCES:
+            if source.key not in values:
+                continue
+            text = format_figure(values.get(source.key), source.unit)
+            detail = figure_detail(source.key, values.get(source.key))
+            figures.append((source.label, f"{text} · {detail}" if detail else text))
         signatures = (
             (
                 await self.db.execute(
