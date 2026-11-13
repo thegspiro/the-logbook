@@ -5,6 +5,24 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: Zeffy Settings and screenshots, November 13, 2026
+
+A targeted pass for the Zeffy follow-ups merged on 2026-11-13: the screenshots
+the November 2 pass queued (#4262), and the connect wording and Settings button
+(#4268). The rest of what merged since the November 10 – 11 pass is left to the
+next full pass. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                               | Guide  | Disposition                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------- |
+| Zeffy screenshots: Grants & Fundraising menu, Zeffy page, Link Zeffy campaign dialog, Zeffy connect dialog; integrations catalog re-shot with the Zeffy card (#4262) | 12, 16 | Captured and applied; the Zeffy page shots use a route mock, recorded in `SCREENSHOT_CURRENCY.md` |
+| Zeffy and PayPal connect forms no longer claim a key is already stored (#4268)                                                                                       | 16     | `16-24-zeffy-connect` re-shot (#4271)                                                             |
+| **Settings** on a connected Zeffy card: change the API key or signing secret without disconnecting; a blank box keeps what is saved (#4268)                          | 16     | Section and troubleshooting rows written in #4268; `16-25-zeffy-settings` captured                |
+| Zeffy had no wiki page, and the Grants & Fundraising wiki page did not list `/grants/zeffy` (gap since #3892)                                                        | none   | `wiki/Integration-Zeffy.md` written; module page, sidebar linked                                  |
+
+**Screenshots:** none queued. PayPal still has no **Settings** button, so its
+credentials are changed by disconnecting; not documented as a change because
+nothing changed.
+
 ## Change audit: November 10 – 11, 2026
 
 Merged to `main` after `69d32dc1` (2026-11-10 13:56 UTC, the previous pass)
