@@ -4,7 +4,11 @@
  * Renders nothing until the member has made one: a department that does not
  * take requests, and a member who never asked, should not see an empty card.
  * The caller supplies the card around the list (`wrap`), so this sits in My
- * Training's collapsible sections like every other list there.
+ * Training's collapsible sections like every other list there; `wrap` is told
+ * when a question waits on the member, so the section can open itself.
+ *
+ * A decider's question is answered here: the open one with its answer form,
+ * and every earlier round beneath the request, so it stays readable.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -14,15 +18,31 @@ import { ATTENDANCE_WAIVER_STATUS_COLORS, ATTENDANCE_WAIVER_STATUS_LABELS } from
 import type { AttendanceWaiverRequest } from '../../types/attendanceWaiver';
 import { formatCalendarDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
-import { closesUndecidedText } from '../../utils/attendanceWaivers';
+import { closesUndecidedText, openQuestion } from '../../utils/attendanceWaivers';
+import { AttendanceWaiverAnswerForm, AttendanceWaiverConversation } from './AttendanceWaiverConversation';
 
 interface MyAttendanceWaiverRequestsProps {
-  wrap: (list: React.ReactNode) => React.ReactNode;
+  /** `needsAnswer`: at least one request has a question waiting on the member. */
+  wrap: (list: React.ReactNode, needsAnswer: boolean) => React.ReactNode;
 }
 
 export const MyAttendanceWaiverRequests: React.FC<MyAttendanceWaiverRequestsProps> = ({ wrap }) => {
   const tz = useTimezone();
   const [requests, setRequests] = useState<AttendanceWaiverRequest[]>([]);
+
+  const replace = (updated: AttendanceWaiverRequest) =>
+    setRequests((current) => current.map((r) => (r.id === updated.id ? updated : r)));
+
+  // After a refusal the request may have been decided meanwhile; the
+  // server's copy replaces ours.
+  const reload = () => {
+    attendanceWaiverService
+      .listMine()
+      .then(setRequests)
+      .catch(() => {
+        // Keep what is on screen; the refusal is already shown.
+      });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -72,9 +92,26 @@ export const MyAttendanceWaiverRequests: React.FC<MyAttendanceWaiverRequestsProp
               <span className={`badge border ${ATTENDANCE_WAIVER_STATUS_COLORS[request.status] ?? ''}`}>
                 {ATTENDANCE_WAIVER_STATUS_LABELS[request.status] ?? request.status}
               </span>
+              {request.can_respond ? (
+                <div className="mt-2 w-full">
+                  <AttendanceWaiverAnswerForm request={request} onAnswered={replace} onRefused={reload} />
+                </div>
+              ) : null}
+              <div className="w-full empty:hidden">
+                <AttendanceWaiverConversation
+                  actions={
+                    request.can_respond
+                      ? // The open question is shown with its answer form above.
+                        request.actions.filter((entry) => entry.id !== openQuestion(request)?.id)
+                      : request.actions
+                  }
+                  timezone={tz}
+                />
+              </div>
             </li>
           ))}
-        </ul>
+        </ul>,
+        requests.some((r) => r.can_respond)
       )}
     </>
   );

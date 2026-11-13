@@ -1198,8 +1198,8 @@ const MyTrainingPage: React.FC = () => {
           {/* Requests to be excused from a training session; nothing until
               the member has made one. */}
           <MyAttendanceWaiverRequests
-            wrap={(list) => (
-              <Section title="My Waiver Requests" icon={CalendarX} defaultOpen={false}>
+            wrap={(list, needsAnswer) => (
+              <Section title="My Waiver Requests" icon={CalendarX} defaultOpen={needsAnswer}>
                 {list}
               </Section>
             )}

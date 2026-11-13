@@ -183,6 +183,13 @@ class AttendanceWaiverOverride(BaseModel):
     note: str = Field(..., max_length=MAX_TEXT_LENGTH)
 
 
+class AttendanceWaiverMessage(BaseModel):
+    """A decider's question to the member, or the member's answer to it."""
+
+    # Blank is refused by the service, which trims first.
+    note: str = Field(..., max_length=MAX_TEXT_LENGTH)
+
+
 # ---------------------------------------------------------------------------
 # Responses
 # ---------------------------------------------------------------------------

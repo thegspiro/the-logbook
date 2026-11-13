@@ -123,6 +123,22 @@ export const attendanceWaiverService = {
     return normalizeRequest(response.data);
   },
 
+  /** A decider asks the member a question; the request stays pending. */
+  async requestInfo(requestId: string, note: string): Promise<AttendanceWaiverRequest> {
+    const response = await api.post<AttendanceWaiverRequest>(`${BASE}/${encodeURIComponent(requestId)}/request-info`, {
+      note,
+    });
+    return normalizeRequest(response.data);
+  },
+
+  /** The member answers the open question on their own request. */
+  async respond(requestId: string, note: string): Promise<AttendanceWaiverRequest> {
+    const response = await api.post<AttendanceWaiverRequest>(`${BASE}/${encodeURIComponent(requestId)}/respond`, {
+      note,
+    });
+    return normalizeRequest(response.data);
+  },
+
   async override(requestId: string, note: string): Promise<AttendanceWaiverRequest> {
     const response = await api.post<AttendanceWaiverRequest>(`${BASE}/${encodeURIComponent(requestId)}/override`, {
       note,

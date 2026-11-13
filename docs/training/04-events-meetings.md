@@ -2238,6 +2238,21 @@ they always agree.
 **Not yet on this screen:** granting a waiver for one meeting. Waivers are
 granted from the meeting.
 
+### Business-meeting waiver requests: asking for more information _(2026-11-13)_
+
+Whoever decides a member's request to be excused from a business meeting can
+ask the member a question first, as on training requests (see
+[Training → Asking a member for more information](./02-training.md#asking-a-member-for-more-information-2026-11-13)).
+The request stays pending; the member is told by email and in the app that a
+question is waiting, never what it says; their answer prompts the deciders
+again. Deciding, withdrawing or cancelling the meeting closes an open
+question.
+
+There is no screen for business-meeting requests yet, so for now this is done
+through the API (`POST /api/v1/meetings/waiver-requests/{id}/request-info` and
+`.../respond`, each with a `note`), and the member's notice links to the
+meeting's event page.
+
 ### Leave of Absence & Meeting Attendance
 
 When a member has an active **leave of absence**, meetings during the leave

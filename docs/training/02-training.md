@@ -2551,6 +2551,31 @@ denial.
 - **In the annual review** the waiver summary counts them as **expired**, on
   their own, not as denials.
 
+### Asking a member for more information _(2026-11-13)_
+
+**Who can do this:** anyone who decides a member's request to be excused.
+
+Sometimes a request needs one more detail before you can decide it. On the
+request's page (**Attendance waiver requests**, then the request), use **Ask
+for more information**, type your question and select **Ask the member**.
+
+- The request stays **pending**. The queue shows it with a **Waiting on
+  member** badge, and its page says it is waiting on the member's answer.
+- The member is told by email and in the app that you asked, with a link to
+  My Training. **The email and the notice never contain your question**: it
+  may concern something medical, so it is shown only on the request, to the
+  member and the people who decide it.
+- The member answers under **My Waiver Requests** on **My Training** (the
+  section opens itself while a question is waiting). Everyone who decides the
+  request is then told, again without the answer itself, and the request is
+  back in their queue.
+- You may ask again after each answer, one question at a time. Every question
+  and answer stays on the request's page under **Questions and answers**, and
+  on the member's list.
+- You do not have to wait for the answer: approving or denying closes the
+  open question. So does the member withdrawing the request, or the session
+  being cancelled.
+
 ### Creating a Waiver
 
 1. Select the **Create Waiver** tab.

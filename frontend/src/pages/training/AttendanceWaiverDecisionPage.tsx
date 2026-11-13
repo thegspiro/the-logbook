@@ -12,6 +12,10 @@
  * depends on positions, the Chief and the fallback chain. The reason is shown
  * only when the server returned it, which it does for the member and for the
  * people who may decide, and for nobody else.
+ *
+ * A decider may ask the member a question first (`can_request_info`); the
+ * request stays pending and may still be decided while the answer is awaited.
+ * The questions and answers are shown from the decision log.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -25,21 +29,31 @@ import { SkeletonCard } from '../../components/ux/Skeleton';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useFieldErrors, type FieldSpecs } from '../../hooks/useFieldErrors';
 import { useTimezone } from '../../hooks/useTimezone';
-import { ATTENDANCE_WAIVER_STATUS_COLORS, ATTENDANCE_WAIVER_STATUS_LABELS } from '../../constants/enums';
+import {
+  ATTENDANCE_WAIVER_STATUS_COLORS,
+  ATTENDANCE_WAIVER_STATUS_LABELS,
+  AttendanceWaiverStatus,
+} from '../../constants/enums';
 import type { AttendanceWaiverRequest } from '../../types/attendanceWaiver';
 import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
 import { WaiverAttachmentList } from '../../components/waivers/WaiverAttachmentList';
+import {
+  AttendanceWaiverAnswerForm,
+  AttendanceWaiverConversation,
+} from '../../components/training/AttendanceWaiverConversation';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import {
   ATTENDANCE_WAIVER_ACTION_LABELS,
   ATTENDANCE_WAIVER_QUEUE_PATH,
   closesUndecidedText,
   WAIVER_TEXT_MAX_LENGTH,
+  waiverConversation,
 } from '../../utils/attendanceWaivers';
 
 type Choice = 'approve' | 'deny';
 type DecisionField = 'choice' | 'note';
 type OverrideField = 'overrideNote';
+type AskField = 'question';
 
 const DECISION_FIELDS: FieldSpecs<DecisionField> = {
   choice: { id: 'waiver-decision-approve', label: 'Decision' },
@@ -48,6 +62,10 @@ const DECISION_FIELDS: FieldSpecs<DecisionField> = {
 
 const OVERRIDE_FIELDS: FieldSpecs<OverrideField> = {
   overrideNote: { id: 'waiver-override-note', label: 'Reason for the override', apiKeys: ['note'] },
+};
+
+const ASK_FIELDS: FieldSpecs<AskField> = {
+  question: { id: 'waiver-ask-question', label: 'Your question', apiKeys: ['note'] },
 };
 
 const choiceFrom = (value: string | null): Choice | null => (value === 'approve' || value === 'deny' ? value : null);
@@ -72,6 +90,9 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
   const [choice, setChoice] = useState<Choice | null>(() => choiceFrom(searchParams.get('action')));
   const [note, setNote] = useState('');
   const [overrideNote, setOverrideNote] = useState('');
+  const [question, setQuestion] = useState('');
+  const [askFocus, setAskFocus] = useState(0);
+  const ask = useFieldErrors(ASK_FIELDS);
   const [busy, setBusy] = useState(false);
   const [decisionFocus, setDecisionFocus] = useState(0);
   const [overrideFocus, setOverrideFocus] = useState(0);
@@ -186,6 +207,30 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
     }
   };
 
+  const handleAsk = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!request) return;
+    const trimmed = question.trim();
+    if (!trimmed) {
+      ask.setErrors({ question: 'Write the question to ask the member.' });
+      setAskFocus((n) => n + 1);
+      return;
+    }
+    ask.clear();
+    setBusy(true);
+    try {
+      setRequest(await attendanceWaiverService.requestInfo(request.id, trimmed));
+      setQuestion('');
+      toast.success('Question sent to the member');
+    } catch (err: unknown) {
+      ask.setFromApiError(err, 'The question could not be sent. Try again.');
+      setAskFocus((n) => n + 1);
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleWithdraw = async () => {
     if (!request) return;
     const confirmed = await confirm({
@@ -293,6 +338,72 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
             />
           )}
         </section>
+
+        {request.status === AttendanceWaiverStatus.PENDING && request.info_requested_at && !request.can_respond && (
+          <div className="alert-info rounded-lg p-4 text-sm" role="status">
+            Waiting on {request.member_name ?? 'the member'}&apos;s answer to the question asked{' '}
+            {formatDateTime(request.info_requested_at, tz)}.
+            {request.can_decide ? ' You can still decide without it.' : ''}
+          </div>
+        )}
+
+        {request.can_respond && (
+          <section className="card space-y-3 p-6" aria-labelledby="waiver-answer-heading">
+            <h2 id="waiver-answer-heading" className="text-theme-text-primary text-lg font-semibold">
+              Answer the question
+            </h2>
+            <AttendanceWaiverAnswerForm request={request} onAnswered={setRequest} onRefused={() => void reload()} />
+          </section>
+        )}
+
+        {waiverConversation(request.actions).length > 0 && (
+          <section className="card space-y-3 p-6" aria-labelledby="waiver-conversation-heading">
+            <h2 id="waiver-conversation-heading" className="text-theme-text-primary text-lg font-semibold">
+              Questions and answers
+            </h2>
+            <AttendanceWaiverConversation actions={request.actions} timezone={tz} />
+          </section>
+        )}
+
+        {request.can_request_info && (
+          <form className="card space-y-4 p-6" onSubmit={(e) => void handleAsk(e)} noValidate>
+            <div>
+              <h2 className="text-theme-text-primary text-lg font-semibold">Ask for more information</h2>
+              <p className="text-theme-text-secondary mt-1 text-sm">
+                The request stays pending. The member is told there is a question, by email and in the app, and the
+                question itself is shown only here and to them.
+              </p>
+            </div>
+            <ErrorSummary
+              items={ask.summary}
+              formError={ask.formError}
+              focusKey={askFocus}
+              title="Fix this before asking"
+            />
+            <FormField
+              id={ASK_FIELDS.question.id}
+              label={ASK_FIELDS.question.label}
+              required
+              error={ask.errors.question}
+              maxLength={WAIVER_TEXT_MAX_LENGTH}
+              count={question.length}
+            >
+              {(field) => (
+                <textarea
+                  {...field}
+                  className="form-input"
+                  rows={3}
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  disabled={busy}
+                />
+              )}
+            </FormField>
+            <button type="submit" disabled={busy} className="btn-secondary text-sm font-medium disabled:opacity-50">
+              {busy ? 'Sending...' : 'Ask the member'}
+            </button>
+          </form>
+        )}
 
         {request.can_decide && (
           <form className="card space-y-4 p-6" onSubmit={(e) => void handleDecide(e)} noValidate>

@@ -360,6 +360,40 @@ approved, denied or withdrawn, and the Chief's override applies only to a
 denial. The annual review counts it as `expired`, its own figure, not a
 denial. Its documents follow the retention period from the day it closed.
 
+### Asking the member for more information _(2026-11-13)_
+
+Anyone who may decide a request may ask its member a question first, while the
+request is pending, no question is already open (`info_requested_at` is NULL)
+and it is not waiting on the member to reconfirm a moved session
+(`reconfirm_requested_at` is NULL). Asking writes an `info_requested` log entry
+whose note is the question, sets `info_requested_at`, and leaves the status
+**pending**. The deciders' in-app prompts are archived, and the member gets an
+in-app notice and an email naming who asked and the session, **never the
+question**; the training notice links to My Training, where the answer form is.
+
+Only the member answers, while the question is open. Answering writes a
+`member_responded` entry whose note is the answer, clears
+`info_requested_at`, and prompts the deciders again (in-app and email, worded
+"answered your question", never the answer). Any number of rounds may follow,
+one open question at a time.
+
+Deciders may approve or deny without waiting for the answer; deciding,
+withdrawing and voiding all clear `info_requested_at`. Questions and answers
+are log notes, encrypted at rest like every note, and appear in no
+notification, email, log line or audit row (audit rows carry ids only).
+`describe` reports `can_request_info` (a decider, and the state above) and
+`can_respond` (the member, while a question is open); `GET .../mine` returns
+each request with its log so the member can read every round.
+
+| Method | Endpoint                                              | Who                                                 |
+| ------ | ----------------------------------------------------- | --------------------------------------------------- |
+| `POST` | `/api/v1/training/waivers/requests/{id}/request-info` | Someone who may decide, body `{note}`               |
+| `POST` | `/api/v1/training/waivers/requests/{id}/respond`      | The member, while a question is open, body `{note}` |
+| `POST` | `/api/v1/meetings/waiver-requests/{id}/request-info`  | As above, for a business-meeting request            |
+| `POST` | `/api/v1/meetings/waiver-requests/{id}/respond`       | As above, for a business-meeting request            |
+
+A request in the wrong state is refused with 400 and a sentence saying why.
+
 ---
 
 ## Example Scenario

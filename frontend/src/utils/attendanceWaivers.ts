@@ -55,6 +55,31 @@ export const closesUndecidedText = (
   return `Closes undecided on ${formatDateTime(request.expires_at, timezone)}`;
 };
 
+/** The log entries that make up the question-and-answer exchange, oldest first. */
+const CONVERSATION_ACTIONS: ReadonlySet<string> = new Set(['info_requested', 'member_responded']);
+
+/**
+ * A decider's questions and the member's answers, in the order the backend
+ * logged them. Every round stays, so an earlier answer can still be read.
+ */
+export const waiverConversation = (actions: readonly AttendanceWaiverActionEntry[]): AttendanceWaiverActionEntry[] =>
+  actions.filter((entry) => CONVERSATION_ACTIONS.has(entry.action));
+
+/**
+ * The question waiting on the member, or null. Whether one is open is the
+ * server's `info_requested_at`; the text is the latest question in the log.
+ */
+export const openQuestion = (
+  request: Pick<AttendanceWaiverRequest, 'info_requested_at' | 'actions'>
+): AttendanceWaiverActionEntry | null => {
+  if (!request.info_requested_at) return null;
+  for (let i = request.actions.length - 1; i >= 0; i -= 1) {
+    const entry = request.actions[i];
+    if (entry?.action === 'info_requested') return entry;
+  }
+  return null;
+};
+
 export const ATTENDANCE_WAIVER_ACTION_LABELS: Record<string, string> = {
   submitted: 'Asked to be excused',
   withdrawn: 'Withdrew the request',

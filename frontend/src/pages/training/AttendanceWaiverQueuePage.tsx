@@ -57,6 +57,12 @@ const RequestRow: React.FC<{ request: AttendanceWaiverRequest; timezone: string 
           <span className="text-theme-text-muted block text-xs">{closesUndecidedText(request, timezone)}</span>
         )}
       </span>
+      {/* The server's flag, cleared when the member answers or the request is decided. */}
+      {request.info_requested_at && request.status === AttendanceWaiverStatus.PENDING && (
+        <span className="badge border border-blue-500/30 bg-blue-500/10 text-blue-800 dark:text-blue-300">
+          Waiting on member
+        </span>
+      )}
       <span className={`badge border ${ATTENDANCE_WAIVER_STATUS_COLORS[request.status] ?? ''}`}>
         {ATTENDANCE_WAIVER_STATUS_LABELS[request.status] ?? request.status}
       </span>

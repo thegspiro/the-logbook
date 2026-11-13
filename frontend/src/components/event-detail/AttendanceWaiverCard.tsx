@@ -11,6 +11,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Link } from 'react-router';
 import { CalendarX } from 'lucide-react';
 import { attendanceWaiverService } from '../../services/attendanceWaiverService';
 import { useConfirm } from '../../contexts/ConfirmContext';
@@ -109,6 +110,15 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
         <span className="split-row-main">
           You asked to be excused from this session on {formatDateTime(request.submitted_at, timezone)}. It is waiting
           for a decision.
+          {request.can_respond && (
+            <span className="mt-1 block font-medium">
+              An officer asked you a question about it.{' '}
+              <Link to="/training/my-training" className="underline underline-offset-2">
+                Answer it on My Training
+              </Link>
+              .
+            </span>
+          )}
         </span>
         {request.can_withdraw && (
           <button

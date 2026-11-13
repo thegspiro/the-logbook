@@ -28,6 +28,8 @@ POST   /meetings/waiver-requests/{id}/withdraw      - Withdraw my pending reques
 POST   /meetings/waiver-requests/{id}/approve       - Approve a pending request
 POST   /meetings/waiver-requests/{id}/deny          - Deny a pending request
 POST   /meetings/waiver-requests/{id}/override      - The Chief approves a denial
+POST   /meetings/waiver-requests/{id}/request-info  - Ask the member a question
+POST   /meetings/waiver-requests/{id}/respond       - Answer the open question
 
 Who may decide is a matter of holding a position (the department picks the
 positions; the Secretary and meetings managers are the fallback, and a Chief
@@ -52,6 +54,7 @@ from app.models.user import User
 from app.schemas.attendance_waiver import (
     AttendanceWaiverDecision,
     AttendanceWaiverEligibilityResponse,
+    AttendanceWaiverMessage,
     AttendanceWaiverOverride,
     AttendanceWaiverPolicy,
     AttendanceWaiverRequestPage,
@@ -154,7 +157,8 @@ async def list_my_meeting_waiver_requests(
     current_user: User = Depends(get_current_user),
 ):
     """
-    The caller's own business-meeting requests, newest first.
+    The caller's own business-meeting requests, newest first, each with its
+    decision log, so a decider's question can be read and answered.
 
     **Authentication required**
     """
@@ -163,7 +167,9 @@ async def list_my_meeting_waiver_requests(
     requests = await service.list_mine(org_id, current_user)
     return [
         AttendanceWaiverRequestResponse(**body)
-        for body in await service.describe(org_id, current_user, requests)
+        for body in await service.describe(
+            org_id, current_user, requests, with_actions=True
+        )
     ]
 
 
@@ -294,6 +300,52 @@ async def override_meeting_waiver_request(
     service = _service(db)
     with _refusals():
         request = await service.chief_override(
+            str(current_user.organization_id), current_user, request_id, body.note
+        )
+    return await _one(service, current_user, request)
+
+
+@router.post(
+    "/{request_id}/request-info", response_model=AttendanceWaiverRequestResponse
+)
+async def request_meeting_waiver_info(
+    request_id: str,
+    body: AttendanceWaiverMessage,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Ask the member a question about their pending request. Only someone who
+    may decide it; the request stays pending and may still be decided. 400
+    when it is no longer pending or a question is already open.
+
+    **Authentication required**
+    """
+    service = _service(db)
+    with _refusals():
+        request = await service.request_info(
+            str(current_user.organization_id), current_user, request_id, body.note
+        )
+    return await _one(service, current_user, request)
+
+
+@router.post("/{request_id}/respond", response_model=AttendanceWaiverRequestResponse)
+async def respond_meeting_waiver_request(
+    request_id: str,
+    body: AttendanceWaiverMessage,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The member answers the open question on their own pending request, and
+    its deciders are asked again. 400 when no question is open; 403 for a
+    decider, 404 for anyone else.
+
+    **Authentication required**
+    """
+    service = _service(db)
+    with _refusals():
+        request = await service.respond(
             str(current_user.organization_id), current_user, request_id, body.note
         )
     return await _one(service, current_user, request)
