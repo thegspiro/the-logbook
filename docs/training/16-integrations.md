@@ -547,13 +547,15 @@ under **Grants & Fundraising → Zeffy** — see
 | **API Key**                           | **Required.** The owner of the department's Zeffy account generates it in Zeffy under **Settings → Integrations**. Stored securely and never shown again |
 | **Webhook Signing Secret** (optional) | The secret Zeffy shows when you add the webhook (below). It starts with `whsec_`. Without it, payments still arrive, but only on the hourly sync         |
 
+![Zeffy connect dialog: the read-only note linking to Grants & Fundraising, the API Key and Webhook Signing Secret (optional) fields, and the webhook address to add in Zeffy](./images/16-24-zeffy-connect.png)
+
 **To change the key or the signing secret later**, select **Settings** on the
 connected Zeffy card. Fill in only what changed: a box left blank keeps what is
 saved. The new key or secret is used from the next sync or webhook message, and
 the linked campaigns and the webhook address do not change. Zeffy stays
 connected throughout, so nothing is missed.
 
-![Zeffy connect dialog: the read-only note linking to Grants & Fundraising, the API Key and Webhook Signing Secret (optional) fields, and the webhook address to add in Zeffy](./images/16-24-zeffy-connect.png)
+![Zeffy settings on a connected card: the API Key box reading Leave blank to keep the current key, the Webhook Signing Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new key or signing secret is used from the next sync or webhook message while linked campaigns and the webhook address do not change](./images/16-25-zeffy-settings.png)
 
 **Test** reads one campaign from Zeffy to prove the key works. It adds a note if
 no signing secret is set, because payments will then arrive only once an hour.

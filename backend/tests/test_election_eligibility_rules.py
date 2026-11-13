@@ -93,13 +93,16 @@ class TestTallyRecentAttendance:
         )
         assert (result.attended, result.considered) == (0, 3)
 
-    def test_waived_meetings_are_skipped_not_counted_as_absences(self):
+    def test_waived_meetings_shorten_the_window_and_are_not_absences(self):
+        # Owner decision, 2026-11-13: a waived meeting reduces the look-back
+        # by one rather than reaching back to an older meeting.
         present = {"m6"}
         result = tally_recent_attendance(
-            self._meetings(), self.WINDOW, {"m8", "m7"}, present, [], last_meetings=2
+            self._meetings(), self.WINDOW, {"m8", "m7"}, present, [], last_meetings=3
         )
-        # m8, m7 waived: the last two eligible meetings are m6 and m5.
-        assert (result.attended, result.considered) == (1, 2)
+        # m8, m7 waived: of the last three, only m6 is counted.
+        assert (result.attended, result.considered) == (1, 1)
+        assert (result.looked_back, result.waived) == (3, 2)
 
     def test_meetings_during_leave_are_skipped(self):
         leave = SimpleNamespace(start_date=date(2026, 7, 15), end_date=None)

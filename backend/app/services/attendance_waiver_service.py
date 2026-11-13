@@ -30,10 +30,19 @@ written once for both (CLAUDE.md pitfall #29). The rules:
 - **Routing**: the holders of the chosen positions; failing them, the
   workflow's fallback office (the Chief for training, the Secretary for
   meetings); failing that, the holders of the workflow's manage permission.
-  A Chief may always decide. Never the requester. ``_route_ids`` is the one
-  definition, read by both the recipients and ``may_decide``.
+  A Chief or a President may always decide. Never the requester.
+  ``_route_ids`` is the one definition, read by both the recipients and
+  ``may_decide``.
+- **The Chief's and the President's own requests** (owner decision,
+  2026-11-13) skip that chain: each is decided by the holders of the other
+  office, and when that office is vacant by the member the policy names as
+  ``chief_alternate_user_id``. With neither, the request cannot be submitted
+  (``_officer_route``), because nobody could decide it.
 - **The first decision is final**, except that a Chief may override a denial,
   with a reason, and never on their own request.
+- **CC positions are informed, never asked.** After a final decision the
+  holders of the policy's ``cc_position_ids`` get the outcome, without the
+  reason, category or note (``_copy_decision``); they cannot open the request.
 
 **Lock order.** Every write locks the requester's ``users`` row before the
 request row. Submitting has to take the member's row first (there is no request
@@ -65,20 +74,27 @@ words, and carried onto a minutes record created later by
 
 import calendar
 import copy
+import html
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from zoneinfo import ZoneInfo
 
 from loguru import logger
-from sqlalchemy import false, func, or_, select
+from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import user_has_permission
 from app.core.audit import log_audit_event
-from app.core.constants import CHIEF_POSITION_SLUGS, SECRETARY_POSITION_SLUGS
+from app.core.config import settings as app_settings
+from app.core.constants import (
+    CHIEF_POSITION_SLUGS,
+    PRESIDENT_POSITION_SLUGS,
+    SECRETARY_POSITION_SLUGS,
+)
 from app.core.utils import generate_uuid
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
@@ -108,6 +124,7 @@ from app.models.user import (
 )
 from app.schemas.attendance_waiver import (
     MAX_ATTACHMENTS,
+    MAX_TEXT_LENGTH,
     MEETING_POLICY_KEY,
     MEETING_POLICY_SECTION,
     POLICY_KEY,
@@ -117,6 +134,11 @@ from app.schemas.attendance_waiver import (
     policy_from_settings,
 )
 from app.services.attendance_waiver_email_service import AttendanceWaiverEmails
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
+)
 from app.services.file_storage_service import StoredFile
 from app.services.notifications_service import NotificationsService
 from app.services.requirement_override_service import holds_chief_position
@@ -126,7 +148,12 @@ from app.services.training_compliance import (
     is_session_attendance,
 )
 from app.utils.org_scoping import assert_all_in_org
-from app.utils.org_timezone import local_date, resolve_scheduling_timezone
+from app.utils.org_timezone import (
+    local_date,
+    local_day_start_utc,
+    resolve_scheduling_timezone,
+    to_local,
+)
 
 TRAINING_WORKFLOW = AttendanceWaiverWorkflow.TRAINING_SESSION
 MEETING_WORKFLOW = AttendanceWaiverWorkflow.BUSINESS_MEETING
@@ -147,6 +174,9 @@ MEETING_WAIVER_TEXT = "Excused: approved request"
 # prompt can be archived once any one of them decides.
 REVIEW_PROMPT_CATEGORY = "attendance_waiver_request"
 MEMBER_UPDATE_CATEGORY = "attendance_waiver_update"
+# A final decision copied to the holders of the policy's CC positions. Not
+# archived with the prompts: it is a record of the outcome, not a task.
+CC_NOTICE_CATEGORY = "attendance_waiver_cc"
 PROMPT_METADATA_KEY = "waiver_request_id"
 
 _DEADLINE_OFFSETS = {
@@ -163,6 +193,11 @@ _ACTION_ORDER = {
     AttendanceWaiverAction.DENIED: 1,
     AttendanceWaiverAction.CHIEF_OVERRIDE: 2,
     AttendanceWaiverAction.VOIDED: 3,
+    AttendanceWaiverAction.INFO_REQUESTED: 1,
+    AttendanceWaiverAction.MEMBER_RESPONDED: 1,
+    AttendanceWaiverAction.RESCHEDULED: 1,
+    AttendanceWaiverAction.MEMBER_CONFIRMED: 1,
+    AttendanceWaiverAction.EXPIRED: 3,
 }
 
 
@@ -191,6 +226,10 @@ class WorkflowSpec:
     decider_path: str
     # Where the member's notice leads once the event is gone.
     member_fallback_url: str
+    # The email-preference kinds a decider's and a member's notices are sent
+    # under (CLAUDE.md pitfall #18: the email goes with the in-app row).
+    decider_email_kind: EmailKind
+    member_email_kind: EmailKind
 
 
 TRAINING_SPEC = WorkflowSpec(
@@ -205,6 +244,8 @@ TRAINING_SPEC = WorkflowSpec(
     default_title="Training session",
     decider_path="/attendance-waivers",
     member_fallback_url="/training/my-training",
+    decider_email_kind=EmailKind.TRAINING_DUTIES,
+    member_email_kind=EmailKind.TRAINING_REMINDERS,
 )
 
 MEETING_SPEC = WorkflowSpec(
@@ -219,6 +260,8 @@ MEETING_SPEC = WorkflowSpec(
     default_title="Business meeting",
     decider_path="/meetings/waiver-requests",
     member_fallback_url="/events",
+    decider_email_kind=EmailKind.EVENT_DUTIES,
+    member_email_kind=EmailKind.EVENT_CHANGES,
 )
 
 SPECS: Dict[AttendanceWaiverWorkflow, WorkflowSpec] = {
@@ -317,6 +360,33 @@ def deadline_for(preset: str, event: Event) -> datetime:
     return _utc(event.start_datetime)
 
 
+# An undecided request closes on its own (owner decision, 2026-11-13): "seven
+# days from the day of the event".
+EXPIRY_DAYS = 7
+# The latest deadline a department can choose; expiry never comes before it.
+EXPIRY_DEADLINE_PRESET = "7d_after_end"
+
+
+def expires_at_for(
+    session_date: date, tz: ZoneInfo, event: Optional[Event]
+) -> datetime:
+    """The instant a still-pending request for this session expires, in UTC.
+
+    The one definition, read by the expiry sweep and by every response
+    (``expires_at``), so no screen works it out for itself (pitfall #29). It
+    is the later of the end of the seventh day after the session on the
+    department's calendar (the next local midnight, so a DST day is bounded by
+    the calendar, not by arithmetic) and the moment a ``7d_after_end``
+    deadline would close for the event, while the event exists: the second
+    term means a request can never expire while it could still be submitted,
+    which matters for a session that runs past its own start date.
+    """
+    day_end = local_day_start_utc(session_date + timedelta(days=EXPIRY_DAYS + 1), tz)
+    if event is None:
+        return day_end
+    return max(day_end, deadline_for(EXPIRY_DEADLINE_PRESET, event))
+
+
 def _cap_period_label(period: CapPeriod, day: date, noun: str = "session") -> str:
     """Where the cap is counted for a session on ``day``, for a sentence."""
     if period == "rolling_12_months":
@@ -385,6 +455,38 @@ class _DeciderPool:
     # The routed set per requester, so a page of requests routes each
     # requester once.
     routed: Dict[str, Set[str]] = field(default_factory=dict)
+    # Current active holders of the President's office.
+    presidents: Set[str] = field(default_factory=set)
+    # The policy's named alternate, only while they are a current member.
+    alternate: Optional[str] = None
+
+
+def _officer_route(pool: _DeciderPool, requester_id: str) -> Optional[Set[str]]:
+    """Who decides a request from the Chief or the President; None for anyone else.
+
+    Owner decision, 2026-11-13: the Chief's own request goes to the President,
+    the President's to the Chief, and the department's chosen positions and
+    fallbacks do not apply. A member holding both offices is decided by any
+    other holder of either. When the other office has no holder but the
+    requester, the policy's named alternate decides; an empty set means nobody
+    can, and submitting is refused (``_no_decider_refusal``).
+    """
+    requester = str(requester_id)
+    is_chief = requester in pool.chiefs
+    is_president = requester in pool.presidents
+    if not (is_chief or is_president):
+        return None
+    other: Set[str] = set()
+    if is_chief:
+        other |= pool.presidents
+    if is_president:
+        other |= pool.chiefs
+    other.discard(requester)
+    if other:
+        return other
+    if pool.alternate and pool.alternate != requester:
+        return {pool.alternate}
+    return set()
 
 
 class AttendanceWaiverService:
@@ -430,6 +532,17 @@ class AttendanceWaiverService:
         await assert_all_in_org(
             self.db, Position, policy.approver_position_ids, org_id, label="position"
         )
+        await assert_all_in_org(
+            self.db, Position, policy.cc_position_ids, org_id, label="copy-to position"
+        )
+        if policy.chief_alternate_user_id and (
+            await self._current_member_id(org_id, policy.chief_alternate_user_id)
+            is None
+        ):
+            raise ValueError(
+                "The alternate who decides the Chief's or President's own "
+                "request must be a current member of the department."
+            )
         # Locked so a concurrent settings save cannot write back a copy taken
         # before this one.
         organization = (
@@ -466,10 +579,47 @@ class AttendanceWaiverService:
                 "attachment": policy.attachment,
                 "attachment_retention_days": policy.attachment_retention_days,
                 "approver_position_ids": list(policy.approver_position_ids),
+                "cc_position_ids": list(policy.cc_position_ids),
+                "chief_alternate_user_id": policy.chief_alternate_user_id,
             },
         )
         await self.db.commit()
         return policy
+
+    async def alternate_options(self, organization_id: str) -> dict:
+        """The members the policy may name as the Chief's and President's
+        alternate, and the stored alternate with whether they still qualify.
+
+        The stored one is reported even once they are no longer current (and
+        so absent from ``members``), so the screen can say who was named and
+        warn that nobody stands in for a vacant office.
+        """
+        org_id = str(organization_id)
+        members = (
+            (
+                await self.db.execute(
+                    select(User)
+                    .where(User.organization_id == org_id, User.is_active)
+                    .order_by(User.last_name, User.first_name, User.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        policy = await self.get_policy(org_id)
+        stored = None
+        if policy.chief_alternate_user_id:
+            alternate_id = policy.chief_alternate_user_id
+            name = (await self._names(org_id, [alternate_id])).get(alternate_id)
+            stored = {
+                "id": alternate_id,
+                "name": name,
+                "current": any(str(m.id) == alternate_id for m in members),
+            }
+        return {
+            "members": [{"id": str(m.id), "name": m.display_name} for m in members],
+            "alternate": stored,
+        }
 
     # ------------------------------------------------------------------
     # Eligibility
@@ -593,8 +743,36 @@ class AttendanceWaiverService:
                 f"You have used all {policy.cap} of your waivers "
                 f"{_cap_period_label(policy.cap_period, session_day, noun)}.",
             )
+        undecidable = await self._no_decider_refusal(org_id, member.id, policy)
+        if undecidable is not None:
+            return refuse("no_decider", undecidable)
         result.allowed = True
         return result
+
+    async def _no_decider_refusal(
+        self, org_id: str, member_id: str, policy: AttendanceWaiverPolicy
+    ) -> Optional[str]:
+        """Why nobody could decide the member's request, or None.
+
+        Only the Chief's and the President's own requests can reach nobody
+        (``_officer_route``); anyone else's falls through to the managers.
+        """
+        pool = await self._pool(org_id, policy)
+        route = _officer_route(pool, member_id)
+        if route is None or route:
+            return None
+        requester = str(member_id)
+        if requester in pool.chiefs and requester in pool.presidents:
+            vacant = "other Chief or President"
+        elif requester in pool.chiefs:
+            vacant = "President"
+        else:
+            vacant = "Chief"
+        return (
+            f"No one can decide this request: your department has no {vacant} "
+            "and no alternate is named in the waiver settings. Ask an officer "
+            "to name one."
+        )
 
     async def _counting_requirements(
         self, org_id: str, member: User, event: Event
@@ -947,8 +1125,12 @@ class AttendanceWaiverService:
             raise AttendanceWaiverNotFound("Request not found")
         if request.status != AttendanceWaiverStatus.PENDING:
             raise ValueError(self._settled_message(request))
+        # Declining a moved session is withdrawing it.
+        request.reconfirm_requested_at = None
         request.status = AttendanceWaiverStatus.WITHDRAWN
         request.live_key = None
+        # Nothing is left to answer once the request is taken back.
+        request.info_requested_at = None
         withdrawn = self._action(request, AttendanceWaiverAction.WITHDRAWN, member)
         withdrawn_id = str(withdrawn.id)
         self.db.add(withdrawn)
@@ -978,6 +1160,7 @@ class AttendanceWaiverService:
         await self._require_decider(org_id, actor, request, policy)
         if request.status != AttendanceWaiverStatus.PENDING:
             raise ValueError(self._settled_message(request))
+        self._refuse_while_reconfirming(request)
         if policy.cap is not None:
             # The member's row is already locked (_locked_request), and this
             # is a locking read of that member's range only, so a second
@@ -1012,6 +1195,7 @@ class AttendanceWaiverService:
         await self._require_decider(org_id, actor, request, policy)
         if request.status != AttendanceWaiverStatus.PENDING:
             raise ValueError(self._settled_message(request))
+        self._refuse_while_reconfirming(request)
         return await self._decide(
             org_id, actor, request, AttendanceWaiverStatus.DENIED, note
         )
@@ -1059,6 +1243,9 @@ class AttendanceWaiverService:
         request.status = status
         request.decided_at = _now()
         request.decided_by = str(actor.id)
+        # A decider may decide without waiting for the answer; the question
+        # stays in the log, but nothing waits on the member any more.
+        request.info_requested_at = None
         chosen = action or (
             AttendanceWaiverAction.APPROVED
             if status == AttendanceWaiverStatus.APPROVED
@@ -1084,6 +1271,7 @@ class AttendanceWaiverService:
         await self.db.refresh(request)
         await self._archive_prompts(org_id, request)
         await self._notify_member(org_id, request, chosen)
+        await self._copy_decision(org_id, request, actor, chosen)
         await self._email(org_id, request, decision_id)
         return request
 
@@ -1107,7 +1295,216 @@ class AttendanceWaiverService:
             return "This request was withdrawn."
         if request.status == AttendanceWaiverStatus.VOIDED:
             return "This request was voided."
+        if request.status == AttendanceWaiverStatus.EXPIRED:
+            return "This request was not decided in time and has closed."
         return f"This request has already been {request.status.value}."
+
+    # ------------------------------------------------------------------
+    # Asking the member for more information
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def may_ask(request: AttendanceWaiverRequest) -> bool:
+        """Whether ``request`` is in a state a decider may put a question to.
+
+        Pending, with no question already open and not waiting on the member
+        to reconfirm a moved session: one question at a time, and the member
+        has only one thing to answer at once. Who may ask is ``may_decide``.
+        """
+        return (
+            request.status == AttendanceWaiverStatus.PENDING
+            and request.info_requested_at is None
+            and request.reconfirm_requested_at is None
+        )
+
+    async def request_info(
+        self,
+        organization_id: str,
+        actor: User,
+        request_id: str,
+        question: Optional[str],
+    ) -> AttendanceWaiverRequest:
+        """A decider asks the member a question; the request stays pending.
+
+        The question is the ``INFO_REQUESTED`` action's note, encrypted like
+        every note. The deciders' prompts are archived, since the next move is
+        the member's; answering prompts them again (``respond``).
+        """
+        org_id = str(organization_id)
+        policy = await self.get_policy(org_id)
+        request = await self._locked_request(org_id, request_id)
+        await self._require_decider(org_id, actor, request, policy)
+        if request.status != AttendanceWaiverStatus.PENDING:
+            raise ValueError(self._settled_message(request))
+        if request.reconfirm_requested_at is not None:
+            raise ValueError(
+                "This request is waiting for the member to confirm the new date."
+            )
+        if request.info_requested_at is not None:
+            raise ValueError("A question is already waiting on the member's answer.")
+        text = self._message(question, "Write the question to ask the member.")
+        request.info_requested_at = _now()
+        self.db.add(
+            self._action(request, AttendanceWaiverAction.INFO_REQUESTED, actor, text)
+        )
+        await self._audit(
+            "attendance_waiver_request_info_requested", actor, self._ids(request)
+        )
+        await self.db.commit()
+        await self.db.refresh(request)
+        await self._archive_prompts(org_id, request)
+        await self._notify_member_asked(org_id, request, actor)
+        return request
+
+    async def respond(
+        self,
+        organization_id: str,
+        member: User,
+        request_id: str,
+        answer: Optional[str],
+    ) -> AttendanceWaiverRequest:
+        """The member answers the open question, and the deciders are asked
+        again."""
+        org_id = str(organization_id)
+        policy = await self.get_policy(org_id)
+        request = await self._locked_request(org_id, request_id)
+        if str(request.user_id) != str(member.id):
+            if await self._may_view(org_id, member, request):
+                raise PermissionError("Only the member who asked can answer.")
+            raise AttendanceWaiverNotFound("Request not found")
+        if request.status != AttendanceWaiverStatus.PENDING:
+            raise ValueError(self._settled_message(request))
+        if request.info_requested_at is None:
+            raise ValueError("There is no question waiting on your answer.")
+        text = self._message(answer, "Write your answer.")
+        request.info_requested_at = None
+        self.db.add(
+            self._action(request, AttendanceWaiverAction.MEMBER_RESPONDED, member, text)
+        )
+        await self._audit(
+            "attendance_waiver_request_member_responded", member, self._ids(request)
+        )
+        await self.db.commit()
+        await self.db.refresh(request)
+        await self._prompt_deciders(org_id, request, member, policy, answered=True)
+        return request
+
+    @staticmethod
+    def _message(text: Optional[str], missing: str) -> str:
+        """A required question or answer, trimmed and within the limit."""
+        cleaned = _clean(text)
+        if cleaned is None:
+            raise ValueError(missing)
+        if len(cleaned) > MAX_TEXT_LENGTH:
+            raise ValueError(f"Keep it to {MAX_TEXT_LENGTH} characters.")
+        return cleaned
+
+    # ------------------------------------------------------------------
+    # A rescheduled session: the member confirms it still needs a waiver
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _refuse_while_reconfirming(request: AttendanceWaiverRequest) -> None:
+        """No decision while the member has not said the new date still
+        needs one (owner decision, 2026-11-13): a decision now would answer a
+        question about a date the member may no longer be asking about."""
+        if request.reconfirm_requested_at is not None:
+            raise ValueError(
+                "This session moved. The member has not yet confirmed that "
+                "the new date still needs a waiver, so it cannot be decided."
+            )
+
+    async def confirm(
+        self, organization_id: str, member: User, request_id: str
+    ) -> AttendanceWaiverRequest:
+        """The member says a moved session still needs a waiver.
+
+        Only the requester, and only while the request waits on them
+        (``reconfirm_requested_at``). The request then goes back to its
+        deciders for a fresh decision. What the new date may have changed is
+        checked again, in the eligibility wording: a member now checked in,
+        or (for a meeting) on leave or already excused by the Secretary, has
+        nothing to excuse and is told to withdraw instead. The deadline and
+        the cap are not: the member asked in time, and the cap is enforced
+        when the request is approved.
+        """
+        org_id = str(organization_id)
+        policy = await self.get_policy(org_id)
+        request = await self._locked_request(org_id, request_id)
+        if str(request.user_id) != str(member.id):
+            if await self._may_view(org_id, member, request):
+                raise PermissionError(
+                    "Only the member who asked can confirm the new date."
+                )
+            raise AttendanceWaiverNotFound("Request not found")
+        if request.status != AttendanceWaiverStatus.PENDING:
+            raise ValueError(self._settled_message(request))
+        if request.reconfirm_requested_at is None:
+            raise ValueError("This request is not waiting for you to confirm a date.")
+        refusal = await self._reconfirm_refusal(org_id, request)
+        if refusal is not None:
+            raise ValueError(f"{refusal} Withdraw this request instead.")
+        request.reconfirm_requested_at = None
+        self.db.add(
+            self._action(request, AttendanceWaiverAction.MEMBER_CONFIRMED, member)
+        )
+        await self._audit(
+            "attendance_waiver_request_member_confirmed", member, self._ids(request)
+        )
+        await self.db.commit()
+        await self.db.refresh(request)
+        name = (await self._names(org_id, [member.id])).get(str(member.id), "A member")
+        title = request.event_title_snapshot
+        day = _day_label(request.session_date)
+        await self._prompt_deciders_with(
+            org_id,
+            request,
+            policy,
+            f"Waiver request — {name}, {title}",
+            [
+                f'"{title}" moved to {day}, and {name} confirmed they still '
+                "need to be excused from it.",
+                "Open the request to approve or deny it.",
+            ],
+        )
+        return request
+
+    async def _reconfirm_refusal(
+        self, org_id: str, request: AttendanceWaiverRequest
+    ) -> Optional[str]:
+        """Why the moved session no longer needs a waiver, or None.
+
+        The part of ``_assess`` a new date can change, in its wording.
+        """
+        noun = self.spec.session_noun
+        event: Optional[Event] = None
+        if request.event_id:
+            event = (
+                await self.db.execute(
+                    select(Event).where(
+                        Event.id == str(request.event_id),
+                        Event.organization_id == org_id,
+                    )
+                )
+            ).scalar_one_or_none()
+        if event is None:
+            return f"This {noun} no longer exists."
+        if event.is_cancelled:
+            return f"This {noun} was cancelled."
+        if self.workflow == MEETING_WORKFLOW and await self._on_leave(
+            org_id, request.user_id, request.session_date
+        ):
+            return (
+                "You are on a leave of absence that covers this meeting, so "
+                "it does not count against you."
+            )
+        if await self._checked_in(org_id, request.user_id, event.id):
+            return f"You checked in to this {noun}, so it already counts as attended."
+        if self.workflow == MEETING_WORKFLOW and await self._meeting_waived(
+            org_id, request.user_id, event.id
+        ):
+            return "The Secretary has already excused you from this meeting."
+        return None
 
     # ------------------------------------------------------------------
     # Routing: who may decide, and who is asked
@@ -1123,7 +1520,38 @@ class AttendanceWaiverService:
         fallback = await self._holder_ids(
             org_id, Position.slug.in_(list(self.spec.fallback_slugs))
         )
-        return _DeciderPool(configured=configured, fallback=fallback, chiefs=chiefs)
+        presidents = await self._holder_ids(
+            org_id, Position.slug.in_(PRESIDENT_POSITION_SLUGS)
+        )
+        alternate = None
+        if policy.chief_alternate_user_id:
+            alternate = await self._current_member_id(
+                org_id, policy.chief_alternate_user_id
+            )
+        return _DeciderPool(
+            configured=configured,
+            fallback=fallback,
+            chiefs=chiefs,
+            presidents=presidents,
+            alternate=alternate,
+        )
+
+    async def _current_member_id(self, org_id: str, user_id: str) -> Optional[str]:
+        """``user_id`` when it is a current member of the department, else None.
+
+        Current is ``User.is_active``: an active or probationary account that
+        is not deleted (CLAUDE.md pitfall #32).
+        """
+        found = (
+            await self.db.execute(
+                select(User.id).where(
+                    User.id == str(user_id),
+                    User.organization_id == org_id,
+                    User.is_active,
+                )
+            )
+        ).scalar_one_or_none()
+        return str(found) if found else None
 
     async def _holder_ids(self, org_id: str, position_filter) -> Set[str]:
         """Current active members holding a position matching ``position_filter``."""
@@ -1165,10 +1593,15 @@ class AttendanceWaiverService:
         Chief for training, the Secretary for meetings); then every holder of
         the workflow's manage permission. The requester is never routed their own
         request, and a request always reaches someone while anyone else holds
-        one of those. ``recipients`` and ``may_decide`` both read this, so who
-        is asked and who may answer cannot drift apart.
+        one of those. The Chief's and the President's own requests are routed
+        by ``_officer_route`` instead, and may reach nobody. ``recipients`` and
+        ``may_decide`` both read this, so who is asked and who may answer
+        cannot drift apart.
         """
         requester = str(requester_id)
+        officers = _officer_route(pool, requester)
+        if officers is not None:
+            return officers
         if requester not in pool.routed:
             routed: Set[str] = set()
             for step in (pool.configured, pool.fallback):
@@ -1186,7 +1619,12 @@ class AttendanceWaiverService:
         uid = str(user.id)
         if uid == str(requester_id):
             return False
-        if uid in pool.configured or uid in pool.chiefs:
+        officers = _officer_route(pool, requester_id)
+        if officers is not None:
+            # Exactly the route: neither the chosen positions nor the other
+            # standing deciders decide the Chief's or President's own request.
+            return uid in officers
+        if uid in pool.configured or uid in pool.chiefs or uid in pool.presidents:
             return True
         return uid in await self._route_ids(org_id, pool, requester_id)
 
@@ -1199,8 +1637,10 @@ class AttendanceWaiverService:
         """Whether ``user`` may approve or deny ``request``.
 
         Never its requester. Otherwise a current holder of a chosen position,
-        a Chief (in either workflow), or anyone the routing chain reached
-        because the chosen positions left nobody (see ``_route_ids``).
+        a Chief or a President (in either workflow), or anyone the routing
+        chain reached because the chosen positions left nobody (see
+        ``_route_ids``). A request from the Chief or the President is decided
+        only by whom ``_officer_route`` names.
         """
         org_id = str(request.organization_id)
         pool = await self._pool(org_id, policy)
@@ -1235,15 +1675,16 @@ class AttendanceWaiverService:
         """Whose requests ``actor`` may decide: None for everyone but themselves.
 
         The set form of ``_may_decide_in`` over every requester, so the queue
-        can be filtered and paged in SQL. A configured holder or a Chief
-        decides everyone's. A fallback holder decides where the chosen
+        can be filtered and paged in SQL. A configured holder, a Chief or a
+        President decides everyone's but the Chief's and President's own,
+        which ``_decidable_officers`` answers for. A fallback holder decides where the chosen
         positions leave nobody: every requester when they are vacant, and
         their one holder's own request. A manager decides where the fallback
         leaves nobody too: every requester when both are vacant, and the one
         member who holds all of them when that member is the requester.
         """
         uid = str(actor.id)
-        if uid in pool.configured or uid in pool.chiefs:
+        if uid in pool.configured or uid in pool.chiefs or uid in pool.presidents:
             return None
         requesters: Set[str] = set()
         if uid in pool.fallback:
@@ -1258,6 +1699,22 @@ class AttendanceWaiverService:
             if len(upstream) == 1:
                 requesters |= upstream
         return requesters - {uid}
+
+    @staticmethod
+    def _decidable_officers(
+        pool: _DeciderPool, actor: User
+    ) -> Tuple[Set[str], Set[str]]:
+        """The Chief's and President's requests ``actor`` may decide, and all
+        of the Chief's and President's ids.
+
+        Their requests are routed by ``_officer_route`` alone, so the queue
+        takes them out of ``_decidable_requesters``' answer and adds back the
+        ones routed to ``actor``.
+        """
+        officers = pool.chiefs | pool.presidents
+        uid = str(actor.id)
+        mine = {o for o in officers if uid in (_officer_route(pool, o) or set())}
+        return mine, officers
 
     # ------------------------------------------------------------------
     # Reads
@@ -1303,12 +1760,21 @@ class AttendanceWaiverService:
         policy = await self.get_policy(org_id)
         pool = await self._pool(org_id, policy)
         requesters = await self._decidable_requesters(org_id, pool, actor)
+        their_own, officers = self._decidable_officers(pool, actor)
         if requesters is None:
             decidable = AttendanceWaiverRequest.user_id != str(actor.id)
-        elif requesters:
-            decidable = AttendanceWaiverRequest.user_id.in_(list(requesters))
+            if officers:
+                decidable = and_(
+                    decidable, AttendanceWaiverRequest.user_id.not_in(list(officers))
+                )
+        elif requesters - officers:
+            decidable = AttendanceWaiverRequest.user_id.in_(list(requesters - officers))
         else:
             decidable = false()
+        if their_own:
+            decidable = or_(
+                decidable, AttendanceWaiverRequest.user_id.in_(list(their_own))
+            )
         conditions = [
             AttendanceWaiverRequest.organization_id == org_id,
             AttendanceWaiverRequest.workflow == self.workflow,
@@ -1356,6 +1822,7 @@ class AttendanceWaiverService:
         policy = await self.get_policy(org_id)
         pool = await self._pool(org_id, policy)
         is_chief = holds_chief_position(viewer)
+        expiries = await self._expiries(org_id, requests)
         actions: Dict[str, List[AttendanceWaiverRequestAction]] = {}
         if with_actions:
             rows = await self.db.execute(
@@ -1417,9 +1884,20 @@ class AttendanceWaiverService:
                         names.get(str(r.decided_by)) if r.decided_by else None
                     ),
                     "chief_override": bool(r.chief_override),
+                    "expires_at": expiries.get(str(r.id)),
+                    "info_requested_at": r.info_requested_at,
                     "can_withdraw": own and r.status == AttendanceWaiverStatus.PENDING,
+                    "can_respond": own
+                    and r.status == AttendanceWaiverStatus.PENDING
+                    and r.info_requested_at is not None,
+                    "can_request_info": decider and self.may_ask(r),
+                    "reconfirm_requested_at": r.reconfirm_requested_at,
+                    "can_confirm": own
+                    and r.status == AttendanceWaiverStatus.PENDING
+                    and r.reconfirm_requested_at is not None,
                     "can_decide": decider
-                    and r.status == AttendanceWaiverStatus.PENDING,
+                    and r.status == AttendanceWaiverStatus.PENDING
+                    and r.reconfirm_requested_at is None,
                     "can_override": is_chief
                     and not own
                     and r.status == AttendanceWaiverStatus.DENIED,
@@ -1454,6 +1932,36 @@ class AttendanceWaiverService:
                 }
             )
         return bodies
+
+    async def _expiries(
+        self, org_id: str, requests: Sequence[AttendanceWaiverRequest]
+    ) -> Dict[str, datetime]:
+        """When each pending request in ``requests`` expires, by request id.
+
+        Only pending requests expire, so only theirs is given; the events are
+        loaded once for the page.
+        """
+        pending = [r for r in requests if r.status == AttendanceWaiverStatus.PENDING]
+        if not pending:
+            return {}
+        tz = await resolve_scheduling_timezone(self.db, org_id)
+        event_ids = sorted({str(r.event_id) for r in pending if r.event_id})
+        events: Dict[str, Event] = {}
+        if event_ids:
+            rows = await self.db.execute(
+                select(Event).where(
+                    Event.organization_id == org_id, Event.id.in_(event_ids)
+                )
+            )
+            events = {str(e.id): e for e in rows.scalars().all()}
+        return {
+            str(r.id): expires_at_for(
+                r.session_date,
+                tz,
+                events.get(str(r.event_id)) if r.event_id else None,
+            )
+            for r in pending
+        }
 
     async def _names(self, org_id: str, user_ids: Iterable[str]) -> Dict[str, str]:
         ids = list({str(u) for u in user_ids if u})
@@ -1610,11 +2118,15 @@ class AttendanceWaiverService:
         request: AttendanceWaiverRequest,
         member: User,
         policy: AttendanceWaiverPolicy,
+        *,
+        answered: bool = False,
     ) -> None:
         """In-app prompts for everyone the request is routed to.
 
         After the commit, and never allowed to fail the request: the member's
-        request stands whether or not the bell could be rung.
+        request stands whether or not the bell could be rung. ``answered``
+        words it as the member's answer to a decider's question (the answer
+        itself stays on the request page).
         """
         try:
             recipients = await self.recipients(org_id, request, policy)
@@ -1625,6 +2137,15 @@ class AttendanceWaiverService:
             )
             title = request.event_title_snapshot
             day = _day_label(request.session_date)
+            if answered:
+                subject = f"Waiver request answered — {name}, {title}"
+                opening = (
+                    f"{name} answered your question about their request to be "
+                    f'excused from "{title}" on {day}.'
+                )
+            else:
+                subject = f"Waiver request — {name}, {title}"
+                opening = f'{name} asked to be excused from "{title}" on {day}.'
             for recipient in recipients:
                 self.db.add(
                     NotificationLog(
@@ -1633,13 +2154,10 @@ class AttendanceWaiverService:
                         recipient_id=str(recipient.id),
                         channel=NotificationChannel.IN_APP,
                         category=REVIEW_PROMPT_CATEGORY,
-                        subject=f"Waiver request — {name}, {title}",
+                        subject=subject,
                         # No reason or category: they may be medical, and a
                         # notification is stored in plain text.
-                        message=(
-                            f'{name} asked to be excused from "{title}" on {day}. '
-                            "Open the request to approve or deny it."
-                        ),
+                        message=f"{opening} Open the request to approve or deny it.",
                         action_url=decider_action_url(request),
                         notification_metadata={
                             PROMPT_METADATA_KEY: str(request.id),
@@ -1656,6 +2174,78 @@ class AttendanceWaiverService:
                 "Failed to prompt deciders for waiver request {}", request.id
             )
             await self._recover(request)
+            return
+        # The first request is emailed from its SUBMITTED log row by the
+        # department's editable template (``AttendanceWaiverEmails``); only the
+        # member's answer to a question, which has no template, is sent here.
+        if not answered:
+            return
+        await self._email_notice(
+            org_id,
+            request,
+            recipients,
+            self.spec.decider_email_kind,
+            subject,
+            [opening, "Open the request to approve or deny it."],
+            decider_action_url(request),
+            "Review Request",
+        )
+
+    async def _prompt_deciders_with(
+        self,
+        org_id: str,
+        request: AttendanceWaiverRequest,
+        policy: AttendanceWaiverPolicy,
+        subject: str,
+        sentences: Sequence[str],
+    ) -> None:
+        """``_prompt_deciders`` in the caller's words: an in-app prompt for
+        everyone the request is routed to, then the same words by email.
+
+        After the commit, and never allowed to fail the action. ``sentences``
+        carry no reason, note, question or answer: the row is plain text.
+        """
+        try:
+            recipients = await self.recipients(org_id, request, policy)
+            if not recipients:
+                return
+            for recipient in recipients:
+                self.db.add(
+                    NotificationLog(
+                        id=generate_uuid(),
+                        organization_id=org_id,
+                        recipient_id=str(recipient.id),
+                        channel=NotificationChannel.IN_APP,
+                        category=REVIEW_PROMPT_CATEGORY,
+                        subject=subject,
+                        message=" ".join(sentences),
+                        action_url=decider_action_url(request),
+                        notification_metadata={
+                            PROMPT_METADATA_KEY: str(request.id),
+                            "event_id": (
+                                str(request.event_id) if request.event_id else None
+                            ),
+                        },
+                        delivered=True,
+                    )
+                )
+            await self.db.commit()
+        except Exception:
+            logger.exception(
+                "Failed to prompt deciders for waiver request {}", request.id
+            )
+            await self._recover(request)
+            return
+        await self._email_notice(
+            org_id,
+            request,
+            recipients,
+            self.spec.decider_email_kind,
+            subject,
+            sentences,
+            decider_action_url(request),
+            "Review Request",
+        )
 
     async def _archive_prompts(
         self, org_id: str, request: AttendanceWaiverRequest
@@ -1708,6 +2298,214 @@ class AttendanceWaiverService:
                 "Failed to notify the member of waiver request {}", request.id
             )
             await self._recover(request)
+        # No email here: the decision is emailed from its log row by the
+        # department's editable template (``AttendanceWaiverEmails``).
+
+    async def _copy_decision(
+        self,
+        org_id: str,
+        request: AttendanceWaiverRequest,
+        actor: User,
+        action: AttendanceWaiverAction,
+    ) -> None:
+        """Tell the holders of the policy's CC positions how a request ended.
+
+        Only a final decision reaches here (approve, deny, the Chief's
+        override); a withdrawal, a void or an expiry is not one and is not
+        copied. The holders are informed only: they cannot open the request,
+        so the notice carries who, which session, when and the outcome, and
+        never the member's reason, category or the decider's note. It leads to
+        the session while the event exists, and nowhere once it is gone.
+        After the commit, and never allowed to fail the decision.
+        """
+        try:
+            policy = await self.get_policy(org_id)
+            if not policy.cc_position_ids:
+                return
+            # One notice per person, however many CC positions they hold; the
+            # member and the decider already have their own notice or the
+            # decision in hand.
+            ids = await self._holder_ids(
+                org_id, Position.id.in_(list(policy.cc_position_ids))
+            ) - {str(request.user_id), str(actor.id)}
+            if not ids:
+                return
+            recipients = list(
+                (
+                    await self.db.execute(
+                        select(User).where(
+                            User.id.in_(sorted(ids)), User.organization_id == org_id
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            name = (await self._names(org_id, [request.user_id])).get(
+                str(request.user_id), "A member"
+            )
+            title = request.event_title_snapshot
+            day = _day_label(request.session_date)
+            if action == AttendanceWaiverAction.CHIEF_OVERRIDE:
+                word, outcome = "approved", "was approved by the Chief on review"
+            elif action == AttendanceWaiverAction.APPROVED:
+                word, outcome = "approved", "was approved"
+            else:
+                word, outcome = "not approved", "was not approved"
+            subject = f"Waiver request {word} — {name}, {title}"
+            sentence = (
+                f'{name}\'s request to be excused from "{title}" on {day} '
+                f"{outcome}."
+            )
+            path = f"/events/{request.event_id}" if request.event_id else None
+            for recipient in recipients:
+                self.db.add(
+                    NotificationLog(
+                        id=generate_uuid(),
+                        organization_id=org_id,
+                        recipient_id=str(recipient.id),
+                        channel=NotificationChannel.IN_APP,
+                        category=CC_NOTICE_CATEGORY,
+                        subject=subject,
+                        message=sentence,
+                        action_url=path,
+                        notification_metadata={
+                            PROMPT_METADATA_KEY: str(request.id),
+                            "event_id": (
+                                str(request.event_id) if request.event_id else None
+                            ),
+                        },
+                        delivered=True,
+                    )
+                )
+            await self.db.commit()
+        except Exception:
+            logger.exception(
+                "Failed to copy the decision on waiver request {}", request.id
+            )
+            await self._recover(request)
+        # In-app only. Email copies of a decision come from the decided
+        # template's own CC addresses and CC positions, so a person named in
+        # both places is not emailed twice.
+
+    async def _notify_member_asked(
+        self, org_id: str, request: AttendanceWaiverRequest, actor: User
+    ) -> None:
+        """Tell the member a decider has a question, never what it is: the
+        question stays on the request, encrypted, behind sign-in."""
+        name = (await self._names(org_id, [actor.id])).get(str(actor.id), "An officer")
+        title = request.event_title_snapshot
+        day = _day_label(request.session_date)
+        subject = f"Question about your waiver request — {title}"
+        sentence = (
+            f"{name} asked for more information about your request to be "
+            f'excused from "{title}" on {day}. Open it to answer.'
+        )
+        url = member_answer_url(request)
+        try:
+            self.db.add(
+                NotificationLog(
+                    id=generate_uuid(),
+                    organization_id=org_id,
+                    recipient_id=str(request.user_id),
+                    channel=NotificationChannel.IN_APP,
+                    category=MEMBER_UPDATE_CATEGORY,
+                    subject=subject,
+                    message=sentence,
+                    action_url=url,
+                    notification_metadata={PROMPT_METADATA_KEY: str(request.id)},
+                    delivered=True,
+                )
+            )
+            await self.db.commit()
+        except Exception:
+            logger.exception(
+                "Failed to tell the member of a question on waiver request {}",
+                request.id,
+            )
+            await self._recover(request)
+            return
+        member = (
+            await self.db.execute(
+                select(User).where(
+                    User.id == str(request.user_id), User.organization_id == org_id
+                )
+            )
+        ).scalar_one_or_none()
+        if member is not None:
+            await self._email_notice(
+                org_id,
+                request,
+                [member],
+                SPECS[request.workflow].member_email_kind,
+                subject,
+                [sentence],
+                url,
+                "Answer the Question",
+            )
+
+    async def _email_notice(
+        self,
+        org_id: str,
+        request: AttendanceWaiverRequest,
+        recipients: Iterable[User],
+        kind: EmailKind,
+        subject: str,
+        sentences: Sequence[str],
+        path: Optional[str],
+        button: str,
+    ) -> None:
+        """Email a notice that an in-app row also carries.
+
+        The one way this workflow sends email, for every notice (CLAUDE.md
+        pitfall #18). ``sentences`` are the same plain words as the in-app
+        row: never the member's reason, a decider's note, or a question or
+        answer, which may be medical and stay on the request page behind
+        sign-in. Each recipient's email preferences decide, under ``kind``.
+        ``path`` None sends no button, for a notice with nowhere to lead.
+        Called after the commit and never allowed to fail the action: a
+        failure is logged by request id and swallowed.
+        """
+        try:
+            org = (
+                await self.db.execute(
+                    select(Organization).where(Organization.id == org_id)
+                )
+            ).scalar_one_or_none()
+            required = department_required_kinds(org)
+            to_emails = sorted(
+                {
+                    str(user.email)
+                    for user in recipients
+                    if user.email
+                    and member_receives_email(
+                        user.notification_preferences, kind, required
+                    )
+                }
+            )
+            if not to_emails:
+                return
+            from app.services.email_service import EmailService, wrap_email_body
+
+            body = "".join(f"<p>{html.escape(line)}</p>" for line in sentences)
+            text_body = "\n\n".join(sentences)
+            if path is not None:
+                url = f"{app_settings.FRONTEND_URL}{path}"
+                body += (
+                    '<p style="text-align: center;">'
+                    f'<a href="{html.escape(url)}" class="button" role="link">'
+                    f"{html.escape(button)}</a></p>"
+                )
+                text_body += f"\n\n{button}: {url}"
+            html_body = wrap_email_body(org, "Waiver Request", body)
+            await EmailService(organization=org).send_email(
+                to_emails=to_emails,
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+            )
+        except Exception:
+            logger.exception("Failed to email about waiver request {}", request.id)
 
     async def _email(
         self, org_id: str, request: AttendanceWaiverRequest, action_id: str
@@ -1715,12 +2513,8 @@ class AttendanceWaiverService:
         """The emails a log row calls for, after the commit (see
         ``AttendanceWaiverEmails``). Never fails the request; a failed send
         rolls the session back, so ``request`` is reloaded for the caller.
-
-        Training only, for now: the meeting templates are catalogued, and the
-        meetings frontend PR turns their sends on with the screens that
-        decide meeting requests (``_TEMPLATES`` in the email service)."""
-        if self.workflow != TRAINING_WORKFLOW:
-            return
+        Both workflows send, each from its own templates (``_TEMPLATES`` in
+        the email service)."""
         # Read before sending: a rollback there expires the request.
         request_id = str(request.id)
         sent = await AttendanceWaiverEmails(self.db).send_for_action(
@@ -1776,6 +2570,15 @@ def member_action_url(request: AttendanceWaiverRequest) -> str:
     if request.event_id:
         return f"/events/{request.event_id}"
     return SPECS[request.workflow].member_fallback_url
+
+
+def member_answer_url(request: AttendanceWaiverRequest) -> str:
+    """Where the member answers a question: My Training's list of their
+    requests holds the answer form. The meeting workflow has no such list: its
+    member answers on the meeting's event page, where its other notices go."""
+    if request.workflow == TRAINING_WORKFLOW:
+        return TRAINING_SPEC.member_fallback_url
+    return member_action_url(request)
 
 
 def _day_label(day: date) -> str:
@@ -1925,6 +2728,288 @@ async def carry_over_meeting_waivers(
     return carried
 
 
+@dataclass(frozen=True)
+class RescheduleNotice:
+    """The email owed to a member whose request a move sent back to them.
+
+    ``reconfirm_for_rescheduled_events`` runs inside the caller's transaction,
+    so it cannot send mail: an email about a move the caller then rolls back
+    would tell the member of something that never happened. The caller sends
+    these with ``send_reschedule_notices`` once it has committed.
+    """
+
+    request_id: str
+    workflow: AttendanceWaiverWorkflow
+    subject: str
+    sentences: Tuple[str, ...]
+
+
+def _same_instant(a: datetime, b: datetime) -> bool:
+    """Whether two stored starts are the same moment.
+
+    DATETIME keeps whole seconds and MySQL rounds a fraction, so a start read
+    back can differ from the value written by under a second.
+    """
+    return abs(_utc(a) - _utc(b)) < timedelta(seconds=1)
+
+
+def _when_label(value: datetime, tz) -> str:
+    """A start as the department's wall clock, for a sentence."""
+    local = to_local(value, tz)
+    clock = local.strftime("%I:%M %p").lstrip("0")
+    return f"{_day_label(local.date())} at {clock}"
+
+
+async def _unapply_meeting_waiver(
+    db: AsyncSession, org_id: str, request: AttendanceWaiverRequest
+) -> int:
+    """Take ``request``'s waiver off the minutes records: the reverse of
+    ``_apply_meeting_waiver``.
+
+    Only a row the request wrote (``waiver_request_id``): a waiver the
+    Secretary granted, or rewrote in their own words, is theirs and stays.
+    ``present`` is never touched. The minutes records are locked before their
+    attendees, as ``grant_meeting_waiver`` does. Does not commit; returns how
+    many rows were cleared.
+    """
+    if request.event_id:
+        await db.execute(
+            select(Meeting.id)
+            .where(
+                Meeting.organization_id == org_id,
+                Meeting.event_id == str(request.event_id),
+            )
+            .with_for_update()
+        )
+    attendees = (
+        (
+            await db.execute(
+                select(MeetingAttendee)
+                .where(
+                    MeetingAttendee.organization_id == org_id,
+                    MeetingAttendee.waiver_request_id == str(request.id),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for attendee in attendees:
+        attendee.excused = False
+        attendee.waiver_reason = None
+        attendee.waiver_granted_by = None
+        attendee.waiver_granted_at = None
+        attendee.waiver_request_id = None
+    return len(attendees)
+
+
+async def reconfirm_for_rescheduled_events(
+    db: AsyncSession, org_id: str, event_ids: Sequence[str]
+) -> List[RescheduleNotice]:
+    """Send every pending or approved request for a moved session back to its
+    member (owner decision, 2026-11-13).
+
+    For every path that changes an event's start, inside the caller's
+    transaction (it commits) while it holds the events exclusively; like
+    ``void_pending_for_events`` it never takes a ``users`` row, so the lock
+    order cannot cycle. A request whose snapshot already has the event's
+    start is left alone, so a change that leaves the start where it was (a
+    title, a room, the end alone) does nothing, and running this twice for one
+    move writes nothing the second time (CLAUDE.md pitfall #36).
+
+    Each moved request takes the new title, start and local date, goes back to
+    PENDING with its decision cleared (the log keeps it) and waits on the
+    member (``reconfirm_requested_at``); an approved meeting request's waiver
+    comes off the minutes record. A denied request is not touched: the first
+    decision is final. The deciders' prompts are archived, and the member gets
+    an in-app notice now and an email once the caller commits: the returned
+    notices, for ``send_reschedule_notices``.
+
+    A member who never answers is not chased: the expiry task closes a request
+    still pending seven days after its (new) session.
+    """
+    ids = [str(e) for e in event_ids if e]
+    if not ids:
+        return []
+    events = {
+        str(e.id): e
+        for e in (
+            await db.execute(
+                select(Event).where(Event.organization_id == org_id, Event.id.in_(ids))
+            )
+        ).scalars()
+    }
+    live = (
+        (
+            await db.execute(
+                select(AttendanceWaiverRequest)
+                .where(
+                    AttendanceWaiverRequest.organization_id == org_id,
+                    AttendanceWaiverRequest.event_id.in_(ids),
+                    AttendanceWaiverRequest.status.in_(
+                        [
+                            AttendanceWaiverStatus.PENDING,
+                            AttendanceWaiverStatus.APPROVED,
+                        ]
+                    ),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    moved = [
+        r
+        for r in live
+        if str(r.event_id) in events
+        and not _same_instant(
+            r.event_start_snapshot, events[str(r.event_id)].start_datetime
+        )
+    ]
+    if not moved:
+        return []
+    tz = await resolve_scheduling_timezone(db, org_id)
+    now = _now()
+    notices: List[RescheduleNotice] = []
+    for request in moved:
+        event = events[str(request.event_id)]
+        spec = SPECS[request.workflow]
+        noun = spec.session_noun
+        was = request.status
+        old_date = request.session_date
+        old_when = _when_label(request.event_start_snapshot, tz)
+        new_when = _when_label(event.start_datetime, tz)
+        if was == AttendanceWaiverStatus.APPROVED and (
+            request.workflow == MEETING_WORKFLOW
+        ):
+            await _unapply_meeting_waiver(db, org_id, request)
+        request.event_title_snapshot = (event.title or spec.default_title)[:255]
+        request.event_start_snapshot = _utc(event.start_datetime)
+        request.session_date = local_date(event.start_datetime, tz)
+        request.status = AttendanceWaiverStatus.PENDING
+        request.decided_at = None
+        request.decided_by = None
+        # It described the decision being cleared; a fresh one sets its own.
+        request.chief_override = False
+        request.info_requested_at = None
+        request.reconfirm_requested_at = now
+        db.add(
+            AttendanceWaiverService._action(
+                request,
+                AttendanceWaiverAction.RESCHEDULED,
+                None,
+                f"The {noun} moved from {old_when} to {new_when}.",
+            )
+        )
+        title = request.event_title_snapshot
+        sentences = [
+            f'The {noun} "{title}" you asked to be excused from moved from '
+            f"{old_when} to {new_when}."
+        ]
+        if was == AttendanceWaiverStatus.APPROVED:
+            sentences.append(
+                "Its approval was for the old date, so the request will be "
+                "decided again."
+            )
+        sentences.append(
+            "Open your request to confirm you still need to be excused, or "
+            "withdraw it."
+        )
+        subject = f"Confirm your waiver request — {title}"
+        db.add(
+            NotificationLog(
+                id=generate_uuid(),
+                organization_id=org_id,
+                recipient_id=str(request.user_id),
+                channel=NotificationChannel.IN_APP,
+                category=MEMBER_UPDATE_CATEGORY,
+                subject=subject,
+                message=" ".join(sentences),
+                action_url=member_action_url(request),
+                notification_metadata={PROMPT_METADATA_KEY: str(request.id)},
+                delivered=True,
+            )
+        )
+        await log_audit_event(
+            db=db,
+            event_type="attendance_waiver_request_rescheduled",
+            event_category=spec.audit_category,
+            severity="info",
+            event_data={
+                **AttendanceWaiverService._ids(request),
+                "previous_session_date": old_date.isoformat(),
+                "previous_status": was.value,
+            },
+        )
+        notices.append(
+            RescheduleNotice(
+                request_id=str(request.id),
+                workflow=request.workflow,
+                subject=subject,
+                sentences=tuple(sentences),
+            )
+        )
+    await db.flush()
+    archive = NotificationsService(db)
+    for request in moved:
+        await archive.archive_related_notifications(
+            org_id,
+            REVIEW_PROMPT_CATEGORY,
+            PROMPT_METADATA_KEY,
+            str(request.id),
+            commit=False,
+        )
+    return notices
+
+
+async def send_reschedule_notices(
+    db: AsyncSession, org_id: str, notices: Sequence[RescheduleNotice]
+) -> None:
+    """Email the members ``reconfirm_for_rescheduled_events`` asked to confirm.
+
+    After the caller's commit, and never allowed to fail it: the move stands
+    whether or not a mail server answered.
+    """
+    for notice in notices:
+        service = AttendanceWaiverService(db, notice.workflow)
+        try:
+            request = await service._find(str(org_id), notice.request_id)
+            member = (
+                None
+                if request is None
+                else (
+                    await db.execute(
+                        select(User).where(
+                            User.id == str(request.user_id),
+                            User.organization_id == str(org_id),
+                        )
+                    )
+                ).scalar_one_or_none()
+            )
+        except Exception:
+            logger.exception(
+                "Failed to load waiver request {} to email its member",
+                notice.request_id,
+            )
+            continue
+        if request is None or member is None:
+            continue
+        await service._email_notice(
+            str(org_id),
+            request,
+            [member],
+            service.spec.member_email_kind,
+            notice.subject,
+            notice.sentences,
+            member_action_url(request),
+            "View Request",
+        )
+
+
 async def void_pending_for_events(
     db: AsyncSession, org_id: str, event_ids: Sequence[str], cause: str
 ) -> int:
@@ -1961,6 +3046,7 @@ async def void_pending_for_events(
         spec = SPECS[request.workflow]
         request.status = AttendanceWaiverStatus.VOIDED
         request.live_key = None
+        request.info_requested_at = None
         db.add(
             AttendanceWaiverService._action(
                 request,

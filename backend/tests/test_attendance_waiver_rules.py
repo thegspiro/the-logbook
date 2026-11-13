@@ -157,7 +157,28 @@ class TestPolicySchema:
             "attachment": "off",
             "attachment_retention_days": 365,
             "approver_position_ids": [],
+            "cc_position_ids": [],
+            "chief_alternate_user_id": None,
         }
+
+    def test_a_policy_stored_before_cc_and_alternate_reads_them_empty(self):
+        stored = {"enabled": True, "approver_position_ids": ["pos-1"]}
+        policy = policy_from_settings(stored)
+        assert policy.enabled is True
+        assert policy.cc_position_ids == []
+        assert policy.chief_alternate_user_id is None
+
+    def test_cc_positions_are_cleaned_like_approver_positions(self):
+        policy = AttendanceWaiverPolicy(cc_position_ids=[" p1 ", "p1", "p2"])
+        assert policy.cc_position_ids == ["p1", "p2"]
+        with pytest.raises(ValidationError):
+            AttendanceWaiverPolicy(cc_position_ids=[""])
+
+    def test_a_blank_alternate_is_none(self):
+        assert (
+            AttendanceWaiverPolicy(chief_alternate_user_id="  ").chief_alternate_user_id
+            is None
+        )
 
     @pytest.mark.parametrize("cap", [0, 366, -1])
     def test_the_cap_is_one_to_365(self, cap):

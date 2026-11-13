@@ -11,6 +11,10 @@ may be medical.
 
 GET    /training/waivers/requests/policy             - The department's policy
 PUT    /training/waivers/requests/policy             - Save it (training.manage)
+GET    /training/waivers/requests/policy/alternate   - Who may be the officers'
+                                                       alternate (training.manage)
+GET    /training/waivers/requests/policy/positions   - The positions to choose
+                                                       from (training.manage)
 GET    /training/waivers/requests/eligibility        - May I ask about this session?
 POST   /training/waivers/requests                    - Ask to be excused
 POST   /training/waivers/requests/with-attachments   - Ask, filing documents
@@ -18,9 +22,12 @@ GET    /training/waivers/requests/mine               - My requests
 GET    /training/waivers/requests                    - Requests I decide or decided
 GET    /training/waivers/requests/{id}               - One request
 POST   /training/waivers/requests/{id}/withdraw      - Withdraw my pending request
+POST   /training/waivers/requests/{id}/confirm       - My moved session still needs it
 POST   /training/waivers/requests/{id}/approve       - Approve a pending request
 POST   /training/waivers/requests/{id}/deny          - Deny a pending request
 POST   /training/waivers/requests/{id}/override      - The Chief approves a denial
+POST   /training/waivers/requests/{id}/request-info  - Ask the member a question
+POST   /training/waivers/requests/{id}/respond       - Answer the open question
 POST   /training/waivers/requests/{id}/attachments   - File documents (pending)
 GET    /training/waivers/requests/{id}/attachments/{attachment_id} - Download one
 
@@ -57,10 +64,13 @@ from app.models.user import User
 from app.schemas.attendance_waiver import (
     MAX_CATEGORY_LENGTH,
     MAX_TEXT_LENGTH,
+    AttendanceWaiverAlternateOptions,
     AttendanceWaiverDecision,
     AttendanceWaiverEligibilityResponse,
+    AttendanceWaiverMessage,
     AttendanceWaiverOverride,
     AttendanceWaiverPolicy,
+    AttendanceWaiverPositionOptions,
     AttendanceWaiverRequestPage,
     AttendanceWaiverRequestResponse,
     AttendanceWaiverSubmit,
@@ -72,6 +82,7 @@ from app.services.attendance_waiver_service import (
     AttendanceWaiverNotFound,
     AttendanceWaiverService,
 )
+from app.services.compliance_config_service import ComplianceConfigService
 
 router = APIRouter()
 
@@ -129,8 +140,8 @@ async def save_attendance_waiver_policy(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Save the department's policy for session waiver requests. Approver
-    positions must belong to the department (400 otherwise).
+    Save the department's policy for session waiver requests. Approver and
+    copy-to (CC) positions must belong to the department (400 otherwise).
 
     **Requires permission: training.manage**
     """
@@ -138,6 +149,40 @@ async def save_attendance_waiver_policy(
         return await AttendanceWaiverService(db).save_policy(
             str(current_user.organization_id), body, current_user
         )
+
+
+@router.get("/policy/positions", response_model=AttendanceWaiverPositionOptions)
+async def get_attendance_waiver_position_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    For the settings screen: the department's positions, by id and name, to
+    choose who decides and who is copied on decisions.
+
+    **Requires permission: training.manage**
+    """
+    positions = await ComplianceConfigService(db).get_available_positions(
+        str(current_user.organization_id)
+    )
+    return {"positions": positions}
+
+
+@router.get("/policy/alternate", response_model=AttendanceWaiverAlternateOptions)
+async def get_attendance_waiver_alternate_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    For the settings screen: the current members who may be named to decide
+    the Chief's or President's own request when the other office is vacant,
+    and whether the stored alternate is still a current member.
+
+    **Requires permission: training.manage**
+    """
+    return await AttendanceWaiverService(db).alternate_options(
+        str(current_user.organization_id)
+    )
 
 
 @router.get("/eligibility", response_model=AttendanceWaiverEligibilityResponse)
@@ -229,7 +274,9 @@ async def list_my_attendance_waiver_requests(
     current_user: User = Depends(get_current_user),
 ):
     """
-    The caller's own requests, newest first, withdrawn ones included.
+    The caller's own requests, newest first, withdrawn ones included, each
+    with its decision log, so a decider's question and the member's earlier
+    answers can be read and answered from the list.
 
     **Authentication required**
     """
@@ -238,7 +285,9 @@ async def list_my_attendance_waiver_requests(
     requests = await service.list_mine(org_id, current_user)
     return [
         AttendanceWaiverRequestResponse(**body)
-        for body in await service.describe(org_id, current_user, requests)
+        for body in await service.describe(
+            org_id, current_user, requests, with_actions=True
+        )
     ]
 
 
@@ -313,6 +362,28 @@ async def withdraw_attendance_waiver_request(
     return await _one(service, current_user, request)
 
 
+@router.post("/{request_id}/confirm", response_model=AttendanceWaiverRequestResponse)
+async def confirm_attendance_waiver_request(
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Confirm that the caller's own request still stands after its session
+    moved, which sends it back to the deciders. 400 when it is not waiting on
+    a confirmation, or the new date no longer needs a waiver (the member
+    checked in, or is on leave); 403 for a decider, 404 for anyone else.
+
+    **Authentication required**
+    """
+    service = AttendanceWaiverService(db)
+    with _refusals():
+        request = await service.confirm(
+            str(current_user.organization_id), current_user, request_id
+        )
+    return await _one(service, current_user, request)
+
+
 @router.post("/{request_id}/approve", response_model=AttendanceWaiverRequestResponse)
 async def approve_attendance_waiver_request(
     request_id: str,
@@ -373,6 +444,53 @@ async def override_attendance_waiver_request(
     service = AttendanceWaiverService(db)
     with _refusals():
         request = await service.chief_override(
+            str(current_user.organization_id), current_user, request_id, body.note
+        )
+    return await _one(service, current_user, request)
+
+
+@router.post(
+    "/{request_id}/request-info", response_model=AttendanceWaiverRequestResponse
+)
+async def request_attendance_waiver_info(
+    request_id: str,
+    body: AttendanceWaiverMessage,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Ask the member a question about their pending request. Only someone who
+    may decide it, never its member; the request stays pending and may still
+    be decided. 400 when it is no longer pending, a question is already open,
+    or it is waiting on the member to confirm a new date.
+
+    **Authentication required**
+    """
+    service = AttendanceWaiverService(db)
+    with _refusals():
+        request = await service.request_info(
+            str(current_user.organization_id), current_user, request_id, body.note
+        )
+    return await _one(service, current_user, request)
+
+
+@router.post("/{request_id}/respond", response_model=AttendanceWaiverRequestResponse)
+async def respond_attendance_waiver_request(
+    request_id: str,
+    body: AttendanceWaiverMessage,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    The member answers the open question on their own pending request, and
+    its deciders are asked again. 400 when no question is open or it is no
+    longer pending; 403 for a decider, 404 for anyone else.
+
+    **Authentication required**
+    """
+    service = AttendanceWaiverService(db)
+    with _refusals():
+        request = await service.respond(
             str(current_user.organization_id), current_user, request_id, body.note
         )
     return await _one(service, current_user, request)

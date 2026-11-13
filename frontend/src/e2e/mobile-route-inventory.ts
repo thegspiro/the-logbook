@@ -1182,6 +1182,27 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
       'secretary report built from the shared rwd-table, card and form-input utilities; /minutes is the representative module route',
   },
   {
+    path: '/minutes/attendance/waiver-settings',
+    source: 'src/modules/minutes/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'the session waiver settings panel bound to the meeting workflow; its training twin under /training/admin covers the same form-input, toggle and card utilities',
+  },
+  {
+    path: '/meetings/waiver-requests',
+    source: 'src/modules/minutes/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'the /attendance-waivers approver queue bound to the meeting workflow; it lists only requests routed to the viewer, so it is empty for the e2e member',
+  },
+  {
+    path: '/meetings/waiver-requests/:id',
+    source: 'src/modules/minutes/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'the /attendance-waivers/:id decision page bound to the meeting workflow, reached from the approver email; a request exists only after a member asks to be excused from a business meeting',
+  },
+  {
     path: '/minutes/outlines',
     source: 'src/modules/minutes/routes.tsx',
     coverage: 'exempt',

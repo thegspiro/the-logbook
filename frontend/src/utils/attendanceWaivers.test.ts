@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { capSummary, latestDecisionNote } from './attendanceWaivers';
+import { capSummary, closesUndecidedText, latestDecisionNote } from './attendanceWaivers';
 import type { AttendanceWaiverActionEntry } from '../types/attendanceWaiver';
 
 describe('capSummary', () => {
@@ -40,5 +40,23 @@ describe('latestDecisionNote', () => {
 
   it('is null before any decision', () => {
     expect(latestDecisionNote([entry('submitted', null)])).toBeNull();
+  });
+});
+
+describe('closesUndecidedText', () => {
+  // 05:00Z on 28 November is midnight in New York: the end of the 27th.
+  const expiresAt = '2026-11-28T05:00:00Z';
+
+  it('words the backend’s instant in the department’s timezone for a pending request', () => {
+    expect(closesUndecidedText({ status: 'pending', expires_at: expiresAt }, 'America/New_York')).toMatch(
+      /^Closes undecided on Saturday, November 28, 2026,? (at )?12:00\sAM$/
+    );
+  });
+
+  it('is null once the request is settled, or when the server gave no instant', () => {
+    expect(closesUndecidedText({ status: 'expired', expires_at: expiresAt }, 'UTC')).toBeNull();
+    expect(closesUndecidedText({ status: 'approved', expires_at: expiresAt }, 'UTC')).toBeNull();
+    expect(closesUndecidedText({ status: 'pending', expires_at: null }, 'UTC')).toBeNull();
+    expect(closesUndecidedText({ status: 'pending' }, 'UTC')).toBeNull();
   });
 });

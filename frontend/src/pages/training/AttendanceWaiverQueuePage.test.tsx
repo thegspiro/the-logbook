@@ -29,6 +29,11 @@ const request = (id: string, over: Partial<AttendanceWaiverRequest> = {}): Atten
   decided_by: null,
   decided_by_name: null,
   chief_override: false,
+  info_requested_at: null,
+  reconfirm_requested_at: null,
+  can_respond: false,
+  can_confirm: false,
+  can_request_info: false,
   can_withdraw: false,
   can_decide: true,
   can_override: false,
@@ -58,7 +63,7 @@ describe('AttendanceWaiverQueuePage', () => {
 
     const waiting = await screen.findByRole('region', { name: 'Waiting for a decision (1)' });
     expect(within(waiting).getByRole('link', { name: /Member p1/ })).toHaveAttribute('href', '/attendance-waivers/p1');
-    const decidedSection = screen.getByRole('region', { name: 'Decided' });
+    const decidedSection = screen.getByRole('region', { name: 'Decided and closed' });
     expect(within(decidedSection).getByRole('link', { name: /Member d1/ })).toBeInTheDocument();
     // A pending row is listed once, under pending, though the unfiltered page carries it too.
     expect(within(decidedSection).queryByText('Member p1')).not.toBeInTheDocument();
@@ -95,5 +100,21 @@ describe('AttendanceWaiverQueuePage', () => {
     mockList.mockRejectedValue(new Error('boom'));
     renderWithRouter(<AttendanceWaiverQueuePage embedded />);
     expect(await screen.findByRole('alert')).toHaveTextContent('boom');
+  });
+
+  it('says when each pending request closes, and lists expired requests with the closed ones', async () => {
+    const pending = request('p1', { expires_at: '2026-11-28T05:00:00Z' });
+    const expired = request('e1', { status: 'expired', can_decide: false, expires_at: null });
+    mockList.mockImplementation((params: { status?: string }) =>
+      Promise.resolve(params.status === 'pending' ? page([pending]) : page([pending, expired]))
+    );
+    renderWithRouter(<AttendanceWaiverQueuePage />);
+
+    const waiting = await screen.findByRole('region', { name: 'Waiting for a decision (1)' });
+    expect(within(waiting).getByText(/^Closes undecided on Saturday, November 28, 2026/)).toBeInTheDocument();
+    const closed = screen.getByRole('region', { name: 'Decided and closed' });
+    expect(within(closed).getByRole('link', { name: /Member e1/ })).toBeInTheDocument();
+    expect(within(closed).getByText('Expired')).toBeInTheDocument();
+    expect(within(closed).queryByText(/Closes undecided/)).not.toBeInTheDocument();
   });
 });
