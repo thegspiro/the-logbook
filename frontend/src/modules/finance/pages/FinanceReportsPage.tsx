@@ -1445,7 +1445,15 @@ const FinanceReportsPage: React.FC = () => {
         Finance reports
       </h1>
 
-      <div className="tab-scroll print:hidden" role="tablist" {...tablist} aria-label="Reports">
+      {/* Ten reports do not fit a phone's width: the strip scrolls sideways, and
+          the marker declares that intentional to the mobile presentation sweep. */}
+      <div
+        className="tab-scroll print:hidden"
+        data-mobile-scroll-region
+        role="tablist"
+        {...tablist}
+        aria-label="Reports"
+      >
         {REPORT_KEYS.map((key) => (
           <button
             key={key}

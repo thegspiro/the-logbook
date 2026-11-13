@@ -261,8 +261,8 @@ describe('ApprovalsPage', () => {
     const cells = rowFor('Radio repair');
     expect(cells.getByText('Not assigned to you')).toBeInTheDocument();
     expect(cells.getByText('Trustee position')).toBeInTheDocument();
-    expect(cells.getByRole('button', { name: 'Approve Radio repair as approvals admin' })).toBeInTheDocument();
-    expect(cells.getByRole('button', { name: 'Deny Radio repair as approvals admin' })).toBeInTheDocument();
+    expect(cells.getByRole('button', { name: 'Approve as admin: Radio repair' })).toBeInTheDocument();
+    expect(cells.getByRole('button', { name: 'Deny as admin: Radio repair' })).toBeInTheDocument();
     expect(cells.queryByRole('button', { name: 'Approve Radio repair' })).not.toBeInTheDocument();
   });
 
@@ -271,7 +271,7 @@ describe('ApprovalsPage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: 'Approve Radio repair as approvals admin' }));
+    await user.click(await screen.findByRole('button', { name: 'Approve as admin: Radio repair' }));
     expect(within(dialog()).getByRole('heading', { name: 'Approve as approvals admin' })).toBeInTheDocument();
     expect(within(dialog()).getByText(/This step is assigned to/)).toHaveTextContent(
       'This step is assigned to Trustee position.'
@@ -295,7 +295,7 @@ describe('ApprovalsPage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: 'Deny Radio repair as approvals admin' }));
+    await user.click(await screen.findByRole('button', { name: 'Deny as admin: Radio repair' }));
     await user.type(within(dialog()).getByLabelText(/Override reason/), 'Trustee position is vacant');
     await user.click(within(dialog()).getByRole('button', { name: 'Deny as approvals admin' }));
     expect(within(dialog()).getByText('Reason is required.')).toBeInTheDocument();
@@ -314,7 +314,7 @@ describe('ApprovalsPage', () => {
     const user = userEvent.setup();
     renderPage();
 
-    await user.click(await screen.findByRole('button', { name: 'Approve Radio repair as approvals admin' }));
+    await user.click(await screen.findByRole('button', { name: 'Approve as admin: Radio repair' }));
     const field = within(dialog()).getByLabelText(/Override reason/);
     await user.click(field);
     await user.paste('x'.repeat(2001));

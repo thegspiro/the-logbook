@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
@@ -6,6 +6,11 @@ import { TemplateEditor } from './TemplateEditor';
 import { useTemplateDraft } from '../hooks/useTemplateDraft';
 import { COLOURWAYS, EMAIL_BLOCKS, EMAIL_LAYOUTS } from '../constants/blocks';
 import type { EmailTemplate, EmailTemplateUpdate } from '../types';
+
+const getRoles = vi.fn();
+vi.mock('../../../services/api', () => ({
+  roleService: { getRoles: (...args: unknown[]) => getRoles(...args) as unknown },
+}));
 
 const makeTemplate = (overrides: Partial<EmailTemplate> = {}): EmailTemplate => ({
   id: 'tmpl-1',
@@ -241,6 +246,64 @@ describe('TemplateEditor', () => {
   });
 });
 
+describe('CC by position', () => {
+  const secretary = { id: 'pos-sec', name: 'Secretary' };
+  const chief = { id: 'pos-chief', name: 'Chief' };
+
+  beforeEach(() => {
+    getRoles.mockReset();
+    getRoles.mockResolvedValue([secretary, chief]);
+  });
+
+  const ordinary = (overrides: Partial<EmailTemplate> = {}) =>
+    makeTemplate({ template_type: 'event_reminder', always_sent: false, ...overrides });
+
+  it('sends the chosen positions with the save', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<Harness template={ordinary({ default_cc: ['a@dept.org'] })} onSave={onSave} />);
+
+    await user.click(await screen.findByRole('checkbox', { name: 'Secretary' }));
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(onSave).toHaveBeenCalledWith({ default_cc_position_ids: ['pos-sec'] });
+  });
+
+  it('clears the positions with an explicit null', async () => {
+    const user = userEvent.setup();
+    const onSave = vi.fn();
+    render(<Harness template={ordinary({ default_cc_position_ids: ['pos-sec'] })} onSave={onSave} />);
+
+    const box = await screen.findByRole('checkbox', { name: 'Secretary' });
+    expect(box).toBeChecked();
+    await user.click(box);
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(onSave).toHaveBeenCalledWith({ default_cc_position_ids: null });
+  });
+
+  it('keeps the chosen positions when the list cannot be loaded', async () => {
+    getRoles.mockReset();
+    getRoles.mockRejectedValue(new Error('403'));
+    render(<Harness template={ordinary({ default_cc_position_ids: ['pos-sec'] })} />);
+
+    expect(await screen.findByText(/could not be loaded/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 chosen already will keep being copied/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled();
+  });
+
+  it('says a credential email is never copied, and offers no copies', async () => {
+    const user = userEvent.setup();
+    render(<Harness template={makeTemplate({ always_sent: true })} />);
+
+    await user.click(screen.getByRole('button', { name: /default cc \/ bcc/i }));
+
+    expect(screen.getByText(/never copied to anyone/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/default cc/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /cc positions/i })).not.toBeInTheDocument();
+  });
+});
+
 /** A draft object for the one test that renders the editor without a page. */
 function makeDraft() {
   const noop = () => undefined;
@@ -257,6 +320,8 @@ function makeDraft() {
     setDefaultCc: noop,
     defaultBcc: '',
     setDefaultBcc: noop,
+    ccPositionIds: [] as string[],
+    setCcPositionIds: noop,
     headerAccent: '',
     setHeaderAccent: noop,
     statusChip: '',

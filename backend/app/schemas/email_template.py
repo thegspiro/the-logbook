@@ -75,6 +75,7 @@ class EmailTemplateResponse(UTCResponseBase):
     allow_attachments: bool
     default_cc: Optional[List[str]] = None
     default_bcc: Optional[List[str]] = None
+    default_cc_position_ids: Optional[List[str]] = None
     available_variables: List[TemplateVariable] = []
     attachments: List[EmailAttachmentResponse] = []
     # Both are computed per request rather than stored, and both answer a
@@ -171,6 +172,19 @@ class EmailTemplateUpdate(BaseModel):
     allow_attachments: Optional[bool] = None
     default_cc: Optional[List[EmailStr]] = None
     default_bcc: Optional[List[EmailStr]] = None
+    # Positions whose current holders are copied. Checked against the
+    # department's own positions when saved; null or [] copies nobody.
+    default_cc_position_ids: Optional[List[str]] = Field(None, max_length=50)
+
+    @field_validator("default_cc_position_ids")
+    @classmethod
+    def _position_ids_are_ids(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        if value is None:
+            return None
+        cleaned = list(dict.fromkeys(v.strip() for v in value if v and v.strip()))
+        if any(len(v) > 36 for v in cleaned):
+            raise ValueError("Each CC position must be a position id.")
+        return cleaned
 
     @field_validator("header_accent")
     @classmethod
