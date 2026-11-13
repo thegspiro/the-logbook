@@ -802,6 +802,20 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Waiver requests nobody decides close after seven days (2026-11-13)
+
+Nothing blocks a restart, and no migration is involved.
+
+- **A new hourly task, `attendance_waiver_expiry`, closes undecided waiver
+  requests** (training sessions and business meetings) seven days after the
+  session, as the owner decided. **Its first run after the upgrade closes
+  every request already past that point at once**, and each member whose
+  request closes gets an in-app notice and an email. An officer who wants to
+  decide old requests rather than let them close should do so before
+  upgrading: `/attendance-waivers` lists them.
+- An expired request counts as an absence. Nothing is written to a meeting's
+  roll call, and no training requirement is excused.
+
 ### Training: documents on waiver requests, kept a year (2026-11-11)
 
 Nothing blocks a restart. Migration `86722d75b5a2` creates one empty table,

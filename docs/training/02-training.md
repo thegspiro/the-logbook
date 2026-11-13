@@ -2531,6 +2531,26 @@ This one page covers:
 > The rules are in `backend/app/docs/TRAINING_WAIVERS.md`, under "Session
 > Waiver Requests".
 
+### Requests nobody decides close after seven days _(2026-11-13)_
+
+A member's request to be excused that nobody has approved or denied by seven
+days after the session closes on its own. Its status becomes **Expired**, the
+session counts as missed, and the member is told in the app and by email. It
+cannot be decided after that, and the Chief's override applies only to a
+denial.
+
+- **When.** At the end of the seventh day after the session, in your
+  department's timezone, or later if your deadline would still let the member
+  ask by then (for a session that runs over several days). A request still
+  waiting on a question to the member, or on the member to confirm a moved
+  date, closes the same way.
+- **Where you see it.** A pending request shows **Closes undecided on** and
+  the date and time on the member's **My Waiver Requests** list, in the
+  approver's queue and on the request's own page. Expired requests are listed
+  with the decided ones.
+- **In the annual review** the waiver summary counts them as **expired**, on
+  their own, not as denials.
+
 ### Creating a Waiver
 
 1. Select the **Create Waiver** tab.
