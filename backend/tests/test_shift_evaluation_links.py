@@ -69,9 +69,16 @@ def _answers(**overrides):
 
 
 def _aware(value):
-    """UTC, to the second: MySQL DATETIME keeps no microseconds."""
-    aware = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-    return aware.replace(microsecond=0)
+    """UTC-aware, for comparing a stored DATETIME (which reads back naive)."""
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+async def _stored(db, *rows):
+    """Read rows back as stored. DATETIME keeps no microseconds, and MySQL 8
+    rounds them where MariaDB truncates, so a stored value is compared only
+    with another stored value, never with one still held in memory."""
+    for row in rows:
+        await db.refresh(row)
 
 
 async def _with_positions(db, user):
@@ -97,6 +104,7 @@ class TestMakingALink:
         assert link.created_by_member is True
         assert link.token_hash == ShiftEvaluationLink.hash_token(link.token)
         assert link.token not in link.token_hash
+        await _stored(db_session, link, entry)
         assert _aware(link.expires_at) == _aware(entry.end_at) + timedelta(days=7)
 
     async def test_the_department_sets_the_window(self, db_session):
@@ -112,6 +120,7 @@ class TestMakingALink:
         link = await _link(db_session, scene, entry, creator=scene.officer)
 
         assert link.created_by_member is False
+        await _stored(db_session, link, entry)
         assert _aware(link.expires_at) == _aware(entry.end_at) + timedelta(days=3)
 
     async def test_a_shift_past_its_window_gets_no_link(self, db_session):
