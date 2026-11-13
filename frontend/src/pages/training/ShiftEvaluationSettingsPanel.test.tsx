@@ -331,3 +331,59 @@ describe('ShiftEvaluationSettingsPanel — unsaved settings survive template edi
     expect(screen.getByRole('checkbox', { name: /One evaluation counts for every program/ })).toBeChecked();
   });
 });
+
+describe('ShiftEvaluationSettingsPanel — preceptor link window', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockList.mockReset();
+    mockList.mockResolvedValue([]);
+    mockListOutstanding.mockReset();
+    mockListOutstanding.mockResolvedValue([]);
+    mockGetSettings.mockReset();
+    mockGetSettings.mockResolvedValue({ ...offSettings, shift_evaluation_link_days: 7 });
+    mockUpdateSettings.mockReset();
+    mockUpdateSettings.mockImplementation((body: Record<string, unknown>) =>
+      Promise.resolve({ ...offSettings, ...body })
+    );
+  });
+
+  it('takes a two-digit number typed over the old one', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftEvaluationSettingsPanel />);
+
+    const days = await screen.findByLabelText(/Preceptor links stay open for/);
+    await user.clear(days);
+    await user.type(days, '30');
+    expect(days).toHaveValue(30);
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ shift_evaluation_link_days: 30 })
+      )
+    );
+  });
+
+  it('brings a number out of range to the nearer end when the field is left', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftEvaluationSettingsPanel />);
+
+    const days = await screen.findByLabelText(/Preceptor links stay open for/);
+    await user.clear(days);
+    await user.type(days, '90');
+    await user.tab();
+
+    expect(days).toHaveValue(60);
+  });
+
+  it('puts back the last valid number when the field is left empty', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ShiftEvaluationSettingsPanel />);
+
+    const days = await screen.findByLabelText(/Preceptor links stay open for/);
+    await user.clear(days);
+    await user.tab();
+
+    expect(days).toHaveValue(7);
+  });
+});
