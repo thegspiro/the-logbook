@@ -39,6 +39,10 @@ settings. Beneath it are **Dashboard**, **Opportunities**, **Applications**,
 **Campaigns**, **Donors**, **Donations**, **Pledges**, **Events**, **Zeffy** and
 **Reports**.
 
+<!-- Screenshot needed:
+The sidebar with Grants & Fundraising expanded, as an administrator: Dashboard through Reports with Zeffy between Events and Reports, Zeffy selected.
+-->
+
 ### Permissions
 
 Two permissions control the module. The Role Management screen lists them as:
@@ -754,6 +758,10 @@ At the top of the page:
 
 **Sync now** reads Zeffy at once instead of waiting for the hour.
 
+<!-- Screenshot needed:
+Grants & Fundraising, Zeffy page as a fundraising manager with Zeffy connected: the Connection panel, the Campaigns cards (linked ones naming their record and start date, one Not linked), and the Payments list with its status filter and a mix of statuses.
+-->
+
 ### Linking a Campaign
 
 **Required Permission:** Manage fundraising
@@ -778,6 +786,10 @@ recorded only** until you link it.
 3. Choose the campaign, event or dues schedule.
 4. Decide **Apply payments made on or after** (see below).
 5. Select **Save link**.
+
+<!-- Screenshot needed:
+The Link Zeffy campaign dialog for a donation campaign: Record payments as Fundraising campaign with its explanation, a campaign chosen, and Apply payments made on or after left blank with its warning about counting gifts twice.
+-->
 
 Payments Zeffy already reported for that campaign are applied straight away, if
 they fall on or after the start date.
