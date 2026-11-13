@@ -85,6 +85,19 @@ async def _people(db, org_id) -> list[HistoricalMember]:
 
 
 class TestDraft:
+    async def test_a_new_draft_reads_back_on_a_database_without_returning(
+        self, db_session, dept, monkeypatch
+    ):
+        # MySQL 8 has no INSERT ... RETURNING, so a database-set created_at is
+        # not handed back with the insert; MariaDB's is. Turn it off here to
+        # stand in for MySQL, which is where the draft's response first broke.
+        dialect = db_session.bind.dialect
+        monkeypatch.setattr(dialect, "insert_returning", False)
+        monkeypatch.setattr(dialect, "insert_executemany_returning", False)
+        draft = await _draft(db_session, dept, "Smith,John,,,,,,\n")
+        detail = await HistoryImportService(db_session).detail(draft)
+        assert detail["created_at"] is not None
+
     async def test_the_cells_are_stored_encrypted(self, db_session, dept):
         draft = await _draft(db_session, dept, "Smith,John,14,1951,,,1929-03-02,\n")
         raw = await db_session.execute(

@@ -115,6 +115,10 @@ class HistoryImportService:
         )
         self.db.add(draft)
         await self.db.flush()
+        # created_at is set by the database. MariaDB hands it back with the
+        # INSERT (RETURNING); MySQL does not, and reading it later from an
+        # async session raises MissingGreenlet. Load it now, on both.
+        await self.db.refresh(draft)
         for line_number, raw in rows:
             self.db.add(
                 HistoryImportRow(
