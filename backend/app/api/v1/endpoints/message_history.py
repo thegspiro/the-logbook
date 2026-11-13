@@ -232,6 +232,9 @@ async def send_test_email(
         db=db,
         template_type=template_type,
         sent_by=current_user.id,
+        # A test goes to the admin who asked for it, never to the
+        # template's CC list.
+        apply_template_copies=False,
     )
     await db.commit()
 

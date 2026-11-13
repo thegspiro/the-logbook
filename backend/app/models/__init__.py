@@ -44,6 +44,7 @@ from app.models.apparatus import (
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
     AttendanceWaiverAttachment,
+    AttendanceWaiverEmailSend,
     AttendanceWaiverRequest,
     AttendanceWaiverRequestAction,
     AttendanceWaiverStatus,
@@ -640,6 +641,7 @@ __all__ = [
     "AttendanceWaiverAttachment",
     "AttendanceWaiverRequest",
     "AttendanceWaiverRequestAction",
+    "AttendanceWaiverEmailSend",
     "AttendanceWaiverStatus",
     "AttendanceWaiverWorkflow",
     # Error log models
