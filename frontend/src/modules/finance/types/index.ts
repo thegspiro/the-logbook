@@ -173,44 +173,46 @@ export interface ApprovalRoutePreview {
 // Status Badge Color Mappings (Tailwind classes)
 // =============================================================================
 
+// -900 / -300 text, not the -800 / -400 that badges elsewhere use: a badge is
+// 12px text, which needs 7:1 to clear AAA. green-800 on green-100 is 6.49:1,
+// and a -400 tint over the high-contrast theme's black ground 6.2-6.9:1. The
+// mobile accessibility sweep holds every finance screen's AAA budget at zero.
+// Cancelled keeps its muted grey: gray-700 on gray-200 still clears 7:1.
+
 export const PURCHASE_REQUEST_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  ordered: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
-  received: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
-  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  reimbursed: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
+  draft: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  submitted: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  pending_approval: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  approved: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  denied: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  ordered: 'bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-300',
+  received: 'bg-teal-100 text-teal-900 dark:bg-teal-500/20 dark:text-teal-300',
+  paid: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300',
+  reimbursed: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300',
+  cancelled: 'bg-gray-200 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
 };
 
 export const EXPENSE_REPORT_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  paid: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
+  draft: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  submitted: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  pending_approval: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  approved: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  denied: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  paid: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300',
+  cancelled: 'bg-gray-200 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
 };
 
 export const CHECK_REQUEST_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  submitted: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  pending_approval: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  issued: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  voided: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
-  cancelled: 'bg-gray-200 text-gray-600 dark:bg-gray-500/20 dark:text-gray-400',
+  draft: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  submitted: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  pending_approval: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  approved: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  denied: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  issued: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-500/20 dark:text-emerald-300',
+  voided: 'bg-orange-100 text-orange-900 dark:bg-orange-500/20 dark:text-orange-300',
+  cancelled: 'bg-gray-200 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
 };
 
-// -900 / -300 rather than the -800 / -400 the other status maps use: a dues
-// badge is 12px text, which needs 7:1 to clear AAA, and green-800 on green-100
-// (6.49:1) and red-400 on its tint over the high-contrast black (6.16:1) did
-// not. The mobile accessibility sweep holds this page's AAA budget at zero.
 export const DUES_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
   paid: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
@@ -221,12 +223,12 @@ export const DUES_STATUS_COLORS: Record<string, string> = {
 };
 
 export const APPROVAL_STEP_STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
-  approved: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  denied: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  skipped: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  auto_approved: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
-  sent: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
+  pending: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  approved: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  denied: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  skipped: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  auto_approved: 'bg-teal-100 text-teal-900 dark:bg-teal-500/20 dark:text-teal-300',
+  sent: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
 };
 
 /** Exact base-10 monetary value serialized by the API. */

@@ -990,6 +990,114 @@ export const ALL_ROUTES: RouteCheck[] = [
     permissions: ['finance.view', 'finance.manage'],
     expectText: 'Collection Rate',
   },
+  //: The rest of Finance. Each sat in the inventory as exempt under the
+  //: generated "covered by its representative module route" sentence, and none
+  //: could have been measured: the catch-all's `{}` drew every list as empty,
+  //: and took budget amendments and reports down through the ErrorBoundary.
+  //: The fixtures in helpers.ts give each a populated body, and `expectText` is
+  //: a string only that populated body draws. The manage grant is on every one
+  //: so the officer controls are measured too; the two that need more come last.
+  //: Written out rather than mapped from a list: mobile-route-integrity.spec.ts
+  //: finds each path in this file as an object literal's first key, so it
+  //: would not see a mapped one.
+  {
+    path: '/finance/budgets',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'Apparatus Maintenance',
+  },
+  {
+    path: '/finance/my-budgets',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'Apparatus Maintenance',
+  },
+  {
+    path: '/finance/budget-requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'No request yet',
+  },
+  {
+    path: '/finance/budget-requests/review',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'Apparatus Maintenance',
+  },
+  {
+    path: '/finance/budget-amendments',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'Grant award for turnout gear replacement',
+  },
+  {
+    path: '/finance/purchase-requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'PR-2026-0012',
+  },
+  {
+    path: '/finance/expenses',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'ER-2026-0031',
+  },
+  {
+    path: '/finance/check-requests',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'CR-2026-0008',
+  },
+  {
+    path: '/finance/my-dues',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: '2026 Annual Membership Dues',
+  },
+  {
+    path: '/finance/reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'Apparatus Maintenance',
+  },
+  {
+    path: '/finance/settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'FY 2026',
+  },
+  {
+    path: '/finance/settings/quickbooks',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage'],
+    expectText: 'QuickBooks Export',
+  },
+  {
+    path: '/finance/approvals',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage', 'finance.approve'],
+    expectText: 'Replacement SCBA cylinders (6)',
+  },
+  {
+    path: '/finance/settings/approval-chains',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['finance.view', 'finance.manage', 'finance.configure_approvals'],
+    expectText: 'Purchases over $1,000',
+  },
   { path: '/grants', maxSmallTargets: 0, maxTinyText: 0, permissions: ['fundraising.view'] },
   { path: '/reports', maxSmallTargets: 0, maxTinyText: 0, permissions: ['reports.view'] },
   { path: '/reports/saved', maxSmallTargets: 0, maxTinyText: 0, permissions: ['reports.view', 'reports.manage'] },
