@@ -5,7 +5,7 @@
 import React from 'react';
 import { formatCalendarDate } from '../../../../utils/dateFormatting';
 import type { DataEntry, EvaluationDataSource, ExcludedRange } from '../../types/evaluations';
-import { formatFigure } from '../../utils/evaluationRecord';
+import { figureDetail, formatFigure } from '../../utils/evaluationRecord';
 
 interface FiguresPanelProps {
   title: string;
@@ -55,6 +55,7 @@ export const FiguresPanel: React.FC<FiguresPanelProps> = ({
       <dl className="mt-4 grid gap-3 sm:grid-cols-2">
         {sources.map((source) => {
           const entry = data[source.key];
+          const detail = figureDetail(source.key, entry);
           return (
             <div key={source.key} className="card-secondary p-3">
               <dt className="text-theme-text-secondary text-sm">{source.label}</dt>
@@ -63,6 +64,7 @@ export const FiguresPanel: React.FC<FiguresPanelProps> = ({
               >
                 {formatFigure(entry, source.unit)}
               </dd>
+              {detail && <dd className="text-theme-text-secondary mt-0.5 text-xs">{detail}</dd>}
             </div>
           );
         })}
