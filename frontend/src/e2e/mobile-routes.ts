@@ -1099,6 +1099,74 @@ export const ALL_ROUTES: RouteCheck[] = [
     expectText: 'Purchases over $1,000',
   },
   { path: '/grants', maxSmallTargets: 0, maxTinyText: 0, permissions: ['fundraising.view'] },
+  //: The rest of Grants & Fundraising, on the same footing as Finance above:
+  //: exempt under the generated sentence, drawn empty by the catch-all, and
+  //: Zeffy and Reports taken down through the ErrorBoundary. The fixtures in
+  //: helpers.ts give each a populated body, and `expectText` is a string only
+  //: that body draws; the manage grant measures the officer controls too.
+  {
+    path: '/grants/opportunities',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Assistance to Firefighters Grant (AFG)',
+  },
+  {
+    path: '/grants/applications',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'State Volunteer Fire Assistance',
+  },
+  {
+    path: '/grants/campaigns',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Thermal Imaging Camera Drive',
+  },
+  {
+    path: '/grants/donors',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Harrington Family Foundation',
+  },
+  {
+    path: '/grants/donations',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Oakville Hardware & Supply',
+  },
+  {
+    path: '/grants/pledges',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Oakville Hardware & Supply',
+  },
+  {
+    path: '/grants/events',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Pancake Breakfast',
+  },
+  {
+    path: '/grants/zeffy',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'D. Alvarez',
+  },
+  {
+    path: '/grants/reports',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['fundraising.view', 'fundraising.manage'],
+    expectText: 'Total Applications',
+  },
   { path: '/reports', maxSmallTargets: 0, maxTinyText: 0, permissions: ['reports.view'] },
   { path: '/reports/saved', maxSmallTargets: 0, maxTinyText: 0, permissions: ['reports.view', 'reports.manage'] },
   {
