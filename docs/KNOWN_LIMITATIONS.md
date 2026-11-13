@@ -656,8 +656,46 @@ an erasure request, a public-website question or a large upload knows it.
   When photos and media arrive (phase 3) uploads stay under the 60 MB proxy
   limit every nginx configuration sets (`client_max_body_size 60M`) — 55 MB
   per file was agreed; long recordings wait for chunked uploads.
-- **Person merge and bulk import are phase 2.** Until then a duplicate is
-  warned about at entry but two records for one person are combined by hand.
+- **Person merge and bulk import are phase 2.** ✅ **Shipped 2026-11-13.**
+  Until then a duplicate was warned about at entry but two records for one
+  person were combined by hand. The decisions they ship with are below.
+- **An import never creates a login account (owner decision, 2026-11-03).**
+  A roster row is matched to an existing history record, mapped to an existing
+  member account, created as a new unlinked record, or skipped. A former
+  member who never had an account stays a history record only.
+- **A matched row only fills what is empty.** Names, badge, birth and death
+  dates, the line-of-duty flag and the notes are written only where the record
+  has nothing; what the Historian entered always wins, and a row's notes are
+  dropped where the record already has research notes. The row's service
+  period is added unless an identical one is already there.
+- **A blank "Left" means unknown, not still serving.** Only `present` (or
+  `current`, `now`) makes a service period ongoing.
+- **Slashed dates are read month first** (`6/14/1952` is 14 June). One whose
+  month would be over 12 is reported for correction, never swapped.
+- **Import drafts are deleted 30 days after anyone last worked on them**
+  (owner decision, 30 days; measured from the last change rather than the
+  upload, so a large roster reviewed over several sittings is not lost). The
+  rows hold the file's personal data encrypted; the import record itself is
+  kept, marked expired, as the audit of what was uploaded.
+- **"Remove this import's records" is not a batch undo.** It deletes only the
+  records the import created that are still drafts and that nobody has
+  edited, published, reviewed, linked to family or merged since; each one kept
+  is named with the reason. What the import added to existing records stays.
+- **A review screen reloads the whole draft after each decision.** Fine for a
+  department roster; a 5,000-row file answers each click in a second or two.
+- **Merging keeps the kept record's publication level** (choice made in the
+  phase 2 spec). If the removed record was published more widely, the merge
+  screen says so before the merge, and the Historian publishes again
+  afterwards. A merge into a public record is a substantial edit, so the public
+  keeps the last cleared version until the result is cleared.
+- **A merge deletes the removed record's clearance requests.** Clearance is
+  decided by revision number, so a request cleared for the removed record
+  could otherwise vouch for a revision of the kept one that nobody reviewed.
+  The change history, which moves to the kept record, still records every step
+  of that review.
+- **A memorial or line-of-duty designation on either record carries through a
+  merge.** A flag that is off is treated as an absence, not as a value that
+  competes with the other record's.
 - **Reading published history needs no permission.** Any signed-in member of a
   department with the module on reads what is published to members. This was
   chosen over a `history.view` grant on every position, which would have

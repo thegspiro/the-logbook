@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**369 tables · 5963 columns · 1236 foreign keys**
+**373 tables · 6007 columns · 1249 foreign keys**
 
 ---
 
@@ -362,10 +362,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`historical_member_period_titles`](#historical_member_period_titles) | `HistoricalMemberPeriodTitle` | 2 | A title held during one service period. |
 | [`historical_member_relations`](#historical_member_relations) | `HistoricalMemberRelation` | 8 | A family link between two people, stored once and read from both ends. |
 | [`historical_member_service_periods`](#historical_member_service_periods) | `HistoricalMemberServicePeriod` | 12 | One stretch of service. A person who left and rejoined has several. |
-| [`historical_members`](#historical_members) | `HistoricalMember` | 37 | A person who served the department, as the archive records them. |
+| [`historical_members`](#historical_members) | `HistoricalMember` | 39 | A person who served the department, as the archive records them. |
 | [`history_clearance_decisions`](#history_clearance_decisions) | `HistoryClearanceDecision` | 9 | One step's decision on one request. |
 | [`history_clearance_requests`](#history_clearance_requests) | `HistoryClearanceRequest` | 12 | One submission of one revision through the clearance list. |
 | [`history_clearance_steps`](#history_clearance_steps) | `HistoryClearanceStep` | 7 | One step in a department's clearance list, in order. |
+| [`history_import_rows`](#history_import_rows) | `HistoryImportRow` | 12 | One line of an uploaded file, with the Historian's decision about it. |
+| [`history_import_title_mappings`](#history_import_title_mappings) | `HistoryImportTitleMapping` | 9 | A department's remembered answer for one title text an import met. |
+| [`history_imports`](#history_imports) | `HistoryImport` | 14 | One uploaded roster file, from draft through commit. |
+| [`history_record_redirects`](#history_record_redirects) | `HistoryRecordRedirect` | 7 | Where a merged-away record's address now leads. |
 | [`history_revisions`](#history_revisions) | `HistoryRevision` | 10 | One entry in an archive record's change history. |
 | [`history_titles`](#history_titles) | `HistoryTitle` | 10 | One entry in a department's managed list of historical titles. |
 
@@ -5836,6 +5840,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `public_revision_number` | INTEGER | yes |  |  |  |
 | `substantial_revision_number` | INTEGER | no |  | `1` |  |
 | `revision_number` | INTEGER | no |  | `1` |  |
+| `import_id` | VARCHAR(36) | yes | FK, IDX |  | → `history_imports.id` ON DELETE SET NULL |
+| `import_revision_number` | INTEGER | yes |  |  |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -5843,6 +5849,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
+- `ix_historical_members_import` (`import_id`)
 - `ix_historical_members_org_last` (`organization_id`, `last_name`)
 - `ix_historical_members_org_level` (`organization_id`, `publication_level`)
 - `ix_historical_members_org_lodd` (`organization_id`, `is_line_of_duty_death`)
@@ -5914,6 +5921,105 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_history_clearance_steps_org` (`organization_id`, `step_order`)
+
+### `history_import_rows`
+
+**HistoryImportRow** · `app/models/history.py`
+
+> One line of an uploaded file, with the Historian's decision about it. The cells and edits are encrypted: a roster file carries birth dates and notes about people who may still be living. No ``organization_id``: reached only through its import, which is.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `import_id` | VARCHAR(36) | no | FK, IDX |  | → `history_imports.id` ON DELETE CASCADE |
+| `line_number` | INTEGER | no |  |  |  |
+| `cells` | TEXT | no |  |  |  |
+| `edits` | TEXT | yes |  |  |  |
+| `suggestions` | JSON | yes |  |  |  |
+| `decision` | ENUM(`match`, `map`, `create`, `skip`, `same_as`) | yes |  |  |  |
+| `target_member_id` | VARCHAR(36) | yes | FK |  | → `historical_members.id` ON DELETE SET NULL |
+| `target_user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `target_row_id` | VARCHAR(36) | yes | FK |  | → `history_import_rows.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_import_rows_import` (`import_id`, `line_number`)
+
+### `history_import_title_mappings`
+
+**HistoryImportTitleMapping** · `app/models/history.py`
+
+> A department's remembered answer for one title text an import met. Keyed on the same casefolded form the title list uses, so "asst. chief" in next year's file finds the answer given for "Asst. Chief" this year.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `source_key` | VARCHAR(150) | no |  |  |  |
+| `source_text` | VARCHAR(150) | no |  |  |  |
+| `action` | ENUM(`map`, `create`, `drop`) | no |  |  |  |
+| `title_id` | VARCHAR(36) | yes | FK |  | → `history_titles.id` ON DELETE SET NULL |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_history_import_title_key` (`organization_id`, `source_key`)
+
+### `history_imports`
+
+**HistoryImport** · `app/models/history.py`
+
+> One uploaded roster file, from draft through commit. The record outlives its rows: after a commit it is the audit of what was imported and the anchor "Remove this import's records" works from. The rows, which hold the file's personal data, are deleted on commit, on discard and when an untouched draft expires.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `status` | ENUM(`draft`, `committed`, `discarded`, `expired`) | no | IDX | `'draft'` |  |
+| `source_filename` | VARCHAR(255) | no |  |  |  |
+| `headers` | JSON | no |  |  |  |
+| `column_mapping` | JSON | no |  |  |  |
+| `row_count` | INTEGER | no |  | `0` |  |
+| `summary` | JSON | yes |  |  |  |
+| `expires_at` | DATETIME | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `committed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `committed_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_imports_org_status` (`organization_id`, `status`)
+- `ix_history_imports_status_expires` (`status`, `expires_at`)
+
+### `history_record_redirects`
+
+**HistoryRecordRedirect** · `app/models/history.py`
+
+> Where a merged-away record's address now leads. By ``record_type`` and id rather than a foreign key, like revisions, so the same table serves every kind of archive record. Never chained: a later merge of the surviving record re-points every redirect that led to it.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `record_type` | VARCHAR(30) | no |  |  |  |
+| `old_id` | VARCHAR(36) | no |  |  |  |
+| `new_id` | VARCHAR(36) | no |  |  |  |
+| `merged_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_redirects_new` (`organization_id`, `record_type`, `new_id`)
+
+**Constraints**
+
+- UNIQUE `uq_history_redirect_old` (`organization_id`, `record_type`, `old_id`)
 
 ### `history_revisions`
 
@@ -12764,7 +12870,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (451 references)
+### → `users` (456 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -12963,6 +13069,11 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `historical_staffing_files` | `created_by` | SET NULL | yes |
 | `history_clearance_decisions` | `decided_by` | SET NULL | yes |
 | `history_clearance_requests` | `submitted_by` | SET NULL | yes |
+| `history_import_rows` | `target_user_id` | SET NULL | yes |
+| `history_import_title_mappings` | `updated_by` | SET NULL | yes |
+| `history_imports` | `committed_by` | SET NULL | yes |
+| `history_imports` | `created_by` | SET NULL | yes |
+| `history_record_redirects` | `merged_by` | SET NULL | yes |
 | `history_revisions` | `actor_id` | SET NULL | yes |
 | `history_titles` | `created_by` | SET NULL | yes |
 | `instructor_qualifications` | `created_by` | SET NULL | yes |
@@ -13220,7 +13331,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (304 references)
+### → `organizations` (307 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13357,6 +13468,9 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `historical_staffing_files` | `organization_id` | CASCADE | no |
 | `history_clearance_requests` | `organization_id` | CASCADE | no |
 | `history_clearance_steps` | `organization_id` | CASCADE | no |
+| `history_import_title_mappings` | `organization_id` | CASCADE | no |
+| `history_imports` | `organization_id` | CASCADE | no |
+| `history_record_redirects` | `organization_id` | CASCADE | no |
 | `history_revisions` | `organization_id` | CASCADE | no |
 | `history_titles` | `organization_id` | CASCADE | no |
 | `imported_source_records` | `organization_id` | CASCADE | no |
@@ -14027,6 +14141,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `imported_source_records` | `historical_import_id` | SET NULL | yes |
 | `shift_history_imports` | `historical_import_id` | SET NULL | yes |
 
+### → `historical_members` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_member_relations` | `member_id` | CASCADE | no |
+| `historical_member_relations` | `related_member_id` | CASCADE | no |
+| `historical_member_service_periods` | `member_id` | CASCADE | no |
+| `history_import_rows` | `target_member_id` | SET NULL | yes |
+
 ### → `meetings` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -14103,14 +14226,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_requests` | `form_submission_id` | SET NULL | yes |
 | `prospect_form_requests` | `submission_id` | SET NULL | yes |
 | `prospective_members` | `form_submission_id` | SET NULL | yes |
-
-### → `historical_members` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `historical_member_relations` | `member_id` | CASCADE | no |
-| `historical_member_relations` | `related_member_id` | CASCADE | no |
-| `historical_member_service_periods` | `member_id` | CASCADE | no |
 
 ### → `inventory_vendors` (3 references)
 
@@ -14272,6 +14387,20 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `zeffy_campaign_links` | `fundraising_event_id` | SET NULL | yes |
 | `zeffy_payments` | `fundraising_event_id` | SET NULL | yes |
+
+### → `history_imports` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_members` | `import_id` | SET NULL | yes |
+| `history_import_rows` | `import_id` | CASCADE | no |
+
+### → `history_titles` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_member_period_titles` | `title_id` | RESTRICT | no |
+| `history_import_title_mappings` | `title_id` | SET NULL | yes |
 
 ### → `integrations` (2 references)
 
@@ -14534,11 +14663,11 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `history_clearance_decisions` | `request_id` | CASCADE | no |
 
-### → `history_titles` (1 references)
+### → `history_import_rows` (1 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `historical_member_period_titles` | `title_id` | RESTRICT | no |
+| `history_import_rows` | `target_row_id` | SET NULL | yes |
 
 ### → `inventory_nfc_audits` (1 references)
 
@@ -14756,6 +14885,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `historical_member_service_periods` | `historical_members` |
 | `historical_staffing_rows` | `historical_staffing_files` |
 | `history_clearance_decisions` | `history_clearance_requests`, `users` |
+| `history_import_rows` | `historical_members`, `history_import_rows`, `history_imports`, `users` |
 | `ip_exception_audit_log` | `ip_exceptions`, `users` |
 | `meeting_motions` | `elections`, `meeting_minutes` |
 | `membership_pipeline_steps` | `email_templates`, `membership_pipelines` |
