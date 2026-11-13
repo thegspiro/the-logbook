@@ -231,6 +231,7 @@ EMPTY = {
     "withdrawn": 0,
     "pending": 0,
     "voided": 0,
+    "expired": 0,
 }
 
 

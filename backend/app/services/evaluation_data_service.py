@@ -1117,13 +1117,16 @@ def _waiver_summary(rows: Sequence[_WaiverRow]) -> Dict[str, Any]:
         "withdrawn": statuses.count(AttendanceWaiverStatus.WITHDRAWN),
         "pending": statuses.count(AttendanceWaiverStatus.PENDING),
         "voided": statuses.count(AttendanceWaiverStatus.VOIDED),
+        # Closed undecided seven days after the session (owner decision,
+        # 2026-11-13): an absence, and not a denial, so its own figure.
+        "expired": statuses.count(AttendanceWaiverStatus.EXPIRED),
     }
     approved_text = f"{approved} approved"
     if overridden:
         approved_text += f" ({overridden} on the Chief's override)"
     parts = [approved_text] + [
         f"{counts[field]} {field}"
-        for field in ("denied", "withdrawn", "pending", "voided")
+        for field in ("denied", "withdrawn", "pending", "voided", "expired")
         if counts[field] or field in ("denied", "withdrawn")
     ]
     return _value(len(rows), **counts, breakdown=", ".join(parts))

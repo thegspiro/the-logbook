@@ -2279,6 +2279,15 @@ many were waived, for example "Attended 4 of 11 meetings counted (the last
 
 The percentage rule, and this dashboard, are unchanged.
 
+### Meeting waiver requests nobody decides close after seven days _(2026-11-13)_
+
+A member's request to be excused from a business meeting that nobody has
+approved or denied by the end of the seventh day after the meeting (in your
+department's timezone, or later if your request deadline would still allow it)
+closes on its own as **Expired**. The meeting counts as missed: nothing is
+written to the minutes' roll call, which only an approval does. The member is
+told in the app and by email, and the request can no longer be decided.
+
 ---
 
 ## Elections and Voting

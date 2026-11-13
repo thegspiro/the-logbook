@@ -261,6 +261,9 @@ class AttendanceWaiverRequestResponse(UTCResponseBase):
     decided_by: Optional[str] = None
     decided_by_name: Optional[str] = None
     chief_override: bool
+    # When a pending request closes undecided (expires_at_for); None once it
+    # is settled. Screens show it rather than working it out.
+    expires_at: Optional[datetime] = None
     # Open while a decider's question waits on the member's answer.
     info_requested_at: Optional[datetime] = None
     # Open while a rescheduled session waits on the member to confirm.

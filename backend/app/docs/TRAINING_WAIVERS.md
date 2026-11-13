@@ -291,8 +291,8 @@ notification.
 
 **In the annual review.** An evaluation template can show a member's requests
 for the review period, by session date: `training.session_waivers_summary`
-(how many were made, approved, overridden, denied, withdrawn, pending and
-voided) and `training.session_waiver_history` (one line per request: session,
+(how many were made, approved, overridden, denied, withdrawn, pending,
+voided and expired) and `training.session_waiver_history` (one line per request: session,
 outcome with who decided, category). Neither shows the reason, a decider's
 note or an attachment, and neither can be scored. See
 `docs/EVALUATIONS_MODULE.md`, "Figures".
@@ -327,6 +327,38 @@ only to a Chief.
 | `POST` | `/api/v1/training/waivers/requests/with-attachments`                 | Any authenticated user, for themselves        |
 | `POST` | `/api/v1/training/waivers/requests/{id}/attachments`                 | The member, while pending                     |
 | `GET`  | `/api/v1/training/waivers/requests/{id}/attachments/{attachment_id}` | The member, or someone who may decide         |
+
+### Expiry seven days after the session
+
+Owner decision, 2026-11-13: a request nobody has decided by seven days after
+the session closes on its own, as **Expired**, for both workflows. Undecided
+means pending, including while it waits on a decider's question or on the
+member to confirm a moved date.
+
+**When.** The later of the end of the seventh day after the session on the
+department's calendar (its timezone, so a request for a drill on 20 November
+closes at midnight between 27 and 28 November local time) and the moment a
+`7d_after_end` deadline would close for the event, so a request can never
+close while it could still be made. Every pending request's response carries
+the instant as `expires_at`, computed by `expires_at_for` in
+`attendance_waiver_service.py`; the screens show it rather than work it out.
+
+**What happens.** The hourly `attendance_waiver_expiry` task sets the status
+to `expired`, frees the session's slot, clears an open question or
+reconfirmation, writes an `expired` step with no actor to the decision log,
+archives the deciders' prompts, tells the member in the app and by email
+("…was not decided within seven days of the session and has closed; the
+session counts as missed"), and audits `attendance_waiver_request_expired`
+with ids only. Each request is expired in its own transaction, guarded on
+the status still being pending under its lock, so a second run or a second
+worker changes nothing; the email goes after the commit, so a crash can lose
+it but never send it twice (the in-app notice is committed with the expiry).
+
+**An expired request is an absence.** Nothing excuses it: the graders and the
+meeting attendance figures read only approved requests. It can no longer be
+approved, denied or withdrawn, and the Chief's override applies only to a
+denial. The annual review counts it as `expired`, its own figure, not a
+denial. Its documents follow the retention period from the day it closed.
 
 ---
 

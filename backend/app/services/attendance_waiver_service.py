@@ -73,6 +73,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from zoneinfo import ZoneInfo
 
 from loguru import logger
 from sqlalchemy import false, func, or_, select
@@ -135,7 +136,11 @@ from app.services.training_compliance import (
     is_session_attendance,
 )
 from app.utils.org_scoping import assert_all_in_org
-from app.utils.org_timezone import local_date, resolve_scheduling_timezone
+from app.utils.org_timezone import (
+    local_date,
+    local_day_start_utc,
+    resolve_scheduling_timezone,
+)
 
 TRAINING_WORKFLOW = AttendanceWaiverWorkflow.TRAINING_SESSION
 MEETING_WORKFLOW = AttendanceWaiverWorkflow.BUSINESS_MEETING
@@ -340,6 +345,33 @@ def deadline_for(preset: str, event: Event) -> datetime:
     if preset in _DEADLINE_OFFSETS:
         return _utc(event.end_datetime) + _DEADLINE_OFFSETS[preset]
     return _utc(event.start_datetime)
+
+
+# An undecided request closes on its own (owner decision, 2026-11-13): "seven
+# days from the day of the event".
+EXPIRY_DAYS = 7
+# The latest deadline a department can choose; expiry never comes before it.
+EXPIRY_DEADLINE_PRESET = "7d_after_end"
+
+
+def expires_at_for(
+    session_date: date, tz: ZoneInfo, event: Optional[Event]
+) -> datetime:
+    """The instant a still-pending request for this session expires, in UTC.
+
+    The one definition, read by the expiry sweep and by every response
+    (``expires_at``), so no screen works it out for itself (pitfall #29). It
+    is the later of the end of the seventh day after the session on the
+    department's calendar (the next local midnight, so a DST day is bounded by
+    the calendar, not by arithmetic) and the moment a ``7d_after_end``
+    deadline would close for the event, while the event exists: the second
+    term means a request can never expire while it could still be submitted,
+    which matters for a session that runs past its own start date.
+    """
+    day_end = local_day_start_utc(session_date + timedelta(days=EXPIRY_DAYS + 1), tz)
+    if event is None:
+        return day_end
+    return max(day_end, deadline_for(EXPIRY_DEADLINE_PRESET, event))
 
 
 def _cap_period_label(period: CapPeriod, day: date, noun: str = "session") -> str:
@@ -1129,6 +1161,8 @@ class AttendanceWaiverService:
             return "This request was withdrawn."
         if request.status == AttendanceWaiverStatus.VOIDED:
             return "This request was voided."
+        if request.status == AttendanceWaiverStatus.EXPIRED:
+            return "This request was not decided in time and has closed."
         return f"This request has already been {request.status.value}."
 
     # ------------------------------------------------------------------
@@ -1378,6 +1412,7 @@ class AttendanceWaiverService:
         policy = await self.get_policy(org_id)
         pool = await self._pool(org_id, policy)
         is_chief = holds_chief_position(viewer)
+        expiries = await self._expiries(org_id, requests)
         actions: Dict[str, List[AttendanceWaiverRequestAction]] = {}
         if with_actions:
             rows = await self.db.execute(
@@ -1439,6 +1474,7 @@ class AttendanceWaiverService:
                         names.get(str(r.decided_by)) if r.decided_by else None
                     ),
                     "chief_override": bool(r.chief_override),
+                    "expires_at": expiries.get(str(r.id)),
                     "can_withdraw": own and r.status == AttendanceWaiverStatus.PENDING,
                     "can_decide": decider
                     and r.status == AttendanceWaiverStatus.PENDING,
@@ -1476,6 +1512,36 @@ class AttendanceWaiverService:
                 }
             )
         return bodies
+
+    async def _expiries(
+        self, org_id: str, requests: Sequence[AttendanceWaiverRequest]
+    ) -> Dict[str, datetime]:
+        """When each pending request in ``requests`` expires, by request id.
+
+        Only pending requests expire, so only theirs is given; the events are
+        loaded once for the page.
+        """
+        pending = [r for r in requests if r.status == AttendanceWaiverStatus.PENDING]
+        if not pending:
+            return {}
+        tz = await resolve_scheduling_timezone(self.db, org_id)
+        event_ids = sorted({str(r.event_id) for r in pending if r.event_id})
+        events: Dict[str, Event] = {}
+        if event_ids:
+            rows = await self.db.execute(
+                select(Event).where(
+                    Event.organization_id == org_id, Event.id.in_(event_ids)
+                )
+            )
+            events = {str(e.id): e for e in rows.scalars().all()}
+        return {
+            str(r.id): expires_at_for(
+                r.session_date,
+                tz,
+                events.get(str(r.event_id)) if r.event_id else None,
+            )
+            for r in pending
+        }
 
     async def _names(self, org_id: str, user_ids: Iterable[str]) -> Dict[str, str]:
         ids = list({str(u) for u in user_ids if u})

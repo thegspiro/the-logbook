@@ -4,8 +4,13 @@
  * none of them decides anything (CLAUDE.md pitfall #29).
  */
 
-import type { AttendanceWaiverActionEntry, AttendanceWaiverEligibility } from '../types/attendanceWaiver';
-import { AttendanceWaiverCapPeriod } from '../constants/enums';
+import type {
+  AttendanceWaiverActionEntry,
+  AttendanceWaiverEligibility,
+  AttendanceWaiverRequest,
+} from '../types/attendanceWaiver';
+import { AttendanceWaiverCapPeriod, AttendanceWaiverStatus } from '../constants/enums';
+import { formatDateTime } from './dateFormatting';
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
@@ -35,6 +40,19 @@ export const latestDecisionNote = (actions: readonly AttendanceWaiverActionEntry
     if (entry && ['approved', 'denied', 'chief_override'].includes(entry.action)) return entry.note || null;
   }
   return null;
+};
+
+/**
+ * "Closes undecided on Saturday, November 28, 2026, 12:00 AM" for a pending
+ * request, or null. The instant is the backend's `expires_at` (seven days
+ * after the session, never before the latest deadline); this only words it.
+ */
+export const closesUndecidedText = (
+  request: Pick<AttendanceWaiverRequest, 'status' | 'expires_at'>,
+  timezone: string
+): string | null => {
+  if (request.status !== AttendanceWaiverStatus.PENDING || !request.expires_at) return null;
+  return `Closes undecided on ${formatDateTime(request.expires_at, timezone)}`;
 };
 
 export const ATTENDANCE_WAIVER_ACTION_LABELS: Record<string, string> = {
