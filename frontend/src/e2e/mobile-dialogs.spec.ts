@@ -61,10 +61,14 @@ test.describe('mobile dialogs', () => {
   test.describe.configure({ retries: 0 });
 
   test('every dialog is named, labelled and fits a phone @sweep', async ({ page }) => {
-    // Measured at 7.5 min on a dedicated CI runner (2026-10-04); 2x that, the
-    // multiple every @sweep test uses. The previous 30 min was 4x and predated
-    // the matrix split, when this shared a runner with the whole suite.
-    test.setTimeout(900_000);
+    // 2x the slowest measured run, the multiple every @sweep test uses. It was
+    // 15 min from a 7.5-min run on 2026-10-04, and the walk has grown with the
+    // route inventory since. Samples on 2026-11-13: 13 min on main's CI run,
+    // about 14 on #4268's first CI run, 12.7 locally on main, and two CI runs
+    // on a busy day that reached the 15-min limit (15.1, 15.0). 2x 15 is 30.
+    // The job cap in ci.yml is derived from mobile-accessibility's 48 min, the
+    // largest budget, so it does not move.
+    test.setTimeout(1_800_000);
 
     // A dialog still fading in when axe runs is measured through a partial
     // opacity: on a slow runner the Create Shift dialog reported 38 contrast
