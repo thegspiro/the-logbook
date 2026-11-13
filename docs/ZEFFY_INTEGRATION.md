@@ -32,7 +32,14 @@ generates an API key.
 
 **Integrations → Zeffy → Connect**, paste the API key, and save. **Test** reads
 one campaign to prove the key works. The key is stored encrypted and never shown
-again; leave the field blank on a later edit to keep it.
+again.
+
+A connected Zeffy card has no **Settings**, so the key and signing secret are
+changed by **Disconnect** and **Connect** again. Disconnecting keeps both, the
+campaign links and the webhook address (it carries the integration's id, which
+does not change), so a box left blank on reconnecting keeps what was stored.
+While disconnected, the webhook answers 404 and the hourly sync skips the
+department; payments made meanwhile are read by the next sync.
 
 ### 3. (Recommended) Add the webhook
 
@@ -49,8 +56,9 @@ within seconds, and so do refunds made long after the sale.
 
 Every delivery must carry a valid `Zeffy-Signature` signed with that secret in
 the last five minutes; anything else is refused with 401. If the secret is ever
-regenerated in Zeffy, paste the new one here first: Zeffy's old secret stops
-working immediately.
+regenerated in Zeffy, enter the new one at once, by disconnecting and connecting
+again with it: Zeffy's old secret stops working immediately, and deliveries are
+refused with 401 until the Logbook has the new one.
 
 ### 4. Link each campaign
 

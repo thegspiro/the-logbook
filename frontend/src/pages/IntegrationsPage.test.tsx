@@ -621,6 +621,71 @@ describe('IntegrationsPage', () => {
     });
   });
 
+  // These forms open only from Connect, on a card that is not connected, and a
+  // stored secret is never sent back. So a placeholder claiming a key is
+  // already stored was false on every first connection.
+  describe('Zeffy and PayPal connect wording', () => {
+    const zeffyAvailable = {
+      id: 'zef-1',
+      organization_id: 'org-1',
+      integration_type: 'zeffy',
+      name: 'Zeffy',
+      description: 'Read donations, event tickets and memberships sold through Zeffy',
+      category: 'Payments',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const paypalAvailable = {
+      ...zeffyAvailable,
+      id: 'pp-1',
+      integration_type: 'paypal',
+      name: 'PayPal',
+      description: 'Reconcile store payments',
+    };
+
+    it('does not tell a first Zeffy connection that a key is already stored', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([zeffyAvailable]);
+      mockConnectIntegration.mockResolvedValue({ ...zeffyAvailable, status: 'connected', enabled: true });
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-zeffy');
+      await user.click(within(card).getByText('Connect'));
+
+      const apiKey = screen.getByLabelText('API Key');
+      expect(apiKey).toHaveAttribute('placeholder', 'Paste the key from Zeffy');
+      expect(
+        screen.getByText(/When connecting again after a disconnect, leave it blank to keep the saved key\./)
+      ).toBeInTheDocument();
+
+      // A blank box is left out of the request, which is what keeps the saved
+      // key on a reconnection.
+      await user.click(screen.getByTestId('connect-submit'));
+      expect(mockConnectIntegration).toHaveBeenCalledWith('zef-1', {
+        api_key: undefined,
+        webhook_secret: undefined,
+      });
+    });
+
+    it('does not tell a first PayPal connection that a secret is already stored', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([paypalAvailable]);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-paypal');
+      await user.click(within(card).getByText('Connect'));
+
+      expect(screen.getByLabelText('Client Secret')).toHaveAttribute('placeholder', 'From your PayPal REST app');
+      expect(
+        screen.getByText(/When connecting again after a disconnect, leave it blank to keep the saved secret\./)
+      ).toBeInTheDocument();
+    });
+  });
+
   describe('NFC ID Cards (activation, not connection)', () => {
     const nfcAvailable = {
       id: 'nfc-1',

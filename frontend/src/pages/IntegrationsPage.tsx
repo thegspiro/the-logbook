@@ -2150,11 +2150,14 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={paypalClientSecret}
                 onChange={(e) => setPaypalClientSecret(e.target.value)}
-                placeholder="Leave blank to keep the stored secret"
+                placeholder="From your PayPal REST app"
                 className={inputClass}
               />
+              {/* As for Zeffy: this form opens only from Connect, and the page
+                  cannot see whether a secret is already stored. */}
               <p className="text-theme-text-muted mt-1 text-xs">
-                Create a REST app at developer.paypal.com under Apps &amp; Credentials.
+                Create a REST app at developer.paypal.com under Apps &amp; Credentials. When connecting again after a
+                disconnect, leave it blank to keep the saved secret.
               </p>
             </div>
             <div>
@@ -2215,12 +2218,16 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={zeffyApiKey}
                 onChange={(e) => setZeffyApiKey(e.target.value)}
-                placeholder="Leave blank to keep the current key"
+                placeholder="Paste the key from Zeffy"
                 className={inputClass}
                 autoComplete="off"
               />
+              {/* This form opens only from Connect, and a stored key is never
+                  sent back, so the page cannot tell a first connection from a
+                  reconnection: the note states when a blank box keeps a key. */}
               <p className="text-theme-text-muted mt-1 text-xs">
-                The Zeffy organization owner generates it in Zeffy under Settings &rarr; Integrations.
+                The Zeffy organization owner generates it in Zeffy under Settings &rarr; Integrations. When connecting
+                again after a disconnect, leave it blank to keep the saved key.
               </p>
             </div>
             <div>
