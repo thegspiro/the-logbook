@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**373 tables · 6008 columns · 1249 foreign keys**
+**373 tables · 6011 columns · 1250 foreign keys**
 
 ---
 
@@ -525,7 +525,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 15 | Meeting Action Item model |
-| [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 11 | Meeting Attendee model |
+| [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 14 | Meeting Attendee model |
 | [`meetings`](#meetings) | `Meeting` | 21 | Meeting model |
 
 ### Member Supervisors
@@ -8282,6 +8282,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `waiver_granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `waiver_granted_at` | DATETIME | yes |  |  |  |
 | `waiver_request_id` | VARCHAR(36) | yes | FK, IDX |  | → `attendance_waiver_requests.id` ON DELETE SET NULL |
+| `checked_in_at` | DATETIME | yes |  |  |  |
+| `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `recorded_via` | VARCHAR(20) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 
 **Indexes**
@@ -12871,7 +12874,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (456 references)
+### → `users` (457 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13135,6 +13138,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `mcp_service_keys` | `revoked_by` | SET NULL | yes |
 | `meeting_action_items` | `assigned_to` | RESTRICT | yes |
 | `meeting_action_items` | `created_by` | SET NULL | yes |
+| `meeting_attendees` | `recorded_by` | SET NULL | yes |
 | `meeting_attendees` | `user_id` | CASCADE | no |
 | `meeting_attendees` | `waiver_granted_by` | RESTRICT | yes |
 | `meeting_minutes` | `approved_by` | RESTRICT | yes |

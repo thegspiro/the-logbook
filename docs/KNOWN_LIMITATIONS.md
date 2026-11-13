@@ -72,10 +72,12 @@ regular set until given one.
   was checked only when the member tried to vote, so a member who fell short
   received a ballot link and was then refused. As a row rule it applies
   everywhere the other rules do: the roster, the ballot send and the vote.
-- **Minutes › Attendance still reads the tier benefits** for its "Voting"
-  column, and so stops agreeing with the ballots once a secretary edits the
-  rows. Fixed by the attendance work that follows (it adds the election-aware
-  Meeting Attendance page and moves both onto `voter_rules`).
+- ~~**Minutes › Attendance still reads the tier benefits** for its "Voting"
+  column.~~ Resolved 2026-11-13: the column now asks the same gate the ballot
+  send does, under the department's regular business meeting rules
+  (`ElectionService.voting_reason_under_rules`), so it agrees with an
+  election held on those defaults. It cannot speak for an election with
+  customized rules; Elections › Meeting Attendance does, per election.
 - **A version 1 election's tier rules can no longer be edited,** because the
   tier screen dropped the fields. Its own election-wide rules still can, until
   voting opens.
@@ -107,6 +109,28 @@ regular set until given one.
 - **The create dialog's count of members who would receive a ballot** covers
   the election's rules only, not each ballot item's own voter types, check-in
   or carve-out rules; it says so beside the number.
+
+### Elections › Meeting Attendance (2026-11-13)
+
+`/elections/attendance` shows each member's meetings over a period the
+secretary picks (presets of 3 to 24 months, or custom dates up to five years),
+whether they may vote in the chosen election, and each member's meetings with
+how they counted and where the record came from (owner decisions: a second
+page with the same data as Minutes › Attendance; check-in time and recorded-by
+added; `elections.manage` is enough; eligibility follows the election chosen).
+
+- **The period is for reading only.** "May vote" is the election's own roster
+  answer, and its attendance rules count their own last N meetings or months,
+  whatever period the page shows. The page says so beside the tiles.
+- **Check-in time and recorded-by start now.** `meeting_attendees` gained
+  `checked_in_at`, `recorded_by` and `recorded_via`; rows written before this
+  have none, and nothing backfills them, since there is no record of who
+  entered them. Those meetings show their status with no source beside it.
+  Only an event check-in has a check-in time: a secretary's entry claims no
+  moment for one.
+- **Excused, on-leave and pre-membership meetings** are classified by the
+  same tally the ballot check uses, so a meeting held before a member's
+  current stint is left out of both the count and their list.
 
 ## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
 

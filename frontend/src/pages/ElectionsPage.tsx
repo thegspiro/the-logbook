@@ -43,7 +43,7 @@ import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
-import { Vote } from 'lucide-react';
+import { ClipboardCheck, Vote } from 'lucide-react';
 
 interface PositionSuggestion {
   key: string;
@@ -537,6 +537,14 @@ export const ElectionsPage: React.FC = () => {
                         d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                       />
                     </svg>
+                  </Link>
+                  <Link
+                    to="/elections/attendance"
+                    className="btn-secondary btn-icon-sm"
+                    aria-label="Meeting attendance"
+                    title="Meeting Attendance"
+                  >
+                    <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
                   </Link>
                   <button
                     onClick={() => setShowCreateModal(true)}

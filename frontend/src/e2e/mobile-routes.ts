@@ -965,6 +965,7 @@ export const ALL_ROUTES: RouteCheck[] = [
   // Held off by toggle-track and on the pass now that it is 44px: both of its
   // sub-44px controls were switches, and both its unnamed selects are named.
   { path: '/elections/settings', maxSmallTargets: 0, maxTinyText: 0, permissions: ['elections.manage'] },
+  { path: '/elections/attendance', maxSmallTargets: 0, maxTinyText: 0, permissions: ['elections.manage'] },
   { path: '/account', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/testing', maxSmallTargets: 0, maxTinyText: 0 },
 

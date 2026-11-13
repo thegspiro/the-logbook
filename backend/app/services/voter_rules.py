@@ -354,6 +354,17 @@ async def row_waits(
     return outcomes
 
 
+# How every attendance refusal from ``attendance_reason`` begins, so a reader
+# that counts members held back by attendance (the minutes dashboard) can
+# tell those refusals from the others without parsing their wording.
+ATTENDANCE_REASON_PREFIXES = ("Attended ", "Meeting attendance is ")
+
+
+def is_attendance_reason(reason: Optional[str]) -> bool:
+    """Whether ``reason`` is a refusal ``attendance_reason`` wrote."""
+    return bool(reason) and str(reason).startswith(ATTENDANCE_REASON_PREFIXES)
+
+
 async def attendance_reason(
     tier_svc: "MembershipTierService",
     user_id: str,

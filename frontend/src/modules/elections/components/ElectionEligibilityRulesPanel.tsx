@@ -9,6 +9,7 @@
  */
 
 import React, { useState } from 'react';
+import { Link } from 'react-router';
 import { Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { electionService } from '../../../services/api';
@@ -95,9 +96,17 @@ export const ElectionEligibilityRulesPanel: React.FC<ElectionEligibilityRulesPan
 
   return (
     <section className="card p-6" aria-labelledby="election-eligibility-rules-heading">
-      <h2 id="election-eligibility-rules-heading" className="text-theme-text-primary text-lg font-semibold">
-        {election.eligibility_rules?.version === 2 ? 'Voter rules by member type' : 'Rules every voter must meet'}
-      </h2>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="election-eligibility-rules-heading" className="text-theme-text-primary text-lg font-semibold">
+          {election.eligibility_rules?.version === 2 ? 'Voter rules by member type' : 'Rules every voter must meet'}
+        </h2>
+        <Link
+          to={`/elections/attendance?election=${encodeURIComponent(election.id)}`}
+          className="text-theme-text-primary touch-target-phone inline-flex items-center text-sm font-medium underline"
+        >
+          Meeting attendance
+        </Link>
+      </div>
       {editable ? (
         <>
           <p className="text-theme-text-muted mt-1 mb-5 text-sm">

@@ -3626,25 +3626,24 @@ class ElectionService:
 
         return total
 
-    async def preview_rules_electorate(
-        self, organization_id: UUID | str, rules: Optional[Dict[str, Any]]
-    ) -> Tuple[int, int]:
-        """``(eligible, total)``: how many of the department's active members
-        a new election carrying ``rules`` would admit today, judged by the
-        same gate the ballot send applies (``_universal_gate``), so the
-        preview a secretary sees while customizing an election cannot
-        disagree with the ballots it would then send (pitfall #29).
+    async def voting_reason_under_rules(
+        self,
+        member: "User",
+        organization_id: UUID | str,
+        rules: Optional[Dict[str, Any]],
+        organization: Optional["Organization"] = None,
+    ) -> Optional[str]:
+        """Why ``member`` could not vote in a new election carrying
+        ``rules``, or None, judged by the gate the ballot send applies
+        (``_universal_gate``) -- the one answer the create dialog's count and
+        the minutes attendance dashboard both report (pitfall #29).
 
         Ballot-item voter types and check-in are left out: they are judged
-        per item, and an election being created has no attendance yet.
+        per item, and an election that does not exist has no attendance.
         """
-        org_result = await self.db.execute(
-            select(Organization).where(Organization.id == str(organization_id))
-        )
-        org = org_result.scalar_one_or_none()
         # A stand-in election, never added to the session: only what the
         # gate reads. Its id is fresh so the per-request rule cache cannot
-        # hand one preview another's answers.
+        # hand one caller's answers to another.
         stand_in = Election(
             id=str(uuid4()),
             organization_id=str(organization_id),
@@ -3652,6 +3651,20 @@ class ElectionService:
             voter_overrides=None,
             ballot_items=None,
         )
+        reason, _ = await self._universal_gate(
+            member, stand_in, str(organization_id), organization
+        )
+        return reason
+
+    async def preview_rules_electorate(
+        self, organization_id: UUID | str, rules: Optional[Dict[str, Any]]
+    ) -> Tuple[int, int]:
+        """``(eligible, total)``: how many of the department's active members
+        a new election carrying ``rules`` would admit today."""
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = org_result.scalar_one_or_none()
         members_result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
@@ -3660,10 +3673,12 @@ class ElectionService:
         members = list(members_result.scalars().all())
         eligible = 0
         for member in members:
-            reason, _ = await self._universal_gate(
-                member, stand_in, str(organization_id), org
-            )
-            if reason is None:
+            if (
+                await self.voting_reason_under_rules(
+                    member, organization_id, rules, org
+                )
+                is None
+            ):
                 eligible += 1
         return eligible, len(members)
 

@@ -1024,3 +1024,63 @@ export interface EligibilityRoster {
   email_sent_at: string | null;
   roster: RosterMember[];
 }
+
+/** GET /elections/{id}/attendance (snake_case, as the module). */
+export interface ElectionAttendanceMember {
+  user_id: string;
+  name: string;
+  member_type?: string | null;
+  member_since?: string | null;
+  meetings_in_period: number;
+  attended: number;
+  absent: number;
+  excused: number;
+  on_leave: number;
+  attendance_pct: number;
+  /** The election's eligibility roster answer; null when the member is not on it. */
+  may_vote?: boolean | null;
+  reason?: string | null;
+}
+
+export interface ElectionAttendance {
+  election_id: string;
+  election_title: string;
+  start: string;
+  end: string;
+  meeting_types?: string[] | null;
+  total_meetings: number;
+  members: ElectionAttendanceMember[];
+}
+
+/** How one meeting counts for a member. */
+export type MeetingAttendanceStatus = 'present' | 'absent' | 'excused' | 'on_leave';
+
+export interface MemberMeetingRecord {
+  meeting_id: string;
+  title: string;
+  meeting_type?: string | null;
+  meeting_date: string;
+  status: MeetingAttendanceStatus;
+  /** Null when the record was written before check-in times were kept, or was no check-in. */
+  checked_in_at?: string | null;
+  recorded_by_name?: string | null;
+  recorded_via?: string | null;
+  waiver_reason?: string | null;
+  leave_start?: string | null;
+  leave_end?: string | null;
+}
+
+export interface MemberMeetings {
+  user_id: string;
+  name: string;
+  start: string;
+  end: string;
+  meetings: MemberMeetingRecord[];
+}
+
+/** The period and meeting types an attendance read covers. */
+export interface AttendancePeriodQuery {
+  start?: string | undefined;
+  end?: string | undefined;
+  meeting_type?: string[] | undefined;
+}
