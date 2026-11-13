@@ -401,7 +401,14 @@ const ZeffyPage: React.FC = () => {
         <h2 id="zeffy-payments" className="text-theme-text-primary text-lg font-semibold">
           Payments
         </h2>
-        <div className="segmented-group hscroll flex gap-1" role="group" aria-label="Filter by status">
+        {/* Nine states do not fit a phone's width: the strip scrolls sideways,
+            and the marker declares that intentional to the mobile sweeps. */}
+        <div
+          className="segmented-group hscroll flex gap-1"
+          data-mobile-scroll-region
+          role="group"
+          aria-label="Filter by status"
+        >
           {STATE_FILTERS.map((filter) => (
             <button
               key={filter.value}
