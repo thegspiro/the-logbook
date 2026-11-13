@@ -65,6 +65,7 @@ words, and carried onto a minutes record created later by
 
 import calendar
 import copy
+import html
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
@@ -78,6 +79,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import user_has_permission
 from app.core.audit import log_audit_event
+from app.core.config import settings as app_settings
 from app.core.constants import CHIEF_POSITION_SLUGS, SECRETARY_POSITION_SLUGS
 from app.core.utils import generate_uuid
 from app.models.attendance_waiver import (
@@ -115,6 +117,11 @@ from app.schemas.attendance_waiver import (
     AttendanceWaiverPolicy,
     CapPeriod,
     policy_from_settings,
+)
+from app.services.email_policy import (
+    EmailKind,
+    department_required_kinds,
+    member_receives_email,
 )
 from app.services.file_storage_service import StoredFile
 from app.services.notifications_service import NotificationsService
@@ -162,6 +169,11 @@ _ACTION_ORDER = {
     AttendanceWaiverAction.DENIED: 1,
     AttendanceWaiverAction.CHIEF_OVERRIDE: 2,
     AttendanceWaiverAction.VOIDED: 3,
+    AttendanceWaiverAction.INFO_REQUESTED: 1,
+    AttendanceWaiverAction.MEMBER_RESPONDED: 1,
+    AttendanceWaiverAction.RESCHEDULED: 1,
+    AttendanceWaiverAction.MEMBER_CONFIRMED: 1,
+    AttendanceWaiverAction.EXPIRED: 3,
 }
 
 
@@ -190,6 +202,10 @@ class WorkflowSpec:
     decider_path: str
     # Where the member's notice leads once the event is gone.
     member_fallback_url: str
+    # The email-preference kinds a decider's and a member's notices are sent
+    # under (CLAUDE.md pitfall #18: the email goes with the in-app row).
+    decider_email_kind: EmailKind
+    member_email_kind: EmailKind
 
 
 TRAINING_SPEC = WorkflowSpec(
@@ -204,6 +220,8 @@ TRAINING_SPEC = WorkflowSpec(
     default_title="Training session",
     decider_path="/attendance-waivers",
     member_fallback_url="/training/my-training",
+    decider_email_kind=EmailKind.TRAINING_DUTIES,
+    member_email_kind=EmailKind.TRAINING_REMINDERS,
 )
 
 MEETING_SPEC = WorkflowSpec(
@@ -218,6 +236,8 @@ MEETING_SPEC = WorkflowSpec(
     default_title="Business meeting",
     decider_path="/meetings/waiver-requests",
     member_fallback_url="/events",
+    decider_email_kind=EmailKind.EVENT_DUTIES,
+    member_email_kind=EmailKind.EVENT_CHANGES,
 )
 
 SPECS: Dict[AttendanceWaiverWorkflow, WorkflowSpec] = {
@@ -1647,6 +1667,20 @@ class AttendanceWaiverService:
                 "Failed to prompt deciders for waiver request {}", request.id
             )
             await self._recover(request)
+            return
+        await self._email(
+            org_id,
+            request,
+            recipients,
+            self.spec.decider_email_kind,
+            f"Waiver request — {name}, {title}",
+            [
+                f'{name} asked to be excused from "{title}" on {day}.',
+                "Open the request to approve or deny it.",
+            ],
+            decider_action_url(request),
+            "Review Request",
+        )
 
     async def _archive_prompts(
         self, org_id: str, request: AttendanceWaiverRequest
@@ -1699,6 +1733,85 @@ class AttendanceWaiverService:
                 "Failed to notify the member of waiver request {}", request.id
             )
             await self._recover(request)
+            return
+        member = (
+            await self.db.execute(
+                select(User).where(
+                    User.id == str(request.user_id), User.organization_id == org_id
+                )
+            )
+        ).scalar_one_or_none()
+        if member is not None:
+            await self._email(
+                org_id,
+                request,
+                [member],
+                SPECS[request.workflow].member_email_kind,
+                subject,
+                [f'Your request to be excused from "{title}" on {day} {outcome}.'],
+                member_action_url(request),
+                "View Request",
+            )
+
+    async def _email(
+        self,
+        org_id: str,
+        request: AttendanceWaiverRequest,
+        recipients: Iterable[User],
+        kind: EmailKind,
+        subject: str,
+        sentences: Sequence[str],
+        path: str,
+        button: str,
+    ) -> None:
+        """Email a notice that an in-app row also carries.
+
+        The one way this workflow sends email, for every notice (CLAUDE.md
+        pitfall #18). ``sentences`` are the same plain words as the in-app
+        row: never the member's reason, a decider's note, or a question or
+        answer, which may be medical and stay on the request page behind
+        sign-in. Each recipient's email preferences decide, under ``kind``.
+        Called after the commit and never allowed to fail the action: a
+        failure is logged by request id and swallowed.
+        """
+        try:
+            org = (
+                await self.db.execute(
+                    select(Organization).where(Organization.id == org_id)
+                )
+            ).scalar_one_or_none()
+            required = department_required_kinds(org)
+            to_emails = sorted(
+                {
+                    str(user.email)
+                    for user in recipients
+                    if user.email
+                    and member_receives_email(
+                        user.notification_preferences, kind, required
+                    )
+                }
+            )
+            if not to_emails:
+                return
+            from app.services.email_service import EmailService, wrap_email_body
+
+            url = f"{app_settings.FRONTEND_URL}{path}"
+            body = "".join(f"<p>{html.escape(line)}</p>" for line in sentences)
+            html_body = wrap_email_body(
+                org,
+                "Waiver Request",
+                body + '<p style="text-align: center;">'
+                f'<a href="{html.escape(url)}" class="button" role="link">'
+                f"{html.escape(button)}</a></p>",
+            )
+            await EmailService(organization=org).send_email(
+                to_emails=to_emails,
+                subject=subject,
+                html_body=html_body,
+                text_body="\n\n".join(sentences) + f"\n\n{button}: {url}",
+            )
+        except Exception:
+            logger.exception("Failed to email about waiver request {}", request.id)
 
     async def _recover(self, request: AttendanceWaiverRequest) -> None:
         """Reset the session after a failed notice, keeping ``request`` usable.

@@ -125,6 +125,11 @@ _WAIVER_ACTION_TEXT = {
     AttendanceWaiverAction.DENIED: "denied",
     AttendanceWaiverAction.CHIEF_OVERRIDE: "approved on the Chief's override",
     AttendanceWaiverAction.VOIDED: "voided",
+    AttendanceWaiverAction.INFO_REQUESTED: "more information asked for",
+    AttendanceWaiverAction.MEMBER_RESPONDED: "answered",
+    AttendanceWaiverAction.EXPIRED: "expired undecided",
+    AttendanceWaiverAction.RESCHEDULED: "session rescheduled",
+    AttendanceWaiverAction.MEMBER_CONFIRMED: "new date confirmed",
 }
 
 #: Where each action falls in a request's life, to order a log whose times
@@ -137,6 +142,11 @@ _WAIVER_ACTION_ORDER = {
     AttendanceWaiverAction.DENIED: 1,
     AttendanceWaiverAction.CHIEF_OVERRIDE: 2,
     AttendanceWaiverAction.VOIDED: 3,
+    AttendanceWaiverAction.INFO_REQUESTED: 1,
+    AttendanceWaiverAction.MEMBER_RESPONDED: 1,
+    AttendanceWaiverAction.RESCHEDULED: 1,
+    AttendanceWaiverAction.MEMBER_CONFIRMED: 1,
+    AttendanceWaiverAction.EXPIRED: 3,
 }
 
 
