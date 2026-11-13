@@ -76,6 +76,7 @@ from app.services.email_template_service import (
     EmailTemplateService,
 )
 from app.services.email_theme import (
+    ACCENT_INDIGO,
     TABLE_STYLE,
     TD_STYLE,
     TH_STYLE,
@@ -150,6 +151,13 @@ _ALERT_DEFAULTS = {
         DEFAULT_ELECTION_DELETED_HTML,
         DEFAULT_ELECTION_DELETED_TEXT,
     ),
+}
+
+
+# How a ballot mail describes each item's vote type to the voter (W50-76).
+_VOTE_TYPE_PHRASES = {
+    "candidate_selection": "choose a candidate",
+    "approval": "approve or deny",
 }
 
 
@@ -1038,7 +1046,10 @@ class ElectionService:
         for item in eligible_items:
             title = html.escape(item.get("title", "Untitled"))
             item_type = item.get("type", "").replace("_", " ").title()
-            vote_type = item.get("vote_type", "").replace("_", " ")
+            # What the voter does, not the vote type's id: the mail read
+            # "(candidate selection)" (W50-76). An unknown type says nothing
+            # rather than print the raw identifier.
+            vote_type = _VOTE_TYPE_PHRASES.get(item.get("vote_type", ""), "")
             label = f"<strong>{title}</strong>"
             if item_type:
                 label += f" &mdash; {html.escape(item_type)}"
@@ -4563,10 +4574,14 @@ class ElectionService:
                 "<p>Sign in to the intranet to nominate a member — or "
                 "yourself — from the election's Nominations tab.</p>"
             )
+            # The election accent and a named tab, as the ballot mail has; an
+            # empty chip left a bare red band across the top (W50-80).
             html_body = wrap_email_body(
                 organization,
                 title=f"Nominations Open: {title}",
                 body_html=body_html,
+                header_color=ACCENT_INDIGO,
+                chip="Nominations open",
             )
             email_service = EmailService(organization)
             outcomes: List[bool] = []
@@ -5332,7 +5347,8 @@ class ElectionService:
                 return (
                     0,
                     None,
-                    f"A candidate in this batch received {largest} votes, "
+                    f"A candidate in this batch received {largest} "
+                    f"{'vote' if largest == 1 else 'votes'}, "
                     f"which cannot come from {ballots_cast} physical "
                     f"ballot(s). Double-check the ballot count.",
                 )
@@ -9264,6 +9280,19 @@ class ElectionService:
                 # (W50-18).
                 if is_test and not subj.startswith("[TEST]"):
                     subj = f"[TEST] {subj}"
+                # The default text part opens with the template's own
+                # "Ballot Available: <title>" heading, so a reminder or test
+                # ballot whose subject said otherwise still read as a first
+                # notice in a plain-text client (W50-81). Only that default
+                # heading is replaced: a department's own template keeps
+                # whatever heading it wrote.
+                default_heading = f"Ballot Available: {params['election_title']}"
+                if (
+                    text_body
+                    and subj != default_heading
+                    and text_body.split("\n", 1)[0] == default_heading
+                ):
+                    text_body = subj + text_body[len(default_heading) :]
                 # build_batch_message, not build_message: the pair the latter
                 # returns is MIME only, which the Cloudflare backend cannot
                 # send — a Cloudflare department's ballots all failed on it.
@@ -9522,7 +9551,11 @@ class ElectionService:
                 to_emails=[recipient.email],
                 recipient_name=recipient.full_name or "Secretary",
                 election_title=election.title,
-                election_type=election.election_type or "General",
+                # Title-cased like the item types beside it: the report read
+                # "Type: general", the raw stored value (W50-76).
+                election_type=(election.election_type or "general")
+                .replace("_", " ")
+                .title(),
                 start_date=_fmt_dt(election.start_date),
                 end_date=_fmt_dt(election.end_date),
                 closed_at=_fmt_dt(election.closed_at or election.end_date),
@@ -10275,8 +10308,10 @@ class ElectionService:
                     f"{with_subline(str(candidate.vote_count), pct)}</td>"
                     f'<td style="{TD_STYLE}text-align:center;">{result_label}</td></tr>'
                 )
+                votes_word = "vote" if candidate.vote_count == 1 else "votes"
                 text_parts.append(
-                    f"  {candidate.candidate_name} — {candidate.vote_count} votes ({pct}){winner_text}"
+                    f"  {candidate.candidate_name} — {candidate.vote_count} "
+                    f"{votes_word} ({pct}){winner_text}"
                 )
             if pos_result.is_tie:
                 outcome = self._tie_outcome_line(

@@ -207,11 +207,15 @@ Covered by `ElectionDetailPage.loaded.test.tsx` and the new `test_ballot_send_me
 
 **Flagged:** whether Open should warn, or positions should become ballot items, is a product choice. The page now says it (W50-8). Mirrored into `KNOWN_LIMITATIONS.md`.
 
-### W50-12 — NIT — The lifecycle buttons disagree about undoing — OPEN
+### W50-12 — NIT — The lifecycle buttons disagree about undoing — ✅ RESOLVED (2026-11-13)
+
+**Resolved (2026-11-13), no change needed:** re-checked on `main`. Open Nominations, Open Election and Close Election each confirm first, and Close Election's wording now says when closing is final ("once any vote has been recorded the election cannot be reopened") instead of a blanket "cannot be undone". Close Nominations still acts on one click, which is consistent: it returns the election to draft, where Open Nominations is offered again behind its own confirmation, so it is reversible.
 
 Open Nominations, Close Nominations and Open Election each act on one click, with no confirmation. Close Election asks first and says "this cannot be undone", although Roll Back reopens a closed election.
 
-### W50-13 — NIT — Reopening a used ballot link reads as a failure — OPEN
+### W50-13 — NIT — Reopening a used ballot link reads as a failure — ✅ FIXED (2026-11-13)
+
+**Fixed (2026-11-13):** re-driven first. The link read "Unable to Load Ballot" under a red "!", with "If you think this is a mistake, contact your organization's secretary." It now shows a green check under "You've already voted": "This ballot has already been submitted, so your vote is recorded. Each voting link can only be used once." It says where to check a receipt, and the "mistake" footer is gone. A closed election gets its own "Voting has closed" heading the same way. Real failures keep the error card. Test: `BallotVotingPage.w50-errors.test.tsx`.
 
 The link after voting shows "Unable to Load Ballot — This ballot has already been fully submitted (Error code: LB-API-400)". The voter has done nothing wrong.
 
@@ -1175,39 +1179,83 @@ A frontend round 2 is in progress for the items marked "FIX in progress (fronten
 **Where:** the ballot-items component; `CandidateManagement.tsx`; `MeetingAttendance.tsx:157-167`; `NominationsPanel.tsx` focus handling; the forensics section.
 **Fix:** queue row 59 — `htmlFor` / `id` pairs, `btn-icon` for the remove button, focus kept on the form after submit. Test: axe assertions in `e2e/mobile-accessibility.spec.ts`.
 
-### W50-74 — NIT — Status badge is the raw lowercase enum (`draft`, `open`, `nominations`, `closed`) on the list and detail — NOTE
+### W50-74 — NIT — Status badge is the raw lowercase enum (`draft`, `open`, `nominations`, `closed`) on the list and detail — ✅ FIXED (2026-11-13)
+
+**Fixed (2026-11-13):** `getStatusLabel` in `utils/electionHelpers.ts` feeds the list badge, the detail header badge, the filter pills and the runoff chain, so all four read Draft / Nominations / Open / Closed / Cancelled. Tests: `electionHelpers.test.ts`, `ElectionDetailPage.w50-polish.test.tsx`.
 
 Seen on every stage. `ElectionsPage.tsx:452`; `ElectionDetailPage.tsx` header. Map through a label table; the filter pills already have the words.
 
-### W50-75 — NIT — Info card "Voting Method — Simple Majority" for an election created as "Most Votes Wins (Plurality)" — NOTE
+### W50-75 — NIT — Info card "Voting Method — Simple Majority" for an election created as "Most Votes Wins (Plurality)" — ✅ ALREADY FIXED (confirmed 2026-11-13)
+
+**Confirmed fixed (2026-11-13):** on `main` the info card reads "Voting Method: One choice per voter" and "Winner: Most Votes (Plurality)" (the `VOTING_METHOD_LABELS` row in `ElectionDetailPage.tsx`).
 
 A2 step 9, B1 step 12, B3 step 3, A9, A10. `ElectionDetailPage.tsx:1123`. Show the winner rule as the Results tab already does.
 
-### W50-76 — NIT — Wording slips — NOTE
+### W50-76 — NIT — Wording slips — ✅ FIXED (2026-11-13), two left by design
+
+**Fixed (2026-11-13):**
+
+- **Plurals:** the bare plurals that read "1 votes" now agree in the results' screen-reader labels, the runoff chain, the suspicious-IP list, the delete dialog, the quorum target, the summary card's drafts, the delete and roll-back notices (`_leadership_notified`), the report's per-candidate lines and the paper-batch check. The app's "vote(s)" convention elsewhere is unchanged.
+- **The report:** reads "Type: Ballot", not the stored value.
+- **The ballot mail:** an item reads "(choose a candidate)" or "(approve or deny)", not "(candidate selection)".
+- **The certified PDF:** labels the vote total "Votes cast".
+- **A multi-seat confirm:** reads "Selected:", and "Approved:" is kept for approval votes.
+- **The ballot instruction:** mentions write-ins only when an item offers one.
+- **The runoff badge:** shows only when the title does not already say "Runoff Round N".
+- **The list filter:** lives in `?status=`.
+- **"Results will be available when the election is closed":** shows only while voting is open.
+
+**Left by design:**
+
+- **Draft rows show no vote count:** a draft cannot hold votes.
+- **The Candidates tab label has no count:** nothing at the tab bar knows it without a new API field or a second fetch, and the tab's heading already reads "Candidates (N)".
+- **The summary card counts a system runoff among its drafts:** it is a draft an officer still has to open.
+
+**Not changed here:** the minutes module's PDF and documents also print `total_votes` as "Ballots cast" (`minutes_pdf.py`, `document_service.py`). That is the same mislabel in another module.
+
+Tests: `test_w50_mail_wording.py`, `test_certified_results_pdf_layout.py`, `test_election_report_delivery.py`, `ballotChoices.test.ts`, `ElectionsPage.statusFilters.test.tsx`, `electionHelpers.test.ts`.
 
 "1 votes", "1 leadership members notified", "Delete the 1 votes", "Type: general" in the report, "Approved: …" on a seat election's confirm, "write in your own choice where allowed" with write-ins off, "(candidate selection)" in mails, "Ballots cast 11" (= votes) in the PDF, "2 draft(s) to finalize" counting a system runoff, a "Runoff Round 1" badge duplicating the title, the Candidates tab label without a count, no vote count on draft rows, the list filter resetting on reload, "Results will be available when the election is closed." on a draft with nothing to vote on (A9, A10, B7, A8, A2, A6).
 
-### W50-77 — NIT — Browser Back from a settings section leaves settings; the "Select a draft election first" toast is unreachable; "Send Test Ballot" gives no hint why it is disabled — NOTE
+### W50-77 — NIT — Browser Back from a settings section leaves settings; the "Select a draft election first" toast is unreachable; "Send Test Ballot" gives no hint why it is disabled — ✅ FIXED (2026-11-13), Back kept
+
+**Fixed (2026-11-13):**
+
+- **The picker:** labelled "Draft election".
+- **The disabled button:** a line beneath it says what enables it, or that there is no draft to preview.
+- **The unreachable toast:** removed. The handler keeps a silent guard.
+
+**Back kept as is:** Organization settings mirror their section with `replace` too (`SettingsPage.tsx`), so Back stepping through sections on this one screen would make it the odd one out. Test: `ElectionsSettingsPage.w50-77-test-ballot.test.tsx`.
 
 A1 steps 8/11. `ElectionsSettingsPage.tsx:76-79, 129, 255-265`. A helper line under the button.
 
-### W50-78 — NIT — `GET /elections/{id}` returns `candidates: []` on a draft whose `/candidates` lists one; list rows lack `auto_open` / `reminder_hours_before_close` / `nomination_deadline`; `rollback_history` is on `/forensics` only — NOTE
+### W50-78 — NIT — `GET /elections/{id}` returns `candidates: []` on a draft whose `/candidates` lists one; list rows lack `auto_open` / `reminder_hours_before_close` / `nomination_deadline`; `rollback_history` is on `/forensics` only — ✅ DECIDED & DOCUMENTED (2026-11-13)
+
+**Owner decision (2026-11-13): document only.** The detail response no longer carries a `candidates` field, so the misleading empty list is gone. Nothing in the app reads the three fields from list rows. `wiki/Module-Elections.md` ("List and Detail Responses") now says list rows are a summary, and names where each of these comes from.
 
 B8 steps 1/3, B3 step 8. API shape; document or align.
 
-### W50-79 — NIT — The Attendance tab disappears at close, so the attendance a membership item depended on cannot be reviewed from the closed election — NOTE
+### W50-79 — NIT — The Attendance tab disappears at close, so the attendance a membership item depended on cannot be reviewed from the closed election — ✅ FIXED (2026-11-13)
+
+**Fixed (2026-11-13):** the tab stays after close. `MeetingAttendance` already drops its check-in and remove controls on a closed election, so it is read-only there. Test: `ElectionWorkflowTabs.test.tsx`.
 
 A8 step 2. `ElectionWorkflowTabs.tsx:77-80`. Keep it read-only after close.
 
-### W50-80 — NIT — The "Nominations Open" mail's red tab strip is empty; the pre-meeting package `Content-Type` is generic — NOTE
+### W50-80 — NIT — The "Nominations Open" mail's red tab strip is empty; the pre-meeting package `Content-Type` is generic — ✅ FIXED (2026-11-13)
+
+**Fixed (2026-11-13):** the announcement passes the election accent and a "Nominations open" chip, as the ballot mail does. The attachment half was already fixed under W50-59 (`MIMEApplication(..., "pdf")`). Test: `test_election_nominations.py`.
 
 A3 step 2, B8 step 10, A4 step 6. Template polish; the attachment type is in W50-59. The `To:` = acting officer with the roster as envelope-only recipients is right.
 
-### W50-81 — NIT — The reminder and test-ballot mails keep "Ballot Available: <title>" as the first line of their plain-text body — NOTE
+### W50-81 — NIT — The reminder and test-ballot mails keep "Ballot Available: <title>" as the first line of their plain-text body — ✅ FIXED (2026-11-13)
+
+**Fixed (2026-11-13):** when a send's subject differs from the default heading, and the text part still opens with that default heading, the heading is replaced by the subject. A department's own saved template keeps whatever heading it wrote. Test: `test_w50_reminder_subject_and_supersession.py`.
 
 Seen re-driving W50-27 and W50-18 (`notes/CONFIRM-backend.md`, CONFIRM-11 and CONFIRM-14; sink 0289–0308 and 0309). The subjects are right — "Reminder: vote in CONFIRM non-anon", "[TEST] Ballot Available: CONFIRM anon" — but the text part still opens with the heading "Ballot Available: <title>" before "This is a reminder that you have not yet voted…" / "This is a TEST ballot…". The HTML part is right. The ballot template's text heading in `email_template_service.py`; a department that saved its own template keeps whatever heading it has.
 
-### W50-82 — NIT — Closing auto-sends "Election Report: <title>" to the election's creator — NOTE
+### W50-82 — NIT — Closing auto-sends "Election Report: <title>" to the election's creator — ✅ DECIDED & FIXED (2026-11-13)
+
+**Owner decision (2026-11-13):** keep the automatic copy on close, since email is the channel of record, and fix the button. The Results panel now reads "Results Report — Emailed to the election's creator and leadership when it closed. Send yourself another copy.", with the button "Send Me a Copy". The automatic copy goes to the creator and leadership (`_election_report_recipients`), not the creator alone. Test: `PublishResultsPanel.w50-s19.test.tsx`.
 
 CONFIRM-16: closing a fresh election mailed the report to the secretary unasked (sink 0310), as every close in the drive did (Notices observed, 15 such mails). It is the same one-recipient report W50-28 relabelled "Email me the results report", so an officer who closes gets it twice if they press the button; and its "Ballots cast 3" is a vote count, not a voter count (W50-76). Pre-existing, not a defect of the fixes; whether the automatic copy on close is wanted belongs with W50-28's decision.
 
@@ -1272,14 +1320,18 @@ CONFIRM-16: closing a fresh election mailed the report to the secretary unasked 
 **Where:** `frontend/src/components/election-detail/NominationsPanel.tsx` (`fetchData`).
 **Fix:** the loading line is shown for the initial load only. Test: `NominationsPanel.w50-73-focus.test.tsx` now asserts focus after the refetch as well.
 
-### W50-91 — LOW — A token ballot on an election created with positions but no ballot items reads "Make a selection for each item below" over nothing, with a Submit button — NOTE (W50-11, re-observed)
+### W50-91 — LOW — A token ballot on an election created with positions but no ballot items reads "Make a selection for each item below" over nothing, with a Submit button — ✅ ALREADY FIXED (confirmed 2026-11-13)
+
+**Confirmed fixed (2026-11-13):** re-driven with a freshly minted link on a positions-only election. The Captain race renders with both candidates and Abstain, because the ballot lookup merges plain positions into the items (`effective_ballot_items`).
 
 **Did:** REDRIVE-B: real and test tokens on an API-created election (`ballot_items: []`, two candidates for Chief).
 **Saw:** no radios, the instruction line and a Submit button; the lookup returned 200 with two candidates; the in-app ballot on the same election worked. The UI disables Send Ballot Emails for such an election (W50-11); the API does not refuse the send.
 **Where:** `BallotVotingPage.tsx` renders `election.ballot_items` only; `election_service.py` ~825.
 **Status:** the owner decision recorded under W50-11 in `docs/KNOWN_LIMITATIONS.md`, with this re-observation added to the row.
 
-### W50-92 — NIT — No verify-receipt form is reachable once an election closes — NOTE
+### W50-92 — NIT — No verify-receipt form is reachable once an election closes — ✅ FIXED (2026-11-13)
+
+**Fixed (2026-11-13):** a closed election's Results tab carries the verify-receipt form. The ballot link's "already voted" and "voting has closed" screens say where to find it. The link page itself cannot verify after close: the refused lookup does not name the election, and naming it would change a public endpoint's error. Test: `ElectionDetailPage.w50-polish.test.tsx`.
 
 REDRIVE-B: after close the token page shows only the closed card and the detail page has no verify form, so a receipt saved during voting can be checked only while voting is open. Flagged in the round-2 fix summary; observed on screen. Open.
 

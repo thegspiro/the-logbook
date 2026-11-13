@@ -23,7 +23,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { VerifyReceipt } from '../components/VerifyReceipt';
 import { electionService } from '../services/api';
-import type { BallotElection, Candidate, BallotSubmissionResponse } from '../types/election';
+import type { BallotElection, BallotItem, Candidate, BallotSubmissionResponse } from '../types/election';
 import { toAppError } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { BallotChoice } from '../constants/enums';
@@ -34,6 +34,8 @@ import {
   candidatesForItem,
   choiceLabel,
   choiceToVote,
+  itemAllowsWriteIn,
+  itemForm,
   missingWriteIn,
   unansweredItems,
 } from '../components/ballot/ballotChoices';
@@ -70,23 +72,37 @@ const publicErrorText = (err: unknown, fallback: string): string => toAppError(e
  * is a mistake, and the reader may be the secretary. Each of those states
  * gets its own sentence and either its own hint or none.
  */
-type LoadError = { message: string; hint: string | null };
+/** ``done`` and ``closed`` are not failures: the voter already voted, or
+ * voting ended. They get their own heading rather than "Unable to Load
+ * Ballot" under a red "!" (W50-13). */
+type LoadErrorTone = 'error' | 'done' | 'closed';
+type LoadError = { message: string; hint: string | null; title?: string; tone?: LoadErrorTone };
 
 const CONTACT_SECRETARY_HINT = "If you think this is a mistake, contact your organization's secretary.";
+// The link page cannot check a receipt once the link is spent or voting has
+// ended, because the refused lookup does not say which election it is. The
+// signed-in election page can, after close too (W50-92).
+const RECEIPT_ELSEWHERE_HINT =
+  'To check a vote receipt you saved, sign in and open this election under Elections, then use "Verify a vote receipt".';
 const REOPENED_PREFIX = 'This election was closed and reopened';
 const BALLOT_CHANGED_PREFIX = 'The ballot changed after this link was sent';
 
 const describeLoadError = (detail: string): LoadError => {
   if (detail === 'This ballot has already been fully submitted') {
     return {
-      message: 'This ballot has already been submitted. Each voting link can only be used once.',
-      hint: CONTACT_SECRETARY_HINT,
+      title: "You've already voted",
+      message:
+        'This ballot has already been submitted, so your vote is recorded. Each voting link can only be used once.',
+      hint: RECEIPT_ELSEWHERE_HINT,
+      tone: 'done',
     };
   }
   if (detail === 'Voting has closed' || detail === 'Voting has ended') {
     return {
-      message: 'Voting has closed for this election.',
-      hint: 'Results will be shared by your organization.',
+      title: 'Voting has closed',
+      message: 'Voting has closed for this election. Results will be shared by your organization.',
+      hint: RECEIPT_ELSEWHERE_HINT,
+      tone: 'closed',
     };
   }
   if (detail.startsWith(REOPENED_PREFIX)) {
@@ -134,6 +150,8 @@ export const BallotVotingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadErrorHint, setLoadErrorHint] = useState<string | null>(CONTACT_SECRETARY_HINT);
+  const [loadErrorTitle, setLoadErrorTitle] = useState<string | undefined>(undefined);
+  const [loadErrorTone, setLoadErrorTone] = useState<LoadErrorTone>('error');
   const { choices, resetChoices, updateChoice, updateWriteInName, toggleCandidate, setCandidateRank } =
     useBallotChoices();
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -188,11 +206,13 @@ export const BallotVotingPage: React.FC = () => {
       // an explicit Abstain on each (W50-25).
       resetChoices(electionData.ballot_items || []);
     } catch (err: unknown) {
-      const { message, hint } = describeLoadError(
+      const { message, hint, title, tone } = describeLoadError(
         publicErrorText(err, "Couldn't load your ballot. The link may have expired or be invalid.")
       );
       setError(message);
       setLoadErrorHint(hint);
+      setLoadErrorTitle(title);
+      setLoadErrorTone(tone ?? 'error');
     } finally {
       setLoading(false);
     }
@@ -231,7 +251,8 @@ export const BallotVotingPage: React.FC = () => {
     }
   };
 
-  const getChoiceLabel = (itemId: string): string => choiceLabel(choices[itemId], candidates);
+  const getChoiceLabel = (item: BallotItem): string =>
+    choiceLabel(choices[item.id], candidates, election ? itemForm(item, election) : undefined);
 
   // ---- Render states ----
 
@@ -256,8 +277,28 @@ export const BallotVotingPage: React.FC = () => {
         className="from-theme-bg-from via-theme-bg-via to-theme-bg-to flex min-h-screen items-center justify-center bg-linear-to-br p-4"
       >
         <div className="bg-theme-surface w-full max-w-md rounded-lg p-8 text-center shadow-lg">
-          <div className="mb-4 text-5xl text-red-600">!</div>
-          <h1 className="text-theme-text-primary mb-2 text-xl font-bold">Unable to Load Ballot</h1>
+          {loadErrorTone === 'done' ? (
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-500/20">
+              <svg
+                className="h-8 w-8 text-green-700 dark:text-green-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          ) : loadErrorTone === 'closed' ? (
+            <div className="text-theme-text-muted mb-4 text-5xl" aria-hidden="true">
+              &#8226;
+            </div>
+          ) : (
+            <div className="mb-4 text-5xl text-red-600">!</div>
+          )}
+          <h1 className="text-theme-text-primary mb-2 text-xl font-bold">
+            {loadErrorTitle ?? 'Unable to Load Ballot'}
+          </h1>
           <p className="text-theme-text-secondary">{error}</p>
           {loadErrorHint && <p className="text-theme-text-muted mt-4 text-sm">{loadErrorHint}</p>}
         </div>
@@ -328,6 +369,9 @@ export const BallotVotingPage: React.FC = () => {
   // An election built from positions alone carries no ballot items, so
   // unansweredItems() is empty and Submit would otherwise enable over nothing.
   const hasNoItems = ballotItems.length === 0;
+  // Mention write-ins only where one is offered: with them off, the
+  // instruction promised a choice no item had (W50-76).
+  const offersWriteIn = ballotItems.some((item) => itemAllowsWriteIn(item, election.allow_write_ins));
 
   return (
     <div className="from-theme-bg-from via-theme-bg-via to-theme-bg-to min-h-screen bg-linear-to-br">
@@ -355,7 +399,9 @@ export const BallotVotingPage: React.FC = () => {
           <p className="text-theme-text-secondary text-sm">
             {hasNoItems
               ? 'This ballot has no items to vote on, so it cannot be submitted from this link. Please vote in the app, or contact the election administrator.'
-              : 'Make a selection for each item below: vote for an option, write in your own choice where allowed, or choose Abstain. Submit becomes available once every item has a selection.'}
+              : offersWriteIn
+                ? 'Make a selection for each item below: vote for an option, write in your own choice where offered, or choose Abstain. Submit becomes available once every item has a selection.'
+                : 'Make a selection for each item below: vote for an option or choose Abstain. Submit becomes available once every item has a selection.'}
           </p>
         </div>
 
@@ -438,7 +484,7 @@ export const BallotVotingPage: React.FC = () => {
             <div className="px-6 py-4">
               <div className="space-y-4">
                 {ballotItems.map((item, index) => {
-                  const label = getChoiceLabel(item.id);
+                  const label = getChoiceLabel(item);
                   const isAbstain = label.startsWith('Abstain');
 
                   return (
