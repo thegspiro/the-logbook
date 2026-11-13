@@ -4,8 +4,12 @@
  * none of them decides anything (CLAUDE.md pitfall #29).
  */
 
-import type { AttendanceWaiverActionEntry, AttendanceWaiverEligibility } from '../types/attendanceWaiver';
-import { AttendanceWaiverCapPeriod } from '../constants/enums';
+import type {
+  AttendanceWaiverActionEntry,
+  AttendanceWaiverEligibility,
+  AttendanceWaiverRequest,
+} from '../types/attendanceWaiver';
+import { AttendanceWaiverCapPeriod, AttendanceWaiverStatus } from '../constants/enums';
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
@@ -50,6 +54,14 @@ export const ATTENDANCE_WAIVER_ACTION_LABELS: Record<string, string> = {
   rescheduled: 'Session rescheduled',
   member_confirmed: 'Confirmed the new date',
 };
+
+/**
+ * Whether the session moved and the request waits on its member to confirm
+ * the new date. The server's own field, read rather than inferred: until the
+ * member confirms, nobody can decide it.
+ */
+export const awaitsReconfirmation = (request: Pick<AttendanceWaiverRequest, 'status' | 'reconfirm_requested_at'>) =>
+  request.status === AttendanceWaiverStatus.PENDING && Boolean(request.reconfirm_requested_at);
 
 /** The decision page every queue row and email button opens. */
 export const attendanceWaiverPath = (requestId: string) => `/attendance-waivers/${encodeURIComponent(requestId)}`;

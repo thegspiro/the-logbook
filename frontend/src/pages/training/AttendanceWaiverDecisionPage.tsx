@@ -34,6 +34,7 @@ import {
   ATTENDANCE_WAIVER_ACTION_LABELS,
   ATTENDANCE_WAIVER_QUEUE_PATH,
   WAIVER_TEXT_MAX_LENGTH,
+  awaitsReconfirmation,
 } from '../../utils/attendanceWaivers';
 
 type Choice = 'approve' | 'deny';
@@ -207,6 +208,20 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
     }
   };
 
+  const handleConfirm = async () => {
+    if (!request) return;
+    setBusy(true);
+    try {
+      setRequest(await attendanceWaiverService.confirm(request.id));
+      toast.success('Confirmed; your request is back with the officers');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Your request could not be confirmed'));
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const header = (
     <TrainingPageHeader
       icon={CalendarX}
@@ -289,6 +304,34 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
             />
           )}
         </section>
+
+        {awaitsReconfirmation(request) &&
+          (request.can_confirm ? (
+            <div className="alert-warning split-row gap-3 rounded-lg p-4 text-sm sm:items-center" role="status">
+              <span className="split-row-main">
+                This session moved to {formatDateTime(request.event_start, tz)}. Do you still need to be excused?
+              </span>
+              <button
+                type="button"
+                onClick={() => void handleConfirm()}
+                disabled={busy}
+                className="split-row-aside btn-primary text-sm font-medium disabled:opacity-50"
+              >
+                Confirm
+              </button>
+            </div>
+          ) : (
+            <div className="alert-info rounded-lg p-4 text-sm" role="status">
+              <p className="font-medium">Waiting for {request.member_name ?? 'the member'} to confirm the new date</p>
+              <p className="mt-1">
+                The session moved to {formatDateTime(request.event_start, tz)}. It can be decided once they confirm they
+                still need to be excused.
+              </p>
+              <button type="button" disabled className="btn-primary mt-3 text-sm font-medium disabled:opacity-50">
+                Record decision
+              </button>
+            </div>
+          ))}
 
         {request.can_decide && (
           <form className="card space-y-4 p-6" onSubmit={(e) => void handleDecide(e)} noValidate>

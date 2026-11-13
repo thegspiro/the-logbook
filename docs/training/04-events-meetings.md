@@ -1602,6 +1602,42 @@ What happens:
 > **Screenshots needed:** the Postpone Event dialog; an event card with the
 > **Postponed** badge; the event page's "Postponed from" line.
 
+### Moving an event that members asked to be excused from _(2026-11-13)_
+
+When an event's **start** moves — an edit of its date or start time, an edit of
+"this and future events" in a series, or **Postpone** — every request to be
+excused from it that is still **pending** or already **approved** goes back to
+the member who made it. The owner decided this on 2026-11-13: the member asked
+about the old date, and may not need to be excused from the new one.
+
+- The member gets a notice in the app and by email: "The training session
+  _title_ you asked to be excused from moved from _old date and time_ to _new
+  date and time_." It never repeats their reason.
+- The request shows **This session moved to _new date_. Do you still need to
+  be excused?** with **Confirm** and **Withdraw**, on **My Training** and on
+  the event's page.
+- **Confirm** sends it back to the officers who decide, who are asked again
+  in the app and by email. It is decided afresh: an approval for the old date
+  does not carry over.
+- **Withdraw** takes the request back; the event then counts as usual.
+- Until the member confirms, nobody can approve or deny it. The officers' page
+  says **Waiting for _member_ to confirm the new date**, and the queue shows a
+  **Session moved: member to confirm** badge.
+- A member who does nothing is not chased. A request still undecided seven
+  days after the (new) date closes on its own and the event counts as missed.
+- An approved business-meeting request's waiver comes off the minutes record
+  until the request is approved again. Whether the member was marked present
+  is not changed.
+- **A denied request stays denied.** The first decision is final.
+- Changing only the title, location, description or end time does nothing to
+  the requests. Cancelling or deleting the event closes pending requests, as
+  before.
+
+**What if Confirm is refused?** The message says why: the member already
+checked in to the event, or (for a business meeting) a leave of absence now
+covers the new date or the Secretary has already excused them. Nothing is left
+to excuse, so withdraw the request instead.
+
 ### Deleting an event or a series
 
 1. On the event's page, select **More → Delete Event**.

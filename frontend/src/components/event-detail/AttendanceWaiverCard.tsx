@@ -103,6 +103,50 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
     await load();
   };
 
+  const handleConfirmMoved = async () => {
+    if (!request) return;
+    setWithdrawing(true);
+    try {
+      await attendanceWaiverService.confirm(request.id);
+      toast.success('Confirmed; your request is back with the officers');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Your request could not be confirmed'));
+    } finally {
+      setWithdrawing(false);
+    }
+    await load();
+  };
+
+  if (request && request.can_confirm) {
+    return (
+      <div className="split-row alert-warning gap-3 rounded-lg p-4 text-sm sm:items-center" role="status">
+        <span className="split-row-main">
+          This session moved to {formatDateTime(request.event_start, timezone)}. Do you still need to be excused?
+        </span>
+        <span className="split-row-aside flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void handleConfirmMoved()}
+            disabled={withdrawing}
+            className="btn-primary text-sm font-medium disabled:opacity-50"
+          >
+            Confirm
+          </button>
+          {request.can_withdraw && (
+            <button
+              type="button"
+              onClick={() => void handleWithdraw()}
+              disabled={withdrawing}
+              className="btn-secondary text-sm font-medium disabled:opacity-50"
+            >
+              Withdraw
+            </button>
+          )}
+        </span>
+      </div>
+    );
+  }
+
   if (request && request.status === AttendanceWaiverStatus.PENDING) {
     return (
       <div className="split-row alert-info gap-3 rounded-lg p-4 text-sm sm:items-center" role="status">

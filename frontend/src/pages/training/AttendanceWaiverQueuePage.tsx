@@ -30,7 +30,7 @@ import type { AttendanceWaiverRequest } from '../../types/attendanceWaiver';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { attendanceWaiverPath } from '../../utils/attendanceWaivers';
+import { attendanceWaiverPath, awaitsReconfirmation } from '../../utils/attendanceWaivers';
 
 /** The backend's largest page (`MAX_PAGE`): every pending request in one call. */
 const PENDING_LIMIT = 200;
@@ -54,6 +54,11 @@ const RequestRow: React.FC<{ request: AttendanceWaiverRequest; timezone: string 
           {request.decided_by_name ? ` · decided by ${request.decided_by_name}` : ''}
         </span>
       </span>
+      {awaitsReconfirmation(request) && (
+        <span className="badge border border-blue-500/30 bg-blue-500/10 text-blue-800 dark:text-blue-300">
+          Session moved: member to confirm
+        </span>
+      )}
       <span className={`badge border ${ATTENDANCE_WAIVER_STATUS_COLORS[request.status] ?? ''}`}>
         {ATTENDANCE_WAIVER_STATUS_LABELS[request.status] ?? request.status}
       </span>
