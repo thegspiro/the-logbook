@@ -89,8 +89,8 @@ async def save_meeting_waiver_policy(
 ):
     """
     Save the department's policy for business-meeting waiver requests, so the
-    Secretary can change it without settings.manage. Approver positions must
-    belong to the department (400 otherwise).
+    Secretary can change it without settings.manage. Approver and copy-to
+    (CC) positions must belong to the department (400 otherwise).
 
     **Requires permission: meetings.manage**
     """

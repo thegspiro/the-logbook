@@ -129,8 +129,8 @@ async def save_attendance_waiver_policy(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Save the department's policy for session waiver requests. Approver
-    positions must belong to the department (400 otherwise).
+    Save the department's policy for session waiver requests. Approver and
+    copy-to (CC) positions must belong to the department (400 otherwise).
 
     **Requires permission: training.manage**
     """

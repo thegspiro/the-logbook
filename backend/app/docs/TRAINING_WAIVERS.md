@@ -239,6 +239,17 @@ own request. The first decision is final, except that the Chief may approve a
 denied request, with a reason, never on their own request; the denial stays on
 record beside the override.
 
+**Who is copied** _(2026-11-13)_. `cc_position_ids` names positions whose
+current holders are told the outcome of each final decision (approved, denied,
+the Chief's override) by an in-app notice (category `attendance_waiver_cc`) and
+an email under the workflow's decider email kind. They are informed only: the
+notice names the member, the session, its date and the outcome, never the
+reason, category or note; it leads to `/events/{id}` while the event exists and
+nowhere after. The requester and the decider are left out, and each holder gets
+one notice. Withdrawals, voids and expiries are not decisions and are not
+copied. Saving the policy refuses a CC position outside the department (400),
+as it does an approver position.
+
 **The cap** counts approved requests, by the session's date, including denials
 the Chief overrode. It is checked when a request is approved, not when it is
 made, so several may be pending at once. Under `rolling_12_months` no 12-month

@@ -15,6 +15,11 @@
  * (PDF, JPEG, PNG or HEIC, 10 MB each, three at most), and how many days after
  * a request closes its documents are kept before the daily retention task
  * deletes them.
+ *
+ * Copy decisions to: positions whose holders are told the outcome of every
+ * final decision (approved, not approved, approved by the Chief on review).
+ * They are informed only — they cannot open a request, and the notice carries
+ * no reason, category or note.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -49,7 +54,13 @@ const MAX_CATEGORY_LENGTH = 100;
 const RETENTION_MIN = 1;
 const RETENTION_MAX = 3650;
 
-type Field = 'cap' | 'categories' | 'category_required' | 'attachment_retention_days' | 'approver_position_ids';
+type Field =
+  | 'cap'
+  | 'categories'
+  | 'category_required'
+  | 'attachment_retention_days'
+  | 'approver_position_ids'
+  | 'cc_position_ids';
 
 const FIELDS: FieldSpecs<Field> = {
   cap: { id: 'waiver-policy-cap', label: 'Most waivers per member' },
@@ -57,6 +68,7 @@ const FIELDS: FieldSpecs<Field> = {
   category_required: { id: 'waiver-policy-category-required', label: 'Category required' },
   attachment_retention_days: { id: 'waiver-policy-retention', label: 'Keep documents for' },
   approver_position_ids: { id: 'waiver-policy-positions', label: 'Who decides' },
+  cc_position_ids: { id: 'waiver-policy-cc-positions', label: 'Copy decisions to' },
 };
 
 const DEADLINE_OPTIONS = Object.values(AttendanceWaiverDeadline);
@@ -239,11 +251,22 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
         : [...draft.positionIds, positionId],
     });
 
+  const toggleCcPosition = (positionId: string) =>
+    update({
+      ccPositionIds: draft.ccPositionIds.includes(positionId)
+        ? draft.ccPositionIds.filter((p) => p !== positionId)
+        : [...draft.ccPositionIds, positionId],
+    });
+
   // A chosen position the loaded list does not contain was deleted; saving
   // drops it (see toPolicy), and the officer is told so before they save.
   const unknownPositionCount = positions
     ? draft.positionIds.filter((p) => !positions.some((option) => option.id === p)).length
     : 0;
+  const unknownCcPositionCount = positions
+    ? draft.ccPositionIds.filter((p) => !positions.some((option) => option.id === p)).length
+    : 0;
+  const staleChoiceCount = unknownPositionCount + unknownCcPositionCount;
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -539,18 +562,59 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
         )}
       </div>
 
+      <div className="card space-y-3 p-6">
+        <div>
+          <h3 id={FIELDS.cc_position_ids.id} className="text-theme-text-primary text-base font-semibold">
+            Copy decisions to
+          </h3>
+          <p className="text-theme-text-secondary mt-1 text-sm">
+            Everyone holding a chosen position is told when a request is approved or not approved: who asked, for which
+            session and the outcome. They are informed only. They cannot open the request, and are never told the
+            member&apos;s reason, category or the decider&apos;s note. Withdrawn requests are not copied.
+          </p>
+        </div>
+        {positions === null ? (
+          <p className={`text-sm ${FIELD_ERROR_CLASS}`} role="alert">
+            The position list did not load, so who is copied cannot be changed right now. The current choice is kept
+            when you save.
+          </p>
+        ) : positions.length === 0 ? (
+          <p className="text-theme-text-muted text-sm">This department has no positions yet.</p>
+        ) : (
+          <fieldset disabled={saving} className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <legend className="sr-only">Positions copied on waiver decisions</legend>
+            {positions.map((position) => (
+              <label key={position.id} className="flex min-h-11 items-center gap-3">
+                <input
+                  type="checkbox"
+                  className="form-checkbox"
+                  checked={draft.ccPositionIds.includes(position.id)}
+                  onChange={() => toggleCcPosition(position.id)}
+                />
+                <span className="text-theme-text-primary text-sm">{position.name}</span>
+              </label>
+            ))}
+          </fieldset>
+        )}
+        {unknownCcPositionCount > 0 && (
+          <p className="text-theme-text-muted text-xs">
+            {unknownCcPositionCount === 1
+              ? 'One copied position no longer exists and is removed when you save.'
+              : `${unknownCcPositionCount} copied positions no longer exist and are removed when you save.`}
+          </p>
+        )}
+      </div>
+
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={saving || (!dirty && unknownPositionCount === 0)}
+          disabled={saving || (!dirty && staleChoiceCount === 0)}
           className="btn-primary inline-flex items-center gap-2 text-sm font-medium disabled:opacity-50"
         >
           <Save className="h-4 w-4" aria-hidden="true" />
           {saving ? 'Saving...' : 'Save'}
         </button>
-        {!dirty && unknownPositionCount === 0 && (
-          <span className="text-theme-text-muted text-sm">No unsaved changes</span>
-        )}
+        {!dirty && staleChoiceCount === 0 && <span className="text-theme-text-muted text-sm">No unsaved changes</span>}
       </div>
     </form>
   );

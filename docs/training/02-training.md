@@ -2563,6 +2563,38 @@ Overview**. It shows:
   **Manual** for waivers created on their own;
 - links to the full Waivers page.
 
+### Copying Waiver Request Decisions to Positions _(2026-11-13)_
+
+**Who can do this:** training officers (`training.manage`).
+
+A department can have other officers told how each waiver request ends without
+letting them decide it. Open **Training Admin > Settings & Data > Session
+Waivers** and, under **Copy decisions to**, tick the positions to inform (for
+example the Captains), then select **Save**. The positions here are separate
+from **Who decides**: ticking a position here does not let its holders approve
+or deny anything.
+
+When a request is approved, not approved, or approved by the Chief on review,
+everyone holding a ticked position gets a notification and an email saying who
+asked, for which session and date, and the outcome. Each person gets one
+notice, however many ticked positions they hold. The member who asked and the
+officer who decided are not copied, and neither is anyone whose account is no
+longer current.
+
+- **What the copy leaves out.** The member's reason, the category they chose
+  and the decider's note are never in it. Copied officers cannot open the
+  request; the notice links to the session's event page, or to nothing if the
+  event has since been deleted.
+- **What is not copied.** A request the member withdrew, or one voided because
+  the session was cancelled or deleted, was never decided, so nobody is copied.
+- **Email.** The copy is sent under the **Training officer duties** email setting, so
+  an officer who turned that off still sees it in the app.
+- **A position that was deleted** after being ticked is listed as "no longer
+  exists" and is removed the next time you save.
+
+Business-meeting requests carry the same setting in their own policy (sent
+under **Event officer duties** email). They have no settings screen yet.
+
 ---
 
 ## Compliance Summary

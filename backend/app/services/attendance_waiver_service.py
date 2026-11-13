@@ -34,6 +34,9 @@ written once for both (CLAUDE.md pitfall #29). The rules:
   definition, read by both the recipients and ``may_decide``.
 - **The first decision is final**, except that a Chief may override a denial,
   with a reason, and never on their own request.
+- **CC positions are informed, never asked.** After a final decision the
+  holders of the policy's ``cc_position_ids`` get the outcome, without the
+  reason, category or note (``_copy_decision``); they cannot open the request.
 
 **Lock order.** Every write locks the requester's ``users`` row before the
 request row. Submitting has to take the member's row first (there is no request
@@ -153,6 +156,9 @@ MEETING_WAIVER_TEXT = "Excused: approved request"
 # prompt can be archived once any one of them decides.
 REVIEW_PROMPT_CATEGORY = "attendance_waiver_request"
 MEMBER_UPDATE_CATEGORY = "attendance_waiver_update"
+# A final decision copied to the holders of the policy's CC positions. Not
+# archived with the prompts: it is a record of the outcome, not a task.
+CC_NOTICE_CATEGORY = "attendance_waiver_cc"
 PROMPT_METADATA_KEY = "waiver_request_id"
 
 _DEADLINE_OFFSETS = {
@@ -449,6 +455,9 @@ class AttendanceWaiverService:
         await assert_all_in_org(
             self.db, Position, policy.approver_position_ids, org_id, label="position"
         )
+        await assert_all_in_org(
+            self.db, Position, policy.cc_position_ids, org_id, label="copy-to position"
+        )
         # Locked so a concurrent settings save cannot write back a copy taken
         # before this one.
         organization = (
@@ -485,6 +494,7 @@ class AttendanceWaiverService:
                 "attachment": policy.attachment,
                 "attachment_retention_days": policy.attachment_retention_days,
                 "approver_position_ids": list(policy.approver_position_ids),
+                "cc_position_ids": list(policy.cc_position_ids),
             },
         )
         await self.db.commit()
@@ -1096,6 +1106,7 @@ class AttendanceWaiverService:
         await self.db.refresh(request)
         await self._archive_prompts(org_id, request)
         await self._notify_member(org_id, request, chosen)
+        await self._copy_decision(org_id, request, actor, chosen)
         return request
 
     async def _require_decider(
@@ -1753,6 +1764,101 @@ class AttendanceWaiverService:
                 "View Request",
             )
 
+    async def _copy_decision(
+        self,
+        org_id: str,
+        request: AttendanceWaiverRequest,
+        actor: User,
+        action: AttendanceWaiverAction,
+    ) -> None:
+        """Tell the holders of the policy's CC positions how a request ended.
+
+        Only a final decision reaches here (approve, deny, the Chief's
+        override); a withdrawal, a void or an expiry is not one and is not
+        copied. The holders are informed only: they cannot open the request,
+        so the notice carries who, which session, when and the outcome, and
+        never the member's reason, category or the decider's note. It leads to
+        the session while the event exists, and nowhere once it is gone.
+        After the commit, and never allowed to fail the decision.
+        """
+        try:
+            policy = await self.get_policy(org_id)
+            if not policy.cc_position_ids:
+                return
+            # One notice per person, however many CC positions they hold; the
+            # member and the decider already have their own notice or the
+            # decision in hand.
+            ids = await self._holder_ids(
+                org_id, Position.id.in_(list(policy.cc_position_ids))
+            ) - {str(request.user_id), str(actor.id)}
+            if not ids:
+                return
+            recipients = list(
+                (
+                    await self.db.execute(
+                        select(User).where(
+                            User.id.in_(sorted(ids)), User.organization_id == org_id
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            name = (await self._names(org_id, [request.user_id])).get(
+                str(request.user_id), "A member"
+            )
+            title = request.event_title_snapshot
+            day = _day_label(request.session_date)
+            if action == AttendanceWaiverAction.CHIEF_OVERRIDE:
+                word, outcome = "approved", "was approved by the Chief on review"
+            elif action == AttendanceWaiverAction.APPROVED:
+                word, outcome = "approved", "was approved"
+            else:
+                word, outcome = "not approved", "was not approved"
+            subject = f"Waiver request {word} — {name}, {title}"
+            sentence = (
+                f'{name}\'s request to be excused from "{title}" on {day} '
+                f"{outcome}."
+            )
+            path = f"/events/{request.event_id}" if request.event_id else None
+            for recipient in recipients:
+                self.db.add(
+                    NotificationLog(
+                        id=generate_uuid(),
+                        organization_id=org_id,
+                        recipient_id=str(recipient.id),
+                        channel=NotificationChannel.IN_APP,
+                        category=CC_NOTICE_CATEGORY,
+                        subject=subject,
+                        message=sentence,
+                        action_url=path,
+                        notification_metadata={
+                            PROMPT_METADATA_KEY: str(request.id),
+                            "event_id": (
+                                str(request.event_id) if request.event_id else None
+                            ),
+                        },
+                        delivered=True,
+                    )
+                )
+            await self.db.commit()
+        except Exception:
+            logger.exception(
+                "Failed to copy the decision on waiver request {}", request.id
+            )
+            await self._recover(request)
+            return
+        await self._email(
+            org_id,
+            request,
+            recipients,
+            self.spec.decider_email_kind,
+            subject,
+            [sentence, "You are copied on waiver decisions by your position."],
+            path,
+            "View Session",
+        )
+
     async def _email(
         self,
         org_id: str,
@@ -1761,7 +1867,7 @@ class AttendanceWaiverService:
         kind: EmailKind,
         subject: str,
         sentences: Sequence[str],
-        path: str,
+        path: Optional[str],
         button: str,
     ) -> None:
         """Email a notice that an in-app row also carries.
@@ -1771,6 +1877,7 @@ class AttendanceWaiverService:
         row: never the member's reason, a decider's note, or a question or
         answer, which may be medical and stay on the request page behind
         sign-in. Each recipient's email preferences decide, under ``kind``.
+        ``path`` None sends no button, for a notice with nowhere to lead.
         Called after the commit and never allowed to fail the action: a
         failure is logged by request id and swallowed.
         """
@@ -1795,20 +1902,22 @@ class AttendanceWaiverService:
                 return
             from app.services.email_service import EmailService, wrap_email_body
 
-            url = f"{app_settings.FRONTEND_URL}{path}"
             body = "".join(f"<p>{html.escape(line)}</p>" for line in sentences)
-            html_body = wrap_email_body(
-                org,
-                "Waiver Request",
-                body + '<p style="text-align: center;">'
-                f'<a href="{html.escape(url)}" class="button" role="link">'
-                f"{html.escape(button)}</a></p>",
-            )
+            text_body = "\n\n".join(sentences)
+            if path is not None:
+                url = f"{app_settings.FRONTEND_URL}{path}"
+                body += (
+                    '<p style="text-align: center;">'
+                    f'<a href="{html.escape(url)}" class="button" role="link">'
+                    f"{html.escape(button)}</a></p>"
+                )
+                text_body += f"\n\n{button}: {url}"
+            html_body = wrap_email_body(org, "Waiver Request", body)
             await EmailService(organization=org).send_email(
                 to_emails=to_emails,
                 subject=subject,
                 html_body=html_body,
-                text_body="\n\n".join(sentences) + f"\n\n{button}: {url}",
+                text_body=text_body,
             )
         except Exception:
             logger.exception("Failed to email about waiver request {}", request.id)
