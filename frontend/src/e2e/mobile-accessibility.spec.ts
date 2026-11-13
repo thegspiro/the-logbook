@@ -160,6 +160,15 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   '/admin-hours': 2,
   '/notifications?tab=inbox': 3,
   '/inventory/admin/checklists': 6,
+  // Both measured the first time the inventory fixtures put rows on them, and
+  // both are `text-theme-text-muted` (slate-600) on a tinted surface rather
+  // than a colour either screen chose: categories' item-count chips sit on
+  // `bg-theme-surface-hover` (6.91:1), and supply's location line, restock
+  // note and lot toggle on an expired item's red-50 card (6.92:1). The status
+  // badges beside them were raised to AAA in the same change. AA-clean, and
+  // short of 7:1 by a hair, like the shared alert-warning token above.
+  '/inventory/admin/categories': 7,
+  '/inventory/admin/checklists/supply': 3,
   '/elections': 3,
   // The minutes landing as a manager sees it, measured the first time the pass
   // granted minutes.manage. All eight nodes are its feature tags (Roll Call,
