@@ -131,6 +131,21 @@ describe('AttendanceWaiverDecisionPage', () => {
     expect(screen.getByText('Illness')).toBeInTheDocument();
   });
 
+  it('says when a pending request closes if nobody decides it', async () => {
+    mockGet.mockResolvedValue(request({ expires_at: '2026-11-28T05:00:00Z' }));
+    renderAt('/attendance-waivers/req-1');
+    expect(await screen.findByText('If nobody decides')).toBeInTheDocument();
+    expect(screen.getByText(/^Closes undecided on Saturday, November 28, 2026/)).toBeInTheDocument();
+  });
+
+  it('says nothing about closing once the request has expired', async () => {
+    mockGet.mockResolvedValue(request({ status: 'expired', can_decide: false, expires_at: null }));
+    renderAt('/attendance-waivers/req-1');
+    expect(await screen.findByText('Expired')).toBeInTheDocument();
+    expect(screen.queryByText('If nobody decides')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Approve' })).not.toBeInTheDocument();
+  });
+
   it('shows no reason when the server withheld it', async () => {
     mockGet.mockResolvedValue(request({ reason: null, category: null }));
     renderAt('/attendance-waivers/req-1');

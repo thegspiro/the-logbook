@@ -33,6 +33,7 @@ import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import {
   ATTENDANCE_WAIVER_ACTION_LABELS,
   ATTENDANCE_WAIVER_QUEUE_PATH,
+  closesUndecidedText,
   WAIVER_TEXT_MAX_LENGTH,
 } from '../../utils/attendanceWaivers';
 
@@ -275,6 +276,9 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
               })}
             </Detail>
             <Detail label="Asked">{formatDateTime(request.submitted_at, tz)}</Detail>
+            {closesUndecidedText(request, tz) && (
+              <Detail label="If nobody decides">{closesUndecidedText(request, tz)}</Detail>
+            )}
             {request.category && <Detail label="Category">{request.category}</Detail>}
             {request.reason && <Detail label="Reason">{request.reason}</Detail>}
           </dl>

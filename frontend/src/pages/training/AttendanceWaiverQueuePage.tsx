@@ -30,7 +30,7 @@ import type { AttendanceWaiverRequest } from '../../types/attendanceWaiver';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { attendanceWaiverPath } from '../../utils/attendanceWaivers';
+import { attendanceWaiverPath, closesUndecidedText } from '../../utils/attendanceWaivers';
 
 /** The backend's largest page (`MAX_PAGE`): every pending request in one call. */
 const PENDING_LIMIT = 200;
@@ -53,6 +53,9 @@ const RequestRow: React.FC<{ request: AttendanceWaiverRequest; timezone: string 
           Asked {formatDateTime(request.submitted_at, timezone)}
           {request.decided_by_name ? ` · decided by ${request.decided_by_name}` : ''}
         </span>
+        {closesUndecidedText(request, timezone) && (
+          <span className="text-theme-text-muted block text-xs">{closesUndecidedText(request, timezone)}</span>
+        )}
       </span>
       <span className={`badge border ${ATTENDANCE_WAIVER_STATUS_COLORS[request.status] ?? ''}`}>
         {ATTENDANCE_WAIVER_STATUS_LABELS[request.status] ?? request.status}
@@ -78,7 +81,9 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
   const [error, setError] = useState<string | null>(null);
 
   // The decided list is the unfiltered list with the pending rows left out:
-  // the API filters by one status at a time, and decided means several.
+  // the API filters by one status at a time, and decided means several. It
+  // also holds the requests that closed without a decision (withdrawn,
+  // voided, expired), each labelled by its status badge.
   const loadDecided = useCallback(async (skip: number) => {
     const page = await attendanceWaiverService.list({ skip, limit: DECIDED_PAGE });
     const rows = page.items.filter((r) => r.status !== AttendanceWaiverStatus.PENDING);
@@ -170,7 +175,7 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
         {decided.length > 0 && (
           <section aria-labelledby="waiver-queue-decided">
             <h2 id="waiver-queue-decided" className="text-theme-text-primary mb-2 text-lg font-semibold">
-              Decided
+              Decided and closed
             </h2>
             <ul className="card divide-theme-surface-border divide-y">
               {decided.map((request) => (

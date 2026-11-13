@@ -93,6 +93,11 @@ export interface AttendanceWaiverRequest {
   decided_by: string | null;
   decided_by_name: string | null;
   chief_override: boolean;
+  /**
+   * When a pending request closes undecided, seven days after the session
+   * (UTC instant, computed by the backend); null once it is settled.
+   */
+  expires_at?: string | null;
   /** Set while a decider's question waits on the member. */
   info_requested_at: string | null;
   /** Set while a rescheduled session waits on the member to confirm. */

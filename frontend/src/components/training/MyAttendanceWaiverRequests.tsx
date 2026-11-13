@@ -13,12 +13,15 @@ import { attendanceWaiverService } from '../../services/attendanceWaiverService'
 import { ATTENDANCE_WAIVER_STATUS_COLORS, ATTENDANCE_WAIVER_STATUS_LABELS } from '../../constants/enums';
 import type { AttendanceWaiverRequest } from '../../types/attendanceWaiver';
 import { formatCalendarDate } from '../../utils/dateFormatting';
+import { useTimezone } from '../../hooks/useTimezone';
+import { closesUndecidedText } from '../../utils/attendanceWaivers';
 
 interface MyAttendanceWaiverRequestsProps {
   wrap: (list: React.ReactNode) => React.ReactNode;
 }
 
 export const MyAttendanceWaiverRequests: React.FC<MyAttendanceWaiverRequestsProps> = ({ wrap }) => {
+  const tz = useTimezone();
   const [requests, setRequests] = useState<AttendanceWaiverRequest[]>([]);
 
   useEffect(() => {
@@ -62,6 +65,9 @@ export const MyAttendanceWaiverRequests: React.FC<MyAttendanceWaiverRequestsProp
                   {request.decided_by_name ? ` · decided by ${request.decided_by_name}` : ''}
                   {request.chief_override ? ' (Chief override)' : ''}
                 </span>
+                {closesUndecidedText(request, tz) && (
+                  <span className="text-theme-text-muted block text-xs">{closesUndecidedText(request, tz)}</span>
+                )}
               </span>
               <span className={`badge border ${ATTENDANCE_WAIVER_STATUS_COLORS[request.status] ?? ''}`}>
                 {ATTENDANCE_WAIVER_STATUS_LABELS[request.status] ?? request.status}
