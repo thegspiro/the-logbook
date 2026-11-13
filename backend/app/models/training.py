@@ -2947,6 +2947,10 @@ class TrainingModuleConfig(Base):
     one_shift_evaluation_for_multiple_programs: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="0", nullable=False
     )
+    # Days after an outside shift ends that a preceptor link stays open.
+    shift_evaluation_link_days: Mapped[int] = mapped_column(
+        Integer, default=7, server_default="7", nullable=False
+    )
 
     # Self-reported submissions
     show_submission_history: Mapped[bool] = mapped_column(

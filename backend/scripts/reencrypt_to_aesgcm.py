@@ -21,6 +21,7 @@ What it covers
     shift_completion_reports: areas_of_strength, areas_for_improvement,
                               officer_narrative, reviewer_notes
     shift_evaluations:        responses, closing_comments
+    shift_evaluation_links:   token, preceptor_email
     users:                    mfa_secret
     integrations:             encrypted_config
     external_training_providers: api_key, api_secret, client_secret
@@ -86,6 +87,11 @@ _PLAIN_COLUMNS = [
         "shift_evaluations",
         "id",
         ["responses", "closing_comments"],
+    ),
+    (
+        "shift_evaluation_links",
+        "id",
+        ["token", "preceptor_email"],
     ),
     (
         "users",

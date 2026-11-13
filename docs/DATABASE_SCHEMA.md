@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**368 tables · 5954 columns · 1233 foreign keys**
+**369 tables · 5974 columns · 1238 foreign keys**
 
 ---
 
@@ -673,6 +673,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`shift_evaluation_links`](#shift_evaluation_links) | `ShiftEvaluationLink` | 19 | A no-login link an outside preceptor fills one evaluation out through. |
 | [`shift_evaluation_templates`](#shift_evaluation_templates) | `ShiftEvaluationTemplate` | 21 | One evaluation form a department has defined. |
 | [`shift_evaluations`](#shift_evaluations) | `ShiftEvaluation` | 29 | One member's evaluation for one shift, filled out on a template. |
 
@@ -809,7 +810,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`training_categories`](#training_categories) | `TrainingCategory` | 14 | Training Category model |
 | [`training_courses`](#training_courses) | `TrainingCourse` | 20 | Training Course model |
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
-| [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 49 | Training Module Configuration model |
+| [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 50 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 24 | Training Program model |
 | [`training_records`](#training_records) | `TrainingRecord` | 44 | Training Record model |
 | [`training_requirement_overrides`](#training_requirement_overrides) | `TrainingRequirementOverride` | 11 | A Chief's ruling that a member meets a requirement over a period. |
@@ -2795,7 +2796,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `shift_evaluation_preceptor_link`, `custom`) | no |  |  |  |
 | `name` | VARCHAR(255) | no |  |  |  |
 | `description` | TEXT | yes |  |  |  |
 | `subject` | VARCHAR(500) | no |  |  |  |
@@ -2858,7 +2859,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `template_id` | VARCHAR(36) | yes | FK |  | → `email_templates.id` ON DELETE SET NULL |
-| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `custom`) | no |  |  |  |
+| `template_type` | ENUM(`welcome`, `password_reset`, `event_cancellation`, `event_reminder`, `training_approval`, `ballot_notification`, `member_dropped`, `inventory_change`, `cert_expiration`, `post_event_validation`, `post_shift_validation`, `property_return_reminder`, `inactivity_warning`, `election_report`, `ballot_eligibility_summary`, `election_rollback`, `election_deleted`, `member_archived`, `event_request_status`, `it_password_notification`, `duplicate_application`, `series_end_reminder`, `shift_decline`, `shift_assignment`, `shift_reminder`, `storefront_order_confirmation`, `storefront_new_order_admin`, `storefront_order_update`, `storefront_order_cancelled`, `storefront_payment_reminder`, `storefront_payment_received`, `storefront_window_open`, `storefront_window_closing`, `storefront_window_closed`, `storefront_vendor_order_placed`, `application_withdrawn`, `suggestion_submitted`, `equipment_request_update`, `external_course_match`, `training_record_voided`, `training_record_changed`, `event_waitlist_promotion`, `application_step_completed`, `application_status_link`, `application_going_inactive`, `application_follow_up_form`, `application_contact_changed`, `application_follow_up_reminder`, `application_follow_up_submitted`, `application_assigned`, `application_needs_attention`, `evaluation_step_waiting`, `evaluation_deadline_reminder`, `evaluation_overdue`, `evaluation_finalized`, `evaluation_deleted`, `evaluation_amended`, `evaluation_response`, `application_interview_requested`, `shift_evaluation_preceptor_link`, `custom`) | no |  |  |  |
 | `to_emails` | TEXT | no |  |  |  |
 | `cc_emails` | TEXT | yes |  |  |  |
 | `bcc_emails` | TEXT | yes |  |  |  |
@@ -9300,6 +9301,43 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Shift_Evaluation
 
+### `shift_evaluation_links`
+
+**ShiftEvaluationLink** · `app/models/shift_evaluation.py`
+
+> A no-login link an outside preceptor fills one evaluation out through. For a shift a member logged on an outside agency's unit: the preceptor belongs to the other agency and has no account. The member or a training officer creates the link and shows it as a QR code, copies it, or emails it. It works once, until ``expires_at``; creating another revokes it. The token is a bearer credential, stored like the follow-up form's: ``token_hash`` (SHA-256) is the only column a lookup matches on, and ``token`` is kept encrypted only so the same link can be shown again.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `external_shift_id` | VARCHAR(36) | no | FK |  | → `external_shift_hours.id` ON DELETE CASCADE |
+| `member_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `scope_key` | VARCHAR(40) | no |  |  |  |
+| `token` | TEXT | yes |  |  |  |
+| `token_hash` | VARCHAR(64) | no |  |  |  |
+| `preceptor_email` | TEXT | yes |  |  |  |
+| `last_sent_at` | DATETIME | yes |  |  |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_by_member` | BOOL | no |  | `0` |  |
+| `expires_at` | DATETIME | no |  |  |  |
+| `revoked_at` | DATETIME | yes |  |  |  |
+| `used_at` | DATETIME | yes |  |  |  |
+| `evaluation_id` | VARCHAR(36) | yes | FK, IDX |  | → `shift_evaluations.id` ON DELETE SET NULL |
+| `submitted_ip` | VARCHAR(64) | yes |  |  |  |
+| `submitted_user_agent` | VARCHAR(500) | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `idx_shift_evaluation_link_entry` (`organization_id`, `external_shift_id`, `scope_key`)
+- `idx_shift_evaluation_link_evaluation` (`evaluation_id`)
+
+**Constraints**
+
+- UNIQUE `uq_shift_evaluation_link_token_hash` (`token_hash`)
+
 ### `shift_evaluation_templates`
 
 **ShiftEvaluationTemplate** · `app/models/shift_evaluation.py`
@@ -11899,6 +11937,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `general_shift_evaluation_template_id` | VARCHAR(36) | yes | FK |  | → `shift_evaluation_templates.id` ON DELETE SET NULL |
 | `general_shift_evaluation_mode` | VARCHAR(20) | yes |  |  |  |
 | `one_shift_evaluation_for_multiple_programs` | BOOL | no |  | `0` |  |
+| `shift_evaluation_link_days` | INTEGER | no |  | `7` |  |
 | `show_submission_history` | BOOL | no |  | `1` |  |
 | `allow_member_report_export` | BOOL | no |  | `0` |  |
 | `report_review_required` | BOOL | no |  | `0` |  |
@@ -12737,7 +12776,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (451 references)
+### → `users` (453 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13101,6 +13140,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_completion_reports` | `reviewed_by` | SET NULL | yes |
 | `shift_completion_reports` | `trainee_id` | CASCADE | no |
 | `shift_equipment_checks` | `checked_by` | SET NULL | yes |
+| `shift_evaluation_links` | `created_by` | SET NULL | yes |
+| `shift_evaluation_links` | `member_id` | CASCADE | no |
 | `shift_evaluation_templates` | `created_by` | SET NULL | yes |
 | `shift_evaluation_templates` | `updated_by` | SET NULL | yes |
 | `shift_evaluations` | `evaluator_id` | SET NULL | yes |
@@ -13193,7 +13234,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (303 references)
+### → `organizations` (304 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13438,6 +13479,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_calls` | `organization_id` | CASCADE | no |
 | `shift_completion_reports` | `organization_id` | CASCADE | no |
 | `shift_equipment_checks` | `organization_id` | CASCADE | no |
+| `shift_evaluation_links` | `organization_id` | CASCADE | no |
 | `shift_evaluation_templates` | `organization_id` | CASCADE | no |
 | `shift_evaluations` | `organization_id` | CASCADE | no |
 | `shift_history_import_mappings` | `organization_id` | CASCADE | no |
@@ -14230,6 +14272,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_requests` | `expense_report_id` | SET NULL | yes |
 | `expense_line_items` | `expense_report_id` | CASCADE | no |
 
+### → `external_shift_hours` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `shift_evaluation_links` | `external_shift_id` | CASCADE | no |
+| `shift_evaluations` | `external_shift_id` | SET NULL | yes |
+
 ### → `facility_rooms` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -14420,12 +14469,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `external_shift_hours` | `external_apparatus_id` | SET NULL | yes |
-
-### → `external_shift_hours` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `shift_evaluations` | `external_shift_id` | SET NULL | yes |
 
 ### → `external_training_sync_logs` (1 references)
 
@@ -14648,6 +14691,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `screening_reminder_sends` | `screening_record_id` | CASCADE | no |
+
+### → `shift_evaluations` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `shift_evaluation_links` | `evaluation_id` | SET NULL | yes |
 
 ### → `shift_history_imports` (1 references)
 

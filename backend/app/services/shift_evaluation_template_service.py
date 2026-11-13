@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.shift_evaluation import (
     DEFAULT_GENERAL_EVALUATION_MODE,
+    DEFAULT_PRECEPTOR_LINK_DAYS,
     ShiftEvaluationTemplate,
 )
 from app.models.training import TrainingModuleConfig, TrainingProgram
@@ -212,6 +213,11 @@ class ShiftEvaluationTemplateService:
             config.one_shift_evaluation_for_multiple_programs = (
                 body.one_shift_evaluation_for_multiple_programs
             )
+        if (
+            "shift_evaluation_link_days" in sent
+            and body.shift_evaluation_link_days is not None
+        ):
+            config.shift_evaluation_link_days = body.shift_evaluation_link_days
         config.updated_by = str(user_id)
         await self.db.commit()
         await self.db.refresh(config)
@@ -281,5 +287,8 @@ def _settings_response(config: TrainingModuleConfig) -> ShiftEvaluationSettingsR
         ),
         one_shift_evaluation_for_multiple_programs=bool(
             config.one_shift_evaluation_for_multiple_programs
+        ),
+        shift_evaluation_link_days=(
+            config.shift_evaluation_link_days or DEFAULT_PRECEPTOR_LINK_DAYS
         ),
     )

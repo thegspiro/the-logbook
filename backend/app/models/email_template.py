@@ -90,6 +90,7 @@ class EmailTemplateType(str, enum.Enum):
     EVALUATION_AMENDED = "evaluation_amended"
     EVALUATION_RESPONSE = "evaluation_response"
     APPLICATION_INTERVIEW_REQUESTED = "application_interview_requested"
+    SHIFT_EVALUATION_PRECEPTOR_LINK = "shift_evaluation_preceptor_link"
     CUSTOM = "custom"
 
 

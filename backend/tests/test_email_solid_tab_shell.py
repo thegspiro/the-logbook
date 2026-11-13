@@ -88,6 +88,7 @@ _ADDED_AFTER_THE_FREEZE = {
     EmailTemplateType.EVALUATION_AMENDED.value: "6b2f0c9d4e71",
     EmailTemplateType.EVALUATION_RESPONSE.value: "9d3a71c5e2b8",
     EmailTemplateType.APPLICATION_INTERVIEW_REQUESTED.value: "4f1f4921a052",
+    EmailTemplateType.SHIFT_EVALUATION_PRECEPTOR_LINK.value: "533f8aba187e",
 }
 
 
