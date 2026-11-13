@@ -19,6 +19,7 @@ import { formatShortDateTime } from '../../utils/dateFormatting';
 import { toDisplayString } from '../../utils/displayValue';
 import { FieldType } from '../../constants/enums';
 import { buildCsv, downloadCsv, type CsvValue } from '../../utils/csv';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 const CHOICE_TYPES = new Set(['select', 'multiselect', 'checkbox', 'radio']);
 const TEXT_TYPES = new Set(['text', 'textarea', 'email', 'phone']);
@@ -322,7 +323,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
 
             {/* Number field — stat cards */}
             {summary.numStats && (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <StatGrid columns={4}>
                 <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
                   <p className="text-theme-text-muted mb-1 text-[10px] tracking-wide uppercase">Average</p>
                   <p className="text-theme-text-primary text-xl font-bold">{summary.numStats.avg}</p>
@@ -339,7 +340,7 @@ const FormResultsPanel = ({ formId }: FormResultsPanelProps) => {
                   <p className="text-theme-text-muted mb-1 text-[10px] tracking-wide uppercase">Max</p>
                   <p className="text-theme-text-primary text-xl font-bold">{summary.numStats.max}</p>
                 </div>
-              </div>
+              </StatGrid>
             )}
 
             {/* Date field — range */}

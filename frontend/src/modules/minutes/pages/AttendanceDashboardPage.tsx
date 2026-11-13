@@ -20,6 +20,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { EmptyState } from '../../../components/ux';
 import type { MeetingType } from '../types/minutes';
 import { MEETING_WAIVER_SETTINGS_PATH, MEETING_WAIVER_WORKFLOW } from '../../../utils/attendanceWaiverWorkflows';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 const PERIOD_OPTIONS = [3, 6, 12, 24] as const;
 
@@ -135,7 +136,7 @@ const AttendanceDashboardPage: React.FC = () => {
         </div>
       ) : data ? (
         <>
-          <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatGrid columns={4} gap={4} className="mb-6">
             <div className="card-secondary p-4">
               <p className="text-theme-text-muted text-sm">Meetings in period</p>
               <p className="text-theme-text-primary text-2xl font-bold">{data.total_meetings_in_period}</p>
@@ -156,7 +157,7 @@ const AttendanceDashboardPage: React.FC = () => {
                 {data.summary.voting_blocked_by_attendance}
               </p>
             </div>
-          </div>
+          </StatGrid>
 
           {data.members.length === 0 ? (
             <EmptyState

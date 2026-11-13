@@ -96,11 +96,11 @@ describe('ElectionEligibilityRulesPanel', () => {
     const onUpdate = vi.fn();
     renderWithRouter(<ElectionEligibilityRulesPanel election={baseElection} onUpdate={onUpdate} />);
 
-    await user.selectOptions(screen.getByLabelText('Held at'), 'annual');
+    await user.selectOptions(screen.getByLabelText('Kind of vote'), 'annual');
     await user.click(await screen.findByRole('button', { name: 'Keep current rules' }));
     expect(updateElection).not.toHaveBeenCalled();
 
-    await user.selectOptions(screen.getByLabelText('Held at'), 'annual');
+    await user.selectOptions(screen.getByLabelText('Kind of vote'), 'annual');
     await user.click(await screen.findByRole('button', { name: 'Change and replace rules' }));
     await waitFor(() => expect(onUpdate).toHaveBeenCalled());
     expect(updateElection).toHaveBeenCalledWith('elec-1', { meeting_kind: 'annual' });

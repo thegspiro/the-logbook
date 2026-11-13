@@ -39,6 +39,7 @@ import type {
   InventoryVendor,
   LowStockAlert,
 } from '../../../services/eventServices';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 const STATUS_OPTIONS = ['pending', 'approved', 'ordered', 'partially_received', 'received', 'cancelled'] as const;
 const URGENCY_OPTIONS = ['low', 'normal', 'high', 'critical'] as const;
@@ -1061,7 +1062,7 @@ export const ReorderRequestsPage: React.FC = () => {
         </div>
 
         {/* Stats */}
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatGrid columns={4} className="mb-6">
           <div className="card-secondary p-3 text-center">
             <p className="text-theme-text-primary text-2xl font-bold">{requests.length}</p>
             <p className="text-theme-text-muted text-xs">Total Requests</p>
@@ -1081,7 +1082,7 @@ export const ReorderRequestsPage: React.FC = () => {
             </p>
             <p className="text-theme-text-muted text-xs">Est. Outstanding</p>
           </div>
-        </div>
+        </StatGrid>
 
         {/* Low stock banner */}
         {lowStockAlerts.length > 0 && (

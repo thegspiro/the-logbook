@@ -621,12 +621,12 @@ def _tier_name(user: Any, org: Any) -> str:
     return member_standing(user) or "active"
 
 
-def _positive_int(value: Any) -> Optional[int]:
-    """``value`` if it is a positive whole number, else None. ``bool`` is an
-    ``int`` subclass and is refused, so a stray ``true`` is not read as 1."""
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        return None
-    return value
+def _uses_type_rules(election: Any) -> bool:
+    """Whether ``election`` carries version 2 (per-type) voter rules, which
+    replace the membership tiers' own voting rules for it."""
+    from app.services.voter_rules import is_type_rules
+
+    return is_type_rules(getattr(election, "eligibility_rules", None))
 
 
 # Domain label for the key fingerprint stored on each vote; distinct from the
@@ -682,6 +682,9 @@ class ElectionService:
         # Organization id -> the tier "Counts as" map, read once per request;
         # see ``_ranks_as_for_org``.
         self._ranks_as_cache: Dict[str, Dict[str, str]] = {}
+        # Organization id -> how each per-type rules row is named; see
+        # ``_row_labels_for_org``.
+        self._row_labels_cache: Dict[str, Dict[str, str]] = {}
 
     @overload
     @staticmethod
@@ -1083,6 +1086,14 @@ class ElectionService:
         if has_override:
             return None, True
 
+        # Version 2 rules carry "may vote" per member type themselves, and
+        # replace the tier's flag rather than adding to it.
+        if _uses_type_rules(election):
+            return (
+                await self._election_rules_reason(user, election, organization_id),
+                False,
+            )
+
         org: Optional[Organization]
         if organization:
             org = organization
@@ -1150,14 +1161,34 @@ class ElectionService:
             evaluate_wait,
             wait_ineligibility_reason,
         )
+        from app.services.voter_rules import (
+            attendance_reason,
+            is_type_rules,
+            type_rules_reason,
+        )
         from app.utils.membership import voter_type_key
         from app.utils.org_timezone import resolve_org_today
 
         tier_svc = MembershipTierService(self.db)
-        user_id = str(user.id)
+        today = self._org_today.get(organization_id)
+        if today is None:
+            today = await resolve_org_today(self.db, organization_id)
+            self._org_today[organization_id] = today
 
-        # Waiting period for the member's type. The start date is only looked
-        # up when their type has a timed wait: "never" and "no rule" need none.
+        if is_type_rules(rules):
+            return await type_rules_reason(
+                tier_svc,
+                user,
+                organization_id,
+                rules,
+                await self._ranks_as_for_org(organization_id),
+                await self._row_labels_for_org(organization_id),
+                today,
+            )
+
+        # Version 1: the waiting period for the member's type. The start date
+        # is only looked up when their type has a timed wait: "never" and "no
+        # rule" need none.
         type_key = voter_type_key(
             getattr(user, "member_class", None),
             getattr(user, "member_status", None),
@@ -1166,10 +1197,6 @@ class ElectionService:
         )
         waiting_periods = rules.get("waiting_periods")
         waived = bool(getattr(user, "voting_wait_waived", False))
-        today = self._org_today.get(organization_id)
-        if today is None:
-            today = await resolve_org_today(self.db, organization_id)
-            self._org_today[organization_id] = today
         outcome = evaluate_wait(waiting_periods, type_key, None, waived, today)
         if outcome.state == "eligible" and outcome.months is not None:
             start = await tier_svc.get_type_wait_start(user, organization_id)
@@ -1178,65 +1205,36 @@ class ElectionService:
         if wait_reason:
             return wait_reason
 
-        attendance = rules.get("attendance")
-        if not isinstance(attendance, dict):
-            return None
-        meeting_types = attendance.get("meeting_types")
-        if not isinstance(meeting_types, list) or not all(
-            isinstance(t, str) for t in meeting_types
-        ):
-            meeting_types = None
-        mode = attendance.get("mode")
-        if mode == "count":
-            min_meetings = _positive_int(attendance.get("min_meetings"))
-            of_last = _positive_int(attendance.get("of_last_meetings"))
-            if min_meetings is None or of_last is None:
-                return None
-            recent = await tier_svc.get_recent_meeting_attendance(
-                user_id, organization_id, of_last, meeting_types
+        return await attendance_reason(
+            tier_svc, str(user.id), organization_id, rules.get("attendance")
+        )
+
+    async def _row_labels_for_org(self, organization_id: Any) -> Dict[str, str]:
+        """How each per-type rules row is named, read once per request as
+        ``_ranks_as_for_org`` is."""
+        from app.services.voter_rules import row_labels
+        from app.utils.membership import configured_tiers
+
+        key = str(organization_id)
+        if key not in self._row_labels_cache:
+            result = await self.db.execute(
+                select(Organization).where(Organization.id == key)
             )
-            required = recent.required(min(min_meetings, of_last), of_last)
-            if recent.attended < required:
-                if recent.waived:
-                    # Name the window as well as the count, so a member with
-                    # a waiver can see why it reads "of 11" for a rule of 12.
-                    return (
-                        f"Attended {recent.attended} of {recent.considered} "
-                        f"meetings counted (the last {recent.looked_back}, "
-                        f"{recent.waived} waived); {required} required to vote"
-                    )
-                return (
-                    f"Attended {recent.attended} of the last {recent.considered} "
-                    f"meetings; {required} required to vote"
-                )
-        elif mode == "percent":
-            min_pct = attendance.get("min_pct")
-            period = _positive_int(attendance.get("period_months"))
-            if (
-                isinstance(min_pct, bool)
-                or not isinstance(min_pct, (int, float))
-                or min_pct <= 0
-                or period is None
-            ):
-                return None
-            actual_pct = await tier_svc.get_meeting_attendance_pct(
-                user_id=user_id,
-                organization_id=organization_id,
-                period_months=period,
-                meeting_types=meeting_types,
+            org: Optional[Organization] = result.scalar_one_or_none()
+            self._row_labels_cache[key] = row_labels(
+                configured_tiers(org.settings if org else None)
             )
-            if actual_pct < min_pct:
-                return (
-                    f"Meeting attendance is {actual_pct:.1f}% over the last "
-                    f"{period} months; {min_pct:g}% required to vote"
-                )
-        return None
+        return self._row_labels_cache[key]
 
     def _has_election_rules(self, election: Election) -> bool:
         """Whether this election carries any election-wide rule to enforce."""
+        from app.services.voter_rules import is_type_rules
+
         rules = getattr(election, "eligibility_rules", None)
         if not isinstance(rules, dict):
             return False
+        if is_type_rules(rules):
+            return True
         attendance = rules.get("attendance")
         waiting_periods = rules.get("waiting_periods")
         return bool(isinstance(waiting_periods, dict) and waiting_periods) or (
@@ -1796,7 +1794,8 @@ class ElectionService:
             select(Organization).where(Organization.id == str(organization_id))
         )
         org = org_result.scalar_one_or_none()
-        if org and not _has_override:
+        # Version 2 rules replace the tier rules, and are checked below.
+        if org and not _has_override and not _uses_type_rules(election):
             tier_def = _member_tier(user, org)
             if tier_def:
                 benefits = tier_benefits(tier_def)
