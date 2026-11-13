@@ -620,3 +620,200 @@ class TestAWaivedTargetIsWholeShifts:
         implied_target = 3 / (shifts.progress_percentage / 100)
         assert implied_target < 5
         assert implied_target == pytest.approx(round(implied_target))
+
+
+class TestTurningALinkOffAlwaysWorks:
+    """A link turned off, or left on a rejected shift, never works again,
+    even if the shift comes back."""
+
+    async def test_turning_it_off_on_a_rejected_shift_sticks(self, db_session):
+        from app.services.external_shift_hours_service import (
+            ExternalShiftHoursService,
+        )
+        from app.services.shift_evaluation_link_service import (
+            ShiftEvaluationLinkService,
+        )
+        from tests.test_outside_shift_evaluations import _outside
+        from tests.test_shift_evaluation_links import _link
+
+        scene = await _scene(db_session)
+        _, entry = await _outside(db_session, scene)
+        link = await _link(db_session, scene, entry)
+        token = link.token
+        hours = ExternalShiftHoursService(db_session)
+
+        await hours.reject(scene.org_id, entry.id, scene.officer.id, "Not on duty")
+        await hours.restore(scene.org_id, entry.id, scene.officer.id)
+
+        assert await ShiftEvaluationLinkService(db_session).resolve(token) is None
+
+    async def test_turn_off_reaches_a_link_whose_evaluation_is_not_waiting(
+        self, db_session
+    ):
+        from app.services.shift_evaluation_link_service import (
+            ShiftEvaluationLinkService,
+        )
+        from tests.test_outside_shift_evaluations import _outside
+        from tests.test_shift_evaluation_links import _link
+
+        scene = await _scene(db_session)
+        agency, entry = await _outside(db_session, scene)
+        link = await _link(db_session, scene, entry)
+        token = link.token
+        service = ShiftEvaluationLinkService(db_session)
+        # The agency stops evaluating shifts, so nothing is "waiting" now.
+        agency.evaluate_shifts = False
+        await db_session.flush()
+
+        revoked = await service.revoke_open(entry.id, scene.org_id)
+
+        assert [r.id for r in revoked] == [link.id]
+        agency.evaluate_shifts = True
+        await db_session.flush()
+        assert await service.resolve(token) is None
+
+
+class TestALinkNeedsACurrentMember:
+    async def test_a_departed_members_link_stops_working(self, db_session):
+        from app.models.user import UserStatus
+        from app.services.shift_evaluation_link_service import (
+            ShiftEvaluationLinkService,
+        )
+        from tests.test_outside_shift_evaluations import _outside
+        from tests.test_shift_evaluation_links import _link
+
+        scene = await _scene(db_session)
+        _, entry = await _outside(db_session, scene)
+        link = await _link(db_session, scene, entry)
+        token = link.token
+        scene.trainee.status = UserStatus.INACTIVE
+        await db_session.flush()
+
+        assert await ShiftEvaluationLinkService(db_session).resolve(token) is None
+
+
+class TestTwoLinksCannotBothStayOpen:
+    async def test_making_a_link_locks_the_shift_first(self, db_session):
+        from app.models.external_shift_hours import ExternalShiftHours
+        from app.services.shift_evaluation_link_service import (
+            ShiftEvaluationLinkService,
+        )
+        from tests.test_outside_shift_evaluations import _outside
+
+        scene = await _scene(db_session)
+        _, entry = await _outside(db_session, scene)
+        service = ShiftEvaluationLinkService(db_session)
+        statements = []
+        real_execute = db_session.execute
+
+        async def recording(statement, *args, **kwargs):
+            statements.append(statement)
+            return await real_execute(statement, *args, **kwargs)
+
+        db_session.execute = recording
+        try:
+            await service.create(entry, scene.org_id, scene.trainee)
+        finally:
+            del db_session.execute
+
+        locks = [
+            s
+            for s in statements
+            if getattr(s, "_for_update_arg", None) is not None
+            and ExternalShiftHours.__table__ in s.get_final_froms()
+        ]
+        assert locks, "create must lock the logged shift before revoking"
+
+
+class TestPreceptorEmailsAreRateLimited:
+    @pytest.mark.parametrize("route", ["create", "send"])
+    async def test_each_email_spends_the_members_allowance(
+        self, db_session, monkeypatch, route
+    ):
+        from app.api.v1.endpoints import shift_evaluations as endpoints
+        from app.schemas.shift_evaluation import (
+            PreceptorLinkCreate,
+            PreceptorLinkSend,
+        )
+        from tests.test_outside_shift_evaluations import _outside
+
+        scene = await _scene(db_session)
+        _, entry = await _outside(db_session, scene)
+        calls = []
+
+        async def spy(request, **kwargs):
+            calls.append(kwargs)
+
+        monkeypatch.setattr(endpoints, "check_rate_limit", spy)
+
+        async def sent(*args, **kwargs):
+            return True
+
+        monkeypatch.setattr(
+            endpoints.ShiftEvaluationLinkService, "send", lambda *a, **k: sent()
+        )
+        trainee = await _with_positions(db_session, scene.trainee)
+        body_email = "pat@acfd.example.org"
+        if route == "create":
+            await endpoints.create_preceptor_link(
+                request=None,
+                entry_id=uuid.UUID(entry.id),
+                body=PreceptorLinkCreate(preceptor_email=body_email),
+                db=db_session,
+                current_user=trainee,
+            )
+        else:
+            await endpoints.create_preceptor_link(
+                request=None,
+                entry_id=uuid.UUID(entry.id),
+                body=PreceptorLinkCreate(),
+                db=db_session,
+                current_user=trainee,
+            )
+            calls.clear()
+            await endpoints.send_preceptor_link(
+                request=None,
+                entry_id=uuid.UUID(entry.id),
+                body=PreceptorLinkSend(preceptor_email=body_email),
+                scope_key=None,
+                db=db_session,
+                current_user=trainee,
+            )
+
+        assert len(calls) == 1
+        assert calls[0]["scope"] == "preceptor_link_email"
+        assert calls[0]["account"] == str(scene.trainee.id)
+
+
+class TestThePublicPageAnswersPrivately:
+    @pytest.fixture
+    async def client(self, db_session):
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.api.public.shift_evaluations import router
+        from app.core.database import get_db
+
+        app = FastAPI()
+        app.include_router(router, prefix="/api")
+        app.dependency_overrides[get_db] = lambda: db_session
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            yield client
+
+    async def test_an_unknown_link_is_404_with_the_private_headers(self, client):
+        response = await client.get(f"/api/public/v1/shift-evaluations/{'a' * 43}")
+
+        assert response.status_code == 404
+        assert response.headers["cache-control"] == "no-store, private"
+        assert response.headers["referrer-policy"] == "no-referrer"
+        assert "noindex" in response.headers["x-robots-tag"]
+
+    @pytest.mark.parametrize("token", ["short", "a" * 43 + "!", "a" * 200])
+    async def test_a_malformed_link_is_the_same_404(self, client, token):
+        response = await client.get(f"/api/public/v1/shift-evaluations/{token}")
+
+        assert response.status_code == 404
+        assert token not in response.text
+        assert response.headers["cache-control"] == "no-store, private"
