@@ -671,6 +671,37 @@ describe('IntegrationsPage', () => {
       });
     });
 
+    it('opens Settings on a connected Zeffy card and saves only what was typed', async () => {
+      const user = userEvent.setup();
+      const zeffyConnected = { ...zeffyAvailable, status: 'connected' as const, enabled: true };
+      mockGetIntegrations.mockResolvedValue([zeffyConnected]);
+      mockUpdateIntegration.mockResolvedValue(zeffyConnected);
+
+      renderPage();
+      const card = await screen.findByTestId('integration-card-zeffy');
+      await user.click(within(card).getByRole('button', { name: 'Zeffy settings' }));
+
+      const dialog = await screen.findByRole('dialog', { name: 'Zeffy settings' });
+      // A connected Zeffy always holds a key: it cannot connect without one.
+      expect(within(dialog).getByLabelText('API Key')).toHaveAttribute(
+        'placeholder',
+        'Leave blank to keep the current key'
+      );
+      expect(dialog).toHaveTextContent('Leave it blank to keep the saved secret, if one was entered.');
+      expect(dialog).toHaveTextContent(
+        'A new key or signing secret is used from the next sync or webhook message. Linked campaigns and the webhook address do not change.'
+      );
+
+      await user.type(within(dialog).getByLabelText('Webhook Signing Secret (optional)'), 'whsec_new');
+      await user.click(screen.getByTestId('settings-submit'));
+
+      expect(mockUpdateIntegration).toHaveBeenCalledWith('zef-1', {
+        api_key: undefined,
+        webhook_secret: 'whsec_new',
+      });
+      expect(mockConnectIntegration).not.toHaveBeenCalled();
+    });
+
     it('does not tell a first PayPal connection that a secret is already stored', async () => {
       const user = userEvent.setup();
       mockGetIntegrations.mockResolvedValue([paypalAvailable]);

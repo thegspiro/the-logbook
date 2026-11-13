@@ -2218,16 +2218,20 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={zeffyApiKey}
                 onChange={(e) => setZeffyApiKey(e.target.value)}
-                placeholder="Paste the key from Zeffy"
+                placeholder={editingSettings ? 'Leave blank to keep the current key' : 'Paste the key from Zeffy'}
                 className={inputClass}
                 autoComplete="off"
               />
-              {/* This form opens only from Connect, and a stored key is never
-                  sent back, so the page cannot tell a first connection from a
-                  reconnection: the note states when a blank box keeps a key. */}
+              {/* A stored key is never sent back. Settings opens only on a
+                  connected card, and Zeffy cannot connect without a key, so
+                  there one is certainly stored. From Connect the page cannot
+                  tell a first connection from a reconnection, so the note
+                  states when a blank box keeps a key. */}
               <p className="text-theme-text-muted mt-1 text-xs">
-                The Zeffy organization owner generates it in Zeffy under Settings &rarr; Integrations. When connecting
-                again after a disconnect, leave it blank to keep the saved key.
+                The Zeffy organization owner generates it in Zeffy under Settings &rarr; Integrations.
+                {editingSettings
+                  ? ' Enter a new one only to replace the key.'
+                  : ' When connecting again after a disconnect, leave it blank to keep the saved key.'}
               </p>
             </div>
             <div>
@@ -2246,7 +2250,8 @@ const IntegrationsPage: React.FC = () => {
               <p className="text-theme-text-muted mt-1 text-xs">
                 Without it, payments arrive on the hourly sync. For payments and refunds within seconds, add this URL as
                 a webhook in Zeffy&apos;s Integrations dialog, subscribe it to the payment events, and paste the signing
-                secret it shows here:
+                secret it shows here.
+                {editingSettings && ' Leave it blank to keep the saved secret, if one was entered.'}
               </p>
               <code className="bg-theme-surface-secondary text-theme-text-secondary mt-1 block rounded px-2 py-1 text-xs break-all">
                 {webhookCallbackUrl('zeffy', integration.id)}
@@ -2478,6 +2483,7 @@ const IntegrationsPage: React.FC = () => {
                     <>
                       {(integration.integration_type === 'claude-mcp' ||
                         integration.integration_type === 'ical' ||
+                        integration.integration_type === 'zeffy' ||
                         (isDirectory(integration.integration_type) && canChange(integration.integration_type))) && (
                         <button
                           onClick={() => {
@@ -3096,7 +3102,9 @@ const IntegrationsPage: React.FC = () => {
                                 ? 'Saved settings apply to the next member converted. Accounts already created are not changed.'
                                 : selectedIntegration.integration_type === 'ical'
                                   ? 'Saved settings apply the next time a subscribed calendar refreshes. The feed link does not change.'
-                                  : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
+                                  : selectedIntegration.integration_type === 'zeffy'
+                                    ? 'A new key or signing secret is used from the next sync or webhook message. Linked campaigns and the webhook address do not change.'
+                                    : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
                               : activation
                                 ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
                                 : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}
