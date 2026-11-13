@@ -51,6 +51,10 @@ export const ResetPasswordPage: React.FC = () => {
   // Validate token on mount, and again when a different link opens in the
   // same tab — which is why the previous link's verdict is cleared first.
   useEffect(() => {
+    // Checks can overlap (React re-runs this effect, or a second link opens
+    // before the first answer arrives); only the latest may set the verdict,
+    // or a stale answer arriving last overwrites it (W03-11).
+    let superseded = false;
     const validateToken = async () => {
       setError(null);
       setTokenValid(false);
@@ -64,12 +68,14 @@ export const ResetPasswordPage: React.FC = () => {
 
       try {
         const result = await authService.validateResetToken(token);
+        if (superseded) return;
         if (result.valid) {
           setTokenValid(true);
         } else {
           setError('This password reset link is invalid or has expired');
         }
       } catch (err: unknown) {
+        if (superseded) return;
         const wait = rateLimitWaitMinutes(err);
         if (wait !== null) {
           setRateLimitedMinutes(wait);
@@ -77,11 +83,14 @@ export const ResetPasswordPage: React.FC = () => {
           setError(getErrorMessage(err, 'This password reset link is invalid or has expired'));
         }
       } finally {
-        setIsValidating(false);
+        if (!superseded) setIsValidating(false);
       }
     };
 
     void validateToken();
+    return () => {
+      superseded = true;
+    };
   }, [token]);
 
   const passwordValidation = validatePasswordStrength(password);
@@ -161,7 +170,7 @@ export const ResetPasswordPage: React.FC = () => {
             </p>
             <Link
               to="/login"
-              className="focus:ring-theme-focus-ring inline-flex items-center rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
+              className="focus:ring-theme-focus-ring touch:min-h-11 inline-flex items-center rounded-sm px-3 py-2 font-medium text-red-700 transition-colors hover:text-red-700 focus:ring-2 focus:outline-hidden dark:text-red-400 dark:hover:text-red-300"
             >
               Back to sign in
             </Link>
@@ -199,7 +208,7 @@ export const ResetPasswordPage: React.FC = () => {
               </Link>
               <Link
                 to="/login"
-                className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring block rounded-sm px-3 py-2 transition-colors focus:ring-2 focus:outline-hidden"
+                className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring touch:min-h-11 block rounded-sm px-3 py-2 transition-colors focus:ring-2 focus:outline-hidden"
               >
                 Back to sign in
               </Link>
@@ -338,6 +347,8 @@ export const ResetPasswordPage: React.FC = () => {
                             aria-hidden="true"
                           />
                         )}
+                        {/* The icon is decorative; this is the state a screen reader hears (W03-10). */}
+                        <span className="sr-only">{check.valid ? 'Met: ' : 'Not met: '}</span>
                         <span className={check.valid ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}>
                           {check.label}
                         </span>
@@ -426,7 +437,7 @@ export const ResetPasswordPage: React.FC = () => {
           <div className="mt-6 text-center">
             <Link
               to="/login"
-              className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring inline-flex items-center space-x-2 rounded-sm px-3 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden"
+              className="text-theme-text-secondary hover:text-theme-text-primary focus:ring-theme-focus-ring touch:min-h-11 inline-flex items-center space-x-2 rounded-sm px-3 py-2 text-sm transition-colors focus:ring-2 focus:outline-hidden"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               <span>Back to sign in</span>

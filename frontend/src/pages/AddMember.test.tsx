@@ -528,6 +528,20 @@ describe('AddMember', { timeout: 20_000 }, () => {
   });
 
   describe('workflow review W08', () => {
+    // W08-7: the optional fields overrode form-input's faded placeholder with
+    // full-strength muted text, so "Michael", "Terry" and the whole second
+    // emergency contact ("Bob Doe", "Parent") read as values already entered.
+    it('shows every example in the same faded placeholder style', async () => {
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      const boxes = screen.getAllByRole('textbox');
+      expect(boxes.length).toBeGreaterThan(20);
+      for (const box of boxes) {
+        expect(box).not.toHaveClass('placeholder-theme-text-muted');
+      }
+    });
+
     it('names every field by its label', async () => {
       renderWithRouter(<AddMember />);
       await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
@@ -556,6 +570,17 @@ describe('AddMember', { timeout: 20_000 }, () => {
           .map((o) => o.textContent)
       ).toEqual(['Active', 'Inactive', 'On Leave']);
       expect(screen.queryByText('Preferred Contact Method')).not.toBeInTheDocument();
+    });
+
+    // W08-9: a member added Inactive or On Leave is refused at sign-in
+    // ("Account is inactive"), while the form still asks for their password.
+    it('says that an inactive or on-leave member cannot sign in', async () => {
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      expect(screen.getByRole('combobox', { name: /^status$/i })).toHaveAccessibleDescription(
+        /inactive or on leave cannot sign in until their status is set to active/i
+      );
     });
 
     // W08-1: the status used to be shown and not sent, so "On Leave" created

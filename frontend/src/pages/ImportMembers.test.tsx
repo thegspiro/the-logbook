@@ -8,6 +8,9 @@ const mockCreateMember = vi.fn();
 const mockGetRoles = vi.fn();
 const mockGetUsers = vi.fn();
 const mockGetWelcomeEmailAvailability = vi.fn();
+// Default: numbering off, as in a fresh install. vi.clearAllMocks keeps this
+// implementation, so every block starts from it (CLAUDE.md pitfall 28).
+const mockPreviewMembershipId = vi.fn(() => Promise.resolve({ enabled: false, next_id: null as string | null }));
 
 vi.mock('../services/api', () => ({
   userService: {
@@ -18,6 +21,9 @@ vi.mock('../services/api', () => ({
   },
   roleService: {
     getRoles: (...args: unknown[]) => mockGetRoles(...args) as unknown,
+  },
+  organizationService: {
+    previewNextMembershipId: () => mockPreviewMembershipId(),
   },
 }));
 
@@ -926,6 +932,75 @@ describe('ImportMembers — a role column naming a rank', () => {
         expect.objectContaining({ role_ids: ['role-1'], rank: 'Firefighter' })
       );
     });
+  });
+});
+
+// W09-4: the pre-check passed an administrative member with a rank, which
+// the server refuses, so the preview counted a member the import then failed.
+describe('ImportMembers — an administrative member with a rank', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRoles.mockResolvedValue([{ id: 'member-role', slug: 'member', name: 'Member' }]);
+    mockGetUsers.mockResolvedValue([]);
+    mockCreateMember.mockResolvedValue({ id: 'u1' });
+    mockGetWelcomeEmailAvailability.mockReset();
+    mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+  });
+
+  it.each([
+    ['memberClass', 'firstName,lastName,email,memberClass,rank\nSky,Brandt,sky@example.com,administrative,Captain'],
+    [
+      'membershipType',
+      'firstName,lastName,email,membershipType,rank\nSky,Brandt,sky@example.com,administrative,Captain',
+    ],
+  ])('flags the row before import when %s makes the member administrative', async (_column, csv) => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv(csv);
+
+    expect(
+      await screen.findByText(/rank "Captain" is set on an administrative member, who holds no operational rank/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import 0 Members' })).toBeDisabled();
+  });
+
+  it('passes an operational member with the same rank', async () => {
+    renderWithRouter(<ImportMembers />);
+    await uploadCsv('firstName,lastName,email,memberClass,rank\nSky,Brandt,sky@example.com,operational,Captain');
+
+    expect(await screen.findByRole('button', { name: 'Import 1 Member' })).toBeEnabled();
+  });
+});
+
+// W09-5: the instructions said a blank membershipNumber is assigned by the
+// system. That holds only when the department numbers members automatically;
+// otherwise the member is imported with no number at all.
+describe('ImportMembers — the membershipNumber instruction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetRoles.mockResolvedValue([{ id: 'member-role', slug: 'member', name: 'Member' }]);
+    mockGetUsers.mockResolvedValue([]);
+    mockGetWelcomeEmailAvailability.mockReset();
+    mockGetWelcomeEmailAvailability.mockResolvedValue({ available: true });
+    mockPreviewMembershipId.mockReset();
+    mockPreviewMembershipId.mockResolvedValue({ enabled: false, next_id: null });
+  });
+
+  it('promises an assigned number only when numbering is on', async () => {
+    mockPreviewMembershipId.mockResolvedValue({ enabled: true, next_id: 'FD-0042' });
+    renderWithRouter(<ImportMembers />);
+
+    expect(
+      await screen.findByText('Leave membershipNumber blank to have the system assign one, starting at FD-0042')
+    ).toBeInTheDocument();
+  });
+
+  it('says a blank number stays blank when numbering is off', async () => {
+    renderWithRouter(<ImportMembers />);
+
+    expect(
+      await screen.findByText(/This department does not assign membership numbers automatically/)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/to have the system assign one/)).not.toBeInTheDocument();
   });
 });
 

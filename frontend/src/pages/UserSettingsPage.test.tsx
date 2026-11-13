@@ -178,6 +178,18 @@ describe('UserSettingsPage', () => {
       expect(screen.getByText('No runs like 123 or abc')).toBeInTheDocument();
     });
 
+    it('says which rules are met in text, not only by icon', async () => {
+      // W03-10: the state was an aria-hidden icon, silent to a screen reader.
+      const user = userEvent.setup();
+      await openPasswordTab(user);
+
+      await user.type(screen.getByLabelText(/^new password/i), 'Abcdef123!xyz');
+
+      const rule = (name: string) => screen.getAllByRole('listitem').find((li) => li.textContent?.endsWith(name));
+      expect(rule('One number')).toHaveTextContent('Met: One number');
+      expect(rule('No runs like 123 or abc')).toHaveTextContent('Not met: No runs like 123 or abc');
+    });
+
     it('signs out and says why after a successful change', async () => {
       // W04-1: the change ends every session, so reloading the user hit a 401
       // and the member reached sign-in with no word that it had worked.
@@ -342,6 +354,32 @@ describe('UserSettingsPage', () => {
     expect(screen.getByText('Emergency Contacts')).toBeInTheDocument();
     expect(screen.getByText('Appearance')).toBeInTheDocument();
     expect(screen.getByText('Notifications')).toBeInTheDocument();
+  });
+
+  // W04-11: the member's own name, phone and address fields carried no
+  // autocomplete hint, so a browser or assistive tool could not fill them
+  // (WCAG 2.2 SC 1.3.5, Identify Input Purpose).
+  describe('Account Tab input purpose', () => {
+    it("names the purpose of each of the member's own fields", async () => {
+      renderWithRouter(<UserSettingsPage />);
+      // By label, as a user finds them; each label is the field's own.
+      const expected: [RegExp, string][] = [
+        [/^first name/i, 'given-name'],
+        [/^middle name/i, 'additional-name'],
+        [/^last name/i, 'family-name'],
+        [/^preferred name/i, 'nickname'],
+        [/^phone/i, 'tel'],
+        [/^mobile/i, 'mobile tel'],
+        [/^street address/i, 'street-address'],
+        [/^city/i, 'address-level2'],
+        [/^state/i, 'address-level1'],
+        [/^zip code/i, 'postal-code'],
+      ];
+      await screen.findByLabelText(/first name/i);
+      for (const [label, token] of expected) {
+        expect(screen.getByLabelText(label), String(label)).toHaveAttribute('autocomplete', token);
+      }
+    });
   });
 
   describe('preferred name', () => {

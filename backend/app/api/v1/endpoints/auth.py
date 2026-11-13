@@ -61,6 +61,7 @@ from app.core.permissions import (
 from app.core.security import (
     create_mfa_pending_token,
     decode_token,
+    email_fingerprint,
     verify_password,
 )
 from app.core.security_middleware import (
@@ -1669,7 +1670,7 @@ async def step_up(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "This account signs in through a provider and has no password. "
-                "Set up two-factor authentication under Profile > Security to "
+                "Set up two-factor authentication under My Account > Security to "
                 "confirm sensitive actions."
             ),
         )
@@ -2594,6 +2595,8 @@ async def forgot_password(
             "auth_provider": auth_config.provider,
         }
 
+    org_id = str(organization.id)
+
     # Email off is a fact about the department, not the account, so saying so
     # reveals nothing about which addresses exist. Issue no token: one nobody
     # can receive only starts the cooldown, and the member's way back is an
@@ -2608,11 +2611,18 @@ async def forgot_password(
             event_category="auth",
             severity="INFO",
             event_data={
-                "email": reset_request.email,
+                # Never the address: the audit log is hash-chained and kept for
+                # good. The keyed fingerprint matches repeats without being
+                # readable (W03-13, owner decision 2026-11-08). No lookup runs
+                # here, so whether it names a member is not known.
+                "email_fingerprint": email_fingerprint(reset_request.email),
                 "token_issued": False,
                 "reason": "email_disabled",
-                "organization_id": str(organization.id),
+                "organization_id": org_id,
             },
+            # The column, not only event_data: the department's audit log
+            # reads by it, and missed every reset request (W03-9).
+            organization_id=org_id,
             ip_address=ip_address,
             user_agent=request.headers.get("user-agent"),
         )
@@ -2626,21 +2636,30 @@ async def forgot_password(
     auth_service = AuthService(db)
     user, raw_token = await auth_service.create_password_reset_token(
         email=reset_request.email,
-        organization_id=str(organization.id),
+        organization_id=org_id,
         ip_address=ip_address,
     )
 
-    # Audit log: record every reset request regardless of outcome
+    # Audit log: record every reset request regardless of outcome. A request
+    # that matched a member is named by user_id; any other keeps only the
+    # keyed fingerprint of what was typed, never the address (W03-13).
+    issued = bool(user and raw_token)
     await log_audit_event(
         db=db,
         event_type="auth.password_reset_requested",
         event_category="auth",
         severity="INFO",
         event_data={
-            "email": reset_request.email,
-            "token_issued": bool(user and raw_token),
-            "organization_id": str(organization.id),
+            **(
+                {}
+                if issued
+                else {"email_fingerprint": email_fingerprint(reset_request.email)}
+            ),
+            "token_issued": issued,
+            "organization_id": org_id,
         },
+        organization_id=org_id,
+        user_id=str(user.id) if user and raw_token else None,
         ip_address=ip_address,
         user_agent=request.headers.get("user-agent"),
     )
@@ -2654,7 +2673,6 @@ async def forgot_password(
         # Use URL fragment (#) instead of query param so the token is
         # never sent to the server in Referer headers or logged in access logs.
         reset_url = f"{settings.FRONTEND_URL}/reset-password#token={raw_token}"
-        org_id = str(organization.id)
         org_name = organization.name
         expiry_minutes = RESET_TOKEN_EXPIRY_MINUTES
         recipient_email = user.email

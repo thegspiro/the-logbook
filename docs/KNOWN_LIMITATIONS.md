@@ -2049,6 +2049,87 @@ existing rows were deliberately not rewritten: the correct date is derivable
 would change historical compliance results, and that was judged not worth it.
 An officer can correct an individual record's date where it matters.
 
+## Membership Number — Add Member Requires One, Import Does Not (W09-6, 2026-11-10)
+
+**Owner decision needed.** When the department does not number members
+automatically (Members Administration → Settings → Membership IDs), the two
+ways of adding a member disagree:
+
+- **Add Member** refuses to save without a membership number (`AddMember.tsx`).
+- **Import Members** creates a member with none when the column is blank. The workflow review's W09 second pass imported three members this way.
+
+`POST /users` accepts either. It assigns a number when automatic numbering is
+on, and otherwise stores none. The rule exists only in Add Member's form.
+
+Until W09-5, the import's instructions promised that a blank number would be
+assigned, so an officer had no reason to fill the column. The instruction now
+says whether one will be. Two questions are open:
+
+- **Should a membership number be required when numbering is off?** If so, the rule belongs on `POST /users`, so that both paths and any API caller meet it.
+- **What happens to members already stored without one?** They can be found by a query and given numbers from each profile; no bulk assignment was checked.
+
+## Department Contact Details — Settings Stores Them However They Are Typed (W06-6, 2026-11-08)
+
+**Owner decision needed.** Under Settings → Contact, the department's phone
+and website are saved as typed. The workflow review's W06 second pass stored
+"call us maybe" and "not a url", and both came back after a reload.
+`OrganizationProfileUpdate` (`backend/app/schemas/organization.py`) bounds
+their length and checks nothing else.
+
+The two writers of these fields disagree:
+
+- **Onboarding** refuses a website that doesn't look like an address ("Enter a valid website address", `OrganizationSetup.tsx`), and its schema adds `https://` when no scheme is given.
+- **The department's phone** gets none of the W04-7 rule that applies to members' own numbers (`app/utils/phone_numbers.py`).
+
+The website is printed in email footers (`organization_website`) and returned
+by the public portal API, so a bad value reaches members and the public. Only
+administrators can set it.
+
+Three questions are open, the same three as the emergency-contact entry below:
+
+- **Apply the onboarding website check and the W04-7 phone rule to the Settings path?**
+- **Refuse a bad value, or save it and flag the field** under the 2026-11-05 forms decision?
+- **What happens to values already stored?**
+
+## Emergency Contacts — The Phone Has No Format Check (W04-12, 2026-11-08)
+
+**Owner decision needed.** A member's emergency contact is saved with any phone
+up to 20 characters. The workflow review's W04 second pass saved "nope", and
+the server stored it. `EmergencyContact.phone` (`backend/app/schemas/user.py`)
+has no rule. The W04-7 rule (`app/utils/phone_numbers.py`, owner decision
+2026-10-05) covers a member's own phone and mobile only. It accepts digits,
+spaces, dashes, dots, brackets, a leading `+` and an extension, with 7 to 15
+digits.
+
+This is the number the department calls when something has happened to the
+member. Three questions are open:
+
+- **Extend the W04-7 rule to emergency-contact phones?** As there, it would apply to new writes only, with a value sent back unchanged still accepted.
+- **What happens to contacts already stored?** They are encrypted (`emergency_contacts` is an encrypted column), so finding bad ones means decrypting each.
+- **Follow the 2026-11-05 forms decision?** A contact with a bad phone could be kept and flagged rather than refused.
+
+## Password Reset Requests Store the Typed Address in the Audit Log (W03-13, 2026-11-08)
+
+**Resolved (2026-11-08), owner decision: a keyed fingerprint for unknown
+addresses.** `POST /auth/forgot-password` wrote the typed address into its
+`auth.password_reset_requested` audit row, including addresses that match
+nobody. The audit log is hash-chained and kept for good.
+
+It no longer writes the address:
+
+- **A request that matched a member** is named by `user_id` alone.
+- **Any other request** stores `email_fingerprint`, the keyed HMAC the account lookup uses (`app.core.security.email_fingerprint`). Repeats of one address can be matched, but the address can't be read back.
+- **Requests with email off** always carry the fingerprint, because the server looks nothing up then.
+
+Every row also carries the department's `organization_id` (W03-9).
+`tests/test_forgot_password_audit_scope.py` covers all three cases.
+
+**Still true:**
+
+- Rows written before this change keep the address, because editing them would break the hash chain.
+- A fingerprint is computed under the current `ENCRYPTION_KEY`, so after a key rotation the same address fingerprints differently from older rows.
+- No screen turns an address into its fingerprint, so an administrator who wants to ask "was this address tried?" has no tool for it yet.
+
 ## Sign-in From a Shared Station Address (2026-10-05)
 
 **Resolved (2026-11-03), owner decision of 2026-11-01: count attempts per

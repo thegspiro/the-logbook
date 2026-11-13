@@ -194,11 +194,13 @@ async def _announce_mfa_grace(db: AsyncSession, user: User) -> None:
         message=(
             "Your positions give you access to administration or health "
             f"records, so two-factor authentication is now required. You have "
-            f"{settings.MFA_GRACE_DAYS} days to set it up under Profile > "
+            f"{settings.MFA_GRACE_DAYS} days to set it up under My Account > "
             "Security; after that you will only be able to reach the setup "
             "screens until it is done."
         ),
-        action_url="/account",
+        # The Security tab, where setup is: plain /account opens the profile
+        # tab (W07-2; the grace banner had the same fault, W05-11).
+        action_url="/account?tab=security",
     )
 
 
