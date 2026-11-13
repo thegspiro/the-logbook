@@ -2576,6 +2576,27 @@ for more information**, type your question and select **Ask the member**.
   open question. So does the member withdrawing the request, or the session
   being cancelled.
 
+### When a session you asked about is moved _(2026-11-13)_
+
+If a training session moves to a new start — its date or start time is edited,
+its series is edited from that session on, or it is postponed — a request to be
+excused from it that is **pending** or **approved** comes back to you. You get a
+notice in the app and by email, and **My Training** shows **This session moved
+to _new date_. Do you still need to be excused?**
+
+- **Confirm** if you still cannot make it. The request goes back to the
+  officers and is decided again; an approval for the old date does not carry
+  over.
+- **Withdraw** if you can make the new date.
+- If you do neither, the request closes on its own seven days after the new
+  date, and the session counts as missed.
+
+Officers cannot approve or deny the request until you confirm; their page says
+it is waiting for you. A request that was **denied** is not reopened. Confirm
+is refused if you have already checked in to the session: withdraw it instead.
+See [Moving an event that members asked to be excused from](./04-events-meetings.md#moving-an-event-that-members-asked-to-be-excused-from-2026-11-13)
+for the officers' side.
+
 ### Creating a Waiver
 
 1. Select the **Create Waiver** tab.

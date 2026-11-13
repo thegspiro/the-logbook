@@ -141,6 +141,7 @@ from app.utils.org_timezone import (
     local_date,
     local_day_start_utc,
     resolve_scheduling_timezone,
+    to_local,
 )
 
 TRAINING_WORKFLOW = AttendanceWaiverWorkflow.TRAINING_SESSION
@@ -1007,6 +1008,8 @@ class AttendanceWaiverService:
             raise AttendanceWaiverNotFound("Request not found")
         if request.status != AttendanceWaiverStatus.PENDING:
             raise ValueError(self._settled_message(request))
+        # Declining a moved session is withdrawing it.
+        request.reconfirm_requested_at = None
         request.status = AttendanceWaiverStatus.WITHDRAWN
         request.live_key = None
         # Nothing is left to answer once the request is taken back.
@@ -1037,6 +1040,7 @@ class AttendanceWaiverService:
         await self._require_decider(org_id, actor, request, policy)
         if request.status != AttendanceWaiverStatus.PENDING:
             raise ValueError(self._settled_message(request))
+        self._refuse_while_reconfirming(request)
         if policy.cap is not None:
             # The member's row is already locked (_locked_request), and this
             # is a locking read of that member's range only, so a second
@@ -1071,6 +1075,7 @@ class AttendanceWaiverService:
         await self._require_decider(org_id, actor, request, policy)
         if request.status != AttendanceWaiverStatus.PENDING:
             raise ValueError(self._settled_message(request))
+        self._refuse_while_reconfirming(request)
         return await self._decide(
             org_id, actor, request, AttendanceWaiverStatus.DENIED, note
         )
@@ -1270,6 +1275,113 @@ class AttendanceWaiverService:
         if len(cleaned) > MAX_TEXT_LENGTH:
             raise ValueError(f"Keep it to {MAX_TEXT_LENGTH} characters.")
         return cleaned
+
+    # ------------------------------------------------------------------
+    # A rescheduled session: the member confirms it still needs a waiver
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _refuse_while_reconfirming(request: AttendanceWaiverRequest) -> None:
+        """No decision while the member has not said the new date still
+        needs one (owner decision, 2026-11-13): a decision now would answer a
+        question about a date the member may no longer be asking about."""
+        if request.reconfirm_requested_at is not None:
+            raise ValueError(
+                "This session moved. The member has not yet confirmed that "
+                "the new date still needs a waiver, so it cannot be decided."
+            )
+
+    async def confirm(
+        self, organization_id: str, member: User, request_id: str
+    ) -> AttendanceWaiverRequest:
+        """The member says a moved session still needs a waiver.
+
+        Only the requester, and only while the request waits on them
+        (``reconfirm_requested_at``). The request then goes back to its
+        deciders for a fresh decision. What the new date may have changed is
+        checked again, in the eligibility wording: a member now checked in,
+        or (for a meeting) on leave or already excused by the Secretary, has
+        nothing to excuse and is told to withdraw instead. The deadline and
+        the cap are not: the member asked in time, and the cap is enforced
+        when the request is approved.
+        """
+        org_id = str(organization_id)
+        policy = await self.get_policy(org_id)
+        request = await self._locked_request(org_id, request_id)
+        if str(request.user_id) != str(member.id):
+            if await self._may_view(org_id, member, request):
+                raise PermissionError(
+                    "Only the member who asked can confirm the new date."
+                )
+            raise AttendanceWaiverNotFound("Request not found")
+        if request.status != AttendanceWaiverStatus.PENDING:
+            raise ValueError(self._settled_message(request))
+        if request.reconfirm_requested_at is None:
+            raise ValueError("This request is not waiting for you to confirm a date.")
+        refusal = await self._reconfirm_refusal(org_id, request)
+        if refusal is not None:
+            raise ValueError(f"{refusal} Withdraw this request instead.")
+        request.reconfirm_requested_at = None
+        self.db.add(
+            self._action(request, AttendanceWaiverAction.MEMBER_CONFIRMED, member)
+        )
+        await self._audit(
+            "attendance_waiver_request_member_confirmed", member, self._ids(request)
+        )
+        await self.db.commit()
+        await self.db.refresh(request)
+        name = (await self._names(org_id, [member.id])).get(str(member.id), "A member")
+        title = request.event_title_snapshot
+        day = _day_label(request.session_date)
+        await self._prompt_deciders_with(
+            org_id,
+            request,
+            policy,
+            f"Waiver request — {name}, {title}",
+            [
+                f'"{title}" moved to {day}, and {name} confirmed they still '
+                "need to be excused from it.",
+                "Open the request to approve or deny it.",
+            ],
+        )
+        return request
+
+    async def _reconfirm_refusal(
+        self, org_id: str, request: AttendanceWaiverRequest
+    ) -> Optional[str]:
+        """Why the moved session no longer needs a waiver, or None.
+
+        The part of ``_assess`` a new date can change, in its wording.
+        """
+        noun = self.spec.session_noun
+        event: Optional[Event] = None
+        if request.event_id:
+            event = (
+                await self.db.execute(
+                    select(Event).where(
+                        Event.id == str(request.event_id),
+                        Event.organization_id == org_id,
+                    )
+                )
+            ).scalar_one_or_none()
+        if event is None:
+            return f"This {noun} no longer exists."
+        if event.is_cancelled:
+            return f"This {noun} was cancelled."
+        if self.workflow == MEETING_WORKFLOW and await self._on_leave(
+            org_id, request.user_id, request.session_date
+        ):
+            return (
+                "You are on a leave of absence that covers this meeting, so "
+                "it does not count against you."
+            )
+        if await self._checked_in(org_id, request.user_id, event.id):
+            return f"You checked in to this {noun}, so it already counts as attended."
+        if self.workflow == MEETING_WORKFLOW and await self._meeting_waived(
+            org_id, request.user_id, event.id
+        ):
+            return "The Secretary has already excused you from this meeting."
+        return None
 
     # ------------------------------------------------------------------
     # Routing: who may decide, and who is asked
@@ -1587,8 +1699,13 @@ class AttendanceWaiverService:
                     and r.status == AttendanceWaiverStatus.PENDING
                     and r.info_requested_at is not None,
                     "can_request_info": decider and self.may_ask(r),
+                    "reconfirm_requested_at": r.reconfirm_requested_at,
+                    "can_confirm": own
+                    and r.status == AttendanceWaiverStatus.PENDING
+                    and r.reconfirm_requested_at is not None,
                     "can_decide": decider
-                    and r.status == AttendanceWaiverStatus.PENDING,
+                    and r.status == AttendanceWaiverStatus.PENDING
+                    and r.reconfirm_requested_at is None,
                     "can_override": is_chief
                     and not own
                     and r.status == AttendanceWaiverStatus.DENIED,
@@ -1873,6 +1990,62 @@ class AttendanceWaiverService:
             self.spec.decider_email_kind,
             subject,
             [opening, "Open the request to approve or deny it."],
+            decider_action_url(request),
+            "Review Request",
+        )
+
+    async def _prompt_deciders_with(
+        self,
+        org_id: str,
+        request: AttendanceWaiverRequest,
+        policy: AttendanceWaiverPolicy,
+        subject: str,
+        sentences: Sequence[str],
+    ) -> None:
+        """``_prompt_deciders`` in the caller's words: an in-app prompt for
+        everyone the request is routed to, then the same words by email.
+
+        After the commit, and never allowed to fail the action. ``sentences``
+        carry no reason, note, question or answer: the row is plain text.
+        """
+        try:
+            recipients = await self.recipients(org_id, request, policy)
+            if not recipients:
+                return
+            for recipient in recipients:
+                self.db.add(
+                    NotificationLog(
+                        id=generate_uuid(),
+                        organization_id=org_id,
+                        recipient_id=str(recipient.id),
+                        channel=NotificationChannel.IN_APP,
+                        category=REVIEW_PROMPT_CATEGORY,
+                        subject=subject,
+                        message=" ".join(sentences),
+                        action_url=decider_action_url(request),
+                        notification_metadata={
+                            PROMPT_METADATA_KEY: str(request.id),
+                            "event_id": (
+                                str(request.event_id) if request.event_id else None
+                            ),
+                        },
+                        delivered=True,
+                    )
+                )
+            await self.db.commit()
+        except Exception:
+            logger.exception(
+                "Failed to prompt deciders for waiver request {}", request.id
+            )
+            await self._recover(request)
+            return
+        await self._email(
+            org_id,
+            request,
+            recipients,
+            self.spec.decider_email_kind,
+            subject,
+            sentences,
             decider_action_url(request),
             "Review Request",
         )
@@ -2362,6 +2535,288 @@ async def carry_over_meeting_waivers(
         elif _apply_meeting_waiver(attendee, request, request.decided_by):
             carried += 1
     return carried
+
+
+@dataclass(frozen=True)
+class RescheduleNotice:
+    """The email owed to a member whose request a move sent back to them.
+
+    ``reconfirm_for_rescheduled_events`` runs inside the caller's transaction,
+    so it cannot send mail: an email about a move the caller then rolls back
+    would tell the member of something that never happened. The caller sends
+    these with ``send_reschedule_notices`` once it has committed.
+    """
+
+    request_id: str
+    workflow: AttendanceWaiverWorkflow
+    subject: str
+    sentences: Tuple[str, ...]
+
+
+def _same_instant(a: datetime, b: datetime) -> bool:
+    """Whether two stored starts are the same moment.
+
+    DATETIME keeps whole seconds and MySQL rounds a fraction, so a start read
+    back can differ from the value written by under a second.
+    """
+    return abs(_utc(a) - _utc(b)) < timedelta(seconds=1)
+
+
+def _when_label(value: datetime, tz) -> str:
+    """A start as the department's wall clock, for a sentence."""
+    local = to_local(value, tz)
+    clock = local.strftime("%I:%M %p").lstrip("0")
+    return f"{_day_label(local.date())} at {clock}"
+
+
+async def _unapply_meeting_waiver(
+    db: AsyncSession, org_id: str, request: AttendanceWaiverRequest
+) -> int:
+    """Take ``request``'s waiver off the minutes records: the reverse of
+    ``_apply_meeting_waiver``.
+
+    Only a row the request wrote (``waiver_request_id``): a waiver the
+    Secretary granted, or rewrote in their own words, is theirs and stays.
+    ``present`` is never touched. The minutes records are locked before their
+    attendees, as ``grant_meeting_waiver`` does. Does not commit; returns how
+    many rows were cleared.
+    """
+    if request.event_id:
+        await db.execute(
+            select(Meeting.id)
+            .where(
+                Meeting.organization_id == org_id,
+                Meeting.event_id == str(request.event_id),
+            )
+            .with_for_update()
+        )
+    attendees = (
+        (
+            await db.execute(
+                select(MeetingAttendee)
+                .where(
+                    MeetingAttendee.organization_id == org_id,
+                    MeetingAttendee.waiver_request_id == str(request.id),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for attendee in attendees:
+        attendee.excused = False
+        attendee.waiver_reason = None
+        attendee.waiver_granted_by = None
+        attendee.waiver_granted_at = None
+        attendee.waiver_request_id = None
+    return len(attendees)
+
+
+async def reconfirm_for_rescheduled_events(
+    db: AsyncSession, org_id: str, event_ids: Sequence[str]
+) -> List[RescheduleNotice]:
+    """Send every pending or approved request for a moved session back to its
+    member (owner decision, 2026-11-13).
+
+    For every path that changes an event's start, inside the caller's
+    transaction (it commits) while it holds the events exclusively; like
+    ``void_pending_for_events`` it never takes a ``users`` row, so the lock
+    order cannot cycle. A request whose snapshot already has the event's
+    start is left alone, so a change that leaves the start where it was (a
+    title, a room, the end alone) does nothing, and running this twice for one
+    move writes nothing the second time (CLAUDE.md pitfall #36).
+
+    Each moved request takes the new title, start and local date, goes back to
+    PENDING with its decision cleared (the log keeps it) and waits on the
+    member (``reconfirm_requested_at``); an approved meeting request's waiver
+    comes off the minutes record. A denied request is not touched: the first
+    decision is final. The deciders' prompts are archived, and the member gets
+    an in-app notice now and an email once the caller commits: the returned
+    notices, for ``send_reschedule_notices``.
+
+    A member who never answers is not chased: the expiry task closes a request
+    still pending seven days after its (new) session.
+    """
+    ids = [str(e) for e in event_ids if e]
+    if not ids:
+        return []
+    events = {
+        str(e.id): e
+        for e in (
+            await db.execute(
+                select(Event).where(Event.organization_id == org_id, Event.id.in_(ids))
+            )
+        ).scalars()
+    }
+    live = (
+        (
+            await db.execute(
+                select(AttendanceWaiverRequest)
+                .where(
+                    AttendanceWaiverRequest.organization_id == org_id,
+                    AttendanceWaiverRequest.event_id.in_(ids),
+                    AttendanceWaiverRequest.status.in_(
+                        [
+                            AttendanceWaiverStatus.PENDING,
+                            AttendanceWaiverStatus.APPROVED,
+                        ]
+                    ),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    moved = [
+        r
+        for r in live
+        if str(r.event_id) in events
+        and not _same_instant(
+            r.event_start_snapshot, events[str(r.event_id)].start_datetime
+        )
+    ]
+    if not moved:
+        return []
+    tz = await resolve_scheduling_timezone(db, org_id)
+    now = _now()
+    notices: List[RescheduleNotice] = []
+    for request in moved:
+        event = events[str(request.event_id)]
+        spec = SPECS[request.workflow]
+        noun = spec.session_noun
+        was = request.status
+        old_date = request.session_date
+        old_when = _when_label(request.event_start_snapshot, tz)
+        new_when = _when_label(event.start_datetime, tz)
+        if was == AttendanceWaiverStatus.APPROVED and (
+            request.workflow == MEETING_WORKFLOW
+        ):
+            await _unapply_meeting_waiver(db, org_id, request)
+        request.event_title_snapshot = (event.title or spec.default_title)[:255]
+        request.event_start_snapshot = _utc(event.start_datetime)
+        request.session_date = local_date(event.start_datetime, tz)
+        request.status = AttendanceWaiverStatus.PENDING
+        request.decided_at = None
+        request.decided_by = None
+        # It described the decision being cleared; a fresh one sets its own.
+        request.chief_override = False
+        request.info_requested_at = None
+        request.reconfirm_requested_at = now
+        db.add(
+            AttendanceWaiverService._action(
+                request,
+                AttendanceWaiverAction.RESCHEDULED,
+                None,
+                f"The {noun} moved from {old_when} to {new_when}.",
+            )
+        )
+        title = request.event_title_snapshot
+        sentences = [
+            f'The {noun} "{title}" you asked to be excused from moved from '
+            f"{old_when} to {new_when}."
+        ]
+        if was == AttendanceWaiverStatus.APPROVED:
+            sentences.append(
+                "Its approval was for the old date, so the request will be "
+                "decided again."
+            )
+        sentences.append(
+            "Open your request to confirm you still need to be excused, or "
+            "withdraw it."
+        )
+        subject = f"Confirm your waiver request — {title}"
+        db.add(
+            NotificationLog(
+                id=generate_uuid(),
+                organization_id=org_id,
+                recipient_id=str(request.user_id),
+                channel=NotificationChannel.IN_APP,
+                category=MEMBER_UPDATE_CATEGORY,
+                subject=subject,
+                message=" ".join(sentences),
+                action_url=member_action_url(request),
+                notification_metadata={PROMPT_METADATA_KEY: str(request.id)},
+                delivered=True,
+            )
+        )
+        await log_audit_event(
+            db=db,
+            event_type="attendance_waiver_request_rescheduled",
+            event_category=spec.audit_category,
+            severity="info",
+            event_data={
+                **AttendanceWaiverService._ids(request),
+                "previous_session_date": old_date.isoformat(),
+                "previous_status": was.value,
+            },
+        )
+        notices.append(
+            RescheduleNotice(
+                request_id=str(request.id),
+                workflow=request.workflow,
+                subject=subject,
+                sentences=tuple(sentences),
+            )
+        )
+    await db.flush()
+    archive = NotificationsService(db)
+    for request in moved:
+        await archive.archive_related_notifications(
+            org_id,
+            REVIEW_PROMPT_CATEGORY,
+            PROMPT_METADATA_KEY,
+            str(request.id),
+            commit=False,
+        )
+    return notices
+
+
+async def send_reschedule_notices(
+    db: AsyncSession, org_id: str, notices: Sequence[RescheduleNotice]
+) -> None:
+    """Email the members ``reconfirm_for_rescheduled_events`` asked to confirm.
+
+    After the caller's commit, and never allowed to fail it: the move stands
+    whether or not a mail server answered.
+    """
+    for notice in notices:
+        service = AttendanceWaiverService(db, notice.workflow)
+        try:
+            request = await service._find(str(org_id), notice.request_id)
+            member = (
+                None
+                if request is None
+                else (
+                    await db.execute(
+                        select(User).where(
+                            User.id == str(request.user_id),
+                            User.organization_id == str(org_id),
+                        )
+                    )
+                ).scalar_one_or_none()
+            )
+        except Exception:
+            logger.exception(
+                "Failed to load waiver request {} to email its member",
+                notice.request_id,
+            )
+            continue
+        if request is None or member is None:
+            continue
+        await service._email(
+            str(org_id),
+            request,
+            [member],
+            service.spec.member_email_kind,
+            notice.subject,
+            notice.sentences,
+            member_action_url(request),
+            "View Request",
+        )
 
 
 async def void_pending_for_events(

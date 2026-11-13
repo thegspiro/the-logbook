@@ -109,6 +109,12 @@ export const attendanceWaiverService = {
     return normalizeRequest(response.data);
   },
 
+  /** The member says their moved session still needs a waiver; it goes back to the deciders. */
+  async confirm(requestId: string): Promise<AttendanceWaiverRequest> {
+    const response = await api.post<AttendanceWaiverRequest>(`${BASE}/${encodeURIComponent(requestId)}/confirm`);
+    return normalizeRequest(response.data);
+  },
+
   async approve(requestId: string, note?: string): Promise<AttendanceWaiverRequest> {
     const response = await api.post<AttendanceWaiverRequest>(`${BASE}/${encodeURIComponent(requestId)}/approve`, {
       note,
