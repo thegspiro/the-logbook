@@ -24,6 +24,7 @@ import { StarRating } from '../modules/scheduling/components/StarRating';
 import { ReportContentDisplay } from '../modules/scheduling/components/ReportContentDisplay';
 import { attributionName } from '../utils/memberName';
 import { evaluationAverageLabel, formatEvaluationAverage } from '../utils/shiftEvaluations';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // ==================== Report Card ====================
 
@@ -175,7 +176,7 @@ const ShiftReportPage: React.FC = () => {
 
         {/* Stats Bar */}
         {myStats && myStats.total_reports > 0 && (
-          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatGrid columns={4} className="mb-6">
             <div className="bg-theme-surface rounded-lg p-3 text-center">
               <div className="text-theme-text-primary text-2xl font-bold">{myStats.total_reports}</div>
               <div className="text-theme-text-muted text-xs">Reports</div>
@@ -201,7 +202,7 @@ const ShiftReportPage: React.FC = () => {
                 <div className="text-theme-text-muted text-xs">{evaluationAverageLabel(average)}</div>
               </div>
             ))}
-          </div>
+          </StatGrid>
         )}
 
         {/* Tabs */}

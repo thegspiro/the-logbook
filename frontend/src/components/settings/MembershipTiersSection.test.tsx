@@ -7,9 +7,10 @@
  * a screen that states something the system does not do.
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { renderWithRouter } from '../../test/utils';
 import MembershipTiersSection from './MembershipTiersSection';
 import type { MembershipTier } from '../../types/user';
 
@@ -25,7 +26,7 @@ const tier = (overrides: Partial<MembershipTier> = {}): MembershipTier => ({
 const onSetRejoinServiceCredit = vi.fn();
 
 const renderSection = (tiers: MembershipTier[]) =>
-  render(
+  renderWithRouter(
     <MembershipTiersSection
       tiers={tiers}
       autoAdvance
@@ -144,7 +145,7 @@ describe('"Counts as" on a department tier', () => {
   it('is offered on a custom rung and reports the chosen status', async () => {
     const user = userEvent.setup();
     const onUpdateTier = vi.fn();
-    render(
+    renderWithRouter(
       <MembershipTiersSection
         tiers={[tier(), tier({ id: 'senior', name: 'Senior Member', years_required: 10, sort_order: 1 })]}
         autoAdvance
@@ -178,7 +179,7 @@ describe('"Counts as" on a department tier', () => {
   it('clears back to nothing', async () => {
     const user = userEvent.setup();
     const onUpdateTier = vi.fn();
-    render(
+    renderWithRouter(
       <MembershipTiersSection
         tiers={[tier({ id: 'senior', name: 'Senior Member', ranks_as: 'regular' })]}
         autoAdvance

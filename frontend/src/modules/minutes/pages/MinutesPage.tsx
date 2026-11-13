@@ -43,6 +43,7 @@ import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
 import { asArray } from '../../../utils/asArray';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 const MEETING_TYPES: { value: MeetingType; label: string; color: string }[] = [
   {
@@ -438,7 +439,7 @@ const MinutesPage: React.FC = () => {
         />
 
         {/* Quick Stats */}
-        <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-4">
+        <StatGrid columns={4} gap={4} className="mb-8">
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total Meetings</p>
             <p className="text-theme-text-primary mt-1 text-2xl font-bold">{summary?.total_meetings ?? 0}</p>
@@ -464,7 +465,7 @@ const MinutesPage: React.FC = () => {
                 the meeting summary's own figure never moved (W51-2). */}
             <p className="mt-1 text-2xl font-bold text-orange-700">{minutesStats?.pending_approval ?? 0}</p>
           </div>
-        </div>
+        </StatGrid>
 
         <MyActionItemsPanel />
 

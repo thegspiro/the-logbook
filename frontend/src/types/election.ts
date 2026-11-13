@@ -16,6 +16,7 @@ import type {
   MeetingKind,
   MemberVoterType,
   WaitingPeriodMode,
+  WaitCountedFrom,
 } from '../constants/enums';
 export type { ElectionStatus, VotingMethod, VictoryCondition, BallotChoice, RunoffType, QuorumType };
 
@@ -67,11 +68,44 @@ export interface WaitingPeriod {
   months?: number | null;
 }
 
-/** Election-wide voter rules, stored on the election (backend `ElectionEligibilityRules`). */
+/** How long members of one type wait before they may vote (backend `TypeWait`). */
+export interface TypeWait {
+  months: number;
+  counted_from: WaitCountedFrom;
+}
+
+/** Every voting rule for one member type (backend `TypeRule`). */
+export interface TypeRule {
+  may_vote: boolean;
+  wait: TypeWait | null;
+  /** Every rule must pass; an empty list means attendance is not required. */
+  attendance: AttendanceRule[];
+}
+
+/**
+ * Voter rules, stored on the election and as each meeting kind's defaults
+ * (backend `ElectionEligibilityRules`). Version 1 — absent `version` — holds
+ * one election-wide `attendance` rule and `waiting_periods`, applied beside
+ * the membership tiers' own voting rules. Version 2 holds one row per member
+ * type in `types`, and nothing else; tier voting rules do not apply to it.
+ */
 export interface ElectionEligibilityRules {
+  version?: 1 | 2;
   attendance: AttendanceRule;
-  /** Per member type; a type not listed has no waiting period. */
+  /** Version 1: per member type; a type not listed has no waiting period. */
   waiting_periods?: Partial<Record<MemberVoterType, WaitingPeriod>>;
+  /** Version 2: keyed by status, class or department tier id. */
+  types?: Record<string, TypeRule>;
+}
+
+/** One member type the per-type rules table has a row for (backend `VoterRow`). */
+export interface VoterRow {
+  key: string;
+  label: string;
+  /** `class` rows (administrative, social) apply on top of a status row. */
+  decided_by: 'status' | 'class';
+  /** A department tier without a row of its own is judged by this status's row. */
+  counts_as?: string | null;
 }
 
 /** Where a member stands against one meeting kind's waiting period. */
@@ -827,7 +861,16 @@ export interface ElectionSettings {
    * Unlike `eligibility`, null is a value PATCH accepts.
    */
   annual_eligibility?: EligibilityDefaults | null;
-  /** Read-only: each membership tier's own voting rules, edited on the tier settings. */
+  /** A bylaws amendment's own defaults; null means it uses `eligibility`. */
+  bylaws_eligibility?: EligibilityDefaults | null;
+  /** A special meeting's own defaults; null means it uses `eligibility`. */
+  special_eligibility?: EligibilityDefaults | null;
+  /** The rows the per-type rules table offers, in display order. */
+  voter_rows?: VoterRow[];
+  /**
+   * Read-only: each membership tier's stored voting benefits. They apply only
+   * beside version 1 rules; version 2 rules replace them.
+   */
   tier_voting_rules?: TierVotingRule[];
   /**
    * Read-only posture reported by GET /elections/settings. `security` is not

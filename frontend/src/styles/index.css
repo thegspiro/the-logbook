@@ -683,7 +683,7 @@
   /* A list of record cards — one card per event, document, course, etc.
 
      Columns follow the width the grid itself has, never the viewport. The
-     sidebar is expanded from lg up, so a viewport rule like
+     sidebar is expanded from md up, so a viewport rule like
      `sm:grid-cols-2 lg:grid-cols-3` packed three ~200px cards into a 1024px
      tablet and pushed their footer buttons off the card edge.
 
