@@ -438,3 +438,185 @@ class TestWithNoReportItWaitsForCloseOut:
         assert not await ShiftEvaluationService(db_session).visible_to_member(
             evaluation, scene.org_id
         )
+
+
+async def _second_shift(db, scene):
+    """Another ended shift, the day before, with the same crew."""
+    from app.models.training import AssignmentStatus, Shift, ShiftAssignment
+
+    start = scene.shift.start_time - timedelta(days=1)
+    shift = Shift(
+        id=str(uuid.uuid4()),
+        organization_id=scene.org_id,
+        shift_date=start.date(),
+        start_time=start,
+        end_time=start + timedelta(hours=12),
+        shift_officer_id=scene.officer.id,
+        created_by=scene.officer.id,
+        platoon="B",
+    )
+    db.add(shift)
+    db.add(
+        ShiftAssignment(
+            id=str(uuid.uuid4()),
+            organization_id=scene.org_id,
+            shift_id=shift.id,
+            user_id=scene.trainee.id,
+            position="ems",
+            assignment_status=AssignmentStatus.CONFIRMED,
+        )
+    )
+    await db.flush()
+    return shift
+
+
+class TestRevokedCreditReopensTheRequirement:
+    """Owner decision (2026-11-13): an evaluation requirement completed by
+    its credit goes back to In progress when the credit falls below target,
+    but one an officer marked complete by hand stays complete."""
+
+    async def test_falling_below_target_reopens_it(self, db_session):
+        scene = await _scene(db_session)
+        transports = await _progress(
+            db_session,
+            scene,
+            scene.program,
+            scene.enrollment,
+            RequirementType.TRANSPORTS,
+            required_transports=5,
+        )
+        await _save(
+            db_session,
+            scene,
+            _complete(statistics={"calls": 7, "transports": 5, "refusals": 0}),
+        )
+        await db_session.refresh(transports)
+        assert transports.status == RequirementProgressStatus.COMPLETED
+
+        await _save(
+            db_session,
+            scene,
+            _complete(statistics={"calls": 7, "transports": 2, "refusals": 0}),
+        )
+
+        await db_session.refresh(transports)
+        assert float(transports.progress_value) == 2
+        assert transports.status == RequirementProgressStatus.IN_PROGRESS
+        assert transports.progress_percentage < 100
+
+    async def test_an_officers_completion_stays(self, db_session):
+        scene = await _scene(db_session)
+        transports = await _progress(
+            db_session,
+            scene,
+            scene.program,
+            scene.enrollment,
+            RequirementType.TRANSPORTS,
+            required_transports=50,
+        )
+        transports.status = RequirementProgressStatus.COMPLETED
+        await db_session.flush()
+
+        await _save(db_session, scene, _complete())
+
+        await db_session.refresh(transports)
+        assert transports.status == RequirementProgressStatus.COMPLETED
+        assert float(transports.progress_value) == 4
+
+    async def test_a_completed_requirement_still_takes_credit(self, db_session):
+        scene = await _scene(db_session)
+        transports = await _progress(
+            db_session,
+            scene,
+            scene.program,
+            scene.enrollment,
+            RequirementType.TRANSPORTS,
+            required_transports=5,
+        )
+        # A second requirement still open, so meeting the first does not
+        # complete the whole enrollment (which would call for no more
+        # evaluations).
+        await _progress(
+            db_session,
+            scene,
+            scene.program,
+            scene.enrollment,
+            RequirementType.EVALUATED_SHIFTS,
+            required_shifts=10,
+        )
+        await _save(
+            db_session,
+            scene,
+            _complete(statistics={"calls": 7, "transports": 5, "refusals": 0}),
+        )
+        earlier = await _second_shift(db_session, scene)
+        await ShiftEvaluationService(db_session).save(
+            earlier,
+            scene.trainee.id,
+            scene.enrollment.id,
+            scene.org_id,
+            _complete(statistics={"calls": 7, "transports": 3, "refusals": 0}),
+            scene.officer,
+        )
+        assert await _value(db_session, transports) == 8
+
+        # So taking the first one back leaves the member at target.
+        await _save(
+            db_session,
+            scene,
+            _complete(statistics={"calls": 7, "transports": 2, "refusals": 0}),
+        )
+        await db_session.refresh(transports)
+        assert float(transports.progress_value) == 5
+        assert transports.status == RequirementProgressStatus.COMPLETED
+
+
+class TestAWaivedTargetIsWholeShifts:
+    """A waiver prorates an evaluation target to whole shifts, as it does a
+    shift or call target: nobody can be evaluated on part of a shift."""
+
+    async def test_the_implied_target_is_a_whole_number(self, db_session, monkeypatch):
+        from datetime import date
+
+        from app.services import training_program_service
+        from app.services.training_waiver_service import WaiverPeriod
+
+        scene = await _scene(db_session)
+        scene.enrollment.enrolled_at = datetime.now(timezone.utc) - timedelta(days=330)
+        await db_session.flush()
+        shifts = await _progress(
+            db_session,
+            scene,
+            scene.program,
+            scene.enrollment,
+            RequirementType.EVALUATED_SHIFTS,
+            required_shifts=5,
+        )
+        today = date.today()
+        month_start = (today.replace(day=1) - timedelta(days=95)).replace(day=1)
+        month_end = (month_start + timedelta(days=32)).replace(day=1) - timedelta(
+            days=1
+        )
+
+        async def one_month_waived(*args, **kwargs):
+            return [WaiverPeriod(month_start, month_end)]
+
+        monkeypatch.setattr(
+            training_program_service, "fetch_user_waivers", one_month_waived
+        )
+
+        _, error = await training_program_service.TrainingProgramService(
+            db_session
+        ).update_requirement_progress(
+            progress_id=shifts.id,
+            organization_id=scene.org_id,
+            updates=training_program_service.RequirementProgressUpdate(
+                progress_value=3
+            ),
+        )
+        assert error is None
+
+        await db_session.refresh(shifts)
+        implied_target = 3 / (shifts.progress_percentage / 100)
+        assert implied_target < 5
+        assert implied_target == pytest.approx(round(implied_target))

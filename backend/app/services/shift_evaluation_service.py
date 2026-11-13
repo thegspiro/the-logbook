@@ -84,7 +84,11 @@ from app.schemas.shift_evaluation import (
     ShiftEvaluationSummary,
     TemplateOption,
 )
-from app.services.training_program_service import TrainingProgramService
+from app.schemas.training_program import RequirementProgressUpdate
+from app.services.training_program_service import (
+    EVALUATION_REQUIREMENT_TARGETS,
+    TrainingProgramService,
+)
 from app.utils.org_timezone import local_date, resolve_scheduling_timezone
 from app.utils.positions import canonical_position
 
@@ -121,13 +125,25 @@ _CREDITED_TYPES = (
     RequirementType.TRANSPORTS,
     RequirementType.REFUSALS,
 )
-# A progress row in one of these states takes no new credit: the member is
-# already done, or the requirement was set aside for them.
+# A progress row in one of these states takes no new credit: an officer
+# signed it off, or the requirement was set aside for the member. A COMPLETED
+# row keeps counting: an evaluation taken back later would otherwise leave the
+# member short of a target their other evaluations had met.
 _CLOSED_PROGRESS = (
-    RequirementProgressStatus.COMPLETED,
     RequirementProgressStatus.VERIFIED,
     RequirementProgressStatus.WAIVED,
 )
+
+
+def _met_by_value(progress: Any, requirement: Any) -> bool:
+    """Whether the row's own value had reached the requirement's target.
+
+    A COMPLETED status pins the percentage at 100 whatever the value, so the
+    value is what tells a completion the credit earned from an officer's.
+    """
+    column = EVALUATION_REQUIREMENT_TARGETS.get(requirement.requirement_type)
+    target = getattr(requirement, column, None) if column else None
+    return bool(target) and float(progress.progress_value or 0) >= float(target)
 
 
 def _is_viewer(member_id: Any, viewer_id: Optional[str]) -> bool:
@@ -1307,13 +1323,22 @@ class ShiftEvaluationService:
                 str(progress.id) in credited,
                 enrollment.status == EnrollmentStatus.ACTIVE
                 and progress.status not in _CLOSED_PROGRESS,
+                progress.status == RequirementProgressStatus.NOT_STARTED,
+                _met_by_value(progress, requirement),
             )
             for progress, requirement, enrollment in rows
         ]
         evaluation_id = str(evaluation.id)
         evaluator_id = evaluation.evaluator_id
         program_service = TrainingProgramService(self.db)
-        for progress_id, units, has_credit, open_for_credit in plan:
+        for (
+            progress_id,
+            units,
+            has_credit,
+            open_for_credit,
+            not_started,
+            met_before,
+        ) in plan:
             if units > 0 and (has_credit or open_for_credit):
                 _, error = await program_service.apply_requirement_credit(
                     progress_id=progress_id,
@@ -1323,7 +1348,9 @@ class ShiftEvaluationService:
                     units=units,
                     verified_by=evaluator_id,
                     applied_by=evaluator_id,
-                    mark_in_progress=not has_credit,
+                    # Only a row not yet begun is started: marking a COMPLETED
+                    # one in progress would undo an officer's sign-off.
+                    mark_in_progress=not has_credit and not_started,
                     restate=True,
                 )
             elif units <= 0 and has_credit:
@@ -1342,6 +1369,10 @@ class ShiftEvaluationService:
                     evaluation_id,
                     progress_id,
                     error,
+                )
+            elif met_before:
+                await self._reopen_if_short(
+                    program_service, progress_id, organization_id
                 )
 
     async def sync_credit_for_shift_member(
@@ -1367,6 +1398,45 @@ class ShiftEvaluationService:
             evaluation = await self.get(evaluation_id, organization_id)
             if evaluation is not None:
                 await self.sync_credit(evaluation, organization_id)
+
+    async def _reopen_if_short(
+        self,
+        program_service: TrainingProgramService,
+        progress_id: str,
+        organization_id: UUID | str,
+    ) -> None:
+        """Owner decision (2026-11-13): a requirement its credit had completed
+        goes back to In progress once that credit falls below the target.
+
+        Only called for a row whose value had met the target before this
+        change, so one an officer marked complete below target is left alone.
+        """
+        progress = (
+            await self.db.execute(
+                select(RequirementProgress).where(RequirementProgress.id == progress_id)
+            )
+        ).scalar_one_or_none()
+        if (
+            progress is None
+            or progress.status != RequirementProgressStatus.COMPLETED
+            or (progress.progress_percentage or 0.0) >= 100.0
+        ):
+            return
+        _, error = await program_service.update_requirement_progress(
+            progress_id=progress_id,
+            organization_id=organization_id,
+            updates=RequirementProgressUpdate(
+                status=RequirementProgressStatus.IN_PROGRESS.value
+            ),
+            # Bookkeeping, like the reversal that led here.
+            enforce_prerequisites=False,
+        )
+        if error:
+            logger.error(
+                "Reopening progress {} after its credit fell failed: {}",
+                progress_id,
+                error,
+            )
 
     async def sync_credit_for_shift(
         self, shift_id: UUID | str, organization_id: UUID | str
