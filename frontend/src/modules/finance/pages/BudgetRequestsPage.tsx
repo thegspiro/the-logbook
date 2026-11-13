@@ -156,22 +156,37 @@ const RequestCard: React.FC<RequestCardProps> = ({
               <button type="button" className="btn-primary btn-sm" onClick={() => onSubmit(request)} disabled={busy}>
                 Submit
               </button>
-              <button type="button" className="btn-secondary btn-sm" onClick={() => onEdit(request)} disabled={busy}>
+              <button
+                type="button"
+                className="btn-secondary btn-sm touch:min-w-11"
+                onClick={() => onEdit(request)}
+                disabled={busy}
+              >
                 Edit
               </button>
-              <button type="button" className="btn-secondary btn-sm" onClick={() => onDelete(request)} disabled={busy}>
+              <button
+                type="button"
+                className="btn-secondary btn-sm touch:min-w-11"
+                onClick={() => onDelete(request)}
+                disabled={busy}
+              >
                 Delete draft
               </button>
             </>
           )}
           {open && request && status === 'submitted' && (
             <>
-              <button type="button" className="btn-secondary btn-sm" onClick={() => onEdit(request)} disabled={busy}>
+              <button
+                type="button"
+                className="btn-secondary btn-sm touch:min-w-11"
+                onClick={() => onEdit(request)}
+                disabled={busy}
+              >
                 Edit
               </button>
               <button
                 type="button"
-                className="btn-secondary btn-sm"
+                className="btn-secondary btn-sm touch:min-w-11"
                 onClick={() => onWithdraw(request)}
                 disabled={busy}
               >

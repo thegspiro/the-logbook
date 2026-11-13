@@ -71,7 +71,10 @@ interface RowActionsProps {
 const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
   if (row.canAct) {
     return (
-      <div className="flex justify-end gap-2">
+      // Wraps, as the override pair below does: at 320px a card row lays the
+      // "Decision" label beside these two buttons, and unwrapped they held the
+      // card ~50px wider than the screen.
+      <div className="flex flex-wrap justify-end gap-2">
         <button
           type="button"
           onClick={() => onOpen(row, 'approve')}
