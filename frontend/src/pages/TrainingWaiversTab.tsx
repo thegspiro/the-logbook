@@ -19,6 +19,7 @@ import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { getWaiverStatusBadge } from '../utils/waiverStatus';
 import type { WaiverDates, WaiverStatusBadge } from '../utils/waiverStatus';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 type StatusFilter = 'all' | 'active' | 'future' | 'expired' | 'inactive';
 
@@ -189,7 +190,7 @@ const TrainingWaiversTab: React.FC = () => {
   return (
     <div className="py-6">
       {/* Summary Cards */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <StatGrid columns={4} gap={4} className="mb-6">
         <div className="card p-4">
           <p className="text-theme-text-muted text-xs tracking-wider uppercase">Active</p>
           <p className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.active}</p>
@@ -206,7 +207,7 @@ const TrainingWaiversTab: React.FC = () => {
           <p className="text-theme-text-muted text-xs tracking-wider uppercase">Total</p>
           <p className="text-theme-text-primary text-2xl font-bold">{stats.total}</p>
         </div>
-      </div>
+      </StatGrid>
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap gap-3">

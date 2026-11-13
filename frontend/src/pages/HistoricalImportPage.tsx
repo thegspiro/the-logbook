@@ -39,6 +39,7 @@ import type {
   TrainingCourse,
   TrainingType,
 } from '../types/training';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // ==================== Constants ====================
 
@@ -567,7 +568,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({ parseResult, courseMappings, 
   return (
     <div className="space-y-6">
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <StatGrid columns={4} gap={4}>
         <div className="card-secondary p-4 text-center">
           <div className="text-theme-text-primary text-2xl font-bold">{parseResult.total_rows}</div>
           <div className="text-theme-text-muted text-xs">Total Rows</div>
@@ -598,7 +599,7 @@ const PreviewStep: React.FC<PreviewStepProps> = ({ parseResult, courseMappings, 
             Members Not Found
           </div>
         </div>
-      </div>
+      </StatGrid>
 
       {/* Parse errors */}
       {parseResult.parse_errors.length > 0 && (
@@ -792,7 +793,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ result, onReset }) => (
       </p>
     </div>
 
-    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+    <StatGrid columns={4} gap={4}>
       <div className="card-secondary p-4 text-center">
         <div className="text-theme-text-primary text-2xl font-bold">{result.total}</div>
         <div className="text-theme-text-muted text-xs">Total</div>
@@ -819,7 +820,7 @@ const ResultsStep: React.FC<ResultsStepProps> = ({ result, onReset }) => (
           Failed
         </div>
       </div>
-    </div>
+    </StatGrid>
 
     {result.errors.length > 0 && (
       <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4">

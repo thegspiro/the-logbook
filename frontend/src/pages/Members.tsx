@@ -38,6 +38,7 @@ import { canonicalMemberStatus, effectiveMemberClass, statusOptionsFor } from '.
 import { useMembershipTierOptions } from '../hooks/useMembershipTierOptions';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { displayNameOf } from '../utils/memberName';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 /**
  * A roster row. A coordinator's rows are full `GET /users` records; everybody
@@ -441,7 +442,7 @@ const Members: React.FC = () => {
         )}
 
         {/* Stats Cards */}
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:mb-8 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
+        <StatGrid columns={5} className="mb-6 sm:mb-8">
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total Members</p>
             <p className="text-theme-text-primary mt-1 text-2xl font-bold">{stats.total}</p>
@@ -462,7 +463,7 @@ const Members: React.FC = () => {
             <p className="text-theme-text-muted text-xs font-medium uppercase">Retired</p>
             <p className="mt-1 text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.retired}</p>
           </div>
-        </div>
+        </StatGrid>
 
         {/* Actions Bar */}
         <div className="card mb-6 p-4">

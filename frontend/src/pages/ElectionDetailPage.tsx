@@ -70,6 +70,7 @@ import EditDatesModal from '../components/election-detail/EditDatesModal';
 import PreMeetingPackageModal from '../components/election-detail/PreMeetingPackageModal';
 import BallotPreviewModal from '../components/election-detail/BallotPreviewModal';
 import RollbackElectionModal from '../components/election-detail/RollbackElectionModal';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 /** Floor the void-reason prompt already enforced, now stated to the user
  *  instead of silently rejecting anything shorter. */
@@ -2379,7 +2380,7 @@ export const ElectionDetailPage: React.FC = () => {
                       {/* issued = live + superseded + used (+ expired); a
                           resent ballot's old token is superseded, not
                           "unused" (W50-65) */}
-                      <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
+                      <StatGrid columns={5} className="text-sm">
                         <div className="bg-theme-surface-secondary rounded-sm p-3">
                           <div className="text-theme-text-muted">Issued</div>
                           <div className="text-theme-text-primary text-xl font-semibold">
@@ -2410,7 +2411,7 @@ export const ElectionDetailPage: React.FC = () => {
                             {forensicsReport.voting_tokens.total_expired}
                           </div>
                         </div>
-                      </div>
+                      </StatGrid>
                     </div>
 
                     {/* Audit Log Summary */}

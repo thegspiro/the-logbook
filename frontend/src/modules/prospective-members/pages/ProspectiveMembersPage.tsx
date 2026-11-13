@@ -62,6 +62,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useAuthStore } from '../../../stores/authStore';
+import { StatGrid } from '@/components/ux/StatGrid';
 type ApplicantField = 'first_name' | 'last_name' | 'email' | 'phone' | 'target_membership_type' | 'target_role_id';
 
 /** ProspectCreate in schemas/membership_pipeline.py: snake_case, and its limits. */
@@ -600,7 +601,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {/* Stats Bar */}
       {pipelineStats && !isLoadingStats && (
         <>
-          <div className="mb-2 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-6">
+          <StatGrid columns={6} className="mb-2">
             <div className="card bg-theme-input-bg p-4">
               <div className="text-theme-text-muted mb-1 flex items-center gap-2 text-xs">
                 <Users className="h-3.5 w-3.5" />
@@ -660,7 +661,7 @@ export const ProspectiveMembersPage: React.FC = () => {
                 <p className="text-theme-text-muted text-2xl font-bold">{pipelineStats.withdrawn_count}</p>
               </div>
             )}
-          </div>
+          </StatGrid>
           <div className="mb-6 flex items-center gap-1.5 px-1">
             <Info className="text-theme-text-muted h-3 w-3 shrink-0" />
             <p className="text-theme-text-muted text-xs">

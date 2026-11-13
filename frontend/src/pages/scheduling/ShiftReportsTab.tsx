@@ -85,6 +85,7 @@ import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { EmptyState } from '../../components/ux/EmptyState';
 import { attributionName } from '../../utils/memberName';
 import { evaluationAverageLabel, formatEvaluationAverage } from '../../utils/shiftEvaluations';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'department' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -955,7 +956,7 @@ export const ShiftReportsTab: React.FC = () => {
         <h3 className="text-theme-text-primary flex items-center gap-2 text-sm font-semibold">
           <TrendingUp className="h-4 w-4 text-violet-500" /> My Shift Progress
         </h3>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatGrid columns={4}>
           <div className="rounded-lg border border-violet-500/15 bg-violet-500/5 p-3 text-center">
             <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{traineeStats.total_reports}</p>
             <p className="text-theme-text-muted mt-0.5 text-xs">Reports</p>
@@ -993,7 +994,7 @@ export const ShiftReportsTab: React.FC = () => {
               <p className="text-theme-text-muted mt-0.5 text-xs">{evaluationAverageLabel(average)}</p>
             </div>
           ))}
-        </div>
+        </StatGrid>
         {traineeStats.monthly.length > 1 && (
           <div>
             <p className="text-theme-text-secondary mb-2 text-xs font-medium">Monthly Hours</p>
