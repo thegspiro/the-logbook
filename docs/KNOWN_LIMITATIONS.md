@@ -32,10 +32,17 @@ taken; each is listed so the owner can confirm or reverse it.
   sign-in-code template to add: those emails carry no template type. A
   scheduled email of one of these types used to carry the template's CC; it
   now keeps only the addresses typed for that email.
-- **The meeting templates are catalogued but not sent.** The meeting
-  workflow's pull request sends them, and must add its row to
-  `_TEMPLATES` in `attendance_waiver_email_service.py` and choose the
-  approvers' `EmailKind` (training uses `TRAINING_DUTIES`).
+- **The meeting templates are sent from the meeting screens' release**
+  (#4266), under `EVENT_DUTIES` for approvers and `EVENT_CHANGES` for the
+  member (`_KINDS` in `attendance_waiver_email_service.py`), the kinds the
+  meeting workflow's in-app notices already used.
+- **A waiver policy's CC positions copy a decision in the app only** _(owner
+  choice, 2026-11-13)_. #4266 also emailed those holders, beside the decided
+  template's own CC positions, so a person named in both would have been
+  emailed twice; the email copy is left to the template. The request, decision
+  and withdrawal are emailed only from their templates; the hand-built emails
+  remain for the notices no template covers (a question, an answer, a moved
+  session, an expiry).
 
 ## Elections — Voter Rules by Member Type (Owner Decisions, 2026-11-13)
 

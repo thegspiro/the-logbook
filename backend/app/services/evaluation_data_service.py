@@ -125,6 +125,11 @@ _WAIVER_ACTION_TEXT = {
     AttendanceWaiverAction.DENIED: "denied",
     AttendanceWaiverAction.CHIEF_OVERRIDE: "approved on the Chief's override",
     AttendanceWaiverAction.VOIDED: "voided",
+    AttendanceWaiverAction.INFO_REQUESTED: "more information asked for",
+    AttendanceWaiverAction.MEMBER_RESPONDED: "answered",
+    AttendanceWaiverAction.EXPIRED: "expired undecided",
+    AttendanceWaiverAction.RESCHEDULED: "session rescheduled",
+    AttendanceWaiverAction.MEMBER_CONFIRMED: "new date confirmed",
 }
 
 #: Where each action falls in a request's life, to order a log whose times
@@ -137,6 +142,11 @@ _WAIVER_ACTION_ORDER = {
     AttendanceWaiverAction.DENIED: 1,
     AttendanceWaiverAction.CHIEF_OVERRIDE: 2,
     AttendanceWaiverAction.VOIDED: 3,
+    AttendanceWaiverAction.INFO_REQUESTED: 1,
+    AttendanceWaiverAction.MEMBER_RESPONDED: 1,
+    AttendanceWaiverAction.RESCHEDULED: 1,
+    AttendanceWaiverAction.MEMBER_CONFIRMED: 1,
+    AttendanceWaiverAction.EXPIRED: 3,
 }
 
 
@@ -1107,13 +1117,16 @@ def _waiver_summary(rows: Sequence[_WaiverRow]) -> Dict[str, Any]:
         "withdrawn": statuses.count(AttendanceWaiverStatus.WITHDRAWN),
         "pending": statuses.count(AttendanceWaiverStatus.PENDING),
         "voided": statuses.count(AttendanceWaiverStatus.VOIDED),
+        # Closed undecided seven days after the session (owner decision,
+        # 2026-11-13): an absence, and not a denial, so its own figure.
+        "expired": statuses.count(AttendanceWaiverStatus.EXPIRED),
     }
     approved_text = f"{approved} approved"
     if overridden:
         approved_text += f" ({overridden} on the Chief's override)"
     parts = [approved_text] + [
         f"{counts[field]} {field}"
-        for field in ("denied", "withdrawn", "pending", "voided")
+        for field in ("denied", "withdrawn", "pending", "voided", "expired")
         if counts[field] or field in ("denied", "withdrawn")
     ]
     return _value(len(rows), **counts, breakdown=", ".join(parts))

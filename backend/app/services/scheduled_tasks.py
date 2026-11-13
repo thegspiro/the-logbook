@@ -529,6 +529,12 @@ SCHEDULE = {
         "recommended_time": "03:50",
         "cron": "50 3 * * *",
     },
+    "attendance_waiver_expiry": {
+        "description": "Close attendance waiver requests (training sessions and business meetings) still undecided seven days after the session (owner decision 2026-11-13): never before the latest submission deadline a department can choose. The member is notified in-app and by email; the session counts as missed.",
+        "frequency": "hourly",
+        "recommended_time": "every hour",
+        "cron": "35 * * * *",
+    },
     "stored_file_malware_scan": {
         "description": "Malware-scan files and images stored before upload scanning covered them (owner decision 2026-11-01), a bounded batch per run, until each has been scanned once. Does nothing while CLAMAV_ENABLED is false; an infected file is removed and audited as upload_malware_detected.",
         "frequency": "hourly",
@@ -4661,6 +4667,19 @@ async def run_attendance_waiver_attachment_retention(
     return result
 
 
+async def run_attendance_waiver_expiry(db: AsyncSession) -> Dict[str, Any]:
+    """Expire waiver requests nobody decided within seven days of the session.
+
+    See app/services/attendance_waiver_expiry.py. Sweeps every department and
+    commits each request itself; a second run finds nothing left to expire.
+    """
+    from app.services.attendance_waiver_expiry import AttendanceWaiverExpiry
+
+    result = await AttendanceWaiverExpiry(db).sweep()
+    result["task"] = "attendance_waiver_expiry"
+    return result
+
+
 async def run_stored_file_malware_scan(db: AsyncSession) -> Dict[str, Any]:
     """Scan stored files and images that never met the upload scanner.
 
@@ -8628,6 +8647,7 @@ TASK_RUNNERS = {
     "attendance_waiver_attachment_retention": (
         run_attendance_waiver_attachment_retention
     ),
+    "attendance_waiver_expiry": run_attendance_waiver_expiry,
     "stored_file_malware_scan": run_stored_file_malware_scan,
     "scheduled_emails": run_scheduled_emails,
     "storefront_window_lifecycle": run_storefront_window_lifecycle,
@@ -8815,6 +8835,11 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Idempotent: the file goes first, then its row, and a missing file
     # counts as deleted (attendance_waiver_attachments.sweep).
     "attendance_waiver_attachment_retention": 86400,
+    # Hourly, so a request closes within the hour after the end of its
+    # seventh day on the department's calendar, which falls at a different UTC
+    # hour in each timezone. Idempotent: the expiry is guarded on status
+    # pending under the request's lock (attendance_waiver_expiry.sweep).
+    "attendance_waiver_expiry": 3600,
     # Hourly, a bounded batch per run; once every stored object has a ledger
     # row a run only compares references (stored_file_rescan).
     "stored_file_malware_scan": 3600,

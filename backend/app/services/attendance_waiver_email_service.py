@@ -37,7 +37,7 @@ it can be re-run at any time.
 import html as _html
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from loguru import logger
 from sqlalchemy import select
@@ -75,17 +75,33 @@ NOT_IN_COPY = "Not included in this copy"
 APPROVER_KIND = EmailKind.TRAINING_DUTIES
 MEMBER_KIND = EmailKind.TRAINING_RECORD_CHANGES
 
+# (approvers, member) preference kinds per workflow. A meeting request is the
+# secretary's and the President's event business, and its outcome changes how
+# the member's attendance at that meeting reads, so it follows the event kinds
+# the meeting workflow's in-app notices already use.
+_KINDS: Dict[AttendanceWaiverWorkflow, Tuple[EmailKind, EmailKind]] = {
+    AttendanceWaiverWorkflow.TRAINING_SESSION: (APPROVER_KIND, MEMBER_KIND),
+    AttendanceWaiverWorkflow.BUSINESS_MEETING: (
+        EmailKind.EVENT_DUTIES,
+        EmailKind.EVENT_CHANGES,
+    ),
+}
+
 _REQUESTED = "requested"
 _DECIDED = "decided"
 _WITHDRAWN = "withdrawn"
 
-# Which template each notice uses, per workflow. Only training is sent today;
-# the meeting workflow adds its row when it sends.
+# Which template each notice uses, per workflow.
 _TEMPLATES: Dict[AttendanceWaiverWorkflow, Dict[str, EmailTemplateType]] = {
     AttendanceWaiverWorkflow.TRAINING_SESSION: {
         _REQUESTED: EmailTemplateType.SESSION_WAIVER_REQUESTED,
         _DECIDED: EmailTemplateType.SESSION_WAIVER_DECIDED,
         _WITHDRAWN: EmailTemplateType.SESSION_WAIVER_WITHDRAWN,
+    },
+    AttendanceWaiverWorkflow.BUSINESS_MEETING: {
+        _REQUESTED: EmailTemplateType.MEETING_WAIVER_REQUESTED,
+        _DECIDED: EmailTemplateType.MEETING_WAIVER_DECIDED,
+        _WITHDRAWN: EmailTemplateType.MEETING_WAIVER_WITHDRAWN,
     },
 }
 
@@ -246,6 +262,7 @@ class AttendanceWaiverEmails:
         action: AttendanceWaiverRequestAction,
         notice: str,
     ) -> List[_Recipient]:
+        approver_kind, member_kind = _KINDS[request.workflow]
         if notice == _REQUESTED:
             from app.services.attendance_waiver_service import (
                 AttendanceWaiverService,
@@ -255,13 +272,13 @@ class AttendanceWaiverEmails:
             waivers = AttendanceWaiverService(self.db, request.workflow)
             policy = await waivers.get_policy(org_id)
             users = await waivers.recipients(org_id, request, policy)
-            kind = APPROVER_KIND
+            kind = approver_kind
         elif notice == _DECIDED:
             users = await self._users(org_id, [str(request.user_id)])
-            kind = MEMBER_KIND
+            kind = member_kind
         else:
             users = await self._users(org_id, await self._asked(org_id, request))
-            kind = APPROVER_KIND
+            kind = approver_kind
         required = department_required_kinds(organization)
         return [
             _Recipient(user_key(str(u.id)), u.email, u.display_name, False)

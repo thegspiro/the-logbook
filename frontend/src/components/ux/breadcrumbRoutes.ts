@@ -198,6 +198,9 @@ export const BREADCRUMB_ROUTES: Record<string, BreadcrumbRoute> = {
   '/training/knowledge-tests': {},
   // The approver queue; ungated like its route, which the API scopes.
   '/attendance-waivers': { label: 'Waiver Requests' },
+  '/meetings/waiver-requests': { label: 'Meeting Waiver Requests' },
+  // Parent of the meeting waiver settings; gated like its route.
+  '/minutes/attendance': { label: 'Attendance', permissions: ['meetings.manage'] },
 };
 
 /**
