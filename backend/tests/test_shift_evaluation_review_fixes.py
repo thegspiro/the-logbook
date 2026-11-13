@@ -360,3 +360,81 @@ class TestNobodyReadsTheirOwnEvaluationEarly:
             current_user=trainee,
         )
         assert listed == []
+
+
+class TestWithNoReportItWaitsForCloseOut:
+    """Owner decision (2026-11-13): under report review, an evaluation of a
+    member with no report of their own on the shift is visible, and credits,
+    once the shift is closed out."""
+
+    async def _review_required(self, db, scene):
+        db.add(
+            TrainingModuleConfig(
+                organization_id=scene.org_id, report_review_required=True
+            )
+        )
+        await db.flush()
+
+    async def test_hidden_while_open_then_visible_and_credited_at_close_out(
+        self, db_session
+    ):
+        from app.services.scheduling_service import SchedulingService
+
+        scene = await _scene(db_session)
+        await self._review_required(db_session, scene)
+        shifts = await _progress(
+            db_session,
+            scene,
+            scene.program,
+            scene.enrollment,
+            RequirementType.EVALUATED_SHIFTS,
+            required_shifts=10,
+        )
+        service = ShiftEvaluationService(db_session)
+        evaluation = await _save(db_session, scene, _complete())
+
+        assert not await service.visible_to_member(evaluation, scene.org_id)
+        assert await _value(db_session, shifts) == 0
+
+        _, error = await SchedulingService(db_session).finalize_shift(
+            uuid.UUID(scene.shift.id), scene.org_id, str(scene.officer.id)
+        )
+        assert error is None
+
+        await db_session.refresh(evaluation)
+        assert await service.visible_to_member(evaluation, scene.org_id)
+        assert await _value(db_session, shifts) == 1
+
+        _, error = await SchedulingService(db_session).reopen_shift(
+            uuid.UUID(scene.shift.id), scene.org_id
+        )
+        assert error is None
+
+        await db_session.refresh(evaluation)
+        assert not await service.visible_to_member(evaluation, scene.org_id)
+        assert await _value(db_session, shifts) == 0
+
+    async def test_a_report_on_file_still_decides(self, db_session):
+        from app.models.training import ShiftCompletionReport
+
+        scene = await _scene(db_session)
+        await self._review_required(db_session, scene)
+        scene.shift.is_finalized = True
+        db_session.add(
+            ShiftCompletionReport(
+                id=str(uuid.uuid4()),
+                organization_id=scene.org_id,
+                shift_id=scene.shift.id,
+                trainee_id=scene.trainee.id,
+                officer_id=scene.officer.id,
+                shift_date=scene.shift.shift_date,
+                hours_on_shift=12.0,
+                review_status="pending_review",
+            )
+        )
+        await db_session.flush()
+        evaluation = await _save(db_session, scene, _complete())
+
+        assert not await ShiftEvaluationService(db_session).visible_to_member(
+            evaluation, scene.org_id
+        )

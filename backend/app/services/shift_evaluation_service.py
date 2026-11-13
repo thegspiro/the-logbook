@@ -1368,6 +1368,23 @@ class ShiftEvaluationService:
             if evaluation is not None:
                 await self.sync_credit(evaluation, organization_id)
 
+    async def sync_credit_for_shift(
+        self, shift_id: UUID | str, organization_id: UUID | str
+    ) -> None:
+        """Re-sync after the shift was finalized or reopened."""
+        evaluation_ids = list(
+            (
+                await self.db.execute(
+                    select(ShiftEvaluation.id).where(
+                        ShiftEvaluation.organization_id == str(organization_id),
+                        ShiftEvaluation.shift_id == str(shift_id),
+                        ShiftEvaluation.status == "submitted",
+                    )
+                )
+            ).scalars()
+        )
+        await self._sync_ids(evaluation_ids, organization_id)
+
     async def sync_credit_for_entry(
         self, entry_id: UUID | str, organization_id: UUID | str
     ) -> None:
@@ -1610,7 +1627,7 @@ class ShiftEvaluationService:
             return True
         if not evaluation.shift_id:
             return False
-        status = (
+        report = (
             await self.db.execute(
                 select(ShiftCompletionReport.review_status).where(
                     ShiftCompletionReport.shift_id == evaluation.shift_id,
@@ -1618,8 +1635,22 @@ class ShiftEvaluationService:
                     ShiftCompletionReport.organization_id == str(organization_id),
                 )
             )
+        ).first()
+        if report is not None:
+            return report[0] == "approved"
+        # No report of their own to wait for (a general-form seat, or a
+        # department that does not ask trainees for one): visible once the
+        # shift is closed out (owner decision, 2026-11-13). Finalize and
+        # reopen re-sync credit through sync_credit_for_shift.
+        finalized = (
+            await self.db.execute(
+                select(Shift.is_finalized).where(
+                    Shift.id == evaluation.shift_id,
+                    Shift.organization_id == str(organization_id),
+                )
+            )
         ).scalar_one_or_none()
-        return status == "approved"
+        return bool(finalized)
 
     async def list_for_member(
         self,
