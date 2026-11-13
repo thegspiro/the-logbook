@@ -23,6 +23,9 @@ import { useFinanceStore } from '../store/financeStore';
 import { MAX_MONEY_AMOUNT, MAX_MONEY_MESSAGE, MIN_MONEY_AMOUNT, MIN_MONEY_MESSAGE } from '../utils/moneyLimits';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { FormField } from '@/components/ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '@/utils/serverFieldErrors';
+import { getSaveFailureMessage } from '@/utils/errorHandling';
 import { budgetOptionLabel, selectableBudgetOptions, useRequestFormOptions } from '../hooks/useRequestFormOptions';
 import { useFundOptions } from '../hooks/useFundOptions';
 import { FundSelect } from '../components/FundSelect';
@@ -34,8 +37,14 @@ import { ADVANCE_RETURN_DAYS, ApprovalEntityType, type CheckRequest } from '../t
 import { useAuthStore } from '@/stores/authStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
 
+/** `CheckRequestCreate.payee_name`'s max_length; the other text fields have none in the schema. */
+const PAYEE_NAME_MAX_LENGTH = 300;
+
 const checkRequestSchema = z.object({
-  payeeName: z.string().min(1, 'Payee name is required').max(200),
+  payeeName: z
+    .string()
+    .min(1, 'Payee name is required')
+    .max(PAYEE_NAME_MAX_LENGTH, `Keep the payee name to ${PAYEE_NAME_MAX_LENGTH} characters`),
   payeeAddress: z.string().max(500).optional(),
   amount: z
     .number({ message: 'Amount is required' })
@@ -54,8 +63,24 @@ type CheckRequestFormData = z.infer<typeof checkRequestSchema>;
 
 const inputClass = 'form-input';
 const selectClass = inputClass;
-const labelClass = 'form-label';
-const errorClass = 'mt-1 text-xs text-red-600';
+
+/**
+ * The form's fields as a 422 names them. Finance request schemas report
+ * snake_case locs (`loc_by_alias=False`); the mapper reads both spellings.
+ * The advance holder is chosen in the "Advance for" select.
+ */
+const SERVER_FIELDS: Record<keyof CheckRequestFormData | 'advanceHolderId', ServerFieldSpec> = {
+  payeeName: { label: 'Payee Name', maxLength: PAYEE_NAME_MAX_LENGTH },
+  payeeAddress: { label: 'Payee Address' },
+  amount: { label: 'Amount' },
+  memo: { label: 'Memo' },
+  purpose: { label: 'Purpose' },
+  fiscalYearId: { label: 'Fiscal Year' },
+  budgetId: { label: 'Budget' },
+  fundCampaignId: { label: 'Restricted fund' },
+  isAdvance: { label: 'Cash advance' },
+  advanceHolderId: { label: 'Advance for' },
+};
 
 const CheckRequestFormPage: React.FC = () => {
   const navigate = useNavigate();
@@ -66,6 +91,8 @@ const CheckRequestFormPage: React.FC = () => {
     handleSubmit,
     watch,
     setValue,
+    setError,
+    setFocus,
     formState: { errors, isSubmitting },
   } = useForm<CheckRequestFormData>({
     resolver: zodResolver(checkRequestSchema),
@@ -84,6 +111,8 @@ const CheckRequestFormPage: React.FC = () => {
   const memberName = user?.full_name || user?.display_name || user?.username || '';
   // '' is the signed-in member; otherwise the member the office raises it for.
   const [holderId, setHolderId] = useState('');
+  const [holderError, setHolderError] = useState<string | undefined>(undefined);
+  const [formError, setFormError] = useState<string | null>(null);
   const holders = useAdvanceHolders(canRaiseForOthers && isAdvance, user?.id);
   const forSomeoneElse = isAdvance && holderId !== '';
   // Advice only: the server refuses the submission while one is overdue.
@@ -107,9 +136,11 @@ const CheckRequestFormPage: React.FC = () => {
     const payee = watch('payeeName');
     if (!payee || payee === payeeFor(holderId)) setValue('payeeName', payeeFor(id), { shouldDirty: true });
     setHolderId(id);
+    setHolderError(undefined);
   };
 
   const onSubmit = async (data: CheckRequestFormData) => {
+    setFormError(null);
     try {
       const payload: Partial<CheckRequest> = {
         payeeName: data.payeeName,
@@ -129,8 +160,21 @@ const CheckRequestFormPage: React.FC = () => {
       const created = await createCheckRequest(payload);
       toast.success('Check request created');
       void navigate(`/finance/check-requests/${created.id}`);
-    } catch {
-      // Error handled by store
+    } catch (err: unknown) {
+      // A create form creates nothing until each refusal is fixed, so each one
+      // is put on the field it names (forms review F-2); the rest are shown
+      // above the actions, since the store's own message is only on the list.
+      const mapped = mapServerFieldErrors(err, SERVER_FIELDS);
+      const keys = Object.keys(mapped?.fieldErrors ?? {}) as (keyof typeof SERVER_FIELDS)[];
+      for (const key of keys) {
+        const message = mapped?.fieldErrors[key] ?? '';
+        if (key === 'advanceHolderId') setHolderError(message);
+        else setError(key, { type: 'server', message });
+      }
+      const first = keys.find((key) => key !== 'advanceHolderId');
+      if (first) setFocus(first);
+      if (keys.length > 0 && !mapped?.unmatched.length) return;
+      setFormError(mapped?.unmatched.join(' ') || getSaveFailureMessage(err, 'create the check request'));
     }
   };
 
@@ -187,29 +231,28 @@ const CheckRequestFormPage: React.FC = () => {
           </div>
 
           {isAdvance && canRaiseForOthers && (
-            <div>
-              <label htmlFor="advanceHolder" className={labelClass}>
-                Advance for
-              </label>
-              <select
-                id="advanceHolder"
-                className={selectClass}
-                value={holderId}
-                onChange={(e) => chooseHolder(e.target.value)}
-                aria-describedby="advanceHolder-hint"
-              >
-                <option value="">Me</option>
-                {holders.map((holder) => (
-                  <option key={holder.id} value={holder.id}>
-                    {holder.name}
-                  </option>
-                ))}
-              </select>
-              <p id="advanceHolder-hint" className="text-theme-text-secondary mt-1 text-xs">
-                The member holds the advance: it is paid to them, its statements and deadline are theirs, and an overdue
-                one stops them requesting another. As the one who raised it, you cannot approve it or issue its check.
-              </p>
-            </div>
+            <FormField
+              id="advanceHolder"
+              label="Advance for"
+              error={holderError}
+              hint="The member holds the advance: it is paid to them, its statements and deadline are theirs, and an overdue one stops them requesting another. As the one who raised it, you cannot approve it or issue its check."
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  className={selectClass}
+                  value={holderId}
+                  onChange={(e) => chooseHolder(e.target.value)}
+                >
+                  <option value="">Me</option>
+                  {holders.map((holder) => (
+                    <option key={holder.id} value={holder.id}>
+                      {holder.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
           )}
 
           {isAdvance && overdue.length > 0 && (
@@ -222,70 +265,70 @@ const CheckRequestFormPage: React.FC = () => {
             </div>
           )}
 
-          <div>
-            <label htmlFor="payeeName" className={labelClass}>
-              Payee Name *
-            </label>
-            <input id="payeeName" {...register('payeeName')} className={inputClass} />
-            {errors.payeeName && <p className={errorClass}>{errors.payeeName.message}</p>}
-          </div>
+          <FormField
+            id="payeeName"
+            label="Payee Name"
+            required
+            error={errors.payeeName?.message}
+            maxLength={PAYEE_NAME_MAX_LENGTH}
+            count={watch('payeeName')?.length ?? 0}
+          >
+            {(field) => (
+              <input {...field} type="text" autoComplete="off" {...register('payeeName')} className={inputClass} />
+            )}
+          </FormField>
 
-          <div>
-            <label htmlFor="payeeAddress" className={labelClass}>
-              Payee Address
-            </label>
-            <input id="payeeAddress" {...register('payeeAddress')} className={inputClass} />
-          </div>
+          <FormField id="payeeAddress" label="Payee Address" error={errors.payeeAddress?.message}>
+            {(field) => (
+              <input {...field} type="text" autoComplete="off" {...register('payeeAddress')} className={inputClass} />
+            )}
+          </FormField>
 
-          <div>
-            <label htmlFor="amount" className={labelClass}>
-              Amount *
-            </label>
-            <input
-              id="amount"
-              type="number"
-              step="0.01"
-              min={MIN_MONEY_AMOUNT}
-              max={MAX_MONEY_AMOUNT}
-              {...register('amount', { valueAsNumber: true })}
-              className={inputClass}
-            />
-            {errors.amount && <p className={errorClass}>{errors.amount.message}</p>}
-          </div>
+          <FormField id="amount" label="Amount" required error={errors.amount?.message}>
+            {(field) => (
+              <input
+                {...field}
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min={MIN_MONEY_AMOUNT}
+                max={MAX_MONEY_AMOUNT}
+                {...register('amount', { valueAsNumber: true })}
+                className={inputClass}
+              />
+            )}
+          </FormField>
 
-          <div>
-            <label htmlFor="fiscalYearId" className={labelClass}>
-              Fiscal Year *
-            </label>
-            <select id="fiscalYearId" {...register('fiscalYearId')} className={selectClass}>
-              <option value="">Select fiscal year</option>
-              {fiscalYears.map((fy) => (
-                <option key={fy.id} value={fy.id}>
-                  {fy.name}
-                </option>
-              ))}
-            </select>
-            {errors.fiscalYearId && <p className={errorClass}>{errors.fiscalYearId.message}</p>}
-          </div>
+          <FormField id="fiscalYearId" label="Fiscal Year" required error={errors.fiscalYearId?.message}>
+            {(field) => (
+              <select {...field} {...register('fiscalYearId')} className={selectClass}>
+                <option value="">Select fiscal year</option>
+                {fiscalYears.map((fy) => (
+                  <option key={fy.id} value={fy.id}>
+                    {fy.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
 
           {/* An advance charges no budget line or fund: the expense report
               that accounts for it does. */}
           {!isAdvance && (
             <>
-              <div>
-                <label htmlFor="budgetId" className={labelClass}>
-                  Budget
-                </label>
-                <select id="budgetId" {...register('budgetId')} className={selectClass}>
-                  <option value="">No budget linked</option>
-                  {/* A new request: nothing on file, so no inactive line. */}
-                  {selectableBudgetOptions(budgetOptions).map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {budgetOptionLabel(option)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <FormField id="budgetId" label="Budget" error={errors.budgetId?.message}>
+                {(field) => (
+                  <select {...field} {...register('budgetId')} className={selectClass}>
+                    <option value="">No budget linked</option>
+                    {/* A new request: nothing on file, so no inactive line. */}
+                    {selectableBudgetOptions(budgetOptions).map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {budgetOptionLabel(option)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
 
               <FundSelect
                 id="fundCampaignId"
@@ -294,6 +337,7 @@ const CheckRequestFormPage: React.FC = () => {
                 amount={watch('amount') || 0}
                 funds={funds}
                 mode={fundMode}
+                error={errors.fundCampaignId?.message}
               />
             </>
           )}
@@ -305,19 +349,21 @@ const CheckRequestFormPage: React.FC = () => {
             budgetId={isAdvance ? undefined : watch('budgetId') || undefined}
           />
 
-          <div>
-            <label htmlFor="purpose" className={labelClass}>
-              Purpose
-            </label>
-            <textarea id="purpose" rows={3} {...register('purpose')} className={inputClass} />
-          </div>
+          <FormField id="purpose" label="Purpose" error={errors.purpose?.message}>
+            {(field) => <textarea {...field} rows={3} {...register('purpose')} className={inputClass} />}
+          </FormField>
 
-          <div>
-            <label htmlFor="memo" className={labelClass}>
-              Memo
-            </label>
-            <input id="memo" {...register('memo')} className={inputClass} />
-          </div>
+          <FormField id="memo" label="Memo" error={errors.memo?.message}>
+            {(field) => (
+              <input {...field} type="text" autoComplete="off" {...register('memo')} className={inputClass} />
+            )}
+          </FormField>
+
+          {formError && (
+            <p role="alert" className="text-sm text-red-800 dark:text-red-300">
+              {formError}
+            </p>
+          )}
 
           <div className="border-theme-surface-border flex justify-end gap-3 border-t pt-4">
             <button

@@ -85,6 +85,7 @@ const HistoryRow: React.FC<{ record: MyTrainingHistoryRecord; showHours: boolean
       </td>
       <td className="px-4 py-2 whitespace-nowrap">{formatDate(record.completion_date, tz)}</td>
       {showHours && <td className="px-4 py-2 whitespace-nowrap">{formatHours(record.hours_completed)}</td>}
+      <td className="px-4 py-2 whitespace-nowrap">{record.source_label}</td>
       <td className="px-4 py-2">
         {record.voided_at ? (
           <div className="flex flex-col gap-1">
@@ -98,9 +99,16 @@ const HistoryRow: React.FC<{ record: MyTrainingHistoryRecord; showHours: boolean
             )}
           </div>
         ) : (
-          <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(record.status)}`}>
-            {getTrainingStatusLabel(record.status)}
-          </span>
+          <div className="flex flex-col gap-1">
+            <span className={`w-fit rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(record.status)}`}>
+              {getTrainingStatusLabel(record.status)}
+            </span>
+            {/* Credit withdrawn by the event (deleted, cancelled, member
+                removed): why, rather than a bare "Cancelled" (W80-15). */}
+            {record.void_reason && (
+              <span className="text-theme-text-secondary text-xs whitespace-pre-line">{record.void_reason}</span>
+            )}
+          </div>
         )}
       </td>
     </tr>
@@ -183,6 +191,9 @@ const YearGroup: React.FC<{
                       </th>
                     )}
                     <th scope="col" className="px-4 py-2">
+                      Source
+                    </th>
+                    <th scope="col" className="px-4 py-2">
                       Status
                     </th>
                   </tr>
@@ -196,7 +207,7 @@ const YearGroup: React.FC<{
                         month={group.month}
                         totals={monthTotals.get(group.month)}
                         showHours={showHours}
-                        columns={showHours ? 5 : 4}
+                        columns={showHours ? 6 : 5}
                       />
                     )}
                     {group.items.map((r) => (

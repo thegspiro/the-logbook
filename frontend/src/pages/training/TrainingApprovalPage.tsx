@@ -27,6 +27,7 @@ import { TrainingPageHeader } from '../../components/training/TrainingPageHeader
 import { SkeletonCard, SkeletonRow } from '../../components/ux/Skeleton';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useTimezone } from '../../hooks/useTimezone';
+import { useAuthStore } from '../../stores/authStore';
 import {
   formatDate,
   formatDateTime,
@@ -90,6 +91,12 @@ const minutesError = (value: string, prefill: string): string | null => {
   if (trimmed === '') return 'Enter the approved minutes. 0 gives no credit.';
   if (!/^\d+$/.test(trimmed)) return 'Enter whole minutes, 0 or more.';
   return null;
+};
+
+/** Whole minutes the event was scheduled to run; null when the times do not parse. */
+const scheduledMinutes = (start: string, end: string): number | null => {
+  const span = new Date(end).getTime() - new Date(start).getTime();
+  return Number.isFinite(span) && span > 0 ? Math.round(span / 60000) : null;
 };
 
 const statusLabel = (status: string): string => STATUS_LABELS[status] ?? status;
@@ -167,6 +174,26 @@ export const TrainingApprovalPage: React.FC = () => {
   }, [data, drafts]);
   const hasErrors = Object.keys(errors).length > 0;
 
+  // Approved minutes are free-form, and nothing stopped a typo (1200 for 120)
+  // or a member's generous claim becoming a full day of credit for a two-hour
+  // drill (workflow review, training events). A warning, not an error: a drill
+  // can run long, and the officer may confirm more than was scheduled.
+  const scheduled = data ? scheduledMinutes(data.event_start_datetime, data.event_end_datetime) : null;
+  const overScheduled = useMemo(() => {
+    if (!data || scheduled === null) return [] as string[];
+    return data.attendees
+      .filter((a) => {
+        const value = (drafts[a.user_id]?.minutes ?? prefillMinutes(a)).trim();
+        return /^\d+$/.test(value) && Number(value) > scheduled;
+      })
+      .map((a) => a.user_id);
+  }, [data, drafts, scheduled]);
+
+  // The server refuses an approver who is on the roster; saying so here spares
+  // them filling in the page to be refused at the end.
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const approverOnRoster = !!currentUserId && !!data?.attendees.some((a) => a.user_id === currentUserId);
+
   const updateDraft = (userId: string, patch: Partial<RowDraft>) => {
     setDrafts((prev) => ({
       ...prev,
@@ -193,12 +220,17 @@ export const TrainingApprovalPage: React.FC = () => {
   const handleApprove = async () => {
     if (!data || !token || hasErrors) return;
     const count = data.attendees.length;
+    const overNames = data.attendees.filter((a) => overScheduled.includes(a.user_id)).map((a) => a.user_name);
+    const overWarning =
+      overNames.length > 0 && scheduled !== null
+        ? ` ${overNames.join(', ')} ${overNames.length === 1 ? 'is' : 'are'} approved for more than the ${scheduled} minutes this session was scheduled for.`
+        : '';
     const confirmed = await confirm({
       title: 'Record training credit?',
-      message: `Records ${count} ${count === 1 ? "member's" : "members'"} training credit. Approved minutes of 0 give that member no credit.`,
+      message: `Records ${count} ${count === 1 ? "member's" : "members'"} training credit. Approved minutes of 0 give that member no credit.${overWarning}`,
       confirmLabel: 'Approve and record',
       cancelLabel: 'Keep reviewing',
-      variant: 'info',
+      variant: overWarning ? 'warning' : 'info',
     });
     if (!confirmed) return;
 
@@ -423,6 +455,8 @@ export const TrainingApprovalPage: React.FC = () => {
                   const draft = drafts[a.user_id] ?? { minutes: prefillMinutes(a), note: a.notes ?? '' };
                   const error = errors[a.user_id];
                   const errorId = `approved-minutes-error-${a.user_id}`;
+                  const overId = `approved-minutes-over-${a.user_id}`;
+                  const over = !error && overScheduled.includes(a.user_id);
                   const checkIn = formatCredited(a.checked_in_at);
                   const checkOut = formatCredited(a.checked_out_at);
                   return (
@@ -450,13 +484,18 @@ export const TrainingApprovalPage: React.FC = () => {
                               className="form-input w-28"
                               aria-label={`Approved minutes for ${a.user_name}`}
                               aria-invalid={error ? true : undefined}
-                              aria-describedby={error ? errorId : undefined}
+                              aria-describedby={error ? errorId : over ? overId : undefined}
                               value={draft.minutes}
                               onChange={(e) => updateDraft(a.user_id, { minutes: e.target.value })}
                             />
                             {error && (
                               <p id={errorId} className="text-xs text-red-700 dark:text-red-400">
                                 {error}
+                              </p>
+                            )}
+                            {over && scheduled !== null && (
+                              <p id={overId} className="text-xs text-amber-800 dark:text-amber-300">
+                                More than the {scheduled}-minute session
                               </p>
                             )}
                           </div>
@@ -504,6 +543,12 @@ export const TrainingApprovalPage: React.FC = () => {
             onChange={(e) => setApprovalNotes(e.target.value)}
             placeholder="Anything the training record should say about this approval"
           />
+          {approverOnRoster && (
+            <p className="alert-warning mb-3 px-3 py-2 text-sm" role="status">
+              You are on this roster, so you cannot approve it. Another training officer or the Chief must approve this
+              training credit.
+            </p>
+          )}
           {hasErrors && (
             <p className="mb-3 text-sm text-red-700 dark:text-red-400">
               Correct the approved minutes above before recording.
@@ -517,7 +562,7 @@ export const TrainingApprovalPage: React.FC = () => {
           <button
             type="button"
             className="btn-primary"
-            disabled={submitting || hasErrors}
+            disabled={submitting || hasErrors || approverOnRoster}
             onClick={() => void handleApprove()}
           >
             {submitting ? 'Recording…' : 'Approve and record'}

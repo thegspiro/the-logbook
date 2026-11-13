@@ -888,3 +888,148 @@ class TestChiefOverrideOverlapLocking:
         )
         listing = _source_of(RequirementOverrideService.list_overrides)
         assert "with_for_update()" in listing
+
+
+class TestTrainingModuleConfigRace:
+    """Two concurrent first-ever reads of a department's training visibility
+    config (e.g. two members opening a training page the moment the org has
+    never configured one) both read the row as missing and both attempt an
+    insert; ``organization_id`` is unique, so the loser's flush raises
+    ``IntegrityError``. Unlike the capacity checks above this isn't a
+    read-then-insert *count*, but the same read-then-insert race shape, and it
+    was unguarded: the loser's raw ``IntegrityError`` surfaced as an unhandled
+    500 on a plain page load (TRX-18 pass 14). The fix mirrors
+    ``SchedulingModuleConfigService._create_row``'s own guard against the
+    identical race on the sibling settings table (pitfall #27)."""
+
+    def test_the_insert_is_wrapped_in_a_savepoint_and_guarded(self):
+        from app.services.training_module_config_service import (
+            TrainingModuleConfigService,
+        )
+
+        source = _source_of(TrainingModuleConfigService.get_config)
+        assert "begin_nested()" in source, (
+            "the insert must run inside a savepoint so the loser's session "
+            "stays usable after the IntegrityError."
+        )
+        assert "except IntegrityError" in source, (
+            "the loser's flush must be caught, not left to surface as an "
+            "unhandled 500."
+        )
+        assert source.index("begin_nested()") < source.index(
+            "except IntegrityError"
+        ), "the savepoint must wrap the insert that can raise."
+
+    def test_the_loser_re_reads_with_a_locking_read(self):
+        from app.services.training_module_config_service import (
+            TrainingModuleConfigService,
+        )
+
+        source = _source_of(TrainingModuleConfigService.get_config)
+        assert "with_for_update()" in source, (
+            "under REPEATABLE READ a plain SELECT after the race would still "
+            "answer from the snapshot taken before it, which is the one that "
+            "found no row — the re-read must lock to see the winner's commit."
+        )
+        assert source.index("except IntegrityError") < source.index(
+            "with_for_update()"
+        ), "the locking re-read must happen in the exception handler, not before."
+
+
+class TestAttendanceWaiverCapLocking:
+    """A department's cap on approved session waivers is enforced when a
+    request is approved: a count of the member's approved requests, then a
+    write. Two deciders approving two of one member's requests at once both
+    counted one fewer than there were and both approved. The member's ``users``
+    row is the parent they contend for (there is no other row both share), and
+    the count must be a locking read for the reason above.
+
+    The parent is one member, so every range a waiver write locks must be that
+    member's alone: a gap shared with another member deadlocked two members'
+    submissions, and two members' approvals under a cap (1213, a 500).
+    ``tests/test_attendance_waiver_races.py`` drives all of these races."""
+
+    def test_every_decision_locks_the_member_before_the_request(self):
+        from app.services.attendance_waiver_service import AttendanceWaiverService
+
+        source = _source_of(AttendanceWaiverService._locked_request)
+        assert "_lock_member(" in source
+        assert source.index("_lock_member(") < source.index("with_for_update()"), (
+            "The member's row is locked before the request's: submitting takes "
+            "the member's row first, so the other order deadlocks."
+        )
+        lock = _source_of(AttendanceWaiverService._lock_member)
+        assert "with_for_update()" in lock
+
+    def test_approval_counts_with_a_locking_read(self):
+        from app.services.attendance_waiver_service import AttendanceWaiverService
+
+        approve = _source_of(AttendanceWaiverService.approve)
+        assert "_locked_request(" in approve
+        assert re.search(r"_approved_dates\([^)]*lock=True", approve), (
+            "The cap's count of approved requests must be a locking read: "
+            "under REPEATABLE READ the second decider would otherwise count "
+            "from the snapshot taken before the first approval committed."
+        )
+        assert approve.index("_locked_request(") < approve.index("_approved_dates(")
+        dates = _source_of(AttendanceWaiverService._approved_dates)
+        assert "with_for_update()" in dates
+
+    def test_the_cap_count_locks_only_the_members_own_range(self):
+        from app.models.attendance_waiver import AttendanceWaiverRequest
+        from app.services.attendance_waiver_service import (
+            MEMBER_INDEX,
+            AttendanceWaiverService,
+        )
+
+        dates = _source_of(AttendanceWaiverService._approved_dates)
+        assert 'f"FORCE INDEX ({MEMBER_INDEX})"' in dates, (
+            "The locking count is pinned to the member's index. Left to the "
+            "optimizer, MariaDB walked the organization-wide status index, "
+            "whose gap every approval's status UPDATE inserts into, and two "
+            "members' approvals deadlocked."
+        )
+        assert "AttendanceWaiverRequest.status ==" not in dates, (
+            "Filter the status in Python: a status predicate in SQL invites a "
+            "plan (or a rowid filter) through the status index."
+        )
+        index = next(
+            i
+            for i in AttendanceWaiverRequest.__table__.indexes
+            if i.name == MEMBER_INDEX
+        )
+        assert [c.name for c in index.columns][:2] == ["organization_id", "user_id"]
+
+    def test_submitting_takes_no_locking_read_of_the_requests(self):
+        from app.services.attendance_waiver_service import AttendanceWaiverService
+
+        # The one lock submitting takes besides the member's row: the event,
+        # shared and by primary key, so a cancellation cannot slip between the
+        # check and the insert. A record lock on one events row, not a range
+        # of attendance_waiver_requests, so it is no gap another member's
+        # insert needs (see test_the_event_lock_is_shared_and_by_id).
+        allowed = "await self._event(org_id, event_id, lock=True)"
+        assert allowed in _source_of(AttendanceWaiverService.submit)
+        for method in (
+            AttendanceWaiverService.submit,
+            AttendanceWaiverService._assess,
+            AttendanceWaiverService._live_request,
+        ):
+            source = _source_of(method).replace(allowed, "")
+            assert "with_for_update" not in source, method.__name__
+            assert "lock=True" not in source, (
+                f"{method.__name__}: a locking read of a live_key that does "
+                "not exist yet takes a gap lock that spans other members' "
+                "keys, and two members' submissions deadlock. The unique "
+                "live_key is the guard."
+            )
+
+    def test_the_event_lock_is_shared_and_by_id(self):
+        """Submitting's event lock is a shared lock on the event's own row:
+        two members submitting for one session both hold it at once."""
+        from app.services.attendance_waiver_service import AttendanceWaiverService
+
+        source = _source_of(AttendanceWaiverService._event)
+        assert "Event.id == str(event_id)" in source
+        assert "with_for_update(read=True)" in source
+        assert "with_for_update()" not in source

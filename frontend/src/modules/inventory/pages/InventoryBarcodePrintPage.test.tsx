@@ -573,6 +573,21 @@ describe('InventoryBarcodePrintPage', () => {
       localStorage.setItem('inventory:labelPreset', 'letter');
     });
 
+    it('lays the sheet out on Avery 5160 columns, gutters and margins', async () => {
+      renderPage('?ids=it-1');
+      await screen.findAllByText('Thermal Camera');
+
+      // Centred columns laid edge to edge printed the outer two 1/8" off
+      // their labels; Avery's sheet has a 0.125" gutter from 0.1875" sides.
+      const grid = screen.getByTestId('label-sheet-grid');
+      expect(grid.style.gridTemplateColumns).toBe('repeat(3, 2.625in)');
+      expect(grid.style.columnGap).toBe('0.125in');
+      expect(grid.style.rowGap).toMatch(/^0(px)?$/);
+      expect(grid.style.justifyContent).toBe('');
+      const pageRule = screen.getByTestId('label-page-css').textContent;
+      expect(pageRule).toMatch(/margin:\s*0\.5in 0\.1875in/);
+    });
+
     it('leaves the used positions blank in the preview and the PDF', async () => {
       const user = userEvent.setup();
       renderPage('?ids=it-1');

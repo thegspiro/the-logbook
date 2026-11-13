@@ -30,6 +30,7 @@ from app.models.training import (
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
+    NOT_YET_HELD_STATUS,
     HeldSession,
     apply_recency,
     biannual_window,
@@ -223,6 +224,7 @@ class CompetencyMatrixService:
                 if deadline is not None and status_info["status"] not in (
                     "current",
                     "expiring_soon",
+                    "not_applicable",
                 ):
                     status_info = {
                         **status_info,
@@ -233,7 +235,7 @@ class CompetencyMatrixService:
 
                 # Count
                 s = status_info["status"]
-                if s == CATCH_UP_STATUS:
+                if s in (CATCH_UP_STATUS, "not_applicable"):
                     ungraded_count += 1
                 elif s == "current":
                     current_count += 1
@@ -337,9 +339,11 @@ class CompetencyMatrixService:
             )
             # A catch-up status lands on "not_started" here; the caller turns
             # an unmet cell inside the catch-up period into its own status.
+            # No session held yet is this matrix's own "not_applicable".
             cell_status = {
                 TrainingStatus.COMPLETED.value: "current",
                 TrainingStatus.IN_PROGRESS.value: "expiring_soon",
+                NOT_YET_HELD_STATUS: "not_applicable",
             }.get(ev.status, "not_started")
             return {
                 "status": cell_status,

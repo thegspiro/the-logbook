@@ -436,6 +436,8 @@ class NotificationsService:
         category: str,
         resource_key: str,
         resource_id: UUID | str,
+        *,
+        commit: bool = True,
     ) -> int:
         """Archive in-app prompts whose related action has been completed.
 
@@ -443,6 +445,9 @@ class NotificationsService:
         their metadata.  Keeping the lookup here gives completion endpoints a
         common, idempotent way to remove stale prompts without coupling the
         notification table to every resource table in the application.
+
+        ``commit=False`` leaves the archival in the caller's transaction, for
+        a caller that is midway through a larger write it commits itself.
         """
         # Whole seconds: ``expires_at`` is DATETIME with no fractional part,
         # and MySQL 8 *rounds* the fraction where MariaDB truncates it. From
@@ -486,7 +491,7 @@ class NotificationsService:
                 resource_id,
             )
             return 0
-        if matched > 0:
+        if matched > 0 and commit:
             try:
                 await self.db.commit()
             except Exception:

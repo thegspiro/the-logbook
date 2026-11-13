@@ -50,4 +50,14 @@ describe('TimeQuarterHour', () => {
       expect(minuteOptions()).toEqual(['00', '15', '30', '45']);
     });
   });
+
+  it('announces a refusal on every select it is given', () => {
+    render(<TimeQuarterHour value="" onChange={onChange} aria-invalid aria-describedby="t-error" aria-required />);
+    for (const name of ['Time hour', 'Time minute', 'Time AM/PM']) {
+      const select = screen.getByLabelText(name);
+      expect(select).toHaveAttribute('aria-invalid', 'true');
+      expect(select).toHaveAttribute('aria-describedby', 't-error');
+    }
+    expect(screen.getByLabelText('Time hour')).toHaveAttribute('aria-required', 'true');
+  });
 });

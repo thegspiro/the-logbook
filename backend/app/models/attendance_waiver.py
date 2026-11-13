@@ -1,0 +1,274 @@
+"""
+Attendance Waiver Requests
+
+A member asks to be excused from one session that counts against them, and a
+routed approver decides (owner decisions, 2026-11-10). One table serves both
+workflows; ``workflow`` says which department policy governs a row: a training
+session, or a business meeting.
+
+Writes go through ``AttendanceWaiverService``, which owns the rules the
+database cannot express: the deadline, the cap, who may decide, and the
+Chief's override of a denial.
+"""
+
+import enum
+import os
+from datetime import date, datetime
+from typing import Optional
+
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    SmallInteger,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
+
+from app.core.database import Base
+from app.core.encrypted_types import EncryptedText
+from app.core.utils import generate_uuid
+
+
+class AttendanceWaiverWorkflow(str, enum.Enum):
+    """Which kind of attendance a request excuses."""
+
+    TRAINING_SESSION = "training_session"
+    BUSINESS_MEETING = "business_meeting"
+
+
+class AttendanceWaiverStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    WITHDRAWN = "withdrawn"
+    VOIDED = "voided"
+
+
+class AttendanceWaiverAction(str, enum.Enum):
+    SUBMITTED = "submitted"
+    WITHDRAWN = "withdrawn"
+    APPROVED = "approved"
+    DENIED = "denied"
+    CHIEF_OVERRIDE = "chief_override"
+    VOIDED = "voided"
+
+
+# The statuses that hold a session's one request open. A denied request stays
+# live so the member cannot ask again for the same session; withdrawing frees
+# the slot, and so does voiding.
+LIVE_STATUSES = (
+    AttendanceWaiverStatus.PENDING,
+    AttendanceWaiverStatus.APPROVED,
+    AttendanceWaiverStatus.DENIED,
+)
+
+
+def live_key_for(workflow: str, event_id: str, user_id: str) -> str:
+    """The value of ``live_key`` while a request holds its session open."""
+    return f"{workflow}:{event_id}:{user_id}"
+
+
+class AttendanceWaiverRequest(Base):
+    """One member's request to be excused from one session.
+
+    **One live request per member and session, enforced by the database.**
+    MySQL has no partial unique index, so ``live_key`` carries the
+    ``workflow:event:user`` triple while the request is pending, approved or
+    denied, and NULL once it is withdrawn or voided; the unique key then
+    admits one live row and any number of closed ones, because MySQL treats
+    NULLs as distinct. A withdrawn request therefore stays in the history and
+    the member may ask again as a new row.
+
+    **``event_id`` is SET NULL, not CASCADE.** The request is the member's
+    record of having been excused; deleting the event must not erase it, so
+    the title, start and local date are snapshotted when the request is made
+    and the row survives the event. ``session_date`` is that local date, the
+    one the cap counts by.
+
+    ``reason`` is encrypted at rest for the reason ``TrainingWaiver.reason``
+    is: a member asking to be excused often says why in medical terms.
+    """
+
+    __tablename__ = "attendance_waiver_requests"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    workflow: Mapped[AttendanceWaiverWorkflow] = mapped_column(
+        Enum(AttendanceWaiverWorkflow, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    event_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("events.id", ondelete="SET NULL"), nullable=True
+    )
+    event_title_snapshot: Mapped[str] = mapped_column(String(255), nullable=False)
+    event_start_snapshot: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    session_date: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[AttendanceWaiverStatus] = mapped_column(
+        Enum(AttendanceWaiverStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=AttendanceWaiverStatus.PENDING,
+        server_default=AttendanceWaiverStatus.PENDING.value,
+    )
+    live_key: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, unique=True
+    )
+    category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    reason: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    decided_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    decided_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    chief_override: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_attendance_waiver_requests_org_workflow_status",
+            "organization_id",
+            "workflow",
+            "status",
+        ),
+        Index(
+            "ix_attendance_waiver_requests_org_user_date",
+            "organization_id",
+            "user_id",
+            "session_date",
+        ),
+        Index("ix_attendance_waiver_requests_event", "event_id"),
+    )
+
+
+class AttendanceWaiverRequestAction(Base):
+    """The decision log: one row per thing that happened to a request.
+
+    A Chief's override does not replace the denial it overturns; both rows
+    stay, so who denied and who overrode are both on record. ``note`` is the
+    decider's words and is encrypted for the same reason the request's reason
+    is.
+    """
+
+    __tablename__ = "attendance_waiver_request_actions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("attendance_waiver_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    action: Mapped[AttendanceWaiverAction] = mapped_column(
+        Enum(AttendanceWaiverAction, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+    )
+    actor_id: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    note: Mapped[Optional[str]] = mapped_column(EncryptedText, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        Index(
+            "ix_attendance_waiver_request_actions_org_request",
+            "organization_id",
+            "request_id",
+        ),
+    )
+
+
+class AttendanceWaiverAttachment(Base):
+    """A file a member filed with their request, when the policy takes them.
+
+    The bytes live in ``FileStorageService``'s ``attendance-waivers`` area
+    under the request's id and are served only through the request routes, to
+    its member and to the people who may decide it. They are often medical (a
+    doctor's note), which is why the uploader's filename is not kept at all: a
+    download is always named ``waiver-attachment-<ordinal>.<ext>``.
+
+    **``ordinal`` is the request's 1st, 2nd or 3rd file**, and the unique
+    ``(request_id, ordinal)`` key is the database's half of the three-file
+    limit: two uploads racing past the count both reach for the same next
+    ordinal and only one insert succeeds.
+
+    A row means the file is on file. The retention task deletes the file and
+    then the row, so the request (the decision record) outlives both, and
+    anonymising the member does the same.
+    """
+
+    __tablename__ = "attendance_waiver_attachments"
+
+    # The neutral name every download carries.
+    DOWNLOAD_STEM = "waiver-attachment"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    organization_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    request_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("attendance_waiver_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    ordinal: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    uploaded_by: Mapped[Optional[str]] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "request_id",
+            "ordinal",
+            name="uq_attendance_waiver_attachments_request_ordinal",
+        ),
+        Index(
+            "ix_attendance_waiver_attachments_org_request",
+            "organization_id",
+            "request_id",
+        ),
+    )
+
+    @property
+    def download_name(self) -> str:
+        """``waiver-attachment-1.pdf``: never the uploader's filename, which
+        for a doctor's note can name the condition, and would show in a
+        download bar or a shared Downloads folder. The extension is the one
+        the file was stored under, which comes from its detected content."""
+        extension = os.path.splitext(self.file_path or "")[1].lower()
+        return f"{self.DOWNLOAD_STEM}-{self.ordinal}{extension}"

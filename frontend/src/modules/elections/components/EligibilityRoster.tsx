@@ -30,6 +30,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import type { EligibilityRoster as EligibilityRosterType, RosterMember } from '../../../types/election';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 interface EligibilityRosterProps {
   electionId: string;
@@ -323,7 +324,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
           {roster && !loading && (
             <>
               {/* Summary cards */}
-              <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4">
+              <StatGrid columns={4} className="p-4">
                 <div className="rounded-lg bg-green-500/10 p-3 text-center">
                   <div className="text-2xl font-bold text-green-700 dark:text-green-400">{roster.total_eligible}</div>
                   <div className="text-xs font-medium text-green-700 dark:text-green-500">
@@ -342,7 +343,7 @@ export const EligibilityRoster: React.FC<EligibilityRosterProps> = ({ electionId
                   <div className="text-theme-text-primary text-2xl font-bold">{roster.total_voted}</div>
                   <div className="text-theme-text-muted text-xs font-medium">Already Voted</div>
                 </div>
-              </div>
+              </StatGrid>
 
               {/* Counter legend. "Eligible" is the roll the send reads — after the
                   election opens that is the frozen roll, so a member added since

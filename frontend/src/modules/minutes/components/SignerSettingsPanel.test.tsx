@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockUpdate = vi.fn();
@@ -109,7 +109,7 @@ describe('SignerSettingsPanel', () => {
     await user.clear(renamed);
     await user.type(renamed, 'Chair of the Board');
     await user.click(screen.getByRole('button', { name: 'Add a signature' }));
-    await user.type(screen.getByLabelText('Signature 3'), '3rd Witness');
+    await user.type(screen.getByLabelText(/^Signature 3/), '3rd Witness');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     const sent = (mockUpdate.mock.calls[0]?.[0] as { minutes: { signature_slots: { key: string; title: string }[] } })
@@ -133,18 +133,44 @@ describe('SignerSettingsPanel', () => {
     expect(order.map((s) => s.key)).toEqual(['presiding_officer', 'recording_secretary']);
   });
 
-  it('will not save with no signature or a blank title', async () => {
+  it('will not save with no signature or a blank title, and says so', async () => {
     const user = userEvent.setup();
     open();
     await screen.findByDisplayValue('Presiding Officer');
 
-    await user.clear(screen.getByDisplayValue('Presiding Officer'));
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    const second = screen.getByDisplayValue('Presiding Officer');
+    await user.clear(second);
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(second).toHaveAccessibleDescription('Give this signature a title.');
 
     await user.click(screen.getByRole('button', { name: 'Remove signature 2' }));
     await user.click(screen.getByRole('button', { name: 'Remove signature 1' }));
-    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Not saved: adopted minutes need at least one signature.');
     expect(screen.getByText('Add at least one signature.')).toBeInTheDocument();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on the slot field it names and announces it', async () => {
+    mockUpdate.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: {
+          detail: [{ field: 'minutes.signature_slots.1.title', message: 'String should have at most 100 characters' }],
+        },
+      },
+    });
+    const user = userEvent.setup();
+    open();
+    const second = await screen.findByDisplayValue('Presiding Officer');
+    await user.type(second, ' of the Board');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(second).toHaveAccessibleDescription('Signature 2 is too long — keep it to 100 characters.')
+    );
+    expect(second).toHaveAttribute('aria-invalid', 'true');
+    expect(onSaved).not.toHaveBeenCalled();
   });
 
   it('has nothing to save until something changes', async () => {
@@ -185,7 +211,7 @@ describe('SignerSettingsPanel', () => {
     const user = userEvent.setup();
     open();
 
-    await user.type(await screen.findByLabelText('Signature 1'), 'x');
+    await user.type(await screen.findByLabelText(/^Signature 1/), 'x');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(onSaved).not.toHaveBeenCalled();

@@ -183,11 +183,15 @@ describe('evaluateCell', () => {
   });
 
   it('labels the row with the date that decides it', () => {
-    const expiring = evaluateCell(cell({ expiry_date: '2026-11-12' }), requirement(), AS_OF);
+    // A fixed cutoff, not AS_OF: whether the date reads "Expires" or "Lapsed"
+    // turns on the cutoff, so measured from today this case flipped to
+    // "Lapsed" the day after its expiry date passed.
+    const asOf = '2026-11-01';
+    const expiring = evaluateCell(cell({ expiry_date: '2026-11-12' }), requirement(), asOf);
     const windowed = evaluateCell(
       cell({ status: 'not_started', window_start: '2026-01-01', window_end: '2026-12-31' }),
       requirement(),
-      AS_OF
+      asOf
     );
     expect(expiring.dateLabel).toBe('Expires Nov 12, 2026');
     // The year prints once when both ends share it.
@@ -731,6 +735,38 @@ describe('an existing member inside a catch-up period', () => {
     const [rollup] = rollUpRequirements([veteran, recruit], [requirement({ id: 'r2' })]);
     expect(rollup?.total).toBe(1);
     expect(rollup?.behind.map((m) => m.member.user_id)).toEqual(['u2']);
+  });
+});
+
+// Workflow review W80-9: the backend reports "not_applicable" for a
+// session-attendance requirement no session of which has been held yet.
+describe('a session-attendance requirement with no session held yet', () => {
+  const reqs = new Map([['r1', requirement()]]);
+  const notYetHeld = cell({
+    requirement_id: 'r2',
+    status: 'not_applicable',
+    progress_current: 0,
+    progress_required: 0,
+    progress_unit: 'sessions',
+  });
+
+  it('says no session has been held, not met and not missing', () => {
+    const evaluated = evaluateCell(notYetHeld, undefined, AS_OF);
+    expect(evaluated.tone).toBe(CellTone.NOT_YET_HELD);
+    expect(evaluated.progressLabel).toBe('No sessions held yet');
+    expect(isMetTone(evaluated.tone)).toBe(false);
+    expect(isGradedTone(evaluated.tone)).toBe(false);
+  });
+
+  it('counts neither met nor open, matching the backend tally', () => {
+    const result = evaluateMember(
+      member({ requirements: [cell({ requirement_id: 'r1', status: 'completed' }), notYetHeld] }),
+      reqs,
+      AS_OF
+    );
+    expect(result.met).toBe(1);
+    expect(result.total).toBe(1);
+    expect(result.open).toBe(0);
   });
 });
 

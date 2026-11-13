@@ -7,6 +7,7 @@ import {
   buildPastRows,
   groupByMonth,
   hoursWorked,
+  monthHeading,
   resolveScope,
   rowsInScope,
   summarizeYears,
@@ -143,5 +144,30 @@ describe('resolveScope', () => {
 
   it('falls back to All time when no shift is dated', () => {
     expect(resolveScope(null, [])).toBe(ALL_TIME);
+  });
+});
+
+describe('soonest-first grouping, for the Upcoming list', () => {
+  const rows = buildPastRows(
+    [assignment('a', '2026-12-05'), assignment('b', '2026-12-20'), assignment('c', '2027-01-02')],
+    new Map()
+  );
+
+  it('puts the next month first, across a year boundary', () => {
+    const groups = groupByMonth(rows, 'soonest');
+    expect(groups.map((g) => g.key)).toEqual(['2026-12', '2027-01']);
+    expect(groups[0]?.rows.map((r) => r.assignment.id)).toEqual(['a', 'b']);
+    expect(groups.map((g) => g.shifts)).toEqual([2, 1]);
+  });
+
+  it('still puts the latest month first by default', () => {
+    expect(groupByMonth(rows).map((g) => g.key)).toEqual(['2027-01', '2026-12']);
+  });
+});
+
+describe('monthHeading', () => {
+  it('names the year with the month', () => {
+    expect(monthHeading({ year: 2027, month: 1 })).toBe('January 2027');
+    expect(monthHeading({ year: null, month: null })).toBe('No shift date');
   });
 });

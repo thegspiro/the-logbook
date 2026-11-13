@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type React from 'react';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
+
+// The app shell mounts ConfirmProvider; an open assignment form needs it to ask before discarding.
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 const mockGetOfficers = vi.fn();
 const mockSetOfficer = vi.fn();
@@ -150,5 +155,38 @@ describe('OfficersPanel', () => {
     await user.click(screen.getByText('Clear'));
 
     await waitFor(() => expect(mockClearOfficer).toHaveBeenCalledWith('president'));
+  });
+
+  it('keeps the form open with a refused field flagged, and the banner quiet', async () => {
+    const user = userEvent.setup();
+    mockGetOfficers.mockResolvedValue(directory([makeOffice()]));
+    mockSetOfficer.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'title', message: 'Value is too long.' }] } },
+    });
+
+    render(<OfficersPanel members={members} isLoadingMembers={false} />);
+    await user.click(await screen.findByText('Assign'));
+    await user.type(screen.getByLabelText('Signature title'), 'Chief of Department');
+    await user.click(screen.getByText('Save'));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Signature title')).toHaveAccessibleDescription(
+        'Signature title is too long — keep it to 150 characters.'
+      )
+    );
+    expect(screen.getByLabelText('Signature title')).toHaveValue('Chief of Department');
+    expect(useOfficersStore.getState().error).toBeNull();
+  });
+
+  it('asks before Cancel throws a typed override away', async () => {
+    const user = userEvent.setup();
+    mockGetOfficers.mockResolvedValue(directory([makeOffice()]));
+
+    render(<OfficersPanel members={members} isLoadingMembers={false} />);
+    await user.click(await screen.findByText('Assign'));
+    await user.type(screen.getByLabelText('Name override'), 'Pat');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText('Name override')).toHaveValue('Pat');
   });
 });

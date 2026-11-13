@@ -155,10 +155,33 @@ test.describe('The member roster fits its card on a laptop or tablet', () => {
       await page.route('**/api/v1/users/with-roles**', (route) => void route.fulfill(json(ROSTER)));
       await page.goto('/members/admin');
       const region = page.getByRole('region', { name: 'Members and their positions' });
-      await expect(region.getByRole('button', { name: 'Delete Elizabeth Zach' })).toBeAttached({ timeout: 15_000 });
+      // The last column's control on the last row: once it is attached the
+      // table has rendered. Delete moved into this "⋯" menu (2026-11-10).
+      await expect(region.getByRole('button', { name: 'More actions for Elizabeth Zach' })).toBeAttached({
+        timeout: 15_000,
+      });
 
       const overflow = await region.evaluate((el) => el.scrollWidth - el.clientWidth);
       expect(overflow, `the roster is ${overflow}px wider than its card`).toBeLessThanOrEqual(0);
     });
   }
+
+  // The row's "⋯" menu, on the last row. Rendered inside the table it was laid
+  // out against the blurred container rather than the window, and focusing
+  // its first item scrolled the page, which closed it again at once.
+  test('/members/admin — the last row’s action menu opens in view', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signIn(page, { permissions: [...TEST_USER.permissions, 'members.manage'] });
+    await page.route('**/api/v1/users/with-roles**', (route) => void route.fulfill(json(ROSTER)));
+    await page.goto('/members/admin');
+    const trigger = page.getByRole('button', { name: 'More actions for Elizabeth Zach' });
+    await trigger.scrollIntoViewIfNeeded();
+    await trigger.click();
+
+    const del = page.getByRole('menuitem', { name: 'Delete Elizabeth Zach' });
+    await expect(del).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(del, 'the menu closed itself straight after opening').toBeVisible();
+    await expect(del).toBeInViewport();
+  });
 });

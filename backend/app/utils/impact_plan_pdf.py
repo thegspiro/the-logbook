@@ -14,9 +14,21 @@ from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+)
+
+from app.utils.pdf_fonts import (
+    BODY_FONT,
+    BOLD_FONT,
+    body_table_style,
+    document_stylesheet,
+)
 
 _HEADER_BG = colors.HexColor("#1f2937")
 _ROW_ALT = colors.HexColor("#f3f4f6")
@@ -28,11 +40,11 @@ def _money(value: Optional[float]) -> str:
 
 
 def _styled_table(data: List[List[Any]], col_widths: List[float]) -> Table:
-    style = TableStyle(
+    style = body_table_style(
         [
             ("BACKGROUND", (0, 0), (-1, 0), _HEADER_BG),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTNAME", (0, 0), (-1, 0), BOLD_FONT),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("GRID", (0, 0), (-1, -1), 0.5, _GRID),
@@ -65,15 +77,20 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
+        # The canvas otherwise declares Helvetica, never embedded, on every page.
+        initialFontName=BODY_FONT,
         pagesize=letter,
         topMargin=0.6 * inch,
         bottomMargin=0.6 * inch,
-        leftMargin=0.5 * inch,
+        # Ink starts 0.78" from the left, clear of a three-hole punch, and
+        # 0.58" from the right, clear of the printer's border (frame padding
+        # adds 6pt to each margin; see app.utils.print_geometry).
+        leftMargin=0.7 * inch,
         rightMargin=0.5 * inch,
         title="Inventory Impact Plan",
     )
 
-    styles = getSampleStyleSheet()
+    styles = document_stylesheet()
     title_style = ParagraphStyle(
         "PlanTitle", parent=styles["Title"], fontSize=18, spaceAfter=2
     )
@@ -201,7 +218,12 @@ def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesI
         "Contact": 1.9 * inch,
     }
     widths = [base_widths[col] for col in header]
-    story.append(_styled_table(rows, widths))
+    # With every column shown the preferred widths total 7.5", wider than
+    # the frame: shrink them together rather than let the table run past
+    # the margins into the punch holes and the printer's border.
+    # doc.width is the frame's; its 6pt padding each side is not table room.
+    scale = min(1.0, (doc.width - 12) / sum(widths))
+    story.append(_styled_table(rows, [w * scale for w in widths]))
 
     doc.build(story)
     buf.seek(0)

@@ -20,6 +20,10 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { refusalsOnFields } from '../utils/fieldRefusals';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { fiscalYearService } from '../services/api';
@@ -27,6 +31,11 @@ import type { FiscalYear, FiscalYearOpenItem } from '../types';
 
 /** The notes the API accepts. */
 const MAX_NOTES = 4000;
+
+/** `FiscalYearLock` (schemas/finance.py). */
+const SERVER_FIELDS: Record<'notes', ServerFieldSpec> = {
+  notes: { label: 'Reconciliation notes', maxLength: MAX_NOTES },
+};
 
 const ITEM_PATHS: Record<FiscalYearOpenItem['kind'], string> = {
   purchase_request: '/finance/purchase-requests',
@@ -74,6 +83,12 @@ export const FiscalYearLockDialog: React.FC<FiscalYearLockDialogProps> = ({ fisc
   const [notes, setNotes] = useState('');
   const [notesError, setNotesError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Escape, the X and Cancel all ask before throwing away typed notes.
+  const requestClose = useDiscardGuard({ isDirty: notes !== '', onClose });
+  const showNotesError = (message: string) => {
+    setNotesError(message);
+    document.getElementById('fiscal-year-lock-notes')?.focus();
+  };
 
   useEffect(() => {
     let current = true;
@@ -102,6 +117,13 @@ export const FiscalYearLockDialog: React.FC<FiscalYearLockDialogProps> = ({ fisc
       toast.success(`${fiscalYear.name} locked`);
       onLocked();
     } catch (err: unknown) {
+      // The year is not locked while the notes are refused.
+      const mapped = refusalsOnFields(err, SERVER_FIELDS);
+      if (mapped?.fieldErrors.notes) {
+        showNotesError(mapped.fieldErrors.notes);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       toast.error(getErrorMessage(err, 'Could not lock the fiscal year'));
     } finally {
       setSaving(false);
@@ -113,7 +135,7 @@ export const FiscalYearLockDialog: React.FC<FiscalYearLockDialogProps> = ({ fisc
     if (blocked) return;
     const signOff = notes.trim();
     if (!signOff) {
-      setNotesError('Add the reconciliation notes for the sign-off.');
+      showNotesError('Add the reconciliation notes for the sign-off.');
       return;
     }
     setNotesError(null);
@@ -123,18 +145,19 @@ export const FiscalYearLockDialog: React.FC<FiscalYearLockDialogProps> = ({ fisc
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       size="lg"
       title={`Lock ${fiscalYear.name}`}
       titleId="fiscal-year-lock-title"
       aria-describedby="fiscal-year-lock-description"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving || blocked} className="btn-primary">
             {saving ? 'Locking...' : 'Lock the year'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -184,27 +207,27 @@ export const FiscalYearLockDialog: React.FC<FiscalYearLockDialogProps> = ({ fisc
           </div>
         )}
 
-        <div>
-          <label htmlFor="fiscal-year-lock-notes" className="form-label">
-            Reconciliation notes
-          </label>
-          <textarea
-            id="fiscal-year-lock-notes"
-            rows={4}
-            maxLength={MAX_NOTES}
-            placeholder="e.g. Reconciled to the June 30 bank statement; reviewed by the audit committee"
-            className="form-input"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            aria-invalid={Boolean(notesError)}
-            aria-describedby={notesError ? 'fiscal-year-lock-notes-error' : undefined}
-          />
-          {notesError && (
-            <p id="fiscal-year-lock-notes-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-              {notesError}
-            </p>
+        <FormField
+          id="fiscal-year-lock-notes"
+          label="Reconciliation notes"
+          error={notesError}
+          maxLength={MAX_NOTES}
+          count={notes.length}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              rows={4}
+              placeholder="e.g. Reconciled to the June 30 bank statement; reviewed by the audit committee"
+              className="form-input"
+              value={notes}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                setNotesError(null);
+              }}
+            />
           )}
-        </div>
+        </FormField>
       </div>
     </Modal>
   );

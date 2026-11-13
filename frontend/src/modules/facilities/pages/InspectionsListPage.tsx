@@ -7,7 +7,7 @@
 
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
-import { DialogPanel } from '../../../components/ux/DialogPanel';
+import InspectionRecordDialog from '../components/InspectionRecordDialog';
 
 import {
   ClipboardCheck,
@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import ListPager from '../components/ListPager';
 import { enumLabel } from '../types';
-import { inputCls, labelCls, INSPECTION_TYPE_OPTIONS } from '../constants';
 import { useInspectionForm } from '../hooks/useInspectionForm';
 import { useFacilitiesStore } from '../store/facilitiesStore';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -58,6 +57,7 @@ export default function InspectionsListPage() {
     void loadFacilities();
   }, [loadFacilities]);
 
+  const form = useInspectionForm({ dueWithinDays, idPrefix: 'inspection-list' });
   const {
     inspections: filtered,
     page,
@@ -72,16 +72,10 @@ export default function InspectionsListPage() {
     resultFilter,
     setResultFilter,
     showModal,
-    setShowModal,
-    editingInspection,
-    isSaving,
-    formData,
-    setFormData,
     openCreate,
     openEdit,
-    handleSave,
     handleDelete,
-  } = useInspectionForm({ dueWithinDays });
+  } = form;
 
   const clearDueWithin = () => {
     const next = new URLSearchParams(searchParams);
@@ -262,232 +256,7 @@ export default function InspectionsListPage() {
       <ListPager page={page} total={total} pageSize={pageSize} onPageChange={setPage} />
 
       {canEdit && showModal && (
-        <div
-          className="modal-overlay z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-labelledby="inspection-list-dialog-title"
-          aria-modal="true"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowModal(false);
-          }}
-        >
-          <DialogPanel onClose={() => setShowModal(false)} className="max-h-[90dvh] w-full max-w-lg overflow-y-auto">
-            <div className="border-theme-surface-border flex items-center justify-between border-b p-6">
-              <h2 id="inspection-list-dialog-title" className="text-theme-text-primary text-lg font-bold">
-                {editingInspection ? 'Edit Inspection' : 'New Inspection'}
-              </h2>
-              <button
-                data-dialog-close
-                onClick={() => setShowModal(false)}
-                aria-label="Close dialog"
-                className="text-theme-text-muted hover:text-theme-text-primary"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-4 p-6">
-              <div>
-                <label htmlFor="inspection-list-facility-id" className={labelCls}>
-                  Facility *
-                </label>
-                <select
-                  id="inspection-list-facility-id"
-                  value={formData.facility_id}
-                  onChange={(e) => setFormData((p) => ({ ...p, facility_id: e.target.value }))}
-                  className={inputCls}
-                >
-                  <option value="">Select facility...</option>
-                  {facilities
-                    .filter((f) => !f.isArchived)
-                    .map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="inspection-list-title" className={labelCls}>
-                  Title *
-                </label>
-                <input
-                  id="inspection-list-title"
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData((p) => ({ ...p, title: e.target.value }))}
-                  className={inputCls}
-                  placeholder="e.g., Annual Fire Inspection 2026"
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="inspection-list-inspection-type" className={labelCls}>
-                    Type
-                  </label>
-                  <select
-                    id="inspection-list-inspection-type"
-                    value={formData.inspection_type}
-                    onChange={(e) => setFormData((p) => ({ ...p, inspection_type: e.target.value }))}
-                    className={inputCls}
-                  >
-                    {INSPECTION_TYPE_OPTIONS.map((t) => (
-                      <option key={t} value={t}>
-                        {enumLabel(t)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="inspection-list-passed" className={labelCls}>
-                    Result
-                  </label>
-                  <select
-                    id="inspection-list-passed"
-                    value={formData.passed}
-                    onChange={(e) => setFormData((p) => ({ ...p, passed: e.target.value }))}
-                    className={inputCls}
-                  >
-                    <option value="">Pending</option>
-                    <option value="true">Passed</option>
-                    <option value="false">Failed</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="inspection-list-inspection-date" className={labelCls}>
-                    Inspection Date *
-                  </label>
-                  <input
-                    id="inspection-list-inspection-date"
-                    type="date"
-                    value={formData.inspection_date}
-                    onChange={(e) => setFormData((p) => ({ ...p, inspection_date: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="inspection-list-next-inspection-date" className={labelCls}>
-                    Next Inspection Date
-                  </label>
-                  <input
-                    id="inspection-list-next-inspection-date"
-                    type="date"
-                    value={formData.next_inspection_date}
-                    onChange={(e) => setFormData((p) => ({ ...p, next_inspection_date: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="inspection-list-inspector-name" className={labelCls}>
-                    Inspector Name
-                  </label>
-                  <input
-                    id="inspection-list-inspector-name"
-                    type="text"
-                    value={formData.inspector_name}
-                    onChange={(e) => setFormData((p) => ({ ...p, inspector_name: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label htmlFor="inspection-list-inspector-organization" className={labelCls}>
-                    Inspector Organization
-                  </label>
-                  <input
-                    id="inspection-list-inspector-organization"
-                    type="text"
-                    value={formData.inspector_organization}
-                    onChange={(e) => setFormData((p) => ({ ...p, inspector_organization: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="inspection-list-description" className={labelCls}>
-                  Description
-                </label>
-                <textarea
-                  id="inspection-list-description"
-                  value={formData.description}
-                  onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
-                  rows={2}
-                  className={inputCls + ' resize-none'}
-                />
-              </div>
-              <div>
-                <label htmlFor="inspection-list-findings" className={labelCls}>
-                  Findings
-                </label>
-                <textarea
-                  id="inspection-list-findings"
-                  value={formData.findings}
-                  onChange={(e) => setFormData((p) => ({ ...p, findings: e.target.value }))}
-                  rows={2}
-                  className={inputCls + ' resize-none'}
-                />
-              </div>
-              <div>
-                <label htmlFor="inspection-list-corrective-actions" className={labelCls}>
-                  Corrective Actions
-                </label>
-                <textarea
-                  id="inspection-list-corrective-actions"
-                  value={formData.corrective_actions}
-                  onChange={(e) => setFormData((p) => ({ ...p, corrective_actions: e.target.value }))}
-                  rows={2}
-                  className={inputCls + ' resize-none'}
-                />
-              </div>
-              {formData.corrective_actions && (
-                <div>
-                  <label htmlFor="inspection-list-corrective-action-deadline" className={labelCls}>
-                    Corrective Action Deadline
-                  </label>
-                  <input
-                    id="inspection-list-corrective-action-deadline"
-                    type="date"
-                    value={formData.corrective_action_deadline}
-                    onChange={(e) => setFormData((p) => ({ ...p, corrective_action_deadline: e.target.value }))}
-                    className={inputCls}
-                  />
-                </div>
-              )}
-              <div>
-                <label htmlFor="inspection-list-notes" className={labelCls}>
-                  Notes
-                </label>
-                <textarea
-                  id="inspection-list-notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
-                  rows={2}
-                  className={inputCls + ' resize-none'}
-                />
-              </div>
-            </div>
-            <div className="border-theme-surface-border flex flex-wrap items-center justify-end gap-3 border-t p-6">
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-theme-text-secondary hover:text-theme-text-primary px-4 py-2 text-sm transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  void handleSave();
-                }}
-                disabled={isSaving}
-                className="btn-primary flex items-center gap-2 px-5 text-sm"
-              >
-                {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                {editingInspection ? 'Save Changes' : 'Create Inspection'}
-              </button>
-            </div>
-          </DialogPanel>
-        </div>
+        <InspectionRecordDialog form={form} titleId="inspection-list-dialog-title" facilities={facilities} />
       )}
     </div>
   );

@@ -1038,9 +1038,12 @@ describe('EventForm', () => {
       const submitButton = screen.getByRole('button', { name: /create event/i });
       await user.click(submitButton);
 
+      // On the field it is about, tied to it, as well as in the summary (forms review F-4).
       await waitFor(() => {
-        expect(screen.getByText('End date must be after start date')).toBeInTheDocument();
+        expect(endInput).toHaveAccessibleDescription('End must be after the start.');
       });
+      expect(endInput).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByRole('alert')).toHaveTextContent('End must be after the start.');
 
       expect(mockOnSubmit).not.toHaveBeenCalled();
     });

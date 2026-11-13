@@ -5,6 +5,78 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 10 – 11, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-10--11-2026).
+
+- **Members Administration**: archived and dropped members move to a new
+  **Former Members** page. Each row says things once: no repeated Member,
+  status or class chips, no separate Status column, and Reset Password,
+  Unlock, Reset MFA and Delete live in a **More actions** (⋯) menu.
+- **Events**: **More → Postpone Event** moves an event to a new time with a
+  reason. RSVPs stay; check-ins and credit for the old time are cleared;
+  members who said Going or Maybe are told; the list shows a **Postponed**
+  badge.
+- **Evaluations**: the training-session attendance figure follows the
+  member's session-attendance requirement, so its percentage may change, and
+  it reads "unavailable" when no requirement applies.
+- **Training**: the groundwork for members asking to be excused from a
+  session is in place. It has no screen yet and is off until a policy is
+  saved.
+- **Shift history import**: an overlapping row's times can be fixed in the
+  table with **Save times**.
+- **Training events** keep their training details through Duplicate and
+  rolling series; **Community Engagement** reports what outreach reached.
+- **Documents**: generated PDFs embed Noto Sans; certified results,
+  evaluations and minutes are PDF/A-2b.
+- **Sign-in**: a member who must change their password goes straight to My
+  Account.
+
+## Recent changes: November 8 – 10, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-8--10-2026).
+
+The November 8 – 9 notes below overlap this pass; where both mention a change, it is the same one.
+
+- **My Shifts**: Upcoming sits under month headers; Past is grouped by year and
+  month with a Year dropdown and an hours chart.
+- **End-of-shift summary** lists call types as counts.
+- **Events**: an officer can record one member, with times, after check-in
+  closes. Moving an event's start lets its reminders go out again, and a drill
+  excused by a training waiver no longer reads as missed.
+- **Training**: a session-attendance requirement with no session held is not
+  graded; each record shows whether it came from a provider, the import or The
+  Logbook.
+- **Members**: the roster is a table again on desktop, and a placeholder email
+  no longer breaks the member list.
+- **Historical import**: members to be created show their real names.
+- **Printing**: PDFs keep ink inside the printable area and leave a binding
+  margin; Avery 5160 labels line up.
+
+## Recent changes: November 8 – 9, 2026
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-november-8--9-2026).
+
+- **My Shifts**: Past shifts are grouped by year and month, with a Year
+  dropdown and an hours-by-month chart.
+- **End-of-shift summary** lists each call type once with a count.
+- **Training programs**: the creation wizard keeps a browser draft; milestones
+  can wait on courses and tests and notify chosen people; requirements show what
+  uses them and can be permanently deleted.
+- **Phones and narrow screens**: about twenty tables reflow to cards, and page
+  header buttons share each row.
+- **Meetings**: members see only approved, non-executive meetings.
+- **Accounts**: you cannot make yourself a member's supervisor, and changing
+  another member's email needs the same approval as a credential reset.
+- **Fixes**: a training waiver takes an excused drill off "missed", moving an
+  event's start lets its reminders go again, and platform analytics count whole
+  local days.
+- **Operators**: `/inventory/ws` accepts only the sign-in cookie, not a token in
+  the URL.
+
 ## Recent changes: November 6 – 8, 2026
 
 The engineering audit is

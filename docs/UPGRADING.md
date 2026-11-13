@@ -135,6 +135,87 @@ _is_ the upgrade. Before it:
 Newest first. Every entry here is a change that was safe on a fresh install
 and refused to boot an existing one.
 
+### Duplicate meeting attendance rows are removed, and cannot be restored (2026-11-11)
+
+A migration (`7b6db9dd8e4f`) runs on the next start and adds a unique index on
+`meeting_attendees (meeting_id, user_id)`, so a member is recorded once per
+meeting. Nothing stopped a member being entered twice until now, and the index
+cannot be added while two rows share a pair, so **the migration first deletes
+the extra rows** (owner-approved, 2026-11-10). For each member entered more
+than once on one meeting it keeps one row:
+
+- a row carrying a waiver, if any does (the most recent of them);
+- otherwise the most recent row.
+
+The kept row also takes "present" and "excused" from the deleted ones when any
+of them was set, so a check-in recorded only on a deleted row is not lost.
+Each deleted row is written to the migration log by its ids (meeting, member,
+deleted row, kept row); no reason text is logged.
+
+- **Take the database backup first.** This step cannot be undone: the
+  downgrade drops the index and the new column but cannot bring the deleted
+  rows back. Only the backup has them.
+- The same migration adds `meeting_attendees.waiver_request_id`, a nullable
+  link to the member request a waiver came from (empty for every existing
+  row).
+- Adding a member who is already on a meeting is now refused with a message
+  ("already an attendee"), and creating a meeting whose attendee list names a
+  member twice is refused (400).
+
+### A screening record's type and requirement link are encrypted at rest (2026-11-08)
+
+A migration (`ac1687769b62`) runs on the next start and turns
+`screening_records.screening_type` from an `ENUM` and
+`screening_records.requirement_id` from a `VARCHAR(36)` into `TEXT`, then
+**encrypts every existing value of both in place**. It first drops the
+**foreign key** from `requirement_id` to `screening_requirements` (whatever
+the constraint is named on your database) and the index under it: the
+database cannot match ciphertext. Same rules as the status change below:
+
+- `ENCRYPTION_KEY` must be set when screening records exist; with it missing
+  the migration stops with a clear error and changes nothing.
+- **Take the database backup first.** The downgrade decrypts both columns,
+  restores the `ENUM` and the `ON DELETE SET NULL` foreign key, and clears any
+  link whose requirement no longer exists (the restored key would refuse it).
+  Only the same `ENCRYPTION_KEY` / `ENCRYPTION_SALT` can read the ciphertext.
+  Backups taken before the upgrade still hold both columns in plaintext.
+- **Deleting a requirement still keeps its records**, now unlinking them in
+  the application rather than through the database. A requirement deleted by
+  hand in SQL leaves its records pointing at nothing; they then count toward
+  no requirement, as an unlinked record always has.
+- **New audit entries no longer name a screening's type**: the record-created
+  entry drops `screening_type`, and the records-list entry records only
+  `screening_type_filtered: true/false`. Existing entries are unchanged — the
+  audit log is hash-chained, and rewriting a row would break the chain.
+- The screens, compliance grading, the expiring list, the Members hub, the
+  membership pipeline's screening stage, the data export and anonymisation
+  behave as before. A report or query of your own that reads, filters or joins
+  on either column directly will now see ciphertext.
+- `scripts/rotate_encryption_key.py` and `scripts/reencrypt_to_aesgcm.py` cover
+  both columns.
+- **Still plaintext:** the dates and which member a record belongs to (see
+  `docs/KNOWN_LIMITATIONS.md`, MS-18).
+
+### Positions held now have a dated history (2026-11-08)
+
+A migration (`67ad01c43434`) runs on the next start, creates
+`member_position_terms` and gives every existing `user_positions` row one
+open term. It does not refuse to start on any data it meets, but what it
+records is worth knowing before an evaluation cycle relies on it:
+
+- Each current position's history starts at its `assigned_at` (or, where
+  that is empty, the member's `created_at`). **Nothing earlier is
+  reconstructed:** a position a member gave up before this upgrade does not
+  appear, and the audit log is not replayed into the history.
+- From then on every assignment and removal opens or closes a term in the
+  same transaction, whichever screen or service made it. A report or script
+  of your own that writes `user_positions` with raw SQL bypasses that; call
+  `sync_position_terms` (`app/models/member_position_term.py`) after it, as
+  `scripts/seed_test_users.py` now does.
+- The downgrade drops the table and the history with it; `user_positions` is
+  untouched, so the previous release boots. Take the backup first if the
+  history matters to you.
+
 ### A screening record's status is encrypted at rest (2026-11-05)
 
 A migration (`80fa2c83bf9d`) runs on the next start and turns
@@ -720,6 +801,195 @@ every authentication and public endpoint at once.
 
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
+
+### Training: documents on waiver requests, kept a year (2026-11-11)
+
+Nothing blocks a restart. Migration `86722d75b5a2` creates one empty table,
+`attendance_waiver_attachments`. No existing row changes.
+
+- **Off until a department turns it on.** The waiver policy gains
+  `attachment` (`off` by default) and `attachment_retention_days` (365 by
+  default); a policy saved before the upgrade reads both at their defaults,
+  so no member can file a document until a training officer chooses
+  `optional` or `required`.
+- **Files go under `<org>/attendance-waivers/`** on the uploads volume (or the
+  department's bucket), through the same storage service, scanning and
+  encryption as every other upload. Back that directory up with the rest of
+  the volume.
+- **A new daily task, `attendance_waiver_attachment_retention`, permanently
+  deletes documents** once their request has been closed longer than the
+  retention period. It deletes nothing on the day of the upgrade: no document
+  exists yet. A department whose records policy needs them longer should raise
+  `attachment_retention_days` before the first anniversary.
+- **Downgrading past `86722d75b5a2`** drops the table; the files stay on the
+  volume with nothing pointing at them.
+
+### Meetings: a member who was present counts as attending, waiver or not; members can ask to be excused (2026-11-11)
+
+- **Attendance figures and voting eligibility can rise on upgrade, with no
+  setting changed.** Until now a meeting waiver beat being present: a member
+  marked present at a meeting they also held a waiver for was counted as
+  excused from it, not as attending. The owner decided check-in wins
+  (2026-11-10), so such a meeting now counts as attended in the voting
+  check's attendance percentage and recent-meetings count, the Secretary's
+  attendance dashboard and the annual evaluation's business-meeting figure.
+  A member with such meetings can move above a voting threshold. A waiver
+  still excuses a meeting the member missed. The election attendee import
+  already copied members marked present; it now agrees with the tally about
+  them (D12).
+- **The Secretary's grant takes a JSON body** (D7):
+  `POST /api/v1/meetings/{id}/attendance-waiver` now reads `user_id` and
+  `reason` from the body, which is what the app already sent (so the call
+  used to fail with 422). A script that passed them as query parameters must
+  send a JSON body instead. The reason is no longer written to the audit log.
+- **Members can ask to be excused from a business meeting**, off until the
+  Secretary saves a policy (`PUT /api/v1/meetings/waiver-requests/policy`,
+  `meetings.manage`; stored in the organization's settings, so nothing to
+  configure at upgrade time). The screens arrive in a later release. An
+  approved request writes the same waiver the Secretary grants by hand onto
+  the minutes record, with the text "Excused: approved request" and the
+  category, never the member's reason.
+- **Cancelling or deleting an event now closes the pending waiver requests
+  about it**, training and meeting alike; approved and denied ones are kept.
+
+### Finance: a budget request draft can be saved blank (2026-11-11)
+
+Nothing blocks a restart. Migration `0136dd6d4144` makes
+`budget_requests.requested_amount` and `budget_requests.justification`
+nullable. Every existing request already holds both, and none is rewritten.
+
+- **What changes for owners.** A line owner can save a draft before deciding
+  the amount or writing the justification. Submit still needs both: pressing
+  it on an unfinished draft opens the draft with the missing fields flagged,
+  and the API refuses the submit with a 422 naming them. A submitted request's
+  edit still needs both, as before.
+- **The Treasurer's review screen** lists a blank draft's amount as _Not
+  entered yet_, and its totals count only what has been entered.
+- **Rolling back.** The previous release cannot read a blank draft: its
+  response schema requires both fields, so listing a year that has one fails.
+  Run the downgrade (`alembic downgrade 09f0171ccf5e`) before restoring the
+  previous image, or restore the database backup taken before upgrading. The
+  downgrade fills each blank draft with an amount of 0.00 and an empty
+  justification so the columns can be NOT NULL again; upgrading again does not
+  undo that fill, so those drafts then read $0.00 until their owner edits them.
+
+### Training: members can ask to be excused from a session (2026-11-10)
+
+Nothing blocks a restart. Migration `8b1cf6f55425` creates two empty tables,
+`attendance_waiver_requests` and `attendance_waiver_request_actions`. No
+existing row changes.
+
+- **Off until a training officer saves a policy.** The policy is stored in the
+  organization's settings, so there is nothing to configure at upgrade time,
+  and until it is saved members cannot ask. The screens arrive in a later
+  release; until then the policy can only be saved through the API
+  (`PUT /api/v1/training/waivers/requests/policy`, `training.manage`).
+- **Compliance exports can change on upgrade, with no policy saved.** The
+  department compliance CSV, the compliance PDF and the compliance forecast now
+  apply the training waivers, leaves of absence and Chief overrides already on
+  file, the way the compliance screens always have. Before, they graded every
+  member as if none existed, so an export could print _Not Met_ for a member
+  the compliance matrix showed as met. A member with an active leave or waiver,
+  or a Chief override, can therefore move from _Not Met_ to _Met_ in an export
+  taken after the upgrade. The data did not change; the exports now agree with
+  the screens.
+- **Once requests are approved, attendance figures move.** An approved request
+  drops its session from the member's held and attended counts for every
+  session-attendance requirement it counts toward, and from their missed
+  mandatory events. Approved requests keep doing so if the policy is later
+  turned off; turning it off only stops new requests.
+- **Downgrading** drops both tables, and every approved request with them, so
+  the sessions they excused count against those members again. Take a backup
+  first (see above) once requests are in use.
+
+### Evaluations: training-session attendance is graded by the attendance requirement (2026-11-10)
+
+Nothing blocks a restart, and no migration runs. The **Training session
+attendance** figure on an evaluation (`training.session_attendance_pct`) now
+uses the same rule as the session-attendance requirement on the training
+screens. **The percentage will change** on any evaluation template that shows
+it:
+
+- **Only sessions that count toward the member's session-attendance
+  requirement are measured.** Before, every training event in the period was,
+  including optional ones nobody was asked to attend.
+- **Attendance is what finalizing the session recorded**, not an RSVP
+  check-in. A session whose attendance has not been finalized is not counted
+  yet, as on the training screens.
+- **Every waiver and leave the training screens apply now excuses a session**,
+  including waivers limited to that requirement, which were ignored before. A
+  member who attended an excused session anyway is credited with it; before,
+  that session was dropped.
+- **The requirement is the one that applies to the member.** If several
+  apply, the one naming the member's membership type is used. If that still
+  leaves more than one, the figure reads "unavailable" rather than guessing.
+  It also reads unavailable for a member exempt from training requirements,
+  and when no requirement applies at all. Departments that never set up a
+  session-attendance requirement will see "unavailable" where a percentage
+  used to appear.
+- **The figure covers the evaluation's review period**, not the requirement's
+  own window.
+
+**Stored figures are not recalculated.** A finalized evaluation keeps the
+figure it was signed with. So does an evaluation already open at the upgrade,
+and an amendment of a finalized one, until the evaluator or a manager presses
+**Update figures**. That is possible only until the evaluator locks their part,
+so an evaluation whose evaluator had already locked it is signed with the old
+figure. Evaluations drafted after the upgrade, refreshed figures and template
+previews show the new one. The stored snapshot's `version` is now `2`; a
+snapshot still at `version` 1 holds the old figure.
+
+### Medical screening: expiry reminder emails, and new requirements recur by default (2026-11-08)
+
+Nothing blocks a restart. Migration `cf93f3b65274` creates an empty table,
+`screening_reminder_sends`, and lets `notification_rules.trigger` hold
+`medical_screening_expiry`. No existing row changes.
+
+- **Members start receiving emails.** A new daily scheduled task,
+  `medical_screening_expiry_reminders` (06:15 in the external crontab, and in
+  the in-process scheduler), emails a member 90, 60, 30 and 7 days before
+  one of their medical screenings falls due — the certification reminders'
+  tiers. Only the most urgent tier a screening has reached is sent, so on the
+  first run after the upgrade a member whose physical is due in three weeks
+  gets the 30-day email once, not three. The subject is "A medical screening
+  is due soon"; the body names the requirement and the due date, nothing
+  about the result.
+- **On by default** for every department with the Medical Screening module
+  switched on. To turn them off, add a **Medical Screening Expiry** rule under
+  **Notifications › Rules** and disable it. A member who has turned off
+  "Training and certification reminders" (or all reminder emails) is not
+  emailed. There is no text message and no notification-bell entry.
+- **Each reminder goes once.** A second run the same day, or two runs at once,
+  sends nothing more. An officer who corrects a screening's expiration date
+  re-arms the reminders for the new date.
+- **A new screening requirement starts recurring every 12 months**; the
+  One-time box starts unticked. Requirements already saved keep their setting.
+- **Downgrading** drops the table, so the next run after re-upgrading may send
+  a screening's current tier again, and deletes any Medical Screening Expiry
+  rule.
+
+### QuickBooks Online: checks post as checks, card payments as credit card expenses (2026-11-08)
+
+Nothing blocks a restart, and nothing changes for a department that has not
+connected QuickBooks Online. No migration. For a connected department, from
+the next posting run:
+
+- **An issued check posts as a QuickBooks Check**, numbered with its check
+  number, with the check request's number in the transaction's private note.
+  It used to post as a cash expense numbered with the request number. Checks
+  already in QuickBooks are left as they were posted.
+- **A payment from a category whose paid-from account is a QuickBooks Credit
+  Card account now posts** as a credit card expense. It used to be refused
+  ("not a Bank account") and left for the CSV export. A payment refused that
+  way before the upgrade stays refused: press **Send again** on it to post it
+  live, or send it in the CSV export as before — not both.
+- **A check paid from a credit card account, or numbered past QuickBooks' 21
+  characters, is refused** and left for the CSV export. A check number already
+  used in the QuickBooks company is refused by QuickBooks, with its reason on
+  the posting.
+- A posting already waiting on a retry is resent under its original request
+  id; if QuickBooks had created it, QuickBooks answers with that original
+  (cash) Purchase rather than creating a Check beside it.
 
 ### Finance: an optional live QuickBooks Online connection (2026-11-06)
 

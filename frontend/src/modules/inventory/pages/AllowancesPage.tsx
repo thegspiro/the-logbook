@@ -14,6 +14,10 @@ import type { IssuanceAllowance, InventoryCategory, Role } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 import toast from 'react-hot-toast';
 
 const PERIOD_OPTIONS = [
@@ -23,6 +27,19 @@ const PERIOD_OPTIONS = [
 ];
 
 const periodLabel = (value: string): string => PERIOD_OPTIONS.find((p) => p.value === value)?.label ?? value;
+
+type AllowanceField = 'category_id' | 'role_id' | 'max_quantity' | 'period_type';
+type AllowanceForm = Record<AllowanceField, string>;
+
+/** `IssuanceAllowanceCreate` / `Update` in schemas/inventory.py; ordered as on screen. */
+const ALLOWANCE_FIELDS: Record<AllowanceField, ServerFieldSpec & { id: string }> = {
+  category_id: { label: 'Category', id: 'allow-cat' },
+  role_id: { label: 'Applies To', id: 'allow-role' },
+  max_quantity: { label: 'Max Quantity', id: 'allow-qty' },
+  period_type: { label: 'Period', id: 'allow-period' },
+};
+const ALLOWANCE_ORDER = Object.keys(ALLOWANCE_FIELDS) as AllowanceField[];
+const EMPTY_FORM: AllowanceForm = { category_id: '', role_id: '', max_quantity: '1', period_type: 'annual' };
 
 const inputClass = 'form-input w-full';
 const labelClass = 'form-label';
@@ -38,7 +55,20 @@ const AllowancesPage: React.FC = () => {
     open: false,
     editing: null,
   });
-  const [form, setForm] = useState({ category_id: '', role_id: '', max_quantity: '1', period_type: 'annual' });
+  const [form, setForm] = useState<AllowanceForm>(EMPTY_FORM);
+  const [baseline, setBaseline] = useState<AllowanceForm>(EMPTY_FORM);
+  const [errors, setErrors] = useState<Partial<Record<AllowanceField, string>>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const closeModal = () => setModal({ open: false, editing: null });
+  // Escape, the X and Cancel ask before throwing typed changes away (forms review F-6).
+  const requestClose = useDiscardGuard({
+    isDirty: modal.open && JSON.stringify(form) !== JSON.stringify(baseline),
+    onClose: closeModal,
+  });
+  const setField = (key: AllowanceField, value: string) => {
+    setForm((p) => ({ ...p, [key]: value }));
+    setErrors((p) => ({ ...p, [key]: undefined }));
+  };
   const [deleteTarget, setDeleteTarget] = useState<IssuanceAllowance | null>(null);
 
   const load = useCallback(async () => {
@@ -66,41 +96,70 @@ const AllowancesPage: React.FC = () => {
   const categoryName = (id: string) => categories.find((c) => c.id === id)?.name ?? id;
   const roleName = (id?: string) => (id ? (roles.find((r) => r.id === id)?.name ?? id) : 'All members');
 
-  const openCreate = () => {
-    setForm({ category_id: categories[0]?.id ?? '', role_id: '', max_quantity: '1', period_type: 'annual' });
-    setModal({ open: true, editing: null });
+  const open = (seeded: AllowanceForm, editing: IssuanceAllowance | null) => {
+    setForm(seeded);
+    setBaseline(seeded);
+    setErrors({});
+    setFormError(null);
+    setModal({ open: true, editing });
   };
 
-  const openEdit = (a: IssuanceAllowance) => {
-    setForm({
-      category_id: a.category_id,
-      role_id: a.role_id ?? '',
-      max_quantity: String(a.max_quantity),
-      period_type: a.period_type,
-    });
-    setModal({ open: true, editing: a });
+  const openCreate = () => open({ ...EMPTY_FORM, category_id: categories[0]?.id ?? '' }, null);
+
+  const openEdit = (a: IssuanceAllowance) =>
+    open(
+      {
+        category_id: a.category_id,
+        role_id: a.role_id ?? '',
+        max_quantity: String(a.max_quantity),
+        period_type: a.period_type,
+      },
+      a
+    );
+
+  const showErrors = (next: Partial<Record<AllowanceField, string>>) => {
+    setErrors(next);
+    const first = firstRefused(ALLOWANCE_ORDER, next);
+    if (first) window.setTimeout(() => document.getElementById(ALLOWANCE_FIELDS[first].id)?.focus(), 0);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     const rawQty = form.max_quantity.trim();
     // Number('') is 0, and 0 is a real setting ("none may be issued"), so an
     // emptied box must be refused rather than silently saved as a zero cap.
     const qty = rawQty === '' ? NaN : Number(rawQty);
-    if (!form.category_id) {
-      toast.error('Select a category');
-      return;
-    }
-    if (!Number.isInteger(qty) || qty < 0) {
-      toast.error('Enter a whole number of 0 or more for max quantity');
+    const problems: Partial<Record<AllowanceField, string>> = {};
+    if (!form.category_id) problems.category_id = 'Choose the category this allowance caps.';
+    if (!Number.isInteger(qty) || qty < 0) problems.max_quantity = 'Enter a whole number of 0 or more.';
+    setFormError(null);
+    // A new allowance is not created until every field is fixed; an edit saves
+    // the rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!modal.editing && Object.keys(problems).length > 0) {
+      showErrors(problems);
       return;
     }
     setSaving(true);
     try {
       if (modal.editing) {
-        await inventoryService.updateAllowance(modal.editing.id, {
-          max_quantity: qty,
-          period_type: form.period_type,
+        const editing = modal.editing;
+        const { refused } = await saveExceptRefused<AllowanceField, unknown>({
+          payload: { max_quantity: qty, period_type: form.period_type },
+          refused: problems,
+          send: (body) => inventoryService.updateAllowance(editing.id, body),
+          place: (err) => mapServerFieldErrors(err, ALLOWANCE_FIELDS),
         });
+        const first = firstRefused(ALLOWANCE_ORDER, refused);
+        if (first) {
+          void load();
+          showErrors(refused);
+          setFormError(
+            `Allowance saved, except ${ALLOWANCE_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+          );
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as AllowanceField]]));
+          setBaseline({ ...form, ...keep });
+          return;
+        }
         toast.success('Allowance updated');
       } else {
         await inventoryService.createAllowance({
@@ -111,10 +170,19 @@ const AllowancesPage: React.FC = () => {
         });
         toast.success('Allowance created');
       }
-      setModal({ open: false, editing: null });
+      closeModal();
       void load();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save allowance'));
+      // A refusal lands on its field (forms review F-2); anything no field
+      // answers for is said in the dialog, which stays open.
+      const mapped = mapServerFieldErrors(err, ALLOWANCE_FIELDS);
+      if (mapped) showErrors(mapped.fieldErrors);
+      setFormError(
+        mapped?.unmatched.join(' ') ||
+          (mapped && Object.keys(mapped.fieldErrors).length > 0
+            ? null
+            : getErrorMessage(err, 'Failed to save allowance'))
+      );
     } finally {
       setSaving(false);
     }
@@ -227,101 +295,124 @@ const AllowancesPage: React.FC = () => {
         {/* Create / Edit Modal */}
         <Modal
           isOpen={modal.open}
-          onClose={() => setModal({ open: false, editing: null })}
+          onClose={requestClose}
           title={modal.editing ? 'Edit Allowance' : 'New Allowance'}
           size="sm"
-        >
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="allow-cat" className={labelClass}>
-                Category
-              </label>
-              <select
-                id="allow-cat"
-                value={form.category_id}
-                onChange={(e) => setForm((p) => ({ ...p, category_id: e.target.value }))}
-                className={inputClass}
-                disabled={!!modal.editing}
-              >
-                <option value="">Select a category…</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="allow-role" className={labelClass}>
-                Applies To
-              </label>
-              <select
-                id="allow-role"
-                value={form.role_id}
-                onChange={(e) => setForm((p) => ({ ...p, role_id: e.target.value }))}
-                className={inputClass}
-                disabled={!!modal.editing}
-              >
-                <option value="">All members</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-              <p className="text-theme-text-muted mt-1 text-xs">
-                A role-specific allowance overrides the all-members default.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label htmlFor="allow-qty" className={labelClass}>
-                  Max Quantity
-                </label>
-                <input
-                  id="allow-qty"
-                  type="number"
-                  min={0}
-                  value={form.max_quantity}
-                  onChange={(e) => setForm((p) => ({ ...p, max_quantity: e.target.value }))}
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label htmlFor="allow-period" className={labelClass}>
-                  Period
-                </label>
-                <select
-                  id="allow-period"
-                  value={form.period_type}
-                  onChange={(e) => setForm((p) => ({ ...p, period_type: e.target.value }))}
-                  className={inputClass}
-                >
-                  {PERIOD_OPTIONS.map((p) => (
-                    <option key={p.value} value={p.value}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex flex-col-reverse items-stretch justify-end gap-2 pt-2 sm:flex-row sm:items-center">
-              <button onClick={() => setModal({ open: false, editing: null })} className="btn-secondary btn-md">
-                Cancel
-              </button>
+          onSubmit={(e) => void handleSave(e)}
+          noValidate
+          footer={
+            <>
               <button
-                onClick={() => {
-                  void handleSave();
-                }}
+                type="submit"
                 disabled={saving}
                 className="btn-info btn-md inline-flex items-center justify-center gap-1"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
                 {modal.editing ? 'Save Changes' : 'Create'}
               </button>
+              <button type="button" onClick={requestClose} className="btn-secondary btn-md">
+                Cancel
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            {formError && (
+              <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+                {formError}
+              </p>
+            )}
+            <FormField
+              id={ALLOWANCE_FIELDS.category_id.id}
+              label="Category"
+              required
+              error={errors.category_id}
+              labelClassName={labelClass}
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  value={form.category_id}
+                  onChange={(e) => setField('category_id', e.target.value)}
+                  className={inputClass}
+                  disabled={!!modal.editing}
+                >
+                  <option value="">Select a category…</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+
+            <FormField
+              id={ALLOWANCE_FIELDS.role_id.id}
+              label="Applies To"
+              error={errors.role_id}
+              labelClassName={labelClass}
+              hint="A role-specific allowance overrides the all-members default."
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  value={form.role_id}
+                  onChange={(e) => setField('role_id', e.target.value)}
+                  className={inputClass}
+                  disabled={!!modal.editing}
+                >
+                  <option value="">All members</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FormField
+                id={ALLOWANCE_FIELDS.max_quantity.id}
+                label="Max Quantity"
+                required
+                error={errors.max_quantity}
+                labelClassName={labelClass}
+              >
+                {(field) => (
+                  <input
+                    {...field}
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={form.max_quantity}
+                    onChange={(e) => setField('max_quantity', e.target.value)}
+                    className={inputClass}
+                  />
+                )}
+              </FormField>
+              <FormField
+                id={ALLOWANCE_FIELDS.period_type.id}
+                label="Period"
+                error={errors.period_type}
+                labelClassName={labelClass}
+              >
+                {(field) => (
+                  <select
+                    {...field}
+                    value={form.period_type}
+                    onChange={(e) => setField('period_type', e.target.value)}
+                    className={inputClass}
+                  >
+                    {PERIOD_OPTIONS.map((p) => (
+                      <option key={p.value} value={p.value}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </FormField>
             </div>
           </div>
         </Modal>

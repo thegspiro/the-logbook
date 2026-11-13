@@ -433,11 +433,23 @@ export const MemberVoterType = {
 export type MemberVoterType = (typeof MemberVoterType)[keyof typeof MemberVoterType];
 
 // ============================================
+// Wait Counted From (TypeRule.wait.counted_from) — when a per-type waiting
+// period starts: when the member became that type, or when they joined.
+// ============================================
+export const WaitCountedFrom = {
+  TYPE: 'type',
+  JOINED: 'joined',
+} as const;
+export type WaitCountedFrom = (typeof WaitCountedFrom)[keyof typeof WaitCountedFrom];
+
+// ============================================
 // Meeting Kind (Election.meeting_kind) — which eligibility defaults it copies
 // ============================================
 export const MeetingKind = {
   REGULAR: 'regular',
   ANNUAL: 'annual',
+  BYLAWS: 'bylaws',
+  SPECIAL: 'special',
 } as const;
 export type MeetingKind = (typeof MeetingKind)[keyof typeof MeetingKind];
 
@@ -654,6 +666,20 @@ export const PracticalSkillsMethod = {
   SHIFT_SIGNOFFS: 'shift_signoffs',
 } as const;
 export type PracticalSkillsMethod = (typeof PracticalSkillsMethod)[keyof typeof PracticalSkillsMethod];
+
+// ============================================
+// Training — Record Source
+// ============================================
+/**
+ * Where a training record came from. The server decides it
+ * (`app/services/training_record_source.py`) and sends the label to show.
+ */
+export const TrainingRecordSource = {
+  PROVIDER: 'provider',
+  IMPORTED: 'imported',
+  LOGBOOK: 'logbook',
+} as const;
+export type TrainingRecordSource = (typeof TrainingRecordSource)[keyof typeof TrainingRecordSource];
 
 // ============================================
 // Scheduling — Assignment Status
@@ -1134,6 +1160,12 @@ export const CellTone = {
    * `tally_standing()` leaves it out of both sides of the standing.
    */
   CATCH_UP: 'catch_up',
+  /**
+   * A session-attendance requirement no session of which has been held in the
+   * member's window yet (backend status `not_applicable`): nothing to have
+   * attended, so counted neither met nor open, like CATCH_UP (W80-9).
+   */
+  NOT_YET_HELD: 'not_yet_held',
 } as const;
 export type CellTone = (typeof CellTone)[keyof typeof CellTone];
 
@@ -1352,3 +1384,58 @@ export const LeaveMonthRule = {
   HALF: 'half',
 } as const;
 export type LeaveMonthRule = (typeof LeaveMonthRule)[keyof typeof LeaveMonthRule];
+
+// ============================================
+// Session Waiver Requests (backend/app/models/attendance_waiver.py)
+// ============================================
+export const AttendanceWaiverStatus = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  DENIED: 'denied',
+  WITHDRAWN: 'withdrawn',
+  VOIDED: 'voided',
+} as const;
+export type AttendanceWaiverStatus = (typeof AttendanceWaiverStatus)[keyof typeof AttendanceWaiverStatus];
+
+export const ATTENDANCE_WAIVER_STATUS_LABELS: Record<string, string> = {
+  pending: 'Pending',
+  approved: 'Approved',
+  denied: 'Denied',
+  withdrawn: 'Withdrawn',
+  voided: 'Voided',
+};
+
+export const ATTENDANCE_WAIVER_STATUS_COLORS: Record<string, string> = {
+  pending: 'bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30',
+  approved: 'bg-green-500/10 text-green-800 dark:text-green-300 border-green-500/30',
+  denied: 'bg-red-500/10 text-red-800 dark:text-red-300 border-red-500/30',
+  withdrawn: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
+  voided: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
+};
+
+/** When a request must arrive by (`AttendanceWaiverPolicy.deadline`). */
+export const AttendanceWaiverDeadline = {
+  BEFORE_START: 'before_start',
+  HOURS_24_AFTER_END: '24h_after_end',
+  DAYS_7_AFTER_END: '7d_after_end',
+} as const;
+export type AttendanceWaiverDeadline = (typeof AttendanceWaiverDeadline)[keyof typeof AttendanceWaiverDeadline];
+
+export const ATTENDANCE_WAIVER_DEADLINE_LABELS: Record<AttendanceWaiverDeadline, string> = {
+  before_start: 'Before the session starts',
+  '24h_after_end': 'Up to 24 hours after it ends',
+  '7d_after_end': 'Up to 7 days after it ends',
+};
+
+export const AttendanceWaiverCapPeriod = {
+  CALENDAR_YEAR: 'calendar_year',
+  ROLLING_12_MONTHS: 'rolling_12_months',
+} as const;
+export type AttendanceWaiverCapPeriod = (typeof AttendanceWaiverCapPeriod)[keyof typeof AttendanceWaiverCapPeriod];
+
+export const AttendanceWaiverReasonText = {
+  OFF: 'off',
+  OPTIONAL: 'optional',
+  REQUIRED: 'required',
+} as const;
+export type AttendanceWaiverReasonText = (typeof AttendanceWaiverReasonText)[keyof typeof AttendanceWaiverReasonText];

@@ -203,6 +203,122 @@ These are more granular waivers that can target specific requirements.
 
 ---
 
+## Session Waiver Requests
+
+A waiver above is something a training officer grants. A **session waiver
+request** is something a member asks for: to be excused from one training
+session that counts against them (owner decisions, 2026-11-10).
+
+**Off until the department turns it on.** A training officer saves the policy
+(`PUT /api/v1/training/waivers/requests/policy`, `training.manage`). With no
+policy saved, or one that cannot be read, members cannot ask and nothing else
+changes. The policy chooses:
+
+| Setting                     | Choices                                                                 |
+| --------------------------- | ----------------------------------------------------------------------- |
+| `deadline`                  | before the session starts; 24 hours after it ends; 7 days after it ends |
+| `cap` / `cap_period`        | no cap, or 1–365 approved requests per calendar year or any 12 months   |
+| `categories`                | up to 20 labels a member picks from, optionally required                |
+| `reason_text`               | off, optional or required                                               |
+| `attachment`                | supporting documents off, optional or required (default off)            |
+| `attachment_retention_days` | days a request's documents are kept once it is closed (default 365)     |
+| `approver_position_ids`     | the positions whose holders decide                                      |
+
+**Who may ask.** A member may ask about a training session that is not
+cancelled and is linked to a session-attendance requirement that applies to
+them, before the deadline, once per session. Not a member who is exempt from
+compliance, who checked in (or was recorded as attending), or who has no
+waivers left under the cap. Withdrawing a pending request frees the session to
+ask again; a denied request does not.
+
+**Who decides.** The current holders of the chosen positions are asked. If
+that leaves nobody (no positions chosen, the positions are vacant, or the only
+holder is the member asking), the Chief is asked, and failing a Chief, every
+holder of `training.manage`. A Chief may always decide. Nobody decides their
+own request. The first decision is final, except that the Chief may approve a
+denied request, with a reason, never on their own request; the denial stays on
+record beside the override.
+
+**The cap** counts approved requests, by the session's date, including denials
+the Chief overrode. It is checked when a request is approved, not when it is
+made, so several may be pending at once. Under `rolling_12_months` no 12-month
+span may hold more approved requests than the cap. A Chief's override is not
+blocked by the cap, but counts toward it.
+
+**What an approval does.** The session drops out of the member's held and
+attended counts for every attendance requirement it counts toward, including
+one linked after the approval, and off their missed-mandatory list. It is
+matched on the session, never on the day: another session that day is still
+owed, and no month of an hours, shifts or calls requirement is reduced. A
+member who attended anyway is still credited with attending.
+
+**Privacy.** The reason and the deciders' notes are encrypted at rest, shown
+only to the member and to those who may decide, and kept out of notifications
+and the audit log. The member's data export carries their requests, reasons
+included, and the decision log of each, notes included; it does not carry
+notes the member wrote as a decider on anyone else's request. Anonymizing a
+departed member clears the reason and the notes; the request itself is kept.
+
+**Supporting documents.** When the policy's `attachment` is `optional` or
+`required`, a member may file up to three documents with a request: PDF,
+JPEG, PNG or HEIC, 10 MB each, judged by the file's contents, not its name.
+They can be filed with the request (`POST .../with-attachments`, multipart)
+or added while it is pending; nothing is added once it is decided or
+withdrawn. Under `required`, a request without one is refused. Only the
+member and the people who may decide the request can open a document; a
+former decider who no longer holds the position cannot. Each download is
+audited (`attendance_waiver_attachment_downloaded`, ids only), is sent
+uncacheable, and is named `waiver-attachment-1.pdf` and so on: the uploader's
+filename is never kept, because a doctor's note's name can say what it is
+about. The daily `attendance_waiver_attachment_retention` task deletes a
+request's documents `attachment_retention_days` after it was decided (or, for
+one withdrawn or voided, after it closed) and audits the ids it removed; the
+request and its decision log are kept. Anonymizing the member deletes them at
+once. The data export lists each document's record (type, size, checksum,
+date) but not the file. Documents never appear in the annual review or in a
+notification.
+
+**In the annual review.** An evaluation template can show a member's requests
+for the review period, by session date: `training.session_waivers_summary`
+(how many were made, approved, overridden, denied, withdrawn, pending and
+voided) and `training.session_waiver_history` (one line per request: session,
+outcome with who decided, category). Neither shows the reason, a decider's
+note or an attachment, and neither can be scored. See
+`docs/EVALUATIONS_MODULE.md`, "Figures".
+
+**Where it is in the app.**
+
+| Who              | Where                                                                                                                                                                                                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Training officer | **Training Admin > Settings & Data > Session Waivers** turns requests on and sets the policy above, including **Supporting documents** and how many days they are kept                                                                                                            |
+| Member           | A training session's page offers **Request to be excused** when the session counts against them, shows how many waivers are left, then the request's state; the request form has a document field when the policy takes them; **My Training > My Waiver Requests** lists them all |
+| Approver         | **Training Admin > Records > Waiver Requests**, or `/attendance-waivers`, lists what they decide; `/attendance-waivers/{id}` is the page their email opens, with the filed documents to download (and, for the member, to add while pending)                                      |
+
+The email's approve and deny buttons only pre-select a choice
+(`?action=approve|deny`). The page never decides on load, because mail scanners
+open every link; the approver presses the button and confirms. A denial needs a
+note to the member. The Chief's override appears only on a denied request and
+only to a Chief.
+
+| Method | Endpoint                                                             | Who                                           |
+| ------ | -------------------------------------------------------------------- | --------------------------------------------- |
+| `GET`  | `/api/v1/training/waivers/requests/policy`                           | Any authenticated user                        |
+| `PUT`  | `/api/v1/training/waivers/requests/policy`                           | `training.manage`                             |
+| `GET`  | `/api/v1/training/waivers/requests/eligibility`                      | Any authenticated user, about themselves      |
+| `POST` | `/api/v1/training/waivers/requests`                                  | Any authenticated user, for themselves        |
+| `GET`  | `/api/v1/training/waivers/requests/mine`                             | Any authenticated user                        |
+| `GET`  | `/api/v1/training/waivers/requests`                                  | The requests the caller may decide or decided |
+| `GET`  | `/api/v1/training/waivers/requests/{id}`                             | The member, or someone who may decide         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/withdraw`                    | The member, while pending                     |
+| `POST` | `/api/v1/training/waivers/requests/{id}/approve`                     | Someone who may decide, while pending         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/deny`                        | Someone who may decide, while pending         |
+| `POST` | `/api/v1/training/waivers/requests/{id}/override`                    | A Chief, on a denied request                  |
+| `POST` | `/api/v1/training/waivers/requests/with-attachments`                 | Any authenticated user, for themselves        |
+| `POST` | `/api/v1/training/waivers/requests/{id}/attachments`                 | The member, while pending                     |
+| `GET`  | `/api/v1/training/waivers/requests/{id}/attachments/{attachment_id}` | The member, or someone who may decide         |
+
+---
+
 ## Example Scenario
 
 **Situation**: Firefighter Smith takes a 3-month medical leave from March 1
@@ -256,6 +372,13 @@ Where:
 Any meeting whose `meeting_date` falls between a leave's `start_date` and
 `end_date` (inclusive) is excluded.
 
+**Check-in wins** (owner decision, 2026-11-10): a meeting the member was
+marked present at counts as attended even if they also hold a waiver for it.
+A per-meeting waiver excuses only a meeting the member missed. The rule lives
+in `tally_attendance`, which the voting check, the attendance dashboard and
+the annual evaluation all use, and the election attendee import copies the
+same present members.
+
 ### Where attendance is affected
 
 | View / Endpoint                                                 | Description                                          |
@@ -268,14 +391,52 @@ Any meeting whose `meeting_date` falls between a leave's `start_date` and
 There are two ways a meeting can be excluded from a member's attendance:
 
 1. **Per-meeting waiver**: An officer grants a waiver for a specific meeting
-   (via the meeting detail page or `POST /meetings/{id}/attendance-waiver`).
-   This sets `waiver_reason` on the `MeetingAttendee` record.
+   (via the meeting detail page or `POST /meetings/{id}/attendance-waiver`,
+   with `user_id` and `reason` in a JSON body; the reason is kept out of the
+   URL and the audit log). This sets `waiver_reason` on the `MeetingAttendee`
+   record. An approved member request (below) sets the same waiver.
 
 2. **Leave of Absence**: Created via Member Lifecycle. Automatically excludes
    all meetings whose date falls within the leave period — no need to grant
    individual per-meeting waivers.
 
 Both are subtracted from the denominator independently.
+
+### Business-meeting waiver requests
+
+A member can ask to be excused from a business meeting, in the same engine as
+session waiver requests (`AttendanceWaiverService` bound to the
+`business_meeting` workflow) and with the same rules: deadline presets, one
+request per meeting, withdraw, the cap (counting only approved **meeting**
+requests, Chief overrides included), one decision, and the Chief's override of
+a denial. What differs:
+
+- **Its own policy**, at `organizations.settings["meetings"]["waiver_policy"]`,
+  saved by the Secretary through `PUT /api/v1/meetings/waiver-requests/policy`
+  (`meetings.manage`). Off until saved; the generic settings save cannot write
+  it.
+- **It is about the business_meeting event**, since members cannot see a
+  minutes record until it is approved. Not when the member checked in (or is
+  marked present on the minutes record), when a leave of absence covers the
+  meeting, or when the Secretary has already waived it.
+- **Routing**: the chosen positions; failing them, the Secretary; failing the
+  Secretary, every holder of `meetings.manage`. A Chief may always decide.
+- **Approving writes the waiver** onto the meeting's minutes record: the
+  `MeetingAttendee` row gets `waiver_reason` "Excused: approved request" (plus
+  the category), `waiver_granted_by` the decider and `waiver_request_id` the
+  request; `present` is left alone (check-in wins). Never the member's reason:
+  `waiver_reason` is plain text shown on voting and ballot screens, and the
+  reason stays encrypted on the request. If the minutes record does not exist
+  yet, `MeetingsService.create_from_event` carries approved requests over when
+  it builds one (absent members get a row with `present=False`). A minutes
+  record created by hand, with no event, cannot be requested; the Secretary's
+  grant still works on it.
+- Cancelling or deleting the event voids pending requests (training ones too);
+  decided ones are kept.
+
+The routes mirror the training ones under `/api/v1/meetings/waiver-requests`
+(`policy`, `eligibility`, submit, `mine`, the decider queue, one request,
+`withdraw`, `approve`, `deny`, `override`).
 
 ---
 

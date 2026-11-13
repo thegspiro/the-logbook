@@ -11,7 +11,10 @@ period.
 
 ``unit`` decides what a department may do with a source: anything numeric can
 carry a scoring rule that suggests a rating, a ``list`` is shown to the
-evaluator and member but never scored.
+evaluator and member but never scored. A numeric source may also be marked
+``scored=False`` when its number is a record rather than a grade, as the
+waiver counts are: asking to be excused is the member's right under the
+department's policy, so the count must not be able to suggest a rating.
 """
 
 from dataclasses import dataclass
@@ -31,10 +34,11 @@ class DataSource:
     unit: DataSourceUnit
     module: str
     description: str
+    scored: bool = True
 
     @property
     def scoreable(self) -> bool:
-        return self.unit in SCOREABLE_UNITS
+        return self.scored and self.unit in SCOREABLE_UNITS
 
 
 DATA_SOURCES: tuple[DataSource, ...] = (
@@ -58,8 +62,10 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "Training session attendance",
         "percent",
         "training",
-        "Training events attended out of those held, with sessions the member "
-        "was excused from by a waiver left out of both counts.",
+        "Sessions attended out of those held that count toward the member's "
+        "session-attendance requirement, graded by that requirement's rule; "
+        "a session the member was excused from is left out unless they "
+        "attended it anyway.",
     ),
     DataSource(
         "events.meeting_attendance_pct",
@@ -138,6 +144,50 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "list",
         "members",
         "Offices and committee positions the member held during the period.",
+    ),
+    DataSource(
+        "training.session_waivers_summary",
+        "Training session waiver requests",
+        "count",
+        "training",
+        "Requests to be excused from a training session held in the period: "
+        "how many were made, and how many were approved (including denials "
+        "the Chief overrode), denied, withdrawn, still pending or voided. "
+        "Never scored, and never shows the member's reason.",
+        scored=False,
+    ),
+    DataSource(
+        "training.session_waiver_history",
+        "Training session waiver history",
+        "list",
+        "training",
+        "One line per request to be excused from a training session held in "
+        "the period: the session, what happened to the request and who "
+        "decided it, and its category. The member's reason and any "
+        "attachment are never shown; whether an attachment is on file is "
+        "not yet recorded and always reads no.",
+    ),
+    DataSource(
+        "meetings.waivers_summary",
+        "Business meeting waiver requests",
+        "count",
+        "meetings",
+        "Requests to be excused from a business meeting held in the period: "
+        "how many were made, and how many were approved (including denials "
+        "the Chief overrode), denied, withdrawn, still pending or voided. "
+        "Never scored, and never shows the member's reason.",
+        scored=False,
+    ),
+    DataSource(
+        "meetings.waiver_history",
+        "Business meeting waiver history",
+        "list",
+        "meetings",
+        "One line per request to be excused from a business meeting held in "
+        "the period: the meeting, what happened to the request and who "
+        "decided it, and its category. The member's reason and any "
+        "attachment are never shown; whether an attachment is on file is "
+        "not yet recorded and always reads no.",
     ),
 )
 

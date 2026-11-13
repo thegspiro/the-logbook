@@ -7,23 +7,30 @@
  * The backend decides who may do which and refuses the rest; its message is
  * what the toast shows. The checks here only spare a round trip.
  *
- * Create payloads leave a blank station out (`|| undefined`); an edit sends
- * both fields the form owns (CLAUDE.md pitfall #1) — neither may be blank, so
- * there is nothing to clear.
+ * A draft saves without an amount or a justification (owner decision,
+ * 2026-11-11); submitting needs both, and so does a submitted request's edit.
+ * Create payloads leave a blank out (`|| undefined`); an edit sends both
+ * fields the form owns, a blank one as `null` so clearing a draft's field
+ * persists (CLAUDE.md pitfall #1).
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { budgetRequestService } from '../services/api';
-import type { BudgetRequest, BudgetRequestProposalOptions } from '../types';
-import { MAX_REQUEST_AMOUNT, MAX_REQUEST_TEXT } from '../utils/budgetRequests';
+import type { BudgetRequest, BudgetRequestProposalOptions, BudgetRequestUpdatePayload } from '../types';
+import { MAX_REQUEST_AMOUNT, MAX_REQUEST_TEXT, type RequestContentField } from '../utils/budgetRequests';
+import { firstErrorField, refusalsOnFields, updateExceptRefused, useDialogFieldErrors } from '../utils/fieldRefusals';
 
 export type BudgetRequestDialogTarget =
   | { kind: 'line'; budgetId: string; lineLabel: string; lastYearBudgeted?: string | null | undefined }
-  | { kind: 'edit'; request: BudgetRequest }
+  /** `flagged`: the fields a refused Submit named, shown as the dialog opens. */
+  | { kind: 'edit'; request: BudgetRequest; flagged?: Partial<Record<RequestContentField, string>> | undefined }
   | { kind: 'proposal'; options: BudgetRequestProposalOptions };
 
 interface BudgetRequestDialogProps {
@@ -35,12 +42,28 @@ interface BudgetRequestDialogProps {
   onSaved: () => void;
 }
 
-const fieldError = (id: string, message: string | undefined) =>
-  message ? (
-    <p id={id} className="mt-1 text-xs text-red-700 dark:text-red-400">
-      {message}
-    </p>
-  ) : null;
+type RequestField = 'category' | 'station' | 'position' | 'amount' | 'justification';
+
+/** `BudgetRequestCreate` / `BudgetRequestUpdate` (schemas/finance.py). */
+const SERVER_FIELDS: Record<RequestField, ServerFieldSpec> = {
+  category: { label: 'Category', api: ['category_id', 'categoryId'] },
+  station: { label: 'Station', api: ['station_id', 'stationId'] },
+  position: { label: 'Position', api: ['owner_position_id', 'ownerPositionId'] },
+  amount: { label: 'Amount requested', api: ['requested_amount', 'requestedAmount'] },
+  justification: { label: 'Justification', maxLength: MAX_REQUEST_TEXT },
+};
+const FIELD_ORDER = Object.keys(SERVER_FIELDS) as RequestField[];
+const UPDATE_KEYS: Partial<Record<RequestField, readonly (keyof BudgetRequestUpdatePayload)[]>> = {
+  amount: ['requestedAmount'],
+  justification: ['justification'],
+};
+const FIELD_IDS: Record<RequestField, string> = {
+  category: 'budget-request-category',
+  station: 'budget-request-station',
+  position: 'budget-request-position',
+  amount: 'budget-request-amount',
+  justification: 'budget-request-justification',
+};
 
 export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
   fiscalYearId,
@@ -51,13 +74,46 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
 }) => {
   const existing = target.kind === 'edit' ? target.request : null;
   const options = target.kind === 'proposal' ? target.options : null;
-  const [amount, setAmount] = useState(existing ? String(existing.requestedAmount) : '');
+  const [amount, setAmount] = useState(existing?.requestedAmount ?? '');
   const [justification, setJustification] = useState(existing?.justification ?? '');
   const [categoryId, setCategoryId] = useState('');
   const [stationId, setStationId] = useState('');
   const [positionId, setPositionId] = useState(options?.positions.length === 1 ? (options.positions[0]?.id ?? '') : '');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const flagged = target.kind === 'edit' ? target.flagged : undefined;
+  const { errors, setErrors, clearError } = useDialogFieldErrors<RequestField>(flagged ?? {});
+  // A draft may be saved with either left blank; the Treasurer reads a
+  // submitted one, which needs both.
+  const draftable = existing === null || existing.status === 'draft';
   const [saving, setSaving] = useState(false);
+  // An edit that saved all but a refused field stays open on that field;
+  // closing then still tells the page to reload.
+  const partlySaved = useRef(false);
+  const initial = useRef({ amount, justification, categoryId, stationId, positionId });
+  const isDirty =
+    amount !== initial.current.amount ||
+    justification !== initial.current.justification ||
+    categoryId !== initial.current.categoryId ||
+    stationId !== initial.current.stationId ||
+    positionId !== initial.current.positionId;
+  const close = () => (partlySaved.current ? onSaved() : onClose());
+  // Escape, the X and Cancel all ask before throwing away a changed request.
+  const requestClose = useDiscardGuard({ isDirty, onClose: close });
+
+  const flag = (next: Partial<Record<RequestField, string>>) => {
+    setErrors(next);
+    const first = firstErrorField(next, FIELD_ORDER);
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+    return first === undefined;
+  };
+
+  // Opened from a refused Submit: start on the first field it named. Once, on
+  // open — the flags then clear field by field as they are edited.
+  const flaggedOnOpen = useRef<Partial<Record<RequestField, string>> | undefined>(flagged);
+  useEffect(() => {
+    const opened = flaggedOnOpen.current;
+    const first = opened ? firstErrorField(opened, FIELD_ORDER) : undefined;
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+  }, []);
 
   const title =
     target.kind === 'proposal'
@@ -69,41 +125,58 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
     target.kind === 'line' ? target.lineLabel : target.kind === 'edit' ? target.request.lineLabel : null;
 
   const validate = (): { amount: string; justification: string } | null => {
-    const next: Record<string, string> = {};
+    const next: Partial<Record<RequestField, string>> = {};
+    const blankAmount = amount.trim() === '';
     const parsed = Number(amount);
-    if (amount.trim() === '' || !Number.isFinite(parsed) || parsed < 0) {
+    if (blankAmount) {
+      if (!draftable) next.amount = 'A submitted request needs the amount requested.';
+    } else if (!Number.isFinite(parsed) || parsed < 0) {
       next.amount = 'Enter an amount of zero or more.';
     } else if (parsed > MAX_REQUEST_AMOUNT) {
       next.amount = 'That amount is too large.';
     }
-    if (!justification.trim()) next.justification = 'Say what the money is for.';
-    else if (justification.trim().length > MAX_REQUEST_TEXT) {
+    if (!justification.trim()) {
+      if (!draftable) next.justification = 'A submitted request needs to say what the money is for.';
+    } else if (justification.trim().length > MAX_REQUEST_TEXT) {
       next.justification = `Keep this under ${String(MAX_REQUEST_TEXT)} characters.`;
     }
     if (target.kind === 'proposal') {
       if (!categoryId) next.category = 'Choose the category of the new line.';
       if (!positionId) next.position = 'Choose the position the line is for.';
     }
-    setErrors(next);
-    if (Object.keys(next).length > 0) return null;
-    return { amount: parsed.toFixed(2), justification: justification.trim() };
+    if (!flag(next)) return null;
+    // '' stands for "not entered yet" in both: omitted on a create, null on an edit.
+    return { amount: blankAmount ? '' : parsed.toFixed(2), justification: justification.trim() };
   };
 
   const save = async (values: { amount: string; justification: string }) => {
     setSaving(true);
     try {
       if (target.kind === 'edit') {
-        await budgetRequestService.update(target.request.id, {
-          requestedAmount: values.amount,
-          justification: values.justification,
-        });
+        // Owner rule (2026-11-05) for a single-save edit: a refused value is
+        // not written, the rest saves, and the field stays flagged.
+        const { refused } = await updateExceptRefused(
+          (body: BudgetRequestUpdatePayload) => budgetRequestService.update(target.request.id, body),
+          { requestedAmount: values.amount || null, justification: values.justification || null },
+          SERVER_FIELDS,
+          UPDATE_KEYS
+        );
+        const first = firstErrorField(refused, FIELD_ORDER);
+        if (first) {
+          partlySaved.current = true;
+          flag(refused);
+          toast.error(
+            `Request saved, except ${SERVER_FIELDS[first].label.toLowerCase()}: ${refused[first] ?? ''} Fix it and save again.`
+          );
+          return;
+        }
         toast.success('Request saved');
       } else if (target.kind === 'line') {
         await budgetRequestService.create({
           fiscalYearId,
           budgetId: target.budgetId,
-          requestedAmount: values.amount,
-          justification: values.justification,
+          requestedAmount: values.amount || undefined,
+          justification: values.justification || undefined,
         });
         toast.success('Draft request saved. Submit it when it is ready.');
       } else {
@@ -112,13 +185,20 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
           categoryId: categoryId || undefined,
           stationId: stationId || undefined,
           ownerPositionId: positionId || undefined,
-          requestedAmount: values.amount,
-          justification: values.justification,
+          requestedAmount: values.amount || undefined,
+          justification: values.justification || undefined,
         });
         toast.success('Draft proposal saved. Submit it when it is ready.');
       }
       onSaved();
     } catch (err: unknown) {
+      // A new request is created only once nothing is refused.
+      const mapped = target.kind === 'edit' ? null : refusalsOnFields(err, SERVER_FIELDS);
+      if (mapped) {
+        flag(mapped.fieldErrors);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       // The API's own words: the deadline passed, a line already has one, …
       toast.error(getErrorMessage(err, 'Could not save the request'));
     } finally {
@@ -136,17 +216,18 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={title}
       titleId="budget-request-form-title"
       aria-describedby="budget-request-form-description"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? 'Saving...' : 'Save draft'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -158,6 +239,7 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
             ? `What ${lineLabel} needs in ${fiscalYearName}. `
             : `A budget line that does not exist yet in ${fiscalYearName}. `}
           It is saved as a draft; the Treasurer sees it once you submit it.
+          {draftable ? ' The amount and justification can wait until then; submitting needs both.' : ''}
           {target.kind === 'line' && target.lastYearBudgeted != null
             ? ` This year's budget is ${formatCurrency(target.lastYearBudgeted)}.`
             : ''}
@@ -165,106 +247,113 @@ export const BudgetRequestDialog: React.FC<BudgetRequestDialogProps> = ({
 
         {options && (
           <>
-            <div>
-              <label htmlFor="budget-request-category" className="form-label">
-                Category
-              </label>
-              <select
-                id="budget-request-category"
-                className="form-input"
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                aria-invalid={Boolean(errors.category)}
-                aria-describedby={errors.category ? 'budget-request-category-error' : undefined}
-              >
-                <option value="">Choose a category</option>
-                {options.categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              {fieldError('budget-request-category-error', errors.category)}
-            </div>
-            <div>
-              <label htmlFor="budget-request-station" className="form-label">
-                Station (optional)
-              </label>
-              <select
-                id="budget-request-station"
-                className="form-input"
-                value={stationId}
-                onChange={(e) => setStationId(e.target.value)}
-              >
-                <option value="">Department-wide</option>
-                {options.stations.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="budget-request-position" className="form-label">
-                For your position
-              </label>
-              <select
-                id="budget-request-position"
-                className="form-input"
-                value={positionId}
-                onChange={(e) => setPositionId(e.target.value)}
-                aria-invalid={Boolean(errors.position)}
-                aria-describedby={errors.position ? 'budget-request-position-error' : 'budget-request-position-hint'}
-              >
-                <option value="">Choose a position</option>
-                {options.positions.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <p id="budget-request-position-hint" className="text-theme-text-secondary mt-1 text-xs">
-                If it is approved, this position owns the new line.
-              </p>
-              {fieldError('budget-request-position-error', errors.position)}
-            </div>
+            <FormField id={FIELD_IDS.category} label="Category" error={errors.category}>
+              {(field) => (
+                <select
+                  {...field}
+                  className="form-input"
+                  value={categoryId}
+                  onChange={(e) => {
+                    setCategoryId(e.target.value);
+                    clearError('category');
+                  }}
+                >
+                  <option value="">Choose a category</option>
+                  {options.categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            <FormField id={FIELD_IDS.station} label="Station" optional error={errors.station}>
+              {(field) => (
+                <select
+                  {...field}
+                  className="form-input"
+                  value={stationId}
+                  onChange={(e) => {
+                    setStationId(e.target.value);
+                    clearError('station');
+                  }}
+                >
+                  <option value="">Department-wide</option>
+                  {options.stations.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            <FormField
+              id={FIELD_IDS.position}
+              label="For your position"
+              error={errors.position}
+              hint="If it is approved, this position owns the new line."
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  className="form-input"
+                  value={positionId}
+                  onChange={(e) => {
+                    setPositionId(e.target.value);
+                    clearError('position');
+                  }}
+                >
+                  <option value="">Choose a position</option>
+                  {options.positions.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
           </>
         )}
 
-        <div>
-          <label htmlFor="budget-request-amount" className="form-label">
-            Amount requested
-          </label>
-          <input
-            id="budget-request-amount"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            className="form-input"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            aria-invalid={Boolean(errors.amount)}
-            aria-describedby={errors.amount ? 'budget-request-amount-error' : undefined}
-          />
-          {fieldError('budget-request-amount-error', errors.amount)}
-        </div>
+        <FormField id={FIELD_IDS.amount} label="Amount requested" error={errors.amount}>
+          {(field) => (
+            <input
+              {...field}
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max={MAX_REQUEST_AMOUNT}
+              step="0.01"
+              className="form-input"
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                clearError('amount');
+              }}
+            />
+          )}
+        </FormField>
 
-        <div>
-          <label htmlFor="budget-request-justification" className="form-label">
-            Justification
-          </label>
-          <textarea
-            id="budget-request-justification"
-            rows={4}
-            className="form-input"
-            value={justification}
-            onChange={(e) => setJustification(e.target.value)}
-            aria-invalid={Boolean(errors.justification)}
-            aria-describedby={errors.justification ? 'budget-request-justification-error' : undefined}
-          />
-          {fieldError('budget-request-justification-error', errors.justification)}
-        </div>
+        <FormField
+          id={FIELD_IDS.justification}
+          label="Justification"
+          error={errors.justification}
+          maxLength={MAX_REQUEST_TEXT}
+          count={justification.length}
+        >
+          {(field) => (
+            <textarea
+              {...field}
+              rows={4}
+              className="form-input"
+              value={justification}
+              onChange={(e) => {
+                setJustification(e.target.value);
+                clearError('justification');
+              }}
+            />
+          )}
+        </FormField>
       </div>
     </Modal>
   );

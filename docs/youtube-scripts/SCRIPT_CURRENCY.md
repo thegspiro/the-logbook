@@ -1,5 +1,23 @@
 # Script currency
 
+## Flagged 2026-11-11 (not edited)
+
+Worth a beat or a re-record note when next touched: 03 IT and 04 Chief
+(Former Members page; Reset Password, Unlock, Reset MFA and Delete now in a
+row's **More actions** menu); 04 Chief and 07 Secretary (**Postpone Event**,
+which keeps RSVPs and clears check-ins); 04 Chief, 05 and 09 (the evaluation's
+training-session attendance figure follows the attendance requirement). No
+script quotes these labels today, so nothing on screen is wrong yet. See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-10--11-2026).
+
+## Flagged 2026-11-09 (not edited)
+
+Worth a beat or a re-record note when next touched: 03 and 06 (My Shifts Past
+by year and month); 05, 09 and 16 (pipeline wizard browser draft, milestones on
+courses and tests); 06 (end-of-shift summary call-type counts); 10 mobile
+segments (table cards, header buttons). See
+[CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--9-2026).
+
 ## Written into the scripts 2026-11-05
 
 Every row below this one, from **2026-10-24 → 10-25 through 2026-11-04 → 11-05**,
@@ -40,6 +58,19 @@ it defaults to on. The "five emails that cannot be switched off" in the
 - Run times for added beats are estimates (04 about +7.5 minutes, 07 about +4,
   03 about +6); Short 8AS still says about 47 seconds and gained roughly 8.
 - The member script (06) leaves out the leader-only dashboard changes by design.
+
+## Flagged by the 2026-11-08 → 11-10 changes
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--10-2026).
+Rows are **Open**; nothing was re-recorded or rewritten.
+
+| Script                                             | Beat                            | Now                                                                                                                         |
+| -------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Member (06)**                                    | My Shifts                       | Upcoming under month headers; Past by year with a Year dropdown and chart                                                   |
+| **Training Officer (05, 16)**, **Member (06)**     | Training History                | Each record shows its source                                                                                                |
+| **Training Officer (05, 16)**, **Fire Chief (04)** | Drill attendance, missed drills | Attendance requirement with no session held is not graded; a waiver excuses a drill; **Add a member** after check-in closes |
+| **Fire Chief (04)**                                | Members roster                  | Table on desktop, cards below                                                                                               |
+| **IT (03)**                                        | Historical import               | Members list shows real names; decided members folded away                                                                  |
 
 ## Flagged by the 2026-11-06 → 11-08 changes
 

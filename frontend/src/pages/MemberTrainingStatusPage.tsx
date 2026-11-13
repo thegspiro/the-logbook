@@ -21,6 +21,7 @@ import { SkeletonCard } from '../components/ux/Skeleton';
 import { EmptyState } from '../components/ux/EmptyState';
 import { SortableHeader, type SortDirection } from '../components/ux/SortableHeader';
 import { expectArray } from '../utils/asArray';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 const MONTHS = [
   'January',
@@ -280,7 +281,7 @@ const MemberTrainingStatusPage: React.FC = () => {
       </div>
 
       {/* Summary tiles */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <StatGrid columns={4} className="mb-6">
         {[
           { label: 'Members', value: summary.totalMembers },
           { label: 'Trained this period', value: summary.activeMembers },
@@ -292,7 +293,7 @@ const MemberTrainingStatusPage: React.FC = () => {
             <p className="text-theme-text-muted text-xs">{t.label}</p>
           </div>
         ))}
-      </div>
+      </StatGrid>
 
       {/* Table */}
       {loading ? (

@@ -6,13 +6,15 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import userEvent from '@testing-library/user-event';
 
 const updatePledge = vi.fn();
+const createPledge = vi.fn();
 vi.mock('../services/api', () => ({
   fundraisingService: {
     updatePledge: (...args: unknown[]) => updatePledge(...args) as unknown,
-    createPledge: vi.fn(),
+    createPledge: (...args: unknown[]) => createPledge(...args) as unknown,
   },
 }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
@@ -40,7 +42,10 @@ const pledge: Pledge = {
 };
 
 const renderDialog = () =>
-  render(<PledgeDialog pledge={pledge} donors={[]} campaigns={[]} onClose={vi.fn()} onSaved={vi.fn()} />);
+  // The dialog asks before discarding a changed form, so it needs the provider the app shell mounts.
+  render(<PledgeDialog pledge={pledge} donors={[]} campaigns={[]} onClose={vi.fn()} onSaved={vi.fn()} />, {
+    wrapper: ConfirmProvider,
+  });
 
 describe('PledgeDialog editing', () => {
   beforeEach(() => {
@@ -74,5 +79,50 @@ describe('PledgeDialog editing', () => {
     const payload = updatePledge.mock.calls[0]?.[1] as Record<string, unknown>;
     expect(payload.fulfilledAmount).toBe('150.00');
     expect(payload).not.toHaveProperty('status');
+  });
+});
+
+describe('PledgeDialog server refusals and discarding', () => {
+  const refusal = (field: string, message: string) => ({
+    response: { status: 422, data: { detail: [{ field, message }] } },
+  });
+
+  beforeEach(() => {
+    updatePledge.mockReset();
+    createPledge.mockReset();
+  });
+
+  it("puts a new pledge's refused amount under the amount and records nothing", async () => {
+    createPledge.mockRejectedValue(refusal('pledgedAmount', 'Value is outside the allowed range.'));
+    const onSaved = vi.fn();
+    const user = userEvent.setup();
+    render(<PledgeDialog donors={[]} campaigns={[]} onClose={vi.fn()} onSaved={onSaved} />, {
+      wrapper: ConfirmProvider,
+    });
+    await user.type(screen.getByLabelText(/^Amount pledged/), '1000');
+    await user.click(screen.getByRole('button', { name: 'Record pledge' }));
+
+    const amount = screen.getByLabelText(/^Amount pledged/);
+    await waitFor(() => expect(amount).toHaveAttribute('aria-invalid', 'true'));
+    expect(amount).toHaveAccessibleDescription('Value is outside the allowed range.');
+    expect(amount).toHaveFocus();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('asks before Escape or Cancel throws away a changed form', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<PledgeDialog pledge={pledge} donors={[]} campaigns={[]} onClose={onClose} onSaved={vi.fn()} />, {
+      wrapper: ConfirmProvider,
+    });
+    await user.type(screen.getByLabelText(/^Notes/), 'Called the donor');
+
+    await user.keyboard('{Escape}');
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

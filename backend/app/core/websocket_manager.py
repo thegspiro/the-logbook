@@ -192,7 +192,7 @@ class ConnectionManager:
         if self._pubsub:
             try:
                 await self._pubsub.unsubscribe()
-                await self._pubsub.close()
+                await self._pubsub.aclose()
             except Exception:
                 pass
         logger.info("WebSocket pub/sub listener stopped")

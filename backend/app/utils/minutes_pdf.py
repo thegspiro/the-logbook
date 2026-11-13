@@ -18,8 +18,9 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.platypus import (
     HRFlowable,
     Image,
@@ -29,15 +30,25 @@ from reportlab.platypus import (
     SimpleDocTemplate,
     Spacer,
     Table,
-    TableStyle,
 )
 
 from app.utils.minutes_pdf_attachments import (
     IMAGE,
+    PDF,
     PreparedAttachment,
     append_pdfs,
     prepare,
 )
+from app.utils.pdf_fonts import (
+    BODY_FONT,
+    BOLD_FONT,
+    BOLD_ITALIC_FONT,
+    ITALIC_FONT,
+    body_table_style,
+    document_stylesheet,
+)
+from app.utils.pdfa import to_pdfa
+from app.utils.print_geometry import BINDING_EDGE, SAFE_EDGE
 from app.utils.rich_text import (
     FORMAT_HTML,
     html_to_pdf_blocks,
@@ -70,6 +81,15 @@ _STATUS_ORDER = [
 ]
 
 
+def _fit(text: str, max_width: float, font: str = BODY_FONT, size: float = 7) -> str:
+    """*text* shortened with an ellipsis until it fits *max_width* points."""
+    if stringWidth(text, font, size) <= max_width:
+        return text
+    while text and stringWidth(text + "…", font, size) > max_width:
+        text = text[:-1]
+    return text + "…"
+
+
 def _esc(value: Any) -> str:
     return html.escape(str(value)) if value is not None else ""
 
@@ -80,11 +100,14 @@ def _text(value: Any) -> str:
 
 
 def _styled_table(data: List[List[Any]], col_widths: List[float]) -> Table:
-    style = TableStyle(
+    """A bordered table. A ``str`` cell prints literally and must NOT be
+    escaped; anything that may hold markup-like user text goes in a
+    ``Paragraph`` built from ``_esc``/``_text`` instead."""
+    style = body_table_style(
         [
             ("BACKGROUND", (0, 0), (-1, 0), _HEADER_BG),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTNAME", (0, 0), (-1, 0), BOLD_FONT),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("GRID", (0, 0), (-1, -1), 0.5, _GRID),
@@ -256,15 +279,17 @@ def render_minutes_pdf(
     buf = BytesIO()
     doc = SimpleDocTemplate(
         buf,
+        # The canvas otherwise declares Helvetica, never embedded, on every page.
+        initialFontName=BODY_FONT,
         pagesize=letter,
         topMargin=0.6 * inch,
-        bottomMargin=0.75 * inch,
+        bottomMargin=0.8 * inch,
         leftMargin=0.7 * inch,
         rightMargin=0.7 * inch,
         title=str(data.get("title") or "Meeting Minutes"),
     )
 
-    styles = getSampleStyleSheet()
+    styles = document_stylesheet()
     title_style = ParagraphStyle(
         "MinTitle", parent=styles["Title"], fontSize=17, spaceAfter=2
     )
@@ -288,7 +313,7 @@ def render_minutes_pdf(
         "h2": ParagraphStyle(
             "MinH2",
             parent=body_style,
-            fontName="Helvetica-Bold",
+            fontName=BOLD_FONT,
             fontSize=11,
             spaceBefore=6,
             spaceAfter=2,
@@ -296,7 +321,7 @@ def render_minutes_pdf(
         "h3": ParagraphStyle(
             "MinH3",
             parent=body_style,
-            fontName="Helvetica-BoldOblique",
+            fontName=BOLD_ITALIC_FONT,
             fontSize=10,
             spaceBefore=4,
             spaceAfter=2,
@@ -309,7 +334,7 @@ def render_minutes_pdf(
             parent=body_style,
             leftIndent=18,
             textColor=_MUTED,
-            fontName="Helvetica-Oblique",
+            fontName=ITALIC_FONT,
         ),
     }
 
@@ -361,7 +386,9 @@ def render_minutes_pdf(
                 [
                     Paragraph(_esc(entry.get("name")), styles["Normal"]),
                     Paragraph(_esc(entry.get("role") or ""), styles["Normal"]),
-                    _STATUS_LABELS.get(entry.get("status"), _esc(entry.get("status"))),
+                    _STATUS_LABELS.get(
+                        entry.get("status"), str(entry.get("status") or "")
+                    ),
                     Paragraph(_esc(entry.get("note") or ""), styles["Normal"]),
                 ]
             )
@@ -466,8 +493,8 @@ def render_minutes_pdf(
                     Paragraph(_esc(item.get("description")), styles["Normal"]),
                     Paragraph(_esc(item.get("assignee") or "—"), styles["Normal"]),
                     item.get("due") or "—",
-                    _esc(item.get("priority")),
-                    _esc(str(item.get("status") or "").replace("_", " ")),
+                    str(item.get("priority") or ""),
+                    str(item.get("status") or "").replace("_", " "),
                 ]
             )
         story.append(
@@ -491,9 +518,9 @@ def render_minutes_pdf(
             rows.append(
                 [
                     Paragraph(_esc(att.get("title")), styles["Normal"]),
-                    _esc(str(att.get("category") or "").replace("_", " ")),
+                    str(att.get("category") or "").replace("_", " "),
                     Paragraph(_esc(att.get("name")), styles["Normal"]),
-                    _esc(str(att.get("sha256") or "")[:16] + "…"),
+                    str(att.get("sha256") or "")[:16] + "…",
                     Paragraph(_esc(entry.note if entry else ""), styles["Normal"]),
                 ]
             )
@@ -572,7 +599,7 @@ def render_minutes_pdf(
                 ["Date", "Date"],
             ],
             colWidths=[3.4 * inch, 3.4 * inch],
-            style=TableStyle(
+            style=body_table_style(
                 [
                     ("FONTSIZE", (0, 0), (-1, -1), 9),
                     ("TOPPADDING", (0, 0), (-1, -1), 4),
@@ -606,23 +633,34 @@ def render_minutes_pdf(
 
     def _decorate(canvas: Any, document: Any) -> None:
         canvas.saveState()
-        canvas.setFont("Helvetica", 7)
+        canvas.setFont(BODY_FONT, 7)
         canvas.setFillColor(_MUTED)
         width = letter[0]
-        y = 0.5 * inch
+        # Up to three footer lines, the lowest just clear of the print-safe
+        # edge so its descenders are not lost to the printer's border.
+        y = SAFE_EDGE + 2
+        # Drawn on the canvas, outside the frame, so the binding edge is
+        # applied here; lines are clipped by measured width, not characters.
+        left = BINDING_EDGE
+        right = width - BINDING_EDGE
+        page_label = f"Page {document.page}" if show_pages else ""
+        page_room = stringWidth(page_label, BODY_FONT, 7) + 12 if page_label else 0
         if notice:
-            canvas.drawString(0.7 * inch, y + 20, str(notice)[:160])
+            canvas.drawString(left, y + 20, _fit(str(notice), right - left))
         if fingerprint:
-            canvas.drawString(0.7 * inch, y + 10, fingerprint)
-        canvas.drawString(0.7 * inch, y, (footer_left or generated)[:110])
-        if show_pages:
-            canvas.drawRightString(width - 0.7 * inch, y, f"Page {document.page}")
+            canvas.drawString(left, y + 10, _fit(fingerprint, right - left))
+        canvas.drawString(
+            left, y, _fit(footer_left or generated, right - left - page_room)
+        )
+        if page_label:
+            canvas.drawRightString(right, y, page_label)
         canvas.restoreState()
 
     doc.build(story, onFirstPage=_decorate, onLaterPages=_decorate)
-    if prepared:
+    if any(entry.kind == PDF for entry in prepared.values()):
         # PDF attachments go after the minutes, page for page. They carry no
         # minutes footer: the version and hash above are the record's own.
+        # Pages from outside cannot be vouched for, so this file makes no
+        # PDF/A claim (owner decision, 2026-11-09).
         return BytesIO(append_pdfs(buf.getvalue(), attachments, prepared))
-    buf.seek(0)
-    return buf
+    return BytesIO(to_pdfa(buf.getvalue()))

@@ -145,7 +145,7 @@ describe('CatalogQuickAdd with medical stock in scope', () => {
 
     await user.type(screen.getByRole('combobox'), 'OPA Kit');
     await user.click(await screen.findByText('Create “OPA Kit” in Medical Supplies'));
-    await user.selectOptions(await screen.findByLabelText('Medical category'), 'cat-airway');
+    await user.selectOptions(await screen.findByLabelText(/^Medical category/), 'cat-airway');
     await user.click(screen.getByRole('button', { name: 'Create & link' }));
 
     await waitFor(() => {
@@ -166,9 +166,14 @@ describe('CatalogQuickAdd with medical stock in scope', () => {
 
     await user.type(screen.getByRole('combobox'), 'OPA Kit');
     await user.click(await screen.findByText('Create “OPA Kit” in Medical Supplies'));
-    await screen.findByLabelText('Medical category');
+    await screen.findByLabelText(/^Medical category/);
+    await user.click(screen.getByRole('button', { name: 'Create & link' }));
 
-    expect(screen.getByRole('button', { name: 'Create & link' })).toBeDisabled();
+    // Named on the field rather than by a greyed-out button (forms review F-3).
+    expect(screen.getByLabelText(/^Medical category/)).toHaveAccessibleDescription(
+      'Choose the medical category this supply belongs to.'
+    );
+    expect(mockMedicalCreate).not.toHaveBeenCalled();
   });
 
   it('keeps the panel open and reports a clash with a gear item', async () => {
@@ -178,14 +183,15 @@ describe('CatalogQuickAdd with medical stock in scope', () => {
 
     await user.type(screen.getByRole('combobox'), 'Tourniquet');
     await user.click(await screen.findByText('Create “Tourniquet” in Medical Supplies'));
-    await user.selectOptions(await screen.findByLabelText('Medical category'), 'cat-trauma');
+    await user.selectOptions(await screen.findByLabelText(/^Medical category/), 'cat-trauma');
     await user.click(screen.getByRole('button', { name: 'Create & link' }));
 
-    await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalled();
-    });
+    // Said in the panel, where it stays, rather than in a toast.
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'An item with this name already exists outside Medical Supplies.'
+    );
     expect(onAdd).not.toHaveBeenCalled();
-    expect(screen.getByLabelText('Medical category')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Medical category/)).toBeInTheDocument();
   });
 
   it('hands the name back when the medical create is cancelled', async () => {
@@ -197,7 +203,7 @@ describe('CatalogQuickAdd with medical stock in scope', () => {
     await user.click(await screen.findByRole('button', { name: 'Cancel' }));
 
     expect(screen.getByRole('combobox')).toHaveValue('OPA Kit');
-    expect(screen.queryByLabelText('Medical category')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Medical category/)).not.toBeInTheDocument();
   });
 
   it('labels the gear create distinctly when both are offered', async () => {
@@ -264,7 +270,7 @@ describe('MedicalCreatePanel category choice', () => {
     await user.click(await screen.findByText('Create “OPA Kit” in Medical Supplies'));
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Medical category')).toHaveValue('cat-only');
+      expect(screen.getByLabelText(/^Medical category/)).toHaveValue('cat-only');
     });
   });
 
@@ -314,7 +320,7 @@ describe('InventoryItemPicker with medical stock in scope', () => {
 
     await user.type(screen.getByPlaceholderText('Search inventory to link…'), 'OPA Kit');
     await user.click(await screen.findByText('Create “OPA Kit” in Medical Supplies'));
-    await user.selectOptions(await screen.findByLabelText('Medical category'), 'cat-airway');
+    await user.selectOptions(await screen.findByLabelText(/^Medical category/), 'cat-airway');
     await user.click(screen.getByRole('button', { name: 'Create & link' }));
 
     await waitFor(() => {

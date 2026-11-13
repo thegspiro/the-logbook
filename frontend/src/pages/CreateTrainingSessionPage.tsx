@@ -28,6 +28,8 @@ import { useTrainingLinkageData } from '../hooks/useTrainingLinkageData';
 import AttendanceRequirementChecklist from '../components/training/AttendanceRequirementChecklist';
 import { attendanceRequirements } from '../utils/attendanceRequirements';
 import { buildingNotInName } from '../utils/locationLabel';
+import { FormField } from '../components/ux/FormField';
+import { mapServerFieldErrors, type ServerFieldSpec } from '../utils/serverFieldErrors';
 
 const RECURRENCE_PATTERNS: { value: RecurrencePattern; label: string }[] = [
   { value: 'daily', label: 'Daily' },
@@ -72,6 +74,63 @@ const MONTHS = [
    section instead — see the note above <TrainingLinkageFields />. */
 const Optional: React.FC = () => <span className="text-theme-text-muted font-normal">(Optional)</span>;
 
+const LABEL_CLASS = 'text-theme-text-primary mb-2 block text-sm font-semibold';
+
+type SessionField =
+  | 'title'
+  | 'description'
+  | 'start_datetime'
+  | 'end_datetime'
+  | 'recurrence_end_date'
+  | 'recurrence_custom_days'
+  | 'location'
+  | 'location_details'
+  | 'rsvp_deadline'
+  | 'max_attendees'
+  | 'course_id'
+  | 'course_name'
+  | 'course_code'
+  | 'training_type'
+  | 'credit_hours'
+  | 'instructor'
+  | 'issuing_agency'
+  | 'certification_number_prefix'
+  | 'expiration_months';
+
+// Labels and limits from TrainingSessionCreate / RecurringTrainingSessionCreate
+// (backend/app/schemas/training_session.py); `step` is the wizard step the
+// field is on, so a refusal can take the officer back to it.
+const STEP_TITLES = {
+  1: 'Event Details',
+  2: 'Training Info',
+  3: 'Settings',
+  4: 'Review',
+} as const;
+type WizardStep = keyof typeof STEP_TITLES;
+
+const SESSION_FIELDS: Record<SessionField, ServerFieldSpec & { id: string; step: WizardStep }> = {
+  title: { label: 'Training title', maxLength: 200, id: 'session-title', step: 1 },
+  description: { label: 'Description', id: 'session-description', step: 1 },
+  start_datetime: { label: 'Start date & time', id: 'session-start', step: 1 },
+  end_datetime: { label: 'End date & time', id: 'session-end', step: 1 },
+  recurrence_end_date: { label: 'Repeat until', id: 'recurrence-end', step: 1 },
+  recurrence_custom_days: { label: 'Days of the week', id: 'recurrence-day-0', step: 1 },
+  location: { label: 'Location', maxLength: 300, id: 'session-location', step: 1 },
+  location_details: { label: 'Location details', id: 'session-location-details', step: 1 },
+  rsvp_deadline: { label: 'RSVP deadline', id: 'rsvp-deadline', step: 1 },
+  max_attendees: { label: 'Max participants', id: 'session-max-attendees', step: 1 },
+  course_id: { label: 'Course', id: 'session-course', step: 2 },
+  course_name: { label: 'Course name', maxLength: 255, id: 'session-course-name', step: 2 },
+  course_code: { label: 'Course code', maxLength: 50, id: 'session-course-code', step: 2 },
+  training_type: { label: 'Training type', id: 'session-training-type', step: 2 },
+  credit_hours: { label: 'Credit hours', id: 'session-credit-hours', step: 2 },
+  instructor: { label: 'Lead instructor', id: 'session-instructor', api: ['instructor', 'instructor_id'], step: 2 },
+  issuing_agency: { label: 'Issuing agency', maxLength: 255, id: 'session-issuing-agency', step: 2 },
+  certification_number_prefix: { label: 'Cert number prefix', maxLength: 50, id: 'session-cert-prefix', step: 2 },
+  expiration_months: { label: 'Expiration (months)', id: 'session-expiration-months', step: 2 },
+};
+const SESSION_FIELD_ORDER = Object.keys(SESSION_FIELDS) as SessionField[];
+
 /**
  * Create Training Session Page
  *
@@ -92,6 +151,12 @@ const CreateTrainingSessionPage: React.FC = () => {
   const [instructorId, setInstructorId] = useState('');
   const [locations, setLocations] = useState<Location[]>([]);
   const [locationMode, setLocationMode] = useState<'select' | 'other'>('select');
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<SessionField, string | undefined>>>({});
+  // A refusal can sit on another step; the field is focused once that step
+  // has rendered it.
+  const [pendingFocus, setPendingFocus] = useState<string | null>(null);
+  const clearFieldError = (key: SessionField) =>
+    setFieldErrors((prev) => (prev[key] ? { ...prev, [key]: undefined } : prev));
 
   // Recurrence state
   const [isRecurring, setIsRecurring] = useState(false);
@@ -180,6 +245,26 @@ const CreateTrainingSessionPage: React.FC = () => {
     value: TrainingSessionCreate[keyof TrainingSessionCreate]
   ) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+    if (field in SESSION_FIELDS) clearFieldError(field as SessionField);
+  };
+
+  useEffect(() => {
+    if (!pendingFocus) return;
+    document.getElementById(pendingFocus)?.focus();
+    setPendingFocus(null);
+  }, [pendingFocus, currentStep]);
+
+  // In "Other" mode with a location list, the typed location sits in the
+  // second box, so that is where its refusal belongs.
+  const locationTypedInDetails = locationMode === 'other' && locations.length > 0;
+
+  const showFieldErrors = (errors: Partial<Record<SessionField, string>>) => {
+    setFieldErrors(errors);
+    const first = SESSION_FIELD_ORDER.find((key) => errors[key]);
+    if (!first) return;
+    const spec = SESSION_FIELDS[first];
+    setCurrentStep(spec.step);
+    setPendingFocus(first === 'location' && locationTypedInDetails ? SESSION_FIELDS.location_details.id : spec.id);
   };
 
   const selectedCourse = formData.use_existing_course
@@ -196,32 +281,50 @@ const CreateTrainingSessionPage: React.FC = () => {
     return match?.label ?? recurrencePattern;
   };
 
+  // Both values are local "YYYY-MM-DDTHH:mm" strings in one timezone, so they
+  // order correctly as strings. Checked when leaving the first step as well as
+  // on submit: the server refuses the schedule too, but only after the officer
+  // has filled in three more steps (workflow review, training events).
+  const endsAfterStart = formData.end_datetime > formData.start_datetime;
+
+  const handleNext = () => {
+    if (currentStep === 1 && formData.start_datetime && formData.end_datetime && !endsAfterStart) {
+      setFieldErrors((prev) => ({ ...prev, end_datetime: 'End time must be after the start time' }));
+      toast.error('End time must be after the start time');
+      return;
+    }
+    setCurrentStep(currentStep + 1);
+  };
+
   const handleSubmit = async () => {
-    // Validation
-    if (!formData.title || !formData.start_datetime || !formData.end_datetime) {
-      toast.error('Enter a title, start time, and end time');
-      return;
-    }
-
-    if (!formData.use_existing_course && !formData.course_name) {
-      toast.error('Enter a course name or choose an existing course');
-      return;
-    }
-
-    if (formData.use_existing_course && !formData.course_id) {
-      toast.error('Choose a course from the Course Library');
-      return;
-    }
-
-    if (isRecurring && !recurrenceEndDate) {
-      toast.error('Recurrence end date is required');
-      return;
-    }
-
+    // A create form creates nothing until each refusal is fixed (owner,
+    // 2026-11-05). Each is written under its field, the wizard goes back to
+    // the step holding the first one, and the toast says why it moved. The
+    // toast names the step rather than repeating the refusal: focus lands on
+    // the field, whose description already reads it, so a screen reader
+    // would otherwise hear the same sentence twice.
+    const errors: Partial<Record<SessionField, string>> = {};
+    if (!formData.title.trim()) errors.title = 'Enter a title';
+    if (!formData.start_datetime) errors.start_datetime = 'Enter a start time';
+    if (!formData.end_datetime) errors.end_datetime = 'Enter an end time';
+    else if (formData.start_datetime && !endsAfterStart) errors.end_datetime = 'End time must be after the start time';
+    if (isRecurring && !recurrenceEndDate) errors.recurrence_end_date = 'Recurrence end date is required';
     if (isRecurring && recurrencePattern === 'custom' && recurrenceCustomDays.length === 0) {
-      toast.error('Select at least one day for custom recurrence');
+      errors.recurrence_custom_days = 'Select at least one day for custom recurrence';
+    }
+    if (!formData.use_existing_course && !formData.course_name?.trim()) {
+      errors.course_name = 'Enter a course name or choose an existing course';
+    }
+    if (formData.use_existing_course && !formData.course_id) {
+      errors.course_id = 'Choose a course from the Course Library';
+    }
+    const firstError = SESSION_FIELD_ORDER.find((key) => errors[key]);
+    if (firstError) {
+      showFieldErrors(errors);
+      toast.error(`Back to ${STEP_TITLES[SESSION_FIELDS[firstError].step]}: fix the flagged field`);
       return;
     }
+    setFieldErrors({});
 
     setSaving(true);
 
@@ -286,40 +389,86 @@ const CreateTrainingSessionPage: React.FC = () => {
         }
       }
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to create training session'));
       setSaving(false);
+      const mapped = mapServerFieldErrors(err, SESSION_FIELDS);
+      if (mapped && Object.keys(mapped.fieldErrors).length > 0) {
+        showFieldErrors(mapped.fieldErrors);
+        toast.error(
+          mapped.unmatched.length > 0
+            ? mapped.unmatched.join(' ')
+            : 'The training session was not created. Fix the flagged field and try again.'
+        );
+        return;
+      }
+      toast.error(getErrorMessage(err, 'Failed to create training session'));
     }
   };
 
   const steps = [
-    { number: 1, title: 'Event Details', icon: Calendar },
-    { number: 2, title: 'Training Info', icon: GraduationCap },
-    { number: 3, title: 'Settings', icon: FileText },
-    { number: 4, title: 'Review', icon: CheckCircle },
+    { number: 1, title: STEP_TITLES[1], icon: Calendar },
+    { number: 2, title: STEP_TITLES[2], icon: GraduationCap },
+    { number: 3, title: STEP_TITLES[3], icon: FileText },
+    { number: 4, title: STEP_TITLES[4], icon: CheckCircle },
   ];
+
+  type TextKey = 'title' | 'course_name' | 'course_code' | 'issuing_agency' | 'certification_number_prefix';
+  const textField = (key: TextKey, label: React.ReactNode, placeholder: string, required = false) => {
+    const value = formData[key] ?? '';
+    return (
+      <FormField
+        label={label}
+        id={SESSION_FIELDS[key].id}
+        required={required}
+        error={fieldErrors[key]}
+        maxLength={SESSION_FIELDS[key].maxLength}
+        count={value.length}
+        labelClassName={LABEL_CLASS}
+      >
+        {(field) => (
+          <input
+            {...field}
+            type="text"
+            autoComplete="off"
+            value={value}
+            onChange={(e) => updateField(key, e.target.value)}
+            placeholder={placeholder}
+            className="form-input placeholder-theme-text-muted py-3"
+          />
+        )}
+      </FormField>
+    );
+  };
 
   // One field for both course modes. With a library course it used to be
   // hidden, so a course that filled in 0 could not be seen, let alone fixed.
   const creditHoursField = (
-    <div>
-      <label htmlFor="session-credit-hours" className="text-theme-text-primary mb-2 block text-sm font-semibold">
-        Credit Hours <span className="text-red-700">*</span>
-      </label>
-      <input
-        id="session-credit-hours"
-        type="number"
-        step="0.5"
-        min="0"
-        value={formData.credit_hours}
-        onChange={(e) => updateField('credit_hours', parseFloat(e.target.value) || 0)}
-        placeholder="0"
-        aria-describedby="session-credit-hours-help"
-        className="form-input placeholder-theme-text-muted py-3"
-      />
-      <p id="session-credit-hours-help" className="text-theme-text-muted mt-1 text-xs">
-        The training hours each attendee is credited with.
-      </p>
-    </div>
+    <FormField
+      label="Credit Hours"
+      id={SESSION_FIELDS.credit_hours.id}
+      required
+      error={fieldErrors.credit_hours}
+      hint={
+        <>
+          The session&apos;s planned length. Each attendee is credited with the time they actually attended — from
+          check-in to check-out, or as corrected — not this figure.
+        </>
+      }
+      labelClassName={LABEL_CLASS}
+    >
+      {(field) => (
+        <input
+          {...field}
+          type="number"
+          inputMode="decimal"
+          step="0.5"
+          min="0"
+          value={formData.credit_hours}
+          onChange={(e) => updateField('credit_hours', parseFloat(e.target.value) || 0)}
+          placeholder="0"
+          className="form-input placeholder-theme-text-muted py-3"
+        />
+      )}
+    </FormField>
   );
 
   return (
@@ -375,45 +524,46 @@ const CreateTrainingSessionPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Form Content */}
-        <div className="card space-y-8 p-8">
+        {/* Form Content. Enter moves to the next step, and on Review creates. */}
+        <form
+          className="card space-y-8 p-8"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (currentStep < 4) handleNext();
+            else void handleSubmit();
+          }}
+        >
           {/* Step 1: Event Details */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <h2 className="text-theme-text-primary mb-4 text-xl font-bold">Event Details</h2>
 
               {/* Title */}
-              <div>
-                <label htmlFor="session-title" className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                  Training Title <span className="text-red-700">*</span>
-                </label>
-                <input
-                  id="session-title"
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => updateField('title', e.target.value)}
-                  placeholder="e.g., CPR/AED Renewal Training"
-                  className="form-input placeholder-theme-text-muted py-3"
-                />
-              </div>
+              {textField('title', 'Training Title', 'e.g., CPR/AED Renewal Training', true)}
 
               {/* Description */}
-              <div>
-                <label
-                  htmlFor="session-description"
-                  className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                >
-                  Description <Optional />
-                </label>
-                <textarea
-                  id="session-description"
-                  value={formData.description}
-                  onChange={(e) => updateField('description', e.target.value)}
-                  placeholder="Training objectives, topics covered, etc."
-                  rows={4}
-                  className="form-input placeholder-theme-text-muted py-3"
-                />
-              </div>
+              <FormField
+                label={
+                  <>
+                    Description <Optional />
+                  </>
+                }
+                id={SESSION_FIELDS.description.id}
+                error={fieldErrors.description}
+                labelClassName={LABEL_CLASS}
+              >
+                {(field) => (
+                  <textarea
+                    {...field}
+                    value={formData.description}
+                    onChange={(e) => updateField('description', e.target.value)}
+                    placeholder="Training objectives, topics covered, etc."
+                    rows={4}
+                    className="form-input placeholder-theme-text-muted py-3"
+                  />
+                )}
+              </FormField>
 
               {/* Date and Time.
                   These three fields hold a *local wall-clock* string — that is
@@ -425,32 +575,40 @@ const CreateTrainingSessionPage: React.FC = () => {
                   every keystroke, compounding once per interaction. Picking
                   9:00 AM and then changing the minutes left 5:00 AM behind. */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label htmlFor="session-start" className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                    Start Date & Time <span className="text-red-700">*</span>
-                  </label>
-                  <DateTimeQuarterHour
-                    value={formData.start_datetime}
-                    id="session-start"
-                    timeLabel="Start time"
-                    onChange={(v) => updateField('start_datetime', v)}
-                    className="form-input py-3"
-                    required
-                  />
-                </div>
-                <div>
-                  <label htmlFor="session-end" className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                    End Date & Time <span className="text-red-700">*</span>
-                  </label>
-                  <DateTimeQuarterHour
-                    value={formData.end_datetime}
-                    id="session-end"
-                    timeLabel="End time"
-                    onChange={(v) => updateField('end_datetime', v)}
-                    className="form-input py-3"
-                    required
-                  />
-                </div>
+                <FormField
+                  id="session-start"
+                  label="Start Date & Time"
+                  required
+                  error={fieldErrors.start_datetime}
+                  labelClassName={LABEL_CLASS}
+                >
+                  {(field) => (
+                    <DateTimeQuarterHour
+                      value={formData.start_datetime}
+                      {...field}
+                      timeLabel="Start time"
+                      onChange={(v) => updateField('start_datetime', v)}
+                      className="form-input py-3"
+                    />
+                  )}
+                </FormField>
+                <FormField
+                  id="session-end"
+                  label="End Date & Time"
+                  required
+                  error={fieldErrors.end_datetime}
+                  labelClassName={LABEL_CLASS}
+                >
+                  {(field) => (
+                    <DateTimeQuarterHour
+                      value={formData.end_datetime}
+                      {...field}
+                      timeLabel="End time"
+                      onChange={(v) => updateField('end_datetime', v)}
+                      className="form-input py-3"
+                    />
+                  )}
+                </FormField>
               </div>
 
               {/* Quick Duration */}
@@ -495,54 +653,68 @@ const CreateTrainingSessionPage: React.FC = () => {
                 {isRecurring && (
                   <div className="space-y-4 border-l-2 border-red-500/30 pl-6">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div>
-                        <label
-                          htmlFor="recurrence-pattern"
-                          className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                        >
-                          Repeats <span className="text-red-700">*</span>
-                        </label>
-                        <select
-                          id="recurrence-pattern"
-                          value={recurrencePattern}
-                          onChange={(e) => setRecurrencePattern(e.target.value as RecurrencePattern)}
-                          className="form-input py-3"
-                        >
-                          {RECURRENCE_PATTERNS.map((p) => (
-                            <option key={p.value} value={p.value}>
-                              {p.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label
-                          htmlFor="recurrence-end"
-                          className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                        >
-                          Repeat Until <span className="text-red-700">*</span>
-                        </label>
-                        <input
-                          id="recurrence-end"
-                          type="date"
-                          value={recurrenceEndDate}
-                          onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                          className="form-input py-3"
-                        />
-                      </div>
+                      <FormField label="Repeats" id="recurrence-pattern" required labelClassName={LABEL_CLASS}>
+                        {(field) => (
+                          <select
+                            {...field}
+                            value={recurrencePattern}
+                            onChange={(e) => {
+                              setRecurrencePattern(e.target.value as RecurrencePattern);
+                              clearFieldError('recurrence_custom_days');
+                            }}
+                            className="form-input py-3"
+                          >
+                            {RECURRENCE_PATTERNS.map((p) => (
+                              <option key={p.value} value={p.value}>
+                                {p.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </FormField>
+                      <FormField
+                        label="Repeat Until"
+                        id={SESSION_FIELDS.recurrence_end_date.id}
+                        required
+                        error={fieldErrors.recurrence_end_date}
+                        labelClassName={LABEL_CLASS}
+                      >
+                        {(field) => (
+                          <input
+                            {...field}
+                            type="date"
+                            value={recurrenceEndDate}
+                            onChange={(e) => {
+                              setRecurrenceEndDate(e.target.value);
+                              clearFieldError('recurrence_end_date');
+                            }}
+                            className="form-input py-3"
+                          />
+                        )}
+                      </FormField>
                     </div>
 
                     {recurrencePattern === 'custom' && (
-                      <div>
-                        <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                          Days of the Week <span className="text-red-700">*</span>
-                        </label>
+                      <div
+                        role="group"
+                        aria-labelledby="recurrence-days-label"
+                        aria-describedby={fieldErrors.recurrence_custom_days ? 'recurrence-days-error' : undefined}
+                      >
+                        <p id="recurrence-days-label" className={LABEL_CLASS}>
+                          Days of the Week{' '}
+                          <span className="text-red-800 dark:text-red-300" aria-hidden="true">
+                            *
+                          </span>
+                        </p>
                         <div className="flex flex-wrap gap-2">
                           {WEEKDAYS.map((day, index) => (
                             <button
                               key={day}
+                              id={`recurrence-day-${index}`}
                               type="button"
+                              aria-pressed={recurrenceCustomDays.includes(index)}
                               onClick={() => {
+                                clearFieldError('recurrence_custom_days');
                                 setRecurrenceCustomDays((prev) =>
                                   prev.includes(index) ? prev.filter((d) => d !== index) : [...prev, index]
                                 );
@@ -557,6 +729,11 @@ const CreateTrainingSessionPage: React.FC = () => {
                             </button>
                           ))}
                         </div>
+                        {fieldErrors.recurrence_custom_days && (
+                          <p id="recurrence-days-error" className="mt-1 text-sm text-red-800 dark:text-red-300">
+                            {fieldErrors.recurrence_custom_days}
+                          </p>
+                        )}
                       </div>
                     )}
 
@@ -638,86 +815,101 @@ const CreateTrainingSessionPage: React.FC = () => {
                     into two inputs at different heights. No help text sits
                     under either field, so the labels are all that can differ. */}
                 <div className="grid grid-cols-1 items-end gap-4 md:grid-cols-2">
-                  <div>
-                    <label
-                      htmlFor="session-location"
-                      className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                    >
-                      Location <Optional />
-                    </label>
-                    {locations.length > 0 ? (
-                      <select
-                        id="session-location"
-                        value={locationMode === 'other' ? '__other__' : formData.location_id || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === '__other__') {
-                            setLocationMode('other');
-                            updateField('location_id', undefined);
-                            updateField('location', '');
-                          } else if (val) {
-                            setLocationMode('select');
-                            updateField('location_id', val);
-                            updateField('location', undefined);
-                          } else {
-                            setLocationMode('select');
-                            updateField('location_id', undefined);
-                            updateField('location', undefined);
-                          }
-                        }}
-                        className="form-input py-3"
-                      >
-                        <option value="">-- Select a location --</option>
-                        {locations.map((loc) => {
-                          const building = buildingNotInName(loc.name, loc.building);
-                          return (
-                            <option key={loc.id} value={loc.id}>
-                              {loc.name}
-                              {building ? ` (${building})` : ''}
-                              {loc.room_number ? ` #${loc.room_number}` : ''}
-                            </option>
-                          );
-                        })}
-                        <option value="__other__">Other (off-site / enter manually)</option>
-                      </select>
-                    ) : (
-                      <input
-                        id="session-location"
-                        type="text"
-                        value={formData.location || ''}
-                        onChange={(e) => updateField('location', e.target.value)}
-                        placeholder="e.g., Station 1 Training Room"
-                        className="form-input placeholder-theme-text-muted py-3"
-                      />
-                    )}
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="session-location-details"
-                      className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                    >
-                      {locationMode === 'other' ? 'Location Name / Address' : 'Location Details'} <Optional />
-                    </label>
-                    {locationMode === 'other' && locations.length > 0 ? (
-                      <input
-                        id="session-location-details"
-                        type="text"
-                        value={formData.location || ''}
-                        onChange={(e) => updateField('location', e.target.value)}
-                        placeholder="e.g., City Hall — 123 Main St"
-                        className="form-input placeholder-theme-text-muted py-3"
-                      />
-                    ) : (
-                      <input
-                        id="session-location-details"
-                        type="text"
-                        value={formData.location_details || ''}
-                        onChange={(e) => updateField('location_details', e.target.value)}
-                        placeholder="Additional directions or room info"
-                        className="form-input placeholder-theme-text-muted py-3"
-                      />
-                    )}
-                  </div>
+                  <FormField
+                    label={
+                      <>
+                        Location <Optional />
+                      </>
+                    }
+                    id={SESSION_FIELDS.location.id}
+                    error={locationTypedInDetails ? undefined : fieldErrors.location}
+                    maxLength={locations.length > 0 ? undefined : SESSION_FIELDS.location.maxLength}
+                    count={locations.length > 0 ? undefined : (formData.location ?? '').length}
+                    labelClassName={LABEL_CLASS}
+                  >
+                    {(field) =>
+                      locations.length > 0 ? (
+                        <select
+                          {...field}
+                          value={locationMode === 'other' ? '__other__' : formData.location_id || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            clearFieldError('location');
+                            if (val === '__other__') {
+                              setLocationMode('other');
+                              updateField('location_id', undefined);
+                              updateField('location', '');
+                            } else if (val) {
+                              setLocationMode('select');
+                              updateField('location_id', val);
+                              updateField('location', undefined);
+                            } else {
+                              setLocationMode('select');
+                              updateField('location_id', undefined);
+                              updateField('location', undefined);
+                            }
+                          }}
+                          className="form-input py-3"
+                        >
+                          <option value="">-- Select a location --</option>
+                          {locations.map((loc) => {
+                            const building = buildingNotInName(loc.name, loc.building);
+                            return (
+                              <option key={loc.id} value={loc.id}>
+                                {loc.name}
+                                {building ? ` (${building})` : ''}
+                                {loc.room_number ? ` #${loc.room_number}` : ''}
+                              </option>
+                            );
+                          })}
+                          <option value="__other__">Other (off-site / enter manually)</option>
+                        </select>
+                      ) : (
+                        <input
+                          {...field}
+                          type="text"
+                          value={formData.location || ''}
+                          onChange={(e) => updateField('location', e.target.value)}
+                          placeholder="e.g., Station 1 Training Room"
+                          className="form-input placeholder-theme-text-muted py-3"
+                        />
+                      )
+                    }
+                  </FormField>
+                  <FormField
+                    label={
+                      <>
+                        {locationMode === 'other' ? 'Location Name / Address' : 'Location Details'} <Optional />
+                      </>
+                    }
+                    id={SESSION_FIELDS.location_details.id}
+                    error={locationTypedInDetails ? fieldErrors.location : fieldErrors.location_details}
+                    maxLength={locationTypedInDetails ? SESSION_FIELDS.location.maxLength : undefined}
+                    count={locationTypedInDetails ? (formData.location ?? '').length : undefined}
+                    labelClassName={LABEL_CLASS}
+                  >
+                    {(field) =>
+                      locationTypedInDetails ? (
+                        <input
+                          {...field}
+                          type="text"
+                          value={formData.location || ''}
+                          onChange={(e) => updateField('location', e.target.value)}
+                          placeholder="e.g., City Hall — 123 Main St"
+                          className="form-input placeholder-theme-text-muted py-3"
+                        />
+                      ) : (
+                        <input
+                          {...field}
+                          type="text"
+                          value={formData.location_details || ''}
+                          onChange={(e) => updateField('location_details', e.target.value)}
+                          placeholder="Additional directions or room info"
+                          className="form-input placeholder-theme-text-muted py-3"
+                        />
+                      )
+                    }
+                  </FormField>
                 </div>
                 {/* Selected location details */}
                 {locationMode === 'select' &&
@@ -777,37 +969,52 @@ const CreateTrainingSessionPage: React.FC = () => {
 
               {formData.requires_rsvp && (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <label htmlFor="rsvp-deadline" className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                      RSVP Deadline <Optional />
-                    </label>
-                    <DateTimeQuarterHour
-                      value={formData.rsvp_deadline ?? ''}
-                      id="rsvp-deadline"
-                      timeLabel="RSVP deadline time"
-                      onChange={(v) => updateField('rsvp_deadline', v)}
-                      className="form-input py-3"
-                    />
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="session-max-attendees"
-                      className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                    >
-                      Max Participants <Optional />
-                    </label>
-                    <input
-                      id="session-max-attendees"
-                      type="number"
-                      value={formData.max_attendees || ''}
-                      onChange={(e) => {
-                        const n = parseInt(e.target.value);
-                        updateField('max_attendees', Number.isNaN(n) ? undefined : n);
-                      }}
-                      placeholder="Unlimited"
-                      className="form-input placeholder-theme-text-muted py-3"
-                    />
-                  </div>
+                  <FormField
+                    id="rsvp-deadline"
+                    label={
+                      <>
+                        RSVP Deadline <Optional />
+                      </>
+                    }
+                    error={fieldErrors.rsvp_deadline}
+                    labelClassName={LABEL_CLASS}
+                  >
+                    {(field) => (
+                      <DateTimeQuarterHour
+                        value={formData.rsvp_deadline ?? ''}
+                        {...field}
+                        timeLabel="RSVP deadline time"
+                        onChange={(v) => updateField('rsvp_deadline', v)}
+                        className="form-input py-3"
+                      />
+                    )}
+                  </FormField>
+                  <FormField
+                    label={
+                      <>
+                        Max Participants <Optional />
+                      </>
+                    }
+                    id={SESSION_FIELDS.max_attendees.id}
+                    error={fieldErrors.max_attendees}
+                    labelClassName={LABEL_CLASS}
+                  >
+                    {(field) => (
+                      <input
+                        {...field}
+                        type="number"
+                        inputMode="numeric"
+                        min="1"
+                        value={formData.max_attendees || ''}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value);
+                          updateField('max_attendees', Number.isNaN(n) ? undefined : n);
+                        }}
+                        placeholder="Unlimited"
+                        className="form-input placeholder-theme-text-muted py-3"
+                      />
+                    )}
+                  </FormField>
                 </div>
               )}
             </div>
@@ -852,53 +1059,60 @@ const CreateTrainingSessionPage: React.FC = () => {
               {formData.use_existing_course ? (
                 /* Existing Course Selection */
                 <div>
-                  <label htmlFor="session-course" className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                    Select Course <span className="text-red-700">*</span>
-                  </label>
-                  <select
-                    id="session-course"
-                    value={formData.course_id}
-                    onChange={(e) => {
-                      const courseId = e.target.value;
-                      updateField('course_id', courseId);
-                      // Auto-populate fields from selected course
-                      const course = availableCourses.find((c) => c.id === courseId);
-                      if (course) {
-                        // The course's instructor is free text, not a member, so a
-                        // lead instructor picked earlier no longer matches the name.
-                        if (course.instructor) setInstructorId('');
-                        setFormData((prev) => ({
-                          ...prev,
-                          course_id: courseId,
-                          course_name: course.name,
-                          course_code: course.code || '',
-                          training_type: course.training_type || prev.training_type,
-                          // Credit Hours is what a course is worth; Duration is how
-                          // long it runs. A course saved with only a duration is
-                          // worth its duration, the same fallback a submission uses
-                          // (credit_hours or hours_completed). Without it the
-                          // session saved 0 and every attendee was credited nothing.
-                          credit_hours: course.credit_hours ?? course.duration_hours ?? prev.credit_hours,
-                          instructor: course.instructor || prev.instructor,
-                          expiration_months: course.expiration_months ?? prev.expiration_months,
-                          max_attendees: course.max_participants ?? prev.max_attendees,
-                          // Pre-link what the course already declares, without
-                          // overriding a choice the officer has made
-                          category_id: prev.category_id || course.category_ids?.[0] || undefined,
-                          program_id: prev.program_id || course.program_id || undefined,
-                        }));
-                      }
-                    }}
-                    className="form-input py-3"
+                  <FormField
+                    label="Select Course"
+                    id={SESSION_FIELDS.course_id.id}
+                    required
+                    error={fieldErrors.course_id}
+                    labelClassName={LABEL_CLASS}
                   >
-                    <option value="">Select a course...</option>
-                    {availableCourses.map((course) => (
-                      <option key={course.id} value={course.id}>
-                        {course.code ? `${course.code} - ` : ''}
-                        {course.name}
-                      </option>
-                    ))}
-                  </select>
+                    {(field) => (
+                      <select
+                        {...field}
+                        value={formData.course_id}
+                        onChange={(e) => {
+                          const courseId = e.target.value;
+                          updateField('course_id', courseId);
+                          // Auto-populate fields from selected course
+                          const course = availableCourses.find((c) => c.id === courseId);
+                          if (course) {
+                            // The course's instructor is free text, not a member, so a
+                            // lead instructor picked earlier no longer matches the name.
+                            if (course.instructor) setInstructorId('');
+                            setFormData((prev) => ({
+                              ...prev,
+                              course_id: courseId,
+                              course_name: course.name,
+                              course_code: course.code || '',
+                              training_type: course.training_type || prev.training_type,
+                              // Credit Hours is what a course is worth; Duration is how
+                              // long it runs. A course saved with only a duration is
+                              // worth its duration, the same fallback a submission uses
+                              // (credit_hours or hours_completed). Without it the
+                              // session saved 0 and every attendee was credited nothing.
+                              credit_hours: course.credit_hours ?? course.duration_hours ?? prev.credit_hours,
+                              instructor: course.instructor || prev.instructor,
+                              expiration_months: course.expiration_months ?? prev.expiration_months,
+                              max_attendees: course.max_participants ?? prev.max_attendees,
+                              // Pre-link what the course already declares, without
+                              // overriding a choice the officer has made
+                              category_id: prev.category_id || course.category_ids?.[0] || undefined,
+                              program_id: prev.program_id || course.program_id || undefined,
+                            }));
+                          }
+                        }}
+                        className="form-input py-3"
+                      >
+                        <option value="">Select a course...</option>
+                        {availableCourses.map((course) => (
+                          <option key={course.id} value={course.id}>
+                            {course.code ? `${course.code} - ` : ''}
+                            {course.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </FormField>
                   {/* Show selected course details */}
                   {formData.course_id &&
                     (() => {
@@ -925,91 +1139,74 @@ const CreateTrainingSessionPage: React.FC = () => {
                 /* New Course Fields */
                 <>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div>
-                      <label
-                        htmlFor="session-course-name"
-                        className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                      >
-                        Course Name <span className="text-red-700">*</span>
-                      </label>
-                      <input
-                        id="session-course-name"
-                        type="text"
-                        value={formData.course_name}
-                        onChange={(e) => updateField('course_name', e.target.value)}
-                        placeholder="e.g., CPR/AED for Healthcare Providers"
-                        className="form-input placeholder-theme-text-muted py-3"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="session-course-code"
-                        className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                      >
+                    {textField('course_name', 'Course Name', 'e.g., CPR/AED for Healthcare Providers', true)}
+                    {textField(
+                      'course_code',
+                      <>
                         Course Code <Optional />
-                      </label>
-                      <input
-                        id="session-course-code"
-                        type="text"
-                        value={formData.course_code}
-                        onChange={(e) => updateField('course_code', e.target.value)}
-                        placeholder="e.g., CPR-HCP"
-                        className="form-input placeholder-theme-text-muted py-3"
-                      />
-                    </div>
+                      </>,
+                      'e.g., CPR-HCP'
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div>
-                      <label
-                        htmlFor="session-training-type"
-                        className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                      >
-                        Training Type <span className="text-red-700">*</span>
-                      </label>
-                      <select
-                        id="session-training-type"
-                        value={formData.training_type}
-                        onChange={(e) => updateField('training_type', e.target.value)}
-                        className="form-input py-3"
-                      >
-                        <option value="certification">Certification</option>
-                        <option value="continuing_education">Continuing Education</option>
-                        <option value="skills_practice">Skills Practice</option>
-                        <option value="orientation">Orientation</option>
-                        <option value="refresher">Refresher</option>
-                        <option value="specialty">Specialty</option>
-                      </select>
-                    </div>
+                    <FormField
+                      label="Training Type"
+                      id={SESSION_FIELDS.training_type.id}
+                      required
+                      error={fieldErrors.training_type}
+                      labelClassName={LABEL_CLASS}
+                    >
+                      {(field) => (
+                        <select
+                          {...field}
+                          value={formData.training_type}
+                          onChange={(e) => updateField('training_type', e.target.value)}
+                          className="form-input py-3"
+                        >
+                          <option value="certification">Certification</option>
+                          <option value="continuing_education">Continuing Education</option>
+                          <option value="skills_practice">Skills Practice</option>
+                          <option value="orientation">Orientation</option>
+                          <option value="refresher">Refresher</option>
+                          <option value="specialty">Specialty</option>
+                        </select>
+                      )}
+                    </FormField>
                     {creditHoursField}
                   </div>
 
-                  <div>
-                    <label
-                      htmlFor="session-instructor"
-                      className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                    >
-                      Lead Instructor <Optional />
-                    </label>
-                    <select
-                      id="session-instructor"
-                      value={instructorId}
-                      onChange={(e) => {
-                        setInstructorId(e.target.value);
-                        const member = members.find((m) => m.id === e.target.value);
-                        updateField('instructor', member ? `${member.first_name} ${member.last_name}` : '');
-                      }}
-                      className="form-input py-3"
-                    >
-                      <option value="">Select instructor...</option>
-                      {members.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.first_name} {m.last_name}
-                          {m.rank ? ` (${formatRank(m.rank)})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <FormField
+                    label={
+                      <>
+                        Lead Instructor <Optional />
+                      </>
+                    }
+                    id={SESSION_FIELDS.instructor.id}
+                    error={fieldErrors.instructor}
+                    labelClassName={LABEL_CLASS}
+                  >
+                    {(field) => (
+                      <select
+                        {...field}
+                        value={instructorId}
+                        onChange={(e) => {
+                          setInstructorId(e.target.value);
+                          const member = members.find((m) => m.id === e.target.value);
+                          updateField('instructor', member ? `${member.first_name} ${member.last_name}` : '');
+                        }}
+                        className="form-input py-3"
+                      >
+                        <option value="">Select instructor...</option>
+                        {members.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.first_name} {m.last_name}
+                            {m.rank ? ` (${formatRank(m.rank)})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </FormField>
                 </>
               )}
 
@@ -1066,58 +1263,47 @@ const CreateTrainingSessionPage: React.FC = () => {
                 {formData.issues_certification && (
                   <div className="space-y-4 pl-7">
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                      <div>
-                        <label
-                          htmlFor="session-issuing-agency"
-                          className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                        >
+                      {textField(
+                        'issuing_agency',
+                        <>
                           Issuing Agency <Optional />
-                        </label>
-                        <input
-                          id="session-issuing-agency"
-                          type="text"
-                          value={formData.issuing_agency}
-                          onChange={(e) => updateField('issuing_agency', e.target.value)}
-                          placeholder="e.g., American Heart Association"
-                          className="form-input placeholder-theme-text-muted py-3"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          htmlFor="session-cert-prefix"
-                          className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                        >
+                        </>,
+                        'e.g., American Heart Association'
+                      )}
+                      {textField(
+                        'certification_number_prefix',
+                        <>
                           Cert Number Prefix <Optional />
-                        </label>
+                        </>,
+                        'e.g., AHA-CPR-'
+                      )}
+                    </div>
+                    <FormField
+                      label={
+                        <>
+                          Expiration (months) <Optional />
+                        </>
+                      }
+                      id={SESSION_FIELDS.expiration_months.id}
+                      error={fieldErrors.expiration_months}
+                      labelClassName={LABEL_CLASS}
+                    >
+                      {(field) => (
                         <input
-                          id="session-cert-prefix"
-                          type="text"
-                          value={formData.certification_number_prefix}
-                          onChange={(e) => updateField('certification_number_prefix', e.target.value)}
-                          placeholder="e.g., AHA-CPR-"
+                          {...field}
+                          type="number"
+                          inputMode="numeric"
+                          min="1"
+                          value={formData.expiration_months || ''}
+                          onChange={(e) => {
+                            const n = parseInt(e.target.value);
+                            updateField('expiration_months', Number.isNaN(n) ? undefined : n);
+                          }}
+                          placeholder="e.g., 24 (for 2 years)"
                           className="form-input placeholder-theme-text-muted py-3"
                         />
-                      </div>
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="session-expiration-months"
-                        className="text-theme-text-primary mb-2 block text-sm font-semibold"
-                      >
-                        Expiration (months) <Optional />
-                      </label>
-                      <input
-                        id="session-expiration-months"
-                        type="number"
-                        value={formData.expiration_months || ''}
-                        onChange={(e) => {
-                          const n = parseInt(e.target.value);
-                          updateField('expiration_months', Number.isNaN(n) ? undefined : n);
-                        }}
-                        placeholder="e.g., 24 (for 2 years)"
-                        className="form-input placeholder-theme-text-muted py-3"
-                      />
-                    </div>
+                      )}
+                    </FormField>
                   </div>
                 )}
               </div>
@@ -1279,7 +1465,10 @@ const CreateTrainingSessionPage: React.FC = () => {
                   )}
                 </ReviewSection>
 
-                {(formData.category_id || formData.program_id || formData.requirement_id) && (
+                {(formData.category_id ||
+                  formData.program_id ||
+                  formData.requirement_id ||
+                  (formData.attendance_requirement_ids ?? []).length > 0) && (
                   <ReviewSection title="Requirement & Program Links">
                     {formData.category_id && (
                       <ReviewItem label="Category" value={categoryName ?? 'Selected category'} />
@@ -1289,6 +1478,16 @@ const CreateTrainingSessionPage: React.FC = () => {
                     )}
                     {formData.program_id && <ReviewItem label="Program" value={programName ?? 'Selected program'} />}
                     {formData.phase_id && <ReviewItem label="Phase" value={phaseName ?? 'Selected phase'} />}
+                    {/* Ticked on step 2 and saved, but the review left them out
+                        (workflow review W80-12). */}
+                    {(formData.attendance_requirement_ids ?? []).length > 0 && (
+                      <ReviewItem
+                        label="Counts toward attendance"
+                        value={(formData.attendance_requirement_ids ?? [])
+                          .map((id) => requirements.find((r) => r.id === id)?.name ?? 'Selected requirement')
+                          .join(', ')}
+                      />
+                    )}
                   </ReviewSection>
                 )}
 
@@ -1311,6 +1510,7 @@ const CreateTrainingSessionPage: React.FC = () => {
           {/* Navigation Buttons */}
           <div className="border-theme-surface-border flex flex-wrap justify-between gap-3 border-t pt-6">
             <button
+              type="button"
               onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
               disabled={currentStep === 1}
               className="bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary rounded-lg px-6 py-3 font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
@@ -1319,14 +1519,13 @@ const CreateTrainingSessionPage: React.FC = () => {
             </button>
 
             {currentStep < 4 ? (
-              <button onClick={() => setCurrentStep(currentStep + 1)} className="btn-primary px-6 py-3 font-medium">
+              <button key="next" type="submit" className="btn-primary px-6 py-3 font-medium">
                 Next
               </button>
             ) : (
               <button
-                onClick={() => {
-                  void handleSubmit();
-                }}
+                key="create"
+                type="submit"
                 disabled={saving}
                 className="btn-success flex items-center space-x-2 px-6 py-3 font-medium disabled:cursor-not-allowed"
               >
@@ -1344,7 +1543,7 @@ const CreateTrainingSessionPage: React.FC = () => {
               </button>
             )}
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

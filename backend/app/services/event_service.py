@@ -26,11 +26,19 @@ from sqlalchemy.orm.attributes import set_committed_value
 
 from app.core.config import settings
 from app.models.admin_hours import EVENT_TYPES_WITHOUT_ADMIN_HOURS
+from app.models.attendance_waiver import (
+    AttendanceWaiverRequest,
+    AttendanceWaiverStatus,
+    AttendanceWaiverWorkflow,
+)
 from app.models.event import (
     EVENT_LIFECYCLE_CUSTOM_FIELD_KEYS,
+    AttendancePetitionStatus,
     AttendeeVisibility,
     CheckInWindowType,
     Event,
+    EventAttendancePetition,
+    EventExternalAttendee,
     EventRSVP,
     EventTemplate,
     EventType,
@@ -55,7 +63,10 @@ from app.schemas.event import (
     RSVPCreate,
     RSVPOverride,
 )
-from app.schemas.training_session import TrainingSessionAttach
+from app.schemas.training_session import (
+    TrainingSessionAttach,
+    TrainingSessionDetailsUpdate,
+)
 from app.services.admin_hours_service import AdminHoursService
 from app.services.email_policy import (
     EmailKind,
@@ -237,6 +248,10 @@ class SeriesPhaseGateWarning(Exception):
 # until a department leader reopens the event. The endpoint layer turns this
 # into a 409 (conflicting state) rather than the 400 it gives a bad request —
 # nothing about the caller's payload is wrong, the event is closed.
+# The start every "check-in window closed" refusal shares, so a caller can
+# tell that refusal apart without matching the whole sentence.
+CHECK_IN_CLOSED_PREFIX = "Check-in has closed for this event."
+
 ATTENDANCE_LOCKED_PREFIX = "ATTENDANCE_LOCKED::"
 
 # Fields on an update payload that change what attendance means. Editing the
@@ -429,6 +444,21 @@ class FinalizeOutcome:
     error: Optional[str] = None
 
 
+def _training_details_from(
+    update_data: Dict[str, Any],
+) -> Optional[TrainingSessionDetailsUpdate]:
+    """Take an edit's training details out of its dumped payload.
+
+    Not an event column, so it must not reach the setattr loop. Rebuilt from
+    the dump, which holds only the keys the client sent, so the rebuilt
+    model's own exclude_unset still tells a key left out from a null.
+    """
+    raw = update_data.pop("training_details", None)
+    if raw is None:
+        return None
+    return TrainingSessionDetailsUpdate.model_validate(raw)
+
+
 class EventService:
     """Service for event management"""
 
@@ -555,13 +585,10 @@ class EventService:
 
         self.db.add(event)
         if training is not None and training_details is not None:
-            # One commit for both, so an event is never left behind without
-            # the details the officer picked for it.
-            await self.db.flush()
-            self.db.add(
-                training.build_session_for_event(
-                    event, training_details, course, organization_id, created_by
-                )
+            # One commit for all of it, so an event is never left behind
+            # without the details the officer picked for it.
+            await training.add_sessions_for_events(
+                [event], training_details, course, organization_id, created_by
             )
         await self.db.commit()
         await self.db.refresh(event)
@@ -870,6 +897,12 @@ class EventService:
             for item in candidates
             if self._was_expected_at(item["event"], user, leaves, tz)
         ]
+        # An approved request to be excused from the session takes it off the
+        # list for the same reason a waiver does: the member was excused.
+        excused = await self._excused_event_ids(
+            organization_id, user_id, [str(item["event"].id) for item in expected]
+        )
+        expected = [item for item in expected if str(item["event"].id) not in excused]
         waivers = await self._active_training_waivers(organization_id, user_id)
         if not expected or not waivers:
             return expected
@@ -885,6 +918,31 @@ class EventService:
                 waivers,
             )
         ]
+
+    async def _excused_event_ids(
+        self,
+        organization_id: UUID | str,
+        user_id: UUID | str,
+        event_ids: List[str],
+    ) -> Set[str]:
+        """The events among ``event_ids`` an approved waiver request excuses.
+
+        Approved includes a denial the Chief overrode. The grading rule is the
+        same: the excusal names the event (training_compliance._waiver_excuses).
+        """
+        if not event_ids:
+            return set()
+        result = await self.db.execute(
+            select(AttendanceWaiverRequest.event_id).where(
+                AttendanceWaiverRequest.organization_id == str(organization_id),
+                AttendanceWaiverRequest.user_id == str(user_id),
+                AttendanceWaiverRequest.workflow
+                == AttendanceWaiverWorkflow.TRAINING_SESSION,
+                AttendanceWaiverRequest.status == AttendanceWaiverStatus.APPROVED,
+                AttendanceWaiverRequest.event_id.in_(event_ids),
+            )
+        )
+        return {str(event_id) for (event_id,) in result.all()}
 
     async def _active_training_waivers(
         self, organization_id: UUID | str, user_id: UUID | str
@@ -1167,8 +1225,10 @@ class EventService:
         if event.is_cancelled:
             raise ValueError("Cannot update cancelled event")
 
-        # Update fields
+        # Update fields. training_details is not an event column: it is the
+        # event's training session, applied once the event's own fields are.
         update_data = event_data.model_dump(exclude_unset=True)
+        training_details = _training_details_from(update_data)
 
         # EV-17 / XC-1: same guard as create_event — a client-supplied
         # attachment file_path must name a file under this org's own upload
@@ -1212,6 +1272,8 @@ class EventService:
         if end_dt <= start_dt:
             raise ValueError("End date must be after start date")
 
+        await self._refuse_orphaning_check_ins(event, update_data)
+
         # Check for location double-booking if location or times are changing
         check_location_id = update_data.get("location_id", event.location_id)
         if check_location_id:
@@ -1248,6 +1310,14 @@ class EventService:
         training_follow_up = await self._follow_training_changes(
             event, was_training, old_title, organization_id
         )
+        if training_details is not None:
+            await self._apply_training_details(
+                [event],
+                training_details,
+                organization_id,
+                updated_by,
+                previous_titles={str(event.id): old_title},
+            )
 
         if updated_by:
             event.updated_by = str(updated_by)
@@ -1267,6 +1337,129 @@ class EventService:
             )
 
         return event
+
+    async def _apply_training_details(
+        self,
+        events: List[Event],
+        details: TrainingSessionDetailsUpdate,
+        organization_id: UUID | str,
+        updated_by: UUID | str | None,
+        previous_titles: Optional[Dict[str, str]] = None,
+    ) -> None:
+        """Apply an edit's training details to each event's session.
+
+        Called after the events' own fields are written (and a renamed
+        event's session has followed its title), so the details are judged
+        against the event the save leaves. Refuses the whole edit, before
+        anything is written, when it would change a finalized event's
+        session beyond its attendance links, and names how many of the
+        finalized events it would change.
+        """
+        # Local import: training_session_service imports this module.
+        from app.services.training_session_service import TrainingSessionService
+
+        # A series edit leaves an occurrence re-typed away from Training alone.
+        training_events = [e for e in events if e.event_type == EventType.TRAINING]
+        if not training_events:
+            raise ValueError("Training details can only be added to a Training event")
+        training = TrainingSessionService(self.db)
+        plans = await training.plan_session_details(
+            training_events, details, organization_id, previous_titles
+        )
+        locked = [plan for plan in plans if plan.locked_fields]
+        if locked:
+            # Session column names: a fixed set, and the refusal is sent
+            # without safe_error_detail's length cap (attendance_locked_error).
+            locked_labels = sorted(
+                {f.replace("_", " ") for plan in locked for f in plan.locked_fields}
+            )
+            what = "changing " + ", ".join(locked_labels)
+            if len(events) > 1:
+                finalized = sum(
+                    1 for e in training_events if attendance_is_finalized(e)
+                )
+                what += (
+                    f" across this series ({len(locked)} of {finalized} "
+                    + (
+                        "finalized occurrence"
+                        if finalized == 1
+                        else "finalized occurrences"
+                    )
+                    + " would change)"
+                )
+            raise ValueError(attendance_locked_error(what))
+        await training.apply_session_details(plans, organization_id, updated_by)
+
+    async def _refuse_orphaning_check_ins(
+        self, event: Event, update_data: Dict[str, Any]
+    ) -> None:
+        """Refuse a schedule change that would strand existing check-ins.
+
+        A check-in is a timestamp, and crediting clamps an early one forward
+        to the scheduled start (``_credited_check_in_time``). Moving an event
+        a week out therefore turned a tap at the original drill into a full
+        session's credit for the new date, for people who may never attend
+        it (workflow review, training events). A correction that still
+        contains every check-in — 10 AM fixed to 10:30 — goes through; a
+        move that leaves any check-in outside the new check-in window is
+        refused until those check-ins are dealt with (owner decision,
+        2026-11-08).
+
+        The window is the one check-in itself enforces, with the hour of
+        early grace that flexible and window events allow, so a check-in the
+        event would accept is never called stranded.
+        """
+        window_fields = {
+            "start_datetime",
+            "end_datetime",
+            "check_in_window_type",
+            "check_in_minutes_before",
+            "check_in_minutes_after",
+        }
+        if not window_fields.intersection(update_data):
+            return
+
+        def proposed(name: str) -> Any:
+            return update_data.get(name, getattr(event, name, None))
+
+        current = self._get_check_in_window(event)
+        # A transient Event, never added to the session: only the window
+        # arithmetic reads it.
+        moved = Event(
+            check_in_window_type=proposed("check_in_window_type"),
+            check_in_minutes_before=proposed("check_in_minutes_before"),
+            check_in_minutes_after=proposed("check_in_minutes_after"),
+            start_datetime=proposed("start_datetime"),
+            end_datetime=proposed("end_datetime"),
+            actual_start_time=event.actual_start_time,
+            actual_end_time=event.actual_end_time,
+        )
+        opens, closes = self._get_check_in_window(moved)
+        if (opens, closes) == current:
+            return
+        window_type = moved.check_in_window_type or CheckInWindowType.FLEXIBLE
+        if window_type != CheckInWindowType.STRICT:
+            opens -= timedelta(hours=1)
+
+        rows = await self.db.execute(
+            select(EventRSVP.checked_in_at).where(
+                EventRSVP.event_id == str(event.id),
+                EventRSVP.checked_in_at.is_not(None),
+            )
+        )
+        stranded = 0
+        for (checked_in_at,) in rows.all():
+            at = self._as_utc(checked_in_at)
+            if at is not None and not opens <= at <= closes:
+                stranded += 1
+        if stranded:
+            members = "member is" if stranded == 1 else "members are"
+            raise ValueError(
+                f"{stranded} {members} already checked in at a time outside "
+                "the new schedule, and would be credited for the new date. "
+                "Postpone the event instead, which starts its attendance "
+                "afresh, or remove or correct those check-ins first."
+            )
 
     async def complete_deferred_writes(self, organization_id: UUID | str) -> None:
         """Run what ``defer_commit`` writes owe once their batch has committed.
@@ -1362,6 +1555,7 @@ class EventService:
             )
 
         update_data = event_data.model_dump(exclude_unset=True)
+        training_details = _training_details_from(update_data)
 
         # The times are the anchor's, not the series'. Written verbatim, as the
         # other fields are, they stamped the anchor's date onto every later
@@ -1469,9 +1663,11 @@ class EventService:
         updated_count = 0
 
         training_follow_ups = []
+        previous_titles: Dict[str, str] = {}
         for event in future_events:
             was_training = self.event_credits_training(event)
             old_title = event.title
+            previous_titles[str(event.id)] = old_title
             old_start = event.start_datetime
             for field, value in update_data.items():
                 if field == "custom_fields":
@@ -1497,6 +1693,19 @@ class EventService:
                 event.updated_by = str(updated_by)
             event.updated_at = now
             updated_count += 1
+
+        # The training details reach every Training occurrence the event
+        # fields did, judged after them so a renamed series is compared under
+        # its new title. A finalized occurrence takes only attendance links;
+        # any other change to one refuses the whole save, before the commit.
+        if training_details is not None and future_events:
+            await self._apply_training_details(
+                list(future_events),
+                training_details,
+                organization_id,
+                updated_by,
+                previous_titles=previous_titles,
+            )
 
         if updated_count > 0:
             await self.db.commit()
@@ -1549,6 +1758,7 @@ class EventService:
         pending_reversals = await self._revoke_event_attendance_credit(
             event_id, organization_id, event=event
         )
+        await self._void_waiver_requests([event], organization_id, "cancelled")
 
         event.is_cancelled = True
         event.cancellation_reason = reason
@@ -1607,6 +1817,228 @@ class EventService:
                 )
 
         return event
+
+    async def postpone_event(
+        self,
+        event_id: UUID | str,
+        organization_id: UUID | str,
+        new_start: datetime,
+        new_end: datetime,
+        reason: str,
+        send_notifications: bool = True,
+        postponed_by: UUID | str | None = None,
+    ) -> Optional[Event]:
+        """Move an event to a new time and start its attendance afresh.
+
+        The difference from an edit of the schedule (workflow review W80-11):
+        an edit keeps the event's attendance, and is refused when that would
+        leave check-ins outside the new times (``_refuse_orphaning_check_ins``).
+        A postponement says the event did not happen at its old time, so it
+        clears every check-in and correction — member and guest — removes the
+        admin hours and training credit they produced, and resets the reminder
+        markers so reminders go out again for the new time. RSVPs are kept:
+        who meant to come is still the best guess at who will.
+
+        ``postponed_from_start`` is written once, at the first postponement,
+        so a drill moved twice still says where it was originally scheduled.
+
+        Safe to run twice: a request naming the times the event already has,
+        on an event already postponed, is the same postponement delivered again
+        (a double tap, a retried request) and returns the event unchanged
+        without a second round of notices (CLAUDE.md pitfall #36).
+        """
+        now = datetime.now(dt_timezone.utc)
+        new_start = self._as_utc(new_start) or new_start
+        new_end = self._as_utc(new_end) or new_end
+        if new_end <= new_start:
+            raise ValueError("The new end must be after the new start")
+
+        # Room bookings before the event row, the order update_event uses
+        # (EV-26), so a postponement and an edit of an event in the same room
+        # cannot each hold a lock the other waits on.
+        await LocationService(self.db).lock_room_bookings(str(organization_id))
+        result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+            .options(selectinload(Event.location_obj), selectinload(Event.rsvps))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        event: Optional[Event] = result.scalar_one_or_none()
+        if not event:
+            return None
+
+        if (
+            event.postponed_at is not None
+            and self._as_utc(event.start_datetime) == new_start
+            and self._as_utc(event.end_datetime) == new_end
+        ):
+            return event
+
+        if event.is_cancelled:
+            raise ValueError("A cancelled event cannot be postponed")
+        if attendance_is_finalized(event):
+            raise ValueError(attendance_locked_error("postponing the event"))
+        if new_start <= now:
+            raise ValueError("A postponed event must start in the future")
+        if (
+            self._as_utc(event.start_datetime) == new_start
+            and self._as_utc(event.end_datetime) == new_end
+        ):
+            raise ValueError("Choose a new time to postpone the event to")
+
+        # A pending "I was there" request is about the old time; deciding it
+        # after the move would credit attendance at a time the event no
+        # longer has. The officer settles them first.
+        pending = (
+            await self.db.execute(
+                select(func.count())
+                .select_from(EventAttendancePetition)
+                .where(
+                    EventAttendancePetition.event_id == str(event.id),
+                    EventAttendancePetition.status == AttendancePetitionStatus.PENDING,
+                )
+            )
+        ).scalar_one()
+        if pending:
+            requests = "request is" if pending == 1 else "requests are"
+            raise ValueError(
+                f"{pending} attendance {requests} waiting on this event. "
+                "Approve or decline them before postponing it."
+            )
+
+        if event.location_id:
+            overlapping = await LocationService(self.db).check_overlapping_events(
+                location_id=event.location_id,
+                organization_id=str(organization_id),
+                start_datetime=new_start,
+                end_datetime=new_end,
+                exclude_event_id=str(event.id),
+            )
+            if overlapping:
+                titles = ", ".join(f'"{e.title}"' for e in overlapping[:3])
+                raise ValueError(
+                    f"Location is already booked during the new time. "
+                    f"Conflicting event(s): {titles}"
+                )
+
+        old_start = event.start_datetime
+        pending_reversals = await self._revoke_event_attendance_credit(
+            event.id, organization_id, event=event
+        )
+
+        for rsvp in event.rsvps:
+            rsvp.checked_in = False
+            rsvp.checked_in_at = None
+            rsvp.checked_out_at = None
+            rsvp.attendance_duration_minutes = None
+            rsvp.early_check_in_minutes = None
+            rsvp.override_check_in_at = None
+            rsvp.override_check_out_at = None
+            rsvp.override_duration_minutes = None
+            rsvp.overridden_by = None
+            rsvp.overridden_at = None
+        guests = (
+            (
+                await self.db.execute(
+                    select(EventExternalAttendee).where(
+                        EventExternalAttendee.event_id == str(event.id),
+                        EventExternalAttendee.organization_id == str(organization_id),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for guest in guests:
+            guest.checked_in = False
+            guest.checked_in_at = None
+
+        event.start_datetime = new_start
+        event.end_datetime = new_end
+        event.actual_start_time = None
+        event.actual_end_time = None
+        if event.postponed_from_start is None:
+            event.postponed_from_start = old_start
+        event.postponed_at = now
+        event.postponement_reason = reason
+        # Deep copy before reassigning (CLAUDE.md pitfall #12). Only the
+        # markers that describe the old time go: series_end_reminder_sent is
+        # about the series, and attendance_finalized cannot be set here.
+        custom = copy.deepcopy(event.custom_fields or {})
+        for marker in ("reminders_sent", "validation_notification_sent"):
+            custom.pop(marker, None)
+        event.custom_fields = custom
+        if postponed_by:
+            event.updated_by = str(postponed_by)
+        event.updated_at = now
+
+        notify_ids = [
+            str(rsvp.user_id)
+            for rsvp in event.rsvps
+            if rsvp.status in (RSVPStatus.GOING, RSVPStatus.MAYBE)
+        ]
+
+        await self.db.commit()
+        await self.db.refresh(event)
+        await self._reverse_pipeline_after_commit(pending_reversals, organization_id)
+
+        if send_notifications and notify_ids:
+            await self._notify_postponement(
+                event, notify_ids, organization_id, old_start, reason
+            )
+        return event
+
+    async def _notify_postponement(
+        self,
+        event: Event,
+        user_ids: List[str],
+        organization_id: UUID | str,
+        old_start: datetime,
+        reason: str,
+    ) -> None:
+        """Bell, then email, each non-fatal: the postponement is committed,
+        and a failed notice must not turn it into an error response."""
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        was = format_in_org_timezone(old_start, org)
+        now_at = format_in_org_timezone(event.start_datetime, org)
+        try:
+            notifications_service = NotificationsService(self.db)
+            for uid in user_ids:
+                await notifications_service.log_notification(
+                    organization_id=organization_id,
+                    log_data={
+                        "channel": NotificationChannel.IN_APP,
+                        "category": "event_update",
+                        "recipient_id": uid,
+                        "subject": f"Event Postponed: {event.title}",
+                        "message": (
+                            f'"{event.title}" has been postponed from {was} '
+                            f"to {now_at}. Reason: {reason}"
+                        ),
+                        "action_url": f"/events/{event.id}",
+                    },
+                )
+        except Exception as e:
+            logger.error("Failed to notify postponement of event {}: {}", event.id, e)
+        # Email is the channel of record (CLAUDE.md pitfall 18), gated by the
+        # member's "Event changes and cancellations" switch like any change.
+        try:
+            await self.email_event_change(
+                event,
+                user_ids,
+                organization_id,
+                "postponed",
+                postponed_from=old_start,
+                postponement_reason=reason,
+            )
+        except Exception as e:
+            logger.error("Failed to email postponement of event {}: {}", event.id, e)
 
     async def _event_email_recipients(
         self,
@@ -1707,9 +2139,15 @@ class EventService:
         user_ids: List[str],
         organization_id: UUID | str,
         changes_desc: str,
+        *,
+        postponed_from: Optional[datetime] = None,
+        postponement_reason: Optional[str] = None,
     ) -> int:
         """Email the members in *user_ids* that *event*'s title, time or
         location changed, showing the details as they now stand.
+
+        With *postponed_from*, the notice says the event was postponed, from
+        when and why, rather than asking the member to spot what changed.
 
         There is no template for this notice: it is built inline through
         ``wrap_email_body``. Gated by the member's "Event changes and
@@ -1737,11 +2175,19 @@ class EventService:
             else:
                 when += " to " + format_in_org_timezone(event.end_datetime, org)
         url = f"{settings.FRONTEND_URL}/events/{event.id}"
-        intro = (
-            f'The event "{event.title}" has been updated ({changes_desc}). '
-            f"Please review the latest details."
-        )
+        if postponed_from is not None:
+            intro = (
+                f'The event "{event.title}" has been postponed. It was '
+                f"scheduled for {format_in_org_timezone(postponed_from, org)}."
+            )
+        else:
+            intro = (
+                f'The event "{event.title}" has been updated ({changes_desc}). '
+                f"Please review the latest details."
+            )
         facts = [("When", when)]
+        if postponement_reason:
+            facts.append(("Reason", postponement_reason))
         if location_name:
             facts.append(("Where", location_name))
 
@@ -1819,6 +2265,7 @@ class EventService:
         pending_reversals = await self._void_training_credit_before_removal(
             list(events), organization_id
         )
+        await self._void_waiver_requests(list(events), organization_id, "cancelled")
 
         now = datetime.now(dt_timezone.utc)
         cancelled_count = 0
@@ -1904,6 +2351,23 @@ class EventService:
         )
 
         self.db.add(new_event)
+        if self.event_credits_training(source_event):
+            # Local import: training_session_service imports this module.
+            from app.services.training_session_service import TrainingSessionService
+
+            # The copy files its credit and counts toward attendance as the
+            # source does. A copy is a session that has not been held, so it
+            # is not finalized whatever the source is.
+            training = TrainingSessionService(self.db)
+            source_session, link_ids = await training.source_for_cloning(source_event)
+            if source_session is not None:
+                await training.clone_sessions_for_events(
+                    source_session,
+                    link_ids,
+                    source_event.title,
+                    [new_event],
+                    created_by,
+                )
         await self.db.commit()
         await self.db.refresh(new_event)
 
@@ -1981,10 +2445,10 @@ class EventService:
             custom_fields.pop("series_end_reminder_sent", None)
         successor.custom_fields = custom_fields or None
 
-        # The parent's organizer pair is the one a rolling series copies onto
-        # new occurrences (a "this and future" handover always writes it), so
-        # an upcoming successor takes it. A successor that already happened
-        # keeps the organizer who ran it: past occurrences are a record.
+        # The parent's organizer pair is the series' current one (a "this and
+        # future" handover always writes it), so an upcoming successor takes
+        # it. A successor that already happened keeps the organizer who ran
+        # it: past occurrences are a record.
         if _utc_instant(successor.start_datetime) >= now:
             successor.organizer_id = old_parent.organizer_id
             successor.alternate_organizer_id = old_parent.alternate_organizer_id
@@ -2036,6 +2500,7 @@ class EventService:
         pending_reversals = await self._revoke_event_attendance_credit(
             event_id, organization_id, event=event
         )
+        await self._void_waiver_requests([event], organization_id, "deleted")
 
         await self.db.delete(event)
         try:
@@ -2138,6 +2603,7 @@ class EventService:
         pending_reversals = await self._void_training_credit_before_removal(
             list(events), organization_id
         )
+        await self._void_waiver_requests(list(events), organization_id, "deleted")
 
         for event in events:
             await self.db.delete(event)
@@ -3112,6 +3578,14 @@ class EventService:
             )
             self.db.add(rsvp)
 
+        if rsvp.checked_in:
+            # As check_in_attendee: the placeholder a self check-in starts
+            # (W80-14). It skips a member who already holds the record.
+            await self.db.flush()
+            await self._auto_create_training_record(
+                event, rsvp, user_id, organization_id
+            )
+
         await self.db.commit()
         await self.db.refresh(rsvp)
 
@@ -3300,6 +3774,23 @@ class EventService:
                 pending.append((training, session_ref))
         return pending
 
+    async def _void_waiver_requests(
+        self, events: List[Event], organization_id: UUID | str, cause: str
+    ) -> None:
+        """Void the pending waiver requests of events being cancelled or deleted.
+
+        Inside the caller's transaction, while it holds the events: a pending
+        request is about a session that will no longer be held. Approved and
+        denied requests are kept (attendance_waiver_service).
+        """
+        # Local import: the waiver engine imports this module's models and
+        # services through the training compliance chain.
+        from app.services.attendance_waiver_service import void_pending_for_events
+
+        await void_pending_for_events(
+            self.db, str(organization_id), [str(e.id) for e in events], cause
+        )
+
     @staticmethod
     async def _reverse_pipeline_after_commit(
         pending: List[Tuple[Any, Tuple[str, Optional[str]]]],
@@ -3422,6 +3913,16 @@ class EventService:
             event, now, tz_name
         )
         if not is_valid:
+            # The shared message tells a member to ask an event organizer,
+            # which said to the organizer sent them in a circle (workflow
+            # review W80-8). Here the caller is the organizer, so name the
+            # control that records a late arrival.
+            if error_msg and error_msg.startswith(CHECK_IN_CLOSED_PREFIX):
+                return None, (
+                    "Check-in has closed for this event. To record a member "
+                    "who was there, use Add a member and enter when they "
+                    "arrived and left."
+                )
             return None, error_msg
 
         # Verify user belongs to organization
@@ -3460,6 +3961,12 @@ class EventService:
 
         rsvp.checked_in = True
         rsvp.checked_in_at = datetime.now(dt_timezone.utc)
+
+        # The same placeholder a self check-in starts, under the same lock: an
+        # officer checking a member in left them with no in-progress record
+        # until finalize (workflow review W80-14).
+        await self.db.flush()
+        await self._auto_create_training_record(event, rsvp, user_id, organization_id)
 
         await self.db.commit()
         await self.db.refresh(rsvp)
@@ -4790,7 +5297,7 @@ class EventService:
         if now > check_in_end:
             return (
                 False,
-                "Check-in has closed for this event. Ask an event organizer to "
+                f"{CHECK_IN_CLOSED_PREFIX} Ask an event organizer to "
                 "record a late check-in.",
                 None,
             )
@@ -5521,9 +6028,9 @@ class EventService:
         recurrence_exceptions = event_data.pop("recurrence_exceptions", None)
         raw_training_details = event_data.pop("training_details", None)
 
-        # Training details become one training session per occurrence. The
-        # schema already refuses them on a rolling series (the job extending
-        # it copies events, not sessions); the type is checked here.
+        # Training details become one training session per occurrence. On a
+        # rolling series the job that extends it copies the latest
+        # occurrence's session and attendance links on to each new one.
         training = None
         training_details = None
         course = None
@@ -5533,8 +6040,6 @@ class EventService:
 
             if event_data.get("event_type") != EventType.TRAINING.value:
                 return [], "Training details can only be added to a Training event"
-            if rolling_recurrence:
-                return [], "Training details can't be added to a rolling series"
             training_details = TrainingSessionAttach(**raw_training_details)
             training = TrainingSessionService(self.db)
             course, error = await training.resolve_attach_details(
@@ -5672,17 +6177,9 @@ class EventService:
             created_events.append(child_event)
 
         if training is not None and training_details is not None:
-            await self.db.flush()
-            for occurrence in created_events:
-                self.db.add(
-                    training.build_session_for_event(
-                        occurrence,
-                        training_details,
-                        course,
-                        organization_id,
-                        created_by,
-                    )
-                )
+            await training.add_sessions_for_events(
+                created_events, training_details, course, organization_id, created_by
+            )
 
         await self.db.commit()
 

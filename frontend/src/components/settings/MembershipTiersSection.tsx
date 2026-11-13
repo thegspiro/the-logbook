@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Loader2, Plus, Trash2, Users } from 'lucide-react';
+import { Link } from 'react-router';
 import type { MembershipTier } from '../../types/user';
 import { MEMBER_STATUS_LABELS, MemberStatus, RejoinServiceCredit } from '../../constants/enums';
 import { isBuiltinStatus } from '../../utils/membership';
@@ -316,15 +317,20 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
 
                   {isOpen && (
                     <div className="border-theme-surface-border space-y-3 border-t p-4">
-                      <label className="flex items-start gap-2">
-                        <input
-                          type="checkbox"
-                          className="form-checkbox mt-0.5"
-                          checked={tier.benefits.voting_eligible !== false}
-                          onChange={(e) => onUpdateBenefits(tier.id, { voting_eligible: e.target.checked })}
-                        />
-                        <span className="text-theme-text-secondary text-sm">Can vote in elections</span>
-                      </label>
+                      {/* Who may vote, and the meeting attendance it takes, is set per
+                        member type in Election Settings. A tier's stored voting
+                        benefits are left as they are: they only seed a department's
+                        first per-type rules (voter_rules.rules_from_v1). */}
+                      <p className="text-theme-text-secondary text-sm">
+                        Who may vote, and the meeting attendance it takes, is set for each member type in{' '}
+                        <Link
+                          to="/elections/settings?tab=eligibility"
+                          className="text-theme-text-primary font-medium underline"
+                        >
+                          Election Settings
+                        </Link>
+                        .
+                      </p>
 
                       <label className="flex items-start gap-2">
                         <input
@@ -341,65 +347,6 @@ const MembershipTiersSection: React.FC<MembershipTiersSectionProps> = ({
                           </span>
                         </span>
                       </label>
-
-                      <label className="flex items-start gap-2">
-                        <input
-                          type="checkbox"
-                          className="form-checkbox mt-0.5"
-                          checked={tier.benefits.voting_requires_meeting_attendance === true}
-                          onChange={(e) =>
-                            onUpdateBenefits(tier.id, { voting_requires_meeting_attendance: e.target.checked })
-                          }
-                        />
-                        <span className="text-theme-text-secondary text-sm">
-                          Must meet a meeting-attendance threshold to vote
-                        </span>
-                      </label>
-
-                      {tier.benefits.voting_requires_meeting_attendance === true && (
-                        <div className="flex flex-wrap gap-3 pl-6">
-                          <div className="w-32">
-                            <label
-                              className="text-theme-text-muted mb-1 block text-xs font-medium"
-                              htmlFor={`pct-${tier.id}`}
-                            >
-                              Minimum %
-                            </label>
-                            <input
-                              id={`pct-${tier.id}`}
-                              type="number"
-                              min={0}
-                              max={100}
-                              className="form-input"
-                              value={tier.benefits.voting_min_attendance_pct ?? 0}
-                              onChange={(e) =>
-                                onUpdateBenefits(tier.id, { voting_min_attendance_pct: Number(e.target.value) || 0 })
-                              }
-                            />
-                          </div>
-                          <div className="w-40">
-                            <label
-                              className="text-theme-text-muted mb-1 block text-xs font-medium"
-                              htmlFor={`months-${tier.id}`}
-                            >
-                              Over the last (months)
-                            </label>
-                            <input
-                              id={`months-${tier.id}`}
-                              type="number"
-                              min={1}
-                              max={60}
-                              className="form-input"
-                              value={tier.benefits.voting_attendance_period_months ?? 12}
-                              onChange={(e) =>
-                                onUpdateBenefits(tier.id, {
-                                  voting_attendance_period_months: Number(e.target.value) || 12,
-                                })
-                              }
-                            />
-                          </div>
-                        </div>
-                      )}
 
                       <label className="flex items-start gap-2">
                         <input

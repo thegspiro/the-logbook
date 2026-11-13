@@ -74,7 +74,7 @@ describe('CreateTrainingSessionPage lead instructor', () => {
 
     await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Ladder Drill');
     await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
+    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
     await user.type(screen.getByPlaceholderText('e.g., CPR/AED for Healthcare Providers'), 'Ladder Operations');
@@ -98,7 +98,7 @@ describe('CreateTrainingSessionPage lead instructor', () => {
 
     await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Ladder Drill');
     await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
+    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.type(screen.getByPlaceholderText('e.g., CPR/AED for Healthcare Providers'), 'Ladder Operations');
     await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -119,7 +119,7 @@ describe('CreateTrainingSessionPage lead instructor', () => {
 
     await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Ladder Drill');
     await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
+    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
     expect(await screen.findByDisplayValue('Select instructor...')).toBeInTheDocument();
@@ -224,7 +224,8 @@ describe('CreateTrainingSessionPage with a course from the library', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.click(screen.getByRole('button', { name: /Create Training Session/ }));
 
-    expect(toastError).toHaveBeenCalledWith('Choose a course from the Course Library');
+    expect(toastError).toHaveBeenCalledWith('Back to Training Info: fix the flagged field');
+    expect(await screen.findByText('Choose a course from the Course Library')).toBeInTheDocument();
     expect(createSession).not.toHaveBeenCalled();
   });
 
@@ -271,6 +272,41 @@ describe('CreateTrainingSessionPage field names', () => {
     expect(await screen.findByLabelText(/^Location/, { selector: 'select' })).toBeInTheDocument();
     expect(screen.getByLabelText(/Location Details/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Max Participants/)).toBeInTheDocument();
+  });
+});
+
+describe('CreateTrainingSessionPage schedule check', () => {
+  beforeEach(() => {
+    tzState.value = 'UTC';
+    getUsers.mockReset();
+    getUsers.mockResolvedValue([]);
+    getCourses.mockReset();
+    getCourses.mockResolvedValue([]);
+    getLocations.mockReset();
+    getLocations.mockResolvedValue([]);
+    getBasicApparatus.mockReset();
+    getBasicApparatus.mockResolvedValue([]);
+    toastError.mockReset();
+  });
+
+  // Workflow review, training events: a 7 PM start with a 6 PM end went through
+  // all four steps and was refused only by the server on the last click.
+  it('keeps the officer on the first step when the end is before the start', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.type(screen.getByLabelText(/Training Title/), 'Ladder Drill');
+    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
+    await user.selectOptions(screen.getByLabelText('Start time hour'), '7');
+    await user.selectOptions(screen.getByLabelText('Start time AM/PM'), 'PM');
+    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
+    await user.selectOptions(screen.getByLabelText('End time hour'), '6');
+    await user.selectOptions(screen.getByLabelText('End time AM/PM'), 'PM');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(toastError).toHaveBeenCalledWith('End time must be after the start time');
+    expect(screen.getByLabelText(/Training Title/)).toBeInTheDocument();
+    expect(screen.queryByText('Course Selection')).not.toBeInTheDocument();
   });
 });
 
@@ -330,7 +366,7 @@ describe('CreateTrainingSessionPage attendance requirements', () => {
   const fillAndCreate = async (user: ReturnType<typeof userEvent.setup>, tick: boolean) => {
     await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Company Drill');
     await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
-    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-01');
+    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await user.type(screen.getByPlaceholderText('e.g., CPR/AED for Healthcare Providers'), 'Company Drill');
     if (tick) await user.click(await screen.findByRole('checkbox', { name: /Company drills/ }));
@@ -348,6 +384,40 @@ describe('CreateTrainingSessionPage attendance requirements', () => {
     await fillAndCreate(user, true);
 
     expect(createSession).toHaveBeenCalledWith(expect.objectContaining({ attendance_requirement_ids: ['req-drills'] }));
+  });
+
+  // Workflow review W80-12: the ticked requirements were saved but the review
+  // step did not list them, so the officer confirmed without seeing them.
+  it('lists the ticked attendance requirements on the review step', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Company Drill');
+    await user.type(screen.getByLabelText(/Start Date & Time/), '2030-05-01');
+    await user.type(screen.getByLabelText(/End Date & Time/), '2030-05-02');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.type(screen.getByPlaceholderText('e.g., CPR/AED for Healthcare Providers'), 'Company Drill');
+    await user.click(await screen.findByRole('checkbox', { name: /Company drills/ }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(screen.getByText('Counts toward attendance:')).toBeInTheDocument();
+    expect(screen.getByText('Company drills')).toBeInTheDocument();
+  });
+
+  // Workflow review W80-13: the hint said attendees are credited these hours;
+  // finalize credits the time each one actually attended.
+  it('explains that credit follows the time attended, not the credit hours', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<CreateTrainingSessionPage />);
+
+    await user.type(screen.getByPlaceholderText('e.g., CPR/AED Renewal Training'), 'Company Drill');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+
+    expect(screen.getByLabelText(/Credit Hours/)).toHaveAccessibleDescription(
+      /planned length\. Each attendee is credited with the time they actually attended/
+    );
+    expect(screen.queryByText('The training hours each attendee is credited with.')).not.toBeInTheDocument();
   });
 
   it('leaves the session optional when nothing is ticked', async () => {

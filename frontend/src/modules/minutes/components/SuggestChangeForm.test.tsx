@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockAdd = vi.fn();
@@ -16,6 +16,7 @@ vi.mock('react-hot-toast', () => ({
   },
 }));
 
+import { renderWithRouter } from '../../../test/utils';
 import { SuggestChangeForm } from './SuggestChangeForm';
 
 describe('SuggestChangeForm', () => {
@@ -31,7 +32,7 @@ describe('SuggestChangeForm', () => {
   });
 
   const open = (sectionKey?: string) =>
-    render(
+    renderWithRouter(
       <SuggestChangeForm
         minutesId="m1"
         sectionKey={sectionKey}
@@ -46,21 +47,55 @@ describe('SuggestChangeForm', () => {
     expect(screen.getByRole('form', { name: 'Suggest a change to New Business' })).toBeInTheDocument();
   });
 
-  it('will not send until there is something to say', async () => {
+  it('will not send until there is something to say, and says so on the field', async () => {
     const user = userEvent.setup();
     open('new_business');
-    expect(screen.getByRole('button', { name: 'Send suggestion' })).toBeDisabled();
-    await user.type(screen.getByLabelText('What should change?'), 'ab');
-    expect(screen.getByRole('button', { name: 'Send suggestion' })).toBeDisabled();
-    await user.type(screen.getByLabelText('What should change?'), 'c');
-    expect(screen.getByRole('button', { name: 'Send suggestion' })).toBeEnabled();
+    await user.type(screen.getByLabelText(/^What should change\?/), 'ab');
+    await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
+
+    const comment = screen.getByLabelText(/^What should change\?/);
+    expect(comment).toHaveAccessibleDescription('Say what should change, in at least 3 characters.');
+    expect(comment).toHaveAttribute('aria-invalid', 'true');
+    expect(mockAdd).not.toHaveBeenCalled();
+  });
+
+  it('puts a 422 on its field and announces it', async () => {
+    mockAdd.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'proposed_text', message: 'String should have at most 10000 characters' }] },
+      },
+    });
+    const user = userEvent.setup();
+    open('new_business');
+    await user.type(screen.getByLabelText(/^What should change\?/), 'The vote was 5-1');
+    await user.type(screen.getByLabelText(/Suggested wording/), 'Motion carried 5-1.');
+    await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
+
+    const wording = screen.getByLabelText(/Suggested wording/);
+    await waitFor(() =>
+      expect(wording).toHaveAccessibleDescription('Suggested wording is too long — keep it to 10000 characters.')
+    );
+    expect(wording).toHaveAttribute('aria-invalid', 'true');
+    expect(onSent).not.toHaveBeenCalled();
+  });
+
+  it('asks before Cancel throws typed words away', async () => {
+    const user = userEvent.setup();
+    open('new_business');
+    await user.type(screen.getByLabelText(/^What should change\?/), 'The vote was 5-1');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^What should change\?/)).toHaveValue('The vote was 5-1');
   });
 
   it('sends the section, the comment and the optional wording, then reports it sent', async () => {
     const user = userEvent.setup();
     open('new_business');
 
-    await user.type(screen.getByLabelText('What should change?'), '  The vote was 5-1  ');
+    await user.type(screen.getByLabelText(/^What should change\?/), '  The vote was 5-1  ');
     await user.type(screen.getByLabelText(/Suggested wording/), 'Motion carried 5-1.');
     await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
 
@@ -77,7 +112,7 @@ describe('SuggestChangeForm', () => {
     const user = userEvent.setup();
     open();
 
-    await user.type(screen.getByLabelText('What should change?'), 'Please add the guest list');
+    await user.type(screen.getByLabelText(/^What should change\?/), 'Please add the guest list');
     await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
 
     expect(mockAdd).toHaveBeenCalledWith('m1', {
@@ -92,11 +127,11 @@ describe('SuggestChangeForm', () => {
     const user = userEvent.setup();
     open('new_business');
 
-    await user.type(screen.getByLabelText('What should change?'), 'Too late maybe');
+    await user.type(screen.getByLabelText(/^What should change\?/), 'Too late maybe');
     await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
 
     await waitFor(() => expect(toastError).toHaveBeenCalled());
-    expect(screen.getByLabelText('What should change?')).toHaveValue('Too late maybe');
+    expect(screen.getByLabelText(/^What should change\?/)).toHaveValue('Too late maybe');
     expect(onSent).not.toHaveBeenCalled();
   });
 
@@ -110,7 +145,7 @@ describe('SuggestChangeForm', () => {
 
   describe('editing the section’s own text', () => {
     const edit = (original = { content: '<p>Three bids today.</p>', format: 'html' as 'html' | 'text' }) =>
-      render(
+      renderWithRouter(
         <SuggestChangeForm
           minutesId="m1"
           sectionKey="old_business"
@@ -130,9 +165,14 @@ describe('SuggestChangeForm', () => {
     });
 
     it('will not send an untouched copy', async () => {
+      const user = userEvent.setup();
       edit();
       await screen.findByRole('textbox', { name: 'Your edit of Old Business' });
-      expect(screen.getByRole('button', { name: 'Send suggestion' })).toBeDisabled();
+      await user.click(screen.getByRole('button', { name: 'Send suggestion' }));
+      expect(screen.getByLabelText('Comment (optional)')).toHaveAccessibleDescription(
+        'Edit the text, or say in a comment what should change.'
+      );
+      expect(mockAdd).not.toHaveBeenCalled();
     });
 
     it('sends the edited copy as tracked changes, with no comment needed', async () => {

@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
+import { ConfirmProvider } from '@/contexts/ConfirmContext';
 import type { BudgetRequest, FiscalYearOption } from '../types';
 
 vi.mock('@/hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
@@ -86,7 +87,10 @@ const requests = [
 const renderPage = () =>
   render(
     <MemoryRouter initialEntries={['/finance/budget-requests/review']}>
-      <BudgetRequestReviewPage />
+      {/* The decision dialogs ask before discarding, as the app shell's provider lets them. */}
+      <ConfirmProvider>
+        <BudgetRequestReviewPage />
+      </ConfirmProvider>
     </MemoryRouter>
   );
 
@@ -145,6 +149,20 @@ describe('Budget request review — the list', () => {
     expect(screen.getByText('Line c')).toBeInTheDocument();
     expect(screen.queryByText('Line a')).not.toBeInTheDocument();
     expect(screen.getByRole('row', { name: 'Totals' })).toHaveTextContent('Total (1 request)');
+  });
+
+  // Owner decision, 2026-11-11: a draft may be blank; it reads as such, and
+  // the total counts what has been entered.
+  it('shows a blank draft as not entered yet, and totals around it', async () => {
+    list.mockResolvedValue([
+      request('a', 'draft', { requestedAmount: '250.00' }),
+      request('z', 'draft', { requestedAmount: null, justification: null }),
+    ]);
+    renderPage();
+    await screen.findByText('No submitted requests for FY2027.');
+    await userEvent.setup().selectOptions(screen.getByLabelText('Status'), 'draft');
+    expect(await row('Line z')).toHaveTextContent('Not entered yet');
+    expect(screen.getByRole('row', { name: 'Totals' })).toHaveTextContent('$250.00');
   });
 
   it('says when nothing is waiting', async () => {

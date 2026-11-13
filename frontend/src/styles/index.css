@@ -683,7 +683,7 @@
   /* A list of record cards — one card per event, document, course, etc.
 
      Columns follow the width the grid itself has, never the viewport. The
-     sidebar is expanded from lg up, so a viewport rule like
+     sidebar is expanded from md up, so a viewport rule like
      `sm:grid-cols-2 lg:grid-cols-3` packed three ~200px cards into a 1024px
      tablet and pushed their footer buttons off the card edge.
 
@@ -1343,6 +1343,7 @@
  * clips it) and one tier class on the table. It reflows to cards whenever the
  * wrapper is narrower than that tier, whatever the screen or sidebar state:
  *
+ *   rwd-table-narrow  under 32rem
  *   rwd-table-wide    under 64rem
  *   rwd-table-xwide   under 78rem
  *   rwd-table-2xwide  under 96rem
@@ -1360,7 +1361,7 @@
  * column) and ~62rem in WebKit with touch, and a 60rem first attempt left a
  * 1280px touch screen — card exactly 60rem — on a table 33px too wide.
  *
- * The three blocks below must stay identical apart from the tier class and the
+ * The four blocks below must stay identical apart from the tier class and the
  * width; `rwdTableTiers.test.ts` holds them to that. They repeat the base
  * reflow rather than changing it, so every other reflow table keeps its 767px
  * switch, with two differences:
@@ -1380,6 +1381,45 @@
 }
 
 @media screen {
+  @container rwd-table (width < 32rem) {
+    .rwd-table.rwd-table-narrow thead {
+      display: none;
+    }
+    .rwd-table.rwd-table-narrow :is(tbody, tfoot) tr {
+      display: block;
+      padding: 0.25rem 0;
+      border-bottom: 1px solid var(--color-theme-surface-border);
+    }
+    .rwd-table.rwd-table-narrow :is(tbody, tfoot) tr:last-child {
+      border-bottom: 0;
+    }
+    .rwd-table.rwd-table-narrow :is(tbody td, tfoot td, tfoot th) {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.375rem 0.75rem;
+      text-align: right;
+    }
+    .rwd-table.rwd-table-narrow :is(tbody td, tfoot td, tfoot th)[data-label]::before {
+      content: attr(data-label);
+      font-weight: 600;
+      text-align: left;
+      color: var(--color-theme-text-muted);
+    }
+    .rwd-table.rwd-table-narrow :is(tbody td, tfoot td, tfoot th):not([data-label]) {
+      display: none;
+    }
+    .rwd-table.rwd-table-narrow :is(tbody td, tfoot td, tfoot th).rwd-table-lead {
+      display: block;
+      text-align: left;
+      padding-bottom: 0.125rem;
+    }
+    .rwd-table.rwd-table-narrow :is(tbody td, tfoot td, tfoot th).rwd-table-lead::before {
+      content: none;
+    }
+  }
+
   @container rwd-table (width < 64rem) {
     .rwd-table.rwd-table-wide thead {
       display: none;
@@ -2015,20 +2055,35 @@
   }
 }
 
-/* Set on the AppLayout root in the LEFT-navigation layout only, so a page-level
- * fixed element can start where the content column starts instead of spanning
- * the side navigation. That layout offsets its content with a matching
- * `md:ml-64` while the nav is `fixed left-0 z-40`, so a viewport-anchored bar
- * at the same z-index paints over the nav's bottom. The top-navigation layout
- * renders content full width and never sets this, so the same element stays
- * edge to edge there. Must stay in step with SideNavigation's own `w-64` and
- * AppLayout's `md:ml-64`. */
+/* Set on the AppLayout root in the LEFT-navigation layout only: the width the
+ * side navigation occupies, which everything beside it reads. AppLayout offsets
+ * its content column by it, paints the nav's background down the full page at
+ * it, and a page-level fixed element starts there instead of spanning the nav
+ * (the nav is `fixed left-0 z-40`, so a viewport-anchored bar at the same
+ * z-index paints over the nav's bottom). The top-navigation layout renders
+ * content full width and never sets this, so the same element stays edge to
+ * edge there. Must stay in step with SideNavigation's `w-64` and its collapsed
+ * `w-20`. */
 .has-side-nav {
   --side-nav-width: 0px;
 }
 @media (min-width: 768px) {
   .has-side-nav {
     --side-nav-width: 16rem;
+  }
+}
+
+/* The collapsed icon rail. The content column used to keep its 16rem offset
+ * when the nav shrank to `w-20`, leaving an empty 11rem stripe between the
+ * rail and the page. AppLayout mirrors SideNavigation's state onto its root as
+ * `data-nav-collapsed` — an attribute on the element that owns the variable,
+ * not a `:has()` match on a descendant, so collapsing restyles the root once
+ * rather than asking the engine to watch the nav. This lives in its own 768px
+ * block because below it the nav is an off-canvas drawer and the width must
+ * stay 0px. */
+@media (min-width: 768px) {
+  .has-side-nav[data-nav-collapsed='true'] {
+    --side-nav-width: 5rem;
   }
 }
 

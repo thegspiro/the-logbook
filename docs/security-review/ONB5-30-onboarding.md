@@ -1,49 +1,221 @@
-# Security Review — Feature 30: Onboarding (passes 7–12)
+# Security Review — Feature 30: Onboarding (passes 7–13)
 
-**Prefix:** `ONB5` · **Rotation pass:** 12 (prior: module-audit iteration 25,
+**Prefix:** `ONB5` · **Rotation pass:** 13 (prior: module-audit iteration 25,
 app-review B25 (4 passes), security-review pass 1 — PR #1913 + follow-up
 (`docs/security-review/ONB2-30-onboarding.md`), pass 2 — PR #2093
 (`docs/security-review/ONB-30-onboarding.md`), passes 3–5 — PRs #2358, #2521,
 #2898 (`docs/security-review/ONB3-30-onboarding.md`), pass 6 — PR #2996,
 pass 7 — PR #3381, pass 8 — PR #3517 (both `docs/security-review/ONB4-30-onboarding.md`
 and this file), pass 9 — PR #3658 + recovery PR #3686 (ONB6-30-1/2/3, both this
-file), pass 10 — PR #3785, pass 11 — PR #3856) · **Reviewed:** 2026-10-17
-(pass 7), 2026-10-21 (pass 8), 2026-10-24 (pass 9, watchdog pickup),
-2026-10-25 (pass 9 recovery), 2026-10-27 (pass 10, watchdog pickup),
-2026-10-30 (pass 11, watchdog pickup), 2026-11-04 (pass 12, watchdog pickup,
-this PR)
+file), pass 10 — PR #3785, pass 11 — PR #3856, pass 12 — PR #4003) ·
+**Reviewed:** 2026-10-17 (pass 7), 2026-10-21 (pass 8), 2026-10-24 (pass 9,
+watchdog pickup), 2026-10-25 (pass 9 recovery), 2026-10-27 (pass 10, watchdog
+pickup), 2026-10-30 (pass 11, watchdog pickup), 2026-11-04 (pass 12, watchdog
+pickup), 2026-11-11 (pass 13, this PR)
 
-**Backend:** `backend/app/api/v1/onboarding.py` (now 3,200 L, 26
-unauthenticated bootstrap routes — unchanged count from pass 7/8, re-enumerated
-by AST this pass), `backend/app/services/onboarding.py`,
-`backend/app/models/onboarding.py`, `backend/app/utils/onboarding_security.py`,
-`backend/app/api/v1/email_test_helper.py`, `backend/app/utils/email_providers.py`,
-`backend/app/utils/microsoft_oauth.py`, `backend/app/services/template_service.py`,
-`backend/app/services/org_template_service.py`,
-`backend/app/services/org_template_registry.py`,
-`backend/app/services/key_custody_service.py`,
-`backend/app/services/system_notices.py` (51 new lines this pass — a backup
-system notice; reviewed in full even though it sits behind a post-onboarding
-permission, same reasoning as pass 7),
-`backend/app/api/v1/endpoints/system_notices.py`,
-`backend/app/schemas/system_notices.py`,
-`backend/app/utils/upload_scanning.py`. Also touched this pass, in scope only
-because the diff passes through onboarding's own persist function:
-`backend/app/schemas/organization.py` (`FileStorageSettings`,
-`encrypt_settings_secrets`/`decrypt_settings_secrets`,
-`_FILE_STORAGE_SECRET_FIELDS`), `backend/app/services/google_drive_storage.py`
-(read for context on how the service-account key is used downstream, not a
-full line-by-line re-review — that storage backend belongs to a different
-rotation feature and was engineered/tested on its own, `test_google_drive_storage.py`).
-**Frontend:** `frontend/src/modules/onboarding/` — new this pass:
-`components/OnboardingGate.tsx`, `utils/onboardingGateState.ts` (both read in
-full); diffed and read at each changed line: `routes.tsx`,
-`pages/FileStorageConfiguration.tsx`, `pages/FileStorageChoice.tsx`,
-`services/api-client.ts`, `types/index.ts`, and the a11y-only token-rename
-diffs in `pages/ApparatusSetup.tsx`, `pages/OnboardingCheck.tsx`,
-`pages/RoleSetup.tsx`, `pages/SetupComplete.tsx`.
-**Migrations:** none in this pass's window (last onboarding-owned migration
-remains `20261009_1045_7e1a3c94d2b6_add_encryption_key_custody.py`, pass 7).
+**Backend (pass 13):** `backend/app/api/v1/onboarding.py` (3,295 L, **26**
+unauthenticated bootstrap routes — unchanged count and auth posture from
+passes 7–12, re-enumerated by AST this pass, not carried forward),
+`backend/app/services/onboarding.py`, `backend/app/models/onboarding.py`,
+`backend/app/utils/onboarding_security.py`,
+`backend/app/api/v1/email_test_helper.py`. Touched this pass, in scope only
+because the diff passes through onboarding's own route/service code: the new
+`app.services.s3_storage` import and its `endpoint_allowed`/
+`ENDPOINT_NOT_ALLOWED` symbols (read in full), `app.models.member_position_term`'s
+`close_terms_for_positions` (read in full),
+`app.services.location_service`'s `release_location_references` and
+`save_system_named_location` (read in full), `app.services.grant_federal_programs`'s
+`seed_federal_program_opportunities` (read in full),
+`backend/app/schemas/organization.py` (diffed in full against pass 12's
+baseline; the only onboarding-relevant symbol, `FileStorageStatusResponse`,
+gained a field — `allowed_s3_endpoints` — that is read only by the
+authenticated settings endpoint, never by onboarding's own persist function;
+every other change in that file's diff is Finance/Minutes/Membership-tier
+schema work from unrelated features that merely shares the file).
+**Frontend (pass 13):** `frontend/src/modules/onboarding/` — new this pass:
+`components/ExpiredSessionBanner.tsx` (read in full); diffed and read at each
+changed line: `components/OnboardingGate.tsx`, `config/moduleRegistry.ts`,
+`config/seededPositionGrants.ts`, `pages/FileStorageConfiguration.tsx`.
+**Migrations:** none owned by this feature in this pass's window (last
+onboarding-owned migration remains
+`20261009_1045_7e1a3c94d2b6_add_encryption_key_custody.py`, pass 7); the
+`public_info`-defaults backfill (`20261103_2316_289504a34d3c`, noted as
+pending at pass 12) is confirmed merged and unchanged.
+
+---
+
+## Pass 13 (2026-11-11) — dedicated rotation session, 0 fixed, 0 new findings; five independent cross-feature touches verified good
+
+**Step 0.** `list_pull_requests` (state=open) returned no PR whose head
+branch starts with `claude/security-review-`. PR #4238 (Feature 29, Reports &
+analytics, pass 15) had already merged (`413ab36e6`). Row 30 (Onboarding) was
+the first `⬜` in the rotation table on a freshly-pulled `main`.
+
+**Scope check.** Pass 12 landed as PR #4003, merge commit `4c52bfee2`.
+`git diff --stat 4c52bfee2..HEAD`, restricted to this feature's full declared
+file list (backend + frontend, as pass 7–12 defined it), found a real diff in
+exactly two backend files (`onboarding.py`: 32 lines; `services/onboarding.py`:
+129 lines) plus a 114-line diff in the shared `schemas/organization.py`, and a
+7-file frontend diff under `modules/onboarding/`. Every other declared file
+(`models/onboarding.py`, `utils/onboarding_security.py`,
+`email_test_helper.py`, `email_providers.py`, `microsoft_oauth.py`,
+`template_service.py`, `org_template_service.py`, `org_template_registry.py`,
+`key_custody_service.py`, `system_notices.py` and its endpoint/schema,
+`upload_scanning.py`, `google_drive_storage.py`) is byte-identical since pass 12.
+
+All of the real deltas trace to five already-merged, independent engineering
+commits (none from this security-review rotation), each re-verified against
+its security properties:
+
+- **S3 endpoint allowlisted at onboarding save time
+  (`onboarding.py:2051-2063`, `save_file_storage_config`).** A new check
+  rejects a submitted `s3EndpointUrl` that is not exactly one of the
+  operator's `S3_ALLOWED_ENDPOINTS` entries (`s3_storage.endpoint_allowed`),
+  mirroring `organization_service.py`'s `_refuse_unlisted_s3_endpoint` for
+  the authenticated Settings screen — same function, same error message
+  (`s3_storage.ENDPOINT_NOT_ALLOWED`), same owner decision (2026-11-01).
+  Read `s3_storage.py` in full: the allowlist check alone (not the full
+  `check_endpoint` SSRF/private-address guard) is deliberate at save time —
+  by design the stricter check runs again, every time, wherever a client is
+  actually built (`file_storage_service`'s short-lived config cache), which
+  is what the module's own docstring states and is unchanged by this diff.
+  Onboarding's check is therefore consistent with the one place this control
+  already existed, not a new or weaker mechanism. The route still refuses
+  once onboarding is complete (`needs_onboarding()`, ONB-3's guard,
+  unaffected). **Verified good, no finding.**
+- **A bulk role delete now closes open position terms first
+  (`onboarding.py:2844,2861-2869`, `save_session_roles`).** Landed by the
+  "Members: keep a dated history of positions held" feature. A bulk
+  `DELETE` bypasses the ORM's before-flush hook that normally closes a
+  deleted position's open `MemberPositionTerm` rows, which would otherwise
+  leave a dangling-but-FK'd term; `close_terms_for_positions` is now called,
+  scoped to the same `Role.organization_id == organization_id,
+Role.is_system.is_(False)` predicate as the delete it precedes. Read
+  `close_terms_for_positions` in full (`models/member_position_term.py:235-248`):
+  a plain `UPDATE ... SET ended_at = now()` filtered to the given position
+  ids and `ended_at IS NULL` — no new by-id query, no new write path, and
+  the ids come from a `select(Role.id)` already filtered to this
+  organization. **Verified good, no finding** — a correctness/data-integrity
+  fix with no security dimension specific to this feature.
+- **Reset now releases the wider set of location references before
+  deleting `Location`, not just `Facility`/`users`
+  (`onboarding.py:3204-3209`, `reset_onboarding`).** Other features since
+  pass 12 added `ON DELETE RESTRICT` foreign keys from events, training
+  history, meetings, requests and apparatus to `locations`; without this,
+  `/reset` would FK-fail on any install where one of those rows existed,
+  reproducing the exact un-resettable-instance shape ONB-1 fixed in 2026 for
+  `Location.created_by`. `release_location_references` (read in full,
+  `location_service.py:196-220`) clears nullable FK columns and deletes rows
+  on NOT NULL ones, is called with no organization filter, which is correct
+  here and not a tenant-isolation gap: reset is a whole-database wipe
+  (single-department model), and the call sits immediately before an
+  equally unfiltered `delete(Location)` that has had no org filter since
+  this route was first written. **Verified good, no finding** — closes a
+  latent robustness gap the same way ONB-1 did, before it could be hit.
+- **`public_info` moved into the wizard's asked-about module set
+  (`services/onboarding.py:85-88,106,152-200`, `ONBOARDING_OFFERED_MODULES`
+  and `modules_from_setup_answers`).** Completes the W01-24 owner decision
+  pass 12 described as already landed for the _write_ side
+  (the backfill migration and the shared-helper dedup); this commit is the
+  _ask_ side — the Modules step now actually offers Public Information, so
+  an explicit "no" during setup is a real no rather than the
+  "never asked → silently stored off" bug the backfill migration exists to
+  undo for pre-existing installs. Re-read `modules_from_setup_answers`'s new
+  three-way logic (named → on; asked-about-and-not-named → off;
+  never-asked → the schema default) against its own docstring: internally
+  consistent, and the one shared helper every writer
+  (`configure_modules`, the completion-time persist, and
+  `OrganizationService`'s legacy-record builder) still goes through.
+  **Verified good, not a security finding** — correctness completion of an
+  already-reviewed decision.
+- **New-org creation now seeds the department's own Federal Programs grant
+  opportunities (`services/onboarding.py:766-768`,
+  `seed_federal_program_opportunities`).** Read in full
+  (`grant_federal_programs.py:79-104`): writes `GrantOpportunity` rows
+  stamped with the caller's `organization_id` (the newly-created org, not
+  client input), is idempotent (checks what the org already holds before
+  inserting — "a second call adds none", satisfying Pitfall #36 even though
+  the single-org-creation guard (ONB-2) already makes a second call
+  unreachable in practice), and introduces no new query shape or by-id
+  lookup. **Verified good, no finding.** Same pass, the HQ facility's
+  station `Location` and `_update_station`'s facility/location replacement
+  now route through `save_system_named_location`/`LocationService.remove_location`
+  instead of a bare insert/delete (LOC-41, de-duplicate-by-name and
+  deactivate-instead-of-RESTRICT-violating-delete) — both read in full,
+  both take `organization_id` from the already-established org context, no
+  client-supplied id reaches either. **Verified good, no finding.**
+
+**Frontend.** The 7-file diff is almost entirely the same W01-24 module-ask
+work (`moduleRegistry.ts`'s new `public_info` entry, `seededPositionGrants.ts`'s
+`mobile` → `public_info` rename, `FileStorageConfiguration.tsx`'s help-text
+update for the new endpoint allowlist) plus one new component,
+`ExpiredSessionBanner.tsx` (76 L, read in full): a presentational banner that
+reads `apiClient.hasSession()` (itself backed by tab-scoped `sessionStorage`,
+unchanged) and the onboarding Zustand store's already-local `departmentName`
+— no network call, no new storage write, no secret or session-identifying
+value rendered. `OnboardingGate.tsx`'s only change is mounting this banner
+alongside its existing children. **Verified good, no finding.**
+
+**Route inventory re-enumerated by AST from source** (not carried forward):
+walked every `@router.{get,post,put,patch,delete}` decorator in
+`onboarding.py` directly — **26 routes**, identical method/path/function set
+and auth-dependency shape (`validate_session`/`needs_onboarding`/
+`_require_owner_authority`/rate-limit dependency, checked per route) to
+passes 7–12. No route gained, lost, or changed its auth posture.
+`check_route_permissions.py --strict`: 305 routes repo-wide, 0
+errors/warnings (grew from 298 at pass 12 — other features' new routes, not
+this one's).
+
+**Re-verified directly against current code (no diff in these mechanisms
+this pass), not re-cited from pass 12:**
+
+- `GET /session/key-custody` (no `needs_onboarding()` guard) and
+  `GET /session/data` (same) — re-read in full. Both remain read-only and
+  return only non-sensitive derived data (an HMAC key fingerprint and a
+  confirmation boolean/timestamp; department info the caller itself
+  submitted, plus `platform`/`configured`/count fields for the sensitive
+  sections — never a password, API key, or OAuth secret), the same
+  established, explicitly-reviewed shape as pass 7's table. Unchanged.
+- Session tokens, CSRF comparison (`secrets.compare_digest`), and the
+  30-minute sliding / 24-hour hard expiry — unchanged, re-read.
+- `_require_owner_authority` and the completed/half-provisioned guards on
+  `/start` and `/reset` — unchanged, re-read.
+- The `/session/*` routes' per-field size caps (roles/positions 200,
+  stations 50, apparatus 100) rather than a per-route rate limiter remain
+  the documented, accepted design.
+
+**Still OPEN (by design), unchanged:** **ONB-7** (no numeric rate cap
+specifically on `/session/roles` beyond the 200-item size cap — the
+session-minting rate limit on `/start` remains the accepted mitigation,
+re-stood at passes 2–12). `ITTeamMemberRequest.email` (`onboarding.py:511`)
+is still `str`, not `EmailStr` (intentionally loose, to match
+`create_it_team_users`'s skip-if-invalid behavior).
+
+**0 new findings.**
+
+**Minor documentation correction, not a finding:** pass 12's own scope note
+listed `backend/app/utils/upload_scanning.py`; the module actually lives at
+`backend/app/services/upload_scanning.py`. Corrected in this pass's header
+above.
+
+### Completion gate (pass 13)
+
+| Check                                                                                                                                                                                                 | Result                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `python3.13 -m flake8 app/ tests/ alembic/` (7.4.1, CI-pinned)                                                                                                                                        | ✅ 0 violations                                |
+| `python3.13 -m black --check app/ tests/ alembic/` (26.10.1, CI-pinned)                                                                                                                               | ✅ clean, 3,115 files unchanged                |
+| `python3.13 -m isort --check-only app/ tests/ alembic/` (9.0.2, CI-pinned)                                                                                                                            | ✅ clean                                       |
+| `python3.13 scripts/validate_migrations.py --strict`                                                                                                                                                  | ✅ 757 revisions, single head `09f0171ccf5e`   |
+| `python3 scripts/check_route_permissions.py --strict`                                                                                                                                                 | ✅ 305 routes, 0 errors/warnings               |
+| `pytest tests/ -q -k "onboard or org_template or template_service or key_custody or system_notices or gmail_service_account or email_provider or encrypt_email or position_kind or position_seeding"` | ✅ 724 passed, 1 skipped (pywebpush, env-only) |
+| `cd frontend && npm run typecheck`                                                                                                                                                                    | ✅ 0 errors                                    |
+| `cd frontend && npm run lint` (`--max-warnings 10`)                                                                                                                                                   | ✅ 0 errors/warnings                           |
+| `npx vitest run src/modules/onboarding`                                                                                                                                                               | ✅ 509 passed (44 files)                       |
+
+No `KNOWN_LIMITATIONS.md` change needed — nothing this pass contradicts an
+existing entry. Rotation row 30 → ✅ (pending this PR's merge). Next: Feature
+31 (Scheduled tasks) — unless a later watchdog pass already advanced further;
+check `list_pull_requests` fresh rather than trusting this note.
 
 ---
 

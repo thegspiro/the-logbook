@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import { FormField } from '../components/ux/FormField';
 import { useLocation, useNavigate, useSearchParams } from 'react-router';
 import {
@@ -330,7 +330,7 @@ export const UserSettingsPage: React.FC = () => {
         last_name: _ln,
         ...editableFields
       } = profileForm;
-      const updated = await userService.updateUserProfile(user.id, {
+      const payload: UserProfileUpdate = {
         ...editableFields,
         // A blank legal name is left out rather than sent: the server refuses
         // one, and an omitted key keeps the stored name, so the rest of the
@@ -339,23 +339,48 @@ export const UserSettingsPage: React.FC = () => {
         ...(lastName ? { last_name: lastName } : {}),
         // An emptied box must clear the stored name, not be omitted (CLAUDE.md #1).
         preferred_name: blankToNull(profileForm.preferred_name),
-      });
+      };
+      let refused: FieldErrors<ProfileField> = {};
+      let updated: UserWithRoles;
+      try {
+        updated = await userService.updateUserProfile(user.id, payload);
+      } catch (err: unknown) {
+        // Owner rule (2026-11-05), the same one that keeps a blank name out:
+        // a value the record cannot hold is not written, the rest of the
+        // profile saves, and the field stays flagged. A refusal the form has
+        // no field for is a real failure and goes to the handler below, as
+        // does a resend that fails too.
+        const placed = placeApiError(PROFILE_FIELDS, err);
+        const keys = placed ? (Object.keys(placed.fieldErrors) as ProfileField[]) : [];
+        if (!placed || keys.length === 0 || placed.unmatched.length > 0) throw err;
+        refused = placed.fieldErrors;
+        const rest: Record<string, unknown> = { ...payload };
+        for (const key of keys) delete rest[key];
+        updated = await userService.updateUserProfile(user.id, rest);
+      }
       setProfile(updated);
       // A name blanked by mistake comes back from the server unchanged; one
       // that was never recorded stays blank and flagged until it is entered.
+      // A refused name keeps what was typed, so it can be corrected.
       setProfileForm((prev) => ({
         ...prev,
-        first_name: updated.first_name || '',
-        last_name: updated.last_name || '',
+        first_name: refused.first_name ? prev.first_name || '' : updated.first_name || '',
+        last_name: refused.last_name ? prev.last_name || '' : updated.last_name || '',
       }));
       const stillBlank = LEGAL_NAME_FIELDS.filter((f) => !updated[f]?.trim());
       const kept = LEGAL_NAME_FIELDS.filter(
         (f) => !(f === 'first_name' ? firstName : lastName) && !stillBlank.includes(f)
       );
       const nameErrors = blankLegalNameErrors(updated);
-      profileErrors.setErrors(nameErrors);
+      profileErrors.setErrors({ ...nameErrors, ...refused });
       const firstBlank = stillBlank[0];
-      if (firstBlank) {
+      const firstRefused = (Object.keys(PROFILE_FIELDS) as ProfileField[]).find((f) => refused[f]);
+      if (firstRefused) {
+        toast.error(
+          `Profile saved, except ${PROFILE_FIELDS[firstRefused].label.toLowerCase()}: ${refused[firstRefused]} Fix it and save again.`
+        );
+        focusAfterSave.current = refused;
+      } else if (firstBlank) {
         toast.success(
           `Profile saved. Your ${LEGAL_NAME_LABELS[firstBlank]} is still missing; enter it to complete your profile.`
         );
@@ -760,7 +785,15 @@ export const UserSettingsPage: React.FC = () => {
                   <div className="text-theme-text-muted">Loading profile...</div>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <form
+                  noValidate
+                  className="space-y-6"
+                  onSubmit={(e) => {
+                    // A real form, so Enter in a field saves the profile (forms review F-7).
+                    e.preventDefault();
+                    void handleSaveProfile();
+                  }}
+                >
                   {/* Personal Information */}
                   <div>
                     <h3 className="text-theme-text-secondary mb-3 text-sm font-medium tracking-wider uppercase">
@@ -782,6 +815,7 @@ export const UserSettingsPage: React.FC = () => {
                               maxLength={100}
                               type="text"
                               value={profileForm.first_name || ''}
+                              autoComplete="given-name"
                               onChange={(e) => handleProfileChange('first_name', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -803,6 +837,7 @@ export const UserSettingsPage: React.FC = () => {
                               maxLength={100}
                               type="text"
                               value={profileForm.middle_name || ''}
+                              autoComplete="additional-name"
                               onChange={(e) => handleProfileChange('middle_name', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -825,6 +860,7 @@ export const UserSettingsPage: React.FC = () => {
                               maxLength={100}
                               type="text"
                               value={profileForm.last_name || ''}
+                              autoComplete="family-name"
                               onChange={(e) => handleProfileChange('last_name', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -848,6 +884,7 @@ export const UserSettingsPage: React.FC = () => {
                             maxLength={100}
                             type="text"
                             value={profileForm.preferred_name || ''}
+                            autoComplete="nickname"
                             onChange={(e) => handleProfileChange('preferred_name', e.target.value)}
                             className="form-input sm:text-sm"
                             disabled={savingProfile}
@@ -877,6 +914,7 @@ export const UserSettingsPage: React.FC = () => {
                               maxLength={20}
                               type="tel"
                               value={profileForm.phone || ''}
+                              autoComplete="tel"
                               onChange={(e) => handleProfileChange('phone', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -898,6 +936,7 @@ export const UserSettingsPage: React.FC = () => {
                               maxLength={20}
                               type="tel"
                               value={profileForm.mobile || ''}
+                              autoComplete="mobile tel"
                               onChange={(e) => handleProfileChange('mobile', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -987,6 +1026,7 @@ export const UserSettingsPage: React.FC = () => {
                               maxLength={255}
                               type="text"
                               value={profileForm.address_street || ''}
+                              autoComplete="street-address"
                               onChange={(e) => handleProfileChange('address_street', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -1009,6 +1049,7 @@ export const UserSettingsPage: React.FC = () => {
                                 maxLength={100}
                                 type="text"
                                 value={profileForm.address_city || ''}
+                                autoComplete="address-level2"
                                 onChange={(e) => handleProfileChange('address_city', e.target.value)}
                                 className="form-input sm:text-sm"
                                 disabled={savingProfile}
@@ -1030,6 +1071,7 @@ export const UserSettingsPage: React.FC = () => {
                                 maxLength={50}
                                 type="text"
                                 value={profileForm.address_state || ''}
+                                autoComplete="address-level1"
                                 onChange={(e) => handleProfileChange('address_state', e.target.value)}
                                 className="form-input sm:text-sm"
                                 disabled={savingProfile}
@@ -1051,6 +1093,8 @@ export const UserSettingsPage: React.FC = () => {
                                 maxLength={20}
                                 type="text"
                                 value={profileForm.address_zip || ''}
+                                autoComplete="postal-code"
+                                inputMode="numeric"
                                 onChange={(e) => handleProfileChange('address_zip', e.target.value)}
                                 className="form-input sm:text-sm"
                                 disabled={savingProfile}
@@ -1065,9 +1109,7 @@ export const UserSettingsPage: React.FC = () => {
                   {/* Save Button */}
                   <div className="border-theme-surface-border border-t pt-4">
                     <button
-                      onClick={() => {
-                        void handleSaveProfile();
-                      }}
+                      type="submit"
                       disabled={savingProfile}
                       className="btn-primary flex w-full justify-center rounded-md text-sm font-medium disabled:cursor-not-allowed"
                     >
@@ -1079,7 +1121,7 @@ export const UserSettingsPage: React.FC = () => {
                       </p>
                     )}
                   </div>
-                </div>
+                </form>
               )}
             </div>
           )}

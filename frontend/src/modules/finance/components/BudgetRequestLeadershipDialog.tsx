@@ -13,11 +13,28 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
+import { FormField } from '../../../components/ux/FormField';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import type { ServerFieldSpec } from '../../../utils/serverFieldErrors';
+import { firstErrorField, refusalsOnFields, useDialogFieldErrors } from '../utils/fieldRefusals';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { budgetRequestService } from '../services/api';
 import type { BudgetRequest, BudgetRequestReviewPayload } from '../types';
 import { MAX_REQUEST_AMOUNT, MAX_REQUEST_TEXT } from '../utils/budgetRequests';
+
+type ReviewField = 'amount' | 'note';
+
+/** `BudgetRequestReview` (schemas/finance.py). */
+const SERVER_FIELDS: Record<ReviewField, ServerFieldSpec> = {
+  amount: { label: 'Amount for this line' },
+  note: { label: 'Why', maxLength: MAX_REQUEST_TEXT },
+};
+const FIELD_ORDER = Object.keys(SERVER_FIELDS) as ReviewField[];
+const FIELD_IDS: Record<ReviewField, string> = {
+  amount: 'budget-request-review-amount',
+  note: 'budget-request-review-note',
+};
 
 interface BudgetRequestLeadershipDialogProps {
   request: BudgetRequest;
@@ -30,14 +47,25 @@ export const BudgetRequestLeadershipDialog: React.FC<BudgetRequestLeadershipDial
   onClose,
   onReviewed,
 }) => {
-  const current = request.reviewAmount ?? request.approvedAmount ?? request.requestedAmount;
-  const [amount, setAmount] = useState(String(current));
+  // Only a decided request reaches this dialog, so one of the three is set.
+  const current = request.reviewAmount ?? request.approvedAmount ?? request.requestedAmount ?? '';
+  const [amount, setAmount] = useState(current);
   const [note, setNote] = useState(request.reviewNote ?? '');
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const { errors, setErrors, clearError } = useDialogFieldErrors<ReviewField>();
   const [saving, setSaving] = useState(false);
+  const isDirty = amount !== current || note !== (request.reviewNote ?? '');
+  // Escape, the X and Cancel all ask before throwing away a typed change.
+  const requestClose = useDiscardGuard({ isDirty, onClose });
+
+  const flag = (next: Partial<Record<ReviewField, string>>) => {
+    setErrors(next);
+    const first = firstErrorField(next, FIELD_ORDER);
+    if (first) document.getElementById(FIELD_IDS[first])?.focus();
+    return first === undefined;
+  };
 
   const validate = (): BudgetRequestReviewPayload | null => {
-    const next: Record<string, string> = {};
+    const next: Partial<Record<ReviewField, string>> = {};
     const parsed = Number(amount);
     if (amount.trim() === '' || !Number.isFinite(parsed) || parsed < 0) {
       next.amount = 'Enter the amount for this line.';
@@ -48,8 +76,7 @@ export const BudgetRequestLeadershipDialog: React.FC<BudgetRequestLeadershipDial
     else if (note.trim().length > MAX_REQUEST_TEXT) {
       next.note = `Keep the note under ${String(MAX_REQUEST_TEXT)} characters.`;
     }
-    setErrors(next);
-    if (Object.keys(next).length > 0) return null;
+    if (!flag(next)) return null;
     return { amount: parsed.toFixed(2), note: note.trim() };
   };
 
@@ -60,6 +87,13 @@ export const BudgetRequestLeadershipDialog: React.FC<BudgetRequestLeadershipDial
       toast.success('Leadership change recorded');
       onReviewed();
     } catch (err: unknown) {
+      // Nothing is recorded until every field is accepted.
+      const mapped = refusalsOnFields(err, SERVER_FIELDS);
+      if (mapped) {
+        flag(mapped.fieldErrors);
+        if (mapped.unmatched.length > 0) toast.error(mapped.unmatched.join(' '));
+        return;
+      }
       toast.error(getErrorMessage(err, 'Could not record the change'));
     } finally {
       setSaving(false);
@@ -76,18 +110,19 @@ export const BudgetRequestLeadershipDialog: React.FC<BudgetRequestLeadershipDial
   return (
     <Modal
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       size="lg"
       title={request.lineLabel}
       titleId="budget-request-leadership-title"
       aria-describedby="budget-request-leadership-description"
       onSubmit={handleSubmit}
+      noValidate
       footer={
         <>
           <button type="submit" disabled={saving} className="btn-primary">
             {saving ? 'Saving...' : 'Record change'}
           </button>
-          <button type="button" onClick={onClose} className="btn-secondary">
+          <button type="button" onClick={requestClose} className="btn-secondary">
             Cancel
           </button>
         </>
@@ -118,49 +153,39 @@ export const BudgetRequestLeadershipDialog: React.FC<BudgetRequestLeadershipDial
           </p>
         </div>
 
-        <div>
-          <label htmlFor="budget-request-review-amount" className="form-label">
-            Amount for this line
-          </label>
-          <input
-            id="budget-request-review-amount"
-            type="number"
-            inputMode="decimal"
-            min="0"
-            step="0.01"
-            className="form-input"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            aria-invalid={Boolean(errors.amount)}
-            aria-describedby={errors.amount ? 'budget-request-review-amount-error' : undefined}
-          />
-          {errors.amount && (
-            <p id="budget-request-review-amount-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-              {errors.amount}
-            </p>
+        <FormField id={FIELD_IDS.amount} label="Amount for this line" error={errors.amount}>
+          {(field) => (
+            <input
+              {...field}
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max={MAX_REQUEST_AMOUNT}
+              step="0.01"
+              className="form-input"
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                clearError('amount');
+              }}
+            />
           )}
-        </div>
+        </FormField>
 
-        <div>
-          <label htmlFor="budget-request-review-note" className="form-label">
-            Why
-          </label>
-          <textarea
-            id="budget-request-review-note"
-            rows={3}
-            maxLength={MAX_REQUEST_TEXT}
-            className="form-input"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            aria-invalid={Boolean(errors.note)}
-            aria-describedby={errors.note ? 'budget-request-review-note-error' : undefined}
-          />
-          {errors.note && (
-            <p id="budget-request-review-note-error" className="mt-1 text-xs text-red-700 dark:text-red-400">
-              {errors.note}
-            </p>
+        <FormField id={FIELD_IDS.note} label="Why" error={errors.note} maxLength={MAX_REQUEST_TEXT} count={note.length}>
+          {(field) => (
+            <textarea
+              {...field}
+              rows={3}
+              className="form-input"
+              value={note}
+              onChange={(e) => {
+                setNote(e.target.value);
+                clearError('note');
+              }}
+            />
           )}
-        </div>
+        </FormField>
       </div>
     </Modal>
   );

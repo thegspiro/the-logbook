@@ -309,7 +309,7 @@ describe('ApprovalsPage', () => {
     );
   });
 
-  it('refuses an override reason longer than 2000 characters', async () => {
+  it('holds an override reason to 2000 characters', async () => {
     mockGetPending.mockResolvedValue([radioRepair]);
     const user = userEvent.setup();
     renderPage();
@@ -318,10 +318,10 @@ describe('ApprovalsPage', () => {
     const field = within(dialog()).getByLabelText(/Override reason/);
     await user.click(field);
     await user.paste('x'.repeat(2001));
-    await user.click(within(dialog()).getByRole('button', { name: 'Approve as approvals admin' }));
 
-    expect(within(dialog()).getByText('Override reason must be 2,000 characters or fewer.')).toBeInTheDocument();
-    expect(mockApprove).not.toHaveBeenCalled();
+    // The field takes the schema's limit, so the 2,001st character never lands.
+    expect(field).toHaveAttribute('maxlength', '2000');
+    expect(field).toHaveValue('x'.repeat(2000));
   });
 
   it('shows the API’s refusal when the step is assigned to someone else', async () => {

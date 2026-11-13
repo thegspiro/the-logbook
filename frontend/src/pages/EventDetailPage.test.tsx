@@ -306,6 +306,20 @@ describe('EventDetailPage', () => {
       });
     });
 
+    it('says a postponed event was postponed, from when and why', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        postponed_at: '2026-11-08T16:15:00Z',
+        postponed_from_start: '2026-11-08T16:00:00Z',
+        postponement_reason: 'Ladder truck out of service',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText('Postponed')).toBeInTheDocument();
+      expect(screen.getByText(/^Postponed from .* — Ladder truck out of service$/)).toBeInTheDocument();
+    });
+
     it('should display mandatory badge for mandatory events', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue({
         ...mockEvent,
@@ -2275,6 +2289,82 @@ describe('EventDetailPage', () => {
 
       expect(await screen.findByRole('heading', { name: 'Attendance Requests' })).toBeInTheDocument();
       expect(screen.getByText('Phone died at the door')).toBeInTheDocument();
+    });
+    it('shows a fallback holder the request they were sent', async () => {
+      mockAuthState.user = { id: 'secretary-1', permissions: [] } as unknown as CurrentUser;
+      // The Secretary was sent the request because the organizer has left.
+      // They do not run the event, but the server says they may decide it.
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...pastEvent,
+        can_manage_organizers: false,
+        can_review_attendance_requests: true,
+      });
+      vi.mocked(eventService.getAttendancePetitions).mockResolvedValue([
+        {
+          id: 'pet-1',
+          event_id: 'evt-1',
+          user_id: 'user-2',
+          user_name: 'Sam Member',
+          status: 'pending',
+          reason: 'Phone died at the door',
+          created_at: '2020-04-15T21:00:00Z',
+        },
+      ]);
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('heading', { name: 'Attendance Requests' })).toBeInTheDocument();
+      expect(screen.getByText('Phone died at the door')).toBeInTheDocument();
+    });
+  });
+
+  // Workflow review W80-8: once check-in has closed, the officer can record
+  // one named member with their times instead of adding the whole roster.
+  describe('Recording a member after check-in closes', () => {
+    beforeEach(() => {
+      mockCheckPermission.mockReturnValue(true);
+      mockAuthState.checkPermission = mockCheckPermission;
+      mockAuthState.user = { id: 'admin-1', permissions: ['events.manage'] } as CurrentUser;
+      vi.mocked(eventService.getEventRSVPs).mockReset();
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockReset();
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+      vi.mocked(eventService.getEligibleMembers).mockReset();
+      vi.mocked(eventService.getEligibleMembers).mockResolvedValue([
+        { id: 'm-1', first_name: 'Blair', last_name: 'Carter', email: null },
+      ]);
+      vi.mocked(eventService.getEvent).mockReset();
+    });
+
+    const openCheckIn = async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<EventDetailPage />);
+      await user.click(await screen.findByRole('button', { name: 'Check In' }));
+      await waitFor(() => expect(eventService.getEligibleMembers).toHaveBeenCalledWith('evt-1'));
+    };
+
+    it('offers Add a member once check-in has closed', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        check_in_closes_at: '2020-01-01T00:00:00Z',
+      });
+
+      await openCheckIn();
+
+      expect(await screen.findByRole('heading', { name: 'Add a member' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Blair Carter' })).toBeInTheDocument();
+    });
+
+    it('does not offer it while check-in is open', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        check_in_closes_at: '2999-01-01T00:00:00Z',
+      });
+
+      await openCheckIn();
+
+      expect(await screen.findByRole('button', { name: /Add All Eligible as Going/ })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Add a member' })).not.toBeInTheDocument();
     });
   });
 

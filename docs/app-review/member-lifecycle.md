@@ -1,9 +1,164 @@
 # Application Review — Member Lifecycle & Offboarding
 
 **Prefix:** `LIFE` · **Iteration:** A6 · **Reviewed:** 2026-08-05 (pass 1),
-2026-08-08 (pass 2), 2026-10-04 (pass 3)
+2026-08-08 (pass 2), 2026-10-04 (pass 3), 2026-11-10 (pass 6)
 
-> **Finding ids continue at LIFE-5.** LIFE-1…LIFE-4 are taken by passes 1–2.
+> **Finding ids continue at LIFE-12.** LIFE-1…LIFE-7 are taken by passes 1–3
+> and LIFE-8…LIFE-11 by pass 6.
+
+## Pass 6 (2026-11-10) — three races and a stale holder
+
+Started, per the pass-6 rule, from the delta since pass 3 and from the items
+left open. The services grew again — 3,363 lines across the six, against 2,000
+at pass 3; the tier service moved to class-and-status and anonymization gained
+the follow-up-form and passkey scrubs — and the new reading went at
+read-then-write paths. **3 fixes, 2 flagged, 4 doc and tidy corrections.**
+
+**Endpoints enumerated, 26 routes, every one gated.** 17 in `member_status.py`
+(16 `members.manage`, archive and status change also `require_stepup`; the
+tier-names lookup `get_current_user`, which is public within the
+organization by design); 6 departure-clearance routes in `inventory.py` (5
+`inventory.manage`, `GET /users/{id}/clearance` self-or-quartermaster through
+`_require_self_or_quartermaster`); `POST /users/{id}/anonymize`
+(`members.manage` + step-up); the two retention-policy routes
+(`settings.manage` or `organization.update_settings`).
+
+### LIFE-8 — MED — Marking a clearance line returned unassigned the item from its current holder — ✅ FIXED
+
+**What:** a clearance line records only the item id. `resolve_line_item` passed
+that to `InventoryService.unassign_item` without `expected_user_id`, the
+parameter that function exists to take for exactly this ("preventing
+stale-read races").
+**Where:** `departure_clearance_service.py`, the `assignment` branch of
+`resolve_line_item`.
+**Impact:** a quartermaster takes the departing member's helmet back through
+the ordinary inventory screens and issues it to another member; marking the
+old clearance line **Returned** later unassigned the helmet from the new
+holder, recorded it returned, and showed nothing wrong.
+**Fix:** passes the clearance's member as `expected_user_id`, so the resolve
+is refused with "Item is not assigned to the expected user" and the new
+holder keeps the item. `tests/test_member_lifecycle_races.py` reproduces the
+reissue and failed before the fix (the resolve succeeded).
+
+### LIFE-9 — LOW — Two requests could open two clearances for one member — ✅ FIXED
+
+**What:** `initiate_clearance` checked for an open clearance and then inserted,
+unlocked, and there is no unique key behind it (MySQL cannot index "one open
+row per member").
+**Impact:** a double-click, or a drop and a manual initiation at once, opened
+two clearances; staff then resolve lines on one while the other blocks the
+member's auto-archive.
+**Fix:** the member row is read `FOR UPDATE` before the check, and the check is
+itself a locking read (pitfall #27: under REPEATABLE READ a plain `SELECT`
+after the lock still answers from the older snapshot). The test asserts both
+statements carry `FOR UPDATE`; it failed before the fix.
+
+### LIFE-10 — MED — A double reactivation recorded two open service stints — ✅ FIXED
+
+**What:** `reactivate_member` read the member, checked `ARCHIVED`, and then
+`record_rejoin` checked "no open stint" — both read-then-write, unlocked.
+**Impact:** two reactivations at once each passed both checks and added an open
+`MemberServicePeriod`, so the member's credited service counted twice — a
+figure that feeds tier advancement and eligibility.
+**Fix:** the member is read `FOR UPDATE`; the second request waits, then reads
+the `ACTIVE` the first committed and is refused ("Only archived members can be
+reactivated"). Asserted by the same test file; failed before the fix.
+
+### LIFE-11 — MED — Anonymization leaves the separation letter's home address in Documents — 🚩 FLAGGED
+
+**What:** the property-return letter is saved to the leadership-only "Member
+Separations" folder, and its body carries the member's home address and the
+stated reason for separation (`property_return_service.py`'s own docstring).
+`MemberAnonymizationService` touches no `Document` row.
+**Impact:** after an erasure the member's address and separation reason remain
+readable to anyone with access to that folder, while the module's docstring
+describes the member as scrubbed.
+**Why flagged:** a separation letter may be a record the department must keep
+(it states a chargeable liability). Options: (a) redact the address and reason
+from stored letters on anonymization; (b) delete the letters; (c) keep them and
+say so in the docstring and `COMPLIANCE.md`. Mirrored to KNOWN_LIMITATIONS.
+
+### Re-verified, still open — with new evidence
+
+- **The pool-issuance valuation disagreement** (pass 3), with new evidence that
+  makes it worse than recorded. Pass 3 described the clearance as valuing a
+  pool issuance "per unit". It divides `current_value` by the pool's whole
+  count (`quantity + quantity_issued`) and multiplies back by the units issued,
+  which is only right if `current_value` were the pool's total value. It is
+  not: every inventory valuation sums `current_value * quantity`
+  (`inventory_service.py` 5860, 6004, 6079, 6105), so `current_value` is
+  per-unit, and the clearance **understates a pool issuance by the size of the
+  pool**. The return letter (`current_value × qty`) and member charges
+  (`unit_cost_at_issuance × qty`, `inventory_service.py:8550`) use two other
+  bases. Which basis is right is the owner's call; the clearance's figure is
+  wrong under either. Still 🚩 FLAGGED, mirrored to KNOWN_LIMITATIONS with this
+  evidence.
+- **LIFE-2** (float in the same computation) — unchanged, and superseded by the
+  item above: fixing the formula fixes the float.
+- **LIFE-3** (NULL timestamps never retention-eligible) — unchanged, still the
+  safer default.
+- **The anonymization docstring and `membership_number`** — ✅ fixed this pass:
+  the "deliberately NOT touched" list now names both columns and why.
+
+### Verified good this pass
+
+- **`email_hash` follows the anonymized email.** The column survives the scrub
+  list, which looks like a leak (a hash of the real address would let anyone
+  confirm a guess), but `keep_email_fingerprint(User.email, "email_hash")`
+  (`models/user.py:1361`) recomputes it on every `email` assignment.
+- **Clearance resolution cannot double-return stock.** A second resolve of the
+  same line runs the inventory operation again, but `return_to_pool` and
+  `checkin_item` lock and re-check the issuance/checkout, and `unassign_item`
+  locks the item, so the second fails cleanly.
+- **Retention's platform-level sweep is committed.** It runs after the per-org
+  loop with no commit of its own; `run_retention_enforcement` commits after
+  `enforce()` returns.
+- **The tier scan** locks the Organization for the whole scan and each member
+  before moving it, re-checks under the lock, and writes the audit row in the
+  same transaction (LIFE-5 holds).
+- **Auto-archive** checks all four property sources and open clearances before
+  archiving; a concurrent final return can at worst send the "archived" notice
+  twice, which was left alone as not worth a lock.
+
+### Duplication and tidy-ups (applied)
+
+- `membership_tier_service` filtered the scan on a literal
+  `[ACTIVE, PROBATIONARY]`; it now uses `ACTIVE_ACCOUNT_STATUSES` (pitfall #32's
+  one definition). No behaviour change.
+- `_recalculate_clearance` carried an `if …: pass` that did nothing; replaced by
+  the comment it existed to hold.
+
+### Documentation
+
+- **Fixed:** `COMPLIANCE.md`'s controls table listed three retention record
+  classes (there are six) and gave the API as `/organizations/retention-policy`
+  (the router prefix is `/organization`, as its own later paragraph says).
+- **Pass 1's future item 4** ("retention covers three record classes") is
+  overtaken: error logs, guest check-ins and practice skills tests have since
+  been enrolled.
+
+### Open, not fixed this pass
+
+- **LIFE-12 — LOW — Departure-clearance audit rows carry no IP or browser.**
+  The three `log_audit_event` calls in `inventory.py` (initiate, resolve,
+  complete) pass neither, the class W02-12 fixed for `users.py`. The handlers
+  take no `request`, so the fix is the W02-12 shape (a keyword-only
+  `request`, and tests that call them directly updated); left for the inventory
+  module's own pass to keep this one to A6's services.
+
+### Pass 6 completion gate
+
+| Check                                                                               | Result                                                     |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `npm run typecheck`                                                                 | ✅ 0 errors (no frontend change)                           |
+| `flake8 app/ tests/`                                                                | ✅ 0                                                       |
+| `black --check app/ tests/`, `isort`                                                | ✅ clean                                                   |
+| `npm run lint`                                                                      | ✅ clean (run with `--max-old-space-size=8192`, see W77-6) |
+| mypy on the four changed services                                                   | ✅ 0                                                       |
+| `test_member_lifecycle_races.py`                                                    | ✅ 3 passed; all 3 failed against the unfixed services     |
+| lifecycle, archive, anonymization, tier, service-history, retention, locking suites | ✅ 301 passed (19 files)                                   |
+| every test file touching the changed functions                                      | ✅ 664 passed (21 files)                                   |
+| frontend tests                                                                      | not run — no frontend change                               |
 
 ## Pass 3 (2026-10-04) — the +602 lines passes 1–2 never saw
 

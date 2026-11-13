@@ -46,8 +46,9 @@ vi.mock('../stores/authStore', () => ({
   }),
 }));
 
+// Callable as well: the page raises a non-blocking warning with toast(...).
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() },
+  default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }));
 
 describe('TrainingRequirementsPage', () => {
@@ -581,5 +582,67 @@ describe('TrainingRequirementsPage inactive filter', () => {
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Show inactive' }));
     expect(screen.getByText('Retired Requirement')).toBeInTheDocument();
+  });
+});
+
+describe('TrainingRequirementsPage session-attendance overlap warning', () => {
+  const attendance = (id: string, name: string, types: string[]) => ({
+    id,
+    name,
+    requirement_type: 'session_attendance',
+    source: 'department',
+    training_type: 'continuing_education',
+    required_attendance_pct: 60,
+    frequency: 'annual',
+    applies_to_all: false,
+    required_membership_types: types,
+    active: true,
+    due_date_type: 'calendar_period',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  });
+
+  const saveForEveryone = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await screen.findByRole('button', { name: 'Edit Drill Attendance' }));
+    await user.click(await screen.findByRole('button', { name: 'Update Requirement' }));
+    await user.click(await screen.findByRole('button', { name: 'Save for everyone' }));
+  };
+
+  beforeEach(() => {
+    vi.mocked(toast).mockReset();
+    vi.mocked(toast.success).mockReset();
+    mockGetCategories.mockReset();
+    mockGetCategories.mockResolvedValue([]);
+    mockUpdateRequirement.mockReset();
+    mockGetRequirements.mockReset();
+  });
+
+  it('warns, after saving, that two requirements grade the same membership type', async () => {
+    const drills = attendance('req-a', 'Drill Attendance', ['active']);
+    mockGetRequirements.mockResolvedValue([drills, attendance('req-b', 'Company Drills', ['active', 'probationary'])]);
+    mockUpdateRequirement.mockResolvedValue(drills);
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+    await saveForEveryone(user);
+
+    await waitFor(() =>
+      expect(vi.mocked(toast)).toHaveBeenCalledWith(
+        expect.stringContaining('"Drill Attendance" and "Company Drills"'),
+        expect.objectContaining({ icon: '⚠️' })
+      )
+    );
+    expect(vi.mocked(toast.success)).toHaveBeenCalledWith('Requirement updated');
+  });
+
+  it('says nothing when the membership types do not overlap', async () => {
+    const drills = attendance('req-a', 'Drill Attendance', ['active']);
+    mockGetRequirements.mockResolvedValue([drills, attendance('req-b', 'Probie Drills', ['probationary'])]);
+    mockUpdateRequirement.mockResolvedValue(drills);
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+    await saveForEveryone(user);
+
+    await waitFor(() => expect(vi.mocked(toast.success)).toHaveBeenCalledWith('Requirement updated'));
+    expect(vi.mocked(toast)).not.toHaveBeenCalled();
   });
 });

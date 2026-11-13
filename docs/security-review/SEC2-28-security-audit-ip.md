@@ -4,7 +4,8 @@
 #1911), 2026-08-31 (pass 2), 2026-09-06 (pass 3), 2026-09-13 (pass 4, and a
 pass-4 addendum, PR #2515), 2026-10-04 (pass 5), 2026-10-07 (pass 6),
 2026-10-17 (pass 7), 2026-10-20 (pass 8), 2026-10-24 (pass 9), 2026-10-27
-(pass 10), 2026-10-30 (pass 11), 2026-11-04 (pass 12) · **PR:** #1911 (pass 1)
+(pass 10), 2026-10-30 (pass 11), 2026-11-04 (pass 12), 2026-11-11 (pass 13) ·
+**PR:** #1911 (pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
@@ -2172,6 +2173,174 @@ decision. No `KNOWN_LIMITATIONS.md` change needed.
 | backend tests, scope (same `-k` filter as pass 11)                | 851 passed, 1 pre-existing skip (`pywebpush`)      |
 | frontend `npm run typecheck`                                      | 0 errors                                           |
 | frontend `npx eslint` on the one changed file                     | 0 errors/warnings                                  |
+
+Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
+`analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).
+
+## Pass 13 (2026-11-11) — true zero-delta in scope, 0 new findings; one out-of-scope change in the shared file noted and verified safe
+
+Before starting: `gh api repos/thegspiro/the-logbook/pulls?state=open` returned
+eleven open PRs, none with a `claude/security-review-*` head — PR #4235
+(Feature 27, Integrations, pass 13) had already merged clean
+(`19b02e4851795ed213e2797b66989ce8681e0142`). Row 28 was confirmed as the next
+`⬜` row on a freshly fetched `main`.
+
+### Baseline and diff method
+
+Pass 12 merged as `a6e04e494` (PR #3998, `merged_at` 2026-11-04T01:45:42Z).
+Diffed each of this doc's nine backend files, plus the three frontend
+surfaces, directly against that commit by content (`git diff --stat
+a6e04e494..HEAD -- <file>`), per the history-quirk workaround passes 7/9/10/
+11/12 already document.
+
+**Eight of the nine backend scope files are byte-identical to pass 12**:
+`security_monitoring.py` (endpoint + service), `ip_security.py` (endpoint),
+`ip_security_service.py`, `audit_logs.py`, `error_logs.py`, `core/audit.py`,
+`core/geoip.py`, `audit_ship_service.py` — every `git diff --stat` empty.
+**`core/security_middleware.py` carries a real diff** (78 insertions / 10
+deletions), but it falls entirely **outside this doc's declared slice of that
+file** — the generic login/account rate-limiting dependencies
+(`check_rate_limit`, `rate_limit_login`, new `login_account_key`), not the
+IP-enforcement classes (`IPBlockingMiddleware`, `IPLoggingMiddleware`,
+`SecurityMonitoringMiddleware`) this doc has scoped itself to since pass 2's
+"Scope check first" note. Confirmed by line range: the diff spans only
+`check_rate_limit`/`rate_limit_login` (~L920–1090); `IPBlockingMiddleware`
+(L1457), `IPLoggingMiddleware` (L1656) and `SecurityMonitoringMiddleware`
+(L1769) are untouched, confirmed both by the diff hunks and a direct read of
+all three classes against pass 12's content.
+
+**What the change is, read anyway since it lives in a file this doc tracks:**
+implements the 2026-10-05 owner decision "Sign-in From a Shared Station
+Address" (`docs/KNOWN_LIMITATIONS.md`) — `rate_limit_login` now takes an
+`account` FastAPI dependency and counts two buckets: a tight 5/minute/account
+bucket keyed on `sha256(casefold(username))[:32]` (never the raw username —
+no PII in Redis keys or limiter state) combined with the client IP, so one
+station's members no longer exhaust each other's allowance, plus a looser
+30/minute/address backstop (`lockout_seconds=0`, a plain sliding window) sized
+for a shift change so one address still cannot try unlimited accounts.
+`lockout_seconds=0` reuses an existing, already-documented `RateLimiter`
+code path (`is_rate_limited`'s own comment at the "Lockout expired" branch
+already handles this case for `public_rate_limit`'s fallback) rather than
+introducing a new one. Read the full diff and the three call-site patterns in
+`auth.py` (`_login_attempt_account`, `_mfa_attempt_account`,
+`_session_account`): all three resolve the rate-limit bucket, never anything
+that could be mistaken for an authorization decision, and the per-address
+backstop runs _before_ the per-account bucket so an address-level refusal
+does not also spend the account's allowance. This belongs to Feature 01
+(Auth & session lifecycle) or Feature 33 (Core infrastructure) — both
+`✅`/`⬜` already past or pending their own turn — not Feature 28; no finding
+recorded here, consistent with pass 2's precedent of reading but not
+re-owning a core-infra change that happens to land in a file this doc also
+tracks.
+
+Of the frontend scope, `ErrorMonitoringPage.tsx` is byte-identical to pass 12.
+Two surfaces carry a diff, both cosmetic/UX, read in full:
+
+- **`frontend/src/modules/ip-security/` (`IPExceptionRequestForm.tsx`,
+  `ipSecurityStore.ts`, and the three table components)** — a forms-review
+  pass adopting `FormField`/`useFieldErrors`-style client-side validation and
+  422-to-field-error mapping on the exception-request form (CLAUDE.md's
+  "Forms — Save With an Error" pattern), plus `rwd-table`/`data-label`
+  responsive-reflow adoption on all three tables. No query, permission, route,
+  or data-flow change; `mapServerFieldErrors` only redirects an already-thrown
+  validation error onto a field instead of a toast. No `dangerouslySetInnerHTML`
+  introduced; free text (`blockReason`, `requestPath`, justification) stays in
+  JSX text nodes or a `title` attribute, both React-escaped.
+- **`frontend/src/pages/AuditLogPage.tsx`** — `AdminPageHeader` adoption
+  (replacing a hand-rolled header) and `rwd-table`/`data-label` responsive
+  adoption on the entries table. Same diff shape as pass 12's
+  `MyIPExceptionsPage.tsx` layout sweep; no data or auth change.
+
+### Route inventory — re-enumerated by AST, 37 routes, unchanged from pass 12
+
+Counted every `@router.<method>` decorator directly in the four endpoint
+files (not trusted from pass 12's count): 16 (`security_monitoring.py`) + 12
+(`ip_security.py`) + 3 (`audit_logs.py`) + 6 (`error_logs.py`) = **37**,
+identical to pass 12 — consistent with all four files being byte-identical.
+Also checked every route's permission string directly against the AST (not
+spot-checked): the `audit.view`/`audit.export`/`audit.manage` and
+`security.manage`/`settings.manage` OR-gates are exactly as documented, with
+no route missing a `Depends(...)`-bearing auth dependency.
+
+### Re-verified — every open finding re-checked against current code
+
+- **SEC2-28-6** (LOW, flagged — TOCTOU race in the IP-exception
+  duplicate-request check) — still open, unchanged. Re-read
+  `request_ip_exception` at `ip_security_service.py:102-119`: the "does a
+  pending/approved exception already exist for this user+IP" check is still a
+  plain `select()` with no `.with_for_update()` and no DB-level unique
+  constraint, immediately followed by an `INSERT`. Still not a security
+  bypass — approval is still required, per SEC2-28-5's resolution the
+  approval's own effect is per-IP, keyed and capped — and still proportionate
+  to leave as an admin-UX nicety rather than fix.
+- **Dead detector code** (pass 3, flagged) — re-grepped `analyze_request`,
+  `_check_rate_limit`, `_check_injection_patterns` across all of `backend/app`
+  outside `services/security_monitoring.py`: zero production callers,
+  unchanged.
+- **Tangential `system.run_tasks` note** (pass 12 and earlier) — out of this
+  pass's file scope (`core/permissions.py`/positions), unchanged, still
+  awaiting a future pass over that surface.
+- **All previously-FIXED/RESOLVED items** (SEC-1 through SEC-9, SEC2-28-1
+  through SEC2-28-11, and pass 11's IP-exception approval locking): spot-
+  verified directly against current code — `_enforce_key_caps()`,
+  `calculate_hash`'s v4 field list, `_log_blocked_attempt`'s dual write,
+  `add_blocked_country`'s update-in-place, the org-scoped audit
+  reads/exports, and the `.with_for_update()` locks on
+  approve/reject/revoke — all intact; no commit since pass 12 touches any of
+  their mechanisms.
+
+### Checklist dimensions re-checked directly against current code (not re-derived from prior passes' claims)
+
+1. **Auth coverage** — all 37 routes carry a `Depends`-bearing auth
+   dependency (AST-checked above); none bare.
+2. **Authorization & role fit** — permission strings unchanged and verified
+   by AST (above); `GET /exceptions/me` and `POST /exceptions` remain
+   correctly self-scoped (`get_current_user` only, no broader permission
+   needed for a member's own request).
+3. **Tenant isolation** — `audit_logs.py` (`AuditLog.organization_id ==
+org_id` at lines 106/179/226), `error_logs.py` (`ErrorLog.organization_id`
+   at six call sites), `ip_security.py`/`ip_security_service.py`
+   (`organization_id` on every create/list/by-id call, `approve_exception`/
+   `reject_exception`/`revoke_exception` all take `organization_id` and scope
+   the lookup before the `.with_for_update()` lock) — all read directly from
+   current source, unchanged from the documented baseline.
+4. **Injection & untrusted output** — `audit_logs.py`'s search still uses
+   `like_pattern(search)` with `escape=LIKE_ESCAPE_CHAR` on both `ilike()`
+   calls (lines 122–126); no bare `csv.writer` anywhere in scope (audit-log
+   and error-log exports are JSON, not CSV); `safe_error_detail()` still
+   wraps the two exception handlers in `security_monitoring.py` that return
+   4xx/5xx.
+5. **Data exposure** — `/security/`, `/audit-logs`, `/ip-security/` and
+   `/errors` are all still present in `UNCACHEABLE_PREFIXES`
+   (`frontend/src/utils/apiCache.ts` lines 35–37, 105).
+6. **Abuse resistance** — n/a change this pass; SEC-1's tracking-dict caps
+   re-verified above.
+7. **Schema & migration integrity** — no migration in scope this pass; no
+   new model/column.
+
+### No new findings this pass
+
+**0 fixes applied, 0 new findings.** SEC2-28-6 and the dead-detector-code note
+remain open, unchanged, still awaiting their respective owner/product
+decision. No `KNOWN_LIMITATIONS.md` change needed — the one real change this
+pass touched (login rate limiting) already has its own KNOWN_LIMITATIONS.md
+row ("Sign-in From a Shared Station Address") from the track that shipped it,
+and it is out of this feature's scope.
+
+### Completion gate (Pass 13)
+
+| Check                                                                                    | Result                                             |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`)                                          | clean                                              |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`)                                  | clean, 3106 files unchanged                        |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`)                               | clean                                              |
+| `python3 scripts/validate_migrations.py --strict`                                        | PASSED — 756 revisions, single head `8b1cf6f55425` |
+| `python3 scripts/generate_schema_docs.py --check`                                        | up to date                                         |
+| `python3 scripts/check_route_permissions.py --strict` (repo root)                        | 305 routes, 0 errors/warnings                      |
+| backend tests, scope (same `-k` filter as pass 11/12)                                    | 882 passed, 1 pre-existing skip (`pywebpush`)      |
+| frontend `npm run typecheck`                                                             | 0 errors                                           |
+| frontend `npm run lint`                                                                  | 0 errors/warnings                                  |
+| frontend scoped suite (`src/modules/ip-security`, `AuditLogPage`, `ErrorMonitoringPage`) | 65 passed (5 files)                                |
 
 Next in rotation: Feature 29 (Reports & analytics — `reports.py`,
 `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`).

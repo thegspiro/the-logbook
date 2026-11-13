@@ -143,6 +143,7 @@ build on each other's data, so run them in order unless a row says otherwise.
 | W77 | The testing module and its printed report                                 | admin            | `/testing`                                 | ✅     |
 | W78 | Platform administration                                                   | admin            | `/admin/platform-analytics`                | ✅     |
 | W79 | Phone pass: W08, W19, W24, W33, W39 and W70 again at 390×844              | member, officers | as those rows                              | ✅     |
+| W80 | Training events: create, credit, correct, excuse, move (owner-asked)      | officer → member | `/training/admin`, `/events/:id`           | ✅     |
 
 ---
 
@@ -151,30 +152,10 @@ build on each other's data, so run them in order unless a row says otherwise.
 Seen while building this harness or in the ad-hoc browser pass of 2026-09-27,
 and not yet confirmed or fixed. The run for each activity starts from these.
 
-- **Any run touching the app shell, or an accessibility activity** — every
-  page carries two "Skip to main content" links, one in `index.html` and one
-  in `AppLayout` (W20).
-
-- **Dashboard, or any activity touching a module left off at setup** — on a
-  fresh install with every module skipped, the administrator's first dashboard
-  asked `GET /training/module-config/config` and was refused `403 LB-ORG-002`
-  ("module is not enabled"). The weather and `/integrations/connected` half of
-  this lead was fixed in the W01 third pass (W01-33); the training call was not
-  seen there, because that install had Training on.
 - **Any run that merges `main`** — two pull requests that each join the same
   Alembic fork leave two heads, and nothing starts until a merge revision
   joins them (W59-1). Run `alembic heads` after a merge that brings in
   migrations.
-
-- **Public portal, a later pass** — public events are only `public_education`
-  events, and their location is the free-text `location` alone, so an event
-  placed at a facility (`location_id`) would publish no location; read from
-  code, not driven (W76).
-
-- **Tooling** — a full `npm run lint` needs about 3.5 GB of heap (2,350
-  files with type-aware rules). It aborted out of memory under the 2 GB default
-  of the W77 container and passed with `--max-old-space-size=8192`. CI's
-  `ubuntu-latest` default is larger, but the margin is thin (W77).
 
 ## Log
 
@@ -368,6 +349,64 @@ Flagged:
 - W03-14 (NIT): two pieces of copy.
 
 Gate: typecheck and lint clean; flake8, black and isort clean on the backend files; 24 backend and 116 frontend tests pass, and every new case failed before its fix. Next: none pending; the owner may name the next second pass.
+### W80 — Training event lifecycle: create, credit, correct, excuse, move — 2026-11-08
+
+Owner-requested, outside the rotation. Driven as: `training_officer` at
+1280×900, `member` at 390×844, `member2`, `chief` and `admin`. Held: the session
+wizard saved what was entered; self check-in and check-out; finalize, approval
+and requirement credit; the finalized event's schedule lock; reopen, delete and
+cancel keeping records consistent; waiver undo; the Chief-only override.
+Fixed: W80-1 (HIGH — moving an event kept its check-ins and would credit them
+for the new date; now refused), W80-2 (MED — approved minutes unbounded, 20 h on
+a 2 h drill; warned), W80-3 (MED — attendance-request times outside the event
+approved as shown; warned), W80-4 (MED — an officer approved their own credit;
+refused), W80-5 (MED — excusing one drill cut the hours target; requirement
+picker), W80-6 (LOW — wizard accepted an end before the start), W80-7 (LOW — a
+stray "0" after a quick check-out). Flagged: W80-11 (MED — no Postpone; design
+written and decided, for its own pull request), W80-8 (MED — no way to record
+one member on a past drill), W80-9 (LOW — "0/0 sessions — Complete"), W80-10
+(LOW — an excused drill stays in "missed mandatory"). Open: W80-12 to W80-15
+(NIT/LOW). Gate: typecheck, lint (with the larger heap of the W77 lead),
+flake8, black, isort and the touched suites clean. Next: W80-11's pull request.
+Follow-ups, all merged by 2026-11-11 on the owner's decisions: W80-11 Postpone
+(#4179, list badge #4188), W80-16 (#4181), W80-10 (#4182), W80-9 (#4185),
+W80-12 to W80-15 (#4186), W80-8 (#4187). Nothing from W80 remains open.
+
+### Leads — Duplicate skip link and the dashboard's Training call, confirmed fixed — 2026-11-10
+
+Re-driven, no code change. Both leads had been fixed by later work without the
+tracker being updated:
+
+- **Skip links (W20):** `/dashboard`, `/events` and `/training` each carry one
+  "Skip to main content" link, now only the static one in `index.html`
+  (#3755). As `member`, it is the first Tab stop, and Enter moves focus to
+  `#main-content`.
+- **Training's settings asked with Training off:** with `training` switched
+  off, two loads of the administrator's dashboard made no `/training/` API call
+  and no request failed. `usePracticalSkillsMethod` is passed the module check
+  by the side and top navigation and the command palette (`d92baccea`), and
+  `TrainingPageHeader` renders only behind Training's route gate. Training was
+  switched back on afterwards.
+
+### Lead — Lint runs with a heap ceiling it can finish under — 2026-11-08
+
+Fixed (W77-6), on the owner's decision to raise the ceiling in the script
+rather than only document it: `npm run lint` and `lint:fix` run ESLint through
+`frontend/scripts/eslint-heap.mjs` with `--max-old-space-size=8192`, unless
+`NODE_OPTIONS` already sets one. On this machine, plain ESLint capped at 2 GB
+died with "JavaScript heap out of memory" (exit 134), and `npm run lint`
+passed (exit 0) with the child running under the 8 GB ceiling.
+
+### Lead — A public event at a facility publishes its name — 2026-11-08
+
+Read from code and tested, not re-driven. Fixed (W76-7): `/events/public`
+published only an event's free-text location, so an event placed at one of
+the department's facilities reached its website with no location. The
+facility's name is now published, falling back to the free text, as the
+department calendar feed already did. Public events are still only
+`public_education` events; that filter is unchanged.
+`test_public_portal_event_location.py` failed before the fix. Gate: flake8,
+black, isort and mypy clean; the 135 public-portal tests pass.
 
 ### W50 follow-up — Meeting link, Import Attendees, unlink — 2026-11-08
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
 import { useDialog } from '../hooks/useDialog';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import { FormField } from '../components/ux/FormField';
 import {
@@ -130,7 +131,7 @@ const TabLoadingFallback = () => (
   </div>
 );
 
-type CreateShiftField = 'start_date' | 'end_date' | 'apparatus';
+type CreateShiftField = 'start_date' | 'end_date' | 'apparatus' | 'shift_officer' | 'notes';
 
 // The Create Shift fields a check or the server can report against. `start_time`
 // and `end_time` are built from the dates, so a refusal of either is the
@@ -139,7 +140,13 @@ const CREATE_SHIFT_FIELDS: FieldSpecs<CreateShiftField> = {
   start_date: { id: 'create-shift-start-date', label: 'Start date', apiKeys: ['shift_date', 'start_time'] },
   end_date: { id: 'create-shift-end-date', label: 'End date', apiKeys: ['end_time'] },
   apparatus: { id: 'create-shift-apparatus', label: 'Apparatus', apiKeys: ['apparatus_id'] },
+  shift_officer: { id: 'create-shift-officer', label: 'Shift officer', apiKeys: ['shift_officer_id'] },
+  notes: { id: 'create-shift-notes', label: 'Notes' },
 };
+
+// Collapsed by default under "Advanced options"; a flagged one must be opened
+// before it can take focus.
+const ADVANCED_SHIFT_FIELDS: readonly CreateShiftField[] = ['shift_officer', 'notes'];
 
 const SchedulingPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -385,6 +392,17 @@ const SchedulingPage: React.FC = () => {
     void loadSummary();
   }, [loadSummary]);
 
+  const focusCreateError = (errors: FieldErrors<CreateShiftField>) => {
+    const first = (Object.keys(CREATE_SHIFT_FIELDS) as CreateShiftField[]).find((name) => errors[name]);
+    if (first && ADVANCED_SHIFT_FIELDS.includes(first)) {
+      setShowAdvancedOptions(true);
+      // The section renders on the next commit; focus once it is there.
+      window.setTimeout(() => document.getElementById(CREATE_SHIFT_FIELDS[first].id)?.focus(), 0);
+      return;
+    }
+    createErrors.focusFirst(errors);
+  };
+
   const handleCreateShift = async () => {
     // The button is never disabled for a missing value (forms review F-3);
     // pressing it says what is missing, on the field, and moves focus there.
@@ -400,7 +418,7 @@ const SchedulingPage: React.FC = () => {
       // its own error.
       const merged = { ...createErrors.errors, ...missing };
       createErrors.setErrors(merged);
-      createErrors.focusFirst(merged);
+      focusCreateError(merged);
       return;
     }
 
@@ -480,7 +498,7 @@ const SchedulingPage: React.FC = () => {
       // A refusal lands on the field it names; anything else becomes the
       // dialog's message, through getErrorMessage rather than err.message,
       // which for an API error is axios's "Request failed with status code".
-      createErrors.focusFirst(createErrors.setFromApiError(err, 'Could not create the shift. Try again.'));
+      focusCreateError(createErrors.setFromApiError(err, 'Could not create the shift. Try again.'));
     } finally {
       setCreating(false);
     }
@@ -516,7 +534,23 @@ const SchedulingPage: React.FC = () => {
    */
   const createShiftOpen = canManage && showCreateShift && !selectedShift;
 
-  const dialogRef = useDialog<HTMLDivElement>({ isOpen: createShiftOpen, onClose: () => setShowCreateShift(false) });
+  // Anything typed beyond the template the dialog opens on is unsaved work:
+  // Escape, the X and Cancel ask before discarding it (forms review F-6).
+  // Closing clears the errors through the effect keyed on showCreateShift.
+  const createShiftDirty = Boolean(
+    shiftForm.startDate ||
+    shiftForm.endDate ||
+    shiftForm.notes ||
+    shiftForm.apparatus_id ||
+    shiftForm.shift_officer_id ||
+    shiftForm.customStartTime ||
+    shiftForm.customEndTime
+  );
+  const requestCloseCreateShift = useDiscardGuard({
+    isDirty: createShiftDirty,
+    onClose: () => setShowCreateShift(false),
+  });
+  const dialogRef = useDialog<HTMLDivElement>({ isOpen: createShiftOpen, onClose: requestCloseCreateShift });
 
   return (
     <div className="min-h-screen">
@@ -666,521 +700,543 @@ const SchedulingPage: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="create-schedule-title"
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setShowCreateShift(false);
-            }}
           >
             <div className="flex min-h-screen items-center justify-center px-4">
               <div className="modal-overlay" aria-hidden="true" />
               <div ref={dialogRef} className="modal-panel relative w-full max-w-lg">
-                <div className="px-6 pt-5 pb-4">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h3 id="create-schedule-title" className="text-theme-text-primary text-lg font-medium">
-                      Create Shift
-                    </h3>
-                    <button
-                      onClick={() => setShowCreateShift(false)}
-                      className="text-theme-text-muted hover:text-theme-text-primary"
-                      aria-label="Close dialog"
-                    >
-                      <X className="h-5 w-5" aria-hidden="true" />
-                    </button>
-                  </div>
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="create-shift-template" className="form-label">
-                        Shift Template
-                      </label>
-                      {effectiveTemplates.length > 5 && (
-                        <input
-                          autoCapitalize="none"
-                          autoCorrect="off"
-                          spellCheck={false}
-                          type="text"
-                          placeholder="Search templates..."
-                          aria-label="Search shift templates"
-                          value={templateSearch}
-                          onChange={(e) => setTemplateSearch(e.target.value)}
-                          className="form-input mb-2 text-sm focus:ring-violet-500"
-                        />
-                      )}
-                      <select
-                        id="create-shift-template"
-                        value={shiftForm.shiftTemplate}
-                        onChange={(e) => {
-                          const tmpl = effectiveTemplates.find((t) => t.id === e.target.value);
-                          setShiftForm((prev) => ({
-                            ...prev,
-                            shiftTemplate: e.target.value,
-                            endDate: computeEndDate(prev.startDate, tmpl),
-                            apparatus_id:
-                              tmpl?.apparatus_id && apparatusList.some((a) => a.id === tmpl.apparatus_id)
-                                ? tmpl.apparatus_id
-                                : prev.apparatus_id,
-                          }));
-                        }}
-                        className="form-input focus:ring-violet-500"
-                        size={effectiveTemplates.length > 5 ? Math.min(8, effectiveTemplates.length) : undefined}
+                {/* A real form, so Enter in a field creates the shift (forms review F-7). */}
+                <form
+                  noValidate
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void handleCreateShift();
+                  }}
+                >
+                  <div className="px-6 pt-5 pb-4">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h3 id="create-schedule-title" className="text-theme-text-primary text-lg font-medium">
+                        Create Shift
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={requestCloseCreateShift}
+                        className="text-theme-text-muted hover:text-theme-text-primary"
+                        aria-label="Close dialog"
                       >
-                        {(() => {
-                          const q = templateSearch.toLowerCase();
-                          const filtered = q
-                            ? effectiveTemplates.filter(
-                                (t) =>
-                                  t.name.toLowerCase().includes(q) ||
-                                  (t.apparatus_type ?? '').toLowerCase().includes(q) ||
-                                  (t.category ?? '').toLowerCase().includes(q)
-                              )
-                            : effectiveTemplates;
-
-                          const standard = filtered.filter((t) => !t.category || t.category === 'standard');
-                          const specialty = filtered.filter((t) => t.category === 'specialty');
-                          const event = filtered.filter((t) => t.category === 'event');
-                          return (
-                            <>
-                              {standard.length > 0 && (
-                                <optgroup label="Standard Shifts">
-                                  {standard.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                      {t.name}
-                                      {t.apparatus_type ? ` — ${enumLabel(t.apparatus_type)}` : ''} (
-                                      {formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                              {specialty.length > 0 && (
-                                <optgroup label="Specialty Vehicle">
-                                  {specialty.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                      {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
-                                      {formatTimeOfDay(t.end_time_of_day)})
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                              {event.length > 0 && (
-                                <optgroup label="Event / Special">
-                                  {event.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                      {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
-                                      {formatTimeOfDay(t.end_time_of_day)})
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                              {standard.length === 0 &&
-                                specialty.length === 0 &&
-                                event.length === 0 &&
-                                filtered.length > 0 &&
-                                filtered.map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
-                                    {formatTimeOfDay(t.end_time_of_day)})
-                                  </option>
-                                ))}
-                              {filtered.length === 0 && (
-                                <option value="" disabled>
-                                  No templates match &ldquo;{templateSearch}&rdquo;
-                                </option>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </select>
-                      {/* Template info preview */}
-                      {(() => {
-                        const tmpl =
-                          effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
-                        if (!tmpl) return null;
-                        const flatPositions = resolveTemplatePositions(tmpl.positions);
-                        const hasPositions = flatPositions.length > 0;
-                        const catLabel =
-                          tmpl.category === 'specialty' ? 'Specialty' : tmpl.category === 'event' ? 'Event' : null;
-                        return (
-                          <div className="bg-theme-surface-hover/50 mt-2 space-y-1.5 rounded-lg p-2.5">
-                            <div className="flex items-center justify-between text-xs">
-                              <div className="flex items-center gap-2">
-                                <span className="text-theme-text-muted">
-                                  Duration:{' '}
-                                  <span className="text-theme-text-primary font-medium">{tmpl.duration_hours}h</span>
-                                </span>
-                                {catLabel && (
-                                  <span
-                                    className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                      tmpl.category === 'specialty'
-                                        ? 'bg-orange-500/10 text-orange-800 dark:text-orange-400'
-                                        : 'bg-purple-500/10 text-purple-700 dark:text-purple-400'
-                                    }`}
-                                  >
-                                    {catLabel}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-theme-text-muted">
-                                Min staffing:{' '}
-                                <span className="text-theme-text-primary font-medium">{tmpl.min_staffing}</span>
-                              </span>
-                            </div>
-                            {tmpl.apparatus_type && (
-                              <p className="text-theme-text-muted flex items-center gap-1 text-xs">
-                                <Truck className="h-3 w-3" /> Vehicle type:{' '}
-                                <span className="text-theme-text-primary font-medium">
-                                  {enumLabel(tmpl.apparatus_type)}
-                                </span>
-                              </p>
-                            )}
-                            {hasPositions && (
-                              <div>
-                                <p className="text-theme-text-muted mb-1 text-xs">Required positions:</p>
-                                <div className="flex flex-wrap gap-1">
-                                  {flatPositions.map((slot, i) => (
-                                    <span
-                                      key={i}
-                                      className={`rounded-sm px-2 py-0.5 text-[10px] font-medium capitalize ${slot.required ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'bg-theme-surface-hover text-theme-text-muted'}`}
-                                    >
-                                      {positionLabel(slot.position)}
-                                      {!slot.required && ' (opt)'}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
-                      {usingFallbackTemplates && (
-                        <p className="text-theme-text-muted mt-1.5 text-xs">
-                          Using default templates.{' '}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowCreateShift(false);
-                              void navigate('/scheduling/admin/planning/templates');
-                            }}
-                            className="text-violet-600 hover:underline dark:text-violet-400"
-                          >
-                            Configure your own
-                          </button>{' '}
-                          on the Templates page.
-                        </p>
-                      )}
+                        <X className="h-5 w-5" aria-hidden="true" />
+                      </button>
                     </div>
-
-                    {/* Start / End Date — always visible */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <FormField
-                        id={CREATE_SHIFT_FIELDS.start_date.id}
-                        label="Start Date"
-                        required
-                        error={createErrors.errors.start_date}
-                      >
-                        {(field) => (
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="create-shift-template" className="form-label">
+                          Shift Template
+                        </label>
+                        {effectiveTemplates.length > 5 && (
                           <input
-                            {...field}
-                            type="date"
-                            value={shiftForm.startDate}
-                            onChange={(e) => {
-                              const newStart = e.target.value;
-                              if (newStart) createErrors.setError('start_date', null);
-                              const tmpl =
-                                effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
-                              setShiftForm((prev) => ({
-                                ...prev,
-                                startDate: newStart,
-                                endDate: computeEndDate(newStart, tmpl),
-                              }));
-                            }}
-                            className="form-input focus:ring-violet-500"
+                            autoCapitalize="none"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            type="text"
+                            placeholder="Search templates..."
+                            aria-label="Search shift templates"
+                            value={templateSearch}
+                            onChange={(e) => setTemplateSearch(e.target.value)}
+                            className="form-input mb-2 text-sm focus:ring-violet-500"
                           />
                         )}
-                      </FormField>
-                      <div>
+                        <select
+                          id="create-shift-template"
+                          value={shiftForm.shiftTemplate}
+                          onChange={(e) => {
+                            const tmpl = effectiveTemplates.find((t) => t.id === e.target.value);
+                            setShiftForm((prev) => ({
+                              ...prev,
+                              shiftTemplate: e.target.value,
+                              endDate: computeEndDate(prev.startDate, tmpl),
+                              apparatus_id:
+                                tmpl?.apparatus_id && apparatusList.some((a) => a.id === tmpl.apparatus_id)
+                                  ? tmpl.apparatus_id
+                                  : prev.apparatus_id,
+                            }));
+                          }}
+                          className="form-input focus:ring-violet-500"
+                          size={effectiveTemplates.length > 5 ? Math.min(8, effectiveTemplates.length) : undefined}
+                        >
+                          {(() => {
+                            const q = templateSearch.toLowerCase();
+                            const filtered = q
+                              ? effectiveTemplates.filter(
+                                  (t) =>
+                                    t.name.toLowerCase().includes(q) ||
+                                    (t.apparatus_type ?? '').toLowerCase().includes(q) ||
+                                    (t.category ?? '').toLowerCase().includes(q)
+                                )
+                              : effectiveTemplates;
+
+                            const standard = filtered.filter((t) => !t.category || t.category === 'standard');
+                            const specialty = filtered.filter((t) => t.category === 'specialty');
+                            const event = filtered.filter((t) => t.category === 'event');
+                            return (
+                              <>
+                                {standard.length > 0 && (
+                                  <optgroup label="Standard Shifts">
+                                    {standard.map((t) => (
+                                      <option key={t.id} value={t.id}>
+                                        {t.name}
+                                        {t.apparatus_type ? ` — ${enumLabel(t.apparatus_type)}` : ''} (
+                                        {formatTimeOfDay(t.start_time_of_day)} - {formatTimeOfDay(t.end_time_of_day)})
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                {specialty.length > 0 && (
+                                  <optgroup label="Specialty Vehicle">
+                                    {specialty.map((t) => (
+                                      <option key={t.id} value={t.id}>
+                                        {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
+                                        {formatTimeOfDay(t.end_time_of_day)})
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                {event.length > 0 && (
+                                  <optgroup label="Event / Special">
+                                    {event.map((t) => (
+                                      <option key={t.id} value={t.id}>
+                                        {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
+                                        {formatTimeOfDay(t.end_time_of_day)})
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                {standard.length === 0 &&
+                                  specialty.length === 0 &&
+                                  event.length === 0 &&
+                                  filtered.length > 0 &&
+                                  filtered.map((t) => (
+                                    <option key={t.id} value={t.id}>
+                                      {t.name} ({formatTimeOfDay(t.start_time_of_day)} -{' '}
+                                      {formatTimeOfDay(t.end_time_of_day)})
+                                    </option>
+                                  ))}
+                                {filtered.length === 0 && (
+                                  <option value="" disabled>
+                                    No templates match &ldquo;{templateSearch}&rdquo;
+                                  </option>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </select>
+                        {/* Template info preview */}
+                        {(() => {
+                          const tmpl =
+                            effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+                          if (!tmpl) return null;
+                          const flatPositions = resolveTemplatePositions(tmpl.positions);
+                          const hasPositions = flatPositions.length > 0;
+                          const catLabel =
+                            tmpl.category === 'specialty' ? 'Specialty' : tmpl.category === 'event' ? 'Event' : null;
+                          return (
+                            <div className="bg-theme-surface-hover/50 mt-2 space-y-1.5 rounded-lg p-2.5">
+                              <div className="flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-theme-text-muted">
+                                    Duration:{' '}
+                                    <span className="text-theme-text-primary font-medium">{tmpl.duration_hours}h</span>
+                                  </span>
+                                  {catLabel && (
+                                    <span
+                                      className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                        tmpl.category === 'specialty'
+                                          ? 'bg-orange-500/10 text-orange-800 dark:text-orange-400'
+                                          : 'bg-purple-500/10 text-purple-700 dark:text-purple-400'
+                                      }`}
+                                    >
+                                      {catLabel}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-theme-text-muted">
+                                  Min staffing:{' '}
+                                  <span className="text-theme-text-primary font-medium">{tmpl.min_staffing}</span>
+                                </span>
+                              </div>
+                              {tmpl.apparatus_type && (
+                                <p className="text-theme-text-muted flex items-center gap-1 text-xs">
+                                  <Truck className="h-3 w-3" /> Vehicle type:{' '}
+                                  <span className="text-theme-text-primary font-medium">
+                                    {enumLabel(tmpl.apparatus_type)}
+                                  </span>
+                                </p>
+                              )}
+                              {hasPositions && (
+                                <div>
+                                  <p className="text-theme-text-muted mb-1 text-xs">Required positions:</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {flatPositions.map((slot, i) => (
+                                      <span
+                                        key={i}
+                                        className={`rounded-sm px-2 py-0.5 text-[10px] font-medium capitalize ${slot.required ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'bg-theme-surface-hover text-theme-text-muted'}`}
+                                      >
+                                        {positionLabel(slot.position)}
+                                        {!slot.required && ' (opt)'}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        {usingFallbackTemplates && (
+                          <p className="text-theme-text-muted mt-1.5 text-xs">
+                            Using default templates.{' '}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowCreateShift(false);
+                                void navigate('/scheduling/admin/planning/templates');
+                              }}
+                              className="text-violet-600 hover:underline dark:text-violet-400"
+                            >
+                              Configure your own
+                            </button>{' '}
+                            on the Templates page.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Start / End Date — always visible */}
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <FormField
-                          id={CREATE_SHIFT_FIELDS.end_date.id}
-                          label="End Date"
-                          error={createErrors.errors.end_date}
+                          id={CREATE_SHIFT_FIELDS.start_date.id}
+                          label="Start Date"
+                          required
+                          error={createErrors.errors.start_date}
                         >
                           {(field) => (
                             <input
                               {...field}
                               type="date"
-                              value={shiftForm.endDate}
+                              value={shiftForm.startDate}
                               onChange={(e) => {
-                                createErrors.setError('end_date', null);
-                                setShiftForm({
-                                  ...shiftForm,
-                                  endDate: e.target.value,
-                                });
+                                const newStart = e.target.value;
+                                if (newStart) createErrors.setError('start_date', null);
+                                const tmpl =
+                                  effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+                                setShiftForm((prev) => ({
+                                  ...prev,
+                                  startDate: newStart,
+                                  endDate: computeEndDate(newStart, tmpl),
+                                }));
                               }}
                               className="form-input focus:ring-violet-500"
                             />
                           )}
                         </FormField>
-                        {shiftForm.startDate &&
-                          shiftForm.endDate &&
-                          (() => {
-                            const tmpl =
-                              effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
-                            if (!tmpl) return null;
-                            const sameDay = shiftForm.startDate === shiftForm.endDate;
-                            return (
-                              <p className="text-theme-text-muted mt-1 text-xs">
-                                {formatTimeOfDay(tmpl.start_time_of_day)} &rarr; {formatTimeOfDay(tmpl.end_time_of_day)}{' '}
-                                ({sameDay ? 'same day' : 'next day'})
-                              </p>
-                            );
-                          })()}
-                      </div>
-                    </div>
-
-                    {/* Apparatus Selection */}
-                    {apparatusList.length > 0 && (
-                      <div>
-                        <FormField
-                          id={CREATE_SHIFT_FIELDS.apparatus.id}
-                          label={
-                            <span className="inline-flex items-center gap-1.5">
-                              <Truck className="h-4 w-4" aria-hidden="true" /> Apparatus
-                            </span>
-                          }
-                          required
-                          error={createErrors.errors.apparatus}
-                        >
-                          {(field) => (
-                            <select
-                              {...field}
-                              value={shiftForm.apparatus_id}
-                              onChange={(e) => {
-                                if (e.target.value) createErrors.setError('apparatus', null);
-                                setShiftForm({
-                                  ...shiftForm,
-                                  apparatus_id: e.target.value,
-                                });
-                              }}
-                              className="form-input focus:ring-violet-500"
-                            >
-                              <option value="">Select apparatus...</option>
-                              {apparatusList.map((a) => (
-                                <option key={a.id} value={a.id}>
-                                  {a.unit_number} — {a.name}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                        </FormField>
-                        {(() => {
-                          const selected = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
-                          if (selected?.positions && selected.positions.length > 0) {
-                            return (
-                              <div className="mt-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-2.5">
-                                <p className="mb-1.5 text-xs font-medium text-violet-700 dark:text-violet-400">
-                                  Positions on {selected.unit_number}:
-                                </p>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {selected.positions.map((slot, i) => {
-                                    const name = slot.position;
-                                    return (
-                                      <span
-                                        key={i}
-                                        className="rounded-sm bg-violet-500/10 px-2 py-0.5 text-xs text-violet-700 capitalize dark:text-violet-300"
-                                      >
-                                        {name}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          }
-                          if (shiftForm.apparatus_id) {
-                            return (
-                              <p className="text-theme-text-muted mt-1 text-xs">
-                                No positions defined — members can sign up with any position.
-                              </p>
-                            );
-                          }
-                          return null;
-                        })()}
-                      </div>
-                    )}
-
-                    {/* Auto-generated shift label preview */}
-                    {(() => {
-                      const tmpl = effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
-                      const apparatus = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
-                      if (!tmpl) return null;
-                      const suffix =
-                        tmpl.duration_hours >= 24 ? '24' : tmpl.start_time_of_day < tmpl.end_time_of_day ? 'DS' : 'NS';
-                      const label = apparatus ? `${apparatus.unit_number ?? apparatus.name} ${suffix}` : `${tmpl.name}`;
-                      return (
-                        <div className="bg-theme-surface-hover/50 border-theme-surface-border flex items-center gap-2 rounded-lg border p-2.5">
-                          <span className="text-theme-text-muted text-xs">Shift label:</span>
-                          <span className="text-theme-text-primary text-sm font-semibold">{label}</span>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Collapsible additional options */}
-                    <div className="border-theme-surface-border overflow-hidden rounded-lg border">
-                      <button
-                        type="button"
-                        onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                        className="text-theme-text-secondary hover:bg-theme-surface-hover flex w-full items-center justify-between px-4 py-2.5 text-left text-sm font-medium transition-colors"
-                      >
-                        <span className="flex items-center gap-1.5">
-                          <Settings className="h-3.5 w-3.5" />
-                          Additional Options
-                          {(shiftForm.apparatus_id ||
-                            shiftForm.shift_officer_id ||
-                            shiftForm.customStartTime ||
-                            shiftForm.customEndTime ||
-                            shiftForm.notes) && <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />}
-                        </span>
-                        <ChevronDown
-                          className={`text-theme-text-muted h-4 w-4 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
-                          aria-hidden="true"
-                        />
-                      </button>
-                      {showAdvancedOptions && (
-                        <div className="border-theme-surface-border space-y-4 border-t px-4 pt-1 pb-4">
-                          {/* Custom Time Override */}
-                          <div role="group" aria-labelledby="create-shift-custom-times">
-                            <span id="create-shift-custom-times" className="form-label">
-                              <span className="flex items-center gap-1.5">
-                                <Clock className="h-4 w-4" /> Custom Times
-                              </span>
-                            </span>
-                            <p className="text-theme-text-muted mb-2 text-xs">
-                              Override the template times for this shift
-                            </p>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label
-                                  htmlFor="create-shift-start-time"
-                                  className="text-theme-text-muted mb-1 block text-xs"
-                                >
-                                  Start Time
-                                </label>
-                                <TimeQuarterHour
-                                  id="create-shift-start-time"
-                                  aria-label="Start Time"
-                                  value={shiftForm.customStartTime}
-                                  onChange={(e) => setShiftForm({ ...shiftForm, customStartTime: e.target.value })}
-                                  className="form-input"
-                                />
-                              </div>
-                              <div>
-                                <label
-                                  htmlFor="create-shift-end-time"
-                                  className="text-theme-text-muted mb-1 block text-xs"
-                                >
-                                  End Time
-                                </label>
-                                <TimeQuarterHour
-                                  id="create-shift-end-time"
-                                  aria-label="End Time"
-                                  value={shiftForm.customEndTime}
-                                  onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
-                                  className="form-input"
-                                />
-                              </div>
-                            </div>
-                            {(shiftForm.customStartTime || shiftForm.customEndTime) && (
-                              <button
-                                type="button"
-                                onClick={() => setShiftForm({ ...shiftForm, customStartTime: '', customEndTime: '' })}
-                                className="text-theme-text-muted mt-1 text-xs hover:text-violet-500"
-                              >
-                                Reset to template times
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Shift Officer Selection */}
-                          {membersList.length > 0 && (
-                            <div>
-                              <label htmlFor="create-shift-officer" className="form-label">
-                                <span className="flex items-center gap-1.5">
-                                  <Users className="h-4 w-4" /> Shift Officer
-                                </span>
-                              </label>
-                              <select
-                                id="create-shift-officer"
-                                value={shiftForm.shift_officer_id}
-                                onChange={(e) =>
+                        <div>
+                          <FormField
+                            id={CREATE_SHIFT_FIELDS.end_date.id}
+                            label="End Date"
+                            error={createErrors.errors.end_date}
+                          >
+                            {(field) => (
+                              <input
+                                {...field}
+                                type="date"
+                                value={shiftForm.endDate}
+                                onChange={(e) => {
+                                  createErrors.setError('end_date', null);
                                   setShiftForm({
                                     ...shiftForm,
-                                    shift_officer_id: e.target.value,
-                                  })
-                                }
+                                    endDate: e.target.value,
+                                  });
+                                }}
+                                className="form-input focus:ring-violet-500"
+                              />
+                            )}
+                          </FormField>
+                          {shiftForm.startDate &&
+                            shiftForm.endDate &&
+                            (() => {
+                              const tmpl =
+                                effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+                              if (!tmpl) return null;
+                              const sameDay = shiftForm.startDate === shiftForm.endDate;
+                              return (
+                                <p className="text-theme-text-muted mt-1 text-xs">
+                                  {formatTimeOfDay(tmpl.start_time_of_day)} &rarr;{' '}
+                                  {formatTimeOfDay(tmpl.end_time_of_day)} ({sameDay ? 'same day' : 'next day'})
+                                </p>
+                              );
+                            })()}
+                        </div>
+                      </div>
+
+                      {/* Apparatus Selection */}
+                      {apparatusList.length > 0 && (
+                        <div>
+                          <FormField
+                            id={CREATE_SHIFT_FIELDS.apparatus.id}
+                            label={
+                              <span className="inline-flex items-center gap-1.5">
+                                <Truck className="h-4 w-4" aria-hidden="true" /> Apparatus
+                              </span>
+                            }
+                            required
+                            error={createErrors.errors.apparatus}
+                          >
+                            {(field) => (
+                              <select
+                                {...field}
+                                value={shiftForm.apparatus_id}
+                                onChange={(e) => {
+                                  if (e.target.value) createErrors.setError('apparatus', null);
+                                  setShiftForm({
+                                    ...shiftForm,
+                                    apparatus_id: e.target.value,
+                                  });
+                                }}
                                 className="form-input focus:ring-violet-500"
                               >
-                                <option value="">No shift officer</option>
-                                {membersList.map((m) => (
-                                  <option key={m.id} value={m.id}>
-                                    {m.label}
+                                <option value="">Select apparatus...</option>
+                                {apparatusList.map((a) => (
+                                  <option key={a.id} value={a.id}>
+                                    {a.unit_number} — {a.name}
                                   </option>
                                 ))}
                               </select>
-                            </div>
-                          )}
+                            )}
+                          </FormField>
+                          {(() => {
+                            const selected = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
+                            if (selected?.positions && selected.positions.length > 0) {
+                              return (
+                                <div className="mt-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-2.5">
+                                  <p className="mb-1.5 text-xs font-medium text-violet-700 dark:text-violet-400">
+                                    Positions on {selected.unit_number}:
+                                  </p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {selected.positions.map((slot, i) => {
+                                      const name = slot.position;
+                                      return (
+                                        <span
+                                          key={i}
+                                          className="rounded-sm bg-violet-500/10 px-2 py-0.5 text-xs text-violet-700 capitalize dark:text-violet-300"
+                                        >
+                                          {name}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            }
+                            if (shiftForm.apparatus_id) {
+                              return (
+                                <p className="text-theme-text-muted mt-1 text-xs">
+                                  No positions defined — members can sign up with any position.
+                                </p>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      )}
 
-                          {/* Notes */}
-                          <div>
-                            <label htmlFor="create-shift-notes" className="form-label">
-                              Notes
-                            </label>
-                            <textarea
-                              id="create-shift-notes"
-                              value={shiftForm.notes}
-                              onChange={(e) => setShiftForm({ ...shiftForm, notes: e.target.value })}
-                              rows={2}
-                              className="form-input resize-none focus:ring-violet-500"
-                              placeholder="Optional notes for this shift..."
+                      {/* Auto-generated shift label preview */}
+                      {(() => {
+                        const tmpl =
+                          effectiveTemplates.find((t) => t.id === shiftForm.shiftTemplate) || defaultTemplate;
+                        const apparatus = apparatusList.find((a) => a.id === shiftForm.apparatus_id);
+                        if (!tmpl) return null;
+                        const suffix =
+                          tmpl.duration_hours >= 24
+                            ? '24'
+                            : tmpl.start_time_of_day < tmpl.end_time_of_day
+                              ? 'DS'
+                              : 'NS';
+                        const label = apparatus
+                          ? `${apparatus.unit_number ?? apparatus.name} ${suffix}`
+                          : `${tmpl.name}`;
+                        return (
+                          <div className="bg-theme-surface-hover/50 border-theme-surface-border flex items-center gap-2 rounded-lg border p-2.5">
+                            <span className="text-theme-text-muted text-xs">Shift label:</span>
+                            <span className="text-theme-text-primary text-sm font-semibold">{label}</span>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Collapsible additional options */}
+                      <div className="border-theme-surface-border overflow-hidden rounded-lg border">
+                        <button
+                          type="button"
+                          onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+                          className="text-theme-text-secondary hover:bg-theme-surface-hover flex w-full items-center justify-between px-4 py-2.5 text-left text-sm font-medium transition-colors"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Settings className="h-3.5 w-3.5" />
+                            Additional Options
+                            {(shiftForm.apparatus_id ||
+                              shiftForm.shift_officer_id ||
+                              shiftForm.customStartTime ||
+                              shiftForm.customEndTime ||
+                              shiftForm.notes) && <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />}
+                          </span>
+                          <ChevronDown
+                            className={`text-theme-text-muted h-4 w-4 transition-transform duration-200 ${showAdvancedOptions ? 'rotate-180' : ''}`}
+                            aria-hidden="true"
+                          />
+                        </button>
+                        {showAdvancedOptions && (
+                          <div className="border-theme-surface-border space-y-4 border-t px-4 pt-1 pb-4">
+                            {/* Custom Time Override */}
+                            <div role="group" aria-labelledby="create-shift-custom-times">
+                              <span id="create-shift-custom-times" className="form-label">
+                                <span className="flex items-center gap-1.5">
+                                  <Clock className="h-4 w-4" /> Custom Times
+                                </span>
+                              </span>
+                              <p className="text-theme-text-muted mb-2 text-xs">
+                                Override the template times for this shift
+                              </p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label
+                                    htmlFor="create-shift-start-time"
+                                    className="text-theme-text-muted mb-1 block text-xs"
+                                  >
+                                    Start Time
+                                  </label>
+                                  <TimeQuarterHour
+                                    id="create-shift-start-time"
+                                    aria-label="Start Time"
+                                    value={shiftForm.customStartTime}
+                                    onChange={(e) => setShiftForm({ ...shiftForm, customStartTime: e.target.value })}
+                                    className="form-input"
+                                  />
+                                </div>
+                                <div>
+                                  <label
+                                    htmlFor="create-shift-end-time"
+                                    className="text-theme-text-muted mb-1 block text-xs"
+                                  >
+                                    End Time
+                                  </label>
+                                  <TimeQuarterHour
+                                    id="create-shift-end-time"
+                                    aria-label="End Time"
+                                    value={shiftForm.customEndTime}
+                                    onChange={(e) => setShiftForm({ ...shiftForm, customEndTime: e.target.value })}
+                                    className="form-input"
+                                  />
+                                </div>
+                              </div>
+                              {(shiftForm.customStartTime || shiftForm.customEndTime) && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShiftForm({ ...shiftForm, customStartTime: '', customEndTime: '' })}
+                                  className="text-theme-text-muted mt-1 text-xs hover:text-violet-500"
+                                >
+                                  Reset to template times
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Shift Officer Selection */}
+                            {membersList.length > 0 && (
+                              <FormField
+                                id={CREATE_SHIFT_FIELDS.shift_officer.id}
+                                label={
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <Users className="h-4 w-4" aria-hidden="true" /> Shift Officer
+                                  </span>
+                                }
+                                error={createErrors.errors.shift_officer}
+                              >
+                                {(field) => (
+                                  <select
+                                    {...field}
+                                    value={shiftForm.shift_officer_id}
+                                    onChange={(e) => {
+                                      createErrors.setError('shift_officer', null);
+                                      setShiftForm({
+                                        ...shiftForm,
+                                        shift_officer_id: e.target.value,
+                                      });
+                                    }}
+                                    className="form-input focus:ring-violet-500"
+                                  >
+                                    <option value="">No shift officer</option>
+                                    {membersList.map((m) => (
+                                      <option key={m.id} value={m.id}>
+                                        {m.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                )}
+                              </FormField>
+                            )}
+
+                            {/* Notes */}
+                            <FormField
+                              id={CREATE_SHIFT_FIELDS.notes.id}
+                              label="Notes"
+                              error={createErrors.errors.notes}
+                            >
+                              {(field) => (
+                                <textarea
+                                  {...field}
+                                  value={shiftForm.notes}
+                                  onChange={(e) => {
+                                    createErrors.setError('notes', null);
+                                    setShiftForm({ ...shiftForm, notes: e.target.value });
+                                  }}
+                                  rows={2}
+                                  className="form-input resize-none focus:ring-violet-500"
+                                  placeholder="Optional notes for this shift..."
+                                />
+                              )}
+                            </FormField>
+                          </div>
+                        )}
+                      </div>
+                      {createErrors.formError && (
+                        <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                          <div className="flex items-start space-x-2">
+                            <AlertCircle
+                              className="mt-0.5 h-4 w-4 shrink-0 text-red-800 dark:text-red-300"
+                              aria-hidden="true"
                             />
+                            <p className="text-sm text-red-800 dark:text-red-300">{createErrors.formError}</p>
                           </div>
                         </div>
                       )}
                     </div>
-                    {createErrors.formError && (
-                      <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3">
-                        <div className="flex items-start space-x-2">
-                          <AlertCircle
-                            className="mt-0.5 h-4 w-4 shrink-0 text-red-800 dark:text-red-300"
-                            aria-hidden="true"
-                          />
-                          <p className="text-sm text-red-800 dark:text-red-300">{createErrors.formError}</p>
-                        </div>
-                      </div>
-                    )}
                   </div>
-                </div>
-                <div className="bg-theme-input-bg flex justify-end space-x-3 rounded-b-lg px-6 py-3">
-                  <button
-                    onClick={() => {
-                      setShowCreateShift(false);
-                      createErrors.clear();
-                    }}
-                    className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      void handleCreateShift();
-                    }}
-                    disabled={creating}
-                    className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors ${
-                      creating
-                        ? 'cursor-not-allowed bg-violet-700 text-white opacity-50'
-                        : 'bg-violet-700 text-white hover:bg-violet-800'
-                    }`}
-                  >
-                    {creating && <Loader2 className="h-4 w-4 animate-spin" />}
-                    <span>{creating ? 'Creating...' : 'Create Shift'}</span>
-                  </button>
-                </div>
+                  <div className="bg-theme-input-bg flex justify-end space-x-3 rounded-b-lg px-6 py-3">
+                    <button
+                      type="button"
+                      onClick={requestCloseCreateShift}
+                      className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg border px-4 py-2 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={creating}
+                      className={`inline-flex items-center space-x-2 rounded-lg px-4 py-2 transition-colors ${
+                        creating
+                          ? 'cursor-not-allowed bg-violet-700 text-white opacity-50'
+                          : 'bg-violet-700 text-white hover:bg-violet-800'
+                      }`}
+                    >
+                      {creating && <Loader2 className="h-4 w-4 animate-spin" />}
+                      <span>{creating ? 'Creating...' : 'Create Shift'}</span>
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           </div>

@@ -28,6 +28,7 @@ import {
   ClipboardCheck,
   CalendarClock,
   CalendarRange,
+  CalendarX,
 } from 'lucide-react';
 import {
   courseCohortService,
@@ -36,6 +37,7 @@ import {
   trainingModuleConfigService,
 } from '../services/api';
 import { MyShiftEvaluationsList } from '../components/training/MyShiftEvaluationsList';
+import { MyAttendanceWaiverRequests } from '../components/training/MyAttendanceWaiverRequests';
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
 import { RequirementDetailCard } from '../components/training/RequirementDetailCard';
@@ -923,9 +925,17 @@ const MyTrainingPage: React.FC = () => {
                               voided
                             </span>
                           ) : (
-                            <span className={`rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(r.status)}`}>
-                              {getTrainingStatusLabel(r.status)}
-                            </span>
+                            <div className="flex flex-col gap-1">
+                              <span
+                                className={`w-fit rounded-sm px-2 py-1 text-xs ${getTrainingStatusColor(r.status)}`}
+                              >
+                                {getTrainingStatusLabel(r.status)}
+                              </span>
+                              {/* Why the event's credit was withdrawn (W80-15). */}
+                              {r.void_reason && (
+                                <span className="text-theme-text-secondary text-xs">{r.void_reason}</span>
+                              )}
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -1184,6 +1194,16 @@ const MyTrainingPage: React.FC = () => {
               <MyShiftEvaluationsList evaluations={shiftEvaluations} />
             </Section>
           )}
+
+          {/* Requests to be excused from a training session; nothing until
+              the member has made one. */}
+          <MyAttendanceWaiverRequests
+            wrap={(list) => (
+              <Section title="My Waiver Requests" icon={CalendarX} defaultOpen={false}>
+                {list}
+              </Section>
+            )}
+          />
 
           {/* Submission History */}
           {v?.show_submission_history && data.submissions && data.submissions.length > 0 && (

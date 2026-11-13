@@ -5,6 +5,108 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: November 10 – 11, 2026
+
+Merged to `main` after `69d32dc1` (2026-11-10 13:56 UTC, the previous pass)
+through `dcc32fe2` (2026-11-11 13:58 UTC), 38 first-parent merges. Sixteen are
+security-review passes, recorded in `docs/security-review/PROGRESS.md`; the
+forms batches (#4206, #4211, #4239) are recorded in
+`docs/FORMS_REVIEW_2026-11-05.md`. `CHANGELOG.md` stays closed.
+
+| Change                                                                                                                                                                                                             | Guide | Disposition                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Members Administration: **Former Members** page (`?tab=former`) for archived and dropped members; Member Management lists everyone else (#4215)                                                                    | 01    | Added under Member Management Row Actions; Roster row of the hub table and the reactivate note updated                        |
+| Member row says each thing once: no base Member chip, no chip repeating the status or class, Status folded into Membership, Reset Password / Unlock / Reset MFA / Delete in a **More actions** menu (#4218, #4222) | 01    | Added; delete steps now point at the menu                                                                                     |
+| **Postpone Event** (W80-11): new start and end, reason, clears check-ins and credit, keeps RSVPs, **Postponed** badge on the list (#4179)                                                                          | 04    | New section after Cancelling; wiki `Module-Events` gains the endpoint. Migration `09f0171ccf5e` (three nullable columns)      |
+| Evaluations: training-session attendance graded by the member's session-attendance requirement (#4208)                                                                                                             | 02    | Note added to the evaluation steps; wiki `Module-Evaluations` updated. Already in `UPGRADING.md` and `EVALUATIONS_MODULE.md`  |
+| Session waiver requests (members ask to be excused), backend only, off until a policy is saved (#4225)                                                                                                             | 02    | "Coming next" note under Waivers. Rules in `backend/app/docs/TRAINING_WAIVERS.md`; migration `8b1cf6f55425` in `UPGRADING.md` |
+| Shift history import: overlapping rows get **Save times** in the Times cell (#4190)                                                                                                                                | 03    | Added to the import steps                                                                                                     |
+| Training event created and edited with its training details in one save; rolling series and Duplicate carry them (#4231, backend part 1)                                                                           | 04    | Already written by the PR                                                                                                     |
+| Community Engagement period report (#4221)                                                                                                                                                                         | 04    | Already written by the PR, also in wiki `Module-Events`                                                                       |
+| Noto Sans embedded; certified results, evaluations and minutes as PDF/A-2b (#4207)                                                                                                                                 | none  | Already in `PDF_REPORTS.md`                                                                                                   |
+| Sign-in lands straight on **My Account** when a password change or MFA enrolment is due; failed sign-in reselects the password; registry Source link beside Import (#4227)                                         | 00    | Guide 00 already says "straight to the Password tab"; no edit                                                                 |
+| Forms batches 4, 16, 17: named missing fields, 422s shown on the field, discard protection                                                                                                                         | none  | Behaviour general across forms; recorded in the forms review                                                                  |
+| Dashboard pulse default: audit rows carry IP and browser; buttons offered on either settings permission (A7, #4223)                                                                                                | none  | Recorded in `docs/app-review/`                                                                                                |
+| CI: `failOnFlakyTests` (#4219, Pitfall #38), Mobile Safari spec fixes (#4216, #4229), dependency bumps (#4195 pypdf 7.0.0, #4197)                                                                                  | none  | Internal or CI only                                                                                                           |
+
+**Screenshots to create:** Roster strip with **Former Members**; a Member
+Management row with the **More actions** menu open; a row reading **No other
+positions**; the **Postpone Event** dialog; an event card with **Postponed**;
+the event page's "Postponed from" line; a history-import row with **Save
+times**. **Replace:** `01-22-member-lifecycle` (shows the old Roster strip and
+a separate Status column). Queued in `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Not covered:** YouTube scripts, flagged in
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`, not edited. No script names the
+moved row actions or the evaluation figure by label.
+
+## Change audit: November 8 – 10, 2026
+
+Merged to `main` after `51e6e1b5` (2026-11-08 08:59 UTC, the previous pass)
+through `69d32dc1` (2026-11-10 13:56 UTC). The plain-language, phone-width and
+forms-review sweeps (#4131–#4178) and the security-review and app-review passes
+are recorded by their own PRs, `docs/FORMS_REVIEW_2026-11-05.md`, and
+`docs/security-review/PROGRESS.md`. `CHANGELOG.md` stays closed.
+The November 8 – 9 pass below started from the same commit and covers part of this window; rows that appear in both describe the same changes.
+
+| Change                                                                                                                                                                                                           | Guide | Disposition                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------ |
+| My Shifts: **Upcoming** under month headers; **Past** by year and month with a Year dropdown and hours chart; declined and cancelled seats leave Past (#4175 area, `674728a5`, `6686002a`)                       | 03    | Added to My Shifts                                     |
+| End-of-shift summary rolls call types into counts (`16f5ea1f`)                                                                                                                                                   | 03    | Added                                                  |
+| Check In offers **Add a member** after check-in closes (W80-8)                                                                                                                                                   | 04    | Added                                                  |
+| Moving an event's start lets reminders resend (W80-16); a training waiver takes an excused drill off "missed" (W80-10)                                                                                           | 04    | Added                                                  |
+| Session-attendance requirement with no session held is not graded (W80-9); wizard review lists counted requirements, credit-hours hint, officer check-in starts a record, withdrawn-credit reason (W80-12 to 15) | 02    | Added                                                  |
+| Training records show their source: provider, Imported or The Logbook; CSV **Source** column; PDF line under the course (#4209)                                                                                  | 02    | Added to the History tab. No migration                 |
+| Member roster is a table again on desktop (`rwd-table-xwide`)                                                                                                                                                    | 01    | Added                                                  |
+| `GET /users/with-roles` no longer 500s on a `.invalid` placeholder email (`8cfabeac`)                                                                                                                            | 01    | Added; no migration, write paths still validate        |
+| Historical import: members to be created are named as they will be; the already-decided ones fold away                                                                                                           | 16    | Added                                                  |
+| PDF margins and Avery 5160 alignment (`21529f7f`)                                                                                                                                                                | none  | Already in `PDF_REPORTS.md` and `KNOWN_LIMITATIONS.md` |
+| Shared report layout for training and equipment-check PDFs; escaped text fixed in PDF cells                                                                                                                      | none  | Already in `PDF_REPORTS.md`                            |
+| Side-navigation collapse rail keyed on a root attribute, not `:has()` (`08fa40a5`); Mobile Safari E2E run in three shards (#4210); dependency bumps                                                              | none  | Internal or CI only                                    |
+
+**Screenshots to create:** My Shifts Upcoming with month headers; My Shifts Past
+with Year dropdown and chart; the event Check In dialog with **Add a member**;
+a Training History page showing the source line; a requirement card reading
+**No sessions held yet**; Historical Data Import members list with the collapsed
+section. **Replace:** `01-01` (roster as a table on a desktop width), `03-04`.
+Queued in `docs/training/SCREENSHOT_CURRENCY.md`.
+
+**Not covered:** YouTube scripts, flagged in
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`, not edited.
+
+## Change audit: November 8 – 9, 2026
+
+Merged to `main` after `51e6e1b5` (2026-11-08 08:59 UTC, the previous pass)
+through `1c15d907` (2026-11-09 07:26 UTC), about 48 merges. Security-review
+pass 14 (training core) and the adversarial exfiltration pass (`ADV-01`) are in
+`docs/security-review/`. `CHANGELOG.md` stays closed. The training-requirement
+delete, milestone, Requests-tab triage and history-import changes were written
+into their guides with the code (see the 2026-11-08 notes in guides 02, 03 and
+04 and `TRAINING_PROGRAMS`).
+
+| Change                                                                                                                                                                                                  | Guide | Disposition                                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------ |
+| **Past** shifts grouped by year and month, Year dropdown, hours-by-month chart                                                                                                                          | 03    | Added under My Shifts. Replace the Past view image                                                                 |
+| End-of-shift summary rolls call types up into counts; no longer truncated                                                                                                                               | 03    | Added                                                                                                              |
+| Scheduling notification CC boxes refuse non-addresses and duplicates; labelled remove buttons                                                                                                           | 03    | Added                                                                                                              |
+| History import: pick an existing agency, new outside units start hidden, catch-all Other                                                                                                                | 03    | Already in the guide                                                                                               |
+| Training program wizard keeps a browser draft; **Save draft**, **Start over**                                                                                                                           | 02    | Added after the wizard steps                                                                                       |
+| Milestones wait on courses and tests, and choose who is told                                                                                                                                            | 02    | In `TRAINING_PROGRAMS`; pointer added to 02                                                                        |
+| Training requirements: usage list, permanent delete, inactive hidden                                                                                                                                    | 02    | Already in the guide                                                                                               |
+| Phone and narrow-card reflow of ~20 tables; page-header buttons share rows on a phone; compact empty states                                                                                             | 10    | Added to the mobile guide. No per-screen guide edits                                                               |
+| Members see only approved, non-executive meetings (list, detail, MCP tools); draft events hidden server-side                                                                                            | 04    | Added beside the minutes rule                                                                                      |
+| Cannot name yourself a supervisor; another member's email change needs step-up and notifies the old address                                                                                             | 01    | Added                                                                                                              |
+| Platform analytics: every 30-day figure counts whole local days (W78-4); training waiver takes an excused drill off "missed" (W80-10); moving an event's start lets reminders resend (W80-16)           | none  | Corrections to numbers and reminders; no screen or wording changes                                                 |
+| Security: guest lookup answers a member's email as not found; refused sign-ins take one Argon2 verification; inventory socket token no longer accepted in the URL; credential email templates protected | none  | Internal; recorded in the security-review files. Operators using `?token=` on `/inventory/ws` must send the cookie |
+
+**Screenshots to create:** training program wizard with the draft notice; a
+phone-width card for one reflowed table (audit log). **Replace:** My Shifts
+**Past** view (year dropdown, chart, month headings); Dashboard/Members roster at
+narrow width if shown as a table.
+
+**Not covered:** YouTube scripts. They are flagged in
+`docs/youtube-scripts/SCRIPT_CURRENCY.md`, not edited.
+
 ## Change audit: November 6 – 8, 2026
 
 Merged to `main` after `5607f5fc` (2026-11-06 14:19 UTC, the previous pass)

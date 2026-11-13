@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 
@@ -160,10 +160,21 @@ describe('BulkAddItemsModal', () => {
     });
   });
 
-  it('will not submit an empty list', () => {
+  // Forms review F-3: the button used to grey out on an empty list; pressing
+  // it now says what is missing, on the box, and sends nothing.
+  it('will not submit an empty list, and says so on the box', async () => {
+    const user = userEvent.setup();
     open();
 
-    expect(screen.getByRole('button', { name: /Add item/ })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Add item/ }));
+
+    const list = screen.getByLabelText(/One item per line/);
+    expect(list).toHaveAttribute('aria-invalid', 'true');
+    expect(list).toHaveAccessibleDescription(
+      expect.stringContaining('Paste or type at least one item name, one per line.')
+    );
+    expect(list).toHaveFocus();
+    expect(mockCreateItemsBulk).not.toHaveBeenCalled();
   });
 
   it('keeps the modal open when the write fails', async () => {
@@ -179,5 +190,37 @@ describe('BulkAddItemsModal', () => {
       expect(onClose).not.toHaveBeenCalled();
     });
     expect(screen.getByLabelText(/One item per line/)).toHaveValue('Gauze');
+  });
+
+  it('names a refused line under the list, announced, and adds nothing', async () => {
+    const user = userEvent.setup();
+    mockCreateItemsBulk.mockRejectedValueOnce({
+      response: {
+        status: 422,
+        data: { detail: [{ field: 'entries.1.unit_of_measure', message: 'Value is too long.' }] },
+      },
+    });
+    open();
+
+    await user.type(screen.getByLabelText(/One item per line/), 'Gauze\nGloves | 2 | Box');
+    await user.click(screen.getByRole('button', { name: /Add 2 items/ }));
+
+    const list = screen.getByLabelText(/One item per line/);
+    await waitFor(() => expect(list).toHaveAttribute('aria-invalid', 'true'));
+    expect(list).toHaveAccessibleDescription(expect.stringContaining('Item 2, unit: Value is too long.'));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks before Escape or Cancel discards a pasted list', async () => {
+    const user = userEvent.setup();
+    open();
+    await user.type(screen.getByLabelText(/One item per line/), 'Gauze');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: /Cancel/ }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

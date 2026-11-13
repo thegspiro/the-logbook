@@ -1,5 +1,48 @@
 # Screenshot currency
 
+## Queued by the November 10 – 11 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-10--11-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 01 | Members Administration hub, Roster strip with **Member Management** and **Former Members**; roster without the Status column | Replace `01-22-member-lifecycle` |
+| 01 | Former Members page with its "moved back" line | Create |
+| 01 | Member Management row with the **More actions** menu open | Create |
+| 01 | A row reading **No other positions** | Create |
+| 04 | **Postpone Event** dialog | Create |
+| 04 | Event card with the **Postponed** badge; event page "Postponed from" line | Create |
+| 03 | Shift History Import **Rows** tab: an overlap row with **Save times** | Create |
+
+## Queued by the November 8 – 10 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--10-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | My Shifts **Upcoming** under month headers | Replace `03-04` |
+| 03 | My Shifts **Past** with Year dropdown, hours chart, month headers | Create |
+| 04 | Event attendance **Check In** dialog with **Add a member** on a closed event | Create |
+| 02 | Training History records showing the source line | Create |
+| 02 | Requirement card reading **No sessions held yet** | Create |
+| 01 | Members roster as a table at a desktop width | Replace `01-01` |
+| 16 | Historical import members list with the collapsed "to be created" section | Create |
+
+The November 8 – 9 queue below also lists the My Shifts **Past** view; one capture covers both.
+
+## Queued by the November 8 – 9 documentation pass
+
+Source: [CHANGE_AUDIT_2026-11](../CHANGE_AUDIT_2026-11.md#change-audit-november-8--9-2026).
+Nothing was captured by this pass.
+
+| Guide | Screen | Action |
+| --- | --- | --- |
+| 03 | My Shifts **Past** view with the Year dropdown, hours chart and month headings | Replace |
+| 02 | Pipeline wizard with the resume-draft notice and **Save draft** | Create |
+| 10 | A reflowed table (audit log) as cards at 390px | Create |
+
 ## Captured 2026-11-08 — Requests tab triage list and drawer (#4141)
 
 Taken on the demo department seeded from this branch, with malware scanning on.

@@ -4,7 +4,7 @@
 2026-08-30 (pass 2), 2026-09-05 (pass 3), 2026-09-11 (pass 4), 2026-09-15
 (pass 5), 2026-10-03 (pass 6), 2026-10-07 (pass 7), 2026-10-16 (pass 8),
 2026-10-20 (pass 9), 2026-10-24 (pass 10), 2026-10-27 (pass 11), 2026-10-30
-(pass 12), 2026-11-02 (pass 13) · **PR:**
+(pass 12), 2026-11-02 (pass 13), 2026-11-10 (pass 14) · **PR:**
 [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
 (pass 1), pass 7 merged as commit `9da13118` (no PR — pushed directly), pass
 6 merged as PR [#2875](https://github.com/thegspiro/the-logbook/pull/2875),
@@ -13,7 +13,248 @@ pass 9 merged as PR [#3454](https://github.com/thegspiro/the-logbook/pull/3454),
 pass 10 merged as PR [#3633](https://github.com/thegspiro/the-logbook/pull/3633),
 pass 11 merged as PR [#3765](https://github.com/thegspiro/the-logbook/pull/3765),
 pass 12 merged as PR [#3847](https://github.com/thegspiro/the-logbook/pull/3847),
-pass 13 (this PR)
+pass 13 merged as PR [#3962](https://github.com/thegspiro/the-logbook/pull/3962),
+pass 14 (this PR)
+
+---
+
+## Pass 14 (2026-11-10) — watchdog pickup, real delta (pledge-linked donations, budget-line/expenditure edit+delete, federal-program opportunity seeding), 0 fixed by this pass itself, 0 new findings
+
+**Watchdog pickup.** The dedicated `/loop 30m /security-review` session
+(`session_011T1ZyyLrD5HagusgK9uDw2`) remains unreachable. PR #4224 (Feature
+21, Admin hours, pass 14) had just merged (`9eac8df98` on `main`). A fresh
+`list_pull_requests` (state=open) found no PR whose head branch starts with
+`claude/security-review-`; `docs/security-review/PROGRESS.md`'s rotation
+table, read on a freshly fetched `main`, showed row 22 (Grants &
+fundraising) as the next `⬜`.
+
+**Backend (declared scope):** `app/api/v1/endpoints/grants.py` (46
+endpoints, up from 45 — AST-walked, not grepped), `app/services/grant_service.py`,
+`app/services/fundraising_service.py`, `app/models/grant.py`,
+`app/schemas/grant.py`, plus the Zeffy files pass 13 added to scope
+(`api/v1/endpoints/zeffy.py`, `api/public/zeffy_webhook.py`,
+`services/integration_services/zeffy_service.py`,
+`services/zeffy_sync_service.py`, `models/zeffy.py`, `schemas/zeffy.py` — all
+byte-identical to pass 13; confirmed below). **Frontend:**
+`frontend/src/modules/grants-fundraising/`.
+
+### Diff-scoping methodology
+
+Baseline `6b816dfb` (PR #3962's merge, pass 13; confirmed an ancestor of
+`HEAD` via `git merge-base --is-ancestor`). `git diff 6b816dfb..HEAD --stat`
+against the declared scope found a **real** delta (not a zero-delta
+watchdog pass): 5 backend files (198 insertions, 4 deletions across
+`grants.py`, `grant_service.py`, `fundraising_service.py`, `models/grant.py`,
+`schemas/grant.py`) and 29 frontend files (2,138 insertions, 444 deletions,
+including 6 new test files), plus one new backend service
+(`grant_federal_programs.py`, 109 L) and 2 new migrations
+(`6dadac1674c8`, `3c1f5e2a9d47`). None of the Zeffy files appear in the diff
+— confirmed via `git diff 6b816dfb..HEAD -- app/models/zeffy.py
+app/schemas/zeffy.py app/api/v1/endpoints/zeffy.py
+app/api/public/zeffy_webhook.py app/services/integration_services/zeffy_service.py
+app/services/zeffy_sync_service.py`, empty. `git log` attributes the real
+delta to a workflow-review-driven burst, all dated 2026-11-05/06/08, none
+from this rotation: `1c749eff2` (edit donors/campaigns), `d1e843654` (edit/
+delete budget lines and expenditures; assign compliance tasks on create),
+`e9080b601` (edit a donation, new `GET /grants/donations/{id}`), `ae11628e2`
+("Finance: build the owner's remaining 2026-11-01 decisions" — this
+feature's share: donations can pay toward a pledge, and the four Federal
+Programs are seeded as real opportunities), plus three UI-only mobile-card
+reflow commits (`bf9b9d9df`, `1cda53c16`, `65761fead`, `c41f25315`,
+`aad90537c`) that touch no backend file. Each read in full against the
+current code, not trusted from its own commit message.
+
+### 1. New route — `GET /grants/donations/{donation_id}`
+
+`grants.py:1424-1449`. Gated `fundraising.view` (`require_permission`).
+Fetches via `FundraisingService.get_donation(donation_id, organization_id)`
+— `fundraising_service.py:333-342` — which filters
+`Donation.organization_id == organization_id` directly in the query, not
+merely inherited from a caller. Response goes through `present_donation`
+with `can_see_identity = user_has_permission(current_user,
+"fundraising.manage")`, the same GF-8 masking `list_donations` already
+applies — confirmed by reading the function body, not the docstring's claim
+— so fetching the single row is no way around the list's anonymity gate.
+404 (not a 403/leak) on a foreign or missing id, since the org filter is in
+the query itself.
+
+### 2. Donations may now link to a pledge (`Donation.pledge_id`) — new cross-tenant and cross-financial-state surface, reviewed end to end
+
+`models/grant.py`: `pledge_id` is `String(36)`, `ForeignKey("pledges.id",
+ondelete="SET NULL")`, `nullable=True` (Pitfall #2 satisfied), with its own
+index. `schemas/grant.py`: accepted on `DonationCreate`/`DonationUpdate`,
+exposed on `DonationResponse`. Migration `6dadac1674c8`: table-existence
+guard (`{TABLE, "pledges"} <= _tables()`), idempotent (`_has_column()`
+short-circuit), clean up/down (drops FK, index, column in that order).
+
+`fundraising_service.py` (`create_donation`/`update_donation`,
+`:454-461`, `:538-568`): the pledge is resolved through a new
+`_lock_pledges` helper that selects `Pledge` **filtered on
+`organization_id`** with `.with_for_update()` — so a foreign pledge id is
+simply absent from the result dict, and `_check_pledge_link` raises
+`ValueError("Pledge not found")` on the missing key. This is the XC-1/XC-3
+shape done correctly: no existence oracle (a foreign id and a typo'd id get
+the identical error), and the row lock satisfies Pitfall #27 (read-then-write
+on a capacity-like figure — here, a pledge's `fulfilled_amount` — needs the
+_read_ locked, not just the write; the helper's own docstring cites the
+pitfall by number). `_check_pledge_link` also refuses linking a _different_
+donor's pledge (`pledge.donor_id != donor_id` → `ValueError`) and refusing a
+newly-linked gift against an already `FULFILLED`/`CANCELLED` pledge. On
+update, reassigning away from a pledge (`pledgeId: null`) or to a different
+one correctly un-applies the old share (`_move_pledge(old, -old_share)`)
+before applying the new one; `pledge_share()` counts only a `COMPLETED`
+gift, matching the existing campaign/donor recompute rule. `_move_pledge`
+floors at `Decimal(0)` so a sequence of edits cannot drive `fulfilled_amount`
+negative. GF-8 interaction: `donor_privacy.DONATION_IDENTITY_FIELDS` was
+updated by the same commit to include `pledge_id` (`donor_privacy.py:32`,
+comment: "The pledge names its donor, so the link is identity too") — an
+anonymous gift's pledge link is masked for a view-only caller exactly as its
+donor is, closing the indirect-identity leak this new field would otherwise
+have opened. Verified by reading the function, not assumed.
+
+Guard tests: `backend/tests/test_fundraising_donation_pledges.py` — 19
+cases, explicitly covering `test_another_departments_pledge_is_not_found`
+(XC-1/XC-3), `test_another_donors_pledge_is_refused`,
+`test_the_pledges_are_read_under_a_row_lock` (asserts
+`"organization_id" in str(statement)` on the compiled `SELECT … FOR UPDATE`),
+`test_an_anonymous_gifts_pledge_is_hidden_from_a_viewer`, and the amount/
+status arithmetic (partial, fulfilled, refund-gives-back, unlink-gives-back,
+move-to-another-pledge).
+
+### 3. `GrantComplianceTaskCreate.assigned_to` — new client-settable FK on create, validated in-org
+
+`schemas/grant.py`: `assigned_to: Optional[UUID] = None` added to
+`GrantComplianceTaskCreate` (previously response-only — a task could be
+given an assignee only by a follow-up `PUT`). `grant_service.py`
+`create_compliance_task` (`:1060-1072`) now calls `assert_in_org(self.db,
+User, data.get("assigned_to"), organization_id, allow_none=True)` before
+constructing the row — the identical helper and call shape
+`update_compliance_task` already used (GF-12, pass 2), now exercised on
+create too. A foreign `assignedTo` raises `ValueError` → 400, not a stored
+dangling FK.
+
+### 4. Budget-line / expenditure Edit and Delete controls — wired to pre-existing, already-reviewed endpoints; no new backend surface
+
+`GrantDetailPage.tsx` and `grantsStore.ts` gained `updateBudgetItem`/
+`deleteBudgetItem`/`updateExpenditure`/`deleteExpenditure` actions, but these
+call the module's existing `PUT`/`DELETE /grants/applications/{id}/budget-items/{id}`
+and `.../expenditures/{id}` routes — unchanged in `grants.py` (confirmed:
+`grant_service.py`'s only change this window is the compliance-task
+`assigned_to` validation above; the budget-item/expenditure update/delete
+methods are byte-identical to pass 13) — already covered by GF-2 (cross-org
+`budget_item_id` validated against the org-verified parent application) and
+GF2-1 (the `updated_at` reload fix). Delete uses `useConfirm()` (Pitfall
+#16), confirmed by reading `GrantDetailPage.tsx`'s new delete handlers, not
+`window.confirm`. An edited expenditure sends an emptied vendor/invoice/line
+as explicit `null` (`blankToNull`, Pitfall #1's update-path corollary) —
+read the submit handler directly.
+
+### 5. Donor/campaign Edit controls and donation-edit form — wired to existing endpoints; frontend Pitfall #1 discipline checked directly
+
+`CampaignsPage.tsx`/`DonorsPage.tsx` Edit controls call the existing
+`PUT /grants/campaigns/{id}` / `PUT /grants/donors/{id}` (unchanged,
+previously reviewed GF-1/GF-9). `DonationFormPage.tsx`'s new edit mode
+(`/grants/donations/:donationId/edit`, `fundraising.manage`) builds its
+update payload with `blankToNull()` on every optional field and `null` (not
+omission) to clear a linked donor/campaign/pledge/dedication — read the
+`saveEdit` function body directly (`DonationFormPage.tsx`): `donorId:
+blankToNull(donorId)`, `pledgeId: donorId ? blankToNull(pledgeId) : null`,
+`donorName: donorId ? null : blankToNull(donorName)`, etc. The create path
+(`handleSubmit`) uses `|| undefined` throughout, not `??` — both halves of
+Pitfall #1 satisfied, not just the common create half. The pledge picker is
+scoped client-side to the selected donor's own open pledges
+(`listPledges({ donorId, ... })` then filtered to `p.donorId === donorId`),
+which is a UX narrowing only — the backend's own `_check_pledge_link` is
+the actual enforcement boundary, confirmed above, so a tampered request
+bypassing this client filter still gets refused server-side.
+
+### 6. New route surface registered in all three registries (Pitfall #30a)
+
+`GET /grants/donations/{id}`'s frontend counterpart,
+`/grants/donations/:donationId/edit`, confirmed present in
+`APPLICATION_PAGES.md:1437`, `testingRegistry.ts:1261`, and
+`mobile-route-inventory.ts:672` — by reading each file directly, and by the
+three checks below (`check_route_permissions.py --strict`,
+`testingRegistry.test.ts`, `mobile-route-integrity.spec.ts`) all passing.
+
+### 7. Federal-program opportunity seeding — per-department rows, not a system/global record
+
+`grant_federal_programs.py` (new service) and migration `3c1f5e2a9d47`
+(backfill for existing orgs) insert the four Federal Programs
+(AFG/SAFER/FP&S/Firehouse Subs) as `grant_opportunities` rows **per
+organization** — `GrantOpportunity.organization_id` is `NOT NULL`, matching
+CLAUDE.md's 2026-11-01 "one department per installation" policy (these are
+not multi-tenant-shared system rows with a `NULL` org id, unlike some other
+seed/lookup tables in this codebase — a deliberate, correct choice here
+since each department edits and retires its own copy independently).
+Idempotent by `(organization_id, federal_program_code)` on both the
+migration (`held` set, queried before insert) and the service (`seed_federal_program_opportunities`,
+called from `OnboardingService.create_organization` for new orgs) — a
+department that already typed one in by hand, or ran the migration twice,
+is not given a duplicate. Migration is table-existence-guarded
+(`{TABLE, "organizations"} <= _tables()`) and its downgrade only removes
+rows matching its own seeded shape (`created_by IS NULL`, un-applied to any
+`grant_application`), leaving an edited or applied-to row alone. `GrantCategory`/`DeadlineType`
+values used (`EQUIPMENT`, `STAFFING`, `PREVENTION`, `RECURRING`) all exist
+on the enum — confirmed by reading `models/grant.py`'s `GrantCategory`/
+`DeadlineType` definitions, not assumed.
+
+### Route surface — re-enumerated from scratch, not carried forward
+
+46 `@router.` decorators in `grants.py` (AST walk, not grepped — up from 45
+at pass 13, the one new `get_donation` route). `scripts/check_route_permissions.py
+--strict` (run from the repo root): 305 routes repo-wide, 0 errors, 0
+warnings.
+
+### Re-confirmed unchanged (not re-derived)
+
+- **GF-1 through GF-6** (cross-org FK validation on donation/expenditure/
+  pledge/event/application writes) — all pre-existing helpers
+  (`_entity_in_org`, `_opportunity_in_org`, `_budget_item_in_application`,
+  `_validate_pledge_fks`, `_validate_fundraising_event_fks`,
+  `_validate_application_fks`) unchanged in logic; none of this window's
+  commits touch them.
+- **GF-7/GF-8/GF-9/GF-14/GF-15/GF-24a/GF-27a/GF-33/GF-35/GF-36** — all
+  unchanged since pass 13; `docs/module-audit/grants-fundraising.md` and
+  `docs/app-review/grants-fundraising.md` re-read in full (Step 2) and both
+  are current (no stale correction needed this pass, unlike pass 12).
+- **LIKE escaping** — no new `.ilike()` call site introduced this window;
+  every existing one still carries `escape=LIKE_ESCAPE_CHAR` via
+  `like_pattern()`.
+- **CSV export** — still n/a; no export exists anywhere in this module.
+- **Zeffy surface (pass 13's addition)** — byte-identical since pass 13,
+  confirmed above; not re-derived.
+
+**No new findings.**
+
+### Schema & migration notes
+
+Two migrations in scope this window, both reviewed above: `6dadac1674c8`
+(`donations.pledge_id`) and `3c1f5e2a9d47` (federal-program opportunity
+backfill). Chain re-validated: 755 revisions, single head `67ad01c43434`,
+no duplicate ids.
+
+### Completion gate (pass 14)
+
+| Check                                                                                       | Result                                                        |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (`flake8==7.4.1`)                                             | ✅ 0 violations                                               |
+| `black --check app/ tests/ alembic/` (`black==26.10.1`)                                     | ✅ 3092 files unchanged                                       |
+| `isort --check-only app/ tests/ alembic/` (`isort==9.0.2`)                                  | ✅ clean                                                      |
+| `python3 scripts/validate_migrations.py --strict`                                           | ✅ 755 revisions, single head `67ad01c43434`                  |
+| `python3.13 scripts/generate_schema_docs.py --check`                                        | ✅ `DATABASE_SCHEMA.md` up to date                            |
+| `pytest tests/ -q -k "grant or fundraising or donor or pledge or zeffy or federal_program"` | ✅ 1479 passed, 1 pre-existing environment skip (`pywebpush`) |
+| `python3 scripts/check_route_permissions.py --strict`                                       | ✅ 305 routes, 0 errors, 0 warnings                           |
+| `npm run typecheck`                                                                         | ✅ 0 errors                                                   |
+| `npm run lint`                                                                              | ✅ 0 errors/warnings                                          |
+| `npx vitest run src/modules/grants-fundraising`                                             | ✅ 158 passed (29 files, up from 136/24)                      |
+| `npx vitest run src/modules/testing/testingRegistry.test.ts`                                | ✅ 12 passed (new `/grants/donations/:donationId/edit` entry) |
+| `npx playwright test src/e2e/mobile-route-integrity.spec.ts --project=chromium`             | ✅ 1 passed                                                   |
+
+No source file was changed by this pass — every fixable item in this
+window's real delta had already landed correctly via non-rotation
+(workflow-review-driven) commits before this pass began. This pass's own
+diff is documentation-only (this file + `PROGRESS.md`).
 
 ---
 

@@ -9,7 +9,7 @@ import calendar
 import math
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from sqlalchemy import ColumnElement, and_, false, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,6 +33,7 @@ from app.services.training_period import (
 from app.services.training_waiver_service import (
     SOURCE_LEAVE,
     SOURCE_OVERRIDE,
+    SOURCE_SESSION_EXCUSAL,
     SOURCE_WAIVER,
     MonthWaiver,
     WaiverPeriod,
@@ -563,6 +564,48 @@ def is_session_attendance(req) -> bool:
 
 
 @dataclass(frozen=True)
+class GoverningRequirement:
+    """The session-attendance requirement that speaks for one member.
+
+    ``requirement`` is None when none applies, or when ``ambiguous``: more
+    than one applies and nothing decides between them.
+    """
+
+    requirement: Optional[TrainingRequirement]
+    ambiguous: bool = False
+
+
+def governing_attendance_requirement(
+    member, member_requirements: Iterable
+) -> GoverningRequirement:
+    """Which session-attendance requirement a member's attendance is read against.
+
+    ``member_requirements`` are the requirements that already grade the
+    member (``ComplianceGrading.for_member(...).requirements``), so profiles,
+    scoping and grandfathering have been applied. Of the session-attendance
+    ones, a single one is used as is. Several are narrowed to the ones naming
+    the member's membership type (owner decision, 2026-11-10: "the one
+    related to their membership type"); if that does not leave exactly one,
+    the answer is ambiguous rather than a guess, because two requirements can
+    link different sessions at different percentages and either pick would
+    report a figure the other contradicts.
+    """
+    candidates = [r for r in member_requirements if is_session_attendance(r)]
+    if len(candidates) <= 1:
+        return GoverningRequirement(candidates[0] if candidates else None)
+    # requirement_applies_to_user reads a missing type as "active"; so does this.
+    membership_type = getattr(member, "membership_type", None) or "active"
+    named = [
+        r
+        for r in candidates
+        if membership_type in (getattr(r, "required_membership_types", None) or [])
+    ]
+    if len(named) == 1:
+        return GoverningRequirement(named[0])
+    return GoverningRequirement(None, ambiguous=True)
+
+
+@dataclass(frozen=True)
 class HeldSession:
     """A session linked to an attendance requirement that has been held.
 
@@ -579,8 +622,9 @@ class AttendanceTally:
     """One member's standing on one SESSION_ATTENDANCE requirement.
 
     ``held`` counts the linked sessions held in the window since the member
-    joined; ``charged`` is those minus the ones a waiver or leave excused
-    (a session the member attended anyway stays charged, and counts);
+    joined; ``charged`` is those minus the ones a waiver, a leave or an
+    approved waiver request excused (a session the member attended anyway
+    stays charged, and counts);
     ``needed`` is how many of ``charged`` the percentage asks for, and
     ``base_needed`` what it would ask of ``held``.
     """
@@ -605,17 +649,24 @@ def _sessions_needed(pct: float, count: int) -> int:
     return max(0, math.ceil(pct * count / 100 - 1e-9))
 
 
-def _waiver_excuses(waiver: WaiverPeriod, req_id: str, day: date) -> bool:
+def _waiver_excuses(waiver: WaiverPeriod, req_id: str, session: HeldSession) -> bool:
     # An override excuses no session; it decides the result instead.
     if waiver.source == SOURCE_OVERRIDE:
         return False
+    # An approved waiver request excuses its own session and no other, for
+    # every requirement the session counts toward (owner decision,
+    # 2026-11-10). Matched on the event rather than the day, so another
+    # session that day stays charged and a requirement linked after the
+    # approval is covered too.
+    if waiver.source == SOURCE_SESSION_EXCUSAL:
+        return waiver.event_id is not None and waiver.event_id == session.event_id
     # The same reading of requirement_ids as excused_month_reasons: an
     # empty or missing list is a blanket waiver.
     if waiver.requirement_ids and req_id not in [
         str(r) for r in waiver.requirement_ids
     ]:
         return False
-    return waiver.start_date <= day <= waiver.end_date
+    return waiver.start_date <= session.held_on <= waiver.end_date
 
 
 def tally_session_attendance(
@@ -625,6 +676,7 @@ def tally_session_attendance(
     as_of: date,
     waivers=None,
     join_date: Optional[date] = None,
+    window: Optional[Tuple[date, date]] = None,
 ) -> AttendanceTally:
     """Count a member's attendance at ``req``'s sessions as of ``as_of``.
 
@@ -636,8 +688,21 @@ def tally_session_attendance(
     COMPLETED record whose ``source_event_id`` is the session's event, the
     record finalizing the session writes. A Chief's override covering
     ``as_of`` makes the tally met; the counts stay as they are.
+
+    ``window`` replaces the requirement's own window with an explicit
+    ``(first, last)`` day range, for a reader whose period is not the
+    requirement's: the annual evaluation measures over its review period
+    (owner decision, 2026-11-10), where a monthly requirement's own window
+    would show only the final month. What is held, attended and excused is
+    decided the same way either way. ``met`` and ``overridden`` are not: an
+    override is checked on ``as_of`` alone, so over a replaced window they
+    describe the cut-off, not the range, and a windowed reader should report
+    the counts.
     """
-    start, end = completion_window(req, as_of)
+    if window is None:
+        start, end = completion_window(req, as_of)
+    else:
+        start, end = window
     last = as_of if end is None else min(end, as_of)
     req_id = str(req.id)
     attended_events = {
@@ -656,7 +721,7 @@ def tally_session_attendance(
         s
         for s in in_window
         if s.event_id in attended_events
-        or not any(_waiver_excuses(w, req_id, s.held_on) for w in waivers or [])
+        or not any(_waiver_excuses(w, req_id, s) for w in waivers or [])
     ]
     attended = [s for s in charged if s.event_id in attended_events]
     pct = float(req.required_attendance_pct or 0)
@@ -815,7 +880,10 @@ def evaluate_member_requirement_detail(
     # Measured against the real day rather than the evaluation cut-off: the
     # deadline is a calendar promise to the member, not a period boundary.
     deadline = catch_up_deadline(req, join_date, today)
-    if deadline is not None and ev.status != TrainingStatus.COMPLETED.value:
+    if deadline is not None and ev.status not in (
+        TrainingStatus.COMPLETED.value,
+        NOT_YET_HELD_STATUS,
+    ):
         return replace(
             ev, status=CATCH_UP_STATUS, catch_up_deadline=deadline.isoformat()
         )
@@ -1188,9 +1256,12 @@ def _grade_member_requirement(
         latest_comp = (
             tally.latest_attended.isoformat() if tally.latest_attended else None
         )
-        # No session charged yet (none held, or every one excused) is met:
-        # the member owes nothing for the window, as a target prorated to
-        # zero is for shifts and calls.
+        # Nothing held yet: nothing to have attended, so not graded at all.
+        # Held but every one excused is different: the member was excused and
+        # owes nothing, as a target prorated to zero is for shifts and calls,
+        # and that is met.
+        if tally.held == 0:
+            return _ev(NOT_YET_HELD_STATUS, None, None, **progress)
         if tally.met:
             return replace(
                 _ev("completed", latest_comp, None, **progress),
@@ -1667,6 +1738,17 @@ def _find_matching_profile(
 # obligation, not a training record, and it never counts against standing.
 CATCH_UP_STATUS = "catch_up"
 
+# Status for a session-attendance requirement with no linked session held in
+# the member's window yet. There is nothing to have attended, so it is neither
+# met nor unmet: it used to read "0/0 sessions - Complete" and count as met,
+# the empty denominator CLAUDE.md pitfall #29 warns of (workflow review W80-9,
+# owner decision 2026-11-08). The same value the competency matrix uses for a
+# requirement that does not apply to a member, and graded the same way.
+NOT_YET_HELD_STATUS = "not_applicable"
+
+# Statuses that count neither for nor against a member's standing.
+UNGRADED_STATUSES = frozenset({CATCH_UP_STATUS, NOT_YET_HELD_STATUS})
+
 
 def member_join_date(member) -> Optional[date]:
     """The date a member joined the department, for grandfathering.
@@ -1739,15 +1821,16 @@ def tally_standing(statuses: Iterable[str]) -> Tuple[int, int]:
     """(met, total) over a member's requirement statuses.
 
     A requirement in its catch-up period is left out of both counts: it is
-    neither met nor held against the member until the deadline passes. Every
-    screen that turns statuses into a standing goes through this so a
-    grandfathered member reads the same on the dashboard, the matrix and the
-    profile card.
+    neither met nor held against the member until the deadline passes. So is
+    a session-attendance requirement no session of which has been held yet
+    (:data:`NOT_YET_HELD_STATUS`). Every screen that turns statuses into a
+    standing goes through this so a member reads the same on the dashboard,
+    the matrix and the profile card.
     """
     met = 0
     total = 0
     for status in statuses:
-        if status == CATCH_UP_STATUS:
+        if status in UNGRADED_STATUSES:
             continue
         total += 1
         if status == TrainingStatus.COMPLETED.value:
@@ -1803,6 +1886,9 @@ def requirement_applies_to_member(
     requirement's grandfathering dates before any of the above. Every caller
     in ``app/`` passes it — ``tests/test_requirement_grandfathering.py``
     sweeps for one that does not.
+
+    :func:`mandatory_tiers_for_requirements` projects this same precedence
+    onto an event's "Mandatory for" tiers; a change here belongs there too.
     """
     if not requirement_applies_by_join_date(req, join_date):
         return False
@@ -1817,6 +1903,105 @@ def requirement_applies_to_member(
         if any(slug in position_slugs for slug in req.required_positions):
             return True
     return False
+
+
+# Membership words that name a member class rather than a rung: an
+# administrative member stands on whatever rung their status puts them, so no
+# tier stands for "administrative", and "honorary" is the social class.
+_CLASS_MEMBERSHIP_WORDS = frozenset({"administrative", "honorary"})
+
+
+@dataclass(frozen=True)
+class UnmappedRequirement:
+    requirement_id: str
+    name: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class MandatoryTiers:
+    """Who an event counting toward some requirements is mandatory for."""
+
+    everyone: bool
+    tier_ids: List[str]
+    unmapped: List[UnmappedRequirement]
+
+
+def mandatory_tiers_for_requirements(
+    requirements: Sequence[Any], ladder: Sequence[str]
+) -> MandatoryTiers:
+    """Project who ``requirements`` grade onto an event's "Mandatory for".
+
+    The pre-fill for an event that counts toward attendance requirements: the
+    membership tiers (ids on ``ladder``, in ladder order) whose members those
+    requirements apply to. It reads the same fields in the same precedence as
+    :func:`requirement_applies_to_member`, which decides who a requirement
+    actually grades; keep the two in step (pitfall #29).
+
+    - ``applies_to_all`` means everyone, which covers every other requirement.
+    - Each ``required_membership_types`` word becomes the tiers it canonically
+      stands on. ``probationary`` also takes a ``junior`` tier, because a
+      junior member's legacy membership type derives to probationary.
+    - A class word (administrative, honorary), a word with no tier on this
+      ladder, or a requirement scoped only by rank or position is reported
+      unmapped rather than guessed at.
+    - A requirement naming nobody contributes nothing.
+
+    Grandfathering and compliance profiles are ignored: they decide which
+    members a requirement grades, not which tiers an event is mandatory for.
+    ``training_exempt`` tiers are not left out, because the requirement rule
+    does not leave them out either.
+    """
+    tiers: List[str] = []
+    unmapped: List[UnmappedRequirement] = []
+    by_standing: Dict[str, List[str]] = {}
+    for tier_id in ladder:
+        standing = canonical_member_status(tier_id)
+        if standing:
+            by_standing.setdefault(standing, []).append(tier_id)
+
+    for req in requirements:
+        req_id, name = str(req.id), str(req.name)
+        if req.applies_to_all:
+            return MandatoryTiers(everyone=True, tier_ids=[], unmapped=[])
+        if req.required_membership_types:
+            for word in req.required_membership_types:
+                key = (word or "").strip().lower()
+                if not key:
+                    continue
+                if key in _CLASS_MEMBERSHIP_WORDS:
+                    unmapped.append(
+                        UnmappedRequirement(
+                            req_id,
+                            name,
+                            f"{key.capitalize()} is a member class, "
+                            "not a membership tier",
+                        )
+                    )
+                    continue
+                matched = list(by_standing.get(canonical_member_status(key) or "", []))
+                if key == "probationary":
+                    matched += by_standing.get(MemberStatus.JUNIOR, [])
+                if not matched:
+                    unmapped.append(
+                        UnmappedRequirement(
+                            req_id, name, f"No membership tier stands for {key}"
+                        )
+                    )
+                tiers.extend(matched)
+        elif req.required_roles or req.required_positions:
+            unmapped.append(
+                UnmappedRequirement(
+                    req_id, name, "It applies by rank or position, not membership"
+                )
+            )
+
+    picked = set(tiers)
+    return MandatoryTiers(
+        everyone=False,
+        tier_ids=[tier_id for tier_id in ladder if tier_id in picked],
+        unmapped=unmapped,
+    )
 
 
 def member_position_slugs(member) -> List[str]:

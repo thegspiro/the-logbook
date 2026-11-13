@@ -34,6 +34,8 @@ import type { StorageAreaResponse, StorageAreaCreate, Location, InventoryItem } 
 import { STORAGE_TYPES, getStatusStyle, getStatusLabel, getConditionColor } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
+import { FIELD_ERROR_CLASS, FormField } from '../../../components/ux/FormField';
+import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
 import { useMediaQuery } from '../../../hooks/useMediaQuery';
@@ -44,10 +46,27 @@ import { useInventoryNfcEnabled } from '../hooks/useInventoryNfcEnabled';
 import { ScanCodeField } from '../components/ScanCodeField';
 import { PutAwayPanel } from '../components/PutAwayPanel';
 import { ContentsCheckPanel } from '../components/ContentsCheckPanel';
+import { useDiscardGuard } from '../../../hooks/useDiscardGuard';
+import { placeApiError } from '../../../hooks/useFieldErrors';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
 const labelClass = 'form-label';
+
+type AreaField = 'name' | 'label' | 'description' | 'storage_type' | 'sort_order' | 'parent_id' | 'location_id';
+const AREA_FIELDS: FieldSpecs<AreaField> = {
+  name: { id: 'sa-name', label: 'Name' },
+  label: { id: 'sa-label', label: 'Label' },
+  description: { id: 'sa-desc', label: 'Description' },
+  storage_type: { id: 'sa-type', label: 'Storage Type' },
+  sort_order: { id: 'sa-sort', label: 'Sort Order' },
+  parent_id: { id: 'sa-parent', label: 'Parent Area' },
+  location_id: { id: 'sa-room', label: 'Room' },
+};
+const AREA_ORDER = Object.keys(AREA_FIELDS) as AreaField[];
+// Limits mirror StorageAreaCreate (description is FreeText, capped at 2000).
+const AREA_LIMITS = { name: 255, label: 100, description: 2000 } as const;
 
 interface AreaFormData {
   name: string;
@@ -410,6 +429,10 @@ const StorageAreasPage: React.FC = () => {
   const [editingArea, setEditingArea] = useState<StorageAreaResponse | null>(null);
   const [formData, setFormData] = useState<AreaFormData>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
+  const areaErrors = useFieldErrors(AREA_FIELDS);
+  // What the dialog held when it opened (or last saved), so Escape, the X and
+  // Cancel ask before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<AreaFormData>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<StorageAreaResponse | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [itemsVisible, setItemsVisible] = useState<Set<string>>(new Set());
@@ -689,12 +712,15 @@ const StorageAreasPage: React.FC = () => {
 
   const openCreateModal = () => {
     setEditingArea(null);
-    setFormData({ ...EMPTY_FORM, location_id: selectedRoomId });
+    const seeded = { ...EMPTY_FORM, location_id: selectedRoomId };
+    setFormData(seeded);
+    setBaseline(seeded);
+    areaErrors.clear();
     setShowModal(true);
   };
   const openEditModal = (area: StorageAreaResponse) => {
     setEditingArea(area);
-    setFormData({
+    const seeded: AreaFormData = {
       name: area.name,
       label: area.label ?? '',
       description: area.description ?? '',
@@ -702,19 +728,38 @@ const StorageAreasPage: React.FC = () => {
       parent_id: area.parent_id ?? '',
       location_id: area.location_id ?? selectedRoomId,
       sort_order: String(area.sort_order),
-    });
+    };
+    setFormData(seeded);
+    setBaseline(seeded);
+    areaErrors.clear();
     setShowModal(true);
   };
   const closeModal = () => {
     setShowModal(false);
     setEditingArea(null);
     setFormData(EMPTY_FORM);
+    setBaseline(EMPTY_FORM);
   };
+  const requestClose = useDiscardGuard({
+    isDirty: showModal && JSON.stringify(formData) !== JSON.stringify(baseline),
+    onClose: closeModal,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      toast.error('Storage area name is required');
+    // Checked here rather than by the browser's required bubble, which
+    // vanished after a few seconds and named nothing (forms review F-3).
+    const problems: FieldErrors<AreaField> = {};
+    if (!formData.name.trim()) problems.name = 'Enter a name for the storage area.';
+    const sortText = formData.sort_order.trim();
+    if (sortText && !Number.isInteger(Number(sortText)))
+      problems.sort_order = 'Enter a whole number, or leave it empty.';
+    areaErrors.setFormError(null);
+    areaErrors.setErrors(problems);
+    // A new area is not created until every field is fixed; an edit saves the
+    // rest and keeps a refused field's stored value (owner rule, 2026-11-05).
+    if (!editingArea && Object.keys(problems).length > 0) {
+      areaErrors.focusFirst(problems);
       return;
     }
     setIsSaving(true);
@@ -736,7 +781,26 @@ const StorageAreasPage: React.FC = () => {
         sort_order: isNaN(sortNum) ? num('') : sortNum,
       };
       if (editingArea) {
-        await inventoryService.updateStorageArea(editingArea.id, payload);
+        const { refused } = await saveExceptRefused<AreaField, unknown>({
+          payload: { ...payload },
+          refused: problems,
+          send: (body) => inventoryService.updateStorageArea(editingArea.id, body),
+          place: (err) => placeApiError(AREA_FIELDS, err),
+        });
+        const first = firstRefused(AREA_ORDER, refused);
+        if (first) {
+          // The tree refreshes behind the dialog, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          void loadStorageAreas();
+          areaErrors.setErrors(refused);
+          areaErrors.setFormError(
+            `Storage area saved, except ${AREA_FIELDS[first].label.toLowerCase()}. Fix it and save again.`
+          );
+          areaErrors.focusFirst(refused);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as keyof AreaFormData]]));
+          setBaseline({ ...formData, ...keep });
+          return;
+        }
         toast.success('Storage area updated');
       } else {
         // The backend assigns the barcode, so the new row has to come back
@@ -747,7 +811,7 @@ const StorageAreasPage: React.FC = () => {
       closeModal();
       await loadStorageAreas();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save storage area'));
+      areaErrors.focusFirst(areaErrors.setFromApiError(err, 'Failed to save storage area'));
     } finally {
       setIsSaving(false);
     }
@@ -782,7 +846,10 @@ const StorageAreasPage: React.FC = () => {
   };
 
   const parentOptions = flattenForDropdown(tree).filter((o) => o.id !== editingArea?.id);
-  const set = (patch: Partial<AreaFormData>) => setFormData((p) => ({ ...p, ...patch }));
+  const set = (patch: Partial<AreaFormData>) => {
+    setFormData((p) => ({ ...p, ...patch }));
+    for (const key of Object.keys(patch) as AreaField[]) areaErrors.setError(key, null);
+  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -1033,7 +1100,7 @@ const StorageAreasPage: React.FC = () => {
       {/* Add / Edit Modal */}
       <Modal
         isOpen={showModal}
-        onClose={closeModal}
+        onClose={requestClose}
         title={editingArea ? 'Edit Storage Area' : 'Add Storage Area'}
         footer={
           <>
@@ -1048,7 +1115,7 @@ const StorageAreasPage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={closeModal}
+              onClick={requestClose}
               className="text-theme-text-secondary hover:text-theme-text-primary mr-2 inline-flex items-center px-4 py-2 text-sm font-medium sm:mr-3"
             >
               Cancel
@@ -1057,117 +1124,156 @@ const StorageAreasPage: React.FC = () => {
         }
         size="md"
       >
-        <form id="sa-form" onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
-          <div>
-            <label htmlFor="sa-name" className={labelClass}>
-              Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="sa-name"
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => set({ name: e.target.value })}
-              className={inputClass}
-              placeholder="e.g. Rack A-1"
-            />
-          </div>
-          <div>
-            <label htmlFor="sa-label" className={labelClass}>
-              Label
-            </label>
-            <input
-              id="sa-label"
-              type="text"
-              value={formData.label}
-              onChange={(e) => set({ label: e.target.value })}
-              className={inputClass}
-              placeholder="Optional display label"
-            />
-          </div>
-          <div>
-            <label htmlFor="sa-desc" className={labelClass}>
-              Description
-            </label>
-            <textarea
-              id="sa-desc"
-              rows={2}
-              value={formData.description}
-              onChange={(e) => set({ description: e.target.value })}
-              className={inputClass}
-              placeholder="Optional description"
-            />
-          </div>
+        <form id="sa-form" onSubmit={(e) => void handleSubmit(e)} noValidate className="space-y-4">
+          {areaErrors.formError && (
+            <p role="alert" className={`text-sm ${FIELD_ERROR_CLASS}`}>
+              {areaErrors.formError}
+            </p>
+          )}
+          <FormField
+            id={AREA_FIELDS.name.id}
+            label="Name"
+            required
+            error={areaErrors.errors.name}
+            labelClassName={labelClass}
+            maxLength={AREA_LIMITS.name}
+            count={formData.name.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                value={formData.name}
+                onChange={(e) => set({ name: e.target.value })}
+                className={inputClass}
+                placeholder="e.g. Rack A-1"
+              />
+            )}
+          </FormField>
+          <FormField
+            id={AREA_FIELDS.label.id}
+            label="Label"
+            error={areaErrors.errors.label}
+            labelClassName={labelClass}
+            maxLength={AREA_LIMITS.label}
+            count={formData.label.length}
+          >
+            {(field) => (
+              <input
+                {...field}
+                type="text"
+                value={formData.label}
+                onChange={(e) => set({ label: e.target.value })}
+                className={inputClass}
+                placeholder="Optional display label"
+              />
+            )}
+          </FormField>
+          <FormField
+            id={AREA_FIELDS.description.id}
+            label="Description"
+            error={areaErrors.errors.description}
+            labelClassName={labelClass}
+            maxLength={AREA_LIMITS.description}
+            count={formData.description.length}
+          >
+            {(field) => (
+              <textarea
+                {...field}
+                rows={2}
+                value={formData.description}
+                onChange={(e) => set({ description: e.target.value })}
+                className={inputClass}
+                placeholder="Optional description"
+              />
+            )}
+          </FormField>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor="sa-type" className={labelClass}>
-                Storage Type
-              </label>
+            <FormField
+              id={AREA_FIELDS.storage_type.id}
+              label="Storage Type"
+              error={areaErrors.errors.storage_type}
+              labelClassName={labelClass}
+            >
+              {(field) => (
+                <select
+                  {...field}
+                  value={formData.storage_type}
+                  onChange={(e) => set({ storage_type: e.target.value })}
+                  className={selectClass}
+                >
+                  {STORAGE_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </FormField>
+            <FormField
+              id={AREA_FIELDS.sort_order.id}
+              label="Sort Order"
+              error={areaErrors.errors.sort_order}
+              labelClassName={labelClass}
+            >
+              {(field) => (
+                <input
+                  {...field}
+                  type="number"
+                  min="0"
+                  value={formData.sort_order}
+                  onChange={(e) => set({ sort_order: e.target.value })}
+                  className={inputClass}
+                />
+              )}
+            </FormField>
+          </div>
+          <FormField
+            id={AREA_FIELDS.parent_id.id}
+            label="Parent Area"
+            error={areaErrors.errors.parent_id}
+            labelClassName={labelClass}
+          >
+            {(field) => (
               <select
-                id="sa-type"
-                value={formData.storage_type}
-                onChange={(e) => set({ storage_type: e.target.value })}
+                {...field}
+                value={formData.parent_id}
+                onChange={(e) => set({ parent_id: e.target.value })}
                 className={selectClass}
               >
-                {STORAGE_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
+                <option value="">None (top level)</option>
+                {parentOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {'  '.repeat(o.depth)}
+                    {o.name}
                   </option>
                 ))}
               </select>
-            </div>
-            <div>
-              <label htmlFor="sa-sort" className={labelClass}>
-                Sort Order
-              </label>
-              <input
-                id="sa-sort"
-                type="number"
-                min="0"
-                value={formData.sort_order}
-                onChange={(e) => set({ sort_order: e.target.value })}
-                className={inputClass}
-              />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="sa-parent" className={labelClass}>
-              Parent Area
-            </label>
-            <select
-              id="sa-parent"
-              value={formData.parent_id}
-              onChange={(e) => set({ parent_id: e.target.value })}
-              className={selectClass}
-            >
-              <option value="">None (top level)</option>
-              {parentOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {'  '.repeat(o.depth)}
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="sa-room" className={labelClass}>
-              Room
-            </label>
-            <select
-              id="sa-room"
-              value={formData.location_id}
-              onChange={(e) => set({ location_id: e.target.value })}
-              className={selectClass}
-            >
-              <option value="">No room assigned</option>
-              {rooms.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                  {r.room_number ? ` — Room ${r.room_number}` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
+            )}
+          </FormField>
+          <FormField
+            id={AREA_FIELDS.location_id.id}
+            label="Room"
+            error={areaErrors.errors.location_id}
+            labelClassName={labelClass}
+          >
+            {(field) => (
+              <select
+                {...field}
+                value={formData.location_id}
+                onChange={(e) => set({ location_id: e.target.value })}
+                className={selectClass}
+              >
+                <option value="">No room assigned</option>
+                {rooms.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                    {r.room_number ? ` — Room ${r.room_number}` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
           <div>
             <label htmlFor="sa-barcode" className={labelClass}>
               Barcode

@@ -47,7 +47,7 @@ const HISTORY_IMPORT_DETAIL = {
   existing_shift_decisions: {},
   analysis: {
     can_commit: false,
-    blocking_issue_count: 3,
+    blocking_issue_count: 4,
     counts: {
       rows: HISTORY_IMPORT_ROWS.length,
       excluded: 1,
@@ -78,6 +78,14 @@ const HISTORY_IMPORT_DETAIL = {
         blocking: true,
         row_ids: ['row-0'],
       },
+      // An overlapping row edits its start and end in the Times cell.
+      {
+        code: 'overlapping_entries',
+        message:
+          'Lines 1240 and 1241 put the same member on the same unit at overlapping times. Exclude or correct one.',
+        blocking: true,
+        row_ids: ['row-0', 'row-1'],
+      },
       // The Rows tab answers a probable match in the row's status cell, so
       // the widest cell carries a pair of buttons as well as the message.
       {
@@ -98,7 +106,7 @@ const HISTORY_IMPORT_DETAIL = {
 // free text from a spreadsheet can overflow the review card on a tablet or a
 // laptop, hiding the Exclude button at the end of each row.
 test.describe('Shift history import — rows table', () => {
-  for (const viewport of TABLE_FIT_VIEWPORTS) {
+  for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
     test(`/scheduling/admin/history-import/:id — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: PERMISSIONS });

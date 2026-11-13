@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
 import type { MaintenanceRecordCreate } from '../../../services/facilitiesServices';
@@ -6,11 +6,12 @@ import type { MaintenanceRecord, MaintenanceType } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { formCoercions } from '../../../utils/formValues';
-import { getErrorMessage } from '../../../utils/errorHandling';
-
+import { placeApiError, useFieldErrors, type FieldErrors, type FieldSpecs } from '../../../hooks/useFieldErrors';
+import { firstRefused, saveExceptRefused } from '../../../utils/saveExceptRefused';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { MAINTENANCE_DUE_WINDOW_DAYS, type MaintenanceStatusFilter } from '../constants';
-interface MaintenanceFormData {
+
+export interface MaintenanceFormData {
   facility_id: string;
   maintenance_type_id: string;
   description: string;
@@ -76,6 +77,35 @@ function formToPayload(formData: MaintenanceFormData, isEdit: boolean): Maintena
   };
 }
 
+export type MaintenanceField = keyof MaintenanceFormData;
+
+/** Field labels in screen order, so the first refusal takes focus. */
+const MAINTENANCE_LABELS: Record<MaintenanceField, string> = {
+  facility_id: 'Facility',
+  description: 'Description',
+  maintenance_type_id: 'Maintenance type',
+  scheduled_date: 'Scheduled date',
+  due_date: 'Due date',
+  performed_by: 'Performed by',
+  vendor: 'Vendor',
+  cost: 'Cost',
+  work_order_number: 'Work order number',
+  notes: 'Notes',
+};
+
+/** Limits mirror FacilityMaintenanceBase. */
+export const MAINTENANCE_LIMITS = { performed_by: 200, vendor: 200, work_order_number: 100 } as const;
+
+/** The field specs for a dialog whose ids start with `idPrefix`. */
+export function maintenanceFieldSpecs(idPrefix: string): FieldSpecs<MaintenanceField> {
+  return Object.fromEntries(
+    (Object.keys(MAINTENANCE_LABELS) as MaintenanceField[]).map((name) => [
+      name,
+      { id: `${idPrefix}-${name.replace(/_/g, '-')}`, label: MAINTENANCE_LABELS[name] },
+    ])
+  ) as FieldSpecs<MaintenanceField>;
+}
+
 type StatusFilter = MaintenanceStatusFilter;
 
 export const MAINTENANCE_PAGE_SIZE = 50;
@@ -84,9 +114,15 @@ const SEARCH_DEBOUNCE_MS = 250;
 interface UseMaintenanceFormOptions {
   facilityId?: string;
   initialStatusFilter?: StatusFilter;
+  /** The prefix of the dialog's field ids, so a refusal can focus its field. */
+  idPrefix?: string;
 }
 
-export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: UseMaintenanceFormOptions = {}) {
+export function useMaintenanceForm({
+  facilityId,
+  initialStatusFilter = 'all',
+  idPrefix = 'facility-maintenance',
+}: UseMaintenanceFormOptions = {}) {
   const { confirm } = useConfirm();
   const tz = useTimezone();
   const [records, setRecords] = useState<MaintenanceRecord[]>([]);
@@ -104,6 +140,17 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
   const [editingRecord, setEditingRecord] = useState<MaintenanceRecord | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<MaintenanceFormData>(emptyForm(facilityId));
+  // What the dialog held when it opened (or last saved), so closing asks
+  // before throwing typed changes away (forms review F-6).
+  const [baseline, setBaseline] = useState<MaintenanceFormData>(emptyForm(facilityId));
+  const fieldSpecs = useMemo(() => maintenanceFieldSpecs(idPrefix), [idPrefix]);
+  const fieldOrder = useMemo(() => Object.keys(fieldSpecs) as MaintenanceField[], [fieldSpecs]);
+  const fieldErrors = useFieldErrors(fieldSpecs);
+  const setField = (patch: Partial<MaintenanceFormData>) => {
+    setFormData((p) => ({ ...p, ...patch }));
+    for (const key of Object.keys(patch)) fieldErrors.setError(key as MaintenanceField, null);
+  };
+  const isDirty = showModal && JSON.stringify(formData) !== JSON.stringify(baseline);
 
   // A new filter or search starts again from the first page, so nobody is
   // left on page 4 of a result set that now has one page. Set in the same
@@ -189,36 +236,73 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
 
   const openCreate = (defaultFacilityId?: string) => {
     setEditingRecord(null);
-    setFormData(emptyForm(defaultFacilityId || facilityId));
+    const seeded = emptyForm(defaultFacilityId || facilityId);
+    setFormData(seeded);
+    setBaseline(seeded);
+    fieldErrors.clear();
     setShowModal(true);
   };
 
   const openEdit = (record: MaintenanceRecord) => {
     setEditingRecord(record);
-    setFormData(recordToForm(record));
+    const seeded = recordToForm(record);
+    setFormData(seeded);
+    setBaseline(seeded);
+    fieldErrors.clear();
     setShowModal(true);
   };
 
-  const handleSave = async () => {
-    if (!facilityId && !formData.facility_id) {
-      toast.error('Select a facility');
-      return;
-    }
-    if (!formData.description.trim()) {
-      toast.error('Description is required');
-      return;
-    }
+  const handleSave = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    // Each missing answer is named on its field rather than in a toast that
+    // vanished (forms review F-3).
+    const problems: FieldErrors<MaintenanceField> = {};
+    if (!facilityId && !formData.facility_id) problems.facility_id = 'Choose the facility this record is for.';
+    if (!formData.description.trim()) problems.description = 'Describe the maintenance work.';
     // The server refuses a record with no type (its column is NOT NULL), and
     // that refusal used to arrive as a bare "Failed to save record".
-    if (!formData.maintenance_type_id) {
-      toast.error('Choose a maintenance type');
+    if (!formData.maintenance_type_id) problems.maintenance_type_id = 'Choose a maintenance type.';
+    const cost = formData.cost.trim();
+    if (cost && !(Number.isFinite(Number(cost)) && Number(cost) >= 0))
+      problems.cost = 'Enter an amount of 0 or more, or leave it empty.';
+    fieldErrors.setFormError(
+      problems.maintenance_type_id && maintenanceTypes.length === 0
+        ? 'No maintenance types are set up yet. Add one in facility settings, then save again.'
+        : null
+    );
+    fieldErrors.setErrors(problems);
+    // A new record is not created until every field is fixed. An edit saves
+    // the rest and keeps a refused field's stored value (owner rule,
+    // 2026-11-05) - except the facility and type, which the record cannot
+    // lack, and which an edit has from the stored row anyway.
+    if (!editingRecord && Object.keys(problems).length > 0) {
+      fieldErrors.focusFirst(problems);
       return;
     }
     setIsSaving(true);
     try {
       const payload = formToPayload(formData, Boolean(editingRecord));
       if (editingRecord) {
-        await facilitiesService.updateMaintenanceRecord(editingRecord.id, payload);
+        const { refused } = await saveExceptRefused<MaintenanceField, unknown>({
+          payload: { ...payload },
+          refused: problems,
+          send: (body) => facilitiesService.updateMaintenanceRecord(editingRecord.id, body),
+          place: (err) => placeApiError(fieldSpecs, err),
+        });
+        const first = firstRefused(fieldOrder, refused);
+        if (first) {
+          // The list refreshes behind the dialog, which stays open with the
+          // refused field flagged; only that field still counts as unsaved.
+          void loadRecords();
+          fieldErrors.setErrors(refused);
+          fieldErrors.setFormError(
+            `Record saved, except ${MAINTENANCE_LABELS[first].toLowerCase()}. Fix it and save again.`
+          );
+          fieldErrors.focusFirst(refused);
+          const keep = Object.fromEntries(Object.keys(refused).map((k) => [k, baseline[k as MaintenanceField]]));
+          setBaseline({ ...formData, ...keep });
+          return;
+        }
         toast.success('Record updated');
       } else {
         await facilitiesService.createMaintenanceRecord(payload);
@@ -227,7 +311,11 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
       setShowModal(false);
       void loadRecords();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to save record'));
+      // A refused field is flagged on that field (forms review F-2); a reason
+      // no field answers for ("due date cannot be before the scheduled date")
+      // is said in the dialog, where it stays until the next save.
+      const placed = fieldErrors.setFromApiError(err, 'Failed to save record');
+      fieldErrors.focusFirst(placed);
     } finally {
       setIsSaving(false);
     }
@@ -286,6 +374,11 @@ export function useMaintenanceForm({ facilityId, initialStatusFilter = 'all' }: 
     isSaving,
     formData,
     setFormData,
+    setField,
+    isDirty,
+    fieldSpecs,
+    errors: fieldErrors.errors,
+    formError: fieldErrors.formError,
     openCreate,
     openEdit,
     handleSave,

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router';
+import { ConfirmProvider } from '../contexts/ConfirmContext';
 
 // Mock the facilities service
 const mockGetFacilities = vi.fn();
@@ -86,11 +87,15 @@ const mockStatuses = [
   { id: 'status-2', name: 'Under Renovation', isActive: true, color: '#f59e0b', isOperational: false },
 ];
 
+// Add Facility asks before discarding typed fields (forms review F-6), so the
+// page renders inside the ConfirmProvider the app shell mounts.
 function renderPage() {
   return render(
-    <BrowserRouter>
-      <FacilitiesDashboard />
-    </BrowserRouter>
+    <ConfirmProvider>
+      <BrowserRouter>
+        <FacilitiesDashboard />
+      </BrowserRouter>
+    </ConfirmProvider>
   );
 }
 
@@ -191,7 +196,7 @@ describe('FacilitiesDashboard', () => {
     expect(firstAddButton).toBeDefined();
     await user.click(firstAddButton as HTMLElement);
 
-    expect(screen.getByText('Name *')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveAttribute('aria-required', 'true');
     expect(screen.getByPlaceholderText('e.g., Station 1')).toBeInTheDocument();
   });
 

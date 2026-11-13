@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import type { InventoryVendor, InventoryVendorContact } from '../types';
@@ -197,8 +197,9 @@ describe('VendorsPage', () => {
     await user.type(screen.getByLabelText(/^Phone$/, { selector: '#vendor-contact-phone' }), '555-0100');
     await user.click(screen.getByRole('button', { name: 'Add Vendor' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Contact name is required to save a contact');
-    expect(screen.getByLabelText('Name')).toHaveAttribute('aria-invalid', 'true');
+    const contactName = screen.getByLabelText('Name');
+    await waitFor(() => expect(contactName).toHaveAttribute('aria-invalid', 'true'));
+    expect(contactName).toHaveAccessibleDescription('Contact name is required to save a contact');
     expect(mockCreateVendor).not.toHaveBeenCalled();
 
     await user.type(screen.getByLabelText('Name'), 'Alex Chen');
@@ -208,6 +209,57 @@ describe('VendorsPage', () => {
     expect(mockCreateVendor.mock.calls[0]?.[0]).toMatchObject({
       name: 'Fire Supply Co',
       contacts: [{ name: 'Alex Chen', phone: '555-0100', is_primary: true }],
+    });
+  });
+
+  describe('new vendor dialog refusing a save', () => {
+    it('names the missing vendor name under its field and focuses it', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<VendorsPage />);
+      await screen.findByText('No vendors yet');
+
+      await user.click(screen.getByRole('button', { name: /New Vendor/i }));
+      await user.click(screen.getByRole('button', { name: 'Add Vendor' }));
+
+      const name = screen.getByRole('textbox', { name: /^Vendor Name/ });
+      expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toHaveAttribute('aria-required', 'true');
+      expect(name).toHaveAccessibleDescription('Enter the vendor name.');
+      expect(name).toHaveFocus();
+      expect(mockCreateVendor).not.toHaveBeenCalled();
+      expect(mockToastError).not.toHaveBeenCalled();
+    });
+
+    it('puts a 422 on the field the server names', async () => {
+      const user = userEvent.setup();
+      mockCreateVendor.mockRejectedValue({
+        response: { status: 422, data: { detail: [{ field: 'account_number', message: 'Value is too long.' }] } },
+      });
+      renderWithRouter(<VendorsPage />);
+      await screen.findByText('No vendors yet');
+
+      await user.click(screen.getByRole('button', { name: /New Vendor/i }));
+      await user.type(screen.getByLabelText('Vendor Name *'), 'Fire Supply Co');
+      await user.click(screen.getByRole('button', { name: 'Add Vendor' }));
+
+      const account = await screen.findByRole('textbox', { name: 'Account Number', description: 'Value is too long.' });
+      expect(account).toHaveAttribute('aria-invalid', 'true');
+      expect(account).toHaveFocus();
+    });
+
+    it('shows a server failure inside the dialog rather than as a toast', async () => {
+      const user = userEvent.setup();
+      mockCreateVendor.mockRejectedValue(new Error('Vendor service unavailable'));
+      renderWithRouter(<VendorsPage />);
+      await screen.findByText('No vendors yet');
+
+      await user.click(screen.getByRole('button', { name: /New Vendor/i }));
+      await user.type(screen.getByLabelText('Vendor Name *'), 'Fire Supply Co');
+      await user.click(screen.getByRole('button', { name: 'Add Vendor' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Vendor service unavailable');
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(mockToastError).not.toHaveBeenCalled();
     });
   });
 
@@ -223,6 +275,76 @@ describe('VendorsPage', () => {
     await waitFor(() => {
       expect(mockUpdateVendor).toHaveBeenCalledWith('v-1', expect.objectContaining({ account_number: null }));
     });
+  });
+
+  it('puts a refused field on its field, announced, and creates nothing', async () => {
+    const user = userEvent.setup();
+    mockCreateVendor.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'postal_code', message: 'Value is too long.' }] } },
+    });
+    renderWithRouter(<VendorsPage />);
+    await screen.findByText('No vendors yet');
+
+    await user.click(screen.getByRole('button', { name: /New Vendor/i }));
+    await user.type(screen.getByLabelText('Vendor Name *'), 'Fire Supply Co');
+    await user.type(screen.getByLabelText('Postal Code'), '12345');
+    await user.click(screen.getByRole('button', { name: 'Add Vendor' }));
+
+    const zip = screen.getByLabelText('Postal Code');
+    await waitFor(() => expect(zip).toHaveAccessibleDescription('Value is too long.'));
+    expect(zip).toHaveAttribute('maxLength', '20');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('saves the rest of an edit, keeps a refused field flagged and stays open', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([makeVendor()]);
+    mockUpdateVendor.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'website', message: 'Website must start with http' }] } },
+    });
+    renderWithRouter(<VendorsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Galls' }));
+    await user.clear(screen.getByLabelText('Website'));
+    await user.type(screen.getByLabelText('Website'), 'galls.com');
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    await waitFor(() => expect(mockUpdateVendor).toHaveBeenCalledTimes(2));
+    expect(mockUpdateVendor.mock.calls[1]?.[1]).not.toHaveProperty('website');
+    expect(screen.getByLabelText('Website')).toHaveAccessibleDescription('Website must start with http.');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('asks before Escape discards a vendor being typed', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<VendorsPage />);
+    await screen.findByText('No vendors yet');
+
+    await user.click(screen.getByRole('button', { name: /New Vendor/i }));
+    await user.type(screen.getByLabelText('Vendor Name *'), 'Fire Supply Co');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByLabelText('Vendor Name *')).toHaveValue('Fire Supply Co');
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard changes' }));
+    await waitFor(() => expect(screen.queryByLabelText('Vendor Name *')).not.toBeInTheDocument());
+  });
+
+  it('puts a refused contact field on its field in the contacts dialog', async () => {
+    const user = userEvent.setup();
+    mockGetVendors.mockResolvedValue([makeVendor()]);
+    mockAddVendorContact.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: [{ field: 'phone_extension', message: 'Value is too long.' }] } },
+    });
+    renderWithRouter(<VendorsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /Contacts \(1\)/ }));
+    await user.type(screen.getByLabelText('Name *'), 'Sam Ortiz');
+    await user.type(screen.getByLabelText('Ext.'), '12');
+    await user.click(screen.getByRole('button', { name: 'Add Contact' }));
+
+    await waitFor(() => expect(screen.getByLabelText('Ext.')).toHaveAccessibleDescription('Value is too long.'));
   });
 
   it('deactivates a vendor only after the confirmation is accepted', async () => {
