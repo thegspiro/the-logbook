@@ -37,6 +37,19 @@ export interface AttendanceWaiverPolicy {
   chief_alternate_user_id: string | null;
 }
 
+/** A current member the policy may name as the Chief's and President's alternate. */
+export interface AttendanceWaiverAlternateMember {
+  id: string;
+  name: string;
+}
+
+/** `GET .../policy/alternate`: the picker's choices, and how the stored choice stands. */
+export interface AttendanceWaiverAlternateOptions {
+  members: AttendanceWaiverAlternateMember[];
+  /** null when no alternate is named. `current` is false once they are no longer a current member. */
+  alternate: { id: string; name: string | null; current: boolean } | null;
+}
+
 /** Whether the signed-in member may ask about one session, and the form's terms. */
 export interface AttendanceWaiverEligibility {
   event_id: string;

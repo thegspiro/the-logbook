@@ -19,6 +19,8 @@ be medical.
 
 GET    /meetings/waiver-requests/policy             - The department's policy
 PUT    /meetings/waiver-requests/policy             - Save it (meetings.manage)
+GET    /meetings/waiver-requests/policy/alternate   - Who may be the officers'
+                                                      alternate (meetings.manage)
 GET    /meetings/waiver-requests/eligibility        - May I ask about this meeting?
 POST   /meetings/waiver-requests                    - Ask to be excused
 GET    /meetings/waiver-requests/mine               - My requests
@@ -31,7 +33,7 @@ POST   /meetings/waiver-requests/{id}/override      - The Chief approves a denia
 
 Who may decide is a matter of holding a position (the department picks the
 positions; the Secretary and meetings managers are the fallback, and a Chief
-may always decide), so every route but the policy save is signed-in only and
+or President may always decide), so every route but the policy save is signed-in only and
 the service decides. A request is answered 404 to anyone who is neither its
 member nor someone who may decide it.
 """
@@ -50,6 +52,7 @@ from app.models.attendance_waiver import (
 )
 from app.models.user import User
 from app.schemas.attendance_waiver import (
+    AttendanceWaiverAlternateOptions,
     AttendanceWaiverDecision,
     AttendanceWaiverEligibilityResponse,
     AttendanceWaiverOverride,
@@ -98,6 +101,21 @@ async def save_meeting_waiver_policy(
         return await _service(db).save_policy(
             str(current_user.organization_id), body, current_user
         )
+
+
+@router.get("/policy/alternate", response_model=AttendanceWaiverAlternateOptions)
+async def get_meeting_waiver_alternate_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("meetings.manage")),
+):
+    """
+    For the settings: the current members who may be named to decide the
+    Chief's or President's own request when the other office is vacant, and
+    whether the stored alternate is still a current member.
+
+    **Requires permission: meetings.manage**
+    """
+    return await _service(db).alternate_options(str(current_user.organization_id))
 
 
 @router.get("/eligibility", response_model=AttendanceWaiverEligibilityResponse)

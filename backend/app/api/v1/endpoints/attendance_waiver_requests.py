@@ -11,6 +11,8 @@ may be medical.
 
 GET    /training/waivers/requests/policy             - The department's policy
 PUT    /training/waivers/requests/policy             - Save it (training.manage)
+GET    /training/waivers/requests/policy/alternate   - Who may be the officers'
+                                                       alternate (training.manage)
 GET    /training/waivers/requests/eligibility        - May I ask about this session?
 POST   /training/waivers/requests                    - Ask to be excused
 POST   /training/waivers/requests/with-attachments   - Ask, filing documents
@@ -57,6 +59,7 @@ from app.models.user import User
 from app.schemas.attendance_waiver import (
     MAX_CATEGORY_LENGTH,
     MAX_TEXT_LENGTH,
+    AttendanceWaiverAlternateOptions,
     AttendanceWaiverDecision,
     AttendanceWaiverEligibilityResponse,
     AttendanceWaiverOverride,
@@ -138,6 +141,23 @@ async def save_attendance_waiver_policy(
         return await AttendanceWaiverService(db).save_policy(
             str(current_user.organization_id), body, current_user
         )
+
+
+@router.get("/policy/alternate", response_model=AttendanceWaiverAlternateOptions)
+async def get_attendance_waiver_alternate_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    For the settings screen: the current members who may be named to decide
+    the Chief's or President's own request when the other office is vacant,
+    and whether the stored alternate is still a current member.
+
+    **Requires permission: training.manage**
+    """
+    return await AttendanceWaiverService(db).alternate_options(
+        str(current_user.organization_id)
+    )
 
 
 @router.get("/eligibility", response_model=AttendanceWaiverEligibilityResponse)

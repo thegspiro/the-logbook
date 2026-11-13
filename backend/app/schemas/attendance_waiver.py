@@ -286,3 +286,27 @@ class AttendanceWaiverRequestPage(UTCResponseBase):
     total: int
     skip: int
     limit: int
+
+
+class AttendanceWaiverAlternateMember(BaseModel):
+    id: str
+    name: str
+
+
+class AttendanceWaiverAlternateStored(BaseModel):
+    """The policy's stored alternate. ``current`` is false once the member is no
+    longer an active or probationary member of the department; while it is,
+    nobody stands in for a vacant Chief or President, and the settings screen
+    warns."""
+
+    id: str
+    name: Optional[str] = None
+    current: bool
+
+
+class AttendanceWaiverAlternateOptions(BaseModel):
+    """What the settings screen's alternate picker offers: the department's
+    current members, and how the stored choice stands."""
+
+    members: List[AttendanceWaiverAlternateMember]
+    alternate: Optional[AttendanceWaiverAlternateStored] = None

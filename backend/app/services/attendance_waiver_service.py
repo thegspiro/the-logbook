@@ -30,8 +30,14 @@ written once for both (CLAUDE.md pitfall #29). The rules:
 - **Routing**: the holders of the chosen positions; failing them, the
   workflow's fallback office (the Chief for training, the Secretary for
   meetings); failing that, the holders of the workflow's manage permission.
-  A Chief may always decide. Never the requester. ``_route_ids`` is the one
-  definition, read by both the recipients and ``may_decide``.
+  A Chief or a President may always decide. Never the requester.
+  ``_route_ids`` is the one definition, read by both the recipients and
+  ``may_decide``.
+- **The Chief's and the President's own requests** (owner decision,
+  2026-11-13) skip that chain: each is decided by the holders of the other
+  office, and when that office is vacant by the member the policy names as
+  ``chief_alternate_user_id``. With neither, the request cannot be submitted
+  (``_officer_route``), because nobody could decide it.
 - **The first decision is final**, except that a Chief may override a denial,
   with a reason, and never on their own request.
 
@@ -72,7 +78,7 @@ from datetime import timezone as dt_timezone
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from loguru import logger
-from sqlalchemy import false, func, or_, select
+from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -80,7 +86,11 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import user_has_permission
 from app.core.audit import log_audit_event
 from app.core.config import settings as app_settings
-from app.core.constants import CHIEF_POSITION_SLUGS, SECRETARY_POSITION_SLUGS
+from app.core.constants import (
+    CHIEF_POSITION_SLUGS,
+    PRESIDENT_POSITION_SLUGS,
+    SECRETARY_POSITION_SLUGS,
+)
 from app.core.utils import generate_uuid
 from app.models.attendance_waiver import (
     AttendanceWaiverAction,
@@ -404,6 +414,38 @@ class _DeciderPool:
     # The routed set per requester, so a page of requests routes each
     # requester once.
     routed: Dict[str, Set[str]] = field(default_factory=dict)
+    # Current active holders of the President's office.
+    presidents: Set[str] = field(default_factory=set)
+    # The policy's named alternate, only while they are a current member.
+    alternate: Optional[str] = None
+
+
+def _officer_route(pool: _DeciderPool, requester_id: str) -> Optional[Set[str]]:
+    """Who decides a request from the Chief or the President; None for anyone else.
+
+    Owner decision, 2026-11-13: the Chief's own request goes to the President,
+    the President's to the Chief, and the department's chosen positions and
+    fallbacks do not apply. A member holding both offices is decided by any
+    other holder of either. When the other office has no holder but the
+    requester, the policy's named alternate decides; an empty set means nobody
+    can, and submitting is refused (``_no_decider_refusal``).
+    """
+    requester = str(requester_id)
+    is_chief = requester in pool.chiefs
+    is_president = requester in pool.presidents
+    if not (is_chief or is_president):
+        return None
+    other: Set[str] = set()
+    if is_chief:
+        other |= pool.presidents
+    if is_president:
+        other |= pool.chiefs
+    other.discard(requester)
+    if other:
+        return other
+    if pool.alternate and pool.alternate != requester:
+        return {pool.alternate}
+    return set()
 
 
 class AttendanceWaiverService:
@@ -449,6 +491,14 @@ class AttendanceWaiverService:
         await assert_all_in_org(
             self.db, Position, policy.approver_position_ids, org_id, label="position"
         )
+        if policy.chief_alternate_user_id and (
+            await self._current_member_id(org_id, policy.chief_alternate_user_id)
+            is None
+        ):
+            raise ValueError(
+                "The alternate who decides the Chief's or President's own "
+                "request must be a current member of the department."
+            )
         # Locked so a concurrent settings save cannot write back a copy taken
         # before this one.
         organization = (
@@ -485,10 +535,46 @@ class AttendanceWaiverService:
                 "attachment": policy.attachment,
                 "attachment_retention_days": policy.attachment_retention_days,
                 "approver_position_ids": list(policy.approver_position_ids),
+                "chief_alternate_user_id": policy.chief_alternate_user_id,
             },
         )
         await self.db.commit()
         return policy
+
+    async def alternate_options(self, organization_id: str) -> dict:
+        """The members the policy may name as the Chief's and President's
+        alternate, and the stored alternate with whether they still qualify.
+
+        The stored one is reported even once they are no longer current (and
+        so absent from ``members``), so the screen can say who was named and
+        warn that nobody stands in for a vacant office.
+        """
+        org_id = str(organization_id)
+        members = (
+            (
+                await self.db.execute(
+                    select(User)
+                    .where(User.organization_id == org_id, User.is_active)
+                    .order_by(User.last_name, User.first_name, User.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        policy = await self.get_policy(org_id)
+        stored = None
+        if policy.chief_alternate_user_id:
+            alternate_id = policy.chief_alternate_user_id
+            name = (await self._names(org_id, [alternate_id])).get(alternate_id)
+            stored = {
+                "id": alternate_id,
+                "name": name,
+                "current": any(str(m.id) == alternate_id for m in members),
+            }
+        return {
+            "members": [{"id": str(m.id), "name": m.display_name} for m in members],
+            "alternate": stored,
+        }
 
     # ------------------------------------------------------------------
     # Eligibility
@@ -612,8 +698,36 @@ class AttendanceWaiverService:
                 f"You have used all {policy.cap} of your waivers "
                 f"{_cap_period_label(policy.cap_period, session_day, noun)}.",
             )
+        undecidable = await self._no_decider_refusal(org_id, member.id, policy)
+        if undecidable is not None:
+            return refuse("no_decider", undecidable)
         result.allowed = True
         return result
+
+    async def _no_decider_refusal(
+        self, org_id: str, member_id: str, policy: AttendanceWaiverPolicy
+    ) -> Optional[str]:
+        """Why nobody could decide the member's request, or None.
+
+        Only the Chief's and the President's own requests can reach nobody
+        (``_officer_route``); anyone else's falls through to the managers.
+        """
+        pool = await self._pool(org_id, policy)
+        route = _officer_route(pool, member_id)
+        if route is None or route:
+            return None
+        requester = str(member_id)
+        if requester in pool.chiefs and requester in pool.presidents:
+            vacant = "other Chief or President"
+        elif requester in pool.chiefs:
+            vacant = "President"
+        else:
+            vacant = "Chief"
+        return (
+            f"No one can decide this request: your department has no {vacant} "
+            "and no alternate is named in the waiver settings. Ask an officer "
+            "to name one."
+        )
 
     async def _counting_requirements(
         self, org_id: str, member: User, event: Event
@@ -1134,7 +1248,38 @@ class AttendanceWaiverService:
         fallback = await self._holder_ids(
             org_id, Position.slug.in_(list(self.spec.fallback_slugs))
         )
-        return _DeciderPool(configured=configured, fallback=fallback, chiefs=chiefs)
+        presidents = await self._holder_ids(
+            org_id, Position.slug.in_(PRESIDENT_POSITION_SLUGS)
+        )
+        alternate = None
+        if policy.chief_alternate_user_id:
+            alternate = await self._current_member_id(
+                org_id, policy.chief_alternate_user_id
+            )
+        return _DeciderPool(
+            configured=configured,
+            fallback=fallback,
+            chiefs=chiefs,
+            presidents=presidents,
+            alternate=alternate,
+        )
+
+    async def _current_member_id(self, org_id: str, user_id: str) -> Optional[str]:
+        """``user_id`` when it is a current member of the department, else None.
+
+        Current is ``User.is_active``: an active or probationary account that
+        is not deleted (CLAUDE.md pitfall #32).
+        """
+        found = (
+            await self.db.execute(
+                select(User.id).where(
+                    User.id == str(user_id),
+                    User.organization_id == org_id,
+                    User.is_active,
+                )
+            )
+        ).scalar_one_or_none()
+        return str(found) if found else None
 
     async def _holder_ids(self, org_id: str, position_filter) -> Set[str]:
         """Current active members holding a position matching ``position_filter``."""
@@ -1176,10 +1321,15 @@ class AttendanceWaiverService:
         Chief for training, the Secretary for meetings); then every holder of
         the workflow's manage permission. The requester is never routed their own
         request, and a request always reaches someone while anyone else holds
-        one of those. ``recipients`` and ``may_decide`` both read this, so who
-        is asked and who may answer cannot drift apart.
+        one of those. The Chief's and the President's own requests are routed
+        by ``_officer_route`` instead, and may reach nobody. ``recipients`` and
+        ``may_decide`` both read this, so who is asked and who may answer
+        cannot drift apart.
         """
         requester = str(requester_id)
+        officers = _officer_route(pool, requester)
+        if officers is not None:
+            return officers
         if requester not in pool.routed:
             routed: Set[str] = set()
             for step in (pool.configured, pool.fallback):
@@ -1197,7 +1347,12 @@ class AttendanceWaiverService:
         uid = str(user.id)
         if uid == str(requester_id):
             return False
-        if uid in pool.configured or uid in pool.chiefs:
+        officers = _officer_route(pool, requester_id)
+        if officers is not None:
+            # Exactly the route: neither the chosen positions nor the other
+            # standing deciders decide the Chief's or President's own request.
+            return uid in officers
+        if uid in pool.configured or uid in pool.chiefs or uid in pool.presidents:
             return True
         return uid in await self._route_ids(org_id, pool, requester_id)
 
@@ -1210,8 +1365,10 @@ class AttendanceWaiverService:
         """Whether ``user`` may approve or deny ``request``.
 
         Never its requester. Otherwise a current holder of a chosen position,
-        a Chief (in either workflow), or anyone the routing chain reached
-        because the chosen positions left nobody (see ``_route_ids``).
+        a Chief or a President (in either workflow), or anyone the routing
+        chain reached because the chosen positions left nobody (see
+        ``_route_ids``). A request from the Chief or the President is decided
+        only by whom ``_officer_route`` names.
         """
         org_id = str(request.organization_id)
         pool = await self._pool(org_id, policy)
@@ -1246,15 +1403,16 @@ class AttendanceWaiverService:
         """Whose requests ``actor`` may decide: None for everyone but themselves.
 
         The set form of ``_may_decide_in`` over every requester, so the queue
-        can be filtered and paged in SQL. A configured holder or a Chief
-        decides everyone's. A fallback holder decides where the chosen
+        can be filtered and paged in SQL. A configured holder, a Chief or a
+        President decides everyone's but the Chief's and President's own,
+        which ``_decidable_officers`` answers for. A fallback holder decides where the chosen
         positions leave nobody: every requester when they are vacant, and
         their one holder's own request. A manager decides where the fallback
         leaves nobody too: every requester when both are vacant, and the one
         member who holds all of them when that member is the requester.
         """
         uid = str(actor.id)
-        if uid in pool.configured or uid in pool.chiefs:
+        if uid in pool.configured or uid in pool.chiefs or uid in pool.presidents:
             return None
         requesters: Set[str] = set()
         if uid in pool.fallback:
@@ -1269,6 +1427,22 @@ class AttendanceWaiverService:
             if len(upstream) == 1:
                 requesters |= upstream
         return requesters - {uid}
+
+    @staticmethod
+    def _decidable_officers(
+        pool: _DeciderPool, actor: User
+    ) -> Tuple[Set[str], Set[str]]:
+        """The Chief's and President's requests ``actor`` may decide, and all
+        of the Chief's and President's ids.
+
+        Their requests are routed by ``_officer_route`` alone, so the queue
+        takes them out of ``_decidable_requesters``' answer and adds back the
+        ones routed to ``actor``.
+        """
+        officers = pool.chiefs | pool.presidents
+        uid = str(actor.id)
+        mine = {o for o in officers if uid in (_officer_route(pool, o) or set())}
+        return mine, officers
 
     # ------------------------------------------------------------------
     # Reads
@@ -1314,12 +1488,21 @@ class AttendanceWaiverService:
         policy = await self.get_policy(org_id)
         pool = await self._pool(org_id, policy)
         requesters = await self._decidable_requesters(org_id, pool, actor)
+        their_own, officers = self._decidable_officers(pool, actor)
         if requesters is None:
             decidable = AttendanceWaiverRequest.user_id != str(actor.id)
-        elif requesters:
-            decidable = AttendanceWaiverRequest.user_id.in_(list(requesters))
+            if officers:
+                decidable = and_(
+                    decidable, AttendanceWaiverRequest.user_id.not_in(list(officers))
+                )
+        elif requesters - officers:
+            decidable = AttendanceWaiverRequest.user_id.in_(list(requesters - officers))
         else:
             decidable = false()
+        if their_own:
+            decidable = or_(
+                decidable, AttendanceWaiverRequest.user_id.in_(list(their_own))
+            )
         conditions = [
             AttendanceWaiverRequest.organization_id == org_id,
             AttendanceWaiverRequest.workflow == self.workflow,
