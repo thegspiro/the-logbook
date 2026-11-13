@@ -46,9 +46,9 @@ const FILTER_PREDICATES: Record<Filter, (item: SupplyExpiringItem) => boolean> =
 
 const FILTERS: { key: Filter; label: string; tone: string }[] = [
   { key: 'all', label: 'All', tone: '' },
-  { key: 'restock', label: 'Needs restock', tone: 'text-red-700 dark:text-red-400' },
-  { key: 'reported', label: 'Used or short', tone: 'text-amber-700 dark:text-amber-400' },
-  { key: 'expired', label: 'Expired', tone: 'text-red-700 dark:text-red-400' },
+  { key: 'restock', label: 'Needs restock', tone: 'text-red-900 dark:text-red-300' },
+  { key: 'reported', label: 'Used or short', tone: 'text-amber-900 dark:text-amber-300' },
+  { key: 'expired', label: 'Expired', tone: 'text-red-900 dark:text-red-300' },
 ];
 
 const shortDate = (date: string) => formatCalendarDate(date, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -204,11 +204,11 @@ const SupplyExpiringPage: React.FC = () => {
         <div className="flex items-start justify-between gap-2">
           <span className="text-theme-text-primary min-w-0 font-semibold">{item.itemName}</span>
           {item.isExpired ? (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-900 dark:bg-red-900/30 dark:text-red-300">
               <AlertTriangle className="h-3 w-3" aria-hidden="true" /> Expired
             </span>
           ) : days != null && days <= daysAhead ? (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-900 dark:bg-yellow-900/30 dark:text-yellow-300">
               <Clock className="h-3 w-3" aria-hidden="true" />
               {days}d left
             </span>
@@ -223,12 +223,12 @@ const SupplyExpiringPage: React.FC = () => {
         {(item.restockNeeded || (item.isShort && item.targetQuantity != null)) && (
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {item.restockNeeded && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-900 dark:bg-orange-900/30 dark:text-orange-300">
                 <PackageX className="h-3 w-3" aria-hidden="true" /> Reported used
               </span>
             )}
             {item.isShort && item.targetQuantity != null && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+              <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-900 dark:bg-orange-900/30 dark:text-orange-300">
                 {item.quantityOnTruck ?? 0} of {item.targetQuantity} aboard
               </span>
             )}
@@ -241,11 +241,11 @@ const SupplyExpiringPage: React.FC = () => {
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
           <div className="flex min-w-0 flex-1 items-center gap-2 text-sm">
             {item.readyStock > 0 ? (
-              <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap text-green-700 dark:text-green-400">
+              <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap text-green-900 dark:text-green-300">
                 <PackageCheck className="h-4 w-4" aria-hidden="true" /> {item.readyStock} ready
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap text-red-700 dark:text-red-400">
+              <span className="inline-flex items-center gap-1 font-medium whitespace-nowrap text-red-900 dark:text-red-300">
                 <PackageX className="h-4 w-4" aria-hidden="true" /> No stock
               </span>
             )}
@@ -275,7 +275,7 @@ const SupplyExpiringPage: React.FC = () => {
                 disabled={!canManageStock}
                 onClick={() => openAddStock(item)}
                 title={canManageStock ? undefined : 'Replacement stock is added by the quartermaster'}
-                className="touch:min-h-11 inline-flex items-center gap-1 rounded-lg border border-blue-600/40 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40 dark:text-blue-400"
+                className="touch:min-h-11 inline-flex items-center gap-1 rounded-lg border border-blue-600/40 px-3 py-1.5 text-xs font-medium text-blue-900 hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-40 dark:text-blue-300"
               >
                 {/* "Add" alone on a phone, where the row also carries the
                     stock count and the lots toggle. The space sits outside the
@@ -304,7 +304,7 @@ const SupplyExpiringPage: React.FC = () => {
                 key={lot.id}
                 className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] ${
                   lot.isExpired
-                    ? 'border-red-500/30 bg-red-500/10 text-red-700 line-through dark:text-red-400'
+                    ? 'border-red-500/30 bg-red-500/10 text-red-900 line-through dark:text-red-300'
                     : 'border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted'
                 }`}
                 // Expired shelf stock is shown so it can be pulled and
@@ -343,7 +343,7 @@ const SupplyExpiringPage: React.FC = () => {
                 type="button"
                 onClick={() => setDaysAhead(w)}
                 aria-pressed={daysAhead === w}
-                className={`touch:min-h-10 rounded-md px-2.5 py-1 text-sm font-medium transition-colors ${
+                className={`touch:min-h-11 rounded-md px-2.5 py-1 text-sm font-medium transition-colors ${
                   daysAhead === w ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >
@@ -401,7 +401,7 @@ const SupplyExpiringPage: React.FC = () => {
                   type="button"
                   onClick={() => setSortBy(key)}
                   aria-pressed={sortBy === key}
-                  className={`touch:min-h-10 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  className={`touch:min-h-11 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     sortBy === key
                       ? 'bg-theme-surface-secondary text-theme-text-primary'
                       : 'hover:text-theme-text-primary'

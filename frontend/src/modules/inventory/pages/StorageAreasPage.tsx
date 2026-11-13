@@ -344,7 +344,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
         </span>
         <button
           onClick={() => onToggleItems(node.id)}
-          className={`w-16 shrink-0 rounded px-1 py-0.5 text-right text-xs transition-colors ${
+          className={`touch:min-h-11 w-16 shrink-0 rounded px-1 py-0.5 text-right text-xs transition-colors ${
             node.item_count > 0
               ? 'hover:bg-theme-surface-hover cursor-pointer text-blue-700 underline decoration-dotted underline-offset-2 dark:text-blue-400'
               : 'text-theme-text-muted cursor-default'
@@ -365,21 +365,21 @@ const TreeRow: React.FC<TreeRowProps> = ({
           <button
             onClick={() => onPrint(node)}
             aria-label={`Print label for ${node.name}`}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-2"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded p-2"
           >
             <Printer className="h-4 w-4" />
           </button>
           <button
             onClick={() => onEdit(node)}
             aria-label={`Edit ${node.name}`}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded p-2"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded p-2"
           >
             <Pencil className="h-4 w-4" />
           </button>
           <button
             onClick={() => onDelete(node)}
             aria-label={`Delete ${node.name}`}
-            className="text-theme-text-muted rounded p-2 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+            className="text-theme-text-muted touch-target-phone rounded p-2 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -1019,7 +1019,7 @@ const StorageAreasPage: React.FC = () => {
             <button
               onClick={() => void loadStorageAreas()}
               aria-label="Refresh storage areas"
-              className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg border p-2.5 transition-colors"
+              className="border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover touch-target-phone rounded-lg border p-2.5 transition-colors"
             >
               <RefreshCw className="h-4 w-4" />
             </button>
