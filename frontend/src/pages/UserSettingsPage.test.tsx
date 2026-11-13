@@ -369,7 +369,7 @@ describe('UserSettingsPage', () => {
         [/^last name/i, 'family-name'],
         [/^preferred name/i, 'nickname'],
         [/^phone/i, 'tel'],
-        [/^mobile/i, 'tel'],
+        [/^mobile/i, 'mobile tel'],
         [/^street address/i, 'street-address'],
         [/^city/i, 'address-level2'],
         [/^state/i, 'address-level1'],
