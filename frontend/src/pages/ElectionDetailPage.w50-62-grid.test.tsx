@@ -109,8 +109,7 @@ describe('ElectionDetailPage info card on a phone (W50-62)', () => {
 
     // The badge reads the status label since W50-74, not the raw enum, so
     // "Draft" also matches the lifecycle stepper's step; the badge is the pill.
-    const pill = screen.getAllByText('Draft').find((el) => el.classList.contains('rounded-full'));
-    expect(pill).toBeDefined();
+    const pill = screen.getByText('Draft', { selector: '.rounded-full' });
     expect(pill).toHaveClass('shrink-0');
     expect(cellAround(pill)).toHaveClass('flex-wrap');
   });
