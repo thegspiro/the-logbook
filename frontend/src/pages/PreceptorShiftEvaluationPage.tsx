@@ -10,7 +10,7 @@
  * URL: /shift-evaluation/:token
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { AlertTriangle, CheckCircle2, Loader2, Send } from 'lucide-react';
 
@@ -45,6 +45,7 @@ const PreceptorShiftEvaluationPage: React.FC = () => {
   const [showErrors, setShowErrors] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const problemsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!token) {
@@ -81,6 +82,8 @@ const PreceptorShiftEvaluationPage: React.FC = () => {
     const outstanding = problems();
     if (outstanding.length > 0) {
       setShowErrors(true);
+      // Rendered on this pass; focus moves to the list once it is there.
+      window.setTimeout(() => problemsRef.current?.focus(), 0);
       return;
     }
     setSubmitting(true);
@@ -179,8 +182,12 @@ const PreceptorShiftEvaluationPage: React.FC = () => {
         />
       </div>
 
+      <ShiftEvaluationFields form={view.template} draft={draft} onChange={setDraft} showErrors={showErrors} />
+
+      {/* Beside the button, not above the form: on a phone the top of a
+          long form is off-screen when Submit is tapped. */}
       {outstanding.length > 0 && (
-        <div role="alert" className="alert-danger text-theme-alert-danger-text text-sm">
+        <div ref={problemsRef} tabIndex={-1} role="alert" className="alert-danger text-theme-alert-danger-text text-sm">
           <p className="font-semibold">Before submitting:</p>
           <ul className="ml-5 list-disc">
             {outstanding.slice(0, 8).map((problem) => (
@@ -189,8 +196,6 @@ const PreceptorShiftEvaluationPage: React.FC = () => {
           </ul>
         </div>
       )}
-
-      <ShiftEvaluationFields form={view.template} draft={draft} onChange={setDraft} showErrors={showErrors} />
 
       {submitError && (
         <p role="alert" className="alert-danger text-theme-alert-danger-text text-sm">
