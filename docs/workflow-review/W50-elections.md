@@ -1447,10 +1447,18 @@ behaviour cases failed against the old code.
 
 **Not changed:** the token ballot (`/ballot`) still says only "not on the
 voter roll". An emailed link is checked against a hashed token, not a
-signed-in member, so the live rules are not evaluated there. The
-secretary's eligibility roster still gives every off-roll member "Not on the
-voter roll frozen when the election opened", which is a separate,
-officer-facing code path. Both are left as they are.
+signed-in member, so the live rules are not evaluated there.
+
+**Follow-up (2026-11-13):** the secretary's eligibility roster and the
+ballot send's skipped list now follow the same rule. Both used to give
+every off-roll member "Not on the voter roll frozen when the election
+opened". They now share `_off_roll_reason`: the tier or election-wide rule
+the member still fails, and the frozen roll only when they pass. So the
+roster still states before a send what the send records after it (W50-55).
+Tests: `TestOfficerViewsNameTheRuleOffTheRoll`. Re-driven: on a freshly
+opened election, 16 off-roll members read the waiting-period rule, one the
+Probationary rule and one the attendance minimum. After a waiver granted
+post-opening, that member moved on to the next rule they fail.
 
 ### W50-R4 — NIT — The roster's "eligible from" date is day-first — ✅ FIXED (2026-11-01)
 

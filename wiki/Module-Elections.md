@@ -274,8 +274,10 @@ eligibility is evaluated live.
 A member left off the roll who opens the election in the app is told the
 rule they still fail, such as a waiting period, attendance or their tier.
 The frozen roll is named only when they now pass every rule, as a member
-waived after opening does (`check_voter_eligibility`). The emailed-ballot
-link and the secretary's roster still give the roll as the reason.
+waived after opening does (`check_voter_eligibility`). The secretary's
+eligibility roster and the ballot send's skipped list give the same reason
+for that member, through `_off_roll_reason`. The emailed-ballot link still
+gives the roll as the reason.
 
 ### Voting Attendance Window
 

@@ -925,6 +925,78 @@ class TestOffTheFrozenRoll:
 
 
 @pytest.mark.integration
+class TestOfficerViewsNameTheRuleOffTheRoll:
+    """The eligibility roster and the ballot send's skipped list give an
+    off-roll member the rule they still fail, as the in-app check does
+    (W50-R3); the frozen roll is named only for one who now passes.
+
+    Both used to say "Not on the voter roll frozen when the election
+    opened" for every member missing from the snapshot. They still say the
+    same thing as each other: the roster states before a send what the send
+    will record after it (W50-55).
+    """
+
+    async def _setup(self, db_session):
+        org = await _org(db_session)
+        settled = await _typed_member(
+            db_session, org, "settled", "administrative", "regular", _ago(months=13)
+        )
+        recent = await _typed_member(
+            db_session, org, "recent", "administrative", "regular", _ago(months=2)
+        )
+        election = await _election(
+            db_session,
+            org,
+            settled,
+            _waits(administrative=ADMIN_A_YEAR),
+            eligible_roster_snapshot=[],
+        )
+        return org, settled, recent, election
+
+    async def test_the_roster_names_the_waiting_period(self, db_session):
+        org, settled, recent, election = await self._setup(db_session)
+
+        roster = await ElectionService(db_session).get_eligibility_roster(
+            election.id, org.id
+        )
+        rows = {r["user_id"]: r for r in roster["roster"]}
+
+        assert rows[str(recent.id)]["will_receive_ballot"] is False
+        assert rows[str(recent.id)]["ineligibility_reason"].startswith(
+            "Administrative members may vote 12 months after becoming "
+            "administrative; eligible from "
+        )
+        assert rows[str(settled.id)]["will_receive_ballot"] is False
+        assert (
+            rows[str(settled.id)]["ineligibility_reason"]
+            == ElectionService.NOT_ON_FROZEN_ROLL
+        )
+
+    async def test_the_send_records_the_same_reasons(self, db_session, monkeypatch):
+        org, settled, recent, election = await self._setup(db_session)
+        monkeypatch.setattr(
+            "app.services.email_service.EmailService.send_batch",
+            AsyncMock(side_effect=lambda batch: [True] * len(batch)),
+        )
+
+        _sent, _failed, _skipped, details, _ids = await ElectionService(
+            db_session
+        ).send_ballot_emails(
+            election.id, org.id, base_ballot_url="https://example.test/ballot"
+        )
+        reasons = {d["user_id"]: d["reason"] for d in details}
+
+        roster = await ElectionService(db_session).get_eligibility_roster(
+            election.id, org.id
+        )
+        for row in roster["roster"]:
+            if row["user_id"] in reasons:
+                assert reasons[row["user_id"]] == row["ineligibility_reason"]
+        assert reasons[str(recent.id)].startswith("Administrative members may vote")
+        assert reasons[str(settled.id)] == ElectionService.NOT_ON_FROZEN_ROLL
+
+
+@pytest.mark.integration
 class TestCreateAndUpdate:
     def _payload(self, **extra):
         now = datetime.now(timezone.utc)

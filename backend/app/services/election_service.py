@@ -8977,7 +8977,9 @@ class ElectionService:
                 and str(recipient.id) not in override_ids
             ):
                 skipped_count += 1
-                reason = self.NOT_ON_FROZEN_ROLL
+                reason = await self._off_roll_reason(
+                    recipient, election, str(organization_id), organization
+                )
                 skipped_details.append(
                     {
                         "user_id": str(recipient.id),
@@ -10296,6 +10298,28 @@ class ElectionService:
     # prints the reason the send recorded, and the roster must say the same
     # thing before the send that the send will say after it (W50-55).
     NOT_ON_FROZEN_ROLL = "Not on the voter roll frozen when the election opened"
+
+    async def _off_roll_reason(
+        self,
+        user: "User",
+        election: Election,
+        organization_id: str,
+        organization: Optional["Organization"] = None,
+    ) -> str:
+        """Why a member left off the frozen roll gets no ballot.
+
+        The rule they still fail, such as a tier ban, waiting period or
+        attendance, when there is one; the frozen roll only when they now
+        pass, which is the member the roll exists to hold back. Per-race
+        rules are not consulted, because the roll bars every race. The roster
+        and the send both call this, so the roster still states before a
+        send what the send records after it (W50-55), and both agree with
+        the in-app check (W50-R3).
+        """
+        reason, _ = await self._universal_gate(
+            user, election, organization_id, organization
+        )
+        return reason or self.NOT_ON_FROZEN_ROLL
 
     @staticmethod
     def summarize_skipped(skipped_details: List[Dict]) -> str:
@@ -12086,7 +12110,9 @@ class ElectionService:
                 and user_id not in frozen_roster_ids
             ):
                 will_receive_ballot = False
-                overall_reason = self.NOT_ON_FROZEN_ROLL
+                overall_reason = await self._off_roll_reason(
+                    user, election, str(organization_id), organization
+                )
 
             member_type = getattr(user, "membership_type", None) or "active"
             roster.append(
