@@ -87,6 +87,8 @@ interface Draft {
   /** The input's text, like `cap`. */
   retentionDays: string;
   positionIds: string[];
+  ccPositionIds: string[];
+  chiefAlternateUserId: string | null;
 }
 
 const toDraft = (policy: AttendanceWaiverPolicy): Draft => ({
@@ -101,6 +103,8 @@ const toDraft = (policy: AttendanceWaiverPolicy): Draft => ({
   attachment: policy.attachment,
   retentionDays: String(policy.attachment_retention_days),
   positionIds: [...policy.approver_position_ids],
+  ccPositionIds: [...policy.cc_position_ids],
+  chiefAlternateUserId: policy.chief_alternate_user_id,
 });
 
 /** Field errors for a draft, worded for the officer; empty when it would save. */
@@ -159,6 +163,8 @@ const toPolicy = (draft: Draft, knownPositionIds: ReadonlySet<string> | null): A
   approver_position_ids: knownPositionIds
     ? draft.positionIds.filter((p) => knownPositionIds.has(p))
     : draft.positionIds,
+  cc_position_ids: knownPositionIds ? draft.ccPositionIds.filter((p) => knownPositionIds.has(p)) : draft.ccPositionIds,
+  chief_alternate_user_id: draft.chiefAlternateUserId,
 });
 
 export const SessionWaiverSettingsPanel: React.FC = () => {

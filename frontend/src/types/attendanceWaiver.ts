@@ -31,6 +31,10 @@ export interface AttendanceWaiverPolicy {
   /** Days a closed request's documents are kept, 1–3650 (365 by default). */
   attachment_retention_days: number;
   approver_position_ids: string[];
+  /** Positions emailed each final decision; never shown the reason. */
+  cc_position_ids: string[];
+  /** Decides the Chief's own request when the President's office is vacant. */
+  chief_alternate_user_id: string | null;
 }
 
 /** Whether the signed-in member may ask about one session, and the form's terms. */
@@ -89,7 +93,14 @@ export interface AttendanceWaiverRequest {
   decided_by: string | null;
   decided_by_name: string | null;
   chief_override: boolean;
+  /** Set while a decider's question waits on the member. */
+  info_requested_at: string | null;
+  /** Set while a rescheduled session waits on the member to confirm. */
+  reconfirm_requested_at: string | null;
   can_withdraw: boolean;
+  can_respond: boolean;
+  can_confirm: boolean;
+  can_request_info: boolean;
   can_decide: boolean;
   can_override: boolean;
   /** The member may file another document now (pending, policy takes them, under the limit). */

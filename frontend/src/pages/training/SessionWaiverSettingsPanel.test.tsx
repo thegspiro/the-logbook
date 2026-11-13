@@ -31,6 +31,8 @@ const policy = (over: Partial<AttendanceWaiverPolicy> = {}): AttendanceWaiverPol
   attachment: 'off',
   attachment_retention_days: 365,
   approver_position_ids: [],
+  cc_position_ids: [],
+  chief_alternate_user_id: null,
   ...over,
 });
 
@@ -82,6 +84,8 @@ describe('SessionWaiverSettingsPanel', () => {
       attachment: 'optional',
       attachment_retention_days: 730,
       approver_position_ids: ['pos-to'],
+      cc_position_ids: [],
+      chief_alternate_user_id: null,
     });
   });
 

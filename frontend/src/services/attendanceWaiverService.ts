@@ -34,6 +34,8 @@ const normalizePolicy = (policy: AttendanceWaiverPolicy): AttendanceWaiverPolicy
   ...policy,
   categories: asArray(policy.categories),
   approver_position_ids: asArray(policy.approver_position_ids),
+  cc_position_ids: asArray(policy.cc_position_ids ?? []),
+  chief_alternate_user_id: policy.chief_alternate_user_id ?? null,
   attachment: policy.attachment ?? WaiverAttachmentMode.OFF,
   attachment_retention_days:
     typeof policy.attachment_retention_days === 'number' ? policy.attachment_retention_days : 365,

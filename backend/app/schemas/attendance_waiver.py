@@ -94,6 +94,12 @@ class AttendanceWaiverPolicy(BaseModel):
         le=MAX_ATTACHMENT_RETENTION_DAYS,
     )
     approver_position_ids: List[str] = Field(default_factory=list)
+    # Positions told of each final decision. Informed only: they cannot decide
+    # and are never shown the member's reason.
+    cc_position_ids: List[str] = Field(default_factory=list)
+    # The member who decides the Chief's own request when no one holds the
+    # President's office (and the President's when no one holds the Chief's).
+    chief_alternate_user_id: Optional[str] = Field(default=None, max_length=36)
 
     @field_validator("categories")
     @classmethod
@@ -119,15 +125,20 @@ class AttendanceWaiverPolicy(BaseModel):
             raise ValueError(f"At most {MAX_CATEGORIES} categories")
         return cleaned
 
-    @field_validator("approver_position_ids")
+    @field_validator("approver_position_ids", "cc_position_ids")
     @classmethod
     def _clean_position_ids(cls, value: List[str]) -> List[str]:
         ids = list(dict.fromkeys(str(v).strip() for v in value))
         if any(not i or len(i) > 36 for i in ids):
             raise ValueError("Invalid position")
         if len(ids) > MAX_APPROVER_POSITIONS:
-            raise ValueError(f"At most {MAX_APPROVER_POSITIONS} approver positions")
+            raise ValueError(f"At most {MAX_APPROVER_POSITIONS} positions")
         return ids
+
+    @field_validator("chief_alternate_user_id")
+    @classmethod
+    def _clean_alternate(cls, value: Optional[str]) -> Optional[str]:
+        return (value or "").strip() or None
 
     @model_validator(mode="after")
     def _category_required_needs_categories(self) -> "AttendanceWaiverPolicy":
@@ -250,7 +261,16 @@ class AttendanceWaiverRequestResponse(UTCResponseBase):
     decided_by: Optional[str] = None
     decided_by_name: Optional[str] = None
     chief_override: bool
+    # Open while a decider's question waits on the member's answer.
+    info_requested_at: Optional[datetime] = None
+    # Open while a rescheduled session waits on the member to confirm.
+    reconfirm_requested_at: Optional[datetime] = None
     can_withdraw: bool = False
+    # The member may answer the open question / confirm the new date.
+    can_respond: bool = False
+    can_confirm: bool = False
+    # The viewer may ask the member a question (a decider, while pending).
+    can_request_info: bool = False
     can_decide: bool = False
     can_override: bool = False
     # Whether the viewer may file another document now: the member, while the

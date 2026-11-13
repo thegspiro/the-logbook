@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**368 tables · 5954 columns · 1233 foreign keys**
+**368 tables · 5956 columns · 1233 foreign keys**
 
 ---
 
@@ -112,7 +112,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`attendance_waiver_attachments`](#attendance_waiver_attachments) | `AttendanceWaiverAttachment` | 10 | A file a member filed with their request, when the policy takes them. |
 | [`attendance_waiver_request_actions`](#attendance_waiver_request_actions) | `AttendanceWaiverRequestAction` | 7 | The decision log: one row per thing that happened to a request. |
-| [`attendance_waiver_requests`](#attendance_waiver_requests) | `AttendanceWaiverRequest` | 18 | One member's request to be excused from one session. |
+| [`attendance_waiver_requests`](#attendance_waiver_requests) | `AttendanceWaiverRequest` | 20 | One member's request to be excused from one session. |
 
 ### Audit & Compliance Logging
 
@@ -2015,7 +2015,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `request_id` | VARCHAR(36) | no | FK, IDX |  | → `attendance_waiver_requests.id` ON DELETE CASCADE |
-| `action` | ENUM(`submitted`, `withdrawn`, `approved`, `denied`, `chief_override`, `voided`) | no |  |  |  |
+| `action` | ENUM(`submitted`, `withdrawn`, `approved`, `denied`, `chief_override`, `voided`, `info_requested`, `member_responded`, `expired`, `rescheduled`, `member_confirmed`) | no |  |  |  |
 | `actor_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `note` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | no |  | `now()` |  |
@@ -2041,7 +2041,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `event_title_snapshot` | VARCHAR(255) | no |  |  |  |
 | `event_start_snapshot` | DATETIME | no |  |  |  |
 | `session_date` | DATE | no |  |  |  |
-| `status` | ENUM(`pending`, `approved`, `denied`, `withdrawn`, `voided`) | no |  | `pending` |  |
+| `status` | ENUM(`pending`, `approved`, `denied`, `withdrawn`, `voided`, `expired`) | no |  | `pending` |  |
 | `live_key` | VARCHAR(100) | yes | UQ |  |  |
 | `category` | VARCHAR(100) | yes |  |  |  |
 | `reason` | TEXT | yes |  |  |  |
@@ -2049,6 +2049,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `decided_at` | DATETIME | yes |  |  |  |
 | `decided_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `chief_override` | BOOL | no |  | `0` |  |
+| `info_requested_at` | DATETIME | yes |  |  |  |
+| `reconfirm_requested_at` | DATETIME | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 

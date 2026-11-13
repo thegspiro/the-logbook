@@ -44,6 +44,11 @@ export const ATTENDANCE_WAIVER_ACTION_LABELS: Record<string, string> = {
   denied: 'Denied',
   chief_override: 'Approved by Chief override',
   voided: 'Voided',
+  info_requested: 'Asked for more information',
+  member_responded: 'Answered the question',
+  expired: 'Expired undecided',
+  rescheduled: 'Session rescheduled',
+  member_confirmed: 'Confirmed the new date',
 };
 
 /** The decision page every queue row and email button opens. */

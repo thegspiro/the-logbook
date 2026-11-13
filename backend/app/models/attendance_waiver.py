@@ -49,6 +49,9 @@ class AttendanceWaiverStatus(str, enum.Enum):
     DENIED = "denied"
     WITHDRAWN = "withdrawn"
     VOIDED = "voided"
+    # Still undecided seven days after the session (owner decision,
+    # 2026-11-13): closed by the expiry task and counted as an absence.
+    EXPIRED = "expired"
 
 
 class AttendanceWaiverAction(str, enum.Enum):
@@ -58,6 +61,14 @@ class AttendanceWaiverAction(str, enum.Enum):
     DENIED = "denied"
     CHIEF_OVERRIDE = "chief_override"
     VOIDED = "voided"
+    # A decider asked the member a question; the member answered it. Neither
+    # is a decision: the request stays pending throughout.
+    INFO_REQUESTED = "info_requested"
+    MEMBER_RESPONDED = "member_responded"
+    EXPIRED = "expired"
+    # The session moved; the member confirmed the new date still needs one.
+    RESCHEDULED = "rescheduled"
+    MEMBER_CONFIRMED = "member_confirmed"
 
 
 # The statuses that hold a session's one request open. A denied request stays
@@ -139,6 +150,17 @@ class AttendanceWaiverRequest(Base):
     )
     chief_override: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="0"
+    )
+    # Set while a decider's question waits on the member; cleared by the
+    # member's answer. The question itself is the INFO_REQUESTED action's note.
+    info_requested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Set while a rescheduled session waits on the member to say the new date
+    # still needs a waiver; cleared by MEMBER_CONFIRMED. A decider cannot act
+    # on a request in this state.
+    reconfirm_requested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
