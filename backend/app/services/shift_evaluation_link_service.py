@@ -31,6 +31,7 @@ from typing import Optional
 from uuid import UUID
 
 from loguru import logger
+from pydantic import ValidationError
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +45,7 @@ from app.models.shift_evaluation import (
 from app.models.training import TrainingModuleConfig
 from app.models.user import Organization, User
 from app.schemas.shift_evaluation import (
+    PreceptorEvaluationSubmit,
     PreceptorLinkResponse,
     PublicShiftEvaluationView,
     ShiftEvaluationSave,
@@ -328,7 +330,7 @@ class ShiftEvaluationLinkService:
     async def submit(
         self,
         token: str,
-        body: ShiftEvaluationSave,
+        body: PreceptorEvaluationSubmit,
         *,
         ip_address: Optional[str],
         user_agent: Optional[str],
@@ -338,11 +340,23 @@ class ShiftEvaluationLinkService:
         Raises LinkAlreadyUsed after a submission, and ValueError for an
         answer the preceptor must correct (nothing is saved then).
         """
-        if not body.preceptor_name:
-            raise ValueError("Enter your name")
+        # The link is judged before the answers, so an unusable link reads as
+        # not found (or used) whatever the body holds.
         resolved = await self.resolve(token, lock=True)
         if resolved is None:
             return None
+        # The form is the one the page showed; a template choice is not the
+        # preceptor's to make.
+        try:
+            submission = ShiftEvaluationSave.model_validate(
+                {**body.model_dump(), "submit": True}
+            )
+        except ValidationError as exc:
+            await self.db.rollback()
+            raise ValueError(_first_problem(exc)) from None
+        if not submission.preceptor_name:
+            await self.db.rollback()
+            raise ValueError("Enter your name")
         link = resolved.link
         # Marked used in the transaction that saves the evaluation, while the
         # row lock is held: a second submission waits on the lock and then
@@ -351,9 +365,6 @@ class ShiftEvaluationLinkService:
         link.used_at = _now()
         link.submitted_ip = (ip_address or "")[:64] or None
         link.submitted_user_agent = (user_agent or "")[:500] or None
-        # The form is the one the page showed; a template choice from the
-        # request body is not the preceptor's to make.
-        submission = body.model_copy(update={"submit": True, "template_id": None})
         try:
             evaluation = await self.evaluations.save_for_entry(
                 resolved.entry,
@@ -371,6 +382,16 @@ class ShiftEvaluationLinkService:
             link.used_at = _now()
         await self.db.commit()
         return evaluation
+
+
+def _first_problem(exc: ValidationError) -> str:
+    """The message of the first rule an answer broke, as the page shows it."""
+    for error in exc.errors():
+        cause = (error.get("ctx") or {}).get("error")
+        if cause is not None:
+            return str(cause)
+        return str(error.get("msg") or "Check your answers")
+    return "Check your answers"
 
 
 def link_response(

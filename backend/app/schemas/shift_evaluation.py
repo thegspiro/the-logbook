@@ -315,12 +315,14 @@ MAX_HEADER_VALUE_LENGTH = 200
 MAX_STATISTIC_VALUE = 1000
 
 
-class EvaluationItemResponse(BaseModel):
-    """One item's answer: a rating, or N/A, and an optional comment."""
-
+class _EvaluationItemFields(BaseModel):
     rating: Optional[int] = Field(None, ge=0, le=100)
     not_applicable: bool = False
     comment: Optional[str] = Field(None, max_length=MAX_COMMENT_LENGTH)
+
+
+class EvaluationItemResponse(_EvaluationItemFields):
+    """One item's answer: a rating, or N/A, and an optional comment."""
 
     @model_validator(mode="after")
     def _settle(self) -> "EvaluationItemResponse":
@@ -361,6 +363,40 @@ class ShiftEvaluationSave(BaseModel):
         self.closing_comments = _clean_text(self.closing_comments)
         self.preceptor_name = _clean_text(self.preceptor_name)
         return self
+
+
+class PreceptorItemAnswer(_EvaluationItemFields):
+    """One item's answer as a preceptor link sends it.
+
+    The same fields and limits as EvaluationItemResponse, without its
+    cross-field rule: that rule is applied once the link is known to be
+    usable (see PreceptorEvaluationSubmit).
+    """
+
+
+class PreceptorEvaluationSubmit(BaseModel):
+    """What a preceptor link's page sends to submit the evaluation.
+
+    Only what the preceptor fills in: the form is the one the link names, and
+    a link only ever submits. Every rule the published schema cannot state
+    is applied after the link is resolved, so an unusable link reads as not
+    found or used, never as an answer to correct; the service builds a
+    ShiftEvaluationSave from this then.
+    """
+
+    header_values: dict[str, str] = Field(
+        default_factory=dict, max_length=MAX_HEADER_FIELDS
+    )
+    statistics: dict[str, Annotated[int, Field(ge=0, le=MAX_STATISTIC_VALUE)]] = Field(
+        default_factory=dict, max_length=3
+    )
+    responses: dict[str, PreceptorItemAnswer] = Field(
+        default_factory=dict, max_length=MAX_ITEMS_TOTAL
+    )
+    closing_comments: Optional[str] = Field(
+        None, max_length=MAX_CLOSING_COMMENTS_LENGTH
+    )
+    preceptor_name: Optional[str] = Field(None, max_length=MAX_PRECEPTOR_NAME_LENGTH)
 
 
 class TemplateOption(BaseModel):

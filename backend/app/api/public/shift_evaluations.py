@@ -21,9 +21,9 @@ from app.core.database import get_db
 from app.core.public_portal_security import validate_ip_rate_limit
 from app.core.security_middleware import get_client_ip
 from app.schemas.shift_evaluation import (
+    PreceptorEvaluationSubmit,
     PublicShiftEvaluationSubmitted,
     PublicShiftEvaluationView,
-    ShiftEvaluationSave,
 )
 from app.services.shift_evaluation_link_service import (
     LinkAlreadyUsed,
@@ -82,7 +82,7 @@ async def get_preceptor_evaluation(
 async def submit_preceptor_evaluation(
     request: Request,
     response: Response,
-    body: ShiftEvaluationSave,
+    body: PreceptorEvaluationSubmit,
     token: str = LinkToken,
     db: AsyncSession = Depends(get_db),
 ):

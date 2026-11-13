@@ -29,7 +29,10 @@ from app.api.v1.endpoints.shift_evaluations import _entry_for_link
 from app.models.shift_evaluation import ShiftEvaluationLink
 from app.models.training import RequirementType, TrainingModuleConfig
 from app.models.user import User
-from app.schemas.shift_evaluation import ShiftEvaluationSettingsUpdate
+from app.schemas.shift_evaluation import (
+    PreceptorEvaluationSubmit,
+    ShiftEvaluationSettingsUpdate,
+)
 from app.services.email_service import EmailService
 from app.services.external_shift_hours_service import ExternalShiftHoursService
 from app.services.shift_evaluation_link_service import (
@@ -54,8 +57,15 @@ async def _link(db, scene, entry, creator=None, **kwargs):
     return link
 
 
+def _preceptor_body(**overrides):
+    """The example form's full answer, as a preceptor link's page sends it."""
+    return PreceptorEvaluationSubmit.model_validate(
+        _complete(**overrides).model_dump(exclude={"template_id", "submit"})
+    )
+
+
 def _answers(**overrides):
-    return _complete(preceptor_name="Pat Preceptor", **overrides)
+    return _preceptor_body(preceptor_name="Pat Preceptor", **overrides)
 
 
 def _aware(value):
@@ -260,9 +270,53 @@ class TestSubmitting:
         service = ShiftEvaluationLinkService(db_session)
 
         with pytest.raises(ValueError, match="Enter your name"):
-            await service.submit(token, _complete(), ip_address=None, user_agent=None)
+            await service.submit(
+                token, _preceptor_body(), ip_address=None, user_agent=None
+            )
 
         assert await service.resolve(token) is not None
+
+    async def test_an_unknown_link_is_not_found_whatever_the_answers(self, db_session):
+        # The link decides first: a stranger's request learns nothing from
+        # which answer the form would have asked them to fix.
+        service = ShiftEvaluationLinkService(db_session)
+
+        assert (
+            await service.submit(
+                "x" * 43, _preceptor_body(), ip_address=None, user_agent=None
+            )
+            is None
+        )
+
+    async def test_an_item_both_rated_and_na_is_sent_back_to_correct(self, db_session):
+        scene = await _scene(db_session)
+        _, entry = await _outside(db_session, scene)
+        link = await _link(db_session, scene, entry)
+        token = link.token
+        service = ShiftEvaluationLinkService(db_session)
+        body = _answers()
+        body.responses["als_assist"].not_applicable = True
+
+        with pytest.raises(ValueError, match="either rated or N/A"):
+            await service.submit(token, body, ip_address=None, user_agent=None)
+        assert await service.resolve(token) is not None
+        assert (
+            await service.submit("x" * 43, body, ip_address=None, user_agent=None)
+            is None
+        )
+
+    async def test_a_used_link_says_so_even_without_a_name(self, db_session):
+        scene = await _scene(db_session)
+        _, entry = await _outside(db_session, scene)
+        link = await _link(db_session, scene, entry)
+        token = link.token
+        service = ShiftEvaluationLinkService(db_session)
+        await service.submit(token, _answers(), ip_address=None, user_agent=None)
+
+        with pytest.raises(LinkAlreadyUsed):
+            await service.submit(
+                token, _preceptor_body(), ip_address=None, user_agent=None
+            )
 
     async def test_an_unfinished_form_leaves_the_link_open(self, db_session):
         scene = await _scene(db_session)
