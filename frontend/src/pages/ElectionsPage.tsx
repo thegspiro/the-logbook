@@ -36,7 +36,12 @@ import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
 import { eventWindow, meetingWindow, type MeetingWindow } from '../utils/electionMeetingWindow';
 import { ElectionSummaryCards } from '../modules/elections/components/ElectionSummaryCards';
-import { MEETING_KIND_LABELS, defaultsForKind, describeEligibilityRules } from '../modules/elections/eligibilityRules';
+import {
+  MEETING_KINDS,
+  MEETING_KIND_LABELS,
+  defaultsForKind,
+  describeEligibilityRules,
+} from '../modules/elections/eligibilityRules';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { FIELD_ERROR_CLASS, FormField } from '../components/ux/FormField';
 import { useDiscardGuard } from '../hooks/useDiscardGuard';
@@ -153,7 +158,8 @@ export const ElectionsPage: React.FC = () => {
   // election starts with.
   const [electionSettings, setElectionSettings] = useState<ElectionSettings>({});
   const voterRules = describeEligibilityRules(
-    defaultsForKind(electionSettings, formData.meeting_kind ?? MeetingKind.REGULAR).rules
+    defaultsForKind(electionSettings, formData.meeting_kind ?? MeetingKind.REGULAR).rules,
+    electionSettings.voter_rows
   );
   const [showPositionDropdown, setShowPositionDropdown] = useState(false);
   const [meetings, setMeetings] = useState<MeetingRecord[]>([]);
@@ -293,9 +299,15 @@ export const ElectionsPage: React.FC = () => {
           meeting_id: id,
           event_id: undefined,
           meeting_date: meeting.meeting_date,
-          // An annual meeting record decides the kind; any other meeting is
-          // a regular one. Still a choice the secretary can change below.
-          meeting_kind: meeting.meeting_type === 'annual' ? MeetingKind.ANNUAL : MeetingKind.REGULAR,
+          // An annual or special meeting record decides the kind; any other
+          // meeting is a regular one, as the backend's _meeting_kind_of_link
+          // decides. Still a choice the secretary can change below.
+          meeting_kind:
+            meeting.meeting_type === 'annual'
+              ? MeetingKind.ANNUAL
+              : meeting.meeting_type === 'special'
+                ? MeetingKind.SPECIAL
+                : MeetingKind.REGULAR,
         });
       }
     } else if (source === 'event') {
@@ -1473,7 +1485,7 @@ export const ElectionsPage: React.FC = () => {
                 <div className="bg-theme-surface-secondary mt-6 space-y-3 rounded-md p-4">
                   <div className="max-w-xs">
                     <label htmlFor="election-meeting-kind" className={LABEL_CLASS}>
-                      Held at
+                      Kind of vote
                     </label>
                     <select
                       id="election-meeting-kind"
@@ -1482,7 +1494,7 @@ export const ElectionsPage: React.FC = () => {
                       aria-describedby="election-meeting-kind-help"
                       className="form-input mt-1 shadow-xs"
                     >
-                      {[MeetingKind.REGULAR, MeetingKind.ANNUAL].map((kind) => (
+                      {MEETING_KINDS.map((kind) => (
                         <option key={kind} value={kind}>
                           {MEETING_KIND_LABELS[kind]}
                         </option>
@@ -1498,8 +1510,10 @@ export const ElectionsPage: React.FC = () => {
                     </p>
                     {voterRules.length === 0 ? (
                       <p className="text-theme-text-muted mt-1 text-sm">
-                        No election-wide rules. Every member whose tier may vote is eligible, subject to each ballot
-                        item&apos;s own rules.
+                        {defaultsForKind(electionSettings, formData.meeting_kind ?? MeetingKind.REGULAR).rules
+                          .version === 2
+                          ? "No voter rules are set: every member may vote, subject to each ballot item's own rules."
+                          : "No election-wide rules. Every member whose tier may vote is eligible, subject to each ballot item's own rules."}
                       </p>
                     ) : (
                       <>
