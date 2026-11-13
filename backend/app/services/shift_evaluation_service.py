@@ -187,13 +187,33 @@ class _Scope:
     enrollments: list[ProgramEnrollment]
     program_names: list[str]
     templates: list[ShiftEvaluationTemplate]
+    # Each enrollment's program form, parallel to ``enrollments``.
+    template_ids: list[str] = field(default_factory=list)
 
-    def started_by(self, cutoff: tuple[date, Any]) -> bool:
-        """Whether any of its enrollments began on or before the shift's date."""
+    def as_of(self, cutoff: tuple[date, Any]) -> Optional["_Scope"]:
+        """The scope narrowed to the enrollments begun by the shift's date.
+
+        A shift counts only toward programs the member had joined by then, so
+        a combined evaluation drops a program joined afterwards rather than
+        crediting it (None when no enrollment is left).
+        """
         shift_date, tz = cutoff
-        return any(
-            e.enrolled_at is None or local_date(e.enrolled_at, tz) <= shift_date
-            for e in self.enrollments
+        kept = [
+            i
+            for i, e in enumerate(self.enrollments)
+            if e.enrolled_at is None or local_date(e.enrolled_at, tz) <= shift_date
+        ]
+        if len(kept) == len(self.enrollments):
+            return self
+        if not kept:
+            return None
+        kept_template_ids = {self.template_ids[i] for i in kept}
+        return _Scope(
+            scope_key=self.scope_key,
+            enrollments=[self.enrollments[i] for i in kept],
+            program_names=[self.program_names[i] for i in kept],
+            templates=[t for t in self.templates if str(t.id) in kept_template_ids],
+            template_ids=[self.template_ids[i] for i in kept],
         )
 
 
@@ -396,6 +416,9 @@ class ShiftEvaluationService:
                         enrollments=[e for e, _ in pairs],
                         program_names=[p.name for _, p in pairs],
                         templates=options,
+                        template_ids=[
+                            str(p.shift_evaluation_template_id) for _, p in pairs
+                        ],
                     )
                 ]
             elif pairs:
@@ -407,6 +430,7 @@ class ShiftEvaluationService:
                         templates=[
                             templates[str(program.shift_evaluation_template_id)]
                         ],
+                        template_ids=[str(program.shift_evaluation_template_id)],
                     )
                     for enrollment, program in pairs
                 ]
@@ -509,9 +533,9 @@ class ShiftEvaluationService:
         result: list[_Requirement] = []
         for member_id, (seat, user) in members.items():
             member_scopes = [
-                scope
+                narrowed
                 for scope in scopes.get(member_id, [])
-                if cutoff is None or scope.started_by(cutoff)
+                if (narrowed := scope.as_of(cutoff)) is not None
             ]
             if member_scopes:
                 for scope in member_scopes:
@@ -584,16 +608,14 @@ class ShiftEvaluationService:
 
     async def _enrollment_cutoff(
         self, occasion: "_Occasion", organization_id: str
-    ) -> Optional[tuple[date, Any]]:
-        """For an outside shift, its date and the department's timezone.
+    ) -> tuple[date, Any]:
+        """The shift's date and the department's timezone.
 
-        A department shift is evaluated as it closes, so whoever is enrolled
-        then is evaluated. An outside shift is logged afterwards, sometimes
-        long afterwards; a shift from before the member joined the program is
-        not one the program asks to have evaluated.
+        A shift counts only toward programs the member had joined by its
+        date, department and outside shifts alike (owner decision,
+        2026-11-13): an evaluation submitted or re-saved later must not
+        credit a program the member joined after the shift.
         """
-        if occasion.kind != EXTERNAL_OCCASION:
-            return None
         return (
             occasion.shift_date,
             await resolve_scheduling_timezone(self.db, organization_id),
@@ -1304,7 +1326,7 @@ class ShiftEvaluationService:
         ``draft`` while one is started but not submitted, ``submitted`` once
         every one is in, and None when the shift calls for none. Worked out
         for the whole page at once from the same rule ``_requirements``
-        applies to one shift (``_program_scopes``, ``_Scope.started_by``).
+        applies to one shift (``_program_scopes``, ``_Scope.as_of``).
         """
         org = str(organization_id)
         # entry_id -> (status, the first scope still to submit)
@@ -1347,7 +1369,7 @@ class ShiftEvaluationService:
                 [
                     scope.scope_key
                     for scope in scopes.get(str(entry.user_id), [])
-                    if scope.started_by((entry.shift_date, tz))
+                    if scope.as_of((entry.shift_date, tz)) is not None
                 ]
                 if entry_id in candidate_ids
                 else []

@@ -179,6 +179,10 @@ async def _scene(db, settings=None) -> Scene:
         db, scene.org_id, "EMT Field Internship", template.id
     )
     scene.enrollment = await _enroll(db, scene.org_id, scene.trainee, scene.program)
+    # Enrolled well before the shift: a shift counts only toward programs the
+    # member had joined by its date.
+    scene.enrollment.enrolled_at = datetime.now(timezone.utc) - timedelta(days=30)
+    await db.flush()
     return scene
 
 
