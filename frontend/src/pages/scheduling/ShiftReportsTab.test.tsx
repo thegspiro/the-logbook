@@ -937,6 +937,28 @@ describe('ShiftReportsTab — a trainee evaluated on a department form', () => {
     expect(screen.queryByRole('button', { name: /Evaluate/ })).not.toBeInTheDocument();
   });
 
+  it('drops the previous shift’s evaluation lines while the next shift loads', async () => {
+    searchParams = new URLSearchParams('view=create&shift=sh1');
+    const { rerender } = renderWithRouter(<ShiftReportsTab />);
+    expect(await screen.findByRole('link', { name: 'Start evaluation for Marcus Bell' })).toBeInTheDocument();
+
+    // The next shift's roster has not answered yet.
+    mockGetEvaluationRoster.mockReturnValueOnce(new Promise(() => undefined));
+    mockGetShift.mockResolvedValue({
+      id: 'sh2',
+      shift_date: '2026-10-04',
+      start_time: '2026-10-04T11:00:00Z',
+      end_time: '2026-10-04T23:00:00Z',
+      apparatus_name: 'Ambulance 106',
+      call_count: 2,
+    });
+    searchParams = new URLSearchParams('view=create&shift=sh2');
+    rerender(<ShiftReportsTab />);
+
+    await waitFor(() => expect(mockGetEvaluationRoster).toHaveBeenCalledWith('sh2'));
+    expect(screen.queryByRole('link', { name: /evaluation for Marcus Bell/ })).not.toBeInTheDocument();
+  });
+
   it('keeps the generic panel for a trainee whose program has no form', async () => {
     mockGetEvaluationRoster.mockResolvedValue({ shift_id: 'sh1', requirements: [] });
     searchParams = new URLSearchParams('view=create&shift=sh1');
