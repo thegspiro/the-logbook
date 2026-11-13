@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**369 tables · 5963 columns · 1236 foreign keys**
+**369 tables · 5964 columns · 1236 foreign keys**
 
 ---
 
@@ -178,7 +178,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`ballot_send_jobs`](#ballot_send_jobs) | `BallotSendJob` | 16 | One request to email ballots, run in the background. |
 | [`candidates`](#candidates) | `Candidate` | 17 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 57 | Election model for managing elections within an organization |
+| [`elections`](#elections) | `Election` | 58 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
@@ -2540,6 +2540,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `ballot_items` | JSON | yes |  |  |  |
 | `position_eligibility` | JSON | yes |  |  |  |
 | `eligibility_rules` | JSON | yes |  |  |  |
+| `eligibility_override_reason` | TEXT | yes |  |  |  |
 | `meeting_kind` | VARCHAR(20) | no |  | `regular` |  |
 | `email_sent` | BOOL | no |  | `0` |  |
 | `email_sent_at` | DATETIME | yes |  |  |  |

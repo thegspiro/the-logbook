@@ -28,6 +28,8 @@ import type {
   ElectionReportResponse,
   ElectionResults,
   ElectionSettings,
+  ElectoratePreview,
+  ElectoratePreviewRequest,
   MemberVotingEligibility,
   MemberVotingEligibilityUpdate,
   ElectionStats,
@@ -476,6 +478,15 @@ export const electionService = {
    */
   async castProxyVote(electionId: string, data: ProxyVoteCreate): Promise<Vote> {
     const response = await api.post<Vote>(`/elections/${electionId}/proxy-vote`, data);
+    return response.data;
+  },
+
+  /**
+   * Count how many active members a new election with these voter rules
+   * would admit today (the same check the ballot send applies).
+   */
+  async previewElectorate(request: ElectoratePreviewRequest): Promise<ElectoratePreview> {
+    const response = await api.post<ElectoratePreview>('/elections/eligibility-preview', request);
     return response.data;
   },
 

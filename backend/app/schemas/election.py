@@ -177,6 +177,11 @@ def clean_voter_types(values: List[str]) -> List[str]:
 # Ballot Item Schemas
 
 
+# A reason a secretary gives for voter rules that differ from the
+# department's defaults; long enough for a bylaws citation and a sentence.
+MAX_OVERRIDE_REASON_LENGTH = 2000
+
+
 class BallotItem(BaseModel):
     """Schema for a ballot item with voter eligibility rules.
 
@@ -247,6 +252,28 @@ class BallotItem(BaseModel):
         description="Override election-level voting method for this item",
     )
 
+    # Per-item voter rules: the carve-out that lets one question on a ballot
+    # (a bylaws amendment at a business meeting) follow a different kind of
+    # vote's rules than the rest. When ``eligibility_rules`` is set, it
+    # replaces the election's rules -- and, being version 2, the tier
+    # ladder's -- for this item only. ``eligibility_kind`` names the kind
+    # whose defaults they were copied from, or is None for custom rules.
+    # Stored as plain JSON here because this is the tolerant read shape;
+    # ``BallotItemInput`` validates the rules on the way in.
+    eligibility_kind: Optional[str] = Field(
+        default=None,
+        description="Meeting kind whose voter rules this item follows",
+    )
+    eligibility_rules: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Version 2 voter rules for this item instead of the election's",
+    )
+    eligibility_override_reason: Optional[str] = Field(
+        default=None,
+        max_length=MAX_OVERRIDE_REASON_LENGTH,
+        description="Why this item's voter rules differ from the defaults",
+    )
+
     @field_validator("type")
     @classmethod
     def validate_type(cls, v: str) -> str:
@@ -312,6 +339,32 @@ class BallotItemInput(BallotItem):
                 "victory_percentage is required for a supermajority ballot item"
             )
         return self
+
+    @field_validator("eligibility_kind")
+    @classmethod
+    def validate_eligibility_kind(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_choice(v, VALID_MEETING_KINDS, "meeting kind")
+
+    @field_validator("eligibility_rules")
+    @classmethod
+    def validate_item_rules(
+        cls, v: Optional[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        if v is None:
+            return None
+        rules = ElectionEligibilityRules.model_validate(v)
+        # Version 1 rules sit beside the tier ladder's; an item's own rules
+        # are meant to be the whole answer for that item.
+        if rules.version != 2:
+            raise ValueError(
+                "A ballot item's own voter rules must be set per member type"
+            )
+        return rules.model_dump()
+
+    @field_validator("eligibility_override_reason")
+    @classmethod
+    def blank_reason_is_none(cls, v: Optional[str]) -> Optional[str]:
+        return (v or "").strip() or None
 
 
 class PositionEligibility(BaseModel):
@@ -682,6 +735,14 @@ class ElectionBase(BaseModel):
             "department's defaults"
         ),
     )
+    eligibility_override_reason: Optional[str] = Field(
+        default=None,
+        max_length=MAX_OVERRIDE_REASON_LENGTH,
+        description=(
+            "Why these rules differ from the department's defaults for the "
+            "meeting kind; required when they do"
+        ),
+    )
     meeting_kind: Optional[str] = Field(
         default=None,
         description=(
@@ -927,6 +988,9 @@ class ElectionUpdate(BaseModel):
     ballot_items: Optional[List[BallotItemInput]] = Field(default=None, max_length=250)
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
     eligibility_rules: Optional[ElectionEligibilityRules] = None
+    eligibility_override_reason: Optional[str] = Field(
+        None, max_length=MAX_OVERRIDE_REASON_LENGTH
+    )
     meeting_kind: Optional[str] = None
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
@@ -1045,6 +1109,7 @@ class ElectionResponse(UTCResponseBase):
     ballot_items: Optional[List[BallotItem]] = None
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
     eligibility_rules: Optional[ElectionEligibilityRulesRead] = None
+    eligibility_override_reason: Optional[str] = None
     meeting_kind: str = "regular"
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
@@ -1570,6 +1635,21 @@ class PositionResults(BaseModel):
     is_tie: bool = False
 
 
+class VoterRuleException(BaseModel):
+    """Where an election's voter rules depart from the department's
+    defaults: the election as a whole, or one ballot item with rules of its
+    own. Carried in the results so the minutes record who could vote and
+    why it differed."""
+
+    # "election" or "ballot_item"
+    scope: str
+    title: str
+    # The meeting kind whose rules apply; None for an item's custom rules.
+    meeting_kind: Optional[str] = None
+    # None for an item that follows another kind's defaults unchanged.
+    reason: Optional[str] = None
+
+
 class ElectionResults(BaseModel):
     """Complete election results"""
 
@@ -1595,6 +1675,7 @@ class ElectionResults(BaseModel):
     quorum_met: Optional[bool] = None
     quorum_detail: Optional[str] = None
     tie_policy: Optional[str] = None
+    voter_rule_exceptions: List[VoterRuleException] = Field(default_factory=list)
 
 
 class ElectionStats(BaseModel):
@@ -2159,6 +2240,28 @@ class SuccessResponse(BaseModel):
 
     success: bool
     message: str
+
+
+class ElectoratePreviewRequest(BaseModel):
+    """Voter rules to preview against today's members: the rules given, or
+    when none are, the defaults ``meeting_kind`` would copy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    meeting_kind: str = "regular"
+    eligibility_rules: Optional[ElectionEligibilityRules] = None
+
+    @field_validator("meeting_kind")
+    @classmethod
+    def validate_meeting_kind(cls, v: str) -> str:
+        return _validate_choice(v, VALID_MEETING_KINDS, "meeting kind")
+
+
+class ElectoratePreviewResponse(BaseModel):
+    """How many active members the previewed rules admit today."""
+
+    eligible: int
+    total: int
 
 
 class VoterRow(BaseModel):

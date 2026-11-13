@@ -57,7 +57,34 @@ describe('ElectionEligibilityRulesPanel', () => {
         attendance: { mode: 'count', min_meetings: 6, of_last_meetings: 12, meeting_types: ['business'] },
         waiting_periods: { administrative: { mode: 'months', months: 12 } },
       },
+      // Sent with every save: the server keeps it only while the rules differ.
+      eligibility_override_reason: null,
     });
+  });
+
+  it('saves the reason the rules differ', async () => {
+    const user = userEvent.setup();
+    const onUpdate = vi.fn();
+    renderWithRouter(<ElectionEligibilityRulesPanel election={baseElection} onUpdate={onUpdate} />);
+
+    await user.type(screen.getByLabelText('Why these rules differ from the defaults'), '  Bylaws Article IV ');
+    await user.click(screen.getByRole('button', { name: 'Save voter rules' }));
+
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    expect(updateElection).toHaveBeenCalledWith(
+      'elec-1',
+      expect.objectContaining({ eligibility_override_reason: 'Bylaws Article IV' })
+    );
+  });
+
+  it('shows the reason once voting is open', () => {
+    renderWithRouter(
+      <ElectionEligibilityRulesPanel
+        election={{ ...baseElection, status: 'open', eligibility_override_reason: 'Bylaws Article IV' }}
+        onUpdate={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('election-override-reason')).toHaveTextContent('Bylaws Article IV');
   });
 
   it('discards an unsaved change', async () => {

@@ -988,12 +988,16 @@ class TestCreateAndUpdate:
         org, admin = await self._admin_org(db_session)
         response = await create_election(
             election=ElectionCreate.model_validate(
-                self._payload(eligibility_rules=None)
+                self._payload(
+                    eligibility_rules=None,
+                    eligibility_override_reason="No rules apply to this vote",
+                )
             ),
             db=db_session,
             current_user=admin,
         )
         assert response.eligibility_rules is None
+        assert response.eligibility_override_reason == "No rules apply to this vote"
 
     async def test_explicit_position_rules_win(self, db_session):
         org, admin = await self._admin_org(db_session)
@@ -1036,7 +1040,8 @@ class TestCreateAndUpdate:
                         "waiting_periods": {
                             "administrative": {"mode": "months", "months": 12}
                         },
-                    }
+                    },
+                    "eligibility_override_reason": "Bylaws Article IV",
                 }
             ),
             db=db_session,
@@ -1241,7 +1246,11 @@ class TestMeetingKind:
         response = await update_election(
             election_id=created.id,
             election_update=ElectionUpdate.model_validate(
-                {"meeting_kind": "annual", "eligibility_rules": None}
+                {
+                    "meeting_kind": "annual",
+                    "eligibility_rules": None,
+                    "eligibility_override_reason": "Open to every member",
+                }
             ),
             db=db_session,
             current_user=admin,

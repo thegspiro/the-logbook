@@ -37,6 +37,16 @@ export interface BallotItem {
   victory_percentage?: number | undefined;
   voting_method?: VotingMethod | undefined;
   prospect_package_id?: string | undefined;
+  /**
+   * The carve-out: voter rules this item follows instead of the election's.
+   * `eligibility_kind` names the kind whose defaults they came from (the
+   * server copies them when only the kind is sent); null for custom rules.
+   * Send null on all three to put the item back on the election's rules.
+   */
+  eligibility_kind?: MeetingKind | null | undefined;
+  eligibility_rules?: ElectionEligibilityRules | null | undefined;
+  /** Required by the server when the rules differ from that kind's defaults. */
+  eligibility_override_reason?: string | null | undefined;
 }
 
 export interface PositionEligibility {
@@ -167,6 +177,8 @@ export interface Election {
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
   eligibility_rules?: ElectionEligibilityRules | null;
+  /** Why the rules differ from the meeting kind's defaults, as the secretary gave it. */
+  eligibility_override_reason?: string | null;
   meeting_kind?: MeetingKind;
   meeting_date?: string;
   meeting_id?: string;
@@ -326,6 +338,10 @@ export interface ElectionCreate {
   position_eligibility?: { [position: string]: PositionEligibility } | undefined;
   // Omitted, the server derives it from the linked meeting's type.
   meeting_kind?: MeetingKind | undefined;
+  // Omitted, the server copies the meeting kind's defaults.
+  eligibility_rules?: ElectionEligibilityRules | null | undefined;
+  // Required by the server when eligibility_rules differ from those defaults.
+  eligibility_override_reason?: string | undefined;
   meeting_date?: string | undefined;
   meeting_id?: string | undefined;
   event_id?: string | undefined;
@@ -361,6 +377,9 @@ export interface ElectionUpdate {
   position_eligibility?: { [position: string]: PositionEligibility };
   // null removes every election-wide rule; an omitted key leaves them alone
   eligibility_rules?: ElectionEligibilityRules | null | undefined;
+  // Required when the resulting rules differ from the meeting kind's
+  // defaults; cleared by the server when they match.
+  eligibility_override_reason?: string | null | undefined;
   // Changing it replaces the election's rules with that kind's defaults,
   // unless the same request sends eligibility_rules / position_eligibility.
   meeting_kind?: MeetingKind | undefined;
@@ -533,6 +552,27 @@ export interface ElectionResults {
   quorum_met?: boolean | null;
   quorum_detail?: string | null;
   tie_policy?: TiePolicy;
+  /** Where this election's voter rules departed from the department's defaults. */
+  voter_rule_exceptions?: VoterRuleException[];
+}
+
+/** Backend `VoterRuleException`, carried in the results and so in the minutes. */
+export interface VoterRuleException {
+  scope: 'election' | 'ballot_item';
+  title: string;
+  meeting_kind?: MeetingKind | null;
+  reason?: string | null;
+}
+
+/** POST /elections/eligibility-preview. Omit the rules to preview the kind's defaults. */
+export interface ElectoratePreviewRequest {
+  meeting_kind: MeetingKind;
+  eligibility_rules?: ElectionEligibilityRules | null | undefined;
+}
+
+export interface ElectoratePreview {
+  eligible: number;
+  total: number;
 }
 
 export interface TimelineEvent {
