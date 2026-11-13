@@ -183,11 +183,15 @@ describe('evaluateCell', () => {
   });
 
   it('labels the row with the date that decides it', () => {
-    const expiring = evaluateCell(cell({ expiry_date: '2026-11-12' }), requirement(), AS_OF);
+    // A fixed cutoff, not AS_OF: whether the date reads "Expires" or "Lapsed"
+    // turns on the cutoff, so measured from today this case flipped to
+    // "Lapsed" the day after its expiry date passed.
+    const asOf = '2026-11-01';
+    const expiring = evaluateCell(cell({ expiry_date: '2026-11-12' }), requirement(), asOf);
     const windowed = evaluateCell(
       cell({ status: 'not_started', window_start: '2026-01-01', window_end: '2026-12-31' }),
       requirement(),
-      AS_OF
+      asOf
     );
     expect(expiring.dateLabel).toBe('Expires Nov 12, 2026');
     // The year prints once when both ends share it.
