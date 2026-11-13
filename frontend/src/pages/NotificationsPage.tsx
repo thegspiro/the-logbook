@@ -887,7 +887,7 @@ const NotificationsPage: React.FC = () => {
             role="tab"
             aria-selected={activeTab === 'inbox'}
             className={`touch:min-h-[44px] flex items-center space-x-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'inbox' ? 'bg-orange-700 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              activeTab === 'inbox' ? 'bg-orange-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
             <span>My Notifications</span>

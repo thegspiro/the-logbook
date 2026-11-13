@@ -602,7 +602,7 @@ export const ReportsPage: React.FC = () => {
                     </span>
                   )}
                   {report.usesDateRange && report.available && (
-                    <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300">
+                    <span className="rounded-sm bg-blue-500/20 px-2 py-1 text-xs font-medium text-blue-900 dark:text-blue-300">
                       Date Range
                     </span>
                   )}

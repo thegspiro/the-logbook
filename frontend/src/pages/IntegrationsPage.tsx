@@ -2355,7 +2355,7 @@ const IntegrationsPage: React.FC = () => {
                   aria-pressed={categoryFilter === cat}
                   className={`touch-target-phone flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
                     categoryFilter === cat
-                      ? 'bg-indigo-600 text-white'
+                      ? 'bg-indigo-700 text-white'
                       : 'bg-theme-surface-secondary text-theme-text-muted hover:text-theme-text-primary'
                   }`}
                 >
