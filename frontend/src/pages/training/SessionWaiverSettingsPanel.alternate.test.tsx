@@ -5,6 +5,7 @@ import { renderWithRouter } from '../../test/utils';
 import type { AttendanceWaiverAlternateOptions, AttendanceWaiverPolicy } from '../../types/attendanceWaiver';
 
 const mockGetPolicy = vi.fn();
+const mockPositions = vi.fn();
 const mockSavePolicy = vi.fn();
 const mockGetAlternateOptions = vi.fn();
 vi.mock('../../services/attendanceWaiverService', () => ({
@@ -12,11 +13,10 @@ vi.mock('../../services/attendanceWaiverService', () => ({
     getPolicy: (...args: unknown[]) => mockGetPolicy(...args) as unknown,
     savePolicy: (...args: unknown[]) => mockSavePolicy(...args) as unknown,
     getAlternateOptions: (...args: unknown[]) => mockGetAlternateOptions(...args) as unknown,
+    // The panel reads positions from the waiver API now; the fixtures keep
+    // the `{ positions }` shape the compliance endpoint returned.
+    getPositions: async (...args: unknown[]) => ((await mockPositions(...args)) as { positions: unknown[] }).positions,
   },
-}));
-const mockPositions = vi.fn();
-vi.mock('../../services/trainingServices', () => ({
-  complianceConfigService: { getAvailablePositions: (...args: unknown[]) => mockPositions(...args) as unknown },
 }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 

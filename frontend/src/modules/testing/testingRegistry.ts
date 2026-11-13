@@ -1002,6 +1002,24 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'minutes',
       },
       {
+        path: '/minutes/attendance/waiver-settings',
+        label: 'Meeting waiver request settings',
+        permission: 'meetings.manage',
+        module: 'minutes',
+      },
+      {
+        path: '/meetings/waiver-requests',
+        label: 'Meeting waiver requests',
+        module: 'minutes',
+        note: 'Only requests the viewer may decide or has decided',
+      },
+      {
+        path: '/meetings/waiver-requests/:id',
+        label: 'Meeting waiver decision',
+        module: 'minutes',
+        note: 'Opened from the approver email; ?action=approve|deny pre-selects only',
+      },
+      {
         path: '/minutes/outlines',
         label: 'Meeting outlines',
         permission: 'minutes.manage',

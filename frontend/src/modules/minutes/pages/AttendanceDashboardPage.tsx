@@ -9,6 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { Loader2, Users } from 'lucide-react';
 import { GovernancePageHeader } from '../../../components/governance/GovernancePageHeader';
 import { meetingsService } from '../../../services/meetingsServices';
@@ -18,6 +19,7 @@ import { formatDateTime } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { EmptyState } from '../../../components/ux';
 import type { MeetingType } from '../types/minutes';
+import { MEETING_WAIVER_SETTINGS_PATH, MEETING_WAIVER_WORKFLOW } from '../../../utils/attendanceWaiverWorkflows';
 
 const PERIOD_OPTIONS = [3, 6, 12, 24] as const;
 
@@ -66,6 +68,16 @@ const AttendanceDashboardPage: React.FC = () => {
         icon={Users}
         title="Meeting Attendance"
         breadcrumbLabel="Attendance"
+        actions={
+          <>
+            <Link to={MEETING_WAIVER_WORKFLOW.queuePath} className="btn-secondary text-sm font-medium">
+              Waiver requests
+            </Link>
+            <Link to={MEETING_WAIVER_SETTINGS_PATH} className="btn-secondary text-sm font-medium">
+              Waiver settings
+            </Link>
+          </>
+        }
         subtitle={
           <>
             Each active member&apos;s attendance since their service began, up to the period chosen. Waived meetings and

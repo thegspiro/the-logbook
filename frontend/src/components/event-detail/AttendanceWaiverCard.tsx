@@ -1,5 +1,10 @@
 /**
- * "Request to be excused" on a training session's page.
+ * "Request to be excused" on a training session's or a business meeting's
+ * page (`workflow`).
+ *
+ * A member whose workflow has no list of their requests (business meetings)
+ * works from here: an officer's question is answered on this card rather than
+ * through a link to My Training.
  *
  * Whether the member may ask is the server's answer (`GET .../eligibility`),
  * never worked out here (CLAUDE.md pitfall #29): it alone knows which
@@ -13,7 +18,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router';
 import { CalendarX } from 'lucide-react';
-import { attendanceWaiverService } from '../../services/attendanceWaiverService';
+import { TRAINING_WAIVER_WORKFLOW, type AttendanceWaiverWorkflow } from '../../utils/attendanceWaiverWorkflows';
+import { AttendanceWaiverAnswerForm } from '../training/AttendanceWaiverConversation';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { AttendanceWaiverStatus } from '../../constants/enums';
 import type { AttendanceWaiverEligibility, AttendanceWaiverRequest } from '../../types/attendanceWaiver';
@@ -36,9 +42,17 @@ interface AttendanceWaiverCardProps {
   eventId: string;
   eventTitle: string;
   timezone: string;
+  /** Training sessions when omitted. */
+  workflow?: AttendanceWaiverWorkflow;
 }
 
-export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ eventId, eventTitle, timezone }) => {
+export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({
+  eventId,
+  eventTitle,
+  timezone,
+  workflow = TRAINING_WAIVER_WORKFLOW,
+}) => {
+  const { service, sessionWord, attendanceMeasure } = workflow;
   const [eligibility, setEligibility] = useState<AttendanceWaiverEligibility | null>(null);
   const [request, setRequest] = useState<AttendanceWaiverRequest | null>(null);
   const [showDialog, setShowDialog] = useState(false);
@@ -48,10 +62,8 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
   const load = useCallback(
     async (isCancelled: () => boolean = () => false) => {
       try {
-        const answer = await attendanceWaiverService.getEligibility(eventId);
-        const existing = answer.existing_request_id
-          ? await attendanceWaiverService.get(answer.existing_request_id)
-          : null;
+        const answer = await service.getEligibility(eventId);
+        const existing = answer.existing_request_id ? await service.get(answer.existing_request_id) : null;
         if (isCancelled()) return;
         setEligibility(answer);
         setRequest(existing);
@@ -63,7 +75,7 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
         setRequest(null);
       }
     },
-    [eventId]
+    [eventId, service]
   );
 
   useEffect(() => {
@@ -85,8 +97,7 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
     if (!request) return;
     const confirmed = await confirm({
       title: 'Withdraw your request?',
-      message:
-        'The officers will no longer be asked to excuse you from this session. You can ask again before the deadline.',
+      message: `The officers will no longer be asked to excuse you from this ${sessionWord}. You can ask again before the deadline.`,
       confirmLabel: 'Withdraw request',
       cancelLabel: 'Keep it',
       variant: 'warning',
@@ -94,7 +105,7 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
     if (!confirmed) return;
     setWithdrawing(true);
     try {
-      await attendanceWaiverService.withdraw(request.id);
+      await service.withdraw(request.id);
       toast.success('Request withdrawn');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Your request could not be withdrawn'));
@@ -110,7 +121,7 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
     if (!request) return;
     setWithdrawing(true);
     try {
-      await attendanceWaiverService.confirm(request.id);
+      await service.confirm(request.id);
       toast.success('Confirmed; your request is back with the officers');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Your request could not be confirmed'));
@@ -124,7 +135,7 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
     return (
       <div className="split-row alert-warning gap-3 rounded-lg p-4 text-sm sm:items-center" role="status">
         <span className="split-row-main">
-          This session moved to {formatDateTime(request.event_start, timezone)}. Do you still need to be excused?
+          This {sessionWord} moved to {formatDateTime(request.event_start, timezone)}. Do you still need to be excused?
         </span>
         <span className="split-row-aside flex flex-wrap gap-2">
           <button
@@ -154,15 +165,28 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
     return (
       <div className="split-row alert-info gap-3 rounded-lg p-4 text-sm sm:items-center" role="status">
         <span className="split-row-main">
-          You asked to be excused from this session on {formatDateTime(request.submitted_at, timezone)}. It is waiting
-          for a decision.
-          {request.can_respond && (
+          You asked to be excused from this {sessionWord} on {formatDateTime(request.submitted_at, timezone)}. It is
+          waiting for a decision.
+          {request.can_respond && workflow.memberListPath && (
             <span className="mt-1 block font-medium">
               An officer asked you a question about it.{' '}
-              <Link to="/training/my-training" className="underline underline-offset-2">
+              <Link to={workflow.memberListPath} className="underline underline-offset-2">
                 Answer it on My Training
               </Link>
               .
+            </span>
+          )}
+          {request.can_respond && !workflow.memberListPath && (
+            <span className="mt-2 block w-full">
+              <AttendanceWaiverAnswerForm
+                request={request}
+                workflow={workflow}
+                onAnswered={(updated) => {
+                  setRequest(updated);
+                  void load();
+                }}
+                onRefused={() => void load()}
+              />
             </span>
           )}
         </span>
@@ -184,9 +208,9 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
     const note = latestDecisionNote(request.actions);
     return (
       <div className="alert-success rounded-lg p-4 text-sm" role="status">
-        You are excused from this session
+        You are excused from this {sessionWord}
         {request.decided_by_name ? `, approved by ${request.decided_by_name}` : ''}
-        {request.chief_override ? ' on a Chief override' : ''}. It does not count toward your attendance requirement.
+        {request.chief_override ? ' on a Chief override' : ''}. It does not count toward {attendanceMeasure}.
         {note && <span className="mt-1 block">Note: {note}</span>}
       </div>
     );
@@ -196,10 +220,9 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
     const note = latestDecisionNote(request.actions);
     return (
       <div className="alert-warning rounded-lg p-4 text-sm" role="status">
-        Your request to be excused from this session was not approved
-        {request.decided_by_name ? ` by ${request.decided_by_name}` : ''}. The session still counts toward your
-        attendance requirement.
-        {note && <span className="mt-1 block">Reason: {note}</span>}
+        Your request to be excused from this {sessionWord} was not approved
+        {request.decided_by_name ? ` by ${request.decided_by_name}` : ''}. The {sessionWord} still counts toward{' '}
+        {attendanceMeasure}.{note && <span className="mt-1 block">Reason: {note}</span>}
       </div>
     );
   }
@@ -221,7 +244,9 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
     <>
       <div className="split-row card gap-3 p-4 sm:items-center">
         <div className="split-row-main text-theme-text-secondary space-y-1 text-sm">
-          <p>This session counts toward your attendance requirement. Can&apos;t make it? Ask to be excused.</p>
+          <p>
+            This {sessionWord} counts toward {attendanceMeasure}. Can&apos;t make it? Ask to be excused.
+          </p>
           {eligibility.deadline && <p>Ask by {formatDateTime(eligibility.deadline, timezone)}.</p>}
           {cap && <p>{cap}</p>}
         </div>
@@ -242,6 +267,7 @@ export const AttendanceWaiverCard: React.FC<AttendanceWaiverCardProps> = ({ even
           timezone={timezone}
           onClose={() => setShowDialog(false)}
           onSubmitted={handleSubmitted}
+          workflow={workflow}
         />
       )}
     </>

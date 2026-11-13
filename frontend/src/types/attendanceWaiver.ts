@@ -37,6 +37,12 @@ export interface AttendanceWaiverPolicy {
   chief_alternate_user_id: string | null;
 }
 
+/** A position the settings screen offers, from `GET .../policy/positions`. */
+export interface AttendanceWaiverPositionOption {
+  id: string;
+  name: string;
+}
+
 /** A current member the policy may name as the Chief's and President's alternate. */
 export interface AttendanceWaiverAlternateMember {
   id: string;

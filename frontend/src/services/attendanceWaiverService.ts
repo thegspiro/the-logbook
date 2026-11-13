@@ -1,9 +1,12 @@
 /**
- * Session waiver requests (`/api/v1/training/waivers/requests`).
+ * Attendance waiver requests, for both workflows the backend runs on one
+ * engine: training sessions (`/api/v1/training/waivers/requests`) and business
+ * meetings (`/api/v1/meetings/waiver-requests`). The two APIs have the same
+ * shape and differ only in their base path, so one factory builds both.
  *
- * Every path sits under `/training/waivers`, which `UNCACHEABLE_PREFIXES`
- * already excludes from the response cache: a request carries a reason that
- * may be medical, and its status changes under the viewer.
+ * Both bases sit under a prefix `UNCACHEABLE_PREFIXES` already excludes from
+ * the response cache (`/training/waivers`, `/meetings`): a request carries a
+ * reason that may be medical, and its status changes under the viewer.
  */
 
 import api from './apiClient';
@@ -14,12 +17,14 @@ import type {
   AttendanceWaiverAlternateOptions,
   AttendanceWaiverEligibility,
   AttendanceWaiverPolicy,
+  AttendanceWaiverPositionOption,
   AttendanceWaiverRequest,
   AttendanceWaiverRequestPage,
   AttendanceWaiverSubmit,
 } from '../types/attendanceWaiver';
 
-const BASE = '/training/waivers/requests';
+export const TRAINING_WAIVER_API_BASE = '/training/waivers/requests';
+export const MEETING_WAIVER_API_BASE = '/meetings/waiver-requests';
 
 // A body that is not the declared shape (a captive portal's HTML, an empty
 // object) must not take a page down on `.map` or `.length`: the lists inside
@@ -54,7 +59,13 @@ const normalizePage = (page: AttendanceWaiverRequestPage): AttendanceWaiverReque
   total: typeof page.total === 'number' ? page.total : 0,
 });
 
-export const attendanceWaiverService = {
+/**
+ * The waiver API under `BASE`. `takesDocuments` is false for business
+ * meetings: the backend files documents only with training requests, so the
+ * document methods refuse rather than post a meeting request's files to the
+ * training routes.
+ */
+export const createAttendanceWaiverService = (BASE: string, { takesDocuments }: { takesDocuments: boolean }) => ({
   async getPolicy(): Promise<AttendanceWaiverPolicy> {
     const response = await api.get<AttendanceWaiverPolicy>(`${BASE}/policy`);
     return normalizePolicy(response.data);
@@ -65,7 +76,13 @@ export const attendanceWaiverService = {
     return normalizePolicy(response.data);
   },
 
-  /** Who may be named to decide the Chief's or President's own request (training.manage). */
+  /** The department's positions, for the settings pickers (the workflow's manage permission). */
+  async getPositions(): Promise<AttendanceWaiverPositionOption[]> {
+    const response = await api.get<{ positions: AttendanceWaiverPositionOption[] }>(`${BASE}/policy/positions`);
+    return asArray(response.data.positions);
+  },
+
+  /** Who may be named to decide the Chief's or President's own request (the workflow's manage permission). */
   async getAlternateOptions(): Promise<AttendanceWaiverAlternateOptions> {
     const response = await api.get<AttendanceWaiverAlternateOptions>(`${BASE}/policy/alternate`);
     return {
@@ -88,11 +105,13 @@ export const attendanceWaiverService = {
 
   /** Ask to be excused with documents: the request and its files are saved together or not at all. */
   async submitWithAttachments(data: AttendanceWaiverSubmit, files: readonly File[]): Promise<AttendanceWaiverRequest> {
+    if (!takesDocuments) throw new Error('Documents cannot be filed with this request.');
     return normalizeRequest(await waiverAttachmentService.submitWithAttachments<AttendanceWaiverRequest>(data, files));
   },
 
   /** File more documents with the caller's own pending request. */
   async addAttachments(requestId: string, files: readonly File[]): Promise<AttendanceWaiverRequest> {
+    if (!takesDocuments) throw new Error('Documents cannot be filed with this request.');
     return normalizeRequest(await waiverAttachmentService.addAttachments<AttendanceWaiverRequest>(requestId, files));
   },
 
@@ -161,4 +180,19 @@ export const attendanceWaiverService = {
     });
     return normalizeRequest(response.data);
   },
-};
+});
+
+export type AttendanceWaiverService = ReturnType<typeof createAttendanceWaiverService>;
+
+/** Training sessions. */
+export const attendanceWaiverService: AttendanceWaiverService = createAttendanceWaiverService(
+  TRAINING_WAIVER_API_BASE,
+  {
+    takesDocuments: true,
+  }
+);
+
+/** Business meetings. */
+export const meetingWaiverService: AttendanceWaiverService = createAttendanceWaiverService(MEETING_WAIVER_API_BASE, {
+  takesDocuments: false,
+});

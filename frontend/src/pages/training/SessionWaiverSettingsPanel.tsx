@@ -31,8 +31,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { CalendarX, Plus, Save, Trash2 } from 'lucide-react';
-import { attendanceWaiverService } from '../../services/attendanceWaiverService';
-import { complianceConfigService } from '../../services/trainingServices';
+import { TRAINING_WAIVER_WORKFLOW, type AttendanceWaiverWorkflow } from '../../utils/attendanceWaiverWorkflows';
 import { ErrorSummary, FIELD_ERROR_CLASS, FormField } from '../../components/ux';
 import { SkeletonCard } from '../../components/ux/Skeleton';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../hooks/useFieldErrors';
@@ -192,7 +191,15 @@ const toPolicy = (
     draft.chiefAlternateUserId && draft.chiefAlternateUserId !== lapsedAlternateId ? draft.chiefAlternateUserId : null,
 });
 
-export const SessionWaiverSettingsPanel: React.FC = () => {
+interface SessionWaiverSettingsPanelProps {
+  /** Training sessions when omitted. */
+  workflow?: AttendanceWaiverWorkflow;
+}
+
+export const SessionWaiverSettingsPanel: React.FC<SessionWaiverSettingsPanelProps> = ({
+  workflow = TRAINING_WAIVER_WORKFLOW,
+}) => {
+  const { service } = workflow;
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saved, setSaved] = useState<Draft | null>(null);
   /** null when the positions could not be loaded. */
@@ -208,7 +215,7 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
     let cancelled = false;
     const load = async () => {
       try {
-        const policy = await attendanceWaiverService.getPolicy();
+        const policy = await service.getPolicy();
         if (cancelled) return;
         setDraft(toDraft(policy));
         setSaved(toDraft(policy));
@@ -216,13 +223,13 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
         if (!cancelled) setLoadError(getErrorMessage(err, 'The waiver request settings could not be loaded.'));
       }
       try {
-        const result = await complianceConfigService.getAvailablePositions();
-        if (!cancelled) setPositions(result.positions);
+        const found = await service.getPositions();
+        if (!cancelled) setPositions(found);
       } catch {
         if (!cancelled) setPositions(null);
       }
       try {
-        const options = await attendanceWaiverService.getAlternateOptions();
+        const options = await service.getAlternateOptions();
         if (!cancelled) setAlternates(options);
       } catch {
         if (!cancelled) setAlternates(null);
@@ -232,7 +239,7 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [service]);
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(saved), [draft, saved]);
 
@@ -308,7 +315,7 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
     clear();
     setSaving(true);
     try {
-      const stored = await attendanceWaiverService.savePolicy(
+      const stored = await service.savePolicy(
         toPolicy(draft, positions ? new Set(positions.map((p) => p.id)) : null, lapsedAlternate?.id ?? null)
       );
       setDraft(toDraft(stored));
@@ -327,12 +334,12 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
       <div>
         <h2 className="text-theme-text-primary flex items-center gap-2 text-lg font-semibold">
           <CalendarX className="h-5 w-5" aria-hidden="true" />
-          Session waiver requests
+          {workflow.sessionLabel} waiver requests
         </h2>
         <p className="text-theme-text-secondary mt-1 text-sm">
-          Let members ask to be excused from a training session that counts toward their attendance requirement. An
-          approved request removes the session from both what they attended and what was held. A member who checks in is
-          counted as attending, and cannot ask.
+          {workflow.takesDocuments
+            ? 'Let members ask to be excused from a training session that counts toward their attendance requirement. An approved request removes the session from both what they attended and what was held. A member who checks in is counted as attending, and cannot ask.'
+            : 'Let members ask to be excused from a business meeting. An approved request removes the meeting from both what they attended and what was held, for the attendance percentage and the voting rules, and is written onto the minutes roll call. A member who checks in is counted as attending, and cannot ask.'}
         </p>
       </div>
 
@@ -502,50 +509,54 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
           </div>
         </fieldset>
 
-        <fieldset disabled={saving} className="space-y-3">
-          <legend className="form-label">Supporting documents</legend>
-          <p className="text-theme-text-muted text-xs">
-            A document such as a doctor&apos;s note: {WAIVER_ATTACHMENT_TYPES_LABEL}, up to {WAIVER_ATTACHMENT_MAX_MB}{' '}
-            MB each and {WAIVER_ATTACHMENT_MAX_COUNT} per request. Only the member and the officers who decide can open
-            them; they are never shown in the annual review or sent in an email.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            {ATTACHMENT_OPTIONS.map((option) => (
-              <label key={option.value} className="flex min-h-11 items-center gap-2">
-                <input
-                  type="radio"
-                  name="waiver-policy-attachment"
-                  value={option.value}
-                  checked={draft.attachment === option.value}
-                  onChange={() => update({ attachment: option.value })}
-                />
-                <span className="text-theme-text-primary text-sm">{option.label}</span>
-              </label>
-            ))}
-          </div>
-          <FormField
-            id={FIELDS.attachment_retention_days.id}
-            label={FIELDS.attachment_retention_days.label}
-            error={errors.attachment_retention_days}
-            hint="Days after a request is decided or withdrawn. Then the documents are deleted; the request and its decision are kept. Applies to documents already filed even if you stop taking new ones."
-          >
-            {(field) => (
-              <div className="flex items-center gap-2">
-                <input
-                  {...field}
-                  type="number"
-                  inputMode="numeric"
-                  min={RETENTION_MIN}
-                  max={RETENTION_MAX}
-                  className="form-input w-28"
-                  value={draft.retentionDays}
-                  onChange={(e) => update({ retentionDays: e.target.value })}
-                />
-                <span className="text-theme-text-secondary text-sm">days</span>
-              </div>
-            )}
-          </FormField>
-        </fieldset>
+        {/* Documents are filed with training requests only (the backend has no
+            document routes for meetings), so the meeting screen does not offer them. */}
+        {workflow.takesDocuments && (
+          <fieldset disabled={saving} className="space-y-3">
+            <legend className="form-label">Supporting documents</legend>
+            <p className="text-theme-text-muted text-xs">
+              A document such as a doctor&apos;s note: {WAIVER_ATTACHMENT_TYPES_LABEL}, up to {WAIVER_ATTACHMENT_MAX_MB}{' '}
+              MB each and {WAIVER_ATTACHMENT_MAX_COUNT} per request. Only the member and the officers who decide can
+              open them; they are never shown in the annual review or sent in an email.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {ATTACHMENT_OPTIONS.map((option) => (
+                <label key={option.value} className="flex min-h-11 items-center gap-2">
+                  <input
+                    type="radio"
+                    name="waiver-policy-attachment"
+                    value={option.value}
+                    checked={draft.attachment === option.value}
+                    onChange={() => update({ attachment: option.value })}
+                  />
+                  <span className="text-theme-text-primary text-sm">{option.label}</span>
+                </label>
+              ))}
+            </div>
+            <FormField
+              id={FIELDS.attachment_retention_days.id}
+              label={FIELDS.attachment_retention_days.label}
+              error={errors.attachment_retention_days}
+              hint="Days after a request is decided or withdrawn. Then the documents are deleted; the request and its decision are kept. Applies to documents already filed even if you stop taking new ones."
+            >
+              {(field) => (
+                <div className="flex items-center gap-2">
+                  <input
+                    {...field}
+                    type="number"
+                    inputMode="numeric"
+                    min={RETENTION_MIN}
+                    max={RETENTION_MAX}
+                    className="form-input w-28"
+                    value={draft.retentionDays}
+                    onChange={(e) => update({ retentionDays: e.target.value })}
+                  />
+                  <span className="text-theme-text-secondary text-sm">days</span>
+                </div>
+              )}
+            </FormField>
+          </fieldset>
+        )}
       </div>
 
       <div className="card space-y-3 p-6">
@@ -555,8 +566,8 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
           </h3>
           <p className="text-theme-text-secondary mt-1 text-sm">
             Everyone holding a chosen position is asked, and the first decision stands. With none chosen, or nobody
-            holding them, requests go to the Chief, and failing a Chief to the training managers. The Chief can always
-            approve a request that was denied.
+            holding them, requests go to {workflow.fallbackDeciders}. The Chief can always approve a request that was
+            denied.
           </p>
         </div>
         {positions === null ? (

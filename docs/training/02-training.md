@@ -2693,7 +2693,8 @@ longer current.
   exists" and is removed the next time you save.
 
 Business-meeting requests carry the same setting in their own policy (sent
-under **Event officer duties** email). They have no settings screen yet.
+under **Event officer duties** email), set on **Meeting Attendance → Waiver
+settings**.
 
 ---
 

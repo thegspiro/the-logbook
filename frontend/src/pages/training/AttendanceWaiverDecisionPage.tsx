@@ -16,14 +16,16 @@
  * A decider may ask the member a question first (`can_request_info`); the
  * request stays pending and may still be decided while the answer is awaited.
  * The questions and answers are shown from the decision log.
+ *
+ * One page serves both workflows (`workflow`): a training session's request
+ * at `/attendance-waivers/:id`, a business meeting's at
+ * `/meetings/waiver-requests/:id`, the paths the deciders' emails link to.
  */
 
 import React, { useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import toast from 'react-hot-toast';
 import { CalendarX } from 'lucide-react';
-import { attendanceWaiverService } from '../../services/attendanceWaiverService';
-import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
 import { ErrorSummary, FIELD_ERROR_CLASS, FormField } from '../../components/ux';
 import { SkeletonCard } from '../../components/ux/Skeleton';
 import { useConfirm } from '../../contexts/ConfirmContext';
@@ -44,12 +46,12 @@ import {
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import {
   ATTENDANCE_WAIVER_ACTION_LABELS,
-  ATTENDANCE_WAIVER_QUEUE_PATH,
   closesUndecidedText,
   WAIVER_TEXT_MAX_LENGTH,
   awaitsReconfirmation,
   waiverConversation,
 } from '../../utils/attendanceWaivers';
+import { TRAINING_WAIVER_WORKFLOW, type AttendanceWaiverWorkflow } from '../../utils/attendanceWaiverWorkflows';
 
 type Choice = 'approve' | 'deny';
 type DecisionField = 'choice' | 'note';
@@ -78,8 +80,16 @@ const Detail: React.FC<{ label: string; children: React.ReactNode }> = ({ label,
   </div>
 );
 
-export const AttendanceWaiverDecisionPage: React.FC = () => {
+interface AttendanceWaiverDecisionPageProps {
+  /** Training sessions when omitted. */
+  workflow?: AttendanceWaiverWorkflow;
+}
+
+export const AttendanceWaiverDecisionPage: React.FC<AttendanceWaiverDecisionPageProps> = ({
+  workflow = TRAINING_WAIVER_WORKFLOW,
+}) => {
   const { id = '' } = useParams<{ id: string }>();
+  const { service } = workflow;
   const [searchParams] = useSearchParams();
   const tz = useTimezone();
   const { confirm } = useConfirm();
@@ -103,7 +113,7 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    attendanceWaiverService
+    service
       .get(id)
       .then((found) => {
         if (!cancelled) setRequest(found);
@@ -122,13 +132,13 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, service]);
 
   // A refusal can mean the request moved on under us (another approver
   // decided it first); the server's current copy replaces ours.
   const reload = async () => {
     try {
-      setRequest(await attendanceWaiverService.get(id));
+      setRequest(await service.get(id));
     } catch {
       // Keep what is on screen; the refusal itself is already shown.
     }
@@ -162,8 +172,8 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
     setBusy(true);
     try {
       const updated = approving
-        ? await attendanceWaiverService.approve(request.id, trimmed || undefined)
-        : await attendanceWaiverService.deny(request.id, trimmed);
+        ? await service.approve(request.id, trimmed || undefined)
+        : await service.deny(request.id, trimmed);
       setRequest(updated);
       setNote('');
       toast.success(approving ? 'Request approved' : 'Request denied');
@@ -196,7 +206,7 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
     if (!confirmed) return;
     setBusy(true);
     try {
-      setRequest(await attendanceWaiverService.override(request.id, trimmed));
+      setRequest(await service.override(request.id, trimmed));
       setOverrideNote('');
       toast.success('Denial overridden; the request is approved');
     } catch (err: unknown) {
@@ -220,7 +230,7 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
     ask.clear();
     setBusy(true);
     try {
-      setRequest(await attendanceWaiverService.requestInfo(request.id, trimmed));
+      setRequest(await service.requestInfo(request.id, trimmed));
       setQuestion('');
       toast.success('Question sent to the member');
     } catch (err: unknown) {
@@ -244,7 +254,7 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
     if (!confirmed) return;
     setBusy(true);
     try {
-      setRequest(await attendanceWaiverService.withdraw(request.id));
+      setRequest(await service.withdraw(request.id));
       toast.success('Request withdrawn');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Your request could not be withdrawn'));
@@ -258,7 +268,7 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
     if (!request) return;
     setBusy(true);
     try {
-      setRequest(await attendanceWaiverService.confirm(request.id));
+      setRequest(await service.confirm(request.id));
       toast.success('Confirmed; your request is back with the officers');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Your request could not be confirmed'));
@@ -269,10 +279,10 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
   };
 
   const header = (
-    <TrainingPageHeader
+    <workflow.PageHeader
       icon={CalendarX}
       title="Attendance waiver request"
-      parentCrumbs={[{ label: 'Waiver requests', path: ATTENDANCE_WAIVER_QUEUE_PATH }]}
+      parentCrumbs={[{ label: 'Waiver requests', path: workflow.queuePath }]}
     />
   );
 
@@ -295,7 +305,7 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
         <div className="alert-danger mt-6 rounded-lg p-4 text-sm" role="alert">
           {loadError ?? 'This request could not be loaded.'}
         </div>
-        <Link to={ATTENDANCE_WAIVER_QUEUE_PATH} className="btn-secondary mt-4 inline-flex text-sm font-medium">
+        <Link to={workflow.queuePath} className="btn-secondary mt-4 inline-flex text-sm font-medium">
           All waiver requests
         </Link>
       </div>
@@ -318,7 +328,7 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
             </span>
           </div>
           <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Detail label="Session">
+            <Detail label={workflow.sessionLabel}>
               {request.event_id ? (
                 <Link to={`/events/${request.event_id}`} className="underline underline-offset-2">
                   {request.event_title}
@@ -344,7 +354,7 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
           </dl>
           {/* Shown when documents are on file, or when the member may still file
               one; a request under a policy without documents shows nothing. */}
-          {((request.attachments ?? []).length > 0 || request.can_attach) && (
+          {workflow.takesDocuments && ((request.attachments ?? []).length > 0 || request.can_attach) && (
             <WaiverAttachmentList
               requestId={request.id}
               attachments={request.attachments ?? []}
@@ -395,7 +405,12 @@ export const AttendanceWaiverDecisionPage: React.FC = () => {
             <h2 id="waiver-answer-heading" className="text-theme-text-primary text-lg font-semibold">
               Answer the question
             </h2>
-            <AttendanceWaiverAnswerForm request={request} onAnswered={setRequest} onRefused={() => void reload()} />
+            <AttendanceWaiverAnswerForm
+              request={request}
+              onAnswered={setRequest}
+              onRefused={() => void reload()}
+              workflow={workflow}
+            />
           </section>
         )}
 

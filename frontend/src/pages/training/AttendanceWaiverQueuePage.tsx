@@ -1,11 +1,14 @@
 /**
  * Attendance waiver requests — the approver's queue.
  *
- * Lists what `GET /training/waivers/requests` returns for the caller: the
+ * Lists what the workflow's `GET .../requests` returns for the caller: the
  * requests they may decide or have decided. Who that is depends on the
- * positions the department routes requests to, the Chief and the training
- * managers fallback, so the page asks the server rather than gating on a
+ * positions the department routes requests to, the Chief and President and the
+ * workflow's fallback, so the page asks the server rather than gating on a
  * permission; a member who decides nothing sees an empty queue.
+ *
+ * One page serves both workflows (`workflow`): training sessions at
+ * `/attendance-waivers`, business meetings at `/meetings/waiver-requests`.
  *
  * Pending requests come first, every one of them; decided ones follow, a page
  * at a time. Each row opens the decision page the approver's email links to.
@@ -17,8 +20,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { CalendarX, ChevronRight } from 'lucide-react';
-import { attendanceWaiverService } from '../../services/attendanceWaiverService';
-import { TrainingPageHeader } from '../../components/training/TrainingPageHeader';
 import { EmptyState } from '../../components/ux';
 import { SkeletonCard } from '../../components/ux/Skeleton';
 import {
@@ -30,18 +31,20 @@ import type { AttendanceWaiverRequest } from '../../types/attendanceWaiver';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { attendanceWaiverPath, awaitsReconfirmation, closesUndecidedText } from '../../utils/attendanceWaivers';
+import { awaitsReconfirmation, closesUndecidedText } from '../../utils/attendanceWaivers';
+import { TRAINING_WAIVER_WORKFLOW, type AttendanceWaiverWorkflow } from '../../utils/attendanceWaiverWorkflows';
 
 /** The backend's largest page (`MAX_PAGE`): every pending request in one call. */
 const PENDING_LIMIT = 200;
 const DECIDED_PAGE = 50;
 
-const RequestRow: React.FC<{ request: AttendanceWaiverRequest; timezone: string }> = ({ request, timezone }) => (
+const RequestRow: React.FC<{ request: AttendanceWaiverRequest; timezone: string; path: string }> = ({
+  request,
+  timezone,
+  path,
+}) => (
   <li>
-    <Link
-      to={attendanceWaiverPath(request.id)}
-      className="hover:bg-theme-surface-hover flex items-center gap-3 rounded-lg p-4 transition-colors"
-    >
+    <Link to={path} className="hover:bg-theme-surface-hover flex items-center gap-3 rounded-lg p-4 transition-colors">
       <span className="min-w-0 flex-1">
         <span className="text-theme-text-primary block font-medium">{request.member_name ?? 'A member'}</span>
         <span className="text-theme-text-secondary block text-sm">
@@ -78,10 +81,16 @@ const RequestRow: React.FC<{ request: AttendanceWaiverRequest; timezone: string 
 
 interface AttendanceWaiverQueuePageProps {
   embedded?: boolean;
+  /** Training sessions when omitted. */
+  workflow?: AttendanceWaiverWorkflow;
 }
 
-export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps> = ({ embedded = false }) => {
+export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps> = ({
+  embedded = false,
+  workflow = TRAINING_WAIVER_WORKFLOW,
+}) => {
   const tz = useTimezone();
+  const { service } = workflow;
   const [pending, setPending] = useState<AttendanceWaiverRequest[]>([]);
   const [pendingTotal, setPendingTotal] = useState(0);
   const [decided, setDecided] = useState<AttendanceWaiverRequest[]>([]);
@@ -95,19 +104,22 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
   // the API filters by one status at a time, and decided means several. It
   // also holds the requests that closed without a decision (withdrawn,
   // voided, expired), each labelled by its status badge.
-  const loadDecided = useCallback(async (skip: number) => {
-    const page = await attendanceWaiverService.list({ skip, limit: DECIDED_PAGE });
-    const rows = page.items.filter((r) => r.status !== AttendanceWaiverStatus.PENDING);
-    setDecided((current) => (skip === 0 ? rows : [...current, ...rows]));
-    setNextSkip(skip + page.items.length);
-    setHasMore(skip + page.items.length < page.total);
-  }, []);
+  const loadDecided = useCallback(
+    async (skip: number) => {
+      const page = await service.list({ skip, limit: DECIDED_PAGE });
+      const rows = page.items.filter((r) => r.status !== AttendanceWaiverStatus.PENDING);
+      setDecided((current) => (skip === 0 ? rows : [...current, ...rows]));
+      setNextSkip(skip + page.items.length);
+      setHasMore(skip + page.items.length < page.total);
+    },
+    [service]
+  );
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        const page = await attendanceWaiverService.list({
+        const page = await service.list({
           status: AttendanceWaiverStatus.PENDING,
           limit: PENDING_LIMIT,
         });
@@ -125,7 +137,7 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
     return () => {
       cancelled = true;
     };
-  }, [loadDecided]);
+  }, [loadDecided, service]);
 
   const showMore = async () => {
     setLoadingMore(true);
@@ -157,7 +169,7 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
       <EmptyState
         icon={CalendarX}
         title="No waiver requests for you"
-        description="When a member asks to be excused from a training session and you are one of the people who decide, the request appears here."
+        description={`When a member asks to be excused from a ${workflow.sessionNoun} and you are one of the people who decide, the request appears here.`}
       />
     );
   } else {
@@ -172,7 +184,7 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
           ) : (
             <ul className="card divide-theme-surface-border divide-y">
               {pending.map((request) => (
-                <RequestRow key={request.id} request={request} timezone={tz} />
+                <RequestRow key={request.id} request={request} timezone={tz} path={workflow.requestPath(request.id)} />
               ))}
             </ul>
           )}
@@ -190,7 +202,7 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
             </h2>
             <ul className="card divide-theme-surface-border divide-y">
               {decided.map((request) => (
-                <RequestRow key={request.id} request={request} timezone={tz} />
+                <RequestRow key={request.id} request={request} timezone={tz} path={workflow.requestPath(request.id)} />
               ))}
             </ul>
           </section>
@@ -213,10 +225,10 @@ export const AttendanceWaiverQueuePage: React.FC<AttendanceWaiverQueuePageProps>
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-      <TrainingPageHeader
+      <workflow.PageHeader
         icon={CalendarX}
         title="Attendance waiver requests"
-        subtitle="Members asking to be excused from a training session"
+        subtitle={`Members asking to be excused from a ${workflow.sessionNoun}`}
       />
       <div className="mt-6">{body}</div>
     </div>

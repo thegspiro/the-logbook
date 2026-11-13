@@ -10,7 +10,7 @@
 
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { attendanceWaiverService } from '../../services/attendanceWaiverService';
+import { TRAINING_WAIVER_WORKFLOW, type AttendanceWaiverWorkflow } from '../../utils/attendanceWaiverWorkflows';
 import { FormField } from '../ux';
 import type { AttendanceWaiverActionEntry, AttendanceWaiverRequest } from '../../types/attendanceWaiver';
 import { formatDateTime } from '../../utils/dateFormatting';
@@ -53,9 +53,16 @@ interface AnswerFormProps {
   onAnswered: (updated: AttendanceWaiverRequest) => void;
   /** Called after a refusal: the request may have moved on under the member. */
   onRefused?: () => void;
+  /** Training sessions when omitted. */
+  workflow?: AttendanceWaiverWorkflow;
 }
 
-export const AttendanceWaiverAnswerForm: React.FC<AnswerFormProps> = ({ request, onAnswered, onRefused }) => {
+export const AttendanceWaiverAnswerForm: React.FC<AnswerFormProps> = ({
+  request,
+  onAnswered,
+  onRefused,
+  workflow = TRAINING_WAIVER_WORKFLOW,
+}) => {
   const [answer, setAnswer] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -72,7 +79,7 @@ export const AttendanceWaiverAnswerForm: React.FC<AnswerFormProps> = ({ request,
     setError(null);
     setBusy(true);
     try {
-      const updated = await attendanceWaiverService.respond(request.id, trimmed);
+      const updated = await workflow.service.respond(request.id, trimmed);
       setAnswer('');
       toast.success('Answer sent');
       onAnswered(updated);

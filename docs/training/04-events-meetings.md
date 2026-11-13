@@ -690,9 +690,9 @@ entering the email they applied with (see
 
 Both settings are on **Edit Event → Check-In Settings**. Both start off.
 
-| Setting                                            | What it does                                                                                |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| **Allow guest (non-member) sign-in**               | Adds the guest QR code to the room display and opens the public sign-in page for this event |
+| Setting                                            | What it does                                                                                   |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Allow guest (non-member) sign-in**               | Adds the guest QR code to the room display and opens the public sign-in page for this event    |
 | **Add guests to the prospective members pipeline** | Signs guests in by email instead: only active applicants are signed in, onto their application |
 
 The second appears only once the first is ticked. A
@@ -771,10 +771,10 @@ page asks for an email address instead of a name:
 
 Anyone else is stopped with a message rather than signed in:
 
-| The email belongs to                                         | The guest is told                                      |
-| ------------------------------------------------------------ | ------------------------------------------------------ |
-| A member account (active or probationary)                    | To scan the **member** QR code instead                 |
-| Nobody — or a withdrawn, rejected or on-hold applicant       | To see a member of staff                               |
+| The email belongs to                                   | The guest is told                      |
+| ------------------------------------------------------ | -------------------------------------- |
+| A member account (active or probationary)              | To scan the **member** QR code instead |
+| Nobody — or a withdrawn, rejected or on-hold applicant | To see a member of staff               |
 
 > **First-time visitors are not signed in by the kiosk at these events.** A
 > recruitment event's kiosk records the attendance of people already in your
@@ -789,10 +789,10 @@ and nothing changes.
 
 ### Where the guest ends up
 
-| Record                                         | When                                                                   |
-| ---------------------------------------------- | ---------------------------------------------------------------------- |
-| An entry on the event's guest list             | Always                                                                 |
-| A link on the guest's **prospective members** card | When an applicant signs in by email at an event with the second switch on |
+| Record                                             | When                                                                                                      |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| An entry on the event's guest list                 | Always                                                                                                    |
+| A link on the guest's **prospective members** card | When an applicant signs in by email at an event with the second switch on                                 |
 | A new **prospective members** card                 | When staff sign a walk-in in with **Add guest**, at an event with the second switch on, and give an email |
 
 **Seeing who came.** Officers who manage events see a **Guests (_n_)** card
@@ -810,11 +810,11 @@ button on their row. At an event with **Add guests to the prospective members
 pipeline** ticked, signing in a guest who gave an email also files them in the
 pipeline:
 
-| The email belongs to                     | What happens                                       |
-| ---------------------------------------- | -------------------------------------------------- |
-| An active applicant                      | The event is linked to their existing card         |
-| Nobody yet                               | A new card is opened, noting "by staff"            |
-| A member account (active or probationary) | Nothing — a member is not an applicant             |
+| The email belongs to                      | What happens                               |
+| ----------------------------------------- | ------------------------------------------ |
+| An active applicant                       | The event is linked to their existing card |
+| Nobody yet                                | A new card is opened, noting "by staff"    |
+| A member account (active or probationary) | Nothing — a member is not an applicant     |
 
 No card is opened without an email, or for a guest entered with only one name.
 
@@ -826,17 +826,17 @@ so at the next pipeline review you can see where each lead came from.
 
 ### Edge cases
 
-| What happens                                                                             | Why                                                                                                                                           |
-| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **A guest who arrives early is turned away** until the check-in window opens             | Members get the one-hour early grace; guests do not. A member's early check-in can be identified and corrected later. An anonymous one cannot |
-| **A guest who taps the code twice is not counted twice** — they see "already checked in" | Matched on their email if they gave one, on their name if they did not                                                                        |
-| **Two guests with the same name and no email become one entry**                          | The name match is the weaker fallback, chosen on purpose: a double-tap at a kiosk is far more common than two Chris Smiths at one open house  |
-| **A guest you added in advance keeps the details you typed**                             | The kiosk sign-in only fills in blanks. It never overwrites something a person entered on purpose                                             |
+| What happens                                                                              | Why                                                                                                                                           |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A guest who arrives early is turned away** until the check-in window opens              | Members get the one-hour early grace; guests do not. A member's early check-in can be identified and corrected later. An anonymous one cannot |
+| **A guest who taps the code twice is not counted twice** — they see "already checked in"  | Matched on their email if they gave one, on their name if they did not                                                                        |
+| **Two guests with the same name and no email become one entry**                           | The name match is the weaker fallback, chosen on purpose: a double-tap at a kiosk is far more common than two Chris Smiths at one open house  |
+| **A guest you added in advance keeps the details you typed**                              | The kiosk sign-in only fills in blanks. It never overwrites something a person entered on purpose                                             |
 | **An applicant who signs in by email does not get a second card**                         | Their existing card is linked to the event instead                                                                                            |
-| **If the link to the pipeline card fails, the applicant is still signed in**             | Signing in is what they came to do. The failure is logged for your administrator                                                              |
+| **If the link to the pipeline card fails, the applicant is still signed in**              | Signing in is what they came to do. The failure is logged for your administrator                                                              |
 | **"Is this you?" waits only ten minutes** — after that the guest enters their email again | The confirmation is tied to that event, that room and that moment, so it cannot be reused later                                               |
-| **Deleting a prospect does not delete the attendance**                                   | Who was in the room is the event's history, not the prospect's                                                                                |
-| **A busy night can hit the daily limit** — 300 guest sign-ins per event per day          | Sized for an open house, not a stadium. Ask your administrator if you really need it raised                                                   |
+| **Deleting a prospect does not delete the attendance**                                    | Who was in the room is the event's history, not the prospect's                                                                                |
+| **A busy night can hit the daily limit** — 300 guest sign-ins per event per day           | Sized for an open house, not a stadium. Ask your administrator if you really need it raised                                                   |
 
 > **Troubleshooting: the guest QR code is missing from the display.** Check
 > three things, in this order: the event has **Allow guest (non-member)
@@ -1704,12 +1704,12 @@ creation tab. Both are pages of **Events Administration**, which is laid out
 like Training, Scheduling and Inventory Administration: four area cards, and
 under them a strip of the chosen area's pages with a line naming the open one.
 
-| Area                   | Pages                                   |
-| ---------------------- | --------------------------------------- |
-| **Events**             | **Create Event**, **Past Events**       |
-| **Community Outreach** | **Requests**, **Community Engagement**  |
+| Area                   | Pages                                     |
+| ---------------------- | ----------------------------------------- |
+| **Events**             | **Create Event**, **Past Events**         |
+| **Community Outreach** | **Requests**, **Community Engagement**    |
 | **Check-ins**          | **QR Code Analytics**, **Card Check-ins** |
-| **Settings**           | **Settings**                            |
+| **Settings**           | **Settings**                              |
 
 An area card and the page under it carry a red count when the **Needs
 attention** list has items there.
@@ -1998,11 +1998,11 @@ action items — is recorded in the audit log.
 
 Under **Minutes → Settings → Quorum**, a settings administrator chooses:
 
-| Setting                          | Default | Effect                                                         |
-| -------------------------------- | ------- | -------------------------------------------------------------- |
-| Members who arrived late count    | On      | A member marked **Late** counts                                |
-| Members who left early count      | On      | A member marked **Left early** counts                          |
-| Use proxies                       | Off     | Adds **Represented by proxy** to the roll call; a proxy counts |
+| Setting                        | Default | Effect                                                         |
+| ------------------------------ | ------- | -------------------------------------------------------------- |
+| Members who arrived late count | On      | A member marked **Late** counts                                |
+| Members who left early count   | On      | A member marked **Left early** counts                          |
+| Use proxies                    | Off     | Adds **Represented by proxy** to the roll call; a proxy counts |
 
 The defaults are the rule every department had before, so an upgrade changes no
 count. Adopted minutes keep the quorum they were adopted with; a draft is
@@ -2107,6 +2107,7 @@ and adopt them at the next meeting. The screen now follows that order:
 ![Circulated minutes with the note that the Membership Business Meeting accepted them as submitted, moved and seconded by named members, and that Adopt Minutes opens already filled in](./images/04-77-minutes-accepted-by-later-meeting.png)
 
 ![The Adopt these minutes dialog filled in from the motion recorded at the Membership Business Meeting: the date the body voted, the meeting that accepted them, and the note saying where it came from](./images/04-78-minutes-adopt-dialog-prefilled.png)
+
 - **Adopted minutes are locked.** **Reopen for Correction** works as described
   above; it clears the adoption details but keeps the earlier version.
 
@@ -2125,15 +2126,15 @@ someone edits them.
 and show their count ("Motions (3)"); open one to add to it. Attendance, the
 suggestions and the sections stay open.
 
-| Panel                 | What it holds                                                                                                                                                                                                                                        |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Panel                 | What it holds                                                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Attendance**        | Roll call with six statuses: present, late, left early, excused, absent, guest (a seventh, **Represented by proxy**, if your department turns it on). **Present always counts toward quorum**; late, left early and proxy count as the department's quorum settings say (below); excused, absent and guests never do. A suggested roll is built from the event's check-ins, or the member list if there is no event |
-| **Motions**           | Mover, seconder and result; a motion can link to the election or ballot item that decided it                                                                                                                                                         |
-| **Closed sessions**   | Reason, legal basis, start and end times, who stayed (someone who stepped out is recorded), a summary, and the motion that moved into it                                                                                                             |
-| **Election results**  | A closed election's certified tally, frozen into the minutes. If the election ends after minutes are circulated, the result is filed as a permanent, labelled **addendum**                                                                           |
-| **Action items**      | Items, with **Carry action items forward** to bring open ones from earlier adopted minutes of the same meeting type (an item is open in only one place)                                                                                              |
-| **Attachments**       | Reports, handouts and the signed copy. Files are scanned and stored encrypted; members see them only once the minutes are adopted. The scanned **signed copy** can be added after adoption and cannot be removed                                     |
-| **Approved versions** | One entry per adoption, with a SHA-256 fingerprint. It opens itself and says **Needs attention** if the record no longer matches the adopted version                                                                                                 |
+| **Motions**           | Mover, seconder and result; a motion can link to the election or ballot item that decided it                                                                                                                                                                                                                                                                                                                        |
+| **Closed sessions**   | Reason, legal basis, start and end times, who stayed (someone who stepped out is recorded), a summary, and the motion that moved into it                                                                                                                                                                                                                                                                            |
+| **Election results**  | A closed election's certified tally, frozen into the minutes. If the election ends after minutes are circulated, the result is filed as a permanent, labelled **addendum**                                                                                                                                                                                                                                          |
+| **Action items**      | Items, with **Carry action items forward** to bring open ones from earlier adopted minutes of the same meeting type (an item is open in only one place)                                                                                                                                                                                                                                                             |
+| **Attachments**       | Reports, handouts and the signed copy. Files are scanned and stored encrypted; members see them only once the minutes are adopted. The scanned **signed copy** can be added after adoption and cannot be removed                                                                                                                                                                                                    |
+| **Approved versions** | One entry per adoption, with a SHA-256 fingerprint. It opens itself and says **Needs attention** if the record no longer matches the adopted version                                                                                                                                                                                                                                                                |
 
 ![Below the sections of circulated minutes, the folded panels with their counts: Motions (1), Closed sessions (1), Election results (0) and Action Items (0)](./images/04-66-minutes-folded-panels.png)
 
@@ -2274,6 +2275,33 @@ they always agree.
 **Not yet on this screen:** granting a waiver for one meeting. Waivers are
 granted from the meeting.
 
+### Business-meeting waiver requests: the screens _(2026-11-13)_
+
+Members can ask to be excused from a **business meeting** the same way they ask
+to be excused from a training session. The screens are the training ones,
+working on the meeting policy.
+
+**Turning it on.** **Who can do this:** officers with the **Manage meetings**
+permission. On **Meeting Attendance** (Minutes, then **Attendance**), select
+**Waiver settings**. Tick **Members may ask to be excused**, choose the deadline,
+any limit and reason categories, **Who decides**, **Copy decisions to**, and the
+alternate for the Chief's and President's own requests, then **Save**. With no
+positions chosen, or nobody holding them, requests go to the Secretary, and
+failing a Secretary to the members who manage meetings. Business-meeting
+requests take no supporting documents.
+
+**Asking.** On a business meeting's event page, a member sees **Request to be
+excused** while the deadline is open, and the same card shows the request
+afterwards: waiting, approved or not approved. A question from an officer is
+answered on that card, and a moved meeting is confirmed or withdrawn there
+too, since meetings have no list like My Training's.
+
+**Deciding.** Everyone who decides is emailed a link to the request. The list
+of requests waiting for you is at **Waiver requests** on Meeting Attendance (or
+the link in the email), and each request opens the same decision page as a
+training request. An approved request is written onto the meeting's minutes
+roll call as an excused absence.
+
 ### Business-meeting waiver requests: asking for more information _(2026-11-13)_
 
 Whoever decides a member's request to be excused from a business meeting can
@@ -2284,10 +2312,8 @@ question is waiting, never what it says; their answer prompts the deciders
 again. Deciding, withdrawing or cancelling the meeting closes an open
 question.
 
-There is no screen for business-meeting requests yet, so for now this is done
-through the API (`POST /api/v1/meetings/waiver-requests/{id}/request-info` and
-`.../respond`, each with a `note`), and the member's notice links to the
-meeting's event page.
+The officer asks from the request's page, and the member answers on the
+meeting's event page, where their notice links.
 
 ### Leave of Absence & Meeting Attendance
 
@@ -2356,8 +2382,8 @@ Their own requests work differently:
   the Chief or President cannot file the request. They are told why, and should
   ask an officer to name an alternate.
 
-There is no screen for the meeting policy yet. The alternate is set with the
-rest of the meeting policy.
+The alternate is set on **Waiver settings**, with the rest of the meeting
+policy.
 
 ---
 
@@ -2459,13 +2485,13 @@ scheduling and communication.
 Requests arrive on the **Requests** tab of Events Administration. _(2026-11-08)_
 The tab is a triage list grouped by what needs doing next:
 
-| Group             | Holds                                                          |
-| ----------------- | -------------------------------------------------------------- |
-| **Needs a reply** | New requests nobody has started on, oldest first               |
+| Group             | Holds                                                           |
+| ----------------- | --------------------------------------------------------------- |
+| **Needs a reply** | New requests nobody has started on, oldest first                |
 | **In progress**   | Requests being worked through the checklist, soonest date first |
-| **Scheduled**     | Requests on the calendar, soonest event first                  |
-| **Postponed**     | Requests waiting on a new date                                 |
-| **Closed**        | Completed, declined and cancelled requests, folded away        |
+| **Scheduled**     | Requests on the calendar, soonest event first                   |
+| **Postponed**     | Requests waiting on a new date                                  |
+| **Closed**        | Completed, declined and cancelled requests, folded away         |
 
 Each row shows:
 
@@ -2492,12 +2518,12 @@ Select a request to open it in a panel on the right (full screen on a phone).
 The list stays where it was. The panel leads with the one action that moves
 the request forward:
 
-| Status                                  | Main button                                            |
-| --------------------------------------- | ------------------------------------------------------ |
-| New, nobody assigned                    | **Take it**                                            |
-| New, assigned                           | **Start working**                                      |
-| In progress or postponed                | **Schedule event**                                     |
-| Scheduled                               | **Mark completed**                                     |
+| Status                   | Main button        |
+| ------------------------ | ------------------ |
+| New, nobody assigned     | **Take it**        |
+| New, assigned            | **Start working**  |
+| In progress or postponed | **Schedule event** |
+| Scheduled                | **Mark completed** |
 
 Beside it, **Email requester** sends one of your email templates or opens your
 own email app. **More** holds the rest:
@@ -2546,12 +2572,12 @@ month**, **This quarter**, **This year** (the default), **Last 12 months** or
 **All time**. The **Community engagement** card on the dashboard opens this
 page on the dashboard's own period.
 
-| Figure             | What it counts                                                                 |
-| ------------------ | ------------------------------------------------------------------------------ |
-| **Events held**    | Outreach events that have started; the line below says how many are scheduled  |
-| **People reached** | Guests who signed in, plus estimates for events nobody signed in at (below)    |
-| **Member hours**   | Credited attendance time of members checked in, the same hours training uses   |
-| **Requests**       | Public requests received in the period, and how many of those are completed    |
+| Figure             | What it counts                                                                |
+| ------------------ | ----------------------------------------------------------------------------- |
+| **Events held**    | Outreach events that have started; the line below says how many are scheduled |
+| **People reached** | Guests who signed in, plus estimates for events nobody signed in at (below)   |
+| **Member hours**   | Credited attendance time of members checked in, the same hours training uses  |
+| **Requests**       | Public requests received in the period, and how many of those are completed   |
 
 An outreach event is any **Public Education**, **Fundraiser**, **Ceremony** or
 **Social** event, or any event a public request was scheduled onto, whatever
@@ -2882,13 +2908,13 @@ Scheduled Date: October 7, 9:00 AM
 | Training records not created from an event                | Records are written when a **Training** event's attendance is **finalized** — not at check-in, and not for other event types. A member with no time to credit is named in the finalize message. If the session needs officer confirmation, records complete when a training officer approves |
 | End Event button is missing                               | It shows only while the event is running. After the scheduled end, use **Finalize Attendance**                                                                                                                                                                                               |
 | Minutes not showing attendees                             | Minutes made from an event take attendees from check-ins, not RSVPs. Make sure members checked in                                                                                                                                                                                            |
-| Event request form not showing outreach types             | Add outreach types under **Manage Events → Settings → Public Requests → Types & roles**. At least one is needed                                                                                                                                                                                               |
-| A published request form is not creating requests         | Switch on **Accept Public Requests** under **Settings → Public Requests → Overview**                                                                                                                                                                                                                      |
+| Event request form not showing outreach types             | Add outreach types under **Manage Events → Settings → Public Requests → Types & roles**. At least one is needed                                                                                                                                                                              |
+| A published request form is not creating requests         | Switch on **Accept Public Requests** under **Settings → Public Requests → Overview**                                                                                                                                                                                                         |
 | Submitted request not appearing for coordinator           | The coordinator needs permission to manage events. Check their position in Role Management                                                                                                                                                                                                   |
 | Room double-booking error when scheduling or saving       | Another event already has that room at that time. Choose a different room or time                                                                                                                                                                                                            |
 | Email template shows `{{something}}` instead of a value   | Use double curly braces with no spaces, and one of the supported fields: `{{contact_name}}`, `{{event_date}}`, `{{organization_name}}`, `{{outreach_type}}`                                                                                                                                  |
 | Requester cannot cancel from the status page              | A completed, declined or cancelled request cannot be changed                                                                                                                                                                                                                                 |
-| Pipeline tasks not visible to the requester               | **Show Checklist Progress to the Requester** is off by default. Turn it on under **Settings → Public Requests → Handling**                                                                                                                                                                                              |
+| Pipeline tasks not visible to the requester               | **Show Checklist Progress to the Requester** is off by default. Turn it on under **Settings → Public Requests → Handling**                                                                                                                                                                   |
 | Custom categories not on the event form or as filter tabs | Add them under **Event settings → Categories**, then switch each one on under **Visibility**                                                                                                                                                                                                 |
 | Calendar view not showing events                          | Check the month — use the arrows. The calendar also follows the type filter                                                                                                                                                                                                                  |
 | Attendance Trends shows no data                           | You need the **View analytics and dashboards** permission. Widen the **Period**                                                                                                                                                                                                              |
