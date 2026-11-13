@@ -263,6 +263,10 @@ from app.models.history import (
     HistoryClearanceDecision,
     HistoryClearanceRequest,
     HistoryClearanceStep,
+    HistoryImport,
+    HistoryImportRow,
+    HistoryImportTitleMapping,
+    HistoryRecordRedirect,
     HistoryRevision,
     HistoryTitle,
 )
@@ -885,6 +889,10 @@ __all__ = [
     "HistoryClearanceDecision",
     "HistoryClearanceRequest",
     "HistoryClearanceStep",
+    "HistoryImport",
+    "HistoryImportRow",
+    "HistoryImportTitleMapping",
+    "HistoryRecordRedirect",
     "HistoryRevision",
     "HistoryTitle",
     # Medical screening models

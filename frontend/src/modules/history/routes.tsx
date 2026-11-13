@@ -17,6 +17,9 @@ const HistoryPersonFormPage = lazyWithRetry(() => import('./pages/HistoryPersonF
 const HistoryHonorRollPage = lazyWithRetry(() => import('./pages/HistoryHonorRollPage'));
 const HistorySettingsPage = lazyWithRetry(() => import('./pages/HistorySettingsPage'));
 const HistoryClearanceReviewPage = lazyWithRetry(() => import('./pages/HistoryClearanceReviewPage'));
+const HistoryImportListPage = lazyWithRetry(() => import('./pages/HistoryImportListPage'));
+const HistoryImportReviewPage = lazyWithRetry(() => import('./pages/HistoryImportReviewPage'));
+const HistoryMergePage = lazyWithRetry(() => import('./pages/HistoryMergePage'));
 
 export function getHistoryRoutes() {
   return (
@@ -58,6 +61,30 @@ export function getHistoryRoutes() {
         element={
           <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
             <HistoryPersonFormPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/people/:personId/merge"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryMergePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/import"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryImportListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/history/import/:importId"
+        element={
+          <ProtectedRoute requiredPermission="history.manage" requiredModule="history" moduleLabel="History">
+            <HistoryImportReviewPage />
           </ProtectedRoute>
         }
       />

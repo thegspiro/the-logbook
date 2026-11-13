@@ -182,6 +182,8 @@ interface PersonViewBase {
   service_periods: ServicePeriod[];
   relations: Relation[];
   publication_level: PublicationLevel;
+  /** The merged-away id the request named, when the server forwarded it here. */
+  redirected_from?: string | null;
 }
 
 /** A member reading what is published: no restricted fields exist here. */
@@ -253,6 +255,8 @@ export interface HistoricalMemberFullView extends PersonViewBase {
   can_publish: boolean;
   created_at: string;
   updated_at: string;
+  /** Set when the record was created by an import. */
+  import_id?: string | null;
 }
 
 export type HistoricalMemberView = HistoricalMemberFullView | HistoricalMemberMemberView;
@@ -345,4 +349,149 @@ export interface PeopleQuery {
   level?: PublicationLevel | undefined;
   limit?: number | undefined;
   offset?: number | undefined;
+}
+
+// --- Import ---
+
+export const ImportStatus = {
+  DRAFT: 'draft',
+  COMMITTED: 'committed',
+  DISCARDED: 'discarded',
+  EXPIRED: 'expired',
+} as const;
+export type ImportStatus = (typeof ImportStatus)[keyof typeof ImportStatus];
+
+export const ImportDecision = {
+  MATCH: 'match',
+  MAP: 'map',
+  CREATE: 'create',
+  SKIP: 'skip',
+  SAME_AS: 'same_as',
+} as const;
+export type ImportDecision = (typeof ImportDecision)[keyof typeof ImportDecision];
+
+export const IMPORT_DECISION_LABELS: Record<ImportDecision, string> = {
+  match: 'Add to an existing record',
+  map: 'New record linked to a member account',
+  create: 'New record',
+  skip: 'Skip this row',
+  same_as: 'Same person as another line',
+};
+
+export type TitleAction = 'map' | 'create' | 'drop';
+
+/** Every column the import reads, in template order, with its label. */
+export const IMPORT_FIELD_LABELS: Record<string, string> = {
+  first_name: 'First name',
+  middle_name: 'Middle name',
+  last_name: 'Last name',
+  suffix: 'Suffix',
+  nickname: 'Nickname',
+  badge_number: 'Badge number',
+  joined: 'Joined',
+  left: 'Left',
+  titles: 'Titles',
+  birth_date: 'Birth date',
+  death_date: 'Death date',
+  line_of_duty_death: 'Line of duty death',
+  notes: 'Notes',
+};
+
+export interface ImportSummary {
+  id: string;
+  status: ImportStatus;
+  source_filename: string;
+  row_count: number;
+  column_mapping: Record<string, string>;
+  summary: Record<string, number> | null;
+  expires_at: string | null;
+  created_at: string;
+  committed_at: string | null;
+}
+
+export interface ImportSuggestion {
+  kind: 'match' | 'map' | 'same_as';
+  id: string;
+  strength: 'strong' | 'weak';
+  label: string;
+}
+
+export interface ImportRow {
+  id: string;
+  line_number: number;
+  values: Record<string, string>;
+  edited_fields: string[];
+  problems: string[];
+  decision: ImportDecision | null;
+  target_member_id: string | null;
+  target_user_id: string | null;
+  target_row_id: string | null;
+  target_label: string | null;
+  suggestions: ImportSuggestion[];
+}
+
+export interface ImportTitle {
+  text: string;
+  key: string;
+  status: 'known' | 'mapped' | 'create' | 'dropped' | 'unresolved';
+  title_id?: string | null;
+}
+
+export interface ImportDetail extends ImportSummary {
+  rows: ImportRow[];
+  titles: ImportTitle[];
+  ready: boolean;
+  blockers: string[];
+}
+
+export interface ImportRowUpdate {
+  edits?: Record<string, string> | undefined;
+  decision?: ImportDecision | null | undefined;
+  target_member_id?: string | undefined;
+  target_user_id?: string | undefined;
+  target_row_id?: string | undefined;
+}
+
+export interface ImportTitleChoice {
+  text: string;
+  action: TitleAction;
+  title_id?: string | undefined;
+}
+
+export interface RemoveRecordsResult {
+  removed: number;
+  kept: { id: string; display_name: string; reason: string }[];
+}
+
+// --- Merge ---
+
+export type MergeChoice = 'keep' | 'other' | 'both';
+
+export interface MergeSide {
+  id: string;
+  display_name: string;
+  service_years: string | null;
+  publication_level: PublicationLevel;
+  period_count: number;
+  relation_count: number;
+  linked_member_name: string | null;
+  is_memorial: boolean;
+  is_line_of_duty_death: boolean;
+}
+
+export interface MergeField {
+  field: string;
+  label: string;
+  keep_value: string | null;
+  other_value: string | null;
+  state: 'same' | 'keep_blank' | 'other_blank' | 'differs';
+  can_keep_both: boolean;
+}
+
+export interface MergePreview {
+  keep: MergeSide;
+  other: MergeSide;
+  fields: MergeField[];
+  refusal: string | null;
+  warnings: string[];
 }

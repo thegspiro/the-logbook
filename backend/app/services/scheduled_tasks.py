@@ -589,6 +589,12 @@ SCHEDULE = {
         "recommended_time": "03:30",
         "cron": "30 3 * * *",
     },
+    "history_import_expiry": {
+        "description": "Delete the rows of History roster-import drafts nobody has worked on for 30 days (the import record stays, marked expired)",
+        "frequency": "daily",
+        "recommended_time": "03:45",
+        "cron": "45 3 * * *",
+    },
     "inventory_audit_digest": {
         "description": "Email inventory managers a list of shelves overdue for an NFC shelf audit. Checked daily, sent at most once a week per department, and only when something is overdue",
         "frequency": "daily check, weekly send",
@@ -5770,6 +5776,30 @@ async def run_nfc_card_tap_purge(db: AsyncSession) -> Dict[str, Any]:
     return await _for_each_org(db, "nfc_card_tap_purge", process)
 
 
+async def run_history_import_expiry(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Delete the rows of History import drafts untouched for 30 days.
+
+    A draft holds a roster file's personal data, and an abandoned one should
+    not keep it indefinitely. Safe to run twice: an expired draft is no longer
+    a draft, so the second run finds nothing to do.
+    """
+    from app.services.history_import_service import HistoryImportService
+
+    async def process(db_session: AsyncSession, org: Organization) -> int:
+        expired = await HistoryImportService(db_session).expire_drafts(str(org.id))
+        await db_session.commit()
+        if expired:
+            logger.info(
+                "history_import_expiry: expired {} draft(s) for org {}",
+                expired,
+                org.id,
+            )
+        return expired
+
+    return await _for_each_org(db, "history_import_expiry", process)
+
+
 #: `NotificationLog.category` of the overdue-gear email, and so the key of its
 #: sent-log. See `run_inventory_overdue_alerts`.
 OVERDUE_CHECKOUT_LOG_CATEGORY = "inventory_overdue_checkout"
@@ -8628,6 +8658,7 @@ TASK_RUNNERS = {
     "inventory_overdue_alerts": run_inventory_overdue_alerts,
     "inventory_audit_digest": run_inventory_audit_digest,
     "nfc_card_tap_purge": run_nfc_card_tap_purge,
+    "history_import_expiry": run_history_import_expiry,
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "supply_expiration_alerts": run_supply_expiration_alerts,
     "weather_alert_poll": run_weather_alert_poll,
@@ -8729,6 +8760,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Checked daily; sends at most weekly per org (see run_inventory_audit_digest).
     "inventory_audit_digest": 86400,
     "nfc_card_tap_purge": 86400,
+    "history_import_expiry": 86400,
     "property_return_reminders": 86400,
     "storefront_payment_reminders": 86400,
     "paypal_capture_backfill": 86400,

@@ -158,6 +158,21 @@ describe('HistoryPersonPage', () => {
     expect(await screen.findByRole('button', { name: /Delete/ })).toBeInTheDocument();
   });
 
+  it('offers the Historian a merge', async () => {
+    mockGetPerson.mockResolvedValue(fullView());
+    renderPage();
+    expect(await screen.findByRole('link', { name: /Merge with/ })).toHaveAttribute('href', '/history/people/p1/merge');
+  });
+
+  it('moves to the kept record when the address was forwarded by a merge', async () => {
+    mockGetPerson.mockImplementation((id: string) =>
+      Promise.resolve(id === 'p1' ? fullView({ id: 'p2', redirected_from: 'p1' }) : fullView({ id: 'p2' }))
+    );
+    renderPage();
+    expect(await screen.findByRole('heading', { name: 'John Smith' })).toBeInTheDocument();
+    expect(mockGetPerson).toHaveBeenLastCalledWith('p2');
+  });
+
   it('says plainly when a record cannot be read', async () => {
     mockGetPerson.mockRejectedValue(Object.assign(new Error('nope'), { response: { status: 404 } }));
     renderPage();
