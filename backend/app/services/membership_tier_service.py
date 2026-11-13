@@ -198,12 +198,37 @@ def whole_months_between(start: date, end: date) -> int:
 
 @dataclass(frozen=True)
 class RecentAttendance:
-    """Attendance at a member's most recent eligible meetings."""
+    """Attendance at a member's most recent meetings, for the count rule.
 
+    The window is the member's last ``of_last_meetings`` meetings, reaching
+    back past a meeting excused by leave but **not** past a waived one: a
+    waived meeting shortens the window instead (owner decision, 2026-11-13).
+    """
+
+    # Meetings attended among those counted.
     attended: int
-    # How many eligible meetings were looked at: the requested look-back, or
-    # fewer when the member has not had that many since their stint began.
+    # Meetings counted: ``looked_back`` less the waived ones.
     considered: int
+    # Meetings in the window: the requested look-back, or fewer when the
+    # member has not had that many since their stint began.
+    looked_back: int
+    # Waived meetings in the window that the member missed. A waived meeting
+    # they attended is attended (check-in wins) and is not counted here.
+    waived: int
+
+    def required(self, min_meetings: int, of_last_meetings: int) -> int:
+        """Meetings the member must have attended among those counted.
+
+        The requirement for ``looked_back`` meetings, pro-rated when the
+        member has had fewer than the look-back, then capped at the meetings
+        left once waivers are taken out: 6 of the last 12 with one waived is
+        6 of 11, and 6 of 12 with seven waived is 5 of 5. Judged over the
+        same window either way, so a waiver never pulls an older meeting in.
+        """
+        return min(
+            required_recent_meetings(min_meetings, of_last_meetings, self.looked_back),
+            self.considered,
+        )
 
 
 def tally_recent_attendance(
@@ -214,30 +239,42 @@ def tally_recent_attendance(
     leaves: Sequence[Any],
     last_meetings: int,
 ) -> RecentAttendance:
-    """Attendance at the ``last_meetings`` most recent eligible meetings.
+    """Attendance at the member's ``last_meetings`` most recent meetings.
 
-    Eligibility (window, waivers, leave) comes from ``tally_attendance``, so
-    the count rule excludes exactly the meetings the percentage rule does.
-    Ties on a date are broken by meeting id so the result is stable.
+    Classification (window, waivers, leave, check-in wins) comes from
+    ``tally_attendance``, so the count rule and the percentage rule agree on
+    what each meeting is. They differ only in the window: a meeting during a
+    leave is skipped and the window reaches back one more, while a waived
+    meeting stays in the window and is not counted (owner decision,
+    2026-11-13; before it, a waiver reached back too). Ties on a date are
+    broken by meeting id so the result is stable.
     """
     meetings = list(meetings)
     tally = tally_attendance(meetings, window, waived_ids, present_ids, leaves)
+    reachable = tally.in_window - tally.on_leave
     dated = sorted(
-        ((md, mid) for mid, md in meetings if mid in tally.eligible),
+        ((md, mid) for mid, md in meetings if mid in reachable),
         reverse=True,
     )
     recent = {mid for _, mid in dated[:last_meetings]}
+    waived = recent & tally.waived
     return RecentAttendance(
-        attended=len(recent & tally.attended), considered=len(recent)
+        attended=len(recent & tally.attended),
+        considered=len(recent) - len(waived),
+        looked_back=len(recent),
+        waived=len(waived),
     )
 
 
 def required_recent_meetings(
     min_meetings: int, of_last_meetings: int, considered: int
 ) -> int:
-    """Meetings a member must have attended among the ``considered`` ones.
+    """Meetings a member must have attended among ``considered`` meetings.
 
-    A member who has had fewer eligible meetings than the look-back -- a
+    The count rule calls this through ``RecentAttendance.required``, which
+    also caps it at the meetings left once waivers are taken out; use that.
+
+    A member who has had fewer meetings than the look-back -- a
     recent joiner, or a department that has not met that often -- is held to
     the same proportion rather than to a count they could not reach:
     6 of 12 becomes 2 of 4. Rounded up, so the proportion is never relaxed.
@@ -412,10 +449,10 @@ class MembershipTierService:
     ) -> RecentAttendance:
         """How many of the member's last ``last_meetings`` meetings they attended.
 
-        Judged on the same eligible meetings as the percentage rule -- held
-        since the member's current stint began, on or before the department's
-        today, not waived and not during a leave of absence -- so the two
-        rules can never disagree on which meetings a member is charged with.
+        Meetings held since the member's current stint began, on or before
+        the department's today, and not during a leave of absence. A waived
+        meeting stays in the window and is not counted; see
+        ``tally_recent_attendance``.
         """
         loaded = await self._load_attendance(
             user_id,
@@ -424,7 +461,7 @@ class MembershipTierService:
             meeting_types,
         )
         if loaded is None:
-            return RecentAttendance(attended=0, considered=0)
+            return RecentAttendance(attended=0, considered=0, looked_back=0, waived=0)
         return tally_recent_attendance(*loaded, last_meetings=last_meetings)
 
     async def get_type_wait_start(

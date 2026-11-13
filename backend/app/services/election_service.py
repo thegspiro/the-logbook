@@ -1148,7 +1148,6 @@ class ElectionService:
         from app.services.membership_tier_service import (
             MembershipTierService,
             evaluate_wait,
-            required_recent_meetings,
             wait_ineligibility_reason,
         )
         from app.utils.membership import voter_type_key
@@ -1196,10 +1195,16 @@ class ElectionService:
             recent = await tier_svc.get_recent_meeting_attendance(
                 user_id, organization_id, of_last, meeting_types
             )
-            required = required_recent_meetings(
-                min(min_meetings, of_last), of_last, recent.considered
-            )
+            required = recent.required(min(min_meetings, of_last), of_last)
             if recent.attended < required:
+                if recent.waived:
+                    # Name the window as well as the count, so a member with
+                    # a waiver can see why it reads "of 11" for a rule of 12.
+                    return (
+                        f"Attended {recent.attended} of {recent.considered} "
+                        f"meetings counted (the last {recent.looked_back}, "
+                        f"{recent.waived} waived); {required} required to vote"
+                    )
                 return (
                     f"Attended {recent.attended} of the last {recent.considered} "
                     f"meetings; {required} required to vote"

@@ -2253,6 +2253,32 @@ are left out of their count automatically. Leaves are created on the
 Waivers for single meetings and leave exclusions are shown separately on the
 dashboard. Each lowers the count on its own.
 
+### A Waived Meeting and the Meeting-Count Voting Rule _(2026-11-13)_
+
+An election can require a member to have attended a number of their most
+recent meetings, such as **6 of the last 12** (see
+[Elections & Voting → Meeting attendance](./14-elections.md#meeting-attendance)).
+A waived meeting now **shortens** that look-back by one. It no longer reaches
+back to an older meeting.
+
+- **6 of the last 12, with one waived**, means 6 of the other 11. The member is
+  judged on the same 12 meetings either way.
+- **When the waivers leave fewer meetings than required**, the requirement is
+  the meetings left. With 6 of 12 and 7 waived, the member needs all 5 of the
+  rest.
+- **A waived meeting the member attended** counts as attended.
+- **A leave of absence is unchanged.** A meeting during a leave is left out
+  and the look-back reaches back one more meeting.
+
+This changed on 2026-11-13 by owner decision. Before that, a waived meeting
+was replaced by the next older meeting, so a member who holds a waiver may
+have gained or lost eligibility for an election that uses this rule. When a
+member falls short, the reason says how many meetings were counted and how
+many were waived, for example "Attended 4 of 11 meetings counted (the last
+12, 1 waived); 6 required to vote".
+
+The percentage rule, and this dashboard, are unchanged.
+
 ---
 
 ## Elections and Voting

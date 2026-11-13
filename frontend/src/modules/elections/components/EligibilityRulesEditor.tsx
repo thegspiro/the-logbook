@@ -242,6 +242,10 @@ export const EligibilityRulesEditor: React.FC<EligibilityRulesEditorProps> = ({
                 {attendance.of_last_meetings ?? '?'}.
               </p>
             )}
+            <p className="text-theme-text-muted mt-1 text-xs">
+              A waived meeting shortens the look-back: 6 of the last 12 with one waived means 6 of the other 11. A
+              meeting during a leave of absence is replaced by the next older one.
+            </p>
           </div>
         )}
         {attendance.mode === AttendanceRuleMode.PERCENT && (

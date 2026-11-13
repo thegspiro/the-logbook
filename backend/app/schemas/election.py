@@ -355,6 +355,9 @@ class AttendanceRule(BaseModel):
     of the meetings held in the last ``period_months``. Either way, waived
     meetings and meetings during a leave of absence are not counted, and
     only meetings since the member's current stint began are considered.
+    In ``count`` mode a waived meeting shortens the look-back rather than
+    reaching back to an older one (owner decision, 2026-11-13); see
+    ``membership_tier_service.tally_recent_attendance``.
     """
 
     model_config = ConfigDict(extra="forbid")
