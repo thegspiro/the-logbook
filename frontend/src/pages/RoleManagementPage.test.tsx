@@ -61,11 +61,23 @@ describe('RoleManagementPage', () => {
     ]);
   });
 
+  // W05-10: every card's buttons were named only "Edit" and "Delete", so a
+  // screen reader heard thirty identical "Edit"s with no clue which position
+  // each opened. The position's name is now part of each button's name.
+  it("names each card's buttons after the position they act on", async () => {
+    vi.mocked(roleService.getRoles).mockResolvedValue([role, memberRole]);
+    renderWithRouter(<RoleManagementPage />);
+
+    expect(await screen.findByRole('button', { name: 'Edit Operations Officer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Operations Officer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit Member' })).toBeInTheDocument();
+  });
+
   it('keeps actions outside the independently scrollable role form', async () => {
     const user = userEvent.setup();
     renderWithRouter(<RoleManagementPage />);
 
-    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('button', { name: /^Edit\b/ }));
 
     const scrollArea = screen.getByTestId('role-modal-scroll-area');
     const actions = screen.getByTestId('role-modal-actions');
@@ -79,7 +91,7 @@ describe('RoleManagementPage', () => {
     const user = userEvent.setup();
     renderWithRouter(<RoleManagementPage />);
 
-    const editButton = await screen.findByRole('button', { name: 'Edit' });
+    const editButton = await screen.findByRole('button', { name: /^Edit\b/ });
     await user.click(editButton);
 
     await waitFor(() => expect(screen.getByLabelText(/^Role Name/)).toHaveFocus());
@@ -93,7 +105,7 @@ describe('RoleManagementPage', () => {
     vi.mocked(roleService.updateRole).mockResolvedValue({ ...memberRole, name: 'Volunteer' });
     renderWithRouter(<RoleManagementPage />);
 
-    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('button', { name: /^Edit\b/ }));
     const name = screen.getByLabelText(/^Role Name/);
     expect(name).toBeEnabled();
     expect(screen.getByText(/display name may be customized/i)).toHaveTextContent(
@@ -115,7 +127,7 @@ describe('RoleManagementPage', () => {
     vi.mocked(roleService.getRoles).mockResolvedValue([fixedSystemRole]);
     renderWithRouter(<RoleManagementPage />);
 
-    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('button', { name: /^Edit\b/ }));
 
     expect(screen.getByLabelText(/^Role Name/)).toBeDisabled();
     expect(screen.getByText(/only the description and permissions/i)).toBeInTheDocument();
@@ -162,7 +174,7 @@ describe('RoleManagementPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<RoleManagementPage />);
 
-      await user.click(await screen.findByRole('button', { name: 'Edit' }));
+      await user.click(await screen.findByRole('button', { name: /^Edit\b/ }));
       await user.click(screen.getByRole('checkbox', { name: /Manage events/ }));
       await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
@@ -184,7 +196,7 @@ describe('RoleManagementPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<RoleManagementPage />);
 
-      await user.click(await screen.findByRole('button', { name: 'Edit' }));
+      await user.click(await screen.findByRole('button', { name: /^Edit\b/ }));
       await user.click(screen.getByRole('checkbox', { name: /View events/ }));
       await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
@@ -202,7 +214,7 @@ describe('RoleManagementPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<RoleManagementPage />);
 
-      await user.click(await screen.findByRole('button', { name: 'Edit' }));
+      await user.click(await screen.findByRole('button', { name: /^Edit\b/ }));
       await user.type(screen.getByLabelText('Description'), ' updated');
       await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
@@ -324,7 +336,7 @@ describe('RoleManagementPage', () => {
       const user = userEvent.setup();
       renderWithRouter(<RoleManagementPage />);
 
-      await user.click(await screen.findByRole('button', { name: 'Edit' }));
+      await user.click(await screen.findByRole('button', { name: /^Edit\b/ }));
       await user.type(screen.getByLabelText(/^Role Name/), '  ');
       await user.click(screen.getByRole('button', { name: 'Save Changes' }));
 
@@ -363,7 +375,7 @@ describe('RoleManagementPage deleting a role', () => {
     const user = userEvent.setup();
     renderWithRouter(<RoleManagementPage />);
 
-    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await user.click(await screen.findByRole('button', { name: /^Delete\b/ }));
 
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('4 members hold it and will lose its permissions.');

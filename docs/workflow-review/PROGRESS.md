@@ -159,6 +159,196 @@ and not yet confirmed or fixed. The run for each activity starts from these.
 
 ## Log
 
+### W09 second pass — Import members from a spreadsheet — 2026-11-10
+
+The owner asked to continue with W09. Driven as `admin` at 1280×900 and
+390×844 with a nine-row file, with `member2` refused.
+
+Held:
+
+- the pre-check names bad rows by column and value;
+- "Confirm it's you" opens mid-import and the run continues from that row;
+- every imported value is stored as written;
+- rows the server refuses come back in the error report;
+- a re-upload flags every imported row;
+- every create is audited;
+- the phone layout is clean.
+
+Fixed:
+
+- W09-4 (LOW): the pre-check passed an administrative member with a rank, which the server refuses.
+- W09-5 (LOW): the instructions promised a blank membershipNumber would be assigned; with numbering off it stays blank.
+
+Flagged:
+
+- W09-6 (MED): Add Member requires a membership number, the import does not. Recorded in `docs/KNOWN_LIMITATIONS.md`.
+- W09-7 (LOW, lead): a bad phone passes the pre-check and fails at import; the rule exists only on the server.
+
+Gate: typecheck and lint clean, no warnings; 65 import tests pass, and each new case failed before its fix; docs links clean. Next: W10 when the owner asks.
+
+### W08 second pass — Add a member and their first sign-in — 2026-11-09
+
+The owner asked to continue with W08. Driven as `admin`, the new member and
+`member2` at 1280×900, with a second add at 390×844.
+
+Held:
+
+- empty submit flags 13 fields and focuses the summary;
+- a weak password is held at the field;
+- a create that grants a rank or position asks "Confirm it's you" and completes once confirmed;
+- every field sent is stored, including the On Leave status;
+- the first sign-in forces the password change with no refused request;
+- `member2` is refused on page and API;
+- every step is audited;
+- the phone layout is clean.
+
+Fixed:
+
+- W08-7 (LOW): eight optional fields showed their examples as full-strength text, so they read as values already entered.
+- W08-8 (LOW): the create's audit row did not record the starting status.
+- W08-9 (LOW): nothing said that a member added Inactive or On Leave cannot sign in.
+
+Flagged:
+
+- W08-10 (NIT): "On Leave" on the form, "Leave" on the profile.
+- Lead: 127 other uses of `placeholder-theme-text-muted` across the app.
+
+Gate: typecheck and lint clean (0 warnings from this PR); flake8, black, isort and mypy clean; 131 backend and 36 Add Member tests pass, and each new case failed before its fix; docs links clean. Next: W09 when the owner asks.
+
+### W07 second pass — Dashboard for every role — 2026-11-08
+
+The owner asked to continue with W07. All ten roles were driven at 1280×900,
+with three at 390×844, on the redesigned dashboard (Personal, plus a My
+Department tab for leaders).
+
+Held:
+
+- every role's dashboard is clean on every tab: no failed request, console error or broken value;
+- every link opens a page the role can use;
+- department-wide data waits for the tab;
+- My Department and its sections are gated per role;
+- the phone layout is clean.
+
+The W01 lead is resolved: with Training off, no dashboard, Members Administration or My Account asks a Training endpoint.
+
+Fixed:
+
+- W07-2 (LOW): the two-factor grace notice said "Profile > Security" and linked to the profile tab. The step-up message and the `LB-AUTH-005` support entry also named screens that don't exist.
+
+Flagged:
+
+- W07-3 (LOW): the treasurer has no My Department tab, so the money and grant cards sit on Personal; the admin sees them under My Department.
+- W07-4 (NIT): two single-card My Department tabs.
+
+Gate: flake8, black and isort clean; 103 backend tests pass, and the new cases failed before the fix; docs links clean. Next: W08 when the owner asks.
+
+### W06 second pass — Organization settings and department setup — 2026-11-08
+
+The owner asked to keep going. Driven as `admin`, with `member` for the
+department's view, at 1280×900 and 390×844.
+
+Held:
+
+- an empty department name is held and flagged while other changes save (W06-1);
+- contact changes autosave and survive a reload;
+- a module switched off leaves the member's menu and explains itself where its pages were;
+- all 21 setup cards land where the step is done, including the new Public Portal step;
+- review progress counts, survives a reload and can be undone;
+- a member is refused on both pages and every write;
+- the five screens are clean at 390px.
+
+Fixed:
+
+- W06-5 (LOW): every review step's button was named only "Mark as reviewed".
+
+Flagged:
+
+- W06-6 (MED): the department's phone and website are stored however they are typed under Settings, while onboarding checks the website. Mirrored to KNOWN_LIMITATIONS.
+- W06-7 (NIT): "All changes saved" beside a name flagged as not saved.
+
+Gate: typecheck and lint clean; 64 related frontend tests pass, and the new case failed before the fix. Next: W07 when the owner asks.
+
+### W05 second pass — Positions and permissions — 2026-11-08
+
+The owner asked to continue with W05. Driven as `member`, `admin` and
+`membership_coordinator` at 1280×900 and 390×844.
+
+Held:
+
+- a member is refused on both pages and by the API;
+- creating a position opens "Confirm it's you", refuses a wrong password, and completes the create once confirmed;
+- a grant reaches a signed-in member and a revoke takes it away;
+- delete confirms with the member count;
+- the grant ceiling holds past the step-up;
+- every change and step-up is audited with actor, IP and department;
+- the pages and dialogs are clean at 390px.
+
+Fixed:
+
+- W05-10 (LOW): every position card's buttons were named only "Edit" and "Delete".
+- W05-11 (LOW): the two-factor deadline banner's "Set it up now" opened the profile tab instead of Security.
+
+Flagged: W05-12 (NIT, "Role" on Role Management, "Position" everywhere else).
+
+Gate: typecheck and lint clean; 93 related frontend tests pass, and both new cases failed before their fixes. Next: W06 when the owner asks.
+
+### W04 second pass — My account — 2026-11-08
+
+The owner asked to continue with W04. Driven as `member` at 1280×900 and
+390×844, on the continued install.
+
+Held:
+
+- a blank legal name saves around it (F-1);
+- a member phone in the wrong format is refused (W04-7);
+- the department fields are read-only;
+- a password change refuses a wrong or reused password, then signs out everywhere and says so (W04-1);
+- MFA enrolment shows the recovery codes once (W04-2);
+- new codes and turning MFA off need a current code;
+- notification settings survive a reload;
+- every tab is clean at 390px.
+
+Fixed:
+
+- W04-10 (MED): a code typed "123 456" was still refused on enrolment, step-up, new recovery codes and turning MFA off; W02-10 had fixed only sign-in. The three code schemas now drop whitespace.
+- W04-11 (LOW): the member's own name, phone and address fields had no autocomplete hint (WCAG 1.3.5).
+
+Flagged:
+
+- W04-12 (MED): an emergency contact's phone has no format check. Mirrored to KNOWN_LIMITATIONS.
+- Also seen: a bad member phone still refuses the whole Account save, with no flag on the field (tracked as F-3 in the forms review), and two NITs.
+
+Gate: typecheck and lint clean; flake8, black and isort clean; 125 backend and 108 frontend tests pass, and every new case failed before its fix. Next: W05 when the owner asks.
+
+### W03 second pass — Forgot password and reset by link — 2026-11-08
+
+The owner asked to continue after W02, so W03 was driven again, as a
+signed-out visitor, `member2` and `admin`, at 1280×900 and 390×844, on the
+continued install. Email is off here, so the reset link was minted, as in the
+first pass.
+
+Held:
+
+- with email off, the server issues no token and says so (W03-6 resolved);
+- opening and submitting a link have their own budget (W03-7 resolved);
+- missing, bad and used links are refused;
+- the checklist lists the seven server rules and blocks a run or a mismatch;
+- a reset signs in with the new password, refuses the old, and kills the link;
+- the completed reset is in the department's audit log.
+
+Fixed:
+
+- W03-9 (MED): reset requests never reached the department's audit log; `forgot_password` left `organization_id` empty.
+- W03-10 (MED): the password checklist's met/unmet state was an aria-hidden icon, silent to a screen reader, on the reset page and in My Account.
+- W03-11 (LOW): a stale link check could overwrite the current verdict (test-proven).
+- W03-12 (LOW): the reset page's "Back to sign in" was 40px tall.
+
+Flagged:
+
+- W03-13 (MED): reset requests wrote the typed email address into the hash-chained audit log. Flagged, then fixed on the owner's decision of 2026-11-08: a matched request keeps `user_id` only, and any other keeps a keyed fingerprint.
+- W03-14 (NIT): two pieces of copy.
+
+Gate: typecheck and lint clean; flake8, black and isort clean on the backend files; 24 backend and 116 frontend tests pass, and every new case failed before its fix. Next: none pending; the owner may name the next second pass.
 ### W80 — Training event lifecycle: create, credit, correct, excuse, move — 2026-11-08
 
 Owner-requested, outside the rotation. Driven as: `training_officer` at

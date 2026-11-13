@@ -811,10 +811,10 @@ export const UserSettingsPage: React.FC = () => {
                           {(field) => (
                             <input
                               {...field}
+                              autoComplete="given-name"
                               maxLength={100}
                               type="text"
                               value={profileForm.first_name || ''}
-                              autoComplete="given-name"
                               onChange={(e) => handleProfileChange('first_name', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -832,10 +832,10 @@ export const UserSettingsPage: React.FC = () => {
                           {(field) => (
                             <input
                               {...field}
+                              autoComplete="additional-name"
                               maxLength={100}
                               type="text"
                               value={profileForm.middle_name || ''}
-                              autoComplete="additional-name"
                               onChange={(e) => handleProfileChange('middle_name', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -854,10 +854,10 @@ export const UserSettingsPage: React.FC = () => {
                           {(field) => (
                             <input
                               {...field}
+                              autoComplete="family-name"
                               maxLength={100}
                               type="text"
                               value={profileForm.last_name || ''}
-                              autoComplete="family-name"
                               onChange={(e) => handleProfileChange('last_name', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -877,10 +877,10 @@ export const UserSettingsPage: React.FC = () => {
                         {(field) => (
                           <input
                             {...field}
+                            autoComplete="nickname"
                             maxLength={100}
                             type="text"
                             value={profileForm.preferred_name || ''}
-                            autoComplete="nickname"
                             onChange={(e) => handleProfileChange('preferred_name', e.target.value)}
                             className="form-input sm:text-sm"
                             disabled={savingProfile}
@@ -906,10 +906,10 @@ export const UserSettingsPage: React.FC = () => {
                           {(field) => (
                             <input
                               {...field}
+                              autoComplete="tel"
                               maxLength={20}
                               type="tel"
                               value={profileForm.phone || ''}
-                              autoComplete="tel"
                               onChange={(e) => handleProfileChange('phone', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -927,10 +927,10 @@ export const UserSettingsPage: React.FC = () => {
                           {(field) => (
                             <input
                               {...field}
+                              autoComplete="mobile tel"
                               maxLength={20}
                               type="tel"
                               value={profileForm.mobile || ''}
-                              autoComplete="mobile tel"
                               onChange={(e) => handleProfileChange('mobile', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -1016,10 +1016,10 @@ export const UserSettingsPage: React.FC = () => {
                           {(field) => (
                             <input
                               {...field}
+                              autoComplete="street-address"
                               maxLength={255}
                               type="text"
                               value={profileForm.address_street || ''}
-                              autoComplete="street-address"
                               onChange={(e) => handleProfileChange('address_street', e.target.value)}
                               className="form-input sm:text-sm"
                               disabled={savingProfile}
@@ -1038,10 +1038,10 @@ export const UserSettingsPage: React.FC = () => {
                             {(field) => (
                               <input
                                 {...field}
+                                autoComplete="address-level2"
                                 maxLength={100}
                                 type="text"
                                 value={profileForm.address_city || ''}
-                                autoComplete="address-level2"
                                 onChange={(e) => handleProfileChange('address_city', e.target.value)}
                                 className="form-input sm:text-sm"
                                 disabled={savingProfile}
@@ -1059,10 +1059,10 @@ export const UserSettingsPage: React.FC = () => {
                             {(field) => (
                               <input
                                 {...field}
+                                autoComplete="address-level1"
                                 maxLength={50}
                                 type="text"
                                 value={profileForm.address_state || ''}
-                                autoComplete="address-level1"
                                 onChange={(e) => handleProfileChange('address_state', e.target.value)}
                                 className="form-input sm:text-sm"
                                 disabled={savingProfile}
@@ -1080,10 +1080,10 @@ export const UserSettingsPage: React.FC = () => {
                             {(field) => (
                               <input
                                 {...field}
+                                autoComplete="postal-code"
                                 maxLength={20}
                                 type="text"
                                 value={profileForm.address_zip || ''}
-                                autoComplete="postal-code"
                                 inputMode="numeric"
                                 onChange={(e) => handleProfileChange('address_zip', e.target.value)}
                                 className="form-input sm:text-sm"
@@ -1236,6 +1236,8 @@ export const UserSettingsPage: React.FC = () => {
                               aria-hidden="true"
                             />
                           )}
+                          {/* The icon is decorative; this is the state a screen reader hears (W03-10). */}
+                          <span className="sr-only">{check.valid ? 'Met: ' : 'Not met: '}</span>
                           <span
                             className={check.valid ? 'text-green-700 dark:text-green-300' : 'text-theme-text-muted'}
                           >

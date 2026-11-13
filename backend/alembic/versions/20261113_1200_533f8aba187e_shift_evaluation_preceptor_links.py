@@ -16,7 +16,7 @@ Downgrade drops the table (outstanding links stop working), the column, and
 the new template rows, then narrows the enum.
 
 Revision ID: 533f8aba187e
-Revises: 3067c03986be
+Revises: 9e79851e9a62
 Create Date: 2026-11-13 12:00:00
 """
 
@@ -27,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "533f8aba187e"
-down_revision: Union[str, None] = "3067c03986be"
+down_revision: Union[str, None] = "9e79851e9a62"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -37,7 +37,7 @@ CONFIGS = "training_module_configs"
 _NEW_TEMPLATE_TYPES = ("shift_evaluation_preceptor_link",)
 
 # EmailTemplateType as this revision finds it (1c6632035ccd's ALL_TYPES,
-# reached through 3067c03986be). Written out rather than imported so a later
+# reached through 9e79851e9a62). Written out rather than imported so a later
 # edit to the enum cannot rewrite this step. Built on the waiver-emails
 # widening rather than beside it: two sibling widenings each rewrite the whole
 # ENUM, so whichever ran second would drop the other's values.

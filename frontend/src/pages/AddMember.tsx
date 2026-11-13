@@ -595,7 +595,7 @@ const AddMember: React.FC = () => {
                   maxLength={100}
                   value={formData.middleName}
                   onChange={(e) => handleInputChange('middleName', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
+                  className="form-input"
                   placeholder="Michael"
                 />
               </div>
@@ -637,7 +637,7 @@ const AddMember: React.FC = () => {
                 maxLength={100}
                 value={formData.preferredName}
                 onChange={(e) => handleInputChange('preferredName', e.target.value)}
-                className="form-input placeholder-theme-text-muted"
+                className="form-input"
                 placeholder="Terry"
                 aria-describedby="add-preferredName-help"
               />
@@ -859,7 +859,7 @@ const AddMember: React.FC = () => {
                   maxLength={20}
                   value={formData.secondaryPhone}
                   onChange={(e) => handleInputChange('secondaryPhone', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
+                  className="form-input"
                   placeholder="(555) 987-6543"
                 />
               </div>
@@ -1060,8 +1060,9 @@ const AddMember: React.FC = () => {
                   <option value="leave">On Leave</option>
                 </select>
                 <p id="add-status-help" className="text-theme-text-muted mt-1 text-xs">
-                  Retired or dropped is set from the member&rsquo;s profile once they are added, so their service
-                  history is recorded.
+                  A member added Inactive or On Leave cannot sign in until their status is set to Active. Retired or
+                  dropped is set from the member&rsquo;s profile once they are added, so their service history is
+                  recorded.
                 </p>
               </div>
 
@@ -1275,7 +1276,7 @@ const AddMember: React.FC = () => {
                   autoComplete="off"
                   value={formData.emergencyEmail1}
                   onChange={(e) => handleInputChange('emergencyEmail1', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
+                  className="form-input"
                   placeholder="jane.doe@example.com"
                 />
               </div>
@@ -1309,7 +1310,7 @@ const AddMember: React.FC = () => {
                   {...fieldA11y('emergencyName2', { required: secondaryContactStarted })}
                   value={formData.emergencyName2}
                   onChange={(e) => handleInputChange('emergencyName2', e.target.value)}
-                  className={`form-input placeholder-theme-text-muted ${errors.emergencyName2 ? 'border-red-500' : ''}`}
+                  className={`form-input ${errors.emergencyName2 ? 'border-red-500' : ''}`}
                   placeholder="Bob Doe"
                 />
                 {errors.emergencyName2 && (
@@ -1340,7 +1341,7 @@ const AddMember: React.FC = () => {
                   {...fieldA11y('emergencyRelationship2', { required: secondaryContactStarted })}
                   value={formData.emergencyRelationship2}
                   onChange={(e) => handleInputChange('emergencyRelationship2', e.target.value)}
-                  className={`form-input placeholder-theme-text-muted ${errors.emergencyRelationship2 ? 'border-red-500' : ''}`}
+                  className={`form-input ${errors.emergencyRelationship2 ? 'border-red-500' : ''}`}
                   placeholder="Parent"
                 />
                 {errors.emergencyRelationship2 && (
@@ -1368,7 +1369,7 @@ const AddMember: React.FC = () => {
                   {...fieldA11y('emergencyPhone2', { required: secondaryContactStarted })}
                   value={formData.emergencyPhone2}
                   onChange={(e) => handleInputChange('emergencyPhone2', e.target.value)}
-                  className={`form-input placeholder-theme-text-muted ${errors.emergencyPhone2 ? 'border-red-500' : ''}`}
+                  className={`form-input ${errors.emergencyPhone2 ? 'border-red-500' : ''}`}
                   placeholder="(555) 987-6543"
                 />
                 {errors.emergencyPhone2 && (
@@ -1388,7 +1389,7 @@ const AddMember: React.FC = () => {
                   autoComplete="off"
                   value={formData.emergencyEmail2}
                   onChange={(e) => handleInputChange('emergencyEmail2', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
+                  className="form-input"
                   placeholder="bob.doe@example.com"
                 />
               </div>

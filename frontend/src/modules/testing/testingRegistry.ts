@@ -1223,6 +1223,20 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'history.manage',
         module: 'history',
       },
+      {
+        path: '/history/people/:personId/merge',
+        label: 'Merge two records',
+        permission: 'history.manage',
+        module: 'history',
+      },
+      { path: '/history/import', label: 'Import a roster', permission: 'history.manage', module: 'history' },
+      {
+        path: '/history/import/:importId',
+        label: 'Review a roster import',
+        permission: 'history.manage',
+        module: 'history',
+        note: 'Decide each row, answer unfamiliar titles, then import; after import, remove untouched records.',
+      },
       { path: '/history/honor-roll', label: 'Honor Roll', module: 'history' },
       {
         path: '/history/clearance/:requestId',

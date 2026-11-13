@@ -176,6 +176,7 @@ _PLAIN_COLUMNS = [
         ["birth_date", "addresses", "verification_sources", "research_notes"],
     ),
     ("history_revisions", "id", ["snapshot"]),
+    ("history_import_rows", "id", ["cells", "edits"]),
     ("integrations", "id", ["encrypted_config"]),
     (
         "quickbooks_connections",
