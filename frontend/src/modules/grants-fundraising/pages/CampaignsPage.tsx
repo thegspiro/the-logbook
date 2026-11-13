@@ -699,7 +699,7 @@ const CampaignsPage: React.FC = () => {
                 {/* Campaign Name & Badges */}
                 <div>
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-theme-text-primary text-lg font-bold">{campaign.name}</h3>
+                    <h2 className="text-theme-text-primary text-lg font-bold">{campaign.name}</h2>
                     {canManage && (
                       <button
                         type="button"
