@@ -133,6 +133,7 @@ from app.schemas.attendance_waiver import (
     CapPeriod,
     policy_from_settings,
 )
+from app.services.attendance_waiver_email_service import AttendanceWaiverEmails
 from app.services.email_policy import (
     EmailKind,
     department_required_kinds,
@@ -1036,11 +1037,12 @@ class AttendanceWaiverService:
             # The durable guard for one live request per member and session.
             # A savepoint, so a lost race on live_key rolls back only this
             # insert and leaves the caller's session usable.
+            submitted = self._action(request, AttendanceWaiverAction.SUBMITTED, member)
+            # Read now: a failed notice below rolls back, expiring the row.
+            submitted_id = str(submitted.id)
             async with self.db.begin_nested():
                 self.db.add(request)
-                self.db.add(
-                    self._action(request, AttendanceWaiverAction.SUBMITTED, member)
-                )
+                self.db.add(submitted)
                 # The request first: the attachments' key points at it.
                 await self.db.flush()
                 for ordinal, file in enumerate(stored, start=1):
@@ -1059,6 +1061,7 @@ class AttendanceWaiverService:
         await self.db.commit()
         await self.db.refresh(request)
         await self._prompt_deciders(org_id, request, member, policy)
+        await self._email(org_id, request, submitted_id)
         return request
 
     @staticmethod
@@ -1128,13 +1131,16 @@ class AttendanceWaiverService:
         request.live_key = None
         # Nothing is left to answer once the request is taken back.
         request.info_requested_at = None
-        self.db.add(self._action(request, AttendanceWaiverAction.WITHDRAWN, member))
+        withdrawn = self._action(request, AttendanceWaiverAction.WITHDRAWN, member)
+        withdrawn_id = str(withdrawn.id)
+        self.db.add(withdrawn)
         await self._audit(
             "attendance_waiver_request_withdrawn", member, self._ids(request)
         )
         await self.db.commit()
         await self.db.refresh(request)
         await self._archive_prompts(org_id, request)
+        await self._email(org_id, request, withdrawn_id)
         return request
 
     # ------------------------------------------------------------------
@@ -1245,7 +1251,9 @@ class AttendanceWaiverService:
             if status == AttendanceWaiverStatus.APPROVED
             else AttendanceWaiverAction.DENIED
         )
-        self.db.add(self._action(request, chosen, actor, note))
+        decision = self._action(request, chosen, actor, note)
+        decision_id = str(decision.id)
+        self.db.add(decision)
         if (
             self.workflow == MEETING_WORKFLOW
             and status == AttendanceWaiverStatus.APPROVED
@@ -1264,6 +1272,7 @@ class AttendanceWaiverService:
         await self._archive_prompts(org_id, request)
         await self._notify_member(org_id, request, chosen)
         await self._copy_decision(org_id, request, actor, chosen)
+        await self._email(org_id, request, decision_id)
         return request
 
     async def _require_decider(
@@ -2166,7 +2175,12 @@ class AttendanceWaiverService:
             )
             await self._recover(request)
             return
-        await self._email(
+        # The first request is emailed from its SUBMITTED log row by the
+        # department's editable template (``AttendanceWaiverEmails``); only the
+        # member's answer to a question, which has no template, is sent here.
+        if not answered:
+            return
+        await self._email_notice(
             org_id,
             request,
             recipients,
@@ -2222,7 +2236,7 @@ class AttendanceWaiverService:
             )
             await self._recover(request)
             return
-        await self._email(
+        await self._email_notice(
             org_id,
             request,
             recipients,
@@ -2284,25 +2298,8 @@ class AttendanceWaiverService:
                 "Failed to notify the member of waiver request {}", request.id
             )
             await self._recover(request)
-            return
-        member = (
-            await self.db.execute(
-                select(User).where(
-                    User.id == str(request.user_id), User.organization_id == org_id
-                )
-            )
-        ).scalar_one_or_none()
-        if member is not None:
-            await self._email(
-                org_id,
-                request,
-                [member],
-                SPECS[request.workflow].member_email_kind,
-                subject,
-                [f'Your request to be excused from "{title}" on {day} {outcome}.'],
-                member_action_url(request),
-                "View Request",
-            )
+        # No email here: the decision is emailed from its log row by the
+        # department's editable template (``AttendanceWaiverEmails``).
 
     async def _copy_decision(
         self,
@@ -2387,17 +2384,9 @@ class AttendanceWaiverService:
                 "Failed to copy the decision on waiver request {}", request.id
             )
             await self._recover(request)
-            return
-        await self._email(
-            org_id,
-            request,
-            recipients,
-            self.spec.decider_email_kind,
-            subject,
-            [sentence, "You are copied on waiver decisions by your position."],
-            path,
-            "View Session",
-        )
+        # In-app only. Email copies of a decision come from the decided
+        # template's own CC addresses and CC positions, so a person named in
+        # both places is not emailed twice.
 
     async def _notify_member_asked(
         self, org_id: str, request: AttendanceWaiverRequest, actor: User
@@ -2444,7 +2433,7 @@ class AttendanceWaiverService:
             )
         ).scalar_one_or_none()
         if member is not None:
-            await self._email(
+            await self._email_notice(
                 org_id,
                 request,
                 [member],
@@ -2455,7 +2444,7 @@ class AttendanceWaiverService:
                 "Answer the Question",
             )
 
-    async def _email(
+    async def _email_notice(
         self,
         org_id: str,
         request: AttendanceWaiverRequest,
@@ -2517,6 +2506,25 @@ class AttendanceWaiverService:
             )
         except Exception:
             logger.exception("Failed to email about waiver request {}", request.id)
+
+    async def _email(
+        self, org_id: str, request: AttendanceWaiverRequest, action_id: str
+    ) -> None:
+        """The emails a log row calls for, after the commit (see
+        ``AttendanceWaiverEmails``). Never fails the request; a failed send
+        rolls the session back, so ``request`` is reloaded for the caller.
+        Both workflows send, each from its own templates (``_TEMPLATES`` in
+        the email service)."""
+        # Read before sending: a rollback there expires the request.
+        request_id = str(request.id)
+        sent = await AttendanceWaiverEmails(self.db).send_for_action(
+            org_id, str(action_id)
+        )
+        logger.info("Waiver request {}: {} email(s) sent", request_id, sent)
+        try:
+            await self.db.refresh(request)
+        except Exception:
+            logger.exception("Failed to reload waiver request {}", request_id)
 
     async def _recover(self, request: AttendanceWaiverRequest) -> None:
         """Reset the session after a failed notice, keeping ``request`` usable.
@@ -2990,7 +2998,7 @@ async def send_reschedule_notices(
             continue
         if request is None or member is None:
             continue
-        await service._email(
+        await service._email_notice(
             str(org_id),
             request,
             [member],

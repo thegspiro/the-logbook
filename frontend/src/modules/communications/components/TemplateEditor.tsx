@@ -17,6 +17,7 @@ import { Variable, ChevronDown, ChevronUp, Info, UserCheck } from 'lucide-react'
 import type { EmailFooter, EmailTemplate, TemplateVariable } from '../types';
 import type { TemplateDraft } from '../hooks/useTemplateDraft';
 import { BlockPalette } from './BlockPalette';
+import { CcPositionsField } from './CcPositionsField';
 import { COLOURWAYS, EMAIL_LAYOUTS, FALLBACK_COLOURWAY } from '../constants/blocks';
 
 interface TemplateEditorProps {
@@ -33,6 +34,14 @@ interface TemplateEditorProps {
   footers?: EmailFooter[];
   /** Which footer a template that has not chosen one renders with. */
   footerDefaultKey?: string;
+}
+
+function hasDefaultCopies(template: EmailTemplate): boolean {
+  return (
+    (template.default_cc?.length ?? 0) > 0 ||
+    (template.default_bcc?.length ?? 0) > 0 ||
+    (template.default_cc_position_ids?.length ?? 0) > 0
+  );
 }
 
 export const TemplateEditor: React.FC<TemplateEditorProps> = ({
@@ -61,6 +70,8 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     setDefaultCc,
     defaultBcc,
     setDefaultBcc,
+    ccPositionIds,
+    setCcPositionIds,
     ccError,
     bccError,
   } = draft;
@@ -68,14 +79,12 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   const [showTextBody, setShowTextBody] = useState(false);
   const [showVariables, setShowVariables] = useState(false);
   const [showOfficerVariables, setShowOfficerVariables] = useState(false);
-  const [showRecipients, setShowRecipients] = useState(
-    () => (template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0
-  );
+  const [showRecipients, setShowRecipients] = useState(() => hasDefaultCopies(template));
   const htmlRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    setShowRecipients((template.default_cc?.length ?? 0) > 0 || (template.default_bcc?.length ?? 0) > 0);
-  }, [template.id, template.default_cc, template.default_bcc]);
+    setShowRecipients(hasDefaultCopies(template));
+  }, [template]);
 
   /**
    * Drop *snippet* in at the cursor, or append when the textarea has never
@@ -275,7 +284,13 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
           {showRecipients ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           <span>Default CC / BCC Recipients</span>
         </button>
-        {showRecipients && (
+        {showRecipients && template.always_sent && (
+          <p className="text-theme-text-muted mt-2 text-xs">
+            This email carries a password, a sign-in or reset link, a ballot link or an applicant&apos;s private link,
+            so it is never copied to anyone.
+          </p>
+        )}
+        {showRecipients && !template.always_sent && (
           <div className="mt-2 space-y-3">
             <div>
               <label htmlFor="template-default-cc" className={labelClass}>
@@ -321,6 +336,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                 </p>
               )}
             </div>
+            <CcPositionsField value={ccPositionIds} onChange={setCcPositionIds} />
           </div>
         )}
       </div>

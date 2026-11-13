@@ -1,8 +1,11 @@
 """Waiver request notices go by email as well as the bell (CLAUDE.md #18).
 
 Before 2026-11-13 every notice was an in-app row only, so a member or decider
-who reads only their inbox never heard about a request. ``_email`` is the one
-sender; these pin that the existing notices use it, that it sends the same
+who reads only their inbox never heard about a request. ``_email_notice`` is
+the sender for the notices that have no editable template (a question, an
+answer, a moved session, an expiry); the request, the decision and the
+withdrawal are emailed from their templates by ``AttendanceWaiverEmails``
+(see test_attendance_waiver_emails). These pin that it sends the same
 plain words as the bell and never the member's reason or a decider's note,
 that a member's email preferences decide, and that a failed send never fails
 the request.
@@ -83,13 +86,13 @@ async def _submit(db, dept, reason="Knee surgery"):
 
 
 class TestDeciderEmail:
-    async def test_a_new_request_emails_its_deciders(self, db_session, dept, outbox):
-        request = await _submit(db_session, dept)
-        (mail,) = outbox
-        assert mail.to_emails == [dept.officer.email]
-        assert f"/attendance-waivers/{request.id}" in mail.text_body
-        assert "Knee" not in mail.html_body
-        assert "Knee" not in mail.text_body
+    async def test_a_new_request_is_left_to_its_template(
+        self, db_session, dept, outbox
+    ):
+        # The SUBMITTED template emails the deciders; a second, hand-built
+        # message here would reach every one of them twice.
+        await _submit(db_session, dept)
+        assert outbox == []
 
     async def test_a_decider_who_turned_the_kind_off_is_not_emailed(
         self, db_session, dept, outbox
@@ -103,19 +106,14 @@ class TestDeciderEmail:
 
 
 class TestMemberEmail:
-    async def test_a_decision_emails_the_member_without_the_note(
-        self, db_session, dept, outbox
-    ):
+    async def test_a_decision_is_left_to_its_template(self, db_session, dept, outbox):
+        # The DECIDED template emails the member, without the note.
         request = await _submit(db_session, dept)
         outbox.clear()
         await AttendanceWaiverService(db_session).approve(
             dept.org, dept.officer, request.id, "Get well soon"
         )
-        (mail,) = outbox
-        assert mail.to_emails == [dept.member.email]
-        assert "approved" in mail.text_body
-        assert "Get well" not in mail.text_body
-        assert "Get well" not in mail.html_body
+        assert outbox == []
 
 
 class TestFailure:

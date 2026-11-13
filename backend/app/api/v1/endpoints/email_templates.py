@@ -564,6 +564,7 @@ _AUDITED_TEMPLATE_FIELDS = (
     "allow_attachments",
     "default_cc",
     "default_bcc",
+    "default_cc_position_ids",
     "footer_key",
     "header_accent",
     "status_chip",

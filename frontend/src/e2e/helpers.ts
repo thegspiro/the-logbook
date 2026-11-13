@@ -636,6 +636,232 @@ const lengthen = (value: unknown, key = ''): unknown => {
   return value;
 };
 
+// Finance. Fourteen finance screens sat in the route inventory as exempt, and
+// a visit could not have measured them: the catch-all's `{}` drew every list as
+// empty and took /finance/budget-amendments down through the ErrorBoundary,
+// which maps the pending list. Camel-cased, as schemas/finance.py serializes,
+// with money as a string, as its Decimal fields do. Statuses vary so the badges
+// a reviewer reads all render.
+const FINANCE_STAMP = {
+  organizationId: 'e2e-org',
+  createdBy: 'e2e-user-id',
+  createdAt: '2026-01-02T15:00:00Z',
+  updatedAt: '2026-02-10T15:00:00Z',
+};
+
+interface FiscalYearFixture {
+  id: string;
+  name: string;
+  status: string;
+  requestDeadline?: string;
+  requestsOpen?: boolean;
+  planningStage?: string;
+}
+
+const FY_2026 = {
+  id: 'e2e-fy-2026',
+  name: 'FY 2026',
+  startDate: '2026-01-01',
+  endDate: '2026-12-31',
+  status: 'active',
+  isLocked: false,
+  ...FINANCE_STAMP,
+};
+
+// Next year's, open for budget requests: what the request and review screens list.
+const FY_2027 = {
+  id: 'e2e-fy-2027',
+  name: 'FY 2027',
+  startDate: '2027-01-01',
+  endDate: '2027-12-31',
+  status: 'draft',
+  isLocked: false,
+  requestDeadline: '2026-12-01',
+  requestsOpen: true,
+  planningStage: 'requests',
+  ...FINANCE_STAMP,
+};
+
+const FISCAL_YEARS = [FY_2026, FY_2027];
+
+const BUDGET_CATEGORIES = [
+  ['e2e-cat-apparatus', 'Apparatus Maintenance'],
+  ['e2e-cat-ppe', 'Personal Protective Equipment'],
+  ['e2e-cat-training', 'Training & Certification'],
+].map(([id, name], i) => ({ id, name, sortOrder: i, isActive: true, ...FINANCE_STAMP }));
+
+const BUDGETS = (
+  [
+    ['e2e-budget-1', 'e2e-cat-apparatus', 'Apparatus Maintenance', '48000.00', '31250.40', '6200.00'],
+    ['e2e-budget-2', 'e2e-cat-ppe', 'Personal Protective Equipment', '125000.00', '98410.15', '18900.00'],
+    ['e2e-budget-3', 'e2e-cat-training', 'Training & Certification', '22500.00', '4180.00', '0.00'],
+  ] as const
+).map(([id, categoryId, categoryName, amountBudgeted, amountSpent, amountEncumbered]) => ({
+  id,
+  fiscalYearId: 'e2e-fy-2026',
+  fiscalYearName: 'FY 2026',
+  fiscalYearStatus: 'active',
+  categoryId,
+  categoryName,
+  amountBudgeted,
+  amountSpent,
+  amountEncumbered,
+  ...FINANCE_STAMP,
+}));
+
+const approvalStep = (entityType: string, entityId: string, status: string) => ({
+  id: `${entityId}-step`,
+  chainId: 'e2e-chain',
+  stepId: 'e2e-chain-step-1',
+  entityType,
+  entityId,
+  status,
+  stepName: 'Chief approval',
+  stepOrder: 1,
+  assigneeLabel: 'Fire Chief',
+  createdAt: '2026-02-01T15:00:00Z',
+});
+
+const PURCHASE_REQUESTS = (
+  [
+    [
+      'e2e-pr-1',
+      'PR-2026-0012',
+      'Replacement SCBA cylinders (6)',
+      'MSA Safety',
+      '14820.00',
+      'pending_approval',
+      'high',
+    ],
+    ['e2e-pr-2', 'PR-2026-0009', 'Hose testing and repair', 'Northeast Hose Co.', '2350.00', 'approved', 'medium'],
+    ['e2e-pr-3', 'PR-2026-0004', 'Station 2 kitchen range', 'City Appliance', '1899.99', 'paid', 'low'],
+  ] as const
+).map(([id, requestNumber, title, vendor, estimatedAmount, status, priority]) => ({
+  id,
+  requestNumber,
+  fiscalYearId: 'e2e-fy-2026',
+  budgetId: 'e2e-budget-1',
+  requestedBy: 'e2e-user-id',
+  title,
+  vendor,
+  estimatedAmount,
+  status,
+  priority,
+  ...FINANCE_STAMP,
+  approvalSteps: [approvalStep('purchase_request', id, status === 'pending_approval' ? 'pending' : 'approved')],
+}));
+
+const EXPENSE_REPORTS = (
+  [
+    ['e2e-er-1', 'ER-2026-0031', 'State fire academy — Instructor II', '486.20', 'submitted'],
+    ['e2e-er-2', 'ER-2026-0027', 'Mileage to regional drill', '112.56', 'approved'],
+    ['e2e-er-3', 'ER-2026-0018', 'Boot allowance', '175.00', 'paid'],
+  ] as const
+).map(([id, reportNumber, title, totalAmount, status]) => ({
+  id,
+  reportNumber,
+  submittedBy: 'e2e-user-id',
+  fiscalYearId: 'e2e-fy-2026',
+  title,
+  totalAmount,
+  status,
+  submittedAt: '2026-02-05T15:00:00Z',
+  ...FINANCE_STAMP,
+  lineItems: [],
+  approvalSteps: [approvalStep('expense_report', id, status === 'submitted' ? 'pending' : 'approved')],
+}));
+
+const CHECK_REQUESTS = (
+  [
+    ['e2e-cr-1', 'CR-2026-0008', 'Oakville Ladies Auxiliary', '750.00', 'pending_approval'],
+    ['e2e-cr-2', 'CR-2026-0006', 'County Fire Training Council', '1200.00', 'issued'],
+    ['e2e-cr-3', 'CR-2026-0002', 'Valley Septic Services', '385.00', 'voided'],
+  ] as const
+).map(([id, requestNumber, payeeName, amount, status]) => ({
+  id,
+  requestNumber,
+  requestedBy: 'e2e-user-id',
+  fiscalYearId: 'e2e-fy-2026',
+  payeeName,
+  amount,
+  purpose: 'Department operating expense',
+  status,
+  ...(status === 'issued' ? { checkNumber: '10482', checkDate: '2026-02-12' } : {}),
+  ...FINANCE_STAMP,
+  approvalSteps: [approvalStep('check_request', id, status === 'pending_approval' ? 'pending' : 'approved')],
+}));
+
+const PENDING_APPROVALS = [
+  {
+    stepRecordId: 'e2e-pr-1-step',
+    entityType: 'purchase_request',
+    entityId: 'e2e-pr-1',
+    entityTitle: 'Replacement SCBA cylinders (6)',
+    entityAmount: '14820.00',
+    requesterName: 'Alex Tester',
+    stepName: 'Chief approval',
+    stepOrder: 1,
+    submittedAt: '2026-02-03T15:00:00Z',
+    approverType: 'position',
+    assigneeLabel: 'Fire Chief',
+    canAct: true,
+    requiresOverride: false,
+  },
+  {
+    stepRecordId: 'e2e-er-1-step',
+    entityType: 'expense_report',
+    entityId: 'e2e-er-1',
+    entityTitle: 'State fire academy — Instructor II',
+    entityAmount: '486.20',
+    requesterName: 'Jordan Captain',
+    stepName: 'Treasurer review',
+    stepOrder: 1,
+    submittedAt: '2026-02-05T15:00:00Z',
+    approverType: 'position',
+    assigneeLabel: 'Treasurer',
+    canAct: false,
+    requiresOverride: true,
+  },
+];
+
+const BUDGET_REQUESTS = (
+  [
+    [
+      'e2e-breq-1',
+      'e2e-cat-apparatus',
+      'Apparatus Maintenance',
+      '52000.00',
+      'submitted',
+      'Engine 2 pump overhaul is due in the spring.',
+    ],
+    ['e2e-breq-2', 'e2e-cat-ppe', 'Personal Protective Equipment', '131500.00', 'draft', null],
+  ] as const
+).map(([id, categoryId, lineLabel, requestedAmount, status, justification]) => ({
+  id,
+  fiscalYearId: 'e2e-fy-2027',
+  fiscalYearName: 'FY 2027',
+  categoryId,
+  categoryName: lineLabel,
+  lineLabel,
+  isProposedLine: false,
+  requestedAmount,
+  status,
+  justification,
+  submittedByName: status === 'submitted' ? 'Alex Tester' : null,
+  lastYearFiscalYearName: 'FY 2026',
+  lastYearBudgeted: categoryId === 'e2e-cat-ppe' ? '125000.00' : '48000.00',
+  ...FINANCE_STAMP,
+}));
+
+const fiscalYearOption = ({ id, name, status, requestDeadline, requestsOpen, planningStage }: FiscalYearFixture) => ({
+  id,
+  name,
+  status,
+  requestDeadline: requestDeadline ?? null,
+  requestsOpen: requestsOpen ?? false,
+  planningStage: planningStage ?? null,
+});
+
 /**
  * Route glob → response body. Ordered least to most specific; `mockApi`
  * registers them in order and Playwright matches the last registration first,
@@ -862,6 +1088,236 @@ const routes = ({
       membersOverdue: 1,
       membersWaived: 1,
     }),
+  ],
+
+  // Finance, with the fixtures declared above `routes`. Each general glob also
+  // matches its own sub-paths (`fiscal-years**` matches `fiscal-years/options`),
+  // so it is registered before the specific one that has to win.
+  ['**/api/v1/finance/fiscal-years**', () => (empty ? [] : FISCAL_YEARS)],
+  ['**/api/v1/finance/fiscal-years/options**', () => (empty ? [] : FISCAL_YEARS.map(fiscalYearOption))],
+  ['**/api/v1/finance/budget-categories**', () => (empty ? [] : BUDGET_CATEGORIES)],
+  ['**/api/v1/finance/budgets**', () => (empty ? [] : BUDGETS)],
+  [
+    '**/api/v1/finance/budgets/summary**',
+    () => ({
+      totalBudgeted: empty ? '0.00' : '195500.00',
+      totalSpent: empty ? '0.00' : '133840.55',
+      totalEncumbered: empty ? '0.00' : '25100.00',
+      totalRemaining: empty ? '0.00' : '36559.45',
+      percentUsed: empty ? 0 : 68.5,
+      categoryBreakdown: [],
+    }),
+  ],
+  [
+    '**/api/v1/finance/my-budgets**',
+    () =>
+      empty
+        ? []
+        : BUDGETS.map((budget) => {
+            const remaining =
+              Number(budget.amountBudgeted) - Number(budget.amountSpent) - Number(budget.amountEncumbered);
+            return {
+              ...budget,
+              amountRemaining: remaining.toFixed(2),
+              percentUsed: Math.round((1 - remaining / Number(budget.amountBudgeted)) * 1000) / 10,
+            };
+          }),
+  ],
+  // Every page's navigation asks this, so it keeps the catch-all's answer:
+  // owning a line would add a navigation entry to every route the sweeps measure.
+  ['**/api/v1/finance/my-budgets/summary**', () => ({})],
+  ['**/api/v1/finance/charge-access**', () => ({ categories: empty ? [] : BUDGET_CATEGORIES, positions: [] })],
+  [
+    '**/api/v1/finance/budget-amendments/pending**',
+    () =>
+      empty
+        ? []
+        : [
+            {
+              id: 'e2e-amend-1',
+              organizationId: 'e2e-org',
+              budgetId: 'e2e-budget-2',
+              amount: '8500.00',
+              reason: 'Grant award for turnout gear replacement',
+              approvedBy: 'Board of Commissioners',
+              approvedOn: '2026-02-09',
+              enteredByName: 'Alex Tester',
+              status: 'pending',
+              categoryName: 'Personal Protective Equipment',
+              fiscalYearId: 'e2e-fy-2026',
+              fiscalYearName: 'FY 2026',
+              yearLocked: false,
+              createdAt: '2026-02-10T15:00:00Z',
+            },
+          ],
+  ],
+  ['**/api/v1/finance/budget-requests**', () => (empty ? [] : BUDGET_REQUESTS)],
+  [
+    '**/api/v1/finance/budget-requests/proposal-options**',
+    () => ({
+      positions: [{ id: 'e2e-position-chief', name: 'Fire Chief' }],
+      categories: BUDGET_CATEGORIES.map(({ id, name }) => ({ id, name })),
+      stations: [{ id: 'e2e-station-1', name: 'Station 1' }],
+    }),
+  ],
+  [
+    '**/api/v1/finance/budget-requests/my-lines**',
+    () => ({
+      fiscalYear: fiscalYearOption(FY_2027),
+      // Two lines the member's position owns, one already requested and one
+      // not, so both the submitted card and the blank request form are drawn.
+      lines: empty
+        ? []
+        : BUDGETS.slice(0, 2).map((budget) => ({
+            budget: {
+              ...budget,
+              fiscalYearId: FY_2027.id,
+              fiscalYearName: FY_2027.name,
+              fiscalYearStatus: FY_2027.status,
+            },
+            request:
+              BUDGET_REQUESTS.find(
+                (request) => request.categoryId === budget.categoryId && request.status === 'submitted'
+              ) ?? null,
+            lastYearFiscalYearName: FY_2026.name,
+            lastYearBudgeted: budget.amountBudgeted,
+            lastYearSpent: budget.amountSpent,
+          })),
+    }),
+  ],
+  ['**/api/v1/finance/purchase-requests**', () => (empty ? [] : PURCHASE_REQUESTS)],
+  ['**/api/v1/finance/expense-reports**', () => (empty ? [] : EXPENSE_REPORTS)],
+  ['**/api/v1/finance/check-requests**', () => (empty ? [] : CHECK_REQUESTS)],
+  [
+    '**/api/v1/finance/my-dues**',
+    () =>
+      empty
+        ? []
+        : [
+            {
+              id: 'e2e-mydues-1',
+              scheduleName: '2026 Annual Membership Dues',
+              amountDue: '150.00',
+              amountPaid: '75.00',
+              balance: '75.00',
+              status: 'partial',
+              dueDate: '2026-03-01T05:00:00Z',
+              payments: [
+                { id: 'e2e-mydues-pay-1', amount: '75.00', paymentMethod: 'check', receivedAt: '2026-02-01T15:00:00Z' },
+              ],
+            },
+            {
+              id: 'e2e-mydues-2',
+              scheduleName: '2025 Annual Membership Dues',
+              amountDue: '150.00',
+              amountPaid: '150.00',
+              balance: '0.00',
+              status: 'paid',
+              dueDate: '2025-03-01T05:00:00Z',
+              paidDate: '2025-02-14T15:00:00Z',
+              payments: [
+                { id: 'e2e-mydues-pay-2', amount: '150.00', paymentMethod: 'cash', receivedAt: '2025-02-14T15:00:00Z' },
+              ],
+            },
+          ],
+  ],
+  ['**/api/v1/finance/approvals/pending**', () => (empty ? [] : PENDING_APPROVALS)],
+  [
+    '**/api/v1/finance/approvals/unrouted**',
+    () =>
+      empty
+        ? []
+        : [
+            {
+              entityType: 'check_request',
+              entityId: 'e2e-cr-1',
+              entityTitle: 'Oakville Ladies Auxiliary',
+              entityAmount: '750.00',
+              requesterName: 'Alex Tester',
+              submittedAt: '2026-02-06T15:00:00Z',
+            },
+          ],
+  ],
+  [
+    '**/api/v1/finance/approval-chains**',
+    () =>
+      empty
+        ? []
+        : [
+            {
+              id: 'e2e-chain',
+              name: 'Purchases over $1,000',
+              description: 'Chief, then the treasurer, for anything over a thousand dollars',
+              appliesTo: 'purchase_request',
+              minAmount: '1000.00',
+              isDefault: false,
+              isActive: true,
+              ...FINANCE_STAMP,
+              steps: [
+                ['e2e-chain-step-1', 1, 'Chief approval', 'Fire Chief'],
+                ['e2e-chain-step-2', 2, 'Treasurer review', 'Treasurer'],
+              ].map(([id, stepOrder, name, approverValue]) => ({
+                id,
+                chainId: 'e2e-chain',
+                stepOrder,
+                name,
+                stepType: 'approval',
+                approverType: 'position',
+                approverValue,
+                allowSelfApproval: false,
+                required: true,
+                createdAt: '2026-01-02T15:00:00Z',
+              })),
+            },
+          ],
+  ],
+  ['**/api/v1/finance/approval-chains/approver-coverage**', () => []],
+  // The reports screen opens on this one for the active year; the others run
+  // only when picked. Built from BUDGETS so its lines agree with /finance/budgets.
+  [
+    '**/api/v1/finance/reports/budget-vs-actual**',
+    (request) => {
+      const rows = empty
+        ? []
+        : BUDGETS.map((budget) => {
+            const spent = Number(budget.amountSpent);
+            const committed = Number(budget.amountEncumbered);
+            const total = Number(budget.amountBudgeted);
+            return {
+              budgetId: budget.id,
+              categoryName: budget.categoryName,
+              originalBudget: budget.amountBudgeted,
+              amendments: '0.00',
+              budget: budget.amountBudgeted,
+              spent: budget.amountSpent,
+              committed: budget.amountEncumbered,
+              remaining: (total - spent - committed).toFixed(2),
+              percentUsed: Math.round(((spent + committed) / total) * 1000) / 10,
+              runningSpentDiffers: false,
+            };
+          });
+      const sum = (key: 'originalBudget' | 'budget' | 'spent' | 'committed' | 'remaining') =>
+        rows.reduce((total, row) => total + Number(row[key]), 0).toFixed(2);
+      return {
+        fiscalYearId: FY_2026.id,
+        fiscalYearName: FY_2026.name,
+        asOf: new URL(request.url()).searchParams.get('as_of') ?? FY_2026.endDate,
+        includesCommitted: true,
+        rows,
+        totals: {
+          originalBudget: sum('originalBudget'),
+          amendments: '0.00',
+          budget: sum('budget'),
+          spent: sum('spent'),
+          committed: sum('committed'),
+          remaining: sum('remaining'),
+        },
+      };
+    },
+  ],
+  [
+    '**/api/v1/finance/settings/budget-request-reminders**',
+    () => ({ offsetsDays: [30, 7, 1], bellNotices: true, isDefault: true }),
   ],
 
   ['**/api/v1/medical-supplies/lots/expiring**', () => []],

@@ -610,7 +610,8 @@ export const SessionWaiverSettingsPanel: React.FC<SessionWaiverSettingsPanelProp
           <p className="text-theme-text-secondary mt-1 text-sm">
             Everyone holding a chosen position is told when a request is approved or not approved: who asked, for which
             session and the outcome. They are informed only. They cannot open the request, and are never told the
-            member&apos;s reason, category or the decider&apos;s note. Withdrawn requests are not copied.
+            member&apos;s reason, category or the decider&apos;s note. Withdrawn requests are not copied. The copy is an
+            in-app notice; to email it too, add the positions to the Waiver Decided email template&apos;s CC positions.
           </p>
         </div>
         {positions === null ? (

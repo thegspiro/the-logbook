@@ -1,7 +1,7 @@
 """Attendance waiver follow-ups: questions, expiry and rescheduling
 
 Revision ID: 5e2b9c7d1a40
-Revises: 86722d75b5a2
+Revises: 3067c03986be
 Create Date: 2026-11-13 12:00:00
 
 Owner decisions of 2026-11-13 extend the waiver request workflow
@@ -36,7 +36,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "5e2b9c7d1a40"
-down_revision: Union[str, None] = "86722d75b5a2"
+down_revision: Union[str, None] = "3067c03986be"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

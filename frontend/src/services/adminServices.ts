@@ -558,6 +558,8 @@ export interface EmailTemplate {
   is_active: boolean;
   default_cc?: string[];
   default_bcc?: string[];
+  /** Positions whose current holders are CC'd; resolved when each email is sent. */
+  default_cc_position_ids?: string[] | null;
   available_variables: TemplateVariable[];
   /**
    * Whether the department has changed anything Reset would put back.
@@ -604,6 +606,7 @@ export interface EmailTemplateUpdate {
   allow_attachments?: boolean;
   default_cc?: string[] | null;
   default_bcc?: string[] | null;
+  default_cc_position_ids?: string[] | null;
 }
 
 /** What the preview endpoint will render instead of the stored template. */

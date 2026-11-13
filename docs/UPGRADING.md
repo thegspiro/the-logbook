@@ -815,6 +815,50 @@ Nothing blocks a restart, and no migration is involved.
   upgrading: `/attendance-waivers` lists them.
 - An expired request counts as an absence. Nothing is written to a meeting's
   roll call, and no training requirement is excused.
+- **Business-meeting waiver requests start being emailed**, from the
+  _Meeting Waiver Requested / Decided / Withdrawn_ templates that have sat
+  unsent since the waiver emails landed: the secretary (or whoever the meeting
+  policy routes to) when a member asks, the member when it is decided. They
+  follow the event-duty and event-change email preferences. Word those
+  templates before upgrading if the defaults do not suit.
+- **A waiver policy's CC positions are copied in the app only.** Holders get
+  the bell, not an email; to email a copy of each decision, add the positions
+  to the _Waiver Decided_ template's CC positions.
+
+### Email templates: saved CC and BCC addresses start being used, and waiver requests are emailed (2026-11-11)
+
+Nothing blocks a restart. Migration `1c6632035ccd` widens the template type
+list, adds `email_templates.default_cc_position_ids` (NULL on every existing
+row) and creates the empty `attendance_waiver_email_sends` table.
+
+- **Saved default CC and BCC addresses start being copied.** The Email
+  Templates editor has always said its CC addresses are "CC'd on every email
+  sent with this template", but until now only scheduled emails used them;
+  every email the application sends on its own dropped them. After the
+  upgrade they are copied on every email sent with that template. **Before
+  upgrading, open Communications → Email Templates and check each template's
+  Default CC / BCC**: an address saved long ago and forgotten starts receiving
+  mail. A template sent to many members at once (an event reminder, say)
+  copies the address on every member's message.
+- **Never copied:** the templates that carry a password, a sign-in or reset
+  link, a ballot link or an applicant's private link — Welcome, Password
+  Reset, IT Password Notification, Ballot Notification, Application Status
+  Link, Application Follow-Up Form and Application Contact Changed. A copy of
+  one would hand the credential to somebody else. Test sends are not copied
+  either.
+- **CC by position.** A template can now also copy whoever currently holds a
+  position (the Secretary, say). Nobody is copied this way until a department
+  picks a position.
+- **Training waiver requests are emailed.** Approvers are emailed when a
+  member asks to be excused (with Approve and Deny buttons that open the
+  request in the Logbook; opening one changes nothing), the member when it is
+  decided, and approvers when it is withdrawn. Six new templates —
+  _Session Waiver Requested / Decided / Withdrawn_ and the three meeting
+  equivalents, which nothing sends yet — appear under Communications → Email
+  Templates. People a waiver template CCs get a separate copy without the
+  buttons, the category or the decider's note.
+- **Downgrading** deletes the six waiver templates' rows (a department's edits
+  included), the position CC choices and the send log.
 
 ### Training: documents on waiver requests, kept a year (2026-11-11)
 

@@ -299,7 +299,7 @@ class AttendanceWaiverExpiry:
         if member is None:
             return
         subject, sentence = expiry_notice(request)
-        await AttendanceWaiverService(self.db, request.workflow)._email(
+        await AttendanceWaiverService(self.db, request.workflow)._email_notice(
             org_id,
             request,
             [member],
