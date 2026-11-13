@@ -3,9 +3,9 @@ import type { InventoryItem } from '../types';
 import { styleAttributesLabel } from '../types';
 import { displaySize } from '../utils/variantHelpers';
 
-const SIZE_COLORS = 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30';
-const COLOR_COLORS = 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/30';
-const STYLE_COLORS = 'bg-amber-500/10 text-amber-800 dark:text-amber-400 border-amber-500/30';
+const SIZE_COLORS = 'bg-blue-500/10 text-blue-900 dark:text-blue-300 border-blue-500/30';
+const COLOR_COLORS = 'bg-purple-500/10 text-purple-900 dark:text-purple-300 border-purple-500/30';
+const STYLE_COLORS = 'bg-amber-500/10 text-amber-900 dark:text-amber-300 border-amber-500/30';
 
 interface CapsuleProps {
   label: string;

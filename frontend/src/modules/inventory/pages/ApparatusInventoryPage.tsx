@@ -26,8 +26,10 @@ import {
   ChevronRight,
   Clock,
   Loader2,
+  Minus,
   PackageCheck,
   PackageX,
+  Plus,
   Repeat,
   Boxes,
   Undo2,
@@ -384,7 +386,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                   className="btn-icon disabled:opacity-40"
                   aria-label={`Record one ${item.itemName} used`}
                 >
-                  &minus;
+                  <Minus className="h-4 w-4" aria-hidden="true" />
                 </button>
                 <span className="text-theme-text-primary w-6 text-center text-sm font-semibold tabular-nums">
                   {item.quantityOnTruck ?? item.targetQuantity}
@@ -396,7 +398,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
                   className="btn-icon disabled:opacity-40"
                   aria-label={`Add one ${item.itemName} to the truck`}
                 >
-                  +
+                  <Plus className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             )}

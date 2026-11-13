@@ -240,17 +240,23 @@ interface TreeRowProps {
  * new type every render, so React would unmount and remount the name on each
  * one.
  */
+// Below 1024px the name takes the whole first line and the count and actions
+// wrap under it. Sharing one line with three 44px actions and the count left a
+// phone 55px for the name, which drew "Apparatus Bay Tool Rack" as "App…".
+// 2rem is the chevron and the gap beside it.
+const NAME_CELL = 'min-w-0 flex-1 basis-[calc(100%-2rem)] lg:basis-0';
+
 const NameCell: React.FC<{
   children: React.ReactNode;
   label: string;
   onNavigate?: () => void;
 }> = ({ children, label, onNavigate }) =>
   onNavigate ? (
-    <button type="button" onClick={onNavigate} className="min-h-11 min-w-0 flex-1 text-left" aria-label={label}>
+    <button type="button" onClick={onNavigate} className={`min-h-11 text-left ${NAME_CELL}`} aria-label={label}>
       {children}
     </button>
   ) : (
-    <div className="min-w-0 flex-1">{children}</div>
+    <div className={NAME_CELL}>{children}</div>
   );
 
 const TreeRow: React.FC<TreeRowProps> = ({
@@ -280,7 +286,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
         data-storage-area-row={node.id}
         data-testid="storage-area-row"
         aria-current={focused ? 'true' : undefined}
-        className={`hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${
+        className={`hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex w-full flex-wrap items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${
           isDesktop ? '' : 'border-theme-surface-border border-l-2'
         } ${focused ? 'bg-blue-500/10 ring-2 ring-blue-500' : ''}`}
         style={{ paddingLeft: `${indent}px` }}
@@ -339,14 +345,14 @@ const TreeRow: React.FC<TreeRowProps> = ({
             {node.label && <span className="text-theme-text-muted ml-1.5 font-normal">({node.label})</span>}
           </span>
         </NameCell>
-        <span className="hidden shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 sm:inline dark:text-blue-400">
+        <span className="hidden shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-xs text-blue-900 sm:inline dark:text-blue-300">
           {getTypeLabel(node.storage_type)}
         </span>
         <button
           onClick={() => onToggleItems(node.id)}
-          className={`touch:min-h-11 w-16 shrink-0 rounded px-1 py-0.5 text-right text-xs transition-colors ${
+          className={`touch:min-h-11 ml-8 w-16 shrink-0 rounded px-1 py-0.5 text-left text-xs transition-colors lg:ml-0 lg:text-right ${
             node.item_count > 0
-              ? 'hover:bg-theme-surface-hover cursor-pointer text-blue-700 underline decoration-dotted underline-offset-2 dark:text-blue-400'
+              ? 'hover:bg-theme-surface-hover cursor-pointer text-blue-900 underline decoration-dotted underline-offset-2 dark:text-blue-300'
               : 'text-theme-text-muted cursor-default'
           } ${showItems ? 'bg-blue-500/10 font-medium' : ''}`}
           disabled={node.item_count === 0}
