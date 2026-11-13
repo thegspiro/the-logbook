@@ -108,7 +108,7 @@ def format_figure(entry: Optional[Dict[str, Any]], unit: str) -> str:
     return f"{value:g}"
 
 
-def _plural(count: Any, one: str, many: str) -> str:
+def _plural(count: float, one: str, many: str) -> str:
     return f"{count:g} {one if count == 1 else many}"
 
 
@@ -125,39 +125,60 @@ def figure_detail(key: str, entry: Optional[Dict[str, Any]]) -> Optional[str]:
     """
     if not entry or not entry.get("available"):
         return None
-    extra = entry.get
-    if key == "training.requirements_met_pct" and extra("total") is not None:
-        return f"{extra('met'):g} of {_plural(extra('total'), 'requirement', 'requirements')} met"
-    if key == "training.session_attendance_pct" and extra("held") is not None:
-        held, excused = extra("held"), extra("excused") or 0
-        text = f"{extra('attended'):g} of {_plural(held - excused, 'session', 'sessions')} attended"
-        if excused:
-            text += f" ({excused:g} excused)"
-        if extra("requirement"):
-            text += f"; {extra('requirement')} requires {extra('required_pct') or 0:g}%"
-        return text
-    if key == "events.meeting_attendance_pct" and extra("held") is not None:
-        return f"{extra('attended'):g} of {_plural(extra('held'), 'meeting', 'meetings')} attended"
-    if key == "calls.response_pct" and extra("department_calls") is not None:
-        text = (
-            f"{_plural(extra('responses'), 'response', 'responses')} to "
-            f"{_plural(extra('department_calls'), 'department call', 'department calls')}"
-        )
-        if extra("capped"):
-            text += (
-                "; shown as 100% because shift call credit exceeds the "
-                "department's call log"
+
+    def num(field: str) -> Optional[float]:
+        value = entry.get(field)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return float(value)
+
+    if key == "training.requirements_met_pct":
+        met, total = num("met"), num("total")
+        if met is not None and total is not None:
+            return f"{met:g} of {_plural(total, 'requirement', 'requirements')} met"
+    if key == "training.session_attendance_pct":
+        attended, held = num("attended"), num("held")
+        excused = num("excused") or 0.0
+        if attended is not None and held is not None:
+            charged = _plural(held - excused, "session", "sessions")
+            text = f"{attended:g} of {charged} attended"
+            if excused:
+                text += f" ({excused:g} excused)"
+            requirement = entry.get("requirement")
+            if requirement:
+                text += f"; {requirement} requires {num('required_pct') or 0:g}%"
+            return text
+    if key == "events.meeting_attendance_pct":
+        attended, held = num("attended"), num("held")
+        if attended is not None and held is not None:
+            return f"{attended:g} of {_plural(held, 'meeting', 'meetings')} attended"
+    if key == "calls.response_pct":
+        responses, calls = num("responses"), num("department_calls")
+        if responses is not None and calls is not None:
+            text = (
+                f"{_plural(responses, 'response', 'responses')} to "
+                f"{_plural(calls, 'department call', 'department calls')}"
             )
-        return text
-    if key == "shifts.hours" and extra("external_hours"):
-        return f"Not included: {extra('external_hours'):g} h for other agencies"
-    if key == "shifts.count" and extra("external_shifts"):
-        return (
-            "Not included: "
-            f"{_plural(extra('external_shifts'), 'shift', 'shifts')} for other agencies"
-        )
-    if extra("breakdown"):
-        return str(extra("breakdown"))
+            if entry.get("capped") is True:
+                text += (
+                    "; shown as 100% because shift call credit exceeds the "
+                    "department's call log"
+                )
+            return text
+    if key == "shifts.hours":
+        external = num("external_hours")
+        if external:
+            return f"Not included: {external:g} h for other agencies"
+    if key == "shifts.count":
+        external = num("external_shifts")
+        if external:
+            return (
+                "Not included: "
+                f"{_plural(external, 'shift', 'shifts')} for other agencies"
+            )
+    breakdown = entry.get("breakdown")
+    if isinstance(breakdown, str) and breakdown:
+        return breakdown
     return None
 
 
