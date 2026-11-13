@@ -80,6 +80,7 @@ import type {
   RequirementProgressUpdate,
 } from '../types/training';
 import { useTablist } from '../hooks/useTablist';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // Format a calendar-date-only value (e.g. the recert deadline "2028-03-30")
 // without a timezone shift: build it at local midnight from its Y-M-D parts so
@@ -1893,7 +1894,7 @@ const PipelineDetailPage: React.FC = () => {
         />
 
         {/* Stats Cards */}
-        <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatGrid columns={4} gap={4} className="mb-8">
           <div className="bg-theme-surface rounded-lg p-4">
             <div className="text-theme-text-muted mb-1 flex items-center space-x-2">
               <Layers className="h-4 w-4" />
@@ -1927,7 +1928,7 @@ const PipelineDetailPage: React.FC = () => {
               <p className="text-theme-text-primary text-2xl font-bold">{enrollments.length}</p>
             </div>
           )}
-        </div>
+        </StatGrid>
 
         {noActiveRequirements && (
           <div className="mb-6">

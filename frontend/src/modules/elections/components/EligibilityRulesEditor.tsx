@@ -13,7 +13,7 @@ import React, { useState } from 'react';
 import type { AttendanceRule, ElectionEligibilityRules, WaitingPeriod } from '../../../types/election';
 import { AttendanceRuleMode, WaitingPeriodMode, type MemberVoterType } from '../../../constants/enums';
 import { MEETING_TYPE_OPTIONS } from '../../minutes/utils/meetingTypes';
-import { ATTENDANCE_RULE_STARTERS, ELIGIBILITY_BOUNDS, MEMBER_VOTER_TYPES } from '../eligibilityRules';
+import { ATTENDANCE_RULE_STARTERS, ELIGIBILITY_BOUNDS, MEMBER_VOTER_TYPES, parseBounded } from '../eligibilityRules';
 
 type NumberField = 'min_meetings' | 'of_last_meetings' | 'min_pct' | 'period_months';
 
@@ -34,14 +34,6 @@ interface EligibilityRulesEditorProps {
   idPrefix: string;
   disabled?: boolean;
 }
-
-const parseBounded = (field: keyof typeof ELIGIBILITY_BOUNDS, raw: string): number | null => {
-  const bounds = ELIGIBILITY_BOUNDS[field];
-  const pattern = bounds.integer ? /^\d+$/ : /^\d+(\.\d+)?$/;
-  if (!pattern.test(raw.trim())) return null;
-  const value = Number(raw);
-  return value >= bounds.min && value <= bounds.max ? value : null;
-};
 
 type Drafts = Partial<Record<NumberField, string>>;
 

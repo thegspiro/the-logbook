@@ -11,6 +11,7 @@ import { Vote, Clock, FileCheck, AlertTriangle } from 'lucide-react';
 import type { ElectionListItem } from '../../../types/election';
 import { ElectionStatus } from '../../../constants/enums';
 import { getTimeRemaining } from '../../../utils/electionHelpers';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 interface ElectionSummaryCardsProps {
   elections: ElectionListItem[];
@@ -29,7 +30,7 @@ export const ElectionSummaryCards: React.FC<ElectionSummaryCardsProps> = ({ elec
   const needsAttention = draftElections.length + expiredOpenElections.length;
 
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <StatGrid columns={4} className="mb-6">
       {/* Active elections */}
       <div className="bg-theme-surface rounded-lg p-4 shadow-sm backdrop-blur-xs">
         <div className="flex items-center gap-3">
@@ -96,7 +97,7 @@ export const ElectionSummaryCards: React.FC<ElectionSummaryCardsProps> = ({ elec
           </div>
         </div>
       </div>
-    </div>
+    </StatGrid>
   );
 };
 

@@ -47,6 +47,7 @@ import { EmptyState } from '@/components/ux/EmptyState';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { BudgetAmendmentStatus } from '../types';
 import type { Budget, BudgetAmendment } from '../types';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 // =============================================================================
 // Budget Info Card
@@ -131,7 +132,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actio
       )}
 
       {/* Amounts grid */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <StatGrid columns={4} gap={4} className="mb-6">
         <div>
           <p className="text-theme-text-secondary text-sm">{amended ? 'Current budget' : 'Budgeted'}</p>
           <p className="text-theme-text-primary text-xl font-bold">
@@ -154,7 +155,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName, actio
             {formatCurrencyWhole(remaining)}
           </p>
         </div>
-      </div>
+      </StatGrid>
 
       {/* Progress bar */}
       <div>

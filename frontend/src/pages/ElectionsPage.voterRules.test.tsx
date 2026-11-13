@@ -100,8 +100,46 @@ describe('ElectionsPage create dialog — voter rules', () => {
     const panel = within(dialog).getByTestId('create-voter-rules');
     await waitFor(() => expect(panel).toHaveTextContent('No election-wide rules.'));
 
-    await userEvent.selectOptions(within(dialog).getByLabelText('Held at'), 'annual');
+    await userEvent.selectOptions(within(dialog).getByLabelText('Kind of vote'), 'annual');
     expect(panel).toHaveTextContent('Attended at least 3 of their last 4 meetings');
     expect(panel).toHaveTextContent('Administrative members may vote 12 months after becoming administrative');
+  });
+});
+
+describe('ElectionsPage create dialog — per-type voter rules', () => {
+  beforeEach(() => {
+    mockGetElections.mockReset();
+    mockGetSettings.mockReset();
+    mockGetElections.mockResolvedValue([]);
+  });
+
+  const typeDefaults = (types: Record<string, unknown>) => ({
+    rules: { version: 2, attendance: { mode: 'none' }, types },
+    default_require_attendance: true,
+    default_voter_types: ['all'],
+    position_voter_types: {},
+  });
+
+  it("lists each member type's rules under the department's names", async () => {
+    mockGetSettings.mockResolvedValue({
+      eligibility: typeDefaults({ senior: { may_vote: false, wait: null, attendance: [] } }),
+      voter_rows: [{ key: 'senior', label: 'Senior', decided_by: 'status', counts_as: 'regular' }],
+    });
+    const dialog = await openCreateDialog();
+    const panel = within(dialog).getByTestId('create-voter-rules');
+    await waitFor(() => expect(panel).toHaveTextContent('Senior members may not vote'));
+  });
+
+  it('shows the bylaws rules for a bylaws amendment', async () => {
+    mockGetSettings.mockResolvedValue({
+      eligibility: typeDefaults({ regular: { may_vote: true, wait: null, attendance: [] } }),
+      bylaws_eligibility: typeDefaults({ probationary: { may_vote: false, wait: null, attendance: [] } }),
+    });
+    const dialog = await openCreateDialog();
+    const panel = within(dialog).getByTestId('create-voter-rules');
+    await waitFor(() => expect(panel).toHaveTextContent('No voter rules are set'));
+
+    await userEvent.selectOptions(within(dialog).getByLabelText('Kind of vote'), 'bylaws');
+    expect(panel).toHaveTextContent('Probationary members may not vote');
   });
 });
