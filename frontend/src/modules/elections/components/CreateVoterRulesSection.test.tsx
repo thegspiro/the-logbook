@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ElectionEligibilityRules, ElectionSettings } from '../../../types/election';
+import type { ElectionEligibilityRules, ElectionSettings, TypeRule } from '../../../types/election';
 import type { MeetingKind } from '../../../constants/enums';
 
 const mockPreview = vi.fn();
@@ -19,7 +19,7 @@ vi.mock('../../../services/api', () => ({
 
 import { CreateVoterRulesSection } from './CreateVoterRulesSection';
 
-const typeDefaults = (types: ElectionEligibilityRules['types']) => ({
+const typeDefaults = (types: Record<string, TypeRule>) => ({
   rules: { version: 2 as const, attendance: { mode: 'none' as const }, types },
   default_require_attendance: true,
   default_voter_types: ['all'],
