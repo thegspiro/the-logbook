@@ -39,9 +39,7 @@ settings. Beneath it are **Dashboard**, **Opportunities**, **Applications**,
 **Campaigns**, **Donors**, **Donations**, **Pledges**, **Events**, **Zeffy** and
 **Reports**.
 
-<!-- Screenshot needed:
-The sidebar with Grants & Fundraising expanded, as an administrator: Dashboard through Reports with Zeffy between Events and Reports, Zeffy selected.
--->
+![The sidebar with Grants & Fundraising expanded: Dashboard, Opportunities, Applications, Campaigns, Donors, Donations, Pledges, Events, Zeffy and Reports, with Zeffy selected](./images/12-18-grants-menu-zeffy.png)
 
 ### Permissions
 
@@ -758,9 +756,7 @@ At the top of the page:
 
 **Sync now** reads Zeffy at once instead of waiting for the hour.
 
-<!-- Screenshot needed:
-Grants & Fundraising, Zeffy page as a fundraising manager with Zeffy connected: the Connection panel, the Campaigns cards (linked ones naming their record and start date, one Not linked), and the Payments list with its status filter and a mix of statuses.
--->
+![The Zeffy page: the Connection panel with Instant updates on, the last sync and one payment needing attention; four Zeffy campaigns, two linked (Fill the Boot to the Fill the Boot campaign, Annual Membership to the year's Annual Member Dues) and two Not linked; and the Payments list with its status filter and payments that are Applied, Campaign not linked, No member match, Processing and Reversed](./images/12-19-zeffy-page.png)
 
 ### Linking a Campaign
 
@@ -787,9 +783,7 @@ recorded only** until you link it.
 4. Decide **Apply payments made on or after** (see below).
 5. Select **Save link**.
 
-<!-- Screenshot needed:
-The Link Zeffy campaign dialog for a donation campaign: Record payments as Fundraising campaign with its explanation, a campaign chosen, and Apply payments made on or after left blank with its warning about counting gifts twice.
--->
+![Link Zeffy campaign for the Equipment Fund Appeal: Record payments as Fundraising campaign, with the note that each payment becomes a donation from a donor matched by email; the year's Equipment Fund chosen; and Apply payments made on or after left blank, with its warning that an earlier date can count hand-entered gifts twice](./images/12-20-zeffy-link-dialog.png)
 
 Payments Zeffy already reported for that campaign are applied straight away, if
 they fall on or after the start date.

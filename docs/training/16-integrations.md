@@ -549,9 +549,7 @@ under **Grants & Fundraising → Zeffy** — see
 
 Leave either box blank on a later edit to keep what is stored.
 
-<!-- Screenshot needed:
-The Zeffy connect window opened from the Zeffy card on the Integrations page, as an administrator: the read-only note linking to Grants & Fundraising, the API Key and Webhook Signing Secret (optional) boxes, and the webhook address below them.
--->
+![Zeffy connect dialog: the read-only note linking to Grants & Fundraising, the API Key and Webhook Signing Secret (optional) fields, and the webhook address to add in Zeffy](./images/16-24-zeffy-connect.png)
 
 **Test** reads one campaign from Zeffy to prove the key works. It adds a note if
 no signing secret is set, because payments will then arrive only once an hour.

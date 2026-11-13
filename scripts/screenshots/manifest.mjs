@@ -1523,7 +1523,13 @@ async function mockZeffyConnected(page) {
     integrationId: "c1d2e3f4-0000-4000-8000-0000000000ff",
     webhookConfigured: true,
     lastSyncAt: ago(0.2),
-    stateCounts: { applied: 3, unlinked: 2, unmatched: 1, pending: 1, reversed: 1 },
+    stateCounts: {
+      applied: 3,
+      unlinked: 2,
+      unmatched: 1,
+      pending: 1,
+      reversed: 1,
+    },
   };
   const json = (route, body) =>
     route.fulfill({
@@ -1550,9 +1556,7 @@ async function mockZeffyConnected(page) {
   // Saving a link or running a sync would reach for Zeffy or write a link to
   // a campaign the demo does not have; neither shot submits, and this keeps
   // a stray click from doing either.
-  await page.route("**/api/v1/grants/zeffy/links/**", (route) =>
-    route.abort(),
-  );
+  await page.route("**/api/v1/grants/zeffy/links/**", (route) => route.abort());
   await page.route("**/api/v1/grants/zeffy/sync", (route) => route.abort());
 }
 
@@ -11899,15 +11903,27 @@ export const SHOTS = [
     id: "12-18-grants-menu-zeffy",
     doc: "12-grants-fundraising.md",
     line: 42,
-    anchor: "The sidebar with Grants & Fundraising expanded, as an administrator",
+    anchor:
+      "The sidebar with Grants & Fundraising expanded, as an administrator",
     alt: "The sidebar with Grants & Fundraising expanded: Dashboard, Opportunities, Applications, Campaigns, Donors, Donations, Pledges, Events, Zeffy and Reports, with Zeffy selected",
-    // Opening a page under the group expands it and marks the page current,
-    // which is the menu the guide lists.
+    // Opened from the Zeffy page: the group expands itself on a page under
+    // it and marks Zeffy current, which is the menu the guide lists. Clicking
+    // the group here would collapse it.
     route: "/grants/zeffy",
     beforeNavigate: mockZeffyConnected,
     viewport: { width: 1440, height: 2100 },
     selector: "nav#side-navigation",
-    expect: { selector: 'nav#side-navigation a[href="/grants/zeffy"]' },
+    expect: {
+      selector:
+        'nav#side-navigation button[aria-current="page"]:has-text("Zeffy")',
+    },
+    prepare: async (page) => {
+      await page
+        .locator(
+          'nav#side-navigation button[aria-current="page"]:has-text("Zeffy")',
+        )
+        .waitFor({ timeout: 20_000 });
+    },
   },
   {
     id: "12-19-zeffy-page",
@@ -11919,6 +11935,9 @@ export const SHOTS = [
     route: "/grants/zeffy",
     beforeNavigate: mockZeffyConnected,
     expect: "Needs attention",
+    allowEmptyState:
+      '"No member match" is a status filter above the payments list, not ' +
+      "an empty page; eight payments are listed below it.",
     viewport: { width: 1440, height: 1100 },
     fullPage: true,
     prepare: async (page) => {
@@ -17996,7 +18015,7 @@ export const SHOTS = [
     fullPage: false,
   },
   {
-    id: "16-19-zeffy-connect",
+    id: "16-24-zeffy-connect",
     doc: "16-integrations.md",
     line: 552,
     anchor: "The Zeffy connect window opened from the Zeffy card",
