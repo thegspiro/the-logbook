@@ -92,7 +92,7 @@ const RequestCard: React.FC<RequestCardProps> = ({
   const canCreate = open && Boolean(onCreate) && (!request || status === 'declined');
 
   return (
-    <li className="card p-4" aria-label={title}>
+    <li className="card @container p-4" aria-label={title}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-theme-text-primary font-semibold break-words">{title}</h3>
@@ -105,7 +105,10 @@ const RequestCard: React.FC<RequestCardProps> = ({
         )}
       </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+      {/* Four figures across only once the card itself has room: the list is two
+          cards wide from lg, beside the sidebar, where a screen breakpoint put
+          each figure in a ~67px column and ran the amounts out of it. */}
+      <dl className="mt-3 grid grid-cols-2 gap-3 text-sm @[28rem]:grid-cols-4">
         <Figure
           label={hasLastYear ? `Budgeted ${lastYearName ?? 'this year'}` : 'Budgeted this year'}
           value={hasLastYear ? formatCurrency(lastYearBudgeted) : 'No line'}
@@ -153,22 +156,37 @@ const RequestCard: React.FC<RequestCardProps> = ({
               <button type="button" className="btn-primary btn-sm" onClick={() => onSubmit(request)} disabled={busy}>
                 Submit
               </button>
-              <button type="button" className="btn-secondary btn-sm" onClick={() => onEdit(request)} disabled={busy}>
+              <button
+                type="button"
+                className="btn-secondary btn-sm touch:min-w-11"
+                onClick={() => onEdit(request)}
+                disabled={busy}
+              >
                 Edit
               </button>
-              <button type="button" className="btn-secondary btn-sm" onClick={() => onDelete(request)} disabled={busy}>
+              <button
+                type="button"
+                className="btn-secondary btn-sm touch:min-w-11"
+                onClick={() => onDelete(request)}
+                disabled={busy}
+              >
                 Delete draft
               </button>
             </>
           )}
           {open && request && status === 'submitted' && (
             <>
-              <button type="button" className="btn-secondary btn-sm" onClick={() => onEdit(request)} disabled={busy}>
+              <button
+                type="button"
+                className="btn-secondary btn-sm touch:min-w-11"
+                onClick={() => onEdit(request)}
+                disabled={busy}
+              >
                 Edit
               </button>
               <button
                 type="button"
-                className="btn-secondary btn-sm"
+                className="btn-secondary btn-sm touch:min-w-11"
                 onClick={() => onWithdraw(request)}
                 disabled={busy}
               >

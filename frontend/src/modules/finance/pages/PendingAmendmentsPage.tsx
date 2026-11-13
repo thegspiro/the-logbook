@@ -141,7 +141,12 @@ const PendingAmendmentsPage: React.FC = () => {
                 <li key={row.id} className="py-4 first:pt-0 last:pb-0">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <p className="text-sm font-semibold">
-                      <Link to={`/finance/budgets/${row.budgetId}`}>{lineLabel(row)}</Link>
+                      <Link
+                        to={`/finance/budgets/${row.budgetId}`}
+                        className="touch:inline-flex touch:min-h-11 touch:items-center"
+                      >
+                        {lineLabel(row)}
+                      </Link>
                     </p>
                     <span className="text-theme-text-secondary text-sm">{row.fiscalYearName}</span>
                   </div>

@@ -1553,6 +1553,7 @@ class EmailService:
         reply_to: Optional[str] = None,
         list_unsubscribe: Optional[str] = None,
         results_out: Optional[List[bool]] = None,
+        apply_template_copies: bool = True,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -1568,6 +1569,10 @@ class EmailService:
             db: Optional async database session (for logging to message_history)
             template_type: Optional template type string (for message_history)
             sent_by: Optional user ID who triggered the send (for message_history)
+            apply_template_copies: Add the stored template's default CC, CC
+                positions and BCC (see ``_with_template_copies``). False for a
+                send that is not the template's real notice — a test send —
+                or one that copies people itself.
 
         Returns:
             Tuple of (success_count, failure_count)
@@ -1579,6 +1584,11 @@ class EmailService:
                 subject,
             )
             return 0, len(to_emails)
+
+        if apply_template_copies and db is not None and template_type:
+            cc_emails, bcc_emails = await self._with_template_copies(
+                db, template_type, to_emails, cc_emails, bcc_emails
+            )
 
         # Inline CSS: convert <style> class rules to inline style=""
         # attributes so they survive Gmail's <style> stripping.
@@ -1765,6 +1775,57 @@ class EmailService:
                 logger.warning("Failed to log message history: {}", e)
 
         return success_count, failure_count
+
+    async def _with_template_copies(
+        self,
+        db: Any,
+        template_type: Any,
+        to_emails: List[str],
+        cc_emails: Optional[List[str]],
+        bcc_emails: Optional[List[str]],
+    ) -> Tuple[Optional[List[str]], Optional[List[str]]]:
+        """The caller's CC and BCC plus the template's own (defect D1).
+
+        The Email Templates editor promises its CC addresses are copied on
+        every email sent with the template; until 2026-11 only scheduled
+        emails honoured it. The credential templates are never copied
+        (``NO_TEMPLATE_COPY_TYPES``). An address already among the
+        recipients is not added again, so a Secretary who is also a recipient
+        gets one message, not two.
+
+        Fails open to the caller's own lists: a lookup error must not stop
+        the email to its real recipient.
+        """
+        org_id = str(self.organization.id) if self.organization else None
+        if not org_id:
+            return cc_emails, bcc_emails
+        try:
+            extra_cc, extra_bcc = await EmailTemplateService(
+                db
+            ).template_copy_recipients(org_id, template_type)
+        except Exception as e:
+            logger.warning(
+                "Could not read the default copies of {}; sending without " "them: {}",
+                getattr(template_type, "value", template_type),
+                e,
+            )
+            return cc_emails, bcc_emails
+        if not extra_cc and not extra_bcc:
+            return cc_emails, bcc_emails
+
+        taken = {str(a).strip().casefold() for a in to_emails}
+
+        def merged(own: Optional[List[str]], extra: List[str]) -> Optional[List[str]]:
+            out: List[str] = []
+            for address in list(own or []) + extra:
+                key = str(address).strip().casefold()
+                if key and key not in taken:
+                    taken.add(key)
+                    out.append(str(address).strip())
+            return out or None
+
+        cc = merged(cc_emails, extra_cc)
+        return cc, merged(bcc_emails, extra_bcc)
 
     async def _log_message_history(
         self,
@@ -3023,6 +3084,50 @@ class EmailService:
             text_body=text_body,
             db=db,
             template_type=template_type.value,
+        )
+        return success_count > 0
+
+    async def send_attendance_waiver_notice(
+        self,
+        template_type: EmailTemplateType,
+        to_email: str,
+        context: Dict[str, Any],
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """One attendance-waiver notice, or one CC copy of it, to one address.
+
+        ``context`` is built by ``AttendanceWaiverEmails``, which decides who
+        is told, fills a copy without the buttons, and stamps each send. The
+        template's default copies are not added here: the sender mails each
+        copy separately, so an approver's buttons never reach a CC.
+        """
+        from app.services.email_templates_attendance_waivers import (
+            DEFAULT_TEMPLATE_DEFS,
+        )
+
+        default = next(d for d in DEFAULT_TEMPLATE_DEFS if d["type"] == template_type)
+        rendered = await self._render_unless_switched_off(
+            template_type=template_type,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=default["subject"],
+            default_html=default["html"],
+            default_text=default["text"],
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=template_type.value,
+            apply_template_copies=False,
         )
         return success_count > 0
 

@@ -16,7 +16,7 @@ Downgrade drops the table (outstanding links stop working), the column, and
 the new template rows, then narrows the enum.
 
 Revision ID: 533f8aba187e
-Revises: 86722d75b5a2
+Revises: 3067c03986be
 Create Date: 2026-11-13 12:00:00
 """
 
@@ -27,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "533f8aba187e"
-down_revision: Union[str, None] = "86722d75b5a2"
+down_revision: Union[str, None] = "3067c03986be"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -36,9 +36,11 @@ CONFIGS = "training_module_configs"
 
 _NEW_TEMPLATE_TYPES = ("shift_evaluation_preceptor_link",)
 
-# EmailTemplateType as this revision finds it (4f1f4921a052's ALL_TYPES).
-# Written out rather than imported so a later edit to the enum cannot rewrite
-# this step.
+# EmailTemplateType as this revision finds it (1c6632035ccd's ALL_TYPES,
+# reached through 3067c03986be). Written out rather than imported so a later
+# edit to the enum cannot rewrite this step. Built on the waiver-emails
+# widening rather than beside it: two sibling widenings each rewrite the whole
+# ENUM, so whichever ran second would drop the other's values.
 _EXISTING_TEMPLATE_TYPES = (
     "welcome",
     "password_reset",
@@ -99,6 +101,12 @@ _EXISTING_TEMPLATE_TYPES = (
     "evaluation_amended",
     "evaluation_response",
     "application_interview_requested",
+    "session_waiver_requested",
+    "session_waiver_decided",
+    "session_waiver_withdrawn",
+    "meeting_waiver_requested",
+    "meeting_waiver_decided",
+    "meeting_waiver_withdrawn",
     "custom",
 )
 

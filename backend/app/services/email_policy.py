@@ -231,6 +231,7 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
         includes=(
             "An officer voided one of your training records, and why",
             "An officer edited one of your training records",
+            "A decision on your request to be excused from a training session",
         ),
         rationale=(
             "Changes to the member's official training record, which they "
@@ -483,6 +484,8 @@ EMAIL_POLICIES: Mapping[EmailKind, EmailPolicy] = {
             "New provider course versions to map",
             "A new member not enrolled automatically for a missing prerequisite",
             "A member reaching a pipeline milestone you are notified of",
+            "A member asking to be excused from a training session, or "
+            "withdrawing the request",
         ),
         rationale=(
             "Pending approvals are also listed in Training, and unmapped "

@@ -90,7 +90,9 @@ class TestScheduledEmailRefreshesAfterRollback:
         # kicks in (rather than read off the expired relationship).
         db.get = AsyncMock(return_value=org2)
 
-        template = MagicMock(default_cc=[], default_bcc=[])
+        template = MagicMock(
+            default_cc=[], default_bcc=[], default_cc_position_ids=None
+        )
         template_service = MagicMock()
         template_service.get_template = AsyncMock(return_value=template)
         template_service.render = MagicMock(

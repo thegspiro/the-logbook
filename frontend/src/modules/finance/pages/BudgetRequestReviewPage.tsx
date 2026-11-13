@@ -198,8 +198,8 @@ const BudgetRequestReviewPage: React.FC = () => {
             <span
               className={`badge ${
                 year.requestsOpen
-                  ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300'
-                  : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300'
+                  ? 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300'
+                  : 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300'
               }`}
             >
               {year.requestsOpen ? 'Owners can still change requests' : 'Closed to owners'}
