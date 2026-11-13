@@ -37,6 +37,8 @@ from app.models.history import (
     HistoricalMemberRelation,
     HistoricalMemberServicePeriod,
     HistoryClearanceRequest,
+    HistoryImportTitleMapping,
+    HistoryRecordRedirect,
     HistoryRevision,
     HistoryTitle,
     PublicationLevel,
@@ -443,6 +445,17 @@ class HistoryService:
             .values(title_id=target.id)
             .execution_options(synchronize_session=False)
         )
+        # An import's remembered answer "this text is that title" follows the
+        # merge, rather than being left pointing at nothing and asked again.
+        await self.db.execute(
+            update(HistoryImportTitleMapping)
+            .where(
+                HistoryImportTitleMapping.organization_id == source.organization_id,
+                HistoryImportTitleMapping.title_id == source.id,
+            )
+            .values(title_id=target.id)
+            .execution_options(synchronize_session=False)
+        )
         await self.db.flush()
         await self.db.delete(source)
         await self.db.flush()
@@ -500,6 +513,17 @@ class HistoryService:
         if person is None or not self.can_read(viewer, person):
             return None
         return person
+
+    async def redirected_id(self, organization_id: str, old_id: str) -> Optional[str]:
+        """Where a merged-away record's address now leads, if anywhere."""
+        new_id = await self.db.scalar(
+            select(HistoryRecordRedirect.new_id).where(
+                HistoryRecordRedirect.organization_id == str(organization_id),
+                HistoryRecordRedirect.record_type == RECORD_MEMBER,
+                HistoryRecordRedirect.old_id == str(old_id),
+            )
+        )
+        return str(new_id) if new_id else None
 
     @staticmethod
     def can_read(viewer: Viewer, person: HistoricalMember) -> bool:
@@ -830,6 +854,7 @@ class HistoryService:
                 "cleared_for_public": cleared_for_public,
                 "can_edit": viewer.can_manage,
                 "can_publish": viewer.can_publish,
+                "import_id": person.import_id,
                 "created_at": person.created_at,
                 "updated_at": person.updated_at,
             }
@@ -1146,6 +1171,15 @@ class HistoryService:
                     model.record_id == person.id,
                 )
             )
+        # Addresses of records merged into this one stop forwarding: there is
+        # nothing left for them to lead to.
+        await self.db.execute(
+            delete(HistoryRecordRedirect).where(
+                HistoryRecordRedirect.organization_id == person.organization_id,
+                HistoryRecordRedirect.record_type == RECORD_MEMBER,
+                HistoryRecordRedirect.new_id == person.id,
+            )
+        )
         await self.db.delete(person)
         await self.db.flush()
 
