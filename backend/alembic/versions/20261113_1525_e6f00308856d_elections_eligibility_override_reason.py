@@ -13,7 +13,7 @@ column; the reasons it held are lost, and the audit log keeps the copy written
 when each one was given.
 
 Revision ID: e6f00308856d
-Revises: 3067c03986be
+Revises: 9e79851e9a62
 Create Date: 2026-11-13 15:25:00.000000
 
 """
@@ -25,7 +25,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e6f00308856d"
-down_revision: Union[str, None] = "3067c03986be"
+down_revision: Union[str, None] = "9e79851e9a62"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

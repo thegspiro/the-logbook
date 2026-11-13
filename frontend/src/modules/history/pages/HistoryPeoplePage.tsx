@@ -4,7 +4,7 @@
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Plus, Search, Users } from 'lucide-react';
+import { FileUp, Plus, Search, Users } from 'lucide-react';
 import { Breadcrumbs } from '../../../components/ux/Breadcrumbs';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { Pagination } from '../../../components/ux/Pagination';
@@ -100,7 +100,14 @@ export const HistoryPeoplePage: React.FC = () => {
           Past Members
         </h1>
         {canManage && (
-          <div className="page-header-actions">
+          <div className="page-header-actions flex flex-wrap gap-2">
+            <Link
+              to="/history/import"
+              className="btn-secondary inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium"
+            >
+              <FileUp className="h-4 w-4" aria-hidden="true" />
+              Import
+            </Link>
             <Link
               to="/history/people/new"
               className="btn-primary inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium"

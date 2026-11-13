@@ -19,6 +19,9 @@ from app.models.history import (
     ClearanceStatus,
     DatePrecision,
     FieldVisibility,
+    HistoryImportDecision,
+    HistoryImportStatus,
+    HistoryTitleAction,
     PublicationLevel,
     RelationType,
     RevisionKind,
@@ -206,6 +209,8 @@ class HistoricalMemberMemberView(BaseModel):
     service_periods: list[ServicePeriodResponse]
     relations: list[RelationResponse]
     publication_level: PublicationLevel
+    #: The merged-away id this request named, when it was forwarded here.
+    redirected_from: Optional[str] = None
 
 
 class ClearanceStepState(BaseModel):
@@ -286,6 +291,10 @@ class HistoricalMemberFullView(BaseModel):
     can_publish: bool
     created_at: datetime
     updated_at: datetime
+    #: Set when the record was created by an import.
+    import_id: Optional[str] = None
+    #: The merged-away id this request named, when it was forwarded here.
+    redirected_from: Optional[str] = None
 
 
 HistoricalMemberView = Union[HistoricalMemberFullView, HistoricalMemberMemberView]
@@ -390,3 +399,152 @@ class MarkdownRender(BaseModel):
 
 class MarkdownRendered(BaseModel):
     html: str
+
+
+# ----------------------------------------------------------------------
+# Import
+# ----------------------------------------------------------------------
+
+
+class HistoryImportSummary(BaseModel):
+    id: str
+    status: HistoryImportStatus
+    source_filename: str
+    row_count: int
+    #: {field: header} the import read each column from.
+    column_mapping: dict[str, str]
+    #: Counts after commit: created, mapped, matched, repeats, skipped, removed.
+    summary: Optional[dict[str, int]]
+    expires_at: Optional[datetime]
+    created_at: datetime
+    committed_at: Optional[datetime]
+
+
+class ImportSuggestion(BaseModel):
+    kind: Literal["match", "map", "same_as"]
+    id: str
+    strength: Literal["strong", "weak"]
+    label: str
+
+
+class ImportRowView(BaseModel):
+    id: str
+    line_number: int
+    #: The file's values with the Historian's corrections applied.
+    values: dict[str, str]
+    edited_fields: list[str]
+    problems: list[str]
+    decision: Optional[HistoryImportDecision]
+    target_member_id: Optional[str]
+    target_user_id: Optional[str]
+    target_row_id: Optional[str]
+    target_label: Optional[str]
+    suggestions: list[ImportSuggestion]
+
+
+class ImportTitleView(BaseModel):
+    text: str
+    key: str
+    #: known: already on the list; mapped / create / dropped: answered;
+    #: unresolved: waiting for the Historian.
+    status: Literal["known", "mapped", "create", "dropped", "unresolved"]
+    title_id: Optional[str] = None
+
+
+class HistoryImportDetail(HistoryImportSummary):
+    rows: list[ImportRowView]
+    titles: list[ImportTitleView]
+    ready: bool
+    #: Why a commit would be refused right now, one line each.
+    blockers: list[str]
+
+
+class ImportRowUpdate(BaseModel):
+    """A correction to the row's values, a decision, or both."""
+
+    #: {field: text}; an empty string clears the file's value.
+    edits: Optional[dict[str, str]] = None
+    decision: Optional[HistoryImportDecision] = None
+    target_member_id: Optional[str] = None
+    target_user_id: Optional[str] = None
+    target_row_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _edits_are_short(self) -> "ImportRowUpdate":
+        for key, value in (self.edits or {}).items():
+            if len(key) > 50 or len(value or "") > 2000:
+                raise ValueError("A corrected value is too long")
+        return self
+
+
+class ImportTitleChoice(BaseModel):
+    text: str = Field(min_length=1, max_length=150)
+    action: HistoryTitleAction
+    title_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _map_names_a_title(self) -> "ImportTitleChoice":
+        if self.action == HistoryTitleAction.MAP and not self.title_id:
+            raise ValueError("Choose the title to use")
+        return self
+
+
+class ImportTitlesUpdate(BaseModel):
+    choices: list[ImportTitleChoice] = Field(max_length=500)
+
+
+class AcceptSuggestionsResult(BaseModel):
+    decided: int
+
+
+class RemovedRecord(BaseModel):
+    id: str
+    display_name: str
+    reason: str
+
+
+class RemoveRecordsResult(BaseModel):
+    removed: int
+    kept: list[RemovedRecord]
+
+
+# ----------------------------------------------------------------------
+# Merge
+# ----------------------------------------------------------------------
+
+
+class MergeSide(BaseModel):
+    id: str
+    display_name: str
+    service_years: Optional[str]
+    publication_level: PublicationLevel
+    period_count: int
+    relation_count: int
+    linked_member_name: Optional[str]
+    is_memorial: bool
+    is_line_of_duty_death: bool
+
+
+class MergeField(BaseModel):
+    field: str
+    label: str
+    keep_value: Optional[str]
+    other_value: Optional[str]
+    #: same / keep_blank / other_blank need no choice; differs does.
+    state: Literal["same", "keep_blank", "other_blank", "differs"]
+    can_keep_both: bool
+
+
+class MergePreview(BaseModel):
+    keep: MergeSide
+    other: MergeSide
+    fields: list[MergeField]
+    #: Why this pair cannot be merged, when it cannot.
+    refusal: Optional[str]
+    warnings: list[str]
+
+
+class MergeRequest(BaseModel):
+    other_id: str = Field(min_length=1, max_length=36)
+    #: {field: "keep" | "other" | "both"} for each field that differs.
+    choices: dict[str, Literal["keep", "other", "both"]] = Field(default_factory=dict)

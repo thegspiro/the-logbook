@@ -43,6 +43,7 @@ from app.api.v1.endpoints import (
     grants,
     historical_import,
     history,
+    history_import,
     integrations,
     inventory,
     inventory_kiosk,
@@ -379,6 +380,12 @@ api_router.include_router(
 )
 api_router.include_router(
     history.router,
+    prefix="/history",
+    tags=["history"],
+    dependencies=module_gate("history", "History"),
+)
+api_router.include_router(
+    history_import.router,
     prefix="/history",
     tags=["history"],
     dependencies=module_gate("history", "History"),

@@ -45,6 +45,8 @@ from app.schemas.history import (
     HonorRollEntry,
     MarkdownRender,
     MarkdownRendered,
+    MergePreview,
+    MergeRequest,
     PersonCheck,
     PositionOption,
     PublishRequest,
@@ -58,6 +60,7 @@ from app.services.history_clearance_service import (
     record_path,
     review_path,
 )
+from app.services.history_merge_service import HistoryMergeService
 from app.services.history_notifications import (
     awaiting_clearance_notice,
     clearance_list_changed_notice,
@@ -222,10 +225,19 @@ async def get_person(
     **Authentication required**
     """
     viewer = Viewer.of(current_user)
-    person = ensure_found(
-        await HistoryService(db).get_readable_person(viewer, person_id), _PERSON
-    )
-    return await _person_view(db, viewer, person)
+    service = HistoryService(db)
+    person = await service.get_readable_person(viewer, person_id)
+    redirected_from = None
+    if person is None:
+        # A record merged into another: its address leads to the kept one,
+        # so links and bookmarks to it keep working.
+        new_id = await service.redirected_id(viewer.organization_id, person_id)
+        if new_id:
+            person = await service.get_readable_person(viewer, new_id)
+            redirected_from = person_id
+    view = await _person_view(db, viewer, ensure_found(person, _PERSON))
+    view.redirected_from = redirected_from
+    return view
 
 
 @router.post("/people", response_model=HistoricalMemberFullView, status_code=201)
@@ -384,6 +396,61 @@ async def delete_person(
         {"person_id": person_id, "display_name": label},
         severity="warning",
     )
+
+
+@router.get("/people/{person_id}/merge-preview", response_model=MergePreview)
+async def merge_preview(
+    person_id: str,
+    other_id: str = Query(..., min_length=1, max_length=36),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("history.manage")),
+):
+    """
+    The two records side by side before a merge: each field, whether it needs
+    a choice, and anything that refuses or should give the Historian pause.
+
+    **Requires permission: history.manage**
+    """
+    keep = await _managed_person(db, current_user, person_id)
+    other = await _managed_person(db, current_user, other_id)
+    return MergePreview(**await HistoryMergeService(db).preview(keep, other))
+
+
+@router.post("/people/{person_id}/merge", response_model=HistoricalMemberFullView)
+async def merge_person(
+    person_id: str,
+    payload: MergeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("history.manage")),
+):
+    """
+    Merge another record into this one. The other record's periods, family
+    links and change history move here, and its address forwards here.
+
+    **Requires permission: history.manage**
+    """
+    async with handle_service_errors("Could not merge these records"):
+        try:
+            person = await HistoryMergeService(db).merge(
+                str(current_user.organization_id),
+                person_id,
+                payload.other_id,
+                dict(payload.choices),
+                str(current_user.id),
+            )
+        except LookupError:
+            raise HTTPException(status_code=404, detail="Person not found")
+    await db.commit()
+    await _audit(
+        db,
+        current_user,
+        "history_person_merged",
+        {"person_id": person.id, "merged_person_id": payload.other_id},
+    )
+    reloaded = await _managed_person(db, current_user, person.id)
+    view = await _person_view(db, Viewer.of(current_user), reloaded)
+    assert isinstance(view, HistoricalMemberFullView)
+    return view
 
 
 @router.get("/people/{person_id}/revisions", response_model=list[RevisionResponse])

@@ -693,6 +693,9 @@ async def create_member(
             "username": new_user.username,
             "email": new_user.email,
             "roles_assigned": assigned_role_ids,
+            # No member_status_changed row records the starting status, so
+            # this row is the only place an "added On Leave" is written down.
+            "status": new_user.status.value,
         },
         user_id=str(current_user.id),
         username=current_user.username,

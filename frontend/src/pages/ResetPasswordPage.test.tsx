@@ -8,9 +8,10 @@
  * - W03-5: opening a second link in the same tab kept the first one's error.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
+import { StrictMode } from 'react';
 
 const validateResetToken = vi.fn();
 const confirmPasswordReset = vi.fn();
@@ -84,5 +85,72 @@ describe('ResetPasswordPage', () => {
     await user.type(screen.getByLabelText(/^confirm new password/i), 'Abcdef123!xyz');
     expect(screen.getByRole('button', { name: /reset password/i })).toBeDisabled();
     expect(confirmPasswordReset).not.toHaveBeenCalled();
+  });
+
+  // W03-10: the met/unmet state was an icon marked aria-hidden, so a screen
+  // reader read seven identical lines and never said which rule failed.
+  it('says which rules are met in text, not only by icon', async () => {
+    const user = userEvent.setup();
+    openLink();
+
+    await user.type(await screen.findByLabelText(/^new password/i), 'Abcdef123!xyz');
+
+    const rule = (name: string) => screen.getAllByRole('listitem').find((li) => li.textContent?.endsWith(name));
+    expect(rule('At least 12 characters')).toHaveTextContent('Met: At least 12 characters');
+    expect(rule('No runs like 123 or abc')).toHaveTextContent('Not met: No runs like 123 or abc');
+  });
+
+  // W03-11: two checks of the link could overlap (React re-runs the effect, or
+  // a second link opens before the first answer arrives) and the stale answer,
+  // arriving last, overwrote the current one. Driven: a used link showed
+  // "Too Many Attempts" beside a later 400 for that same link.
+  it('ignores the answer to a check it has already replaced', async () => {
+    let answerStale: (value: unknown) => void = () => undefined;
+    validateResetToken
+      .mockReset()
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            answerStale = reject;
+          })
+      )
+      .mockResolvedValue({ valid: true });
+
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={['/reset-password#token=abc']}>
+          <ResetPasswordPage />
+        </MemoryRouter>
+      </StrictMode>
+    );
+    expect(await screen.findByLabelText(/^new password/i)).toBeInTheDocument();
+
+    await act(async () => {
+      answerStale(tooMany);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByLabelText(/^new password/i)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /too many attempts/i })).not.toBeInTheDocument();
+  });
+
+  // W03-12: at 390px the invalid-link screen's "Back to sign in" was 40px tall.
+  it('gives "Back to sign in" a touch-size target on every screen', async () => {
+    validateResetToken.mockReset().mockRejectedValue({ response: { status: 400, data: { detail: 'Invalid' } } });
+    openLink();
+    expect(await screen.findByRole('link', { name: /back to sign in/i })).toHaveClass('touch:min-h-11');
+  });
+
+  it('gives the form screen\'s "Back to sign in" a touch-size target', async () => {
+    openLink();
+    await screen.findByLabelText(/^new password/i);
+    expect(screen.getByRole('link', { name: /back to sign in/i })).toHaveClass('touch:min-h-11');
+  });
+
+  it('gives the rate-limited screen\'s "Back to sign in" a touch-size target', async () => {
+    validateResetToken.mockReset().mockRejectedValue(tooMany);
+    openLink();
+    await screen.findByRole('heading', { name: /too many attempts/i });
+    expect(screen.getByRole('link', { name: /back to sign in/i })).toHaveClass('touch:min-h-11');
   });
 });
