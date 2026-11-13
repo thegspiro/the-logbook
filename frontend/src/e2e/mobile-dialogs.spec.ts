@@ -137,16 +137,22 @@ test.describe('mobile dialogs', () => {
             return b.height > 80 && b.width > 100;
           }) ?? panel;
         const box = inner.getBoundingClientRect();
-        const style = getComputedStyle(inner);
+        // The end is reachable when anything from the measured element up to
+        // and including the dialog element scrolls. Where role="dialog" sits
+        // on the capped, scrolling panel itself, `inner` is the form inside it:
+        // taller than the screen and not scrolling on its own, yet every field
+        // is reached by scrolling the panel around it.
+        let scrolls = false;
+        for (let el: Element | null = inner; el; el = el === panel ? null : el.parentElement) {
+          const overflowY = getComputedStyle(el).overflowY;
+          if (overflowY === 'auto' || overflowY === 'scroll') scrolls = true;
+        }
         return {
           named: !!(panel.getAttribute('aria-label')?.trim() || panel.getAttribute('aria-labelledby')?.trim()),
           // Both ends must be reachable: a panel centred by flex that outgrows
           // the viewport overflows in both directions and no scrollbar reaches
           // either edge, unless the panel itself scrolls.
-          strandedEnd:
-            (box.top < -1 || box.bottom > viewportHeight + 1) &&
-            style.overflowY !== 'auto' &&
-            style.overflowY !== 'scroll',
+          strandedEnd: (box.top < -1 || box.bottom > viewportHeight + 1) && !scrolls,
           top: Math.round(box.top),
           bottom: Math.round(box.bottom),
           viewportHeight,
