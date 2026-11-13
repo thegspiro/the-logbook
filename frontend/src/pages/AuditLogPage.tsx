@@ -22,6 +22,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { Pagination, EmptyState, SkeletonText } from '../components/ux';
 import { AdminPageHeader } from '../components/admin/AdminPageHeader';
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '../constants/config';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 const SEVERITY_BADGE: Record<AuditSeverity, string> = {
   info: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
@@ -157,7 +158,7 @@ const AuditLogPage: React.FC = () => {
       {/* Stats. Drawn while they load, placeholders where the figures go:
           appearing with them pushed the filters and the log ~190px down. */}
       {(stats || loading) && (
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatGrid columns={4} className="mb-6">
           <div className="card p-4">
             <p className="text-theme-text-muted text-xs font-medium uppercase">Total events</p>
             <p className="text-theme-text-primary mt-1 text-2xl font-bold sm:text-3xl">
@@ -182,7 +183,7 @@ const AuditLogPage: React.FC = () => {
               {stats ? (stats.by_severity.info ?? 0) : <SkeletonText className="w-10" />}
             </p>
           </div>
-        </div>
+        </StatGrid>
       )}
 
       {/* Filters */}

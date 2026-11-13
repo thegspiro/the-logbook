@@ -19,6 +19,7 @@ import { SkeletonPage } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
 import type { Budget } from '../types';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 /** Station filter value for lines with no station. */
 const DEPARTMENT_WIDE = '__department_wide__';
@@ -98,14 +99,14 @@ const SummaryCards: React.FC<SummaryCardsProps> = ({ budgets }) => {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <StatGrid columns={4}>
       {cards.map((c) => (
         <div key={c.label} className="card p-4">
           <p className="text-theme-text-secondary text-sm">{c.label}</p>
           <p className={`text-xl font-bold ${c.color}`}>{c.value}</p>
         </div>
       ))}
-    </div>
+    </StatGrid>
   );
 };
 

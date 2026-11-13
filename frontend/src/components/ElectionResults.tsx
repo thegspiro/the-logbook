@@ -13,6 +13,7 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { formatDateTime } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { getVictoryDescription } from '../utils/electionHelpers';
+import { StatGrid } from '@/components/ux/StatGrid';
 
 interface ElectionResultsProps {
   electionId: string;
@@ -175,7 +176,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
       {/* Overall Stats */}
       <div className="bg-theme-surface rounded-lg p-6 backdrop-blur-xs">
         <h3 className="text-theme-text-primary mb-4 text-lg font-medium">Election Summary</h3>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        <StatGrid columns={4} gap={4}>
           <div className="rounded-lg bg-blue-500/10 p-4">
             <div className="text-sm font-medium text-blue-700 dark:text-blue-400">Total Votes</div>
             <div
@@ -210,7 +211,7 @@ export const ElectionResults: React.FC<ElectionResultsProps> = ({ electionId, el
             <div className="text-theme-text-muted text-sm font-medium">Victory Condition</div>
             <div className="text-theme-text-primary mt-1 text-sm font-semibold">{getVictoryDescription(election)}</div>
           </div>
-        </div>
+        </StatGrid>
       </div>
 
       {/* Quorum Status — the backend decides (CLAUDE.md #29): `quorum_met`
