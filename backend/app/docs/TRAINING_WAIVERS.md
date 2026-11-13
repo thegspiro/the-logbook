@@ -286,6 +286,23 @@ outcome with who decided, category). Neither shows the reason, a decider's
 note or an attachment, and neither can be scored. See
 `docs/EVALUATIONS_MODULE.md`, "Figures".
 
+**A moved session** (owner decision, 2026-11-13). When an event's start moves
+(an edit, a series edit from that event on, or a postponement), every pending
+or approved request for it, in either workflow, goes back to its member:
+`reconfirm_for_rescheduled_events` in `attendance_waiver_service.py`, called by
+`EventService` inside the move's own transaction. The request takes the new
+title, start and date, returns to pending with its decision cleared (the log
+keeps it, with a `rescheduled` entry naming both times), and waits on the
+member (`reconfirm_requested_at`); an approved meeting request's waiver comes
+off the minutes record, `present` untouched. The deciders' prompts are
+archived; the member is told in the app at once and by email after the commit.
+Nobody can approve or deny while it waits. `POST .../{id}/confirm` (the member
+only) sends it back to the deciders, unless the member has since checked in or,
+for a meeting, a leave or the Secretary now excuses them, in which case it is
+refused and the member withdraws instead. A denied request is never touched. A
+change that leaves the start alone does nothing, and a second run for one move
+writes nothing. A member who never answers is closed by the seven-day expiry.
+
 **Where it is in the app.**
 
 | Who              | Where                                                                                                                                                                                                                                                                             |
@@ -310,6 +327,7 @@ only to a Chief.
 | `GET`  | `/api/v1/training/waivers/requests`                                  | The requests the caller may decide or decided |
 | `GET`  | `/api/v1/training/waivers/requests/{id}`                             | The member, or someone who may decide         |
 | `POST` | `/api/v1/training/waivers/requests/{id}/withdraw`                    | The member, while pending                     |
+| `POST` | `/api/v1/training/waivers/requests/{id}/confirm`                     | The member, while a moved session waits       |
 | `POST` | `/api/v1/training/waivers/requests/{id}/approve`                     | Someone who may decide, while pending         |
 | `POST` | `/api/v1/training/waivers/requests/{id}/deny`                        | Someone who may decide, while pending         |
 | `POST` | `/api/v1/training/waivers/requests/{id}/override`                    | A Chief, on a denied request                  |

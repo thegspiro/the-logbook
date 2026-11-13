@@ -18,6 +18,7 @@ GET    /training/waivers/requests/mine               - My requests
 GET    /training/waivers/requests                    - Requests I decide or decided
 GET    /training/waivers/requests/{id}               - One request
 POST   /training/waivers/requests/{id}/withdraw      - Withdraw my pending request
+POST   /training/waivers/requests/{id}/confirm       - My moved session still needs it
 POST   /training/waivers/requests/{id}/approve       - Approve a pending request
 POST   /training/waivers/requests/{id}/deny          - Deny a pending request
 POST   /training/waivers/requests/{id}/override      - The Chief approves a denial
@@ -308,6 +309,28 @@ async def withdraw_attendance_waiver_request(
     service = AttendanceWaiverService(db)
     with _refusals():
         request = await service.withdraw(
+            str(current_user.organization_id), current_user, request_id
+        )
+    return await _one(service, current_user, request)
+
+
+@router.post("/{request_id}/confirm", response_model=AttendanceWaiverRequestResponse)
+async def confirm_attendance_waiver_request(
+    request_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Confirm that the caller's own request still stands after its session
+    moved, which sends it back to the deciders. 400 when it is not waiting on
+    a confirmation, or the new date no longer needs a waiver (the member
+    checked in, or is on leave); 403 for a decider, 404 for anyone else.
+
+    **Authentication required**
+    """
+    service = AttendanceWaiverService(db)
+    with _refusals():
+        request = await service.confirm(
             str(current_user.organization_id), current_user, request_id
         )
     return await _one(service, current_user, request)
