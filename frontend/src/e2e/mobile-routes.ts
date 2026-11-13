@@ -1144,7 +1144,7 @@ export const ALL_ROUTES: RouteCheck[] = [
     maxSmallTargets: 0,
     maxTinyText: 0,
     permissions: ['fundraising.view', 'fundraising.manage'],
-    expectText: 'Oakville Hardware & Supply',
+    expectText: 'Thermal Imaging Camera Drive',
   },
   {
     path: '/grants/events',
