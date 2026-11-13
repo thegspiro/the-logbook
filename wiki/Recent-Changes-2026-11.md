@@ -5,6 +5,19 @@ section at the top of the current month's page, and a new month starts a
 new page. The engineering audit behind each pass is in
 [`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md).
 
+## Recent changes: November 13, 2026 (Zeffy)
+
+The engineering audit is
+[`docs/CHANGE_AUDIT_2026-11.md`](https://github.com/thegspiro/the-logbook/blob/main/docs/CHANGE_AUDIT_2026-11.md#change-audit-zeffy-settings-and-screenshots-november-13-2026).
+
+- **Zeffy**: a connected Zeffy card has a **Settings** button. Change the API
+  key or the webhook signing secret there without disconnecting; a box left
+  blank keeps what is saved. See [Zeffy Integration](Integration-Zeffy).
+- **Zeffy and PayPal connect windows** no longer say a key is already stored
+  on a first connection.
+- **Training guides**: the Zeffy screens are pictured in the Grants &
+  Fundraising and Integrations guides.
+
 ## Recent changes: November 10 – 11, 2026
 
 The engineering audit is

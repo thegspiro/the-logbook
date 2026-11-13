@@ -232,8 +232,10 @@ updated before these three images are re-shot.
 **`16-24-zeffy-connect` re-shot the same day**, from `main` at `71bfff68`, after
 #4268 corrected the dialog's wording: the API Key box now reads "Paste the key
 from Zeffy", and the note beneath it says a blank box keeps the saved key only
-when connecting again after a disconnect. The new **Settings** dialog on a
-connected Zeffy card (#4268) is not pictured.
+when connecting again after a disconnect. `16-25-zeffy-settings` is new: the **Settings** dialog
+on a connected Zeffy card (#4268). The demo cannot connect Zeffy, so the
+shot marks the Zeffy row connected in the integrations list the page
+receives; the dialog is opened and never saved.
 
 ## The October 16 – November 1 queues, captured 2026-11-02
 
