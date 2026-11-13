@@ -24,6 +24,7 @@ from app.services.shift_evaluation_service import (
     ShiftEvaluationService,
 )
 from tests.test_shift_evaluation_credit import _value
+from tests.test_shift_evaluation_links import _with_positions
 from tests.test_shift_evaluations import (
     _complete,
     _enroll,
@@ -274,3 +275,88 @@ class TestARacingFirstSaveLandsOnTheRow:
 
         assert failed
         assert saved.status == "submitted"
+
+
+class TestNobodyReadsTheirOwnEvaluationEarly:
+    """The evaluated member sees their evaluation only as a member would.
+
+    Being the shift's officer, or holding training.manage, lets a member open
+    everyone else's evaluations, not read their own draft or one still waiting
+    on review.
+    """
+
+    async def _officer_evaluated(self, db):
+        """The trainee is the shift's officer; another officer drafts theirs."""
+        scene = await _scene(db)
+        scene.shift.shift_officer_id = scene.trainee.id
+        await db.flush()
+        draft = await ShiftEvaluationService(db).save(
+            scene.shift,
+            scene.trainee.id,
+            scene.enrollment.id,
+            scene.org_id,
+            _complete(submit=False),
+            scene.officer,
+        )
+        return scene, draft
+
+    async def test_the_form_opens_without_their_answers(self, db_session):
+        from app.api.v1.endpoints import shift_evaluations as endpoints
+
+        scene, _ = await self._officer_evaluated(db_session)
+
+        form = await endpoints.get_shift_evaluation_form(
+            shift_id=uuid.UUID(scene.shift.id),
+            member_id=uuid.UUID(scene.trainee.id),
+            scope_key=scene.enrollment.id,
+            template_id=None,
+            db=db_session,
+            current_user=await _with_positions(db_session, scene.trainee),
+        )
+
+        assert form.evaluation is None
+        assert form.requirement.evaluation is None
+
+    async def test_the_roster_keeps_their_status_without_the_scores(self, db_session):
+        from app.api.v1.endpoints import shift_evaluations as endpoints
+
+        scene, draft = await self._officer_evaluated(db_session)
+
+        roster = await endpoints.get_shift_evaluation_roster(
+            shift_id=uuid.UUID(scene.shift.id),
+            db=db_session,
+            current_user=await _with_positions(db_session, scene.trainee),
+        )
+
+        [own] = [r for r in roster.requirements if r.member_id == scene.trainee.id]
+        assert own.evaluation is not None
+        assert own.evaluation.status == "draft"
+        assert own.evaluation.average_rating is None
+        assert own.evaluation.rated_count == 0
+        assert own.evaluation.low_rating_count == 0
+
+    async def test_a_training_officer_cannot_read_their_own_draft(
+        self, db_session, monkeypatch
+    ):
+        from fastapi import HTTPException
+
+        from app.api.v1.endpoints import shift_evaluations as endpoints
+
+        scene, draft = await self._officer_evaluated(db_session)
+        monkeypatch.setattr(endpoints, "_manages_training", lambda user: True)
+        trainee = await _with_positions(db_session, scene.trainee)
+
+        with pytest.raises(HTTPException) as refused:
+            await endpoints.get_shift_evaluation(
+                evaluation_id=uuid.UUID(draft.id), db=db_session, current_user=trainee
+            )
+        assert refused.value.status_code == 404
+
+        listed = await endpoints.list_member_shift_evaluations(
+            member_id=uuid.UUID(scene.trainee.id),
+            start_date=None,
+            end_date=None,
+            db=db_session,
+            current_user=trainee,
+        )
+        assert listed == []

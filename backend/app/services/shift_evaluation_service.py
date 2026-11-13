@@ -130,6 +130,10 @@ _CLOSED_PROGRESS = (
 )
 
 
+def _is_viewer(member_id: Any, viewer_id: Optional[str]) -> bool:
+    return viewer_id is not None and str(member_id) == str(viewer_id)
+
+
 def credit_units(evaluation: ShiftEvaluation, requirement: Any) -> float:
     """What one submitted evaluation is worth toward one requirement."""
     rtype = requirement.requirement_type
@@ -643,8 +647,10 @@ class ShiftEvaluationService:
     # -- Responses ---------------------------------------------------------
 
     def _requirement_response(
-        self, requirement: _Requirement, users: dict[str, User]
+        self, requirement: _Requirement, users: dict[str, User], own: bool = False
     ) -> ShiftEvaluationRequirement:
+        """One roster row. ``own``: the viewer is the evaluated member, who
+        sees where it stands (close-out depends on it) but not its scores."""
         evaluation = requirement.evaluation
         options = [TemplateOption(id=t.id, name=t.name) for t in requirement.templates]
         if evaluation is not None and not options:
@@ -666,9 +672,9 @@ class ShiftEvaluationService:
                 ShiftEvaluationSummary(
                     id=evaluation.id,
                     status=evaluation.status,
-                    average_rating=evaluation.average_rating,
-                    rated_count=evaluation.rated_count,
-                    low_rating_count=evaluation.low_rating_count,
+                    average_rating=None if own else evaluation.average_rating,
+                    rated_count=0 if own else evaluation.rated_count,
+                    low_rating_count=0 if own else evaluation.low_rating_count,
                     evaluator_name=_name(users.get(str(evaluation.evaluator_id))),
                     submitted_at=evaluation.submitted_at,
                     updated_at=evaluation.updated_at,
@@ -692,19 +698,32 @@ class ShiftEvaluationService:
         return {str(u.id): u for u in rows.scalars()}
 
     async def roster(
-        self, shift: Shift, organization_id: UUID | str
+        self,
+        shift: Shift,
+        organization_id: UUID | str,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationRoster:
         return await self._roster(
-            await self.occasion_for_shift(shift, organization_id), organization_id
+            await self.occasion_for_shift(shift, organization_id),
+            organization_id,
+            viewer_id,
         )
 
     async def entry_roster(
-        self, entry: ExternalShiftHours, organization_id: UUID | str
+        self,
+        entry: ExternalShiftHours,
+        organization_id: UUID | str,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationRoster:
-        return await self._roster(self.occasion_for_entry(entry), organization_id)
+        return await self._roster(
+            self.occasion_for_entry(entry), organization_id, viewer_id
+        )
 
     async def _roster(
-        self, occasion: _Occasion, organization_id: UUID | str
+        self,
+        occasion: _Occasion,
+        organization_id: UUID | str,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationRoster:
         requirements = await self._requirements(occasion, organization_id)
         users = await self._users(
@@ -726,7 +745,12 @@ class ShiftEvaluationService:
             shift_end=occasion.end,
             unit_label=occasion.unit_label,
             platoon=occasion.platoon,
-            requirements=[self._requirement_response(r, users) for r in requirements],
+            requirements=[
+                self._requirement_response(
+                    r, users, own=_is_viewer(r.member.id, viewer_id)
+                )
+                for r in requirements
+            ],
         )
 
     async def detail(
@@ -834,6 +858,7 @@ class ShiftEvaluationService:
         scope_key: str,
         organization_id: UUID | str,
         template_id: Optional[str] = None,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationForm:
         return await self._form(
             await self.occasion_for_shift(shift, organization_id),
@@ -841,6 +866,7 @@ class ShiftEvaluationService:
             scope_key,
             organization_id,
             template_id,
+            viewer_id,
         )
 
     async def entry_form(
@@ -849,6 +875,7 @@ class ShiftEvaluationService:
         scope_key: str,
         organization_id: UUID | str,
         template_id: Optional[str] = None,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationForm:
         return await self._form(
             self.occasion_for_entry(entry),
@@ -856,6 +883,7 @@ class ShiftEvaluationService:
             scope_key,
             organization_id,
             template_id,
+            viewer_id,
         )
 
     async def _form(
@@ -865,10 +893,16 @@ class ShiftEvaluationService:
         scope_key: str,
         organization_id: UUID | str,
         template_id: Optional[str] = None,
+        viewer_id: Optional[str] = None,
     ) -> ShiftEvaluationForm:
         requirement = await self._find_requirement(
             occasion, member_id, scope_key, organization_id
         )
+        if _is_viewer(member_id, viewer_id):
+            # The page opens a member's own evaluation read-only, to say
+            # someone else must fill it out; it must not carry the answers a
+            # draft, or one still waiting on review, already holds.
+            requirement.evaluation = None
         users = await self._users(
             (
                 {str(requirement.evaluation.evaluator_id)}

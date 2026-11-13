@@ -108,6 +108,9 @@ async def list_member_shift_evaluations(
         current_user.organization_id,
         start_date=start_date,
         end_date=end_date,
+        # A training officer reads their own evaluations as a member does:
+        # no drafts, nothing still waiting on review.
+        member_view=str(member_id) == str(current_user.id),
     )
     return [await service.detail(e, current_user.organization_id) for e in evaluations]
 
@@ -124,7 +127,9 @@ async def get_shift_evaluation_roster(
     """
     service = ShiftEvaluationService(db)
     shift = await _shift_for_filing(db, current_user, shift_id, service)
-    return await service.roster(shift, current_user.organization_id)
+    return await service.roster(
+        shift, current_user.organization_id, viewer_id=str(current_user.id)
+    )
 
 
 @router.get(
@@ -152,6 +157,7 @@ async def get_shift_evaluation_form(
             scope_key,
             current_user.organization_id,
             str(template_id) if template_id else None,
+            viewer_id=str(current_user.id),
         )
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -268,7 +274,9 @@ async def get_outside_shift_evaluation_roster(
     """
     service = ShiftEvaluationService(db)
     entry = await _entry(service, entry_id, current_user.organization_id)
-    return await service.entry_roster(entry, current_user.organization_id)
+    return await service.entry_roster(
+        entry, current_user.organization_id, viewer_id=str(current_user.id)
+    )
 
 
 @router.get("/external/{entry_id}/{scope_key}", response_model=ShiftEvaluationForm)
@@ -291,6 +299,7 @@ async def get_outside_shift_evaluation_form(
             scope_key,
             current_user.organization_id,
             str(template_id) if template_id else None,
+            viewer_id=str(current_user.id),
         )
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -513,16 +522,15 @@ async def get_shift_evaluation(
         await service.get(evaluation_id, current_user.organization_id),
         "Shift evaluation",
     )
-    allowed = (
-        _manages_training(current_user)
-        or str(evaluation.evaluator_id) == str(current_user.id)
-        or (
-            str(evaluation.member_id) == str(current_user.id)
-            and await service.visible_to_member(
-                evaluation, current_user.organization_id
-            )
+    if str(evaluation.member_id) == str(current_user.id):
+        # About the caller: read as a member, whatever else they may hold.
+        allowed = await service.visible_to_member(
+            evaluation, current_user.organization_id
         )
-    )
+    else:
+        allowed = _manages_training(current_user) or str(
+            evaluation.evaluator_id
+        ) == str(current_user.id)
     if not allowed:
         # Same answer as a missing row: a member must not learn that an
         # evaluation exists before they may read it.
