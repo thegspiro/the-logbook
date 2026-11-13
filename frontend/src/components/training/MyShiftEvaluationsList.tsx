@@ -11,7 +11,7 @@ import { Link } from 'react-router';
 import { ChevronDown, ChevronUp, Printer } from 'lucide-react';
 import type { ShiftEvaluationDetail } from '../../types/training';
 import { formatCalendarDate } from '../../utils/dateFormatting';
-import { shiftEvaluationPrintPath } from '../../utils/shiftEvaluations';
+import { evaluatedByLabel, shiftEvaluationPrintPath } from '../../utils/shiftEvaluations';
 import { ShiftEvaluationView } from './ShiftEvaluationView';
 
 interface Props {
@@ -60,7 +60,7 @@ export const MyShiftEvaluationsList: React.FC<Props> = ({ evaluations }) => {
             {open && (
               <div id={panelId} className="space-y-3 px-4 pb-4">
                 <p className="text-theme-text-muted text-xs">
-                  Evaluated by {evaluation.evaluator_name ?? 'a former member'}
+                  Evaluated by {evaluatedByLabel(evaluation)}
                   {evaluation.program_names.length > 0 && ` · ${evaluation.program_names.join(', ')}`}
                 </p>
                 <ShiftEvaluationView evaluation={evaluation} />

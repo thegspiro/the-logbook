@@ -9,7 +9,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Loader2, Truck } from 'lucide-react';
+import { Loader2, QrCode, Truck } from 'lucide-react';
 
 import { useTimezone } from '../../hooks/useTimezone';
 import { shiftEvaluationService } from '../../services/api';
@@ -17,11 +17,13 @@ import type { OutsideShiftAwaitingEvaluation } from '../../types/training';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { outsideShiftEvaluationPagePath } from '../../utils/shiftEvaluations';
+import { PreceptorLinkDialog } from './PreceptorLinkDialog';
 
 export const OutsideShiftEvaluationsList: React.FC = () => {
   const tz = useTimezone();
   const [rows, setRows] = useState<OutsideShiftAwaitingEvaluation[] | null>(null);
   const [error, setError] = useState('');
+  const [linkFor, setLinkFor] = useState<OutsideShiftAwaitingEvaluation | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,13 +80,33 @@ export const OutsideShiftEvaluationsList: React.FC = () => {
                     {times} · {row.agency_name} {row.apparatus_name}
                   </p>
                 </div>
-                <Link to={outsideShiftEvaluationPagePath(row.entry_id, row.scope_key)} className="btn-primary shrink-0">
-                  {row.evaluation_status === 'draft' ? 'Continue' : 'Enter evaluation'}
-                </Link>
+                <div className="split-row-aside flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn-secondary inline-flex shrink-0 items-center gap-1"
+                    onClick={() => setLinkFor(row)}
+                  >
+                    <QrCode className="h-4 w-4" aria-hidden="true" /> Preceptor link
+                  </button>
+                  <Link
+                    to={outsideShiftEvaluationPagePath(row.entry_id, row.scope_key)}
+                    className="btn-primary shrink-0"
+                  >
+                    {row.evaluation_status === 'draft' ? 'Continue' : 'Enter evaluation'}
+                  </Link>
+                </div>
               </li>
             );
           })}
         </ul>
+      )}
+      {linkFor && (
+        <PreceptorLinkDialog
+          isOpen
+          onClose={() => setLinkFor(null)}
+          entryId={linkFor.entry_id}
+          shiftLabel={`${linkFor.member_name ?? 'A member'} · ${linkFor.agency_name} ${linkFor.apparatus_name}`}
+        />
       )}
     </section>
   );

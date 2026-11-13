@@ -166,6 +166,11 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   external_course_match: { icon: GraduationCap, label: 'New Course Version to Map', color: 'text-purple-500' },
   training_record_voided: { icon: Ban, label: 'Training Record Voided', color: 'text-amber-700 dark:text-amber-600' },
   training_record_changed: { icon: GraduationCap, label: 'Training Record Updated', color: 'text-purple-500' },
+  shift_evaluation_preceptor_link: {
+    icon: GraduationCap,
+    label: 'Shift Evaluation Preceptor Link',
+    color: 'text-purple-500',
+  },
   series_end_reminder: { icon: CalendarRange, label: 'Series End Reminder', color: 'text-purple-400' },
   shift_assignment: { icon: CalendarCheck, label: 'Shift Assignment', color: 'text-green-700 dark:text-green-600' },
   shift_decline: { icon: UserX, label: 'Shift Decline', color: 'text-red-400' },
@@ -260,6 +265,7 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
       'external_course_match',
       'training_record_voided',
       'training_record_changed',
+      'shift_evaluation_preceptor_link',
     ],
   },
   {

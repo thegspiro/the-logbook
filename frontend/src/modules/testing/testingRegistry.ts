@@ -147,6 +147,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/event-request/status/:token', label: 'Event request status', isPublic: true },
       {
+        path: '/shift-evaluation/:token',
+        label: 'Preceptor shift evaluation',
+        note: 'Token-based; reached from a preceptor link QR code or email',
+        isPublic: true,
+      },
+      {
         path: '/display/:code',
         label: 'Location kiosk display',
         note: 'Room QR display for a wall tablet',

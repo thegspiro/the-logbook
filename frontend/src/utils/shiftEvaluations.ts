@@ -9,6 +9,8 @@
 
 import type {
   ShiftEvaluationAverage,
+  ShiftEvaluationDetail,
+  ShiftEvaluationSaveBody,
   ShiftEvaluationFormSnapshot,
   ShiftEvaluationItemAnswer,
   ShiftEvaluationStatistic,
@@ -123,3 +125,55 @@ export const formatEvaluationAverage = (average: ShiftEvaluationAverage): string
 /** "EMT Shift Evaluation · 5 evaluations" */
 export const evaluationAverageLabel = (average: ShiftEvaluationAverage): string =>
   `${average.form_name} · ${average.evaluations} ${average.evaluations === 1 ? 'evaluation' : 'evaluations'}`;
+
+/** What an evaluation page sends: typed counts as numbers, comments trimmed. */
+export function shiftEvaluationBody(
+  draft: ShiftEvaluationDraft,
+  submit: boolean,
+  templateId: string | null,
+  preceptorName: string | null
+): ShiftEvaluationSaveBody {
+  const statistics: ShiftEvaluationSaveBody['statistics'] = {};
+  (Object.keys(draft.statistics) as ShiftEvaluationStatistic[]).forEach((stat) => {
+    const count = parseCount(draft.statistics[stat]);
+    if (count !== undefined) statistics[stat] = count;
+  });
+  return {
+    template_id: templateId || undefined,
+    header_values: draft.header_values,
+    statistics,
+    responses: Object.fromEntries(
+      Object.entries(draft.responses).map(([key, answer]) => [
+        key,
+        { rating: answer.rating, not_applicable: answer.not_applicable, comment: answer.comment?.trim() || null },
+      ])
+    ),
+    closing_comments: draft.closing_comments.trim() || null,
+    ...(preceptorName !== null ? { preceptor_name: preceptorName.trim() || null } : {}),
+    submit,
+  };
+}
+
+/**
+ * Who evaluated, in words. An outside preceptor has no account here, so the
+ * evaluation names them; when they used a preceptor link, the reader also
+ * learns whether the evaluated member made that link themselves.
+ */
+export function evaluatedByLabel(
+  evaluation: Pick<
+    ShiftEvaluationDetail,
+    'evaluator_name' | 'preceptor_name' | 'via_preceptor_link' | 'link_created_by_member'
+  >
+): string {
+  if (evaluation.preceptor_name) {
+    if (evaluation.via_preceptor_link) {
+      return `${evaluation.preceptor_name}, outside preceptor, through a preceptor link${
+        evaluation.link_created_by_member ? ' the member made' : ''
+      }`;
+    }
+    return `${evaluation.preceptor_name}, outside preceptor${
+      evaluation.evaluator_name ? `, entered by ${evaluation.evaluator_name}` : ''
+    }`;
+  }
+  return evaluation.evaluator_name ?? 'a former member';
+}

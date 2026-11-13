@@ -35,7 +35,6 @@ import { useAuthStore } from '../../stores/authStore';
 import type {
   ShiftEvaluationFormResponse,
   ShiftEvaluationRoster,
-  ShiftEvaluationSaveBody,
   ShiftEvaluationStatistic,
 } from '../../types/training';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
@@ -43,7 +42,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import {
   OUTSIDE_SHIFT_EVALUATIONS_LIST_PATH,
   outsideShiftEvaluationPagePath,
-  parseCount,
+  shiftEvaluationBody,
   shiftEvaluationPagePath,
   shiftEvaluationProblems,
   type ShiftEvaluationDraft,
@@ -79,33 +78,6 @@ function draftFrom(form: ShiftEvaluationFormResponse): ShiftEvaluationDraft {
     }
   });
   return { header_values, statistics, responses: {}, closing_comments: '' };
-}
-
-function bodyFrom(
-  draft: ShiftEvaluationDraft,
-  submit: boolean,
-  templateId: string | null,
-  preceptorName: string | null
-): ShiftEvaluationSaveBody {
-  const statistics: ShiftEvaluationSaveBody['statistics'] = {};
-  (Object.keys(draft.statistics) as ShiftEvaluationStatistic[]).forEach((stat) => {
-    const count = parseCount(draft.statistics[stat]);
-    if (count !== undefined) statistics[stat] = count;
-  });
-  return {
-    template_id: templateId || undefined,
-    header_values: draft.header_values,
-    statistics,
-    responses: Object.fromEntries(
-      Object.entries(draft.responses).map(([key, answer]) => [
-        key,
-        { rating: answer.rating, not_applicable: answer.not_applicable, comment: answer.comment?.trim() || null },
-      ])
-    ),
-    closing_comments: draft.closing_comments.trim() || null,
-    ...(preceptorName !== null ? { preceptor_name: preceptorName.trim() || null } : {}),
-    submit,
-  };
 }
 
 const ShiftEvaluationPage: React.FC = () => {
@@ -182,13 +154,13 @@ const ShiftEvaluationPage: React.FC = () => {
           ? await shiftEvaluationService.saveOutside(
               entryId,
               scopeKey,
-              bodyFrom(draft, submit, templateId, preceptorName)
+              shiftEvaluationBody(draft, submit, templateId, preceptorName)
             )
           : await shiftEvaluationService.save(
               shiftId,
               memberParam,
               scopeKey,
-              bodyFrom(draft, submit, templateId, null)
+              shiftEvaluationBody(draft, submit, templateId, null)
             );
         dirty.current = false;
         setSavedAt(saved.updated_at);
