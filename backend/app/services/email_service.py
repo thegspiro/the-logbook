@@ -2801,6 +2801,53 @@ class EmailService:
         )
         return success_count > 0
 
+    async def send_shift_evaluation_preceptor_link_email(
+        self,
+        to_email: str,
+        member_name: str,
+        shift_date: str,
+        unit_label: str,
+        evaluation_url: str,
+        expires_on: str,
+        db: Optional[Any] = None,
+        organization_id: Optional[str] = None,
+    ) -> bool:
+        """Send an outside preceptor the link to a member's shift evaluation."""
+        from app.services.email_template_service import (
+            DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_HTML,
+            DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_SUBJECT,
+            DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_TEXT,
+        )
+
+        rendered = await self._render_unless_switched_off(
+            template_type=EmailTemplateType.SHIFT_EVALUATION_PRECEPTOR_LINK,
+            context={
+                "member_name": member_name,
+                "shift_date": shift_date,
+                "unit_label": unit_label,
+                "evaluation_url": evaluation_url,
+                "expires_on": expires_on,
+            },
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_SUBJECT,
+            default_html=DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_HTML,
+            default_text=DEFAULT_SHIFT_EVALUATION_PRECEPTOR_LINK_TEXT,
+        )
+        if rendered is None:
+            return False
+        subject, html_body, text_body = rendered
+
+        success_count, _ = await self.send_email(
+            to_emails=[to_email],
+            subject=subject,
+            html_body=html_body,
+            text_body=text_body,
+            db=db,
+            template_type=EmailTemplateType.SHIFT_EVALUATION_PRECEPTOR_LINK.value,
+        )
+        return success_count > 0
+
     async def send_contact_changed_email(
         self,
         to_email: str,

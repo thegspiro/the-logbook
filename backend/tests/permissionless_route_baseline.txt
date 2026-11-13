@@ -474,6 +474,12 @@ app/api/v1/endpoints/shift_evaluations.py::list_my_shift_evaluations
 # training.manage, the evaluator, or the evaluated member once visible to
 # them; anyone else gets the same 404 as a missing row.
 app/api/v1/endpoints/shift_evaluations.py::get_shift_evaluation
+# Preceptor links: the member who logged the outside shift, or training.manage
+# (_entry_for_link); anyone else gets the same 404 as a missing shift.
+app/api/v1/endpoints/shift_evaluations.py::create_preceptor_link
+app/api/v1/endpoints/shift_evaluations.py::get_preceptor_link
+app/api/v1/endpoints/shift_evaluations.py::revoke_preceptor_link
+app/api/v1/endpoints/shift_evaluations.py::send_preceptor_link
 
 app/api/v1/endpoints/shift_completion.py::acknowledge_report
 app/api/v1/endpoints/shift_completion.py::batch_create_shift_reports

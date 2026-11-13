@@ -21,7 +21,9 @@ describe('MfaGraceBanner', () => {
     renderWithRouter(<MfaGraceBanner />);
 
     expect(screen.getByRole('status')).toHaveTextContent(/two-factor authentication/i);
-    expect(screen.getByRole('link', { name: 'Set it up now' })).toHaveAttribute('href', '/account');
+    // W05-11: the link opened /account, the profile tab, while two-factor
+    // setup lives on the Security tab; it now goes straight there.
+    expect(screen.getByRole('link', { name: 'Set it up now' })).toHaveAttribute('href', '/account?tab=security');
   });
 
   it('shows nothing outside a grace period', () => {

@@ -44,14 +44,14 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 const CATEGORY_LABELS: Record<string, string> = GRANT_CATEGORY_LABELS;
 
 const CATEGORY_COLORS: Record<string, string> = {
-  equipment: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
-  staffing: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-400',
-  training: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  prevention: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
-  facilities: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-500/20 dark:text-indigo-400',
-  vehicles: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
-  wellness: 'bg-teal-100 text-teal-800 dark:bg-teal-500/20 dark:text-teal-400',
-  community: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
+  equipment: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  staffing: 'bg-purple-100 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300',
+  training: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  prevention: 'bg-orange-100 text-orange-900 dark:bg-orange-500/20 dark:text-orange-300',
+  facilities: 'bg-indigo-100 text-indigo-900 dark:bg-indigo-500/20 dark:text-indigo-300',
+  vehicles: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  wellness: 'bg-teal-100 text-teal-900 dark:bg-teal-500/20 dark:text-teal-300',
+  community: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
   other: 'bg-theme-surface-secondary text-theme-text-secondary',
 };
 
@@ -330,7 +330,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
                   {opp.matchRequired && (
                     <div className="mb-3 flex items-center gap-2 text-sm">
                       <Shield className="h-4 w-4 shrink-0 text-amber-500" />
-                      <span className="text-amber-700 dark:text-amber-400">
+                      <span className="text-amber-900 dark:text-amber-300">
                         Match required
                         {opp.matchPercentage != null ? ` (${opp.matchPercentage}%)` : ''}
                       </span>

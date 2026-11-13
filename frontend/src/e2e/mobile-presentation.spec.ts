@@ -83,7 +83,12 @@ test.describe('mobile presentation', () => {
     // Raised again on 2026-10-29, for the tablet pass below: 7.5-8.8 min
     // measured locally with it (5.9 on CI without it), and 2x the slower is
     // the budget.
-    test.setTimeout(1_080_000);
+    //
+    // Raised on 2026-11-13, by owner decision, to 2x the measured run as the
+    // route list grows. 9.9 min on `main` (run 43208484077, 2026-11-12); 15.4
+    // min on both of #4267's runs once the finance screens joined; the nine
+    // grants screens add ~5% more, so ~16.2 min, and 2x that is 33.
+    test.setTimeout(1_980_000);
     await page.setViewportSize(PHONE);
     // The fixture user has no permissions by default (`signIn` sets
     // `permissions: []`, overriding TEST_USER's list), so a manager-gated route

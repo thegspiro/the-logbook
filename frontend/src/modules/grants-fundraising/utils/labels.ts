@@ -66,11 +66,11 @@ export const PLEDGE_STATUS_LABELS: Record<PledgeStatus, string> = {
 };
 
 export const PLEDGE_STATUS_COLORS: Record<string, string> = {
-  [PledgeStatus.PENDING]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
-  [PledgeStatus.PARTIAL]: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
-  [PledgeStatus.OVERDUE]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
-  [PledgeStatus.FULFILLED]: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300',
-  [PledgeStatus.CANCELLED]: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
+  [PledgeStatus.PENDING]: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  [PledgeStatus.PARTIAL]: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  [PledgeStatus.OVERDUE]: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  [PledgeStatus.FULFILLED]: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  [PledgeStatus.CANCELLED]: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
 };
 
 export const FUNDRAISING_EVENT_TYPE_LABELS: Record<FundraisingEventType, string> = {
@@ -92,11 +92,11 @@ export const FUNDRAISING_EVENT_STATUS_LABELS: Record<FundraisingEventStatus, str
 };
 
 export const FUNDRAISING_EVENT_STATUS_COLORS: Record<string, string> = {
-  [FundraisingEventStatus.PLANNING]: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
-  [FundraisingEventStatus.OPEN]: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300',
-  [FundraisingEventStatus.SOLD_OUT]: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
-  [FundraisingEventStatus.COMPLETED]: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300',
-  [FundraisingEventStatus.CANCELLED]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
+  [FundraisingEventStatus.PLANNING]: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
+  [FundraisingEventStatus.OPEN]: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  [FundraisingEventStatus.SOLD_OUT]: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  [FundraisingEventStatus.COMPLETED]: 'bg-purple-100 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300',
+  [FundraisingEventStatus.CANCELLED]: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
 };
 
 export const ZEFFY_TARGET_LABELS: Record<string, string> = {
@@ -117,12 +117,12 @@ export const ZEFFY_STATE_LABELS: Record<string, string> = {
 };
 
 export const ZEFFY_STATE_COLORS: Record<string, string> = {
-  [ZeffyPaymentState.PENDING]: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
-  [ZeffyPaymentState.IGNORED]: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
-  [ZeffyPaymentState.UNLINKED]: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-300',
-  [ZeffyPaymentState.BEFORE_START]: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-300',
-  [ZeffyPaymentState.UNMATCHED]: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300',
-  [ZeffyPaymentState.APPLIED]: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-300',
-  [ZeffyPaymentState.REVERSED]: 'bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300',
-  [ZeffyPaymentState.NEEDS_REVIEW]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
+  [ZeffyPaymentState.PENDING]: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
+  [ZeffyPaymentState.IGNORED]: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
+  [ZeffyPaymentState.UNLINKED]: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  [ZeffyPaymentState.BEFORE_START]: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
+  [ZeffyPaymentState.UNMATCHED]: 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-300',
+  [ZeffyPaymentState.APPLIED]: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  [ZeffyPaymentState.REVERSED]: 'bg-purple-100 text-purple-900 dark:bg-purple-500/20 dark:text-purple-300',
+  [ZeffyPaymentState.NEEDS_REVIEW]: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
 };
