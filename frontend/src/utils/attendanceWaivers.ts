@@ -4,7 +4,11 @@
  * none of them decides anything (CLAUDE.md pitfall #29).
  */
 
-import type { AttendanceWaiverActionEntry, AttendanceWaiverEligibility } from '../types/attendanceWaiver';
+import type {
+  AttendanceWaiverActionEntry,
+  AttendanceWaiverEligibility,
+  AttendanceWaiverRequest,
+} from '../types/attendanceWaiver';
 import { AttendanceWaiverCapPeriod } from '../constants/enums';
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
@@ -33,6 +37,31 @@ export const latestDecisionNote = (actions: readonly AttendanceWaiverActionEntry
   for (let i = actions.length - 1; i >= 0; i -= 1) {
     const entry = actions[i];
     if (entry && ['approved', 'denied', 'chief_override'].includes(entry.action)) return entry.note || null;
+  }
+  return null;
+};
+
+/** The log entries that make up the question-and-answer exchange, oldest first. */
+const CONVERSATION_ACTIONS: ReadonlySet<string> = new Set(['info_requested', 'member_responded']);
+
+/**
+ * A decider's questions and the member's answers, in the order the backend
+ * logged them. Every round stays, so an earlier answer can still be read.
+ */
+export const waiverConversation = (actions: readonly AttendanceWaiverActionEntry[]): AttendanceWaiverActionEntry[] =>
+  actions.filter((entry) => CONVERSATION_ACTIONS.has(entry.action));
+
+/**
+ * The question waiting on the member, or null. Whether one is open is the
+ * server's `info_requested_at`; the text is the latest question in the log.
+ */
+export const openQuestion = (
+  request: Pick<AttendanceWaiverRequest, 'info_requested_at' | 'actions'>
+): AttendanceWaiverActionEntry | null => {
+  if (!request.info_requested_at) return null;
+  for (let i = request.actions.length - 1; i >= 0; i -= 1) {
+    const entry = request.actions[i];
+    if (entry?.action === 'info_requested') return entry;
   }
   return null;
 };

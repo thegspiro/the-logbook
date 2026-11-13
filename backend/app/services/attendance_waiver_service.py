@@ -110,6 +110,7 @@ from app.models.user import (
 )
 from app.schemas.attendance_waiver import (
     MAX_ATTACHMENTS,
+    MAX_TEXT_LENGTH,
     MEETING_POLICY_KEY,
     MEETING_POLICY_SECTION,
     POLICY_KEY,
@@ -966,6 +967,8 @@ class AttendanceWaiverService:
             raise ValueError(self._settled_message(request))
         request.status = AttendanceWaiverStatus.WITHDRAWN
         request.live_key = None
+        # Nothing is left to answer once the request is taken back.
+        request.info_requested_at = None
         self.db.add(self._action(request, AttendanceWaiverAction.WITHDRAWN, member))
         await self._audit(
             "attendance_waiver_request_withdrawn", member, self._ids(request)
@@ -1073,6 +1076,9 @@ class AttendanceWaiverService:
         request.status = status
         request.decided_at = _now()
         request.decided_by = str(actor.id)
+        # A decider may decide without waiting for the answer; the question
+        # stays in the log, but nothing waits on the member any more.
+        request.info_requested_at = None
         chosen = action or (
             AttendanceWaiverAction.APPROVED
             if status == AttendanceWaiverStatus.APPROVED
@@ -1119,6 +1125,106 @@ class AttendanceWaiverService:
         if request.status == AttendanceWaiverStatus.VOIDED:
             return "This request was voided."
         return f"This request has already been {request.status.value}."
+
+    # ------------------------------------------------------------------
+    # Asking the member for more information
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def may_ask(request: AttendanceWaiverRequest) -> bool:
+        """Whether ``request`` is in a state a decider may put a question to.
+
+        Pending, with no question already open and not waiting on the member
+        to reconfirm a moved session: one question at a time, and the member
+        has only one thing to answer at once. Who may ask is ``may_decide``.
+        """
+        return (
+            request.status == AttendanceWaiverStatus.PENDING
+            and request.info_requested_at is None
+            and request.reconfirm_requested_at is None
+        )
+
+    async def request_info(
+        self,
+        organization_id: str,
+        actor: User,
+        request_id: str,
+        question: Optional[str],
+    ) -> AttendanceWaiverRequest:
+        """A decider asks the member a question; the request stays pending.
+
+        The question is the ``INFO_REQUESTED`` action's note, encrypted like
+        every note. The deciders' prompts are archived, since the next move is
+        the member's; answering prompts them again (``respond``).
+        """
+        org_id = str(organization_id)
+        policy = await self.get_policy(org_id)
+        request = await self._locked_request(org_id, request_id)
+        await self._require_decider(org_id, actor, request, policy)
+        if request.status != AttendanceWaiverStatus.PENDING:
+            raise ValueError(self._settled_message(request))
+        if request.reconfirm_requested_at is not None:
+            raise ValueError(
+                "This request is waiting for the member to confirm the new date."
+            )
+        if request.info_requested_at is not None:
+            raise ValueError("A question is already waiting on the member's answer.")
+        text = self._message(question, "Write the question to ask the member.")
+        request.info_requested_at = _now()
+        self.db.add(
+            self._action(request, AttendanceWaiverAction.INFO_REQUESTED, actor, text)
+        )
+        await self._audit(
+            "attendance_waiver_request_info_requested", actor, self._ids(request)
+        )
+        await self.db.commit()
+        await self.db.refresh(request)
+        await self._archive_prompts(org_id, request)
+        await self._notify_member_asked(org_id, request, actor)
+        return request
+
+    async def respond(
+        self,
+        organization_id: str,
+        member: User,
+        request_id: str,
+        answer: Optional[str],
+    ) -> AttendanceWaiverRequest:
+        """The member answers the open question, and the deciders are asked
+        again."""
+        org_id = str(organization_id)
+        policy = await self.get_policy(org_id)
+        request = await self._locked_request(org_id, request_id)
+        if str(request.user_id) != str(member.id):
+            if await self._may_view(org_id, member, request):
+                raise PermissionError("Only the member who asked can answer.")
+            raise AttendanceWaiverNotFound("Request not found")
+        if request.status != AttendanceWaiverStatus.PENDING:
+            raise ValueError(self._settled_message(request))
+        if request.info_requested_at is None:
+            raise ValueError("There is no question waiting on your answer.")
+        text = self._message(answer, "Write your answer.")
+        request.info_requested_at = None
+        self.db.add(
+            self._action(request, AttendanceWaiverAction.MEMBER_RESPONDED, member, text)
+        )
+        await self._audit(
+            "attendance_waiver_request_member_responded", member, self._ids(request)
+        )
+        await self.db.commit()
+        await self.db.refresh(request)
+        await self._prompt_deciders(org_id, request, member, policy, answered=True)
+        return request
+
+    @staticmethod
+    def _message(text: Optional[str], missing: str) -> str:
+        """A required question or answer, trimmed and within the limit."""
+        cleaned = _clean(text)
+        if cleaned is None:
+            raise ValueError(missing)
+        if len(cleaned) > MAX_TEXT_LENGTH:
+            raise ValueError(f"Keep it to {MAX_TEXT_LENGTH} characters.")
+        return cleaned
 
     # ------------------------------------------------------------------
     # Routing: who may decide, and who is asked
@@ -1428,7 +1534,12 @@ class AttendanceWaiverService:
                         names.get(str(r.decided_by)) if r.decided_by else None
                     ),
                     "chief_override": bool(r.chief_override),
+                    "info_requested_at": r.info_requested_at,
                     "can_withdraw": own and r.status == AttendanceWaiverStatus.PENDING,
+                    "can_respond": own
+                    and r.status == AttendanceWaiverStatus.PENDING
+                    and r.info_requested_at is not None,
+                    "can_request_info": decider and self.may_ask(r),
                     "can_decide": decider
                     and r.status == AttendanceWaiverStatus.PENDING,
                     "can_override": is_chief
@@ -1621,11 +1732,15 @@ class AttendanceWaiverService:
         request: AttendanceWaiverRequest,
         member: User,
         policy: AttendanceWaiverPolicy,
+        *,
+        answered: bool = False,
     ) -> None:
         """In-app prompts for everyone the request is routed to.
 
         After the commit, and never allowed to fail the request: the member's
-        request stands whether or not the bell could be rung.
+        request stands whether or not the bell could be rung. ``answered``
+        words it as the member's answer to a decider's question (the answer
+        itself stays on the request page).
         """
         try:
             recipients = await self.recipients(org_id, request, policy)
@@ -1636,6 +1751,15 @@ class AttendanceWaiverService:
             )
             title = request.event_title_snapshot
             day = _day_label(request.session_date)
+            if answered:
+                subject = f"Waiver request answered — {name}, {title}"
+                opening = (
+                    f"{name} answered your question about their request to be "
+                    f'excused from "{title}" on {day}.'
+                )
+            else:
+                subject = f"Waiver request — {name}, {title}"
+                opening = f'{name} asked to be excused from "{title}" on {day}.'
             for recipient in recipients:
                 self.db.add(
                     NotificationLog(
@@ -1644,13 +1768,10 @@ class AttendanceWaiverService:
                         recipient_id=str(recipient.id),
                         channel=NotificationChannel.IN_APP,
                         category=REVIEW_PROMPT_CATEGORY,
-                        subject=f"Waiver request — {name}, {title}",
+                        subject=subject,
                         # No reason or category: they may be medical, and a
                         # notification is stored in plain text.
-                        message=(
-                            f'{name} asked to be excused from "{title}" on {day}. '
-                            "Open the request to approve or deny it."
-                        ),
+                        message=f"{opening} Open the request to approve or deny it.",
                         action_url=decider_action_url(request),
                         notification_metadata={
                             PROMPT_METADATA_KEY: str(request.id),
@@ -1673,11 +1794,8 @@ class AttendanceWaiverService:
             request,
             recipients,
             self.spec.decider_email_kind,
-            f"Waiver request — {name}, {title}",
-            [
-                f'{name} asked to be excused from "{title}" on {day}.',
-                "Open the request to approve or deny it.",
-            ],
+            subject,
+            [opening, "Open the request to approve or deny it."],
             decider_action_url(request),
             "Review Request",
         )
@@ -1751,6 +1869,62 @@ class AttendanceWaiverService:
                 [f'Your request to be excused from "{title}" on {day} {outcome}.'],
                 member_action_url(request),
                 "View Request",
+            )
+
+    async def _notify_member_asked(
+        self, org_id: str, request: AttendanceWaiverRequest, actor: User
+    ) -> None:
+        """Tell the member a decider has a question, never what it is: the
+        question stays on the request, encrypted, behind sign-in."""
+        name = (await self._names(org_id, [actor.id])).get(str(actor.id), "An officer")
+        title = request.event_title_snapshot
+        day = _day_label(request.session_date)
+        subject = f"Question about your waiver request — {title}"
+        sentence = (
+            f"{name} asked for more information about your request to be "
+            f'excused from "{title}" on {day}. Open it to answer.'
+        )
+        url = member_answer_url(request)
+        try:
+            self.db.add(
+                NotificationLog(
+                    id=generate_uuid(),
+                    organization_id=org_id,
+                    recipient_id=str(request.user_id),
+                    channel=NotificationChannel.IN_APP,
+                    category=MEMBER_UPDATE_CATEGORY,
+                    subject=subject,
+                    message=sentence,
+                    action_url=url,
+                    notification_metadata={PROMPT_METADATA_KEY: str(request.id)},
+                    delivered=True,
+                )
+            )
+            await self.db.commit()
+        except Exception:
+            logger.exception(
+                "Failed to tell the member of a question on waiver request {}",
+                request.id,
+            )
+            await self._recover(request)
+            return
+        member = (
+            await self.db.execute(
+                select(User).where(
+                    User.id == str(request.user_id), User.organization_id == org_id
+                )
+            )
+        ).scalar_one_or_none()
+        if member is not None:
+            await self._email(
+                org_id,
+                request,
+                [member],
+                SPECS[request.workflow].member_email_kind,
+                subject,
+                [sentence],
+                url,
+                "Answer the Question",
             )
 
     async def _email(
@@ -1857,6 +2031,15 @@ def member_action_url(request: AttendanceWaiverRequest) -> str:
     if request.event_id:
         return f"/events/{request.event_id}"
     return SPECS[request.workflow].member_fallback_url
+
+
+def member_answer_url(request: AttendanceWaiverRequest) -> str:
+    """Where the member answers a question: My Training's list of their
+    requests holds the answer form. The meeting workflow has no screen of its
+    own, so its member is sent where its other notices go."""
+    if request.workflow == TRAINING_WORKFLOW:
+        return TRAINING_SPEC.member_fallback_url
+    return member_action_url(request)
 
 
 def _day_label(day: date) -> str:
@@ -2042,6 +2225,7 @@ async def void_pending_for_events(
         spec = SPECS[request.workflow]
         request.status = AttendanceWaiverStatus.VOIDED
         request.live_key = None
+        request.info_requested_at = None
         db.add(
             AttendanceWaiverService._action(
                 request,
