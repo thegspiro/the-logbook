@@ -8,7 +8,7 @@ import copy
 import hashlib
 import unicodedata
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, List, Optional
 from uuid import UUID, uuid4
 
 from fastapi import (
@@ -77,6 +77,7 @@ from app.schemas.election import (
     ElectionCreate,
     ElectionDelete,
     ElectionDeleteResponse,
+    ElectionEligibilityRules,
     ElectionListResponse,
     ElectionReportResponse,
     ElectionResponse,
@@ -150,13 +151,18 @@ from app.services.election_service import (
     office_ineligible_message,
     position_ballot_items,
 )
-from app.services.membership_tier_service import (
-    MembershipTierService,
-    evaluate_wait,
-    wait_ineligibility_reason,
+from app.services.membership_tier_service import MembershipTierService
+from app.services.voter_rules import (
+    RowWait,
+    as_type_rules,
+    row_labels,
+    row_wait_reason,
+    row_waits,
+    voter_rows,
 )
 from app.utils.membership import (
     VOTER_TYPE_LABELS,
+    configured_tiers,
     voter_type_decided_by_class,
     voter_type_key,
 )
@@ -1032,10 +1038,12 @@ class ElectionSettingsUpdate(BaseModel):
     )
     # Replaced whole: the settings screen sends the complete object.
     eligibility: Optional[EligibilityDefaults] = None
-    # The annual meeting's own defaults, replaced whole. Unlike
-    # ``eligibility``, null is meaningful: the annual meeting uses the
+    # Each other meeting kind's own defaults, replaced whole. Unlike
+    # ``eligibility``, null is meaningful: that kind uses the
     # regular-meeting defaults.
     annual_eligibility: Optional[EligibilityDefaults] = None
+    bylaws_eligibility: Optional[EligibilityDefaults] = None
+    special_eligibility: Optional[EligibilityDefaults] = None
 
     @field_validator(
         "default_voting_method",
@@ -1086,11 +1094,40 @@ def _feature_flag(features: dict, name: str) -> bool:
 
 
 _REGULAR_ELIGIBILITY_KEY = "election_eligibility"
-_ANNUAL_ELIGIBILITY_KEY = "election_eligibility_annual"
+# Where each other meeting kind keeps its own defaults; absent means it uses
+# the regular ones.
+_KIND_ELIGIBILITY_KEYS = {
+    "annual": "election_eligibility_annual",
+    "bylaws": "election_eligibility_bylaws",
+    "special": "election_eligibility_special",
+}
+_OWN_DEFAULT_KINDS = tuple(_KIND_ELIGIBILITY_KEYS)
+
+
+def _as_type_rule_defaults(
+    defaults: EligibilityDefaults, org_settings: dict
+) -> EligibilityDefaults:
+    """``defaults`` with its rules as a version 2 (per-type) rule set.
+
+    A department that has not saved version 2 rules yet still has version
+    1 rules and tier voting benefits; ``as_type_rules`` turns the two into
+    the rows that judge every member the same way, so what the settings
+    screen shows and what a new election copies is what applies. Nothing is
+    written back until the secretary saves.
+    """
+    if defaults.rules.version == 2:
+        return defaults
+    converted = as_type_rules(
+        defaults.rules.model_dump(), configured_tiers(org_settings)
+    )
+    return defaults.model_copy(
+        update={"rules": ElectionEligibilityRules.model_validate(converted)}
+    )
 
 
 def _stored_eligibility(org_settings: dict, key: str) -> Optional[EligibilityDefaults]:
-    """One set of the department's stored eligibility defaults, or None.
+    """One set of the department's stored eligibility defaults, as version 2
+    rules, or None.
 
     The value is validated on every write, but ``organizations.settings`` is
     free-form JSON, so a stored value that no longer validates reads as
@@ -1100,28 +1137,29 @@ def _stored_eligibility(org_settings: dict, key: str) -> Optional[EligibilityDef
     if not isinstance(raw, dict):
         return None
     try:
-        return EligibilityDefaults.model_validate(raw)
+        stored = EligibilityDefaults.model_validate(raw)
     except ValidationError:
         logger.warning("Stored {} is invalid; ignoring it", key)
         return None
+    return _as_type_rule_defaults(stored, org_settings)
 
 
 def _eligibility_defaults(org_settings: dict) -> EligibilityDefaults:
-    """The regular-meeting defaults, else the built-in ones (no
-    election-wide rules, check-in required on new items)."""
-    return (
-        _stored_eligibility(org_settings, _REGULAR_ELIGIBILITY_KEY)
-        or EligibilityDefaults()
-    )
+    """The regular-meeting defaults, else the built-in ones (check-in
+    required on new items, and the rules the tier ladder implies)."""
+    return _stored_eligibility(
+        org_settings, _REGULAR_ELIGIBILITY_KEY
+    ) or _as_type_rule_defaults(EligibilityDefaults(), org_settings)
 
 
 def _defaults_for_kind(org_settings: dict, meeting_kind: str) -> EligibilityDefaults:
-    """The defaults an election held at ``meeting_kind`` copies: the annual
-    meeting's own when the department set them, else the regular ones."""
-    if meeting_kind == "annual":
-        annual = _stored_eligibility(org_settings, _ANNUAL_ELIGIBILITY_KEY)
-        if annual is not None:
-            return annual
+    """The defaults an election held at ``meeting_kind`` copies: that
+    kind's own when the department set them, else the regular ones."""
+    key = _KIND_ELIGIBILITY_KEYS.get(meeting_kind)
+    if key is not None:
+        own = _stored_eligibility(org_settings, key)
+        if own is not None:
+            return own
     return _eligibility_defaults(org_settings)
 
 
@@ -1188,6 +1226,10 @@ def _active_rules_or_none(rules: Optional[dict]) -> Optional[dict]:
     created before the column existed."""
     if not rules:
         return None
+    # A version 2 set is kept even with no rule in force: its presence is
+    # what says the tier ladder's voting rules do not apply to the election.
+    if rules.get("version") == 2:
+        return rules
     attendance = rules.get("attendance") or {}
     if attendance.get("mode", "none") == "none" and not rules.get("waiting_periods"):
         return None
@@ -1197,10 +1239,10 @@ def _active_rules_or_none(rules: Optional[dict]) -> Optional[dict]:
 async def _meeting_kind_of_link(
     db: AsyncSession, organization_id: Any, meeting_id: Optional[Any]
 ) -> str:
-    """``annual`` when the linked meeting record is an annual meeting, else
-    ``regular``. Calendar events carry no annual type, so an election linked
+    """``annual`` or ``special`` when the linked meeting record is one, else
+    ``regular``. Calendar events carry no meeting type, so an election linked
     to one (or to nothing) is a regular-meeting election unless it says
-    otherwise."""
+    otherwise; a bylaws vote is never inferred, only chosen."""
     if not meeting_id:
         return "regular"
     result = await db.execute(
@@ -1210,7 +1252,11 @@ async def _meeting_kind_of_link(
         )
     )
     meeting_type = result.scalar_one_or_none()
-    return "annual" if meeting_type == MeetingType.ANNUAL else "regular"
+    if meeting_type == MeetingType.ANNUAL:
+        return "annual"
+    if meeting_type == MeetingType.SPECIAL:
+        return "special"
+    return "regular"
 
 
 async def _apply_eligibility_defaults(
@@ -1303,11 +1349,15 @@ def _settings_response(org_settings: dict) -> dict:
             "paper_ballot_attestations_required", 2
         ),
         "eligibility": _eligibility_defaults(org_settings).model_dump(),
-        "annual_eligibility": (
-            annual.model_dump()
-            if (annual := _stored_eligibility(org_settings, _ANNUAL_ELIGIBILITY_KEY))
-            else None
-        ),
+        **{
+            f"{kind}_eligibility": (
+                own.model_dump()
+                if (own := _stored_eligibility(org_settings, key))
+                else None
+            )
+            for kind, key in _KIND_ELIGIBILITY_KEYS.items()
+        },
+        "voter_rows": voter_rows(configured_tiers(org_settings)),
         "tier_voting_rules": _tier_voting_rules(org_settings),
     }
 
@@ -1430,11 +1480,14 @@ async def update_election_settings(
 
     if "eligibility" in update_data:
         org_settings[_REGULAR_ELIGIBILITY_KEY] = update_data["eligibility"]
-    if "annual_eligibility" in update_data:
-        if update_data["annual_eligibility"] is None:
-            org_settings.pop(_ANNUAL_ELIGIBILITY_KEY, None)
+    for kind, key in _KIND_ELIGIBILITY_KEYS.items():
+        field = f"{kind}_eligibility"
+        if field not in update_data:
+            continue
+        if update_data[field] is None:
+            org_settings.pop(key, None)
         else:
-            org_settings[_ANNUAL_ELIGIBILITY_KEY] = update_data["annual_eligibility"]
+            org_settings[key] = update_data[field]
 
     org_settings["election_defaults"] = election_defaults
     org_settings["proxy_voting"] = proxy_config
@@ -1454,6 +1507,27 @@ async def update_election_settings(
 
     # Return the full updated settings in the same flat shape as GET
     return _settings_response(org_settings)
+
+
+# Which of a member's rows decides what their profile reports: one that
+# keeps them from voting outright, then one still waiting, then the rest.
+_WAIT_STATE_RANK = {"never": 0, "waiting": 1, "waived": 2, "eligible": 3}
+
+
+def _binding_wait(outcomes: List[RowWait]) -> Optional[RowWait]:
+    """The row that decides a member's waiting-period standing, or None
+    when no row sets a rule for them. Of two rows still waiting, the later
+    date binds."""
+    ruled = [o for o in outcomes if o.state in _WAIT_STATE_RANK]
+    if not ruled:
+        return None
+    return min(
+        ruled,
+        key=lambda o: (
+            _WAIT_STATE_RANK[o.state],
+            -(o.eligible_from.toordinal() if o.eligible_from else 0),
+        ),
+    )
 
 
 async def _member_voting_eligibility(
@@ -1479,23 +1553,24 @@ async def _member_voting_eligibility(
         else member.member_status_since
     )
     wait_starts = await tier_svc.get_type_wait_start(member, organization_id)
+    tiers = configured_tiers(org_settings)
+    ranks_as = MembershipTierService.ranks_as_by_tier(org)
+    labels = row_labels(tiers)
     outcomes = []
-    for kind in ("regular", "annual"):
+    for kind in ("regular", *_OWN_DEFAULT_KINDS):
         rules = _defaults_for_kind(org_settings, kind).rules.model_dump()
-        outcome = evaluate_wait(
-            rules.get("waiting_periods"),
-            type_key,
-            wait_starts,
-            bool(member.voting_wait_waived),
-            today,
+        outcome = _binding_wait(
+            await row_waits(
+                tier_svc, member, organization_id, rules, ranks_as, labels, today
+            )
         )
         outcomes.append(
             MemberWaitOutcome(
                 meeting_kind=kind,
-                state=outcome.state,
-                months=outcome.months,
-                eligible_from=outcome.eligible_from,
-                reason=wait_ineligibility_reason(outcome),
+                state=outcome.state if outcome else "no_rule",
+                months=outcome.months if outcome else None,
+                eligible_from=outcome.eligible_from if outcome else None,
+                reason=row_wait_reason(outcome) if outcome else None,
             )
         )
     return MemberVotingEligibilityResponse(

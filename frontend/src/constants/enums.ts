@@ -433,11 +433,23 @@ export const MemberVoterType = {
 export type MemberVoterType = (typeof MemberVoterType)[keyof typeof MemberVoterType];
 
 // ============================================
+// Wait Counted From (TypeRule.wait.counted_from) — when a per-type waiting
+// period starts: when the member became that type, or when they joined.
+// ============================================
+export const WaitCountedFrom = {
+  TYPE: 'type',
+  JOINED: 'joined',
+} as const;
+export type WaitCountedFrom = (typeof WaitCountedFrom)[keyof typeof WaitCountedFrom];
+
+// ============================================
 // Meeting Kind (Election.meeting_kind) — which eligibility defaults it copies
 // ============================================
 export const MeetingKind = {
   REGULAR: 'regular',
   ANNUAL: 'annual',
+  BYLAWS: 'bylaws',
+  SPECIAL: 'special',
 } as const;
 export type MeetingKind = (typeof MeetingKind)[keyof typeof MeetingKind];
 

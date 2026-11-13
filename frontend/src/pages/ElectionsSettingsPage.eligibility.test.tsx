@@ -5,7 +5,7 @@
  * rules are shown read-only beside them.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import type { ElectionSettings, EligibilityDefaults } from '../types/election';
@@ -318,5 +318,80 @@ describe('ElectionsSettingsPage — waiting periods by member type', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Enter a whole number from 1 to 600. It is still saved as 12.');
     await act(() => new Promise((resolve) => setTimeout(resolve, 900)));
     expect(mockUpdateSettings).not.toHaveBeenCalled();
+  });
+});
+
+describe('ElectionsSettingsPage — per-type rules (version 2)', () => {
+  const typeRules: EligibilityDefaults = {
+    rules: {
+      version: 2,
+      attendance: { mode: 'none' },
+      types: {
+        regular: { may_vote: true, wait: null, attendance: [{ mode: 'count', min_meetings: 6, of_last_meetings: 12 }] },
+        probationary: { may_vote: false, wait: null, attendance: [] },
+        administrative: { may_vote: true, wait: null, attendance: [] },
+      },
+    },
+    default_require_attendance: true,
+    default_voter_types: ['all'],
+    position_voter_types: {},
+  };
+  const v2Settings: ElectionSettings = {
+    ...structuredClone(stored),
+    eligibility: typeRules,
+    voter_rows: [
+      { key: 'regular', label: 'Regular', decided_by: 'status', counts_as: null },
+      { key: 'probationary', label: 'Probationary', decided_by: 'status', counts_as: null },
+      { key: 'administrative', label: 'Administrative', decided_by: 'class', counts_as: null },
+    ],
+  };
+
+  const lastSent = (): ElectionSettings => {
+    const calls = mockUpdateSettings.mock.calls;
+    const sent = calls[calls.length - 1]?.[0] as ElectionSettings | undefined;
+    if (!sent) throw new Error('nothing was sent');
+    return sent;
+  };
+
+  beforeEach(() => {
+    mockGetSettings.mockReset();
+    mockGetElections.mockReset();
+    mockUpdateSettings.mockReset();
+    mockGetSettings.mockResolvedValue(structuredClone(v2Settings));
+    mockGetElections.mockResolvedValue([]);
+    mockUpdateSettings.mockImplementation((data: unknown) => Promise.resolve(data));
+    window.history.pushState({}, '', '/elections/settings?tab=eligibility');
+  });
+
+  it('edits a row and hides the tier rules it replaces', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionsSettingsPage />);
+
+    const regular = await screen.findByRole('group', { name: 'Regular members' });
+    expect(screen.queryByRole('heading', { name: 'Membership tier rules' })).not.toBeInTheDocument();
+
+    await user.selectOptions(within(regular).getByLabelText('Waiting period'), 'months');
+    await waitFor(
+      () =>
+        expect(lastSent().eligibility?.rules.types?.regular).toEqual({
+          may_vote: true,
+          wait: { months: 12, counted_from: 'joined' },
+          attendance: [{ mode: 'count', min_meetings: 6, of_last_meetings: 12 }],
+        }),
+      SETTLE
+    );
+    // The other rows ride along unchanged.
+    expect(lastSent().eligibility?.rules.types?.probationary).toEqual({ may_vote: false, wait: null, attendance: [] });
+  });
+
+  it('gives bylaws amendments their own rules, starting from the regular ones', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ElectionsSettingsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Bylaws amendment' }));
+    expect(screen.getByText('Bylaws amendments use the regular business meeting rules.')).toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: 'Use different rules for bylaws amendments' }));
+    await waitFor(() => expect(lastSent().bylaws_eligibility).toEqual(typeRules), SETTLE);
+    expect(lastSent().eligibility).toEqual(typeRules);
   });
 });

@@ -408,6 +408,21 @@ def configured_tiers(settings: Any) -> List[Dict[str, Any]]:
     return sorted(rungs, key=lambda t: t.get("sort_order", 0) or 0)
 
 
+def ranks_as_from_tiers(tiers: Iterable[Mapping[str, Any]]) -> Dict[str, str]:
+    """tier id (canonical) -> the built-in status it counts as.
+
+    Only tiers that declare ``ranks_as`` appear; a tier without one counts as
+    nothing, which is what ``status_for_tier`` relies on.
+    """
+    mapping: Dict[str, str] = {}
+    for tier in tiers:
+        tier_id = canonical_member_status(tier.get("id"))
+        ranks_as = (tier.get("ranks_as") or "").strip().lower()
+        if tier_id and ranks_as:
+            mapping[tier_id] = ranks_as
+    return mapping
+
+
 def standing_from(
     member_status: Optional[str], membership_type: Optional[str]
 ) -> Optional[str]:

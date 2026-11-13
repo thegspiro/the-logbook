@@ -367,8 +367,13 @@ class TestMemberVotingEligibilityEndpoints:
         )
         assert response.member_type == "administrative"
         assert response.member_type_label == "Administrative"
-        assert [o.meeting_kind for o in response.outcomes] == ["regular", "annual"]
-        # No annual set: the annual meeting uses the regular rules.
+        assert [o.meeting_kind for o in response.outcomes] == [
+            "regular",
+            "annual",
+            "bylaws",
+            "special",
+        ]
+        # No other kind has a set of its own: each uses the regular rules.
         assert {o.state for o in response.outcomes} == {"waiting"}
         assert response.outcomes[0].reason.startswith("Administrative members may vote")
 
