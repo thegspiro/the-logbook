@@ -183,7 +183,10 @@ describe('evaluateCell', () => {
   });
 
   it('labels the row with the date that decides it', () => {
-    const expiring = evaluateCell(cell({ expiry_date: '2026-11-12' }), requirement(), AS_OF);
+    // A fixed date before the expiry: judged against today, the label turns
+    // to "Lapsed" the day after the hard-coded expiry passes.
+    const beforeExpiry = '2026-11-01';
+    const expiring = evaluateCell(cell({ expiry_date: '2026-11-12' }), requirement(), beforeExpiry);
     const windowed = evaluateCell(
       cell({ status: 'not_started', window_start: '2026-01-01', window_end: '2026-12-31' }),
       requirement(),
