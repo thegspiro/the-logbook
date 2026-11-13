@@ -262,6 +262,11 @@ TRAINING_OFFICER_ROLE_SLUGS: list[str] = position_slugs_for_offices(
 # which named only the one spelling no department is ever given.
 CHIEF_POSITION_SLUGS: list[str] = position_slugs_for_offices("chief")
 
+# Every spelling of the President. Like the Chief, the President may decide any
+# member's attendance waiver request, and each decides the other's own
+# (owner decision, 2026-11-13).
+PRESIDENT_POSITION_SLUGS: list[str] = position_slugs_for_offices("president")
+
 # Every spelling of the Secretary: the business-meeting waiver routing falls
 # back to it when the department's chosen positions leave nobody to ask.
 SECRETARY_POSITION_SLUGS: list[str] = position_slugs_for_offices("secretary")

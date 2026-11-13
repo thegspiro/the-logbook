@@ -27,8 +27,10 @@ import AttendanceWaiverRequestDialog from './AttendanceWaiverRequestDialog';
  * them, but they can no longer ask. The others (the department takes no
  * requests, the session does not count, the member is exempt) mean there is
  * nothing to excuse, and a notice would only be noise on the page.
+ * `no_decider` is the Chief's or President's own request while the other
+ * office is vacant and no alternate is named: they can fix it by asking.
  */
-const SHOWN_REFUSALS: ReadonlySet<string> = new Set(['checked_in', 'deadline_passed', 'no_waivers_left']);
+const SHOWN_REFUSALS: ReadonlySet<string> = new Set(['checked_in', 'deadline_passed', 'no_waivers_left', 'no_decider']);
 
 interface AttendanceWaiverCardProps {
   eventId: string;

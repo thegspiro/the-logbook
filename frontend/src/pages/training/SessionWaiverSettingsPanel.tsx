@@ -20,6 +20,12 @@
  * final decision (approved, not approved, approved by the Chief on review).
  * They are informed only — they cannot open a request, and the notice carries
  * no reason, category or note.
+ *
+ * The alternate (owner decision, 2026-11-13): the Chief's own request goes to
+ * the President and the President's to the Chief; when that other office is
+ * vacant, the member named here decides. The choices and whether the stored
+ * one is still a current member come from `GET .../policy/alternate`, so the
+ * screen warns rather than judging membership itself.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -36,7 +42,7 @@ import {
   AttendanceWaiverDeadline,
   AttendanceWaiverReasonText,
 } from '../../constants/enums';
-import type { AttendanceWaiverPolicy } from '../../types/attendanceWaiver';
+import type { AttendanceWaiverAlternateOptions, AttendanceWaiverPolicy } from '../../types/attendanceWaiver';
 import {
   WAIVER_ATTACHMENT_MAX_COUNT,
   WAIVER_ATTACHMENT_MAX_MB,
@@ -162,7 +168,11 @@ const validatePolicyDraft = (draft: Draft): FieldErrors<Field> => {
  * chosen position missing from it no longer exists, and the backend refuses a
  * save naming it, so it is dropped. With no list, the choice is sent as is.
  */
-const toPolicy = (draft: Draft, knownPositionIds: ReadonlySet<string> | null): AttendanceWaiverPolicy => ({
+const toPolicy = (
+  draft: Draft,
+  knownPositionIds: ReadonlySet<string> | null,
+  lapsedAlternateId: string | null = null
+): AttendanceWaiverPolicy => ({
   enabled: draft.enabled,
   deadline: draft.deadline,
   cap: draft.capOn ? Number(draft.cap) : null,
@@ -176,7 +186,10 @@ const toPolicy = (draft: Draft, knownPositionIds: ReadonlySet<string> | null): A
     ? draft.positionIds.filter((p) => knownPositionIds.has(p))
     : draft.positionIds,
   cc_position_ids: knownPositionIds ? draft.ccPositionIds.filter((p) => knownPositionIds.has(p)) : draft.ccPositionIds,
-  chief_alternate_user_id: draft.chiefAlternateUserId,
+  // An alternate who is no longer a current member is refused by the
+  // backend, and already stands in for nobody, so a save clears them.
+  chief_alternate_user_id:
+    draft.chiefAlternateUserId && draft.chiefAlternateUserId !== lapsedAlternateId ? draft.chiefAlternateUserId : null,
 });
 
 export const SessionWaiverSettingsPanel: React.FC = () => {
@@ -184,6 +197,8 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
   const [saved, setSaved] = useState<Draft | null>(null);
   /** null when the positions could not be loaded. */
   const [positions, setPositions] = useState<AvailablePosition[] | null>([]);
+  /** undefined while loading; null when the choices could not be loaded. */
+  const [alternates, setAlternates] = useState<AttendanceWaiverAlternateOptions | null | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [summaryFocus, setSummaryFocus] = useState(0);
@@ -205,6 +220,12 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
         if (!cancelled) setPositions(result.positions);
       } catch {
         if (!cancelled) setPositions(null);
+      }
+      try {
+        const options = await attendanceWaiverService.getAlternateOptions();
+        if (!cancelled) setAlternates(options);
+      } catch {
+        if (!cancelled) setAlternates(null);
       }
     };
     void load();
@@ -268,6 +289,14 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
     : 0;
   const staleChoiceCount = unknownPositionCount + unknownCcPositionCount;
 
+  // The stored alternate is no longer a current member: nobody stands in for
+  // a vacant Chief or President until someone else is chosen.
+  const lapsedAlternate =
+    alternates?.alternate && !alternates.alternate.current && draft.chiefAlternateUserId === alternates.alternate.id
+      ? alternates.alternate
+      : null;
+  const unchanged = !dirty && staleChoiceCount === 0 && !lapsedAlternate;
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const found = validatePolicyDraft(draft);
@@ -280,7 +309,7 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
     setSaving(true);
     try {
       const stored = await attendanceWaiverService.savePolicy(
-        toPolicy(draft, positions ? new Set(positions.map((p) => p.id)) : null)
+        toPolicy(draft, positions ? new Set(positions.map((p) => p.id)) : null, lapsedAlternate?.id ?? null)
       );
       setDraft(toDraft(stored));
       setSaved(toDraft(stored));
@@ -605,16 +634,73 @@ export const SessionWaiverSettingsPanel: React.FC = () => {
         )}
       </div>
 
+      <div className="card space-y-3 p-6">
+        <div>
+          <h3 className="text-theme-text-primary text-base font-semibold">
+            The Chief&apos;s and President&apos;s own requests
+          </h3>
+          <p className="text-theme-text-secondary mt-1 text-sm">
+            The Chief and the President can decide any member&apos;s request. The Chief&apos;s own request goes to the
+            President, and the President&apos;s to the Chief; the positions chosen above do not decide either.
+          </p>
+        </div>
+        {alternates === undefined ? (
+          <p className="text-theme-text-muted text-sm" role="status">
+            Loading members…
+          </p>
+        ) : alternates === null ? (
+          <p className={`text-sm ${FIELD_ERROR_CLASS}`} role="alert">
+            Members could not be loaded, so the alternate cannot be changed right now. The current choice is kept when
+            you save.
+          </p>
+        ) : (
+          <FormField
+            id="waiver-policy-alternate"
+            label="Who decides the Chief's or President's own request when the other office is vacant"
+            hint="With no one named, the Chief or President cannot file a request while the other office is vacant. The person must be a current member."
+          >
+            {(field) => (
+              <select
+                {...field}
+                className="form-input"
+                disabled={saving}
+                value={draft.chiefAlternateUserId ?? ''}
+                onChange={(e) => update({ chiefAlternateUserId: e.target.value || null })}
+              >
+                <option value="">No one named</option>
+                {lapsedAlternate && !alternates.members.some((m) => m.id === lapsedAlternate.id) && (
+                  <option value={lapsedAlternate.id}>
+                    {lapsedAlternate.name ?? 'A former member'} (no longer a member)
+                  </option>
+                )}
+                {alternates.members.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </FormField>
+        )}
+        {lapsedAlternate && (
+          <div className="alert-warning rounded-lg p-3 text-sm" role="alert">
+            {lapsedAlternate.name ?? 'The named alternate'} is no longer a current member, so nobody decides the
+            Chief&apos;s or President&apos;s own request while the other office is vacant. Choose someone else; saving
+            without a new choice clears the alternate.
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={saving || (!dirty && staleChoiceCount === 0)}
+          disabled={saving || unchanged}
           className="btn-primary inline-flex items-center gap-2 text-sm font-medium disabled:opacity-50"
         >
           <Save className="h-4 w-4" aria-hidden="true" />
           {saving ? 'Saving...' : 'Save'}
         </button>
-        {!dirty && staleChoiceCount === 0 && <span className="text-theme-text-muted text-sm">No unsaved changes</span>}
+        {unchanged && <span className="text-theme-text-muted text-sm">No unsaved changes</span>}
       </div>
     </form>
   );

@@ -2339,6 +2339,26 @@ closes on its own as **Expired**. The meeting counts as missed: nothing is
 written to the minutes' roll call, which only an approval does. The member is
 told in the app and by email, and the request can no longer be decided.
 
+### Requests from the Chief or the President _(2026-11-13)_
+
+When members ask to be excused from a business meeting, the Chief and the
+President can decide any member's request, alongside the positions the
+Secretary chose.
+
+Their own requests work differently:
+
+- The **Chief's** request goes to the **President**, and the **President's**
+  goes to the **Chief**. The positions the Secretary chose do not decide
+  either one.
+- If that other office is empty, the request goes to the member named as the
+  **alternate** in the meeting waiver policy.
+- If no alternate is named, or the named member is no longer a current member,
+  the Chief or President cannot file the request. They are told why, and should
+  ask an officer to name an alternate.
+
+There is no screen for the meeting policy yet. The alternate is set with the
+rest of the meeting policy.
+
 ---
 
 ## Elections and Voting

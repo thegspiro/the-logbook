@@ -2597,6 +2597,40 @@ is refused if you have already checked in to the session: withdraw it instead.
 See [Moving an event that members asked to be excused from](./04-events-meetings.md#moving-an-event-that-members-asked-to-be-excused-from-2026-11-13)
 for the officers' side.
 
+### Requests from the Chief or the President _(2026-11-13)_
+
+**Who can set this up:** training officers with `training.manage`.
+
+The Chief and the President can decide any member's request to be excused
+from a training session, alongside the positions your department chose. Their
+own requests work differently:
+
+- The **Chief's** request goes to the **President**, and the **President's**
+  goes to the **Chief**. The positions chosen under **Who decides** do not
+  decide either one.
+- If that other office is empty, the request goes to the member you name as
+  the **alternate**.
+- If no alternate is named, or the named member is no longer a current member,
+  the Chief or President cannot file the request. The session page tells them
+  why: "No one can decide this request: your department has no President and
+  no alternate is named in the waiver settings. Ask an officer to name one."
+
+To name the alternate:
+
+1. Open **Training Admin > Settings & Data > Session Waivers**.
+2. Under **The Chief's and President's own requests**, choose a member in
+   **Who decides the Chief's or President's own request when the other office
+   is vacant**. Choose **No one named** to clear it.
+3. Select **Save**.
+
+Only current members (active or probationary) can be named. If the member you
+named later leaves, the settings show a warning: nobody stands in for an empty
+office until you choose someone else. Saving without a new choice clears the
+alternate.
+
+The Chief alone can still approve a request that was denied. The President
+cannot.
+
 ### Creating a Waiver
 
 1. Select the **Create Waiver** tab.

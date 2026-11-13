@@ -11,6 +11,7 @@ import { asArray } from '../utils/asArray';
 import { WaiverAttachmentMode, waiverAttachmentService } from './waiverAttachmentService';
 import type { AttendanceWaiverStatus } from '../constants/enums';
 import type {
+  AttendanceWaiverAlternateOptions,
   AttendanceWaiverEligibility,
   AttendanceWaiverPolicy,
   AttendanceWaiverRequest,
@@ -62,6 +63,15 @@ export const attendanceWaiverService = {
   async savePolicy(policy: AttendanceWaiverPolicy): Promise<AttendanceWaiverPolicy> {
     const response = await api.put<AttendanceWaiverPolicy>(`${BASE}/policy`, policy);
     return normalizePolicy(response.data);
+  },
+
+  /** Who may be named to decide the Chief's or President's own request (training.manage). */
+  async getAlternateOptions(): Promise<AttendanceWaiverAlternateOptions> {
+    const response = await api.get<AttendanceWaiverAlternateOptions>(`${BASE}/policy/alternate`);
+    return {
+      members: asArray(response.data.members),
+      alternate: response.data.alternate ?? null,
+    };
   },
 
   async getEligibility(eventId: string): Promise<AttendanceWaiverEligibility> {

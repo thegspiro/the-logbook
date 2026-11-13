@@ -223,6 +223,7 @@ changes. The policy chooses:
 | `attachment`                | supporting documents off, optional or required (default off)            |
 | `attachment_retention_days` | days a request's documents are kept once it is closed (default 365)     |
 | `approver_position_ids`     | the positions whose holders decide                                      |
+| `chief_alternate_user_id`   | the Chief's or President's decider when the other office is vacant      |
 
 **Who may ask.** A member may ask about a training session that is not
 cancelled and is linked to a session-attendance requirement that applies to
@@ -234,10 +235,26 @@ ask again; a denied request does not.
 **Who decides.** The current holders of the chosen positions are asked. If
 that leaves nobody (no positions chosen, the positions are vacant, or the only
 holder is the member asking), the Chief is asked, and failing a Chief, every
-holder of `training.manage`. A Chief may always decide. Nobody decides their
-own request. The first decision is final, except that the Chief may approve a
-denied request, with a reason, never on their own request; the denial stays on
-record beside the override.
+holder of `training.manage`. A Chief or a President may always decide. Nobody
+decides their own request. The first decision is final, except that the Chief
+may approve a denied request, with a reason, never on their own request; the
+denial stays on record beside the override.
+
+**The Chief's and the President's own requests** _(owner decision,
+2026-11-13)_. The Chief's request is decided by the President's holders, and the
+President's by the Chief's; the chosen positions and the fallbacks do not
+apply to either. A member holding both offices is decided by any other holder
+of either. When the other office has no holder, the member named in
+`chief_alternate_user_id` decides, while they are a current (active or
+probationary) member and not the one asking. With neither, eligibility refuses
+with `refusal_code` `no_decider` ("No one can decide this request: your
+department has no President and no alternate is named in the waiver settings.
+Ask an officer to name one."), so the request cannot be filed. Saving the
+policy refuses an alternate who is not a current member of the department, and
+`GET .../policy/alternate` (the manage permission) lists the members who can
+be named and whether the stored one still qualifies, for the settings screen's
+warning. `_officer_route` is the one rule; routing, `may_decide` and the
+decider queue all read it.
 
 **Who is copied** _(2026-11-13)_. `cc_position_ids` names positions whose
 current holders are told the outcome of each final decision (approved, denied,
@@ -332,6 +349,7 @@ only to a Chief.
 | ------ | -------------------------------------------------------------------- | --------------------------------------------- |
 | `GET`  | `/api/v1/training/waivers/requests/policy`                           | Any authenticated user                        |
 | `PUT`  | `/api/v1/training/waivers/requests/policy`                           | `training.manage`                             |
+| `GET`  | `/api/v1/training/waivers/requests/policy/alternate`                 | `training.manage`                             |
 | `GET`  | `/api/v1/training/waivers/requests/eligibility`                      | Any authenticated user, about themselves      |
 | `POST` | `/api/v1/training/waivers/requests`                                  | Any authenticated user, for themselves        |
 | `GET`  | `/api/v1/training/waivers/requests/mine`                             | Any authenticated user                        |
@@ -515,7 +533,9 @@ a denial. What differs:
   marked present on the minutes record), when a leave of absence covers the
   meeting, or when the Secretary has already waived it.
 - **Routing**: the chosen positions; failing them, the Secretary; failing the
-  Secretary, every holder of `meetings.manage`. A Chief may always decide.
+  Secretary, every holder of `meetings.manage`. A Chief or a President may
+  always decide. The Chief's and the President's own requests are routed as in
+  training (to the other office, then the meeting policy's own named alternate).
 - **Approving writes the waiver** onto the meeting's minutes record: the
   `MeetingAttendee` row gets `waiver_reason` "Excused: approved request" (plus
   the category), `waiver_granted_by` the decider and `waiver_request_id` the

@@ -641,6 +641,14 @@ class TestGranting:
 
 class TestCarryOver:
     async def test_create_from_event_carries_approved_requests(self, db_session, dept):
+        # With no President, the Chief's request goes to a named alternate
+        # (owner decision, 2026-11-13); the clerk is named here.
+        await set_meeting_policy(
+            db_session,
+            dept.org,
+            approver_position_ids=[dept.clerk_pos],
+            chief_alternate_user_id=dept.ids["clerk"],
+        )
         absent = await _submit(db_session, dept, reason="Work")
         await _svc(db_session).approve(dept.org, dept.clerk, absent.id)
         attended = await _submit(db_session, dept, who=dept.other)
