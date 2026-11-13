@@ -69,8 +69,9 @@ test.describe('mobile dialogs', () => {
     // route list grows. 9.8 min on `main` (run 43208484077, 2026-11-12); 12.1
     // min once the finance screens joined (#4267, run 43415858920); the nine
     // grants screens add ~5% (0.78 of 14.9 min, timed per route locally), so
-    // ~12.7 min, and 2x that is 26.
-    test.setTimeout(1_560_000);
+    // ~12.7 min, and 2x that would have been 26. This PR's own run measured
+    // 15.1 min with every route in (#4269, run 43444576216), so 2x is 31.
+    test.setTimeout(1_860_000);
 
     // A dialog still fading in when axe runs is measured through a partial
     // opacity: on a slow runner the Create Shift dialog reported 38 contrast
