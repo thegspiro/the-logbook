@@ -230,7 +230,10 @@ const ExpenseReportsPage: React.FC = () => {
                     onClick={() => void navigate(`/finance/expenses/${er.id}`)}
                     className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
                   >
-                    <td data-label="Report #" className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-600">
+                    <td
+                      data-label="Report #"
+                      className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-800 dark:text-red-300"
+                    >
                       {er.reportNumber}
                     </td>
                     <td data-label="Title" className="text-theme-text-primary px-4 py-3 text-sm">

@@ -235,7 +235,10 @@ const CheckRequestsPage: React.FC = () => {
                     onClick={() => void navigate(`/finance/check-requests/${cr.id}`)}
                     className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
                   >
-                    <td data-label="Request #" className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-600">
+                    <td
+                      data-label="Request #"
+                      className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-800 dark:text-red-300"
+                    >
                       {cr.requestNumber}
                     </td>
                     <td data-label="Payee" className="text-theme-text-primary px-4 py-3 text-sm">

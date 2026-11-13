@@ -51,10 +51,10 @@ const PRIORITY_LABELS: Record<string, string> = {
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  low: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400',
-  medium: 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400',
-  high: 'bg-orange-100 text-orange-800 dark:bg-orange-500/20 dark:text-orange-400',
-  urgent: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400',
+  low: 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300',
+  medium: 'bg-blue-100 text-blue-900 dark:bg-blue-500/20 dark:text-blue-300',
+  high: 'bg-orange-100 text-orange-900 dark:bg-orange-500/20 dark:text-orange-300',
+  urgent: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
 };
 
 // =============================================================================
@@ -262,7 +262,10 @@ const PurchaseRequestsPage: React.FC = () => {
                     onClick={() => void navigate(`/finance/purchase-requests/${pr.id}`)}
                     className="hover:bg-theme-surface-hover cursor-pointer transition-colors"
                   >
-                    <td data-label="Request #" className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-600">
+                    <td
+                      data-label="Request #"
+                      className="px-4 py-3 text-sm font-medium whitespace-nowrap text-red-800 dark:text-red-300"
+                    >
                       {pr.requestNumber}
                     </td>
                     <td data-label="Title" className="text-theme-text-primary px-4 py-3 text-sm">
@@ -279,7 +282,7 @@ const PurchaseRequestsPage: React.FC = () => {
                     </td>
                     <td data-label="Priority" className="px-4 py-3 whitespace-nowrap">
                       <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[pr.priority] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-400'}`}
+                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[pr.priority] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-500/20 dark:text-gray-300'}`}
                       >
                         {PRIORITY_LABELS[pr.priority] ?? pr.priority}
                       </span>

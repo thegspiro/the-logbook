@@ -77,10 +77,10 @@ import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 // A closed year that is not locked is in its year-end close: it is "Closing"
 // here, and only a locked year is "Closed".
 const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400',
-  active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
-  closing: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
-  closed: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  draft: 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300',
+  active: 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300',
+  closing: 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300',
+  closed: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -591,11 +591,14 @@ const NextYearPlanning: React.FC<NextYearPlanningProps> = ({ fy, sources, onChan
         <label htmlFor={deadlineInputId} className={labelClass}>
           Request deadline
         </label>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        {/* Wraps rather than pushing "Clear deadline" off the screen: a date input
+            does not shrink below its own content width, and beside the sidebar
+            the row is narrower than the screen breakpoint assumed. */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <input
             id={deadlineInputId}
             type="date"
-            className={inputClass}
+            className={`${inputClass} sm:w-auto sm:min-w-40 sm:flex-1`}
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
             aria-describedby={`${deadlineInputId}-hint`}
@@ -641,15 +644,15 @@ const RequestWindow: React.FC<{ fy: FiscalYear }> = ({ fy }) => (
     <span
       className={`inline-flex rounded-full px-2 py-0.5 font-medium ${
         fy.requestsOpen
-          ? 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400'
-          : 'bg-gray-100 text-gray-800 dark:bg-gray-500/20 dark:text-gray-400'
+          ? 'bg-green-100 text-green-900 dark:bg-green-500/20 dark:text-green-300'
+          : 'bg-gray-100 text-gray-900 dark:bg-gray-500/20 dark:text-gray-300'
       }`}
     >
       {fy.requestsOpen ? 'Requests open' : 'Requests closed'}
     </span>
     <Link
       to="/finance/budget-requests/review"
-      className="font-medium text-red-700 underline-offset-2 hover:underline dark:text-red-400"
+      className="font-medium text-red-800 underline-offset-2 hover:underline dark:text-red-300"
     >
       Review requests
     </Link>
@@ -985,7 +988,7 @@ const FiscalYearSettingsPage: React.FC = () => {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>

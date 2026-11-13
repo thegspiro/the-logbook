@@ -85,7 +85,7 @@ const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
           type="button"
           onClick={() => onOpen(row, 'deny')}
           aria-label={`Deny ${row.entityTitle}`}
-          className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-400"
+          className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-800 dark:text-red-300"
         >
           <XCircle className="h-4 w-4" />
           Deny
@@ -101,7 +101,7 @@ const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
       <button
         type="button"
         onClick={() => onOpen(row, 'approve')}
-        aria-label={`Approve ${row.entityTitle} as approvals admin`}
+        aria-label={`Approve as admin: ${row.entityTitle}`}
         className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium"
       >
         <CheckCircle className="h-4 w-4" />
@@ -110,8 +110,8 @@ const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
       <button
         type="button"
         onClick={() => onOpen(row, 'deny')}
-        aria-label={`Deny ${row.entityTitle} as approvals admin`}
-        className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-400"
+        aria-label={`Deny as admin: ${row.entityTitle}`}
+        className="btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-800 dark:text-red-300"
       >
         <XCircle className="h-4 w-4" />
         Deny as admin
@@ -121,9 +121,9 @@ const RowActions: React.FC<RowActionsProps> = ({ row, onOpen }) => {
 };
 
 const EMAIL_BADGE: Record<string, string> = {
-  [ApprovalEmailDelivery.FAILED]: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
-  [ApprovalEmailDelivery.EXPIRED]: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
-  [ApprovalEmailDelivery.NOT_SENT]: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
+  [ApprovalEmailDelivery.FAILED]: 'bg-red-100 text-red-900 dark:bg-red-500/20 dark:text-red-300',
+  [ApprovalEmailDelivery.EXPIRED]: 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300',
+  [ApprovalEmailDelivery.NOT_SENT]: 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300',
 };
 
 const emailDeliveryText = (row: PendingApproval, tz: string): string | null => {
@@ -229,7 +229,7 @@ const ManualDecisions: React.FC = () => {
   }, []);
 
   if (error) {
-    return <p className="text-sm text-red-700 dark:text-red-400">{error}</p>;
+    return <p className="text-sm text-red-800 dark:text-red-300">{error}</p>;
   }
   if (!rows || rows.length === 0) return null;
 
@@ -274,7 +274,7 @@ const ManualDecisions: React.FC = () => {
                 <td data-label="Request" className="rwd-table-lead px-4 py-3 text-sm font-medium">
                   <Link
                     to={approvalEntityPath(row.entityType, row.entityId)}
-                    className="touch:inline-flex touch:min-h-11 touch:items-center text-red-700 hover:underline dark:text-red-400"
+                    className="touch:inline-flex touch:min-h-11 touch:items-center text-red-800 hover:underline dark:text-red-300"
                   >
                     {row.entityTitle}
                   </Link>
@@ -359,7 +359,7 @@ const ApprovalsPage: React.FC = () => {
       <PageHeader />
 
       {error && (
-        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <p>{error}</p>
         </div>
@@ -413,7 +413,7 @@ const ApprovalsPage: React.FC = () => {
                     <td data-label="Request" className="rwd-table-lead px-4 py-3 text-sm font-medium">
                       <Link
                         to={approvalEntityPath(row.entityType, row.entityId)}
-                        className="touch:inline-flex touch:min-h-11 touch:items-center text-red-700 hover:underline dark:text-red-400"
+                        className="touch:inline-flex touch:min-h-11 touch:items-center text-red-800 hover:underline dark:text-red-300"
                       >
                         {row.entityTitle}
                       </Link>
@@ -447,7 +447,7 @@ const ApprovalsPage: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <span>{row.assigneeLabel}</span>
                         {!row.canAct && row.requiresOverride && (
-                          <span className="badge bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
+                          <span className="badge bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300">
                             Not assigned to you
                           </span>
                         )}
