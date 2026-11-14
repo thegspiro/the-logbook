@@ -65,7 +65,6 @@ from app.models.training import (
     RequirementProgress,
     RequirementProgressCredit,
     RequirementProgressStatus,
-    RequirementType,
     Shift,
     ShiftAssignment,
     ShiftCompletionReport,
@@ -85,10 +84,13 @@ from app.schemas.shift_evaluation import (
     TemplateOption,
 )
 from app.schemas.training_program import RequirementProgressUpdate
-from app.services.training_program_service import (
+from app.services.shift_evaluation_rules import (
+    CREDITED_TYPES,
     EVALUATION_REQUIREMENT_TARGETS,
-    TrainingProgramService,
+    credit_units,
+    evaluation_visible,
 )
+from app.services.training_program_service import TrainingProgramService
 from app.utils.org_timezone import local_date, resolve_scheduling_timezone
 from app.utils.positions import canonical_position
 
@@ -119,12 +121,6 @@ _EVALUATED_ENTRY_STATUSES = (
     ExternalShiftHoursStatus.PENDING.value,
 )
 
-# The requirement types an evaluation credits.
-_CREDITED_TYPES = (
-    RequirementType.EVALUATED_SHIFTS,
-    RequirementType.TRANSPORTS,
-    RequirementType.REFUSALS,
-)
 # A progress row in one of these states takes no new credit: an officer
 # signed it off, or the requirement was set aside for the member. A COMPLETED
 # row keeps counting: an evaluation taken back later would otherwise leave the
@@ -150,29 +146,6 @@ def _met_by_value(progress: Any, requirement: Any) -> bool:
 
 def _is_viewer(member_id: Any, viewer_id: Optional[str]) -> bool:
     return viewer_id is not None and str(member_id) == str(viewer_id)
-
-
-def credit_units(evaluation: ShiftEvaluation, requirement: Any) -> float:
-    """What one submitted evaluation is worth toward one requirement."""
-    rtype = requirement.requirement_type
-    statistics = evaluation.statistics or {}
-    if rtype == RequirementType.TRANSPORTS:
-        return float(statistics.get("transports") or 0)
-    if rtype == RequirementType.REFUSALS:
-        return float(statistics.get("refusals") or 0)
-    if rtype != RequirementType.EVALUATED_SHIFTS:
-        return 0.0
-    if requirement.evaluation_excludes_lowest_rating:
-        # The form's own lowest rating, from the copy it was filled out on,
-        # so a later edit to the template's scale cannot regrade it.
-        scale = (evaluation.template_snapshot or {}).get("scale") or []
-        values = [int(level["value"]) for level in scale if "value" in level]
-        if values:
-            lowest = min(values)
-            for answer in (evaluation.responses or {}).values():
-                if (answer or {}).get("rating") == lowest:
-                    return 0.0
-    return 1.0
 
 
 def _name(user: Optional[User]) -> Optional[str]:
@@ -1295,7 +1268,38 @@ class ShiftEvaluationService:
         Called after the evaluation or the state that decides its visibility
         has been committed: the credit ledger's own conflict handling rolls the
         session back, which must not take an uncommitted change with it.
+
+        A department requirement linked into a program keeps no ledger: its
+        row reads the compliance grader, which counts the member's visible
+        evaluations itself (owner decision, 2026-11-14). So the program's own
+        rows take the credit here, and the member's linked rows are re-read
+        afterwards — on a submission, an edit or a revocation alike, and
+        whichever program the evaluation was scoped to.
         """
+        member_id = str(evaluation.member_id)
+        await self._sync_own_credit(evaluation, organization_id)
+        await self._refresh_linked_rows(member_id, organization_id)
+
+    async def _refresh_linked_rows(
+        self, member_id: str, organization_id: UUID | str
+    ) -> None:
+        enrollments = list(
+            (
+                await self.db.execute(
+                    select(ProgramEnrollment).where(
+                        ProgramEnrollment.organization_id == str(organization_id),
+                        ProgramEnrollment.user_id == member_id,
+                    )
+                )
+            ).scalars()
+        )
+        if enrollments:
+            await TrainingProgramService(self.db).refresh_linked_progress(enrollments)
+
+    async def _sync_own_credit(
+        self, evaluation: ShiftEvaluation, organization_id: UUID | str
+    ) -> None:
+        """The ledger credit to the program's own requirements."""
         enrollment_ids = [str(e) for e in (evaluation.enrollment_ids or [])]
         if not enrollment_ids:
             return
@@ -1320,10 +1324,20 @@ class ShiftEvaluationService:
                     RequirementProgress.enrollment_id.in_(enrollment_ids),
                     ProgramEnrollment.organization_id == str(organization_id),
                     ProgramEnrollment.user_id == evaluation.member_id,
-                    TrainingRequirement.requirement_type.in_(_CREDITED_TYPES),
+                    TrainingRequirement.requirement_type.in_(CREDITED_TYPES),
                 )
             )
         ).all()
+        program_service = TrainingProgramService(self.db)
+        linked = await program_service.linked_requirement_ids(
+            list({str(enrollment.program_id) for _, _, enrollment in rows})
+        )
+        # A linked row is the grader's; _refresh_linked_rows re-reads it.
+        rows = [
+            row
+            for row in rows
+            if str(row[1].id) not in linked.get(str(row[2].program_id), set())
+        ]
         if not rows:
             return
         credited = set(
@@ -1356,7 +1370,6 @@ class ShiftEvaluationService:
         ]
         evaluation_id = str(evaluation.id)
         evaluator_id = evaluation.evaluator_id
-        program_service = TrainingProgramService(self.db)
         for (
             progress_id,
             units,
@@ -1713,14 +1726,10 @@ class ShiftEvaluationService:
         """Which of these the evaluated member may see, decided for the whole
         list at once (a fixed handful of queries however many there are).
 
-        - Outside shift: while the logged shift it describes counts (no report
-          to wait for).
-        - Department shift, report review off: once submitted.
-        - Department shift, review on: once the member's own report on that
-          shift is approved; with no report of their own (a general-form seat,
-          or a department that does not ask trainees for one), once the shift
-          is closed out (owner decision, 2026-11-13). Finalize and reopen
-          re-sync credit through sync_credit_for_shift.
+        Reads the facts ``evaluation_visible`` needs, in batches; the
+        compliance grader batches the same facts for a whole department
+        (``training_compliance.load_evaluation_credits``). Finalize and reopen
+        re-sync credit through sync_credit_for_shift.
         """
         org = str(organization_id)
         submitted = [e for e in evaluations if e.status == "submitted"]
@@ -1733,74 +1742,76 @@ class ShiftEvaluationService:
         department = [
             e for e in submitted if (e.occasion or SHIFT_OCCASION) != EXTERNAL_OCCASION
         ]
-        visible: set[str] = set()
 
+        entry_statuses: dict[str, Any] = {}
         if outside:
-            counted = set(
-                (
+            for entry_id, status in (
+                await self.db.execute(
+                    select(ExternalShiftHours.id, ExternalShiftHours.status).where(
+                        ExternalShiftHours.id.in_(
+                            {str(e.external_shift_id) for e in outside}
+                        ),
+                        ExternalShiftHours.organization_id == org,
+                    )
+                )
+            ).all():
+                entry_statuses[str(entry_id)] = getattr(status, "value", status)
+
+        review_required = False
+        reports: dict[tuple[str, str], Any] = {}
+        finalized: set[str] = set()
+        if department:
+            config = await self._config(organization_id)
+            review_required = bool(config and config.report_review_required)
+        on_shift = [e for e in department if e.shift_id]
+        if review_required and on_shift:
+            shift_ids = {str(e.shift_id) for e in on_shift}
+            for shift_id, trainee_id, review_status in (
+                await self.db.execute(
+                    select(
+                        ShiftCompletionReport.shift_id,
+                        ShiftCompletionReport.trainee_id,
+                        ShiftCompletionReport.review_status,
+                    ).where(
+                        ShiftCompletionReport.shift_id.in_(shift_ids),
+                        ShiftCompletionReport.trainee_id.in_(
+                            {str(e.member_id) for e in on_shift}
+                        ),
+                        ShiftCompletionReport.organization_id == org,
+                    )
+                )
+            ).all():
+                # One report per trainee per shift is the rule; should a
+                # second exist, the first read decides, as the one-at-a-time
+                # read did.
+                reports.setdefault(
+                    (str(shift_id), str(trainee_id)),
+                    getattr(review_status, "value", review_status),
+                )
+            finalized = {
+                str(shift_id)
+                for shift_id in (
                     await self.db.execute(
-                        select(ExternalShiftHours.id).where(
-                            ExternalShiftHours.id.in_(
-                                {str(e.external_shift_id) for e in outside}
-                            ),
-                            ExternalShiftHours.organization_id == org,
-                            ExternalShiftHours.status
-                            == ExternalShiftHoursStatus.COUNTED.value,
+                        select(Shift.id).where(
+                            Shift.id.in_(shift_ids),
+                            Shift.organization_id == org,
+                            Shift.is_finalized.is_(True),
                         )
                     )
                 ).scalars()
-            )
-            visible.update(e.id for e in outside if str(e.external_shift_id) in counted)
+            }
 
-        if not department:
-            return visible
-        config = await self._config(organization_id)
-        if not (config and config.report_review_required):
-            visible.update(e.id for e in department)
-            return visible
-        on_shift = [e for e in department if e.shift_id]
-        if not on_shift:
-            return visible
-        shift_ids = {str(e.shift_id) for e in on_shift}
-        reports: dict[tuple[str, str], str] = {}
-        for shift_id, trainee_id, review_status in (
-            await self.db.execute(
-                select(
-                    ShiftCompletionReport.shift_id,
-                    ShiftCompletionReport.trainee_id,
-                    ShiftCompletionReport.review_status,
-                ).where(
-                    ShiftCompletionReport.shift_id.in_(shift_ids),
-                    ShiftCompletionReport.trainee_id.in_(
-                        {str(e.member_id) for e in on_shift}
-                    ),
-                    ShiftCompletionReport.organization_id == org,
-                )
-            )
-        ).all():
-            # One report per trainee per shift is the rule; should a second
-            # exist, the first read decides, as the one-at-a-time read did.
-            reports.setdefault(
-                (str(shift_id), str(trainee_id)),
-                getattr(review_status, "value", review_status),
-            )
-        finalized = set(
-            (
-                await self.db.execute(
-                    select(Shift.id).where(
-                        Shift.id.in_(shift_ids),
-                        Shift.organization_id == org,
-                        Shift.is_finalized.is_(True),
-                    )
-                )
-            ).scalars()
-        )
-        for e in on_shift:
+        visible: set[str] = set()
+        for e in submitted:
             key = (str(e.shift_id), str(e.member_id))
-            if key in reports:
-                if reports[key] == "approved":
-                    visible.add(e.id)
-            elif str(e.shift_id) in finalized:
+            if evaluation_visible(
+                e,
+                review_required=review_required,
+                report_status=reports.get(key),
+                has_report=key in reports,
+                shift_finalized=str(e.shift_id) in finalized,
+                entry_status=entry_statuses.get(str(e.external_shift_id)),
+            ):
                 visible.add(e.id)
         return visible
 

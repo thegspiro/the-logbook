@@ -26,7 +26,8 @@ vi.mock('./authStore', () => ({
 
 // Import the store AFTER mocks are in place.
 import { useSkillsTestingStore } from './skillsTestingStore';
-import { getCachedSkillTest, getOwnSkillsPending } from '../utils/skillsTestOffline';
+import { cacheSkillTest, getCachedSkillTest, getOwnSkillsPending } from '../utils/skillsTestOffline';
+import { recordDrainedVersion } from '../utils/skillsTestOfflineStore';
 
 const networkError = () => Object.assign(new Error('Network Error'), { isAxiosError: true, request: {} });
 
@@ -131,5 +132,42 @@ describe('skillsTestingStore offline', () => {
       .handleSynced('t1', liveTest({ status: 'completed', result: 'pass', version: 6 }), true);
     expect(useSkillsTestingStore.getState().currentTest?.status).toBe('completed');
     expect(useSkillsTestingStore.getState().offlineState).toBeNull();
+  });
+
+  describe('a queued save sent elsewhere just before the screen saves', () => {
+    // A drain — this page's or the service worker's — sends the test's last
+    // queued save, producing version 5, and the screen autosaves before the
+    // drain's result reaches it. The screen still holds version 4.
+
+    it('saves against the version the queued save produced', async () => {
+      useSkillsTestingStore.setState({ currentTest: liveTest({ version: 4 }) });
+      await recordDrainedVersion('examiner-1', liveTest({ version: 5 }));
+      updateTest.mockResolvedValueOnce(liveTest({ version: 6 }));
+
+      await useSkillsTestingStore.getState().updateTest('t1', { elapsed_seconds: 90, expected_version: 4 });
+
+      expect(updateTest).toHaveBeenCalledWith('t1', { elapsed_seconds: 90, expected_version: 5 });
+      expect(useSkillsTestingStore.getState().currentTest?.version).toBe(6);
+    });
+
+    it('does not adopt a newer version that only a reload saw', async () => {
+      // A copy cached by loading the test can carry another examiner's write;
+      // saving against it would overwrite what this screen never saw.
+      useSkillsTestingStore.setState({ currentTest: liveTest({ version: 4 }) });
+      await cacheSkillTest(liveTest({ version: 7 }));
+      updateTest.mockResolvedValueOnce(liveTest({ version: 8 }));
+
+      await useSkillsTestingStore.getState().updateTest('t1', { elapsed_seconds: 90, expected_version: 4 });
+
+      expect(updateTest).toHaveBeenCalledWith('t1', { elapsed_seconds: 90, expected_version: 4 });
+    });
+
+    it('never moves the version back when the drain’s report arrives late', async () => {
+      useSkillsTestingStore.setState({ currentTest: liveTest({ version: 6 }) });
+
+      await useSkillsTestingStore.getState().handleSynced('t1', liveTest({ version: 5 }), false);
+
+      expect(useSkillsTestingStore.getState().currentTest?.version).toBe(6);
+    });
   });
 });
