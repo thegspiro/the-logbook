@@ -525,6 +525,86 @@ class TestMatching:
         assert response.status_code == 400
 
 
+class TestDataSourceAvailability:
+    """The builder is told which sources the department cannot measure, and
+    still offers them, so a template already using one keeps showing it."""
+
+    @staticmethod
+    async def _settings(db, org_id: str, settings: dict) -> None:
+        await db.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :id"),
+            {"s": json.dumps(settings), "id": org_id},
+        )
+
+    @staticmethod
+    async def _reasons(client: AsyncClient) -> dict:
+        response = await client.get("/evaluations/data-sources")
+        assert response.status_code == 200, response.text
+        return {s["key"]: s["unavailable_reason"] for s in response.json()}
+
+    async def test_a_department_with_everything_on_sees_no_reasons(
+        self, db_session, make_client
+    ):
+        _, _, configurer = await _configurer(db_session, make_client)
+
+        reasons = await self._reasons(configurer)
+
+        assert reasons
+        assert set(reasons.values()) == {None}
+
+    async def test_training_off_marks_the_training_sources(
+        self, db_session, make_client
+    ):
+        org_id = await _org(db_session)
+        await self._settings(
+            db_session,
+            org_id,
+            {"modules": {"training": False, "_user_configured": True}},
+        )
+        _, _, configurer = await _configurer(db_session, make_client, org_id)
+
+        reasons = await self._reasons(configurer)
+
+        assert reasons["training.hours"] == "The Training module is turned off."
+        assert reasons["certifications.current"] == (
+            "The Training module is turned off."
+        )
+        assert reasons["shifts.hours"] is None
+        assert reasons["events.meeting_attendance_pct"] is None
+
+    async def test_scheduling_off_marks_shifts_and_calls(self, db_session, make_client):
+        org_id = await _org(db_session)
+        await self._settings(
+            db_session,
+            org_id,
+            {"modules": {"scheduling": False, "_user_configured": True}},
+        )
+        _, _, configurer = await _configurer(db_session, make_client, org_id)
+
+        reasons = await self._reasons(configurer)
+
+        for key in ("shifts.hours", "shifts.count", "calls.response_pct"):
+            assert reasons[key] == "The Scheduling module is turned off.", key
+        assert reasons["training.hours"] is None
+
+    async def test_call_tracking_off_marks_only_the_call_sources(
+        self, db_session, make_client
+    ):
+        org_id = await _org(db_session)
+        await self._settings(
+            db_session, org_id, {"scheduling": {"call_tracking": {"mode": "off"}}}
+        )
+        _, _, configurer = await _configurer(db_session, make_client, org_id)
+
+        reasons = await self._reasons(configurer)
+
+        assert {k for k, v in reasons.items() if v} == {
+            "calls.responses",
+            "calls.response_pct",
+        }
+        assert reasons["calls.responses"] == "Call tracking is turned off."
+
+
 class TestPermissions:
     async def test_a_period_manager_reads_templates_but_cannot_build_them(
         self, db_session, make_client

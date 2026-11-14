@@ -366,13 +366,18 @@ export const ItemEditor: React.FC<ItemEditorProps> = ({
             <optgroup key={group.label} label={group.label}>
               {group.sources.map((s) => (
                 <option key={s.key} value={s.key}>
-                  {s.label}
+                  {s.unavailable_reason ? `${s.label} (turned off)` : s.label}
                 </option>
               ))}
             </optgroup>
           ))}
         </select>
         {source && <p className="text-theme-text-muted mt-1 text-xs">{source.description}</p>}
+        {source?.unavailable_reason && (
+          <p className="mt-1 text-xs text-amber-900 dark:text-amber-200">
+            {source.unavailable_reason} Until it is turned on, this figure may have nothing to measure for any member.
+          </p>
+        )}
 
         {source?.scoreable && isScale && (
           <fieldset className="mt-3">
