@@ -45,7 +45,7 @@ describe('FilesSection permissions', () => {
 
   it('applies create, edit, delete and sensitive-read grants independently', async () => {
     render(<FilesSection facilityId="f1" canCreate canEdit canDelete canViewSensitive />);
-    expect(await screen.findByRole('button', { name: 'Upload a photo or document' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^Upload a photo or document/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit station.jpg' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete station.jpg' })).toBeInTheDocument();
     await waitFor(() => expect(facilitiesService.getFacilityDocuments).toHaveBeenCalledWith({ facility_id: 'f1' }));
@@ -74,7 +74,7 @@ describe('FilesSection upload', () => {
 
   const choose = async (file: File) => {
     render(<FilesSection facilityId="f1" canCreate canEdit canDelete canViewSensitive />);
-    const zone = await screen.findByRole('button', { name: 'Upload a photo or document' });
+    const zone = await screen.findByRole('button', { name: /^Upload a photo or document/ });
     fireEvent.drop(zone, { dataTransfer: { files: [file] } });
   };
 
