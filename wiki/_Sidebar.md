@@ -70,6 +70,7 @@
 - [Historical Data Import](Integration-Historical-Data-Import)
 - [Google Workspace Integration](Integration-Google-Workspace)
 - [Microsoft 365 Integration](Integration-Microsoft-365)
+- [PayPal Integration](Integration-PayPal)
 - [Zeffy Integration](Integration-Zeffy)
 
 ### 🔐 Security

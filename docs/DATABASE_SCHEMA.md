@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**380 tables · 6099 columns · 1271 foreign keys**
+**380 tables · 6100 columns · 1271 foreign keys**
 
 ---
 
@@ -738,7 +738,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`store_product_images`](#store_product_images) | `StoreProductImage` | 9 | Uploaded product photo, stored out of line from the catalog row. |
 | [`store_product_variants`](#store_product_variants) | `StoreProductVariant` | 11 | A size/color option on a product (e.g. "L / Navy") |
 | [`store_products`](#store_products) | `StoreProduct` | 28 | A sellable item in the department catalog |
-| [`store_settings`](#store_settings) | `StoreSettings` | 43 | Per-organization storefront configuration (one row per org). |
+| [`store_settings`](#store_settings) | `StoreSettings` | 44 | Per-organization storefront configuration (one row per org). |
 | [`store_window_products`](#store_window_products) | `StoreWindowProduct` | 9 | Which catalog products a window offers, with per-window overrides |
 
 ### Suggestion
@@ -10285,6 +10285,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `venmo_handle` | VARCHAR(100) | yes |  |  |  |
 | `paypal_me_url` | VARCHAR(300) | yes |  |  |  |
 | `paypal_email` | VARCHAR(255) | yes |  |  |  |
+| `paypal_use_connected` | BOOL | no |  | `0` |  |
 | `payment_policy` | ENUM(`none`, `before_pickup`, `before_vendor_order`) | no |  | `none` |  |
 | `cash_app_cashtag` | VARCHAR(100) | yes |  |  |  |
 | `zelle_handle` | VARCHAR(255) | yes |  |  |  |

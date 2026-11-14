@@ -237,6 +237,23 @@ on a connected Zeffy card (#4268). The demo cannot connect Zeffy, so the
 shot marks the Zeffy row connected in the integrations list the page
 receives; the dialog is opened and never saved.
 
+**`16-26-paypal-settings` added 2026-11-14**, with PayPal's own **Settings**
+button. It uses the same mock (`showIntegrationConnected` in the manifest),
+with the form's example Webhook ID and the live environment prefilled, so the
+values pictured are not a real PayPal app.
+
+**PayPal.Me link and account email, 2026-11-14.** The PayPal integration
+gained both fields, so `16-06-paypal-connect` and `16-26-paypal-settings` were
+re-shot at a taller 1400px frame (the dialog's buttons fell below 1100) and
+their captions rewritten. `18-07-store-paypal-account` is new: the store's
+**PayPal account members pay into** choice, with the store settings read
+answered as "the connected account" and that account's link and email filled
+in. `18-02-store-admin` was re-captured to check it and put back: the demo
+store does not accept PayPal, so the choice is not in its frame.
+`18-08-store-paypal-fallback` pictures the fallback warning: the same choice,
+with the settings read answered as "connected account" and no connected
+PayPal integration.
+
 ## The October 16 – November 1 queues, captured 2026-11-02
 
 Every queue from the October 16 – 18 pass to the October 31 – November 1 pass

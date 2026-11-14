@@ -25,6 +25,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.security import email_fingerprints
 from app.core.utils import generate_uuid
+from app.models.integration import Integration
 from app.models.inventory import InventoryItem
 from app.models.notification import NotificationChannel
 from app.models.storefront import (
@@ -71,6 +72,7 @@ from app.utils.org_timezone import (
 from app.utils.size_order import size_sort_key, sort_by_size
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 from app.utils.storefront_payments import (
+    PayPalAccount,
     build_payment_option,
     build_payment_options,
 )
@@ -259,6 +261,35 @@ def _as_aware(value: Optional[datetime]) -> Optional[datetime]:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
+async def load_connected_paypal_account(
+    db: AsyncSession, organization_id: str
+) -> Optional[PayPalAccount]:
+    """The connected PayPal integration's PayPal.Me link and email.
+
+    None when the department's PayPal integration is not connected. A
+    connected one with neither field filled in still returns an account;
+    ``store_paypal_account`` is what decides to fall back.
+    """
+    result = await db.execute(
+        select(Integration).where(
+            Integration.organization_id == str(organization_id),
+            Integration.integration_type == "paypal",
+            Integration.status == "connected",
+            Integration.enabled.is_(True),
+        )
+    )
+    integration = result.scalars().first()
+    if integration is None:
+        return None
+    config = integration.config or {}
+    link = config.get("paypal_me_url")
+    email = config.get("account_email")
+    return PayPalAccount(
+        paypal_me_url=link if isinstance(link, str) and link else None,
+        email=email if isinstance(email, str) and email else None,
+    )
+
+
 class StorefrontService:
     """Service for the department storefront."""
 
@@ -268,13 +299,36 @@ class StorefrontService:
         self.db = db
         self.notifications = StorefrontNotificationService(db)
         self.in_app_notifications = NotificationsService(db)
+        # The connected PayPal integration's link and email, per department,
+        # loaded by get_settings. Every path that builds a Pay button loads
+        # the settings first, so reading it here costs one query a request
+        # rather than a new argument on two dozen call sites. Shared with the
+        # notification service, which renders the same buttons in email.
+        self.connected_paypal: Dict[str, Optional[PayPalAccount]] = {}
+        self.notifications.connected_paypal = self.connected_paypal
 
     # ==================================================================
     # Settings
     # ==================================================================
 
     async def get_settings(self, organization_id: str) -> StoreSettings:
-        """Fetch the org's store settings, creating defaults on first use."""
+        """Fetch the org's store settings, creating defaults on first use.
+
+        Also loads the connected PayPal account the Pay button may use; see
+        ``connected_paypal``.
+        """
+        settings = await self._settings_row(organization_id)
+        self.connected_paypal[str(organization_id)] = (
+            await load_connected_paypal_account(self.db, str(organization_id))
+        )
+        return settings
+
+    def paypal_account_for(self, settings: StoreSettings) -> Optional[PayPalAccount]:
+        """The connected account loaded with *settings*, if any."""
+        return self.connected_paypal.get(str(settings.organization_id))
+
+    async def _settings_row(self, organization_id: str) -> StoreSettings:
+        """The settings row, created with defaults on first use."""
         result = await self.db.execute(
             select(StoreSettings).where(
                 StoreSettings.organization_id == str(organization_id)
@@ -3455,7 +3509,9 @@ class StorefrontService:
         self, settings: StoreSettings, balance: Decimal, reference: str
     ) -> List[Dict[str, Any]]:
         """Every configured way to settle, in the order the department listed."""
-        return build_payment_options(settings, balance, reference)
+        return build_payment_options(
+            settings, balance, reference, self.paypal_account_for(settings)
+        )
 
     def build_payment_instructions(
         self, order: StoreOrder, settings: StoreSettings
@@ -3481,7 +3537,13 @@ class StorefrontService:
             # order was placed. The member still owes the balance and still
             # needs somewhere to send it, so their own method is rebuilt even
             # though it is no longer offered to new orders.
-            chosen = build_payment_option(method, settings, balance, order.order_number)
+            chosen = build_payment_option(
+                method,
+                settings,
+                balance,
+                order.order_number,
+                self.paypal_account_for(settings),
+            )
             if chosen is not None:
                 options = [chosen] + options
 

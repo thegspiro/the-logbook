@@ -1560,6 +1560,55 @@ async function mockZeffyConnected(page) {
   await page.route("**/api/v1/grants/zeffy/sync", (route) => route.abort());
 }
 
+/**
+ * Answer the integrations list with one card shown as connected.
+ *
+ * A Settings button appears only on a connected card, and connecting Zeffy or
+ * PayPal needs real credentials the demo does not have. The list is read from
+ * the API and only the named row is changed, in the copy the page receives;
+ * `config` holds the public settings the form prefills. Nothing is saved.
+ */
+function showIntegrationConnected(integrationType, config = {}) {
+  return async (page) => {
+    await page.route(/\/api\/v1\/integrations(\?.*)?$/, async (route) => {
+      if (route.request().method() !== "GET") {
+        await route.continue();
+        return;
+      }
+      const response = await route.fetch();
+      const rows = await response.json();
+      const shaped = (Array.isArray(rows) ? rows : []).map((row) =>
+        row.integration_type === integrationType
+          ? {
+              ...row,
+              status: "connected",
+              enabled: true,
+              config: { ...(row.config ?? {}), ...config },
+            }
+          : row,
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(shaped),
+      });
+    });
+  };
+}
+
+/** Open a connected card's Settings dialog and wait for it. */
+function openIntegrationSettings(providerName, testId) {
+  return async (page) => {
+    await page
+      .locator(`[data-testid="integration-card-${testId}"]`)
+      .getByRole("button", { name: `${providerName} settings` })
+      .click({ timeout: 20_000 });
+    await page
+      .getByRole("dialog", { name: `${providerName} settings` })
+      .waitFor({ timeout: 10_000 });
+  };
+}
+
 export function openIntegrationConnect(providerName) {
   return async (page) => {
     const card = page
@@ -12337,6 +12386,99 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    // The demo cannot connect PayPal (connecting needs a real REST app), so
+    // the store settings read is answered with the choice set to the
+    // connected account and that account's link and email filled in. The
+    // form's own example values; nothing is saved.
+    id: "18-07-store-paypal-account",
+    doc: "18-storefront.md",
+    line: 194,
+    anchor:
+      "Store Settings, Payments, as an administrator with PayPal accepted",
+    alt: "PayPal account members pay into, with The connected PayPal account chosen and the note that members are sent to https://paypal.me/oakvillefd and treasurer@oakvillefd.org, and that payments to it are matched to orders automatically",
+    route: "/inventory/admin/store?tab=settings",
+    beforeNavigate: async (page) => {
+      await page.route(/\/api\/v1\/store\/settings(\?.*)?$/, async (route) => {
+        if (route.request().method() !== "GET") {
+          await route.abort();
+          return;
+        }
+        const response = await route.fetch();
+        const body = await response.json();
+        const accepted = Array.isArray(body.acceptedPaymentMethods)
+          ? body.acceptedPaymentMethods
+          : [];
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ...body,
+            acceptedPaymentMethods: accepted.includes("paypal")
+              ? accepted
+              : [...accepted, "paypal"],
+            paypalUseConnected: true,
+            connectedPaypal: {
+              paypalMeUrl: "https://paypal.me/oakvillefd",
+              accountEmail: "treasurer@oakvillefd.org",
+            },
+          }),
+        });
+      });
+    },
+    prepare: async (page) => {
+      await page
+        .locator('[data-testid="paypal-account-note"]')
+        .waitFor({ timeout: 20_000 });
+    },
+    expect: "Payments to it are matched to orders automatically",
+    selector: 'fieldset:has([data-testid="paypal-account-note"])',
+  },
+  {
+    // The fallback case: the store set to the connected account while PayPal
+    // is not connected, so the settings read reports no connected account.
+    // Answered from the real read with only those two fields changed (and
+    // PayPal accepted); nothing is saved.
+    id: "18-08-store-paypal-fallback",
+    doc: "18-storefront.md",
+    line: 199,
+    anchor:
+      "with the store set to The connected PayPal account while PayPal is not",
+    alt: "PayPal account members pay into, with The connected PayPal account chosen and the warning that PayPal is not connected on the Integrations page, so until it is, members are sent to the fallback link and email below",
+    route: "/inventory/admin/store?tab=settings",
+    beforeNavigate: async (page) => {
+      await page.route(/\/api\/v1\/store\/settings(\?.*)?$/, async (route) => {
+        if (route.request().method() !== "GET") {
+          await route.abort();
+          return;
+        }
+        const response = await route.fetch();
+        const body = await response.json();
+        const accepted = Array.isArray(body.acceptedPaymentMethods)
+          ? body.acceptedPaymentMethods
+          : [];
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ...body,
+            acceptedPaymentMethods: accepted.includes("paypal")
+              ? accepted
+              : [...accepted, "paypal"],
+            paypalUseConnected: true,
+            connectedPaypal: null,
+          }),
+        });
+      });
+    },
+    prepare: async (page) => {
+      await page
+        .locator('[data-testid="paypal-account-note"]')
+        .waitFor({ timeout: 20_000 });
+    },
+    expect: "members are sent to the fallback link and email below",
+    selector: 'fieldset:has([data-testid="paypal-account-note"])',
+  },
+  {
     id: "18-05-store-offline-overview",
     doc: "18-storefront.md",
     line: 122,
@@ -18004,56 +18146,51 @@ export const SHOTS = [
     line: 283,
     anchor:
       "Screenshot of the PayPal connect dialog showing the Environment dropdown",
-    alt: "PayPal connect dialog with environment and credential fields",
+    alt: "PayPal connect dialog with environment and credential fields, the Webhook ID and its address, and the optional PayPal.Me link and account email for the store's PayPal button",
     route: "/integrations",
     prepare: openIntegrationConnect("PayPal"),
     expect: "Connecting turns this integration on",
     // "No personal information" is a chip on the Claude card behind the
     // dialog, not an empty page.
     allowEmptyState: true,
-    viewport: { width: 1440, height: 1100 },
+    viewport: { width: 1440, height: 1400 },
     fullPage: false,
   },
   {
-    // Settings appears only on a connected card, and the demo cannot connect
-    // Zeffy: connecting needs a real API key. The integrations list is read
-    // from the API and only the Zeffy row is marked connected in the copy the
-    // page receives. The dialog is opened and never saved.
+    // Settings appears only on a connected card; see showIntegrationConnected.
+    // The prefilled values are the form's own example Webhook ID and live
+    // environment, not a real PayPal app.
+    id: "16-26-paypal-settings",
+    doc: "16-integrations.md",
+    line: 448,
+    anchor: "PayPal settings on a connected PayPal card, as an administrator",
+    alt: "PayPal settings on a connected card: Environment Live with the note that changing it needs that environment's Client ID and Client Secret, the Client ID and Client Secret boxes reading Leave blank to keep the current ID and secret, the Webhook ID filled in, the PayPal.Me link and account email the store's PayPal button can use, Settle orders automatically ticked, and the notice that saved settings apply to the next payment PayPal reports",
+    route: "/integrations",
+    beforeNavigate: showIntegrationConnected("paypal", {
+      environment: "live",
+      webhook_id: "8SR123456A789012B",
+      auto_apply_payments: true,
+      paypal_me_url: "https://paypal.me/oakvillefd",
+      account_email: "treasurer@oakvillefd.org",
+    }),
+    prepare: openIntegrationSettings("PayPal", "paypal"),
+    expect: "Saved settings apply to the next payment PayPal reports",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1400 },
+    fullPage: false,
+  },
+  {
+    // Settings appears only on a connected card; see showIntegrationConnected.
     id: "16-25-zeffy-settings",
     doc: "16-integrations.md",
     line: 558,
     anchor: "Zeffy settings on a connected Zeffy card, as an administrator",
     alt: "Zeffy settings on a connected card: the API Key box reading Leave blank to keep the current key, the Webhook Signing Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new key or signing secret is used from the next sync or webhook message while linked campaigns and the webhook address do not change",
     route: "/integrations",
-    beforeNavigate: async (page) => {
-      await page.route(/\/api\/v1\/integrations(\?.*)?$/, async (route) => {
-        if (route.request().method() !== "GET") {
-          await route.continue();
-          return;
-        }
-        const response = await route.fetch();
-        const rows = await response.json();
-        const shaped = (Array.isArray(rows) ? rows : []).map((row) =>
-          row.integration_type === "zeffy"
-            ? { ...row, status: "connected", enabled: true }
-            : row,
-        );
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(shaped),
-        });
-      });
-    },
-    prepare: async (page) => {
-      await page
-        .locator('[data-testid="integration-card-zeffy"]')
-        .getByRole("button", { name: "Zeffy settings" })
-        .click({ timeout: 20_000 });
-      await page
-        .getByRole("dialog", { name: "Zeffy settings" })
-        .waitFor({ timeout: 10_000 });
-    },
+    beforeNavigate: showIntegrationConnected("zeffy"),
+    prepare: openIntegrationSettings("Zeffy", "zeffy"),
     expect: "Linked campaigns and the webhook address do not change",
     // "No personal information" is a chip on the Claude card behind the
     // dialog, not an empty page.

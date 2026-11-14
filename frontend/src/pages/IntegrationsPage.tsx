@@ -475,6 +475,8 @@ const IntegrationsPage: React.FC = () => {
   const [paypalClientSecret, setPaypalClientSecret] = useState('');
   const [paypalWebhookId, setPaypalWebhookId] = useState('');
   const [paypalAutoApply, setPaypalAutoApply] = useState(true);
+  const [paypalMeUrl, setPaypalMeUrl] = useState('');
+  const [paypalAccountEmail, setPaypalAccountEmail] = useState('');
   const [zeffyApiKey, setZeffyApiKey] = useState('');
   const [zeffyWebhookSecret, setZeffyWebhookSecret] = useState('');
   const [mcpAccessMode, setMcpAccessMode] = useState<'read_only' | 'read_write'>('read_only');
@@ -677,6 +679,8 @@ const IntegrationsPage: React.FC = () => {
     setPaypalClientSecret('');
     setPaypalWebhookId(typeof stored['webhook_id'] === 'string' ? stored['webhook_id'] : '');
     setPaypalAutoApply(stored['auto_apply_payments'] !== false);
+    setPaypalMeUrl(typeof stored['paypal_me_url'] === 'string' ? stored['paypal_me_url'] : '');
+    setPaypalAccountEmail(typeof stored['account_email'] === 'string' ? stored['account_email'] : '');
     setZeffyApiKey('');
     setZeffyWebhookSecret('');
     // Every switch on this add-on defaults to off; reopening the form on a
@@ -768,6 +772,10 @@ const IntegrationsPage: React.FC = () => {
           client_secret: paypalClientSecret.trim() || undefined,
           webhook_id: paypalWebhookId.trim() || undefined,
           auto_apply_payments: paypalAutoApply,
+          // Public, and sent as typed: a blank box clears it, unlike the
+          // credentials, which are never echoed back.
+          paypal_me_url: paypalMeUrl.trim(),
+          account_email: paypalAccountEmail.trim(),
         };
       case 'zeffy':
         return {
@@ -2126,6 +2134,7 @@ const IntegrationsPage: React.FC = () => {
               </select>
               <p className="text-theme-text-muted mt-1 text-xs">
                 Sandbox and live credentials are not interchangeable &mdash; use the pair that matches this setting.
+                {editingSettings && ' Changing it needs the Client ID and Client Secret of that environment’s app.'}
               </p>
             </div>
             <div>
@@ -2137,7 +2146,7 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={paypalClientId}
                 onChange={(e) => setPaypalClientId(e.target.value)}
-                placeholder="From your PayPal REST app"
+                placeholder={editingSettings ? 'Leave blank to keep the current ID' : 'From your PayPal REST app'}
                 className={inputClass}
               />
             </div>
@@ -2150,14 +2159,19 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={paypalClientSecret}
                 onChange={(e) => setPaypalClientSecret(e.target.value)}
-                placeholder="From your PayPal REST app"
+                placeholder={editingSettings ? 'Leave blank to keep the current secret' : 'From your PayPal REST app'}
                 className={inputClass}
               />
-              {/* As for Zeffy: this form opens only from Connect, and the page
-                  cannot see whether a secret is already stored. */}
+              {/* As for Zeffy: neither credential is ever sent back. Settings
+                  opens only on a connected card, and PayPal cannot connect
+                  without both, so there a pair is certainly stored. From
+                  Connect the page cannot tell a first connection from a
+                  reconnection. */}
               <p className="text-theme-text-muted mt-1 text-xs">
-                Create a REST app at developer.paypal.com under Apps &amp; Credentials. When connecting again after a
-                disconnect, leave it blank to keep the saved secret.
+                Create a REST app at developer.paypal.com under Apps &amp; Credentials.
+                {editingSettings
+                  ? ' Enter new ones only to replace them.'
+                  : ' When connecting again after a disconnect, leave it blank to keep the saved secret.'}
               </p>
             </div>
             <div>
@@ -2179,6 +2193,35 @@ const IntegrationsPage: React.FC = () => {
               <code className="bg-theme-surface-secondary text-theme-text-secondary mt-1 block rounded px-2 py-1 text-xs break-all">
                 {webhookCallbackUrl('paypal', integration.id)}
               </code>
+            </div>
+            <div>
+              <label htmlFor="paypal-me-url" className={labelClass}>
+                PayPal.Me link (optional)
+              </label>
+              <input
+                id="paypal-me-url"
+                type="text"
+                value={paypalMeUrl}
+                onChange={(e) => setPaypalMeUrl(e.target.value)}
+                placeholder="https://paypal.me/yourdept"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="paypal-account-email" className={labelClass}>
+                Account email (optional)
+              </label>
+              <input
+                id="paypal-account-email"
+                type="email"
+                value={paypalAccountEmail}
+                onChange={(e) => setPaypalAccountEmail(e.target.value)}
+                className={inputClass}
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Where members send money when the store is set to use the connected PayPal account (Store &rarr;
+                Settings &rarr; Payments). PayPal cannot report these, so enter them here.
+              </p>
             </div>
             <label className="text-theme-text-secondary flex items-start gap-2 text-sm">
               <input
@@ -2484,6 +2527,7 @@ const IntegrationsPage: React.FC = () => {
                       {(integration.integration_type === 'claude-mcp' ||
                         integration.integration_type === 'ical' ||
                         integration.integration_type === 'zeffy' ||
+                        integration.integration_type === 'paypal' ||
                         (isDirectory(integration.integration_type) && canChange(integration.integration_type))) && (
                         <button
                           onClick={() => {
@@ -3102,9 +3146,11 @@ const IntegrationsPage: React.FC = () => {
                                 ? 'Saved settings apply to the next member converted. Accounts already created are not changed.'
                                 : selectedIntegration.integration_type === 'ical'
                                   ? 'Saved settings apply the next time a subscribed calendar refreshes. The feed link does not change.'
-                                  : selectedIntegration.integration_type === 'zeffy'
-                                    ? 'A new key or signing secret is used from the next sync or webhook message. Linked campaigns and the webhook address do not change.'
-                                    : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
+                                  : selectedIntegration.integration_type === 'paypal'
+                                    ? 'Saved settings apply to the next payment PayPal reports. The webhook address does not change.'
+                                    : selectedIntegration.integration_type === 'zeffy'
+                                      ? 'A new key or signing secret is used from the next sync or webhook message. Linked campaigns and the webhook address do not change.'
+                                      : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
                               : activation
                                 ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
                                 : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}
