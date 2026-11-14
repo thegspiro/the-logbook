@@ -77,7 +77,7 @@ import { labelCallTypeChoices, orgCallTypeChoices } from '../../modules/scheduli
 import { callTypesAreOrgSlugs, useOrgCallTypes } from '../../modules/scheduling/hooks/useCallTypeLabels';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { blankToNull } from '../../utils/formValues';
-import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
+import { saveDraft, loadDraft, deleteDraft, type ShiftReportDraft } from '../../utils/shiftReportDrafts';
 import { enqueueShiftReport, pendingReportCount } from '../../utils/shiftReportOfflineQueue';
 import { SHIFT_REPORTS_SYNCED_EVENT } from '../../utils/shiftReportSync';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -513,22 +513,40 @@ export const ShiftReportsTab: React.FC = () => {
       .finally(() => setLoadingShifts(false));
   }, [viewMode, linkedShiftId, tz]);
 
+  // The draft as it stands, for the save that runs when the report closes.
+  const currentDraft = useRef<ShiftReportDraft | null>(null);
+  currentDraft.current =
+    viewMode === 'create' && form.shift_id
+      ? {
+          shiftId: form.shift_id,
+          shiftLabel: linkedShiftLabel || '',
+          formData: form,
+          crewSelections: Array.from(selectedCrewIds),
+          traineeEvals,
+          crewRemarks,
+          memberCalls,
+          savedAt: Date.now(),
+        }
+      : null;
+
   // Auto-save draft to localStorage when form changes
   useEffect(() => {
     if (viewMode !== 'create' || !form.shift_id) return;
     const timer = setTimeout(() => {
-      saveDraft({
-        shiftId: form.shift_id || '',
-        shiftLabel: linkedShiftLabel || '',
-        formData: form,
-        crewSelections: Array.from(selectedCrewIds),
-        traineeEvals: traineeEvals,
-        crewRemarks,
-        savedAt: Date.now(),
-      });
+      if (currentDraft.current) saveDraft({ ...currentDraft.current, savedAt: Date.now() });
     }, 1000);
     return () => clearTimeout(timer);
-  }, [viewMode, form, selectedCrewIds, traineeEvals, crewRemarks, linkedShiftLabel]);
+  }, [viewMode, form, selectedCrewIds, traineeEvals, crewRemarks, memberCalls, linkedShiftLabel]);
+
+  // And at once when the report closes: an officer who taps a trainee's
+  // evaluation link leaves inside the one-second wait above, and the
+  // evaluation is now part of every program trainee's close-out.
+  useEffect(
+    () => () => {
+      if (currentDraft.current) saveDraft({ ...currentDraft.current, savedAt: Date.now() });
+    },
+    []
+  );
 
   // Restore draft when a shift is loaded and a draft exists
   useEffect(() => {
@@ -548,10 +566,23 @@ export const ShiftReportsTab: React.FC = () => {
     if (draft.crewRemarks && Object.keys(draft.crewRemarks).length > 0) {
       setCrewRemarks(draft.crewRemarks);
     }
-    if (draft.formData.officer_narrative) {
-      setForm((prev) => ({ ...prev, officer_narrative: draft.formData.officer_narrative as string }));
-    }
-  }, [form.shift_id, crewMembers.length, userId]);
+    // Everything else the draft holds comes back too: trainees' ratings,
+    // strengths, skills and tasks, calls typed per member, and the report's
+    // own fields. Only crew still on the shift is restored.
+    const onShift = new Set(crewMembers.map((m) => m.user_id));
+    const evals = Object.fromEntries(
+      Object.entries(draft.traineeEvals ?? {}).filter(([id]) => onShift.has(id))
+    ) as Record<string, CrewMemberEvaluation>;
+    if (Object.keys(evals).length > 0) setTraineeEvals(evals);
+    const calls = Object.fromEntries(Object.entries(draft.memberCalls ?? {}).filter(([id]) => onShift.has(id)));
+    if (Object.keys(calls).length > 0) setMemberCalls(calls);
+    setForm((prev) => ({
+      ...prev,
+      ...(draft.formData as Partial<ShiftCompletionReportCreate>),
+      // The shift is the one now open; a draft never moves the report.
+      shift_id: prev.shift_id,
+    }));
+  }, [form.shift_id, crewMembers, userId]);
 
   // Queued reports are sent by the app-wide sync engine (shiftReportSync.ts),
   // so they go on reconnect whatever page is open. This screen only refreshes

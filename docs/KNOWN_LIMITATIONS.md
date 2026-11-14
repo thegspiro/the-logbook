@@ -10269,16 +10269,28 @@ beyond the feature.
   already submitted are kept but no longer required, new ones are required,
   and close-out waits for them. Freezing the set at close-out would need a
   stored snapshot.
-- **No-show and pending crew are asked for an evaluation.** The rule mirrors
-  the trainee-report gate (only declined and cancelled seats are left out),
-  so the two agree; excusing no-shows would mean changing both.
+- ~~**No-show and pending crew are asked for an evaluation.**~~ Resolved
+  2026-11-14 (owner decision): only Assigned and Confirmed crew need a trainee
+  report or a shift evaluation, and close-out drafts reports for them alone
+  (`WORKING_ASSIGNMENT_STATUSES`).
 - **No requirement type counts the calls an evaluation records.** Evaluated
   shifts, transports and refusals are credited; the existing Calls type is
   still fed by shift reports.
-- **A department requirement of an evaluation type, linked into a program
+- ~~**A department requirement of an evaluation type, linked into a program
   with "Link existing", is not credited by evaluations.** A linked row is
   graded by the compliance engine, which has no branch for these types and
-  falls back to matching training records by type.
+  falls back to matching training records by type.~~ Resolved 2026-11-14
+  (owner decision: credit it, like a program's own): the compliance grader
+  counts the member's submitted evaluations for evaluated shifts, transports
+  and refusals (`load_evaluation_credits`), only once the member can see them
+  and worth the same units as program credit — both read the rules in
+  `app/services/shift_evaluation_rules.py` — windowed and prorated for leave
+  as shifts worked are. A training record no longer satisfies these types.
+  Every compliance screen reads the same count, so a linked row, My Training
+  and the matrix agree, and a submission, edit or revocation re-reads the
+  member's linked rows. An evaluation scoped to several programs counts once
+  toward a department requirement, and a general-form evaluation counts too:
+  the requirement is the member's, not one enrollment's.
 
 **Accepted for now**
 
