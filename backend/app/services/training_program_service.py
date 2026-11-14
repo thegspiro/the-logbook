@@ -64,11 +64,13 @@ from app.schemas.training_program import (
 )
 from app.services.notifications_service import NotificationsService
 from app.services.program_requirement_deadlines import notify_completed_requirements
+from app.services.shift_evaluation_rules import EVALUATION_REQUIREMENT_TARGETS
 from app.services.training_compliance import (
     RequirementEvaluation,
     evaluate_member_requirement_detail,
     get_org_include_current_month,
     load_credited_shift_dates,
+    load_evaluation_credits,
     load_graded_records,
     load_held_sessions,
     member_join_date,
@@ -151,16 +153,6 @@ def prerequisite_refusal(missing_names: Sequence[str]) -> str:
     """The refusal for a member missing these prerequisite pipelines — the
     one wording every enrollment path and the eligibility picker give."""
     return f"Must first complete: {', '.join(missing_names)}"
-
-
-# Requirement types credited only by submitted shift evaluations, and the
-# column each one's target lives in. An evaluated-shift count reuses
-# required_shifts, as the form beside it does.
-EVALUATION_REQUIREMENT_TARGETS = {
-    RequirementType.EVALUATED_SHIFTS: "required_shifts",
-    RequirementType.TRANSPORTS: "required_transports",
-    RequirementType.REFUSALS: "required_refusals",
-}
 
 
 def _evaluation_requirement_target(requirement: Any) -> Optional[float]:
@@ -3541,6 +3533,14 @@ class TrainingProgramService:
                 today,
                 include_current,
             )
+            evaluations_by_user = await load_evaluation_credits(
+                self.db,
+                org_id,
+                user_ids,
+                list(requirements.values()),
+                today,
+                include_current,
+            )
             held_sessions = await load_held_sessions(
                 self.db, str(org_id), list(requirements.values())
             )
@@ -3560,6 +3560,7 @@ class TrainingProgramService:
                     org_include_current_month=include_current,
                     join_date=member_join_date(member),
                     shift_dates=shifts_by_user.get(str(member.id), []),
+                    evaluation_credits=evaluations_by_user.get(str(member.id), {}),
                     held_sessions=held_sessions,
                 )
                 status, value, pct = compliance_projection(ev)

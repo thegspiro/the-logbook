@@ -10275,10 +10275,21 @@ beyond the feature.
 - **No requirement type counts the calls an evaluation records.** Evaluated
   shifts, transports and refusals are credited; the existing Calls type is
   still fed by shift reports.
-- **A department requirement of an evaluation type, linked into a program
+- ~~**A department requirement of an evaluation type, linked into a program
   with "Link existing", is not credited by evaluations.** A linked row is
   graded by the compliance engine, which has no branch for these types and
-  falls back to matching training records by type.
+  falls back to matching training records by type.~~ Resolved 2026-11-14
+  (owner decision: credit it, like a program's own): the compliance grader
+  counts the member's submitted evaluations for evaluated shifts, transports
+  and refusals (`load_evaluation_credits`), only once the member can see them
+  and worth the same units as program credit — both read the rules in
+  `app/services/shift_evaluation_rules.py` — windowed and prorated for leave
+  as shifts worked are. A training record no longer satisfies these types.
+  Every compliance screen reads the same count, so a linked row, My Training
+  and the matrix agree, and a submission, edit or revocation re-reads the
+  member's linked rows. An evaluation scoped to several programs counts once
+  toward a department requirement, and a general-form evaluation counts too:
+  the requirement is the member's, not one enrollment's.
 
 **Accepted for now**
 

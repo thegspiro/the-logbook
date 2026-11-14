@@ -65,7 +65,6 @@ from app.models.training import (
     RequirementProgress,
     RequirementProgressCredit,
     RequirementProgressStatus,
-    RequirementType,
     Shift,
     ShiftAssignment,
     ShiftCompletionReport,
@@ -85,10 +84,13 @@ from app.schemas.shift_evaluation import (
     TemplateOption,
 )
 from app.schemas.training_program import RequirementProgressUpdate
-from app.services.training_program_service import (
+from app.services.shift_evaluation_rules import (
+    CREDITED_TYPES,
     EVALUATION_REQUIREMENT_TARGETS,
-    TrainingProgramService,
+    credit_units,
+    evaluation_visible,
 )
+from app.services.training_program_service import TrainingProgramService
 from app.utils.org_timezone import local_date, resolve_scheduling_timezone
 from app.utils.positions import canonical_position
 
@@ -119,12 +121,6 @@ _EVALUATED_ENTRY_STATUSES = (
     ExternalShiftHoursStatus.PENDING.value,
 )
 
-# The requirement types an evaluation credits.
-_CREDITED_TYPES = (
-    RequirementType.EVALUATED_SHIFTS,
-    RequirementType.TRANSPORTS,
-    RequirementType.REFUSALS,
-)
 # A progress row in one of these states takes no new credit: an officer
 # signed it off, or the requirement was set aside for the member. A COMPLETED
 # row keeps counting: an evaluation taken back later would otherwise leave the
@@ -150,29 +146,6 @@ def _met_by_value(progress: Any, requirement: Any) -> bool:
 
 def _is_viewer(member_id: Any, viewer_id: Optional[str]) -> bool:
     return viewer_id is not None and str(member_id) == str(viewer_id)
-
-
-def credit_units(evaluation: ShiftEvaluation, requirement: Any) -> float:
-    """What one submitted evaluation is worth toward one requirement."""
-    rtype = requirement.requirement_type
-    statistics = evaluation.statistics or {}
-    if rtype == RequirementType.TRANSPORTS:
-        return float(statistics.get("transports") or 0)
-    if rtype == RequirementType.REFUSALS:
-        return float(statistics.get("refusals") or 0)
-    if rtype != RequirementType.EVALUATED_SHIFTS:
-        return 0.0
-    if requirement.evaluation_excludes_lowest_rating:
-        # The form's own lowest rating, from the copy it was filled out on,
-        # so a later edit to the template's scale cannot regrade it.
-        scale = (evaluation.template_snapshot or {}).get("scale") or []
-        values = [int(level["value"]) for level in scale if "value" in level]
-        if values:
-            lowest = min(values)
-            for answer in (evaluation.responses or {}).values():
-                if (answer or {}).get("rating") == lowest:
-                    return 0.0
-    return 1.0
 
 
 def _name(user: Optional[User]) -> Optional[str]:
@@ -1272,7 +1245,38 @@ class ShiftEvaluationService:
         Called after the evaluation or the state that decides its visibility
         has been committed: the credit ledger's own conflict handling rolls the
         session back, which must not take an uncommitted change with it.
+
+        A department requirement linked into a program keeps no ledger: its
+        row reads the compliance grader, which counts the member's visible
+        evaluations itself (owner decision, 2026-11-14). So the program's own
+        rows take the credit here, and the member's linked rows are re-read
+        afterwards — on a submission, an edit or a revocation alike, and
+        whichever program the evaluation was scoped to.
         """
+        member_id = str(evaluation.member_id)
+        await self._sync_own_credit(evaluation, organization_id)
+        await self._refresh_linked_rows(member_id, organization_id)
+
+    async def _refresh_linked_rows(
+        self, member_id: str, organization_id: UUID | str
+    ) -> None:
+        enrollments = list(
+            (
+                await self.db.execute(
+                    select(ProgramEnrollment).where(
+                        ProgramEnrollment.organization_id == str(organization_id),
+                        ProgramEnrollment.user_id == member_id,
+                    )
+                )
+            ).scalars()
+        )
+        if enrollments:
+            await TrainingProgramService(self.db).refresh_linked_progress(enrollments)
+
+    async def _sync_own_credit(
+        self, evaluation: ShiftEvaluation, organization_id: UUID | str
+    ) -> None:
+        """The ledger credit to the program's own requirements."""
         enrollment_ids = [str(e) for e in (evaluation.enrollment_ids or [])]
         if not enrollment_ids:
             return
@@ -1297,10 +1301,20 @@ class ShiftEvaluationService:
                     RequirementProgress.enrollment_id.in_(enrollment_ids),
                     ProgramEnrollment.organization_id == str(organization_id),
                     ProgramEnrollment.user_id == evaluation.member_id,
-                    TrainingRequirement.requirement_type.in_(_CREDITED_TYPES),
+                    TrainingRequirement.requirement_type.in_(CREDITED_TYPES),
                 )
             )
         ).all()
+        program_service = TrainingProgramService(self.db)
+        linked = await program_service.linked_requirement_ids(
+            list({str(enrollment.program_id) for _, _, enrollment in rows})
+        )
+        # A linked row is the grader's; _refresh_linked_rows re-reads it.
+        rows = [
+            row
+            for row in rows
+            if str(row[1].id) not in linked.get(str(row[2].program_id), set())
+        ]
         if not rows:
             return
         credited = set(
@@ -1333,7 +1347,6 @@ class ShiftEvaluationService:
         ]
         evaluation_id = str(evaluation.id)
         evaluator_id = evaluation.evaluator_id
-        program_service = TrainingProgramService(self.db)
         for (
             progress_id,
             units,
@@ -1678,52 +1691,63 @@ class ShiftEvaluationService:
     async def visible_to_member(
         self, evaluation: ShiftEvaluation, organization_id: UUID | str
     ) -> bool:
-        """Whether the evaluated member may see it, on the shift report's terms."""
+        """Whether the evaluated member may see it, on the shift report's terms.
+
+        Reads only the facts ``evaluation_visible`` needs for this evaluation;
+        the compliance grader batches the same facts for a whole department
+        (``training_compliance.load_evaluation_credits``).
+        """
         if evaluation.status != "submitted":
             return False
+        entry_status = None
+        review_required = False
+        report = None
+        finalized = False
         if (evaluation.occasion or SHIFT_OCCASION) == EXTERNAL_OCCASION:
-            # No report to wait for: the member sees it while the logged
-            # shift it describes still counts.
-            if not evaluation.external_shift_id:
-                return False
-            entry_status = (
-                await self.db.execute(
-                    select(ExternalShiftHours.status).where(
-                        ExternalShiftHours.id == evaluation.external_shift_id,
-                        ExternalShiftHours.organization_id == str(organization_id),
+            if evaluation.external_shift_id:
+                entry_status = (
+                    await self.db.execute(
+                        select(ExternalShiftHours.status).where(
+                            ExternalShiftHours.id == evaluation.external_shift_id,
+                            ExternalShiftHours.organization_id == str(organization_id),
+                        )
                     )
-                )
-            ).scalar_one_or_none()
-            return entry_status == ExternalShiftHoursStatus.COUNTED.value
-        config = await self._config(organization_id)
-        if not (config and config.report_review_required):
-            return True
-        if not evaluation.shift_id:
-            return False
-        report = (
-            await self.db.execute(
-                select(ShiftCompletionReport.review_status).where(
-                    ShiftCompletionReport.shift_id == evaluation.shift_id,
-                    ShiftCompletionReport.trainee_id == evaluation.member_id,
-                    ShiftCompletionReport.organization_id == str(organization_id),
-                )
-            )
-        ).first()
-        if report is not None:
-            return report[0] == "approved"
-        # No report of their own to wait for (a general-form seat, or a
-        # department that does not ask trainees for one): visible once the
-        # shift is closed out (owner decision, 2026-11-13). Finalize and
-        # reopen re-sync credit through sync_credit_for_shift.
-        finalized = (
-            await self.db.execute(
-                select(Shift.is_finalized).where(
-                    Shift.id == evaluation.shift_id,
-                    Shift.organization_id == str(organization_id),
-                )
-            )
-        ).scalar_one_or_none()
-        return bool(finalized)
+                ).scalar_one_or_none()
+        else:
+            config = await self._config(organization_id)
+            review_required = bool(config and config.report_review_required)
+            if review_required and evaluation.shift_id:
+                report = (
+                    await self.db.execute(
+                        select(ShiftCompletionReport.review_status).where(
+                            ShiftCompletionReport.shift_id == evaluation.shift_id,
+                            ShiftCompletionReport.trainee_id == evaluation.member_id,
+                            ShiftCompletionReport.organization_id
+                            == str(organization_id),
+                        )
+                    )
+                ).first()
+                if report is None:
+                    # Finalize and reopen re-sync credit through
+                    # sync_credit_for_shift.
+                    finalized = bool(
+                        (
+                            await self.db.execute(
+                                select(Shift.is_finalized).where(
+                                    Shift.id == evaluation.shift_id,
+                                    Shift.organization_id == str(organization_id),
+                                )
+                            )
+                        ).scalar_one_or_none()
+                    )
+        return evaluation_visible(
+            evaluation,
+            review_required=review_required,
+            report_status=report[0] if report is not None else None,
+            has_report=report is not None,
+            shift_finalized=finalized,
+            entry_status=entry_status,
+        )
 
     async def list_for_member(
         self,

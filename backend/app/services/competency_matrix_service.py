@@ -31,6 +31,7 @@ from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
 from app.services.training_compliance import (
     CATCH_UP_STATUS,
     NOT_YET_HELD_STATUS,
+    EvaluationCredits,
     HeldSession,
     apply_recency,
     biannual_window,
@@ -40,8 +41,10 @@ from app.services.training_compliance import (
     evaluate_member_requirement_detail,
     fallback_record_matches,
     get_org_include_current_month,
+    is_evaluation_credited,
     is_session_attendance,
     load_credited_shift_dates,
+    load_evaluation_credits,
     load_held_sessions,
     member_join_date,
     requirement_applies_to_user,
@@ -164,6 +167,14 @@ class CompetencyMatrixService:
             today,
             org_include_current,
         )
+        evaluations_by_user = await load_evaluation_credits(
+            self.db,
+            str(organization_id),
+            [m.id for m in members],
+            requirements,
+            today,
+            org_include_current,
+        )
         held_sessions = await load_held_sessions(
             self.db, str(organization_id), requirements
         )
@@ -219,6 +230,7 @@ class CompetencyMatrixService:
                     shift_dates=shifts_by_user.get(uid, []),
                     held_sessions=held_sessions,
                     join_date=join_date,
+                    evaluation_credits=evaluations_by_user.get(uid, {}),
                 )
                 deadline = catch_up_deadline(req, join_date, today)
                 if deadline is not None and status_info["status"] not in (
@@ -319,14 +331,19 @@ class CompetencyMatrixService:
         shift_dates: Optional[List[date]] = None,
         held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
         join_date: Optional[date] = None,
+        evaluation_credits: Optional[EvaluationCredits] = None,
     ) -> Dict:
         """Evaluate a single requirement for a single member using type-aware matching."""
         attendance = is_session_attendance(requirement)
-        if attendance or counts_shift_attendance(requirement):
-            # Counted from shifts worked, or from sessions attended, by the
-            # one shared grader, so this cell reads what the compliance matrix
-            # reads for the member (shifts-three-sources). Partial progress is
-            # yellow, as hours is.
+        if (
+            attendance
+            or counts_shift_attendance(requirement)
+            or is_evaluation_credited(requirement)
+        ):
+            # Counted from shifts worked, sessions attended or shift
+            # evaluations, by the one shared grader, so this cell reads what
+            # the compliance matrix reads for the member (shifts-three-sources).
+            # Partial progress is yellow, as hours is.
             ev = evaluate_member_requirement_detail(
                 requirement,
                 user_records if attendance else [],
@@ -336,6 +353,7 @@ class CompetencyMatrixService:
                 join_date=join_date,
                 shift_dates=shift_dates,
                 held_sessions=held_sessions,
+                evaluation_credits=evaluation_credits,
             )
             # A catch-up status lands on "not_started" here; the caller turns
             # an unmet cell inside the catch-up period into its own status.

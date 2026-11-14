@@ -26,6 +26,11 @@ from app.models.training import (
     TrainingStatus,
 )
 from app.models.user import ACTIVE_ACCOUNT_STATUSES, User
+from app.services.shift_evaluation_rules import (
+    EVALUATION_REQUIREMENT_TARGETS,
+    credit_units,
+    evaluation_visible,
+)
 from app.services.training_period import (
     effective_include_current_month,
     resolve_as_of_date,
@@ -589,6 +594,77 @@ def _require_shift_dates(req, shift_dates: Optional[Sequence[date]]):
     return shift_dates
 
 
+# A member's shift-evaluation credit, by requirement id: one (shift date,
+# units) per visible evaluation that is worth something toward it. See
+# load_evaluation_credits.
+EvaluationCredits = Mapping[str, Sequence[Tuple[date, float]]]
+
+_EVALUATION_TYPE_UNITS = {
+    RequirementType.EVALUATED_SHIFTS.value: "evaluated shifts",
+    RequirementType.TRANSPORTS.value: "transports",
+    RequirementType.REFUSALS.value: "refusals",
+}
+
+
+def is_evaluation_credited(req) -> bool:
+    """Whether ``req`` is counted from the member's shift evaluations.
+
+    Owner decision (2026-11-14): evaluated shifts, transports and refusals are
+    credited only by submitted evaluations the member can see, whether the
+    requirement is a program's own (the credit ledger) or the department's
+    (this grader). A training record never stands in for one.
+    """
+    req_type = getattr(req, "requirement_type", None)
+    req_type = getattr(req_type, "value", req_type)
+    return req_type in _EVALUATION_TYPE_UNITS
+
+
+def _require_evaluation_credits(
+    req, evaluation_credits: Optional[EvaluationCredits]
+) -> EvaluationCredits:
+    """``evaluation_credits``, or a loud failure when a caller did not load them.
+
+    As with shift dates: grading without them would read zero for everybody.
+    """
+    if evaluation_credits is None:
+        raise ValueError(
+            f"Requirement {getattr(req, 'id', '?')} counts shift evaluations; "
+            "pass the member's evaluation_credits (load_evaluation_credits)"
+        )
+    return evaluation_credits
+
+
+def evaluation_target(req) -> float:
+    """The count an evaluation-credited requirement asks for (0 when unset)."""
+    req_type = getattr(req.requirement_type, "value", req.requirement_type)
+    column = next(
+        column
+        for rtype, column in EVALUATION_REQUIREMENT_TARGETS.items()
+        if rtype.value == req_type
+    )
+    return float(getattr(req, column, None) or 0)
+
+
+def evaluation_credits_in_window(
+    req, evaluation_credits: Optional[EvaluationCredits], as_of: date
+) -> List[Tuple[date, float]]:
+    """The member's evaluation credit toward ``req`` as of ``as_of``.
+
+    Windowed as :func:`credited_shifts_in_window` windows shifts worked —
+    :func:`completion_window`, the frequency window narrowed by any
+    freshness cutoff — so an evaluated shift counts in the same period a
+    shift worked does. Every grader of these types goes through here.
+    """
+    start, end = completion_window(req, as_of)
+    return [
+        (d, units)
+        for d, units in _require_evaluation_credits(req, evaluation_credits).get(
+            str(req.id), []
+        )
+        if (start is None or d >= start) and (end is None or d <= end)
+    ]
+
+
 def is_session_attendance(req) -> bool:
     """Whether ``req`` is graded on attendance at its linked sessions."""
     req_type = getattr(req, "requirement_type", None)
@@ -883,6 +959,7 @@ def evaluate_member_requirement_detail(
     join_date: Optional[date] = None,
     shift_dates: Optional[Sequence[date]] = None,
     held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
+    evaluation_credits: Optional[EvaluationCredits] = None,
 ) -> RequirementEvaluation:
     """Evaluate one member against one requirement, honouring a catch-up period.
 
@@ -899,6 +976,10 @@ def evaluate_member_requirement_detail(
 
     ``held_sessions`` is :func:`load_held_sessions` for the requirements being
     graded, required whenever ``req`` is a SESSION_ATTENDANCE requirement.
+
+    ``evaluation_credits`` is the member's entry in
+    :func:`load_evaluation_credits`, required whenever ``req`` is counted from
+    shift evaluations (:func:`is_evaluation_credited`).
     """
     ev = _grade_member_requirement(
         req,
@@ -909,6 +990,7 @@ def evaluate_member_requirement_detail(
         shift_dates=shift_dates,
         held_sessions=held_sessions,
         join_date=join_date,
+        evaluation_credits=evaluation_credits,
     )
     # Measured against the real day rather than the evaluation cut-off: the
     # deadline is a calendar promise to the member, not a period boundary.
@@ -932,6 +1014,7 @@ def _grade_member_requirement(
     shift_dates: Optional[Sequence[date]] = None,
     held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
     join_date: Optional[date] = None,
+    evaluation_credits: Optional[EvaluationCredits] = None,
 ) -> RequirementEvaluation:
     """
     Evaluate a single member's status for a single requirement.
@@ -958,6 +1041,10 @@ def _grade_member_requirement(
                       (:func:`counts_shift_attendance`), or matching records
                       when the requirement is not shift-credited
     - CALLS:          Count matching records within date window
+    - EVALUATED_SHIFTS, TRANSPORTS, REFUSALS:
+                      Sum the units of the member's visible shift
+                      evaluations within the window
+                      (:func:`load_evaluation_credits`); never records
     - SESSION_ATTENDANCE: Share of the linked sessions held since
                       ``join_date`` the member attended
                       (:func:`tally_session_attendance`)
@@ -1270,6 +1357,45 @@ def _grade_member_requirement(
             return _ev("in_progress", latest_comp, latest_exp, **progress)
         return _ev("not_started", None, None, **progress)
 
+    # ---- Shift-evaluation requirements (evaluated shifts, transports,
+    # refusals): counted like attendance-credited SHIFTS — the same window,
+    # the same whole-unit waiver proration — from evaluations, not records.
+    if req_type in _EVALUATION_TYPE_UNITS:
+        counted = evaluation_credits_in_window(req, evaluation_credits, today)
+        earned = float(sum(units for _, units in counted))
+        required = evaluation_target(req)
+        base_required = required
+        waived_months = 0
+
+        if required > 0 and start_date and end_date and _waivers:
+            required, waived_months, _ = adjust_required(
+                required,
+                start_date,
+                end_date,
+                _waivers,
+                str(req.id),
+                period_months=get_rolling_period_months(req),
+                whole_units=True,
+            )
+
+        progress = {
+            "current": earned,
+            "required": required,
+            "unit": _EVALUATION_TYPE_UNITS[req_type],
+            "base": base_required,
+            "waived": waived_months,
+        }
+        latest_evaluated = max((d for d, _ in counted), default=None)
+        latest_comp = latest_evaluated.isoformat() if latest_evaluated else None
+
+        # A base target that leave prorated down to zero is met, as for
+        # shifts and calls.
+        if (required > 0 or base_required > 0) and earned >= required:
+            return _ev("completed", latest_comp, None, **progress)
+        elif earned > 0:
+            return _ev("in_progress", latest_comp, None, **progress)
+        return _ev("not_started", None, None, **progress)
+
     # ---- SESSION_ATTENDANCE requirements ----
     if req_type == RequirementType.SESSION_ATTENDANCE.value:
         tally = tally_session_attendance(
@@ -1336,6 +1462,7 @@ def evaluate_member_requirement(
     join_date: Optional[date] = None,
     shift_dates: Optional[Sequence[date]] = None,
     held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
+    evaluation_credits: Optional[EvaluationCredits] = None,
 ):
     """
     Evaluate a single member's status for a single requirement.
@@ -1357,6 +1484,7 @@ def evaluate_member_requirement(
         join_date=join_date,
         shift_dates=shift_dates,
         held_sessions=held_sessions,
+        evaluation_credits=evaluation_credits,
     )
     return ev.status, ev.completion_date, ev.expiry_date
 
@@ -1372,6 +1500,7 @@ _TYPED_BRANCH_TYPES = frozenset(
         RequirementType.SHIFTS.value,
         RequirementType.CALLS.value,
         RequirementType.SESSION_ATTENDANCE.value,
+        *_EVALUATION_TYPE_UNITS,
     }
 )
 
@@ -1422,6 +1551,8 @@ def graded_records_clause(
     lets through is dropped by the grader, which compares the stored keys in
     Python. A record is never loaded for text its key does not carry.
 
+    - **Shift-evaluation types** (evaluated shifts, transports, refusals)
+      read no records: :func:`load_evaluation_credits` feeds them.
     - **SESSION_ATTENDANCE** reads COMPLETED records by ``source_event_id``,
       not by date, so the records of every session linked to one are
       selected whatever their completion date.
@@ -1444,6 +1575,9 @@ def graded_records_clause(
     for req in requirements:
         if is_session_attendance(req):
             attendance_ids.append(str(req.id))
+        if is_evaluation_credited(req):
+            # Counted from shift evaluations; reads no record at all.
+            continue
         as_of = requirement_as_of(req, today, org_include_current_month)
         req_type = getattr(req.requirement_type, "value", req.requirement_type)
         if req_type == RequirementType.CERTIFICATION.value:
@@ -1713,6 +1847,155 @@ async def load_credited_shift_dates(
         by_user.setdefault(str(user_id), []).extend([shift_date] * int(n or 0))
     for dates in by_user.values():
         dates.sort()
+    return by_user
+
+
+async def load_evaluation_credits(
+    db: AsyncSession,
+    org_id: str,
+    member_ids: Sequence[str],
+    requirements: Iterable[TrainingRequirement],
+    today: date,
+    org_include_current_month: bool,
+) -> Dict[str, Dict[str, List[Tuple[date, float]]]]:
+    """Each member's shift-evaluation credit, by requirement id.
+
+    Owner decision (2026-11-14): a department requirement of an evaluation
+    type — linked into a program or not — is credited by the same
+    evaluations, worth the same units, as a program's own is through
+    ``ShiftEvaluationService.sync_credit``. Both read the shared rules in
+    ``shift_evaluation_rules``: an evaluation counts once the member can see
+    it (:func:`evaluation_visible`, the batched form of
+    ``ShiftEvaluationService.visible_to_member``) and is worth
+    :func:`credit_units` toward each requirement. One evaluation scoped to
+    several programs is one evaluation here: the department requirement is
+    the member's, not any one enrollment's.
+
+    Dated by the shift's date, so the grader windows it as it windows shifts
+    worked. Loaded only when one of ``requirements`` is evaluation-credited;
+    otherwise ``{}``, and callers pass ``.get(member_id, {})``. Bounded by the
+    earliest start of those requirements' :func:`completion_window`.
+    """
+    from app.models.external_shift_hours import ExternalShiftHours
+    from app.models.shift_evaluation import EXTERNAL_OCCASION, ShiftEvaluation
+    from app.models.training import (
+        Shift,
+        ShiftCompletionReport,
+        TrainingModuleConfig,
+    )
+
+    credited = [r for r in requirements if is_evaluation_credited(r)]
+    if not credited or not member_ids:
+        return {}
+
+    starts = [
+        completion_window(
+            req, requirement_as_of(req, today, org_include_current_month)
+        )[0]
+        for req in credited
+    ]
+    # One unbounded requirement (ONE_TIME without a cutoff) reads them all.
+    bounded = [s for s in starts if s is not None]
+    earliest = min(bounded) if len(bounded) == len(starts) else None
+
+    org = str(org_id)
+    ids = [str(m) for m in member_ids]
+    query = select(ShiftEvaluation).where(
+        ShiftEvaluation.organization_id == org,
+        ShiftEvaluation.member_id.in_(ids),
+        ShiftEvaluation.status == "submitted",
+    )
+    if earliest is not None:
+        query = query.where(ShiftEvaluation.shift_date >= earliest)
+    evaluations = list((await db.execute(query)).scalars().all())
+    if not evaluations:
+        return {}
+
+    review_required = bool(
+        (
+            await db.execute(
+                select(TrainingModuleConfig.report_review_required).where(
+                    TrainingModuleConfig.organization_id == org
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    on_shift = [
+        e
+        for e in evaluations
+        if (e.occasion or "") != EXTERNAL_OCCASION and e.shift_id is not None
+    ]
+    shift_ids = list({str(e.shift_id) for e in on_shift})
+    reports: Dict[Tuple[str, str], Optional[str]] = {}
+    finalized: set = set()
+    if review_required and shift_ids:
+        for shift_id, trainee_id, status in (
+            await db.execute(
+                select(
+                    ShiftCompletionReport.shift_id,
+                    ShiftCompletionReport.trainee_id,
+                    ShiftCompletionReport.review_status,
+                ).where(
+                    ShiftCompletionReport.organization_id == org,
+                    ShiftCompletionReport.shift_id.in_(shift_ids),
+                    ShiftCompletionReport.trainee_id.in_(ids),
+                )
+            )
+        ).all():
+            reports[(str(shift_id), str(trainee_id))] = status
+        finalized = {
+            str(i)
+            for i in (
+                await db.execute(
+                    select(Shift.id).where(
+                        Shift.organization_id == org,
+                        Shift.id.in_(shift_ids),
+                        Shift.is_finalized.is_(True),
+                    )
+                )
+            ).scalars()
+        }
+    entry_ids = list(
+        {
+            str(e.external_shift_id)
+            for e in evaluations
+            if (e.occasion or "") == EXTERNAL_OCCASION and e.external_shift_id
+        }
+    )
+    entry_statuses: Dict[str, str] = {}
+    if entry_ids:
+        entry_statuses = {
+            str(entry_id): status
+            for entry_id, status in (
+                await db.execute(
+                    select(ExternalShiftHours.id, ExternalShiftHours.status).where(
+                        ExternalShiftHours.organization_id == org,
+                        ExternalShiftHours.id.in_(entry_ids),
+                    )
+                )
+            ).all()
+        }
+
+    by_user: Dict[str, Dict[str, List[Tuple[date, float]]]] = {}
+    for evaluation in evaluations:
+        key = (str(evaluation.shift_id), str(evaluation.member_id))
+        if not evaluation_visible(
+            evaluation,
+            review_required=review_required,
+            report_status=reports.get(key),
+            has_report=key in reports,
+            shift_finalized=str(evaluation.shift_id) in finalized,
+            entry_status=entry_statuses.get(str(evaluation.external_shift_id)),
+        ):
+            continue
+        for req in credited:
+            units = credit_units(evaluation, req)
+            if units > 0:
+                by_user.setdefault(str(evaluation.member_id), {}).setdefault(
+                    str(req.id), []
+                ).append((evaluation.shift_date, units))
     return by_user
 
 
@@ -2124,6 +2407,7 @@ def _evaluate_member_compliance(
     join_date: Optional[date] = None,
     shift_dates: Optional[Sequence[date]] = None,
     held_sessions: Optional[Mapping[str, Sequence[HeldSession]]] = None,
+    evaluation_credits: Optional[EvaluationCredits] = None,
 ) -> Tuple[str, Optional[float]]:
     """Evaluate a member's compliance status against a set of requirements.
 
@@ -2141,6 +2425,7 @@ def _evaluate_member_compliance(
             join_date=join_date,
             shift_dates=shift_dates,
             held_sessions=held_sessions,
+            evaluation_credits=evaluation_credits,
         )
         statuses.append(req_status)
     completed_count, total_count = tally_standing(statuses)
@@ -2423,6 +2708,14 @@ async def compute_org_compliance_tally(
         today,
         grading.include_current_month,
     )
+    evaluations_by_user = await load_evaluation_credits(
+        db,
+        org_id,
+        [m.id for m in members],
+        requirements,
+        today,
+        grading.include_current_month,
+    )
     held_sessions = await load_held_sessions(db, str(org_id), requirements)
 
     # Fetch waivers
@@ -2448,6 +2741,7 @@ async def compute_org_compliance_tally(
             join_date=member_join_date(member),
             shift_dates=shifts_by_user.get(str(member.id), []),
             held_sessions=held_sessions,
+            evaluation_credits=evaluations_by_user.get(str(member.id), {}),
         )
         if status == STANDING_NOT_APPLICABLE:
             not_applicable_count += 1
@@ -2523,6 +2817,9 @@ async def grade_org_members(
     shifts_by_user = await load_credited_shift_dates(
         db, org_id, member_ids, requirements, today, grading.include_current_month
     )
+    evaluations_by_user = await load_evaluation_credits(
+        db, org_id, member_ids, requirements, today, grading.include_current_month
+    )
     held_sessions = await load_held_sessions(db, str(org_id), requirements)
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
@@ -2542,6 +2839,7 @@ async def grade_org_members(
                     join_date=join_date,
                     shift_dates=shifts_by_user.get(str(member.id), []),
                     held_sessions=held_sessions,
+                    evaluation_credits=evaluations_by_user.get(str(member.id), {}),
                 ),
             )
             for req in member_grading.requirements
