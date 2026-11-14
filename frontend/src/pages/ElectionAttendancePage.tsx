@@ -16,6 +16,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router';
 import { ChevronDown, ChevronRight, ClipboardCheck, Loader2 } from 'lucide-react';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
+import { ElectionsAreaNav } from '../modules/elections/components/ElectionsAreaNav';
 import { EmptyState } from '../components/ux';
 import { StatGrid } from '../components/ux/StatGrid';
 import { electionService } from '../services/api';
@@ -236,6 +237,7 @@ const ElectionAttendancePage: React.FC = () => {
         breadcrumbLabel="Meeting Attendance"
         subtitle="How many meetings each member attended, and whether they may vote in the election you choose"
       />
+      <ElectionsAreaNav />
 
       {electionsError ? (
         <div role="alert" className="alert-danger rounded-lg p-4">
@@ -389,7 +391,7 @@ const ElectionAttendancePage: React.FC = () => {
                   <p className="text-theme-text-secondary text-sm">
                     The election&apos;s rules count their own meetings, whatever period is shown here.{' '}
                     <Link
-                      to={`/elections/${data.election_id}?tab=eligibility`}
+                      to={`/elections/${data.election_id}/eligibility`}
                       className="text-theme-text-primary font-medium underline"
                     >
                       See this election&apos;s rules

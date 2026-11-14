@@ -5,7 +5,8 @@
  *   /elections            — Elections list
  *   /elections/settings   — Election Settings (elections.manage)
  *   /elections/attendance — Meeting attendance against an election (elections.manage)
- *   /elections/:electionId — Election detail
+ *   /elections/:electionId            — Election overview
+ *   /elections/:electionId/<section>  — One section of it (results, ballot, …)
  *
  * Public routes (no auth):
  *   /ballot               — Ballot voting (token-based)
@@ -17,7 +18,8 @@ import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const ElectionsPage = lazyWithRetry(() => import('../../pages/ElectionsPage'));
-const ElectionDetailPage = lazyWithRetry(() => import('../../pages/ElectionDetailPage'));
+// The route element, not the page: it forwards `?tab=` links to section paths.
+const ElectionDetailRoute = lazyWithRetry(() => import('./ElectionDetailRoute'));
 const ElectionsSettingsPage = lazyWithRetry(() => import('../../pages/ElectionsSettingsPage'));
 const ElectionAttendancePage = lazyWithRetry(() => import('../../pages/ElectionAttendancePage'));
 const BallotVotingPage = lazyWithRetry(() => import('../../pages/BallotVotingPage'));
@@ -55,12 +57,15 @@ export const getElectionsRoutes = () => (
         </ProtectedRoute>
       }
     />
+    {/* One splat route for the Overview and every section, so moving between
+        sections never remounts the page (and so never drops a vote receipt or
+        an open dialog); the page reads the section from the splat. */}
     <Route
-      path="/elections/:electionId"
+      path="/elections/:electionId/*"
       element={
         <ProtectedRoute requiredModule="elections" moduleLabel="Elections">
           <Suspense fallback={null}>
-            <ElectionDetailPage />
+            <ElectionDetailRoute />
           </Suspense>
         </ProtectedRoute>
       }

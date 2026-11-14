@@ -75,7 +75,7 @@ const roster = {
 // ineligibility reason. One row is expanded to show its per-item detail.
 test.describe('Voter eligibility roster fits its card', () => {
   for (const viewport of [{ name: 'iPhone 390x844', width: 390, height: 844 }, ...TABLE_FIT_VIEWPORTS]) {
-    test(`/elections/:id?tab=eligibility — ${viewport.name}`, async ({ page }) => {
+    test(`/elections/:id/eligibility — ${viewport.name}`, async ({ page }) => {
       await page.setViewportSize(viewport);
       await signIn(page, { permissions: [...TEST_USER.permissions, 'elections.view', 'elections.manage'] });
       // The detail page reads both of these on load; the default mock's `{}`
@@ -88,7 +88,7 @@ test.describe('Voter eligibility roster fits its card', () => {
       );
       await page.route('**/api/v1/elections/election-1', (route) => route.fulfill(json(election)));
       await page.route('**/api/v1/elections/election-1/eligibility-roster**', (route) => route.fulfill(json(roster)));
-      await page.goto('/elections/election-1?tab=eligibility');
+      await page.goto('/elections/election-1/eligibility');
 
       const table = page.getByRole('table', { name: 'Voter eligibility roster' });
       await table.waitFor();

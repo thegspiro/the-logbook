@@ -43,7 +43,8 @@ import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../hooks/useFieldErrors';
 import ElectionCloseStamp from '../components/election-detail/ElectionCloseStamp';
 import { GovernancePageHeader } from '../components/governance/GovernancePageHeader';
-import { ClipboardCheck, Settings, Vote } from 'lucide-react';
+import { Vote } from 'lucide-react';
+import { ElectionsAreaNav } from '../modules/elections/components/ElectionsAreaNav';
 
 interface PositionSuggestion {
   key: string;
@@ -533,23 +534,6 @@ export const ElectionsPage: React.FC = () => {
               />
               {canManage && (
                 <>
-                  {/* Labelled, not a bare gear: officers missed the icon, and the
-                      Minutes header beside it already names its Settings link. */}
-                  <Link
-                    to="/elections/settings"
-                    className="btn-secondary touch:min-h-11 inline-flex items-center gap-2"
-                  >
-                    <Settings className="h-4 w-4" aria-hidden="true" />
-                    <span>Election Settings</span>
-                  </Link>
-                  <Link
-                    to="/elections/attendance"
-                    className="btn-secondary btn-icon-sm"
-                    aria-label="Meeting attendance"
-                    title="Meeting Attendance"
-                  >
-                    <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
-                  </Link>
                   <button
                     onClick={() => setShowCreateModal(true)}
                     className="btn-primary inline-flex items-center rounded-md"
@@ -570,6 +554,8 @@ export const ElectionsPage: React.FC = () => {
             </>
           }
         />
+
+        <ElectionsAreaNav />
 
         {error && (
           <div

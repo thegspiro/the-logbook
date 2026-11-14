@@ -1,26 +1,20 @@
 /**
- * An election's workflow tabs are addressable by `?tab=`.
+ * An election's sections are addressable by path: `/elections/:id` is the
+ * Overview and `/elections/:id/<section>` opens one section.
  *
- * The sixth page found holding its tab in plain `useState`, after Email
- * Templates, Notifications, Medical Screening, Compliance Config and Item
- * Detail. Same three consequences every time: the tab cannot be linked to, the
- * Back button does nothing after a tab change, and the screenshot harness can
- * only ever shoot the default.
+ * They were `?tab=` before, and before that plain `useState` — which kept
+ * **Eligibility**, **Attendance** and **Proxy Voting** unlinkable, though "the
+ * eligibility roster for this election" is exactly the thing a secretary sends
+ * a colleague. A path is the stronger address: the results can be sent round
+ * after the vote, and old `?tab=` links are forwarded by ElectionDetailRoute.
  *
- * Here it kept **Eligibility**, **Attendance** and **Proxy Voting** unlinkable
- * — and "the eligibility roster for this election" is exactly the thing a
- * secretary sends a colleague.
- *
- * Unlike the other five this page does not validate the value against a list,
- * and deliberately: `ElectionWorkflowTabs` already computes which tabs this
- * viewer may see and falls back to the first of them when the active tab is not
- * among them, so an unknown or forbidden `?tab=` lands on a real panel instead
- * of a blank one. Duplicating that list here would be a second source of truth
- * for who sees what.
+ * The page does not keep its own list of who may see which section:
+ * `visibleElectionSections` decides, for the links and for the fallback that
+ * sends a refused or unknown section to the Overview.
  *
  * Asserted against the source: rendering this page needs the election, its
  * candidates, its package, the applicant service and a permission surface all
- * mocked, and the defect is two expressions a render test would pass over.
+ * mocked; the rendered behaviour is covered in ElectionDetailPage.w50-s24.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -30,22 +24,26 @@ import { join } from 'node:path';
 const page = readFileSync(join(__dirname, 'ElectionDetailPage.tsx'), 'utf8');
 const tabs = readFileSync(join(__dirname, '../modules/elections/components/ElectionWorkflowTabs.tsx'), 'utf8');
 
-describe('ElectionDetailPage tab deep links', () => {
-  it('reads the tab back out of the URL', () => {
-    expect(page).toContain('useSearchParams');
-    expect(page).toContain("searchParams.get('tab')");
+describe('ElectionDetailPage section paths', () => {
+  it('reads the section from the route, not from the query string', () => {
+    expect(page).toContain("'*': sectionPath");
+    expect(page).not.toContain('useSearchParams');
   });
 
-  it('writes the tab back to the URL when it changes', () => {
-    expect(page).toContain('setSearchParams({ tab })');
+  it('moves between sections by path', () => {
+    expect(page).toContain('navigate(electionSectionPath(electionId, section))');
+    expect(page).toContain("goToSection('results')");
   });
 
-  it('does not keep a second copy of the tab in component state', () => {
+  it('does not keep a second copy of the section in component state', () => {
     expect(page).not.toContain("useState('ballot')");
+    expect(page).not.toContain('useState<ElectionSection');
   });
 
-  it('leaves the visible-tab fallback where it already lived', () => {
-    // The guard that makes an unknown or forbidden `?tab=` safe.
-    expect(tabs).toContain("tabs.find((t) => t.id === activeTab) ? activeTab : (tabs[0]?.id ?? 'ballot')");
+  it('sends a refused or unknown section to the Overview without pushing history', () => {
+    expect(page).toContain('visibleElectionSections(election, canManage).some((s) => s.id === activeSection)');
+    expect(page).toContain('navigate(electionSectionPath(electionId, null), { replace: true })');
+    // The links and the fallback share one rule.
+    expect(tabs).toContain('visibleElectionSections(election, canManage, candidateCount)');
   });
 });
