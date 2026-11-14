@@ -33,6 +33,18 @@ import type {
   MergeChoice,
   MergePreview,
   RemoveRecordsResult,
+  AlbumDetail,
+  AlbumLevel,
+  AlbumSummary,
+  HistorySource,
+  MediaFullView,
+  MediaList,
+  MediaPublishResult,
+  MediaQuery,
+  MediaSummary,
+  MediaUpdate,
+  MediaUploadFields,
+  MediaView,
 } from '../types';
 
 const api = createApiClient();
@@ -181,9 +193,13 @@ export const historyService = {
     return asArray(data);
   },
 
-  async submitForClearance(recordId: string, purpose: ClearancePurpose): Promise<ClearanceRequest> {
+  async submitForClearance(
+    recordId: string,
+    purpose: ClearancePurpose,
+    recordType: 'member' | 'media' = 'member'
+  ): Promise<ClearanceRequest> {
     const { data } = await api.post<ClearanceRequest>(`${BASE}/clearance/requests`, {
-      record_type: 'member',
+      record_type: recordType,
       record_id: recordId,
       purpose,
     });
@@ -282,6 +298,158 @@ export const historyService = {
       choices,
     });
     return data;
+  },
+};
+
+/** Where a media item's files are read from. Plain URLs, so an <img>,
+ * <audio> or <video> loads them directly: the session cookie goes with a
+ * same-origin request, and the server checks the item is readable. */
+const MEDIA_FILE_BASE = `/api/v1${BASE}/media`;
+
+export const mediaFileUrl = (id: string, which: 'thumbnail' | 'view' | 'original'): string =>
+  `${MEDIA_FILE_BASE}/${encodeURIComponent(id)}/${which}`;
+
+export const historyMediaService = {
+  async listMedia(query: MediaQuery = {}): Promise<MediaList> {
+    const { data } = await api.get<MediaList>(`${BASE}/media`, { params: query });
+    return { items: asArray(data.items), total: data.total };
+  },
+
+  async getMedia(id: string): Promise<MediaView> {
+    const { data } = await api.get<MediaView>(`${BASE}/media/${id}`);
+    return { ...data, tags: asArray(data.tags) } as MediaView;
+  },
+
+  /** One file of a batch. Each goes in its own request: the server accepts 60 MB
+   * per request, and one refused file must not stop the rest. */
+  async uploadMedia(
+    file: File,
+    catalogue: MediaUploadFields,
+    batchId: string,
+    onProgress?: (fraction: number) => void
+  ): Promise<MediaFullView> {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('catalogue', JSON.stringify(catalogue));
+    form.append('batch_id', batchId);
+    const { data } = await api.post<MediaFullView>(`${BASE}/media`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      // A 55 MB file over a slow connection outlasts the default timeout.
+      timeout: 0,
+      onUploadProgress: (event) => {
+        if (onProgress && event.total) onProgress(event.loaded / event.total);
+      },
+    });
+    return data;
+  },
+
+  async updateMedia(id: string, payload: MediaUpdate): Promise<MediaFullView> {
+    const { data } = await api.patch<MediaFullView>(`${BASE}/media/${id}`, payload);
+    return data;
+  },
+
+  async replaceTags(id: string, memberIds: string[]): Promise<MediaFullView> {
+    const { data } = await api.put<MediaFullView>(`${BASE}/media/${id}/tags`, { member_ids: memberIds });
+    return data;
+  },
+
+  async deleteMedia(id: string): Promise<void> {
+    await api.delete(`${BASE}/media/${id}`);
+  },
+
+  async publish(id: string, level: 'members' | 'public'): Promise<MediaPublishResult> {
+    const { data } = await api.post<MediaPublishResult>(`${BASE}/media/${id}/publish`, { level });
+    return { ...data, consent_warnings: asArray(data.consent_warnings) };
+  },
+
+  async unpublish(id: string, level: 'draft' | 'members'): Promise<MediaFullView> {
+    const { data } = await api.post<MediaFullView>(`${BASE}/media/${id}/unpublish`, { level });
+    return data;
+  },
+
+  async listRevisions(id: string): Promise<Revision[]> {
+    const { data } = await api.get<Revision[]>(`${BASE}/media/${id}/revisions`);
+    return asArray(data);
+  },
+
+  async personMedia(personId: string): Promise<MediaSummary[]> {
+    const { data } = await api.get<MediaSummary[]>(`${BASE}/people/${personId}/media`);
+    return asArray(data);
+  },
+
+  async downloadOriginal(id: string): Promise<Blob> {
+    const { data } = await api.get<Blob>(`${BASE}/media/${id}/original`, { responseType: 'blob' });
+    return data;
+  },
+
+  // --- Sources ---
+
+  async listSources(includeRetired = false): Promise<HistorySource[]> {
+    const { data } = await api.get<HistorySource[]>(`${BASE}/sources`, {
+      params: { include_retired: includeRetired },
+    });
+    return asArray(data);
+  },
+
+  async createSource(name: string): Promise<HistorySource> {
+    const { data } = await api.post<HistorySource>(`${BASE}/sources`, { name });
+    return data;
+  },
+
+  async updateSource(
+    id: string,
+    changes: { name?: string | undefined; is_retired?: boolean | undefined }
+  ): Promise<HistorySource> {
+    const { data } = await api.patch<HistorySource>(`${BASE}/sources/${id}`, changes);
+    return data;
+  },
+
+  async mergeSource(id: string, intoSourceId: string): Promise<HistorySource> {
+    const { data } = await api.post<HistorySource>(`${BASE}/sources/${id}/merge`, { into_source_id: intoSourceId });
+    return data;
+  },
+
+  // --- Albums ---
+
+  async listAlbums(): Promise<AlbumSummary[]> {
+    const { data } = await api.get<AlbumSummary[]>(`${BASE}/albums`);
+    return asArray(data);
+  },
+
+  async getAlbum(id: string): Promise<AlbumDetail> {
+    const { data } = await api.get<AlbumDetail>(`${BASE}/albums/${id}`);
+    return { ...data, items: asArray(data.items) };
+  },
+
+  async createAlbum(payload: {
+    name: string;
+    description?: string | undefined;
+    level?: AlbumLevel | undefined;
+  }): Promise<AlbumDetail> {
+    const { data } = await api.post<AlbumDetail>(`${BASE}/albums`, payload);
+    return { ...data, items: asArray(data.items) };
+  },
+
+  async updateAlbum(
+    id: string,
+    payload: {
+      name?: string | undefined;
+      description?: string | null | undefined;
+      level?: AlbumLevel | undefined;
+      cover_media_id?: string | null | undefined;
+    }
+  ): Promise<AlbumDetail> {
+    const { data } = await api.patch<AlbumDetail>(`${BASE}/albums/${id}`, payload);
+    return { ...data, items: asArray(data.items) };
+  },
+
+  async setAlbumItems(id: string, mediaIds: string[]): Promise<AlbumDetail> {
+    const { data } = await api.put<AlbumDetail>(`${BASE}/albums/${id}/items`, { media_ids: mediaIds });
+    return { ...data, items: asArray(data.items) };
+  },
+
+  async deleteAlbum(id: string): Promise<void> {
+    await api.delete(`${BASE}/albums/${id}`);
   },
 };
 

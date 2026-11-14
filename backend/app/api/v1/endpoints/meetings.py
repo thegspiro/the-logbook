@@ -314,7 +314,10 @@ async def add_attendee(
     """Add an attendee to a meeting"""
     service = MeetingsService(db)
     result, error = await service.add_attendee(
-        meeting_id, current_user.organization_id, attendee.model_dump()
+        meeting_id,
+        current_user.organization_id,
+        attendee.model_dump(),
+        recorded_by=current_user.id,
     )
     if error:
         raise HTTPException(

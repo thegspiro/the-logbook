@@ -211,7 +211,7 @@ export interface ClearanceStepState {
 
 export interface ClearanceRequest {
   id: string;
-  record_type: 'member';
+  record_type: 'member' | 'media';
   record_id: string;
   record_label: string;
   revision_number: number;
@@ -337,7 +337,9 @@ export interface ClearanceStep {
 
 export interface ClearanceReview {
   request: ClearanceRequest;
-  record: HistoricalMemberMemberView;
+  /** A person or a photo/media item, as members would read it: which one is
+   * `request.record_type`. */
+  record: HistoricalMemberMemberView | MediaMemberView;
 }
 
 export interface PeopleQuery {
@@ -494,4 +496,172 @@ export interface MergePreview {
   fields: MergeField[];
   refusal: string | null;
   warnings: string[];
+}
+
+// --- Photos and media ---
+
+export const MediaKind = {
+  PHOTO: 'photo',
+  AUDIO: 'audio',
+  VIDEO: 'video',
+} as const;
+export type MediaKind = (typeof MediaKind)[keyof typeof MediaKind];
+
+export const MEDIA_KIND_LABELS: Record<MediaKind, string> = {
+  photo: 'Photo',
+  audio: 'Audio',
+  video: 'Video',
+};
+
+export type ConsentState = 'granted' | 'declined' | 'not_answered' | 'no_account';
+
+/** What each photo-use answer means for the Historian. Never a refusal. */
+export const CONSENT_STATE_LABELS: Record<ConsentState, string> = {
+  granted: 'Photo use granted',
+  declined: 'Declined photo use',
+  not_answered: 'Never answered the photo-use question',
+  no_account: 'No member account to ask',
+};
+
+export interface MediaSummary {
+  id: string;
+  kind: MediaKind;
+  title: string;
+  taken_date: string | null;
+  taken_date_precision: DatePrecision;
+  taken_date_circa: boolean;
+  duration_seconds: number | null;
+  has_thumbnail: boolean;
+  publication_level: PublicationLevel;
+}
+
+export interface MediaList {
+  items: MediaSummary[];
+  total: number;
+}
+
+export interface MediaTag {
+  member_id: string;
+  display_name: string;
+}
+
+export interface MediaTagFull extends MediaTag {
+  consent: ConsentState;
+}
+
+interface MediaCatalogue {
+  id: string;
+  kind: MediaKind;
+  title: string;
+  description: string | null;
+  taken_date: string | null;
+  taken_date_precision: DatePrecision;
+  taken_date_circa: boolean;
+  place: string | null;
+  creator: string | null;
+  source_id: string | null;
+  source_name: string | null;
+  rights_note: string | null;
+  accession_number: string | null;
+  original_location: string | null;
+  width: number | null;
+  height: number | null;
+  duration_seconds: number | null;
+  has_thumbnail: boolean;
+  mime_type: string | null;
+  publication_level: PublicationLevel;
+}
+
+export interface MediaMemberView extends MediaCatalogue {
+  view: 'member';
+  tags: MediaTag[];
+}
+
+export interface MediaFullView extends MediaCatalogue {
+  view: 'full';
+  research_notes: string | null;
+  original_filename: string;
+  original_mime_type: string | null;
+  original_size_bytes: number | null;
+  original_sha256: string | null;
+  batch_id: string | null;
+  tags: MediaTagFull[];
+  published_at: string | null;
+  revision_number: number;
+  public_revision_number: number | null;
+  public_changes_pending: boolean;
+  clearance_required: boolean;
+  cleared_for_public: boolean;
+  clearance: ClearanceRequest | null;
+  can_edit: boolean;
+  can_publish: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type MediaView = MediaFullView | MediaMemberView;
+
+/** The catalogue fields a keeper sets. Update payloads send `null` to clear. */
+export interface MediaFields {
+  title?: string | undefined;
+  description?: string | null | undefined;
+  taken_date?: string | null | undefined;
+  taken_date_precision?: DatePrecision | undefined;
+  taken_date_circa?: boolean | undefined;
+  place?: string | null | undefined;
+  creator?: string | null | undefined;
+  source_id?: string | null | undefined;
+  rights_note?: string | null | undefined;
+  accession_number?: string | null | undefined;
+  original_location?: string | null | undefined;
+  research_notes?: string | null | undefined;
+}
+
+export interface MediaUploadFields extends MediaFields {
+  tag_member_ids?: string[] | undefined;
+}
+
+export interface MediaUpdate extends MediaFields {
+  edit_kind?: EditKind | undefined;
+  edit_note?: string | undefined;
+}
+
+export interface MediaPublishResult {
+  item: MediaFullView;
+  consent_warnings: MediaTagFull[];
+}
+
+export interface HistorySource {
+  id: string;
+  name: string;
+  sort_order: number;
+  is_retired: boolean;
+  usage_count: number;
+}
+
+export type AlbumLevel = 'draft' | 'members';
+
+export interface AlbumSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  level: AlbumLevel;
+  cover_media_id: string | null;
+  item_count: number;
+}
+
+export interface AlbumDetail extends AlbumSummary {
+  items: MediaSummary[];
+  can_edit: boolean;
+}
+
+export interface MediaQuery {
+  search?: string | undefined;
+  kind?: MediaKind | undefined;
+  decade?: number | undefined;
+  album_id?: string | undefined;
+  member_id?: string | undefined;
+  level?: PublicationLevel | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
 }

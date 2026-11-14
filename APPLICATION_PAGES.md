@@ -1187,11 +1187,12 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Elections
 
-| URL                   | Page              | Permission         |
-| --------------------- | ----------------- | ------------------ |
-| `/elections`          | Elections List    | Authenticated      |
-| `/elections/:id`      | Election Detail   | Authenticated      |
-| `/elections/settings` | Election Settings | `elections.manage` |
+| URL                     | Page                        | Permission         |
+| ----------------------- | --------------------------- | ------------------ |
+| `/elections`            | Elections List              | Authenticated      |
+| `/elections/:id`        | Election Detail             | Authenticated      |
+| `/elections/settings`   | Election Settings           | `elections.manage` |
+| `/elections/attendance` | Election Meeting Attendance | `elections.manage` |
 
 > **Voiding a paper-ballot batch** used to ask for its reason with
 > `window.prompt`, which a browser may suppress — and which silently dropped any
@@ -1239,21 +1240,27 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## History _(2026-11-03)_
 
-| URL                               | Page                      | Permission                            |
-| --------------------------------- | ------------------------- | ------------------------------------- |
-| `/history`                        | History home              | Authenticated                         |
-| `/history/people`                 | Past members              | Authenticated                         |
-| `/history/people/new`             | Add a past member         | `history.manage`                      |
-| `/history/people/:personId`       | Past member               | Authenticated                         |
-| `/history/people/:personId/edit`  | Edit a past member        | `history.manage`                      |
-| `/history/people/:personId/merge` | Merge two records         | `history.manage`                      |
-| `/history/import`                 | Import a roster           | `history.manage`                      |
-| `/history/import/:importId`       | Review a roster import    | `history.manage`                      |
-| `/history/honor-roll`             | Honor Roll                | Authenticated                         |
-| `/history/clearance/:requestId`   | Clearance review          | Authenticated                         |
-| `/history/settings`               | Titles and clearance list | `history.manage` or `settings.manage` |
+| URL                               | Page                       | Permission                            |
+| --------------------------------- | -------------------------- | ------------------------------------- |
+| `/history`                        | History home               | Authenticated                         |
+| `/history/people`                 | Past members               | Authenticated                         |
+| `/history/people/new`             | Add a past member          | `history.manage`                      |
+| `/history/people/:personId`       | Past member                | Authenticated                         |
+| `/history/people/:personId/edit`  | Edit a past member         | `history.manage`                      |
+| `/history/people/:personId/merge` | Merge two records          | `history.manage`                      |
+| `/history/import`                 | Import a roster            | `history.manage`                      |
+| `/history/media`                  | Photos and media           | Authenticated                         |
+| `/history/media/upload`           | Upload photos and media    | `history.manage`                      |
+| `/history/media/:mediaId`         | Photo or media item        | Authenticated                         |
+| `/history/media/:mediaId/edit`    | Edit a photo or media item | `history.manage`                      |
+| `/history/albums`                 | Albums                     | Authenticated                         |
+| `/history/albums/:albumId`        | Album                      | Authenticated                         |
+| `/history/import/:importId`       | Review a roster import     | `history.manage`                      |
+| `/history/honor-roll`             | Honor Roll                 | Authenticated                         |
+| `/history/clearance/:requestId`   | Clearance review           | Authenticated                         |
+| `/history/settings`               | Titles and clearance list  | `history.manage` or `settings.manage` |
 
-> The department archive, off by default and turned on under Settings → Modules. Any signed-in member reads what is published to members; the server decides what each caller receives, so a member's response never carries a past member's birth date, addresses, verification sources or research notes, and each memorial detail (date of death, circumstances, resting place) only where its own visibility allows. `history.view` reads drafts and research without editing, `history.manage` creates and edits, and `history.publish` publishes. Publishing to the public needs the department's clearance list — each step a position, any one holder of which clears it — to have cleared the record's latest substantial revision; with no list, a publisher publishes directly. The review page opens for the archive's keepers, the member who submitted the record and holders of a step's position. Public records are stored now and appear on the department's website once the public feed ships. A roster CSV is imported through a reviewed draft: each row is matched to an existing record (which only gains the fields it is missing), mapped to a member account, created as a new draft record, or skipped, and no login account is ever created. Merging two records of one person keeps one, moves the other's service, family links and change history to it, and forwards the removed record's address.
+> The department archive, off by default and turned on under Settings → Modules. Any signed-in member reads what is published to members; the server decides what each caller receives, so a member's response never carries a past member's birth date, addresses, verification sources or research notes, and each memorial detail (date of death, circumstances, resting place) only where its own visibility allows. `history.view` reads drafts and research without editing, `history.manage` creates and edits, and `history.publish` publishes. Publishing to the public needs the department's clearance list — each step a position, any one holder of which clears it — to have cleared the record's latest substantial revision; with no list, a publisher publishes directly. The review page opens for the archive's keepers, the member who submitted the record and holders of a step's position. Public records are stored now and appear on the department's website once the public feed ships. A roster CSV is imported through a reviewed draft: each row is matched to an existing record (which only gains the fields it is missing), mapped to a member account, created as a new draft record, or skipped, and no login account is ever created. Merging two records of one person keeps one, moves the other's service, family links and change history to it, and forwards the removed record's address. Photos, audio and video keep their original exactly as uploaded, downloadable by `history.manage` only; everyone else sees a photo as a re-encoded copy with its location and camera data stripped, and audio and video as a copy with their recording-device tags and data tracks removed. TIFF is not accepted. A tagged person's photo-use answer is shown to the archive's keepers as a warning, never a block.
 
 ---
 

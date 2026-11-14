@@ -5,6 +5,7 @@
  */
 import type {
   AttendanceRule,
+  BallotItem,
   EligibilityDefaults,
   ElectionEligibilityRules,
   ElectionSettings,
@@ -141,6 +142,20 @@ const BUILTIN_ROW_LABELS: Record<string, string> = {
 };
 const CLASS_ROW_KEYS = new Set(['administrative', 'social']);
 
+/** The built-in member types, for a screen with no `voter_rows` and no rows of its own to show. */
+export const BUILTIN_VOTER_ROWS: VoterRow[] = Object.entries(BUILTIN_ROW_LABELS).map(([key, label]) => ({
+  key,
+  label,
+  decided_by: CLASS_ROW_KEYS.has(key) ? 'class' : 'status',
+}));
+
+/** A version 2 rule set with no row set: every member may vote. */
+export const EMPTY_TYPE_RULES: ElectionEligibilityRules = {
+  version: 2,
+  attendance: { mode: AttendanceRuleMode.NONE },
+  types: {},
+};
+
 /**
  * The rows to show for `rules`: the department's rows when the screen has
  * them, plus any row the rules hold that they do not name (a tier since
@@ -242,3 +257,43 @@ export const defaultsForKind = (settings: ElectionSettings, kind: MeetingKind): 
   (kind === MeetingKind.REGULAR ? null : settings[OWN_DEFAULTS_FIELD[kind]]) ??
   settings.eligibility ??
   DEFAULT_ELIGIBILITY;
+
+/** A ballot item that follows the election's rules, or rules of its own. */
+export const ITEM_RULES_SAME = 'same';
+export const ITEM_RULES_CUSTOM = 'custom';
+
+/** What a ballot item follows: the election, one kind's defaults, or its own rules. */
+export const itemRulesChoice = (item: BallotItem): string => {
+  if (!item.eligibility_rules) return ITEM_RULES_SAME;
+  if (item.eligibility_kind && !item.eligibility_override_reason) return item.eligibility_kind;
+  return ITEM_RULES_CUSTOM;
+};
+
+/** A short label for a ballot item's summary pills, or null when it follows the election. */
+export const itemRulesLabel = (item: BallotItem): string | null => {
+  const choice = itemRulesChoice(item);
+  if (choice === ITEM_RULES_SAME) return null;
+  if (choice === ITEM_RULES_CUSTOM) return 'Custom voter rules';
+  return `${MEETING_KIND_LABELS[choice as MeetingKind]} rules`;
+};
+
+/** One place an election's voter rules departed from the defaults (backend `VoterRuleException`). */
+interface VoterRuleExceptionLike {
+  scope: 'election' | 'ballot_item';
+  title: string;
+  meeting_kind?: string | null;
+  reason?: string | null;
+}
+
+/** A departure from the default voter rules, as the results and the minutes print it. */
+export const voterRuleExceptionText = (exception: VoterRuleExceptionLike): string => {
+  const kind = MEETING_KINDS.find((k) => k === exception.meeting_kind);
+  const kindLabel = kind ? MEETING_KIND_LABELS[kind] : undefined;
+  const followed =
+    exception.scope === 'election'
+      ? 'Custom voter rules for the election'
+      : kindLabel && !exception.reason
+        ? `"${exception.title}" followed the ${kindLabel.toLowerCase()} rules`
+        : `"${exception.title}" had custom voter rules`;
+  return exception.reason ? `${followed}. Reason: ${exception.reason}` : `${followed}.`;
+};

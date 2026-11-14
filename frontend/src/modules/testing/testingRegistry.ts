@@ -992,6 +992,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/elections', label: 'Elections', module: 'elections' },
       { path: '/elections/:electionId', label: 'Election detail', module: 'elections' },
       { path: '/elections/settings', label: 'Election settings', permission: 'elections.manage', module: 'elections' },
+      {
+        path: '/elections/attendance',
+        label: 'Election meeting attendance',
+        permission: 'elections.manage',
+        module: 'elections',
+      },
     ],
   },
   {
@@ -1248,6 +1254,28 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'history',
       },
       { path: '/history/import', label: 'Import a roster', permission: 'history.manage', module: 'history' },
+      { path: '/history/media', label: 'Photos and media', module: 'history' },
+      {
+        path: '/history/media/upload',
+        label: 'Upload photos and media',
+        permission: 'history.manage',
+        module: 'history',
+        note: 'Up to 25 files at once, each sent separately; one refused file does not stop the rest.',
+      },
+      {
+        path: '/history/media/:mediaId',
+        label: 'Photo or media item',
+        module: 'history',
+        note: 'Members see the stripped viewing copy; keepers also see consent answers and the original download.',
+      },
+      {
+        path: '/history/media/:mediaId/edit',
+        label: 'Edit a photo or media item',
+        permission: 'history.manage',
+        module: 'history',
+      },
+      { path: '/history/albums', label: 'Albums', module: 'history' },
+      { path: '/history/albums/:albumId', label: 'Album', module: 'history' },
       {
         path: '/history/import/:importId',
         label: 'Review a roster import',

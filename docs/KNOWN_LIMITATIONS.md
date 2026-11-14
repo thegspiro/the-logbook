@@ -79,10 +79,12 @@ regular set until given one.
   was checked only when the member tried to vote, so a member who fell short
   received a ballot link and was then refused. As a row rule it applies
   everywhere the other rules do: the roster, the ballot send and the vote.
-- **Minutes › Attendance still reads the tier benefits** for its "Voting"
-  column, and so stops agreeing with the ballots once a secretary edits the
-  rows. Fixed by the attendance work that follows (it adds the election-aware
-  Meeting Attendance page and moves both onto `voter_rules`).
+- ~~**Minutes › Attendance still reads the tier benefits** for its "Voting"
+  column.~~ Resolved 2026-11-13: the column now asks the same gate the ballot
+  send does, under the department's regular business meeting rules
+  (`ElectionService.voting_reason_under_rules`), so it agrees with an
+  election held on those defaults. It cannot speak for an election with
+  customized rules; Elections › Meeting Attendance does, per election.
 - **A version 1 election's tier rules can no longer be edited,** because the
   tier screen dropped the fields. Its own election-wide rules still can, until
   voting opens.
@@ -90,6 +92,52 @@ regular set until given one.
   judged by the row of the status it counts as (or by no row at all, if it
   counts as none) until the secretary gives it one; the screen says so on that
   row.
+
+### Holding an election outside the defaults (2026-11-13)
+
+- **A reason is required whenever an election's rules differ from its kind's
+  defaults** (owner decision), on create and on any edit that touches the
+  rules, the kind or the reason. It is cleared when the rules match the
+  defaults again, written to the audit log
+  (`election_voter_rules_customized`), shown on the election, and carried in
+  the results the minutes file. This includes an explicit "no rules" (null),
+  which the API accepted without a reason before.
+- **A ballot item can follow another kind's rules, or rules of its own**
+  (owner decision: the bylaws carve-out is per ballot item, not per member).
+  Its own rules replace the election's — and the tier ladder's — for that item
+  only. Custom item rules need a reason; following a kind's defaults does not.
+- **In an election with such an item, a vote is judged live against the rules
+  of the item being voted on**, even for a member on the roll frozen when
+  voting opened. The roll holds everyone eligible for at least one item, so
+  being on it no longer proves eligibility for the item in hand. The cost: a
+  meeting recorded while the vote is open can change the answer for those
+  elections, which the frozen roll otherwise prevents. Elections with no such
+  item keep the frozen-roll behaviour.
+- **The create dialog's count of members who would receive a ballot** covers
+  the election's rules only, not each ballot item's own voter types, check-in
+  or carve-out rules; it says so beside the number.
+
+### Elections › Meeting Attendance (2026-11-13)
+
+`/elections/attendance` shows each member's meetings over a period the
+secretary picks (presets of 3 to 24 months, or custom dates up to five years),
+whether they may vote in the chosen election, and each member's meetings with
+how they counted and where the record came from (owner decisions: a second
+page with the same data as Minutes › Attendance; check-in time and recorded-by
+added; `elections.manage` is enough; eligibility follows the election chosen).
+
+- **The period is for reading only.** "May vote" is the election's own roster
+  answer, and its attendance rules count their own last N meetings or months,
+  whatever period the page shows. The page says so beside the tiles.
+- **Check-in time and recorded-by start now.** `meeting_attendees` gained
+  `checked_in_at`, `recorded_by` and `recorded_via`; rows written before this
+  have none, and nothing backfills them, since there is no record of who
+  entered them. Those meetings show their status with no source beside it.
+  Only an event check-in has a check-in time: a secretary's entry claims no
+  moment for one.
+- **Excused, on-leave and pre-membership meetings** are classified by the
+  same tally the ballot check uses, so a meeting held before a member's
+  current stint is left out of both the count and their list.
 
 ## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
 
@@ -659,10 +707,10 @@ an erasure request, a public-website question or a large upload knows it.
   decision: the public feed ships in phase 7).** Publishing to the public
   writes a cleared snapshot and the clearance list is enforced, but no public
   portal endpoint reads it yet. The person page says so beside the button.
-- **Video and large audio are not accepted yet.** Phase 1 stores no files.
-  When photos and media arrive (phase 3) uploads stay under the 60 MB proxy
-  limit every nginx configuration sets (`client_max_body_size 60M`) — 55 MB
-  per file was agreed; long recordings wait for chunked uploads.
+- **Audio and video are limited to 55 MB a file.** ✅ Photos and media
+  shipped 2026-11-13 (phase 3). Uploads stay under the 60 MB proxy limit every
+  nginx configuration sets (`client_max_body_size 60M`) — 55 MB per file was
+  agreed; long recordings wait for chunked uploads.
 - **Person merge and bulk import are phase 2.** ✅ **Shipped 2026-11-13.**
   Until then a duplicate was warned about at entry but two records for one
   person were combined by hand. The decisions they ship with are below.
@@ -708,6 +756,47 @@ an erasure request, a public-website question or a large upload knows it.
   chosen over a `history.view` grant on every position, which would have
   needed a positions migration for every department; `history.view` instead
   reads drafts and research.
+
+Phase 3, photos and media (2026-11-13), ships with these:
+
+- **TIFF is refused (owner decision).** It is refused everywhere else on the
+  platform as a complex format with a history of decoder vulnerabilities, and
+  the archive follows suit: a Historian converts a TIFF scan to JPEG or PNG
+  before uploading it, and the archival TIFF itself is kept outside the app.
+- **ffmpeg is part of the backend image (owner decision).** It makes the
+  image larger on every platform (Docker, Unraid, the ARM build); it is
+  installed without Debian's recommended extras to keep that down. It strips
+  audio and video for members — the streams are copied, not re-encoded, so
+  quality is unchanged and the members' copy roughly doubles each
+  recording's storage — and makes a video's poster frame and the length shown
+  in the gallery.
+- **A host without ffmpeg refuses audio and video (owner decision).** A
+  bare Linux or cloud install that runs the backend outside the image must
+  install the `ffmpeg` package (which provides `ffprobe`) for audio and video
+  uploads; until then they are refused with a message naming the package,
+  never stored unstripped. Photos are unaffected.
+- **Stripping covers tags and side tracks, not the sound or picture
+  itself.** Location, device and title tags, chapters, subtitles, data
+  tracks (where some cameras keep GPS) and embedded cover art are removed. A
+  place spoken aloud or visible in the frame is not, nor anything a codec
+  hides inside the encoded stream; the Historian still listens and watches
+  before publishing.
+- **The original is downloadable by `history.manage` only.** It is kept
+  byte for byte; everyone else gets the stripped copy.
+- **A photo-use consent warning never blocks.** A tagged person who declined
+  photo use, or never answered, is named on the item page and in a
+  confirmation before publishing; the Historian may publish anyway. A past
+  member with no account has no answer to show.
+- **Tags point at past-member records, not member accounts.** A current member
+  is tagged through their history record, which the Historian creates first
+  (`POST /people/from-member/{user_id}`).
+- **An item can be deleted only while it is a draft.** A published one is
+  returned to draft first, so deleting it is a deliberate second step.
+- **A batch upload is not one transaction.** Each file is its own request; if
+  the browser is closed part way, the files already sent stay as drafts and
+  the rest were never uploaded. The shared `batch_id` identifies the set.
+- **Documents (letters, minutes, scanned PDFs) are phase 4.** The media
+  upload refuses PDF and office files.
 
 ## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
 

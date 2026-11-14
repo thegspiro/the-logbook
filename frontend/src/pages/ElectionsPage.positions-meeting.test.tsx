@@ -24,6 +24,8 @@ vi.mock('../services/api', () => ({
     getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
   },
   electionService: {
+    // The create dialog counts who its voter rules admit.
+    previewElectorate: vi.fn().mockResolvedValue({ eligible: 0, total: 0 }),
     getElections: (...args: unknown[]) => mockGetElections(...args) as unknown,
     getElectionSettings: vi.fn().mockRejectedValue(new Error('not needed')),
   },

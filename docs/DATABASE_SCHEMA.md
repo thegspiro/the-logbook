@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**374 tables · 6029 columns · 1254 foreign keys**
+**380 tables · 6099 columns · 1271 foreign keys**
 
 ---
 
@@ -178,7 +178,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`ballot_send_jobs`](#ballot_send_jobs) | `BallotSendJob` | 16 | One request to email ballots, run in the background. |
 | [`candidates`](#candidates) | `Candidate` | 17 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 57 | Election model for managing elections within an organization |
+| [`elections`](#elections) | `Election` | 58 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
@@ -363,14 +363,20 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`historical_member_relations`](#historical_member_relations) | `HistoricalMemberRelation` | 8 | A family link between two people, stored once and read from both ends. |
 | [`historical_member_service_periods`](#historical_member_service_periods) | `HistoricalMemberServicePeriod` | 12 | One stretch of service. A person who left and rejoined has several. |
 | [`historical_members`](#historical_members) | `HistoricalMember` | 39 | A person who served the department, as the archive records them. |
+| [`history_album_items`](#history_album_items) | `HistoryAlbumItem` | 4 | One media item's place in one album. |
+| [`history_albums`](#history_albums) | `HistoryAlbum` | 10 | A named group of media items, in an order the Historian sets. |
 | [`history_clearance_decisions`](#history_clearance_decisions) | `HistoryClearanceDecision` | 9 | One step's decision on one request. |
 | [`history_clearance_requests`](#history_clearance_requests) | `HistoryClearanceRequest` | 12 | One submission of one revision through the clearance list. |
 | [`history_clearance_steps`](#history_clearance_steps) | `HistoryClearanceStep` | 7 | One step in a department's clearance list, in order. |
 | [`history_import_rows`](#history_import_rows) | `HistoryImportRow` | 12 | One line of an uploaded file, with the Historian's decision about it. |
 | [`history_import_title_mappings`](#history_import_title_mappings) | `HistoryImportTitleMapping` | 9 | A department's remembered answer for one title text an import met. |
 | [`history_imports`](#history_imports) | `HistoryImport` | 14 | One uploaded roster file, from draft through commit. |
+| [`history_media`](#history_media) | `HistoryMedia` | 31 | A photo, audio recording or video in the archive, with its catalogue. |
+| [`history_media_files`](#history_media_files) | `HistoryMediaFile` | 8 | One stored file of a media item: its original, viewing copy or |
+| [`history_media_tags`](#history_media_tags) | `HistoryMediaTag` | 4 | A person shown or heard in a media item. |
 | [`history_record_redirects`](#history_record_redirects) | `HistoryRecordRedirect` | 7 | Where a merged-away record's address now leads. |
 | [`history_revisions`](#history_revisions) | `HistoryRevision` | 10 | One entry in an archive record's change history. |
+| [`history_sources`](#history_sources) | `HistorySource` | 9 | One entry in a department's managed list of sources and donors. |
 | [`history_titles`](#history_titles) | `HistoryTitle` | 10 | One entry in a department's managed list of historical titles. |
 
 ### IP Security
@@ -525,7 +531,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 15 | Meeting Action Item model |
-| [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 11 | Meeting Attendee model |
+| [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 14 | Meeting Attendee model |
 | [`meetings`](#meetings) | `Meeting` | 21 | Meeting model |
 
 ### Member Supervisors
@@ -2547,6 +2553,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `ballot_items` | JSON | yes |  |  |  |
 | `position_eligibility` | JSON | yes |  |  |  |
 | `eligibility_rules` | JSON | yes |  |  |  |
+| `eligibility_override_reason` | TEXT | yes |  |  |  |
 | `meeting_kind` | VARCHAR(20) | no |  | `regular` |  |
 | `email_sent` | BOOL | no |  | `0` |  |
 | `email_sent_at` | DATETIME | yes |  |  |  |
@@ -5857,6 +5864,46 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_historical_members_org_level` (`organization_id`, `publication_level`)
 - `ix_historical_members_org_lodd` (`organization_id`, `is_line_of_duty_death`)
 
+### `history_album_items`
+
+**HistoryAlbumItem** · `app/models/history.py`
+
+> One media item's place in one album.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `album_id` | VARCHAR(36) | no | PK, FK |  | → `history_albums.id` ON DELETE CASCADE |
+| `media_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `history_media.id` ON DELETE CASCADE |
+| `position` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_album_items_media` (`media_id`)
+
+### `history_albums`
+
+**HistoryAlbum** · `app/models/history.py`
+
+> A named group of media items, in an order the Historian sets.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(200) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `cover_media_id` | VARCHAR(36) | yes | FK |  | → `history_media.id` ON DELETE SET NULL |
+| `level` | ENUM(`draft`, `members`) | no |  | `'draft'` |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_albums_org_level` (`organization_id`, `level`)
+
 ### `history_clearance_decisions`
 
 **HistoryClearanceDecision** · `app/models/history.py`
@@ -6000,6 +6047,91 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_history_imports_org_status` (`organization_id`, `status`)
 - `ix_history_imports_status_expires` (`status`, `expires_at`)
 
+### `history_media`
+
+**HistoryMedia** · `app/models/history.py`
+
+> A photo, audio recording or video in the archive, with its catalogue. Published like a person record: draft, members or public, the clearance list standing between it and the public, and a change history under ``record_type = "media"``.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `kind` | ENUM(`photo`, `audio`, `video`) | no |  |  |  |
+| `title` | VARCHAR(200) | no |  |  |  |
+| `description` | TEXT | yes |  |  |  |
+| `taken_date` | DATE | yes |  |  |  |
+| `taken_date_precision` | ENUM(`day`, `month`, `year`) | no |  | `'year'` |  |
+| `taken_date_circa` | BOOL | no |  | `0` |  |
+| `place` | VARCHAR(255) | yes |  |  |  |
+| `creator` | VARCHAR(255) | yes |  |  |  |
+| `source_id` | VARCHAR(36) | yes | FK, IDX |  | → `history_sources.id` ON DELETE SET NULL |
+| `rights_note` | TEXT | yes |  |  |  |
+| `accession_number` | VARCHAR(100) | yes |  |  |  |
+| `original_location` | VARCHAR(255) | yes |  |  |  |
+| `research_notes` | TEXT | yes |  |  |  |
+| `original_filename` | VARCHAR(255) | no |  |  |  |
+| `width` | INTEGER | yes |  |  |  |
+| `height` | INTEGER | yes |  |  |  |
+| `duration_seconds` | INTEGER | yes |  |  |  |
+| `batch_id` | VARCHAR(36) | yes |  |  |  |
+| `publication_level` | ENUM(`draft`, `members`, `public`) | no |  | `'draft'` |  |
+| `published_at` | DATETIME | yes |  |  |  |
+| `published_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `public_snapshot` | JSON | yes |  |  |  |
+| `public_revision_number` | INTEGER | yes |  |  |  |
+| `substantial_revision_number` | INTEGER | no |  | `1` |  |
+| `revision_number` | INTEGER | no |  | `1` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_media_org_date` (`organization_id`, `taken_date`)
+- `ix_history_media_org_kind` (`organization_id`, `kind`)
+- `ix_history_media_org_level` (`organization_id`, `publication_level`)
+- `ix_history_media_source` (`source_id`)
+
+### `history_media_files`
+
+**HistoryMediaFile** · `app/models/history.py`
+
+> One stored file of a media item: its original, viewing copy or thumbnail. A row per file, so every stored path sits in one column that the storage tools (rescan, relocation, remote migration) can rewrite. No ``organization_id``: reached only through its media item, which is.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `media_id` | VARCHAR(36) | no | FK |  | → `history_media.id` ON DELETE CASCADE |
+| `role` | ENUM(`original`, `display`, `thumbnail`) | no |  |  |  |
+| `file_path` | VARCHAR(500) | no |  |  |  |
+| `mime_type` | VARCHAR(100) | no |  |  |  |
+| `size_bytes` | INTEGER | no |  |  |  |
+| `sha256` | VARCHAR(64) | no |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_history_media_file_role` (`media_id`, `role`)
+
+### `history_media_tags`
+
+**HistoryMediaTag** · `app/models/history.py`
+
+> A person shown or heard in a media item.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `media_id` | VARCHAR(36) | no | PK, FK |  | → `history_media.id` ON DELETE CASCADE |
+| `member_id` | VARCHAR(36) | no | PK, FK, IDX |  | → `historical_members.id` ON DELETE CASCADE |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_history_media_tags_member` (`member_id`)
+
 ### `history_record_redirects`
 
 **HistoryRecordRedirect** · `app/models/history.py`
@@ -6046,6 +6178,28 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Indexes**
 
 - `ix_history_revisions_record` (`organization_id`, `record_type`, `record_id`, `created_at`)
+
+### `history_sources`
+
+**HistorySource** · `app/models/history.py`
+
+> One entry in a department's managed list of sources and donors. Managed like the title list (owner decision): records point at the entry, an entry in use is retired or merged, never deleted.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `name` | VARCHAR(150) | no |  |  |  |
+| `name_key` | VARCHAR(150) | no |  |  |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `is_retired` | BOOL | no |  | `0` |  |
+| `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Constraints**
+
+- UNIQUE `uq_history_source_key` (`organization_id`, `name_key`)
 
 ### `history_titles`
 
@@ -8284,6 +8438,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `waiver_granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `waiver_granted_at` | DATETIME | yes |  |  |  |
 | `waiver_request_id` | VARCHAR(36) | yes | FK, IDX |  | → `attendance_waiver_requests.id` ON DELETE SET NULL |
+| `checked_in_at` | DATETIME | yes |  |  |  |
+| `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `recorded_via` | VARCHAR(20) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 
 **Indexes**
@@ -12911,7 +13068,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (458 references)
+### → `users` (465 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13108,14 +13265,20 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `historical_members` | `updated_by` | SET NULL | yes |
 | `historical_members` | `user_id` | SET NULL | yes |
 | `historical_staffing_files` | `created_by` | SET NULL | yes |
+| `history_albums` | `created_by` | SET NULL | yes |
 | `history_clearance_decisions` | `decided_by` | SET NULL | yes |
 | `history_clearance_requests` | `submitted_by` | SET NULL | yes |
 | `history_import_rows` | `target_user_id` | SET NULL | yes |
 | `history_import_title_mappings` | `updated_by` | SET NULL | yes |
 | `history_imports` | `committed_by` | SET NULL | yes |
 | `history_imports` | `created_by` | SET NULL | yes |
+| `history_media` | `created_by` | SET NULL | yes |
+| `history_media` | `published_by` | SET NULL | yes |
+| `history_media` | `updated_by` | SET NULL | yes |
+| `history_media_tags` | `created_by` | SET NULL | yes |
 | `history_record_redirects` | `merged_by` | SET NULL | yes |
 | `history_revisions` | `actor_id` | SET NULL | yes |
+| `history_sources` | `created_by` | SET NULL | yes |
 | `history_titles` | `created_by` | SET NULL | yes |
 | `instructor_qualifications` | `created_by` | SET NULL | yes |
 | `instructor_qualifications` | `user_id` | CASCADE | no |
@@ -13175,6 +13338,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `mcp_service_keys` | `revoked_by` | SET NULL | yes |
 | `meeting_action_items` | `assigned_to` | RESTRICT | yes |
 | `meeting_action_items` | `created_by` | SET NULL | yes |
+| `meeting_attendees` | `recorded_by` | SET NULL | yes |
 | `meeting_attendees` | `user_id` | CASCADE | no |
 | `meeting_attendees` | `waiver_granted_by` | RESTRICT | yes |
 | `meeting_minutes` | `approved_by` | RESTRICT | yes |
@@ -13374,7 +13538,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `xapi_statements` | `user_id` | SET NULL | yes |
 | `zeffy_campaign_links` | `created_by` | SET NULL | yes |
 
-### → `organizations` (308 references)
+### → `organizations` (311 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13509,12 +13673,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `historical_member_relations` | `organization_id` | CASCADE | no |
 | `historical_members` | `organization_id` | CASCADE | no |
 | `historical_staffing_files` | `organization_id` | CASCADE | no |
+| `history_albums` | `organization_id` | CASCADE | no |
 | `history_clearance_requests` | `organization_id` | CASCADE | no |
 | `history_clearance_steps` | `organization_id` | CASCADE | no |
 | `history_import_title_mappings` | `organization_id` | CASCADE | no |
 | `history_imports` | `organization_id` | CASCADE | no |
+| `history_media` | `organization_id` | CASCADE | no |
 | `history_record_redirects` | `organization_id` | CASCADE | no |
 | `history_revisions` | `organization_id` | CASCADE | no |
+| `history_sources` | `organization_id` | CASCADE | no |
 | `history_titles` | `organization_id` | CASCADE | no |
 | `imported_source_records` | `organization_id` | CASCADE | no |
 | `instructor_qualifications` | `organization_id` | CASCADE | no |
@@ -14121,6 +14288,16 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `evaluation_signatures` | `evaluation_id` | CASCADE | no |
 | `evaluation_steps` | `evaluation_id` | CASCADE | no |
 
+### → `historical_members` (5 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `historical_member_relations` | `member_id` | CASCADE | no |
+| `historical_member_relations` | `related_member_id` | CASCADE | no |
+| `historical_member_service_periods` | `member_id` | CASCADE | no |
+| `history_import_rows` | `target_member_id` | SET NULL | yes |
+| `history_media_tags` | `member_id` | CASCADE | no |
+
 ### → `suggestions` (5 references)
 
 | From table | Column | On delete | Nullable |
@@ -14185,14 +14362,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `imported_source_records` | `historical_import_id` | SET NULL | yes |
 | `shift_history_imports` | `historical_import_id` | SET NULL | yes |
 
-### → `historical_members` (4 references)
+### → `history_media` (4 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `historical_member_relations` | `member_id` | CASCADE | no |
-| `historical_member_relations` | `related_member_id` | CASCADE | no |
-| `historical_member_service_periods` | `member_id` | CASCADE | no |
-| `history_import_rows` | `target_member_id` | SET NULL | yes |
+| `history_album_items` | `media_id` | CASCADE | no |
+| `history_albums` | `cover_media_id` | SET NULL | yes |
+| `history_media_files` | `media_id` | CASCADE | no |
+| `history_media_tags` | `media_id` | CASCADE | no |
 
 ### → `meetings` (4 references)
 
@@ -14702,6 +14879,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `historical_staffing_rows` | `file_id` | CASCADE | no |
 
+### → `history_albums` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_album_items` | `album_id` | CASCADE | no |
+
 ### → `history_clearance_requests` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -14713,6 +14896,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `history_import_rows` | `target_row_id` | SET NULL | yes |
+
+### → `history_sources` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `history_media` | `source_id` | SET NULL | yes |
 
 ### → `inventory_nfc_audits` (1 references)
 
@@ -14935,8 +15124,11 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `historical_member_period_titles` | `historical_member_service_periods`, `history_titles` |
 | `historical_member_service_periods` | `historical_members` |
 | `historical_staffing_rows` | `historical_staffing_files` |
+| `history_album_items` | `history_albums`, `history_media` |
 | `history_clearance_decisions` | `history_clearance_requests`, `users` |
 | `history_import_rows` | `historical_members`, `history_import_rows`, `history_imports`, `users` |
+| `history_media_files` | `history_media` |
+| `history_media_tags` | `historical_members`, `history_media`, `users` |
 | `ip_exception_audit_log` | `ip_exceptions`, `users` |
 | `meeting_motions` | `elections`, `meeting_minutes` |
 | `membership_pipeline_steps` | `email_templates`, `membership_pipelines` |

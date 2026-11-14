@@ -12,6 +12,7 @@ import {
   EvaluationTool,
   SCALE_TOOLS,
   SCORED_TOOLS,
+  type EvaluationDataSource,
   type GradeBand,
   type ScaleLevel,
   type TemplateDefinition,
@@ -177,4 +178,39 @@ export function describeMatching(memberClass: string | null, memberStatus: strin
   const cls = memberClass ? `${memberClass.charAt(0).toUpperCase()}${memberClass.slice(1)}` : 'All';
   const status = memberStatus ? ` · ${memberStatus} only` : '';
   return `${cls} members${status}`;
+}
+
+/** How the builder names each module's group of data sources. */
+const DATA_SOURCE_GROUP_LABELS: Record<string, string> = {
+  training: 'Training',
+  meetings: 'Business meetings',
+  events: 'Events',
+  scheduling: 'Shifts',
+  calls: 'Calls',
+  admin_hours: 'Administrative hours',
+  members: 'Membership',
+};
+
+export interface DataSourceGroup {
+  label: string;
+  sources: EvaluationDataSource[];
+}
+
+/**
+ * The data sources grouped by the module they read, for the builder's
+ * dropdown: eighteen entries in one flat list were hard to scan. Groups
+ * appear in the order the catalog first names their module, and sources keep
+ * the catalog's order within a group, so the server still decides the order.
+ * A module this map does not name is grouped under "Other" rather than shown
+ * as its storage slug.
+ */
+export function groupDataSources(sources: readonly EvaluationDataSource[]): DataSourceGroup[] {
+  const groups = new Map<string, DataSourceGroup>();
+  for (const source of sources) {
+    const label = DATA_SOURCE_GROUP_LABELS[source.module] ?? 'Other';
+    const group = groups.get(label);
+    if (group) group.sources.push(source);
+    else groups.set(label, { label, sources: [source] });
+  }
+  return [...groups.values()];
 }
