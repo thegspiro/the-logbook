@@ -802,6 +802,29 @@ every authentication and public endpoint at once.
 Newest first. Nothing here blocks a restart — these are changes an operator
 should not have to discover by being surprised.
 
+### Waiver requests nobody decides close after seven days (2026-11-13)
+
+Nothing blocks a restart, and no migration is involved.
+
+- **A new hourly task, `attendance_waiver_expiry`, closes undecided waiver
+  requests** (training sessions and business meetings) seven days after the
+  session, as the owner decided. **Its first run after the upgrade closes
+  every request already past that point at once**, and each member whose
+  request closes gets an in-app notice and an email. An officer who wants to
+  decide old requests rather than let them close should do so before
+  upgrading: `/attendance-waivers` lists them.
+- An expired request counts as an absence. Nothing is written to a meeting's
+  roll call, and no training requirement is excused.
+- **Business-meeting waiver requests start being emailed**, from the
+  _Meeting Waiver Requested / Decided / Withdrawn_ templates that have sat
+  unsent since the waiver emails landed: the secretary (or whoever the meeting
+  policy routes to) when a member asks, the member when it is decided. They
+  follow the event-duty and event-change email preferences. Word those
+  templates before upgrading if the defaults do not suit.
+- **A waiver policy's CC positions are copied in the app only.** Holders get
+  the bell, not an email; to email a copy of each decision, add the positions
+  to the _Waiver Decided_ template's CC positions.
+
 ### Email templates: saved CC and BCC addresses start being used, and waiver requests are emailed (2026-11-11)
 
 Nothing blocks a restart. Migration `1c6632035ccd` widens the template type

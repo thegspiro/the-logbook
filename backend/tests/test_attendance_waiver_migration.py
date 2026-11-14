@@ -7,8 +7,9 @@ test database (DDL cannot ride in a rolled-back transaction; the pattern of
 * upgrade, downgrade, upgrade: both tables exist after each upgrade and are
   gone after the downgrade, which leaves the tables they point at alone;
 * a re-run of either step changes nothing;
-* the columns, nullability, keys and indexes are the model's, so a database
-  built by the migration and one built by ``create_all`` agree;
+* the columns, nullability, keys and indexes are the model's once
+  ``5e2b9c7d1a40`` (the 2026-11-13 follow-ups) has run on top, so a database
+  built by the migrations and one built by ``create_all`` agree;
 * ``live_key`` admits one live request per key and any number of NULLs.
 
 Two new tables hold no existing rows, so there is nothing to settle (pitfall
@@ -53,6 +54,24 @@ def _migration():
 
 MIGRATION = _migration()
 
+_FOLLOWUPS_PATH = _PATH.with_name(
+    "20261113_1200_5e2b9c7d1a40_attendance_waiver_followups.py"
+)
+
+
+def _followups():
+    spec = importlib.util.spec_from_file_location(
+        "_attendance_waiver_followups", _FOLLOWUPS_PATH
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+FOLLOWUPS = _followups()
+
 _PREFIXED = ("REQUESTS", "ACTIONS", "ORGANIZATIONS", "USERS", "EVENTS")
 _MODELS = {
     "REQUESTS": AttendanceWaiverRequest,
@@ -76,9 +95,13 @@ class TestTheShapeIsTheModels:
         }
 
     def test_the_enums_are_frozen_copies_of_the_models(self):
+        # The model's enums are this migration's plus what 5e2b9c7d1a40 added;
+        # that migration's own "old" tuples must be exactly these.
         assert MIGRATION._WORKFLOWS == tuple(e.value for e in AttendanceWaiverWorkflow)
-        assert MIGRATION._STATUSES == tuple(e.value for e in AttendanceWaiverStatus)
-        assert MIGRATION._ACTIONS == tuple(e.value for e in AttendanceWaiverAction)
+        assert FOLLOWUPS._OLD_STATUSES == MIGRATION._STATUSES
+        assert FOLLOWUPS._OLD_ACTIONS == MIGRATION._ACTIONS
+        assert FOLLOWUPS._NEW_STATUSES == tuple(e.value for e in AttendanceWaiverStatus)
+        assert FOLLOWUPS._NEW_ACTIONS == tuple(e.value for e in AttendanceWaiverAction)
 
 
 @pytest.fixture
@@ -86,6 +109,8 @@ def scratch(monkeypatch):
     prefix = f"t{uuid.uuid4().hex[:6]}_"
     for attr in _PREFIXED:
         monkeypatch.setattr(MIGRATION, attr, f"{prefix}{getattr(MIGRATION, attr)}")
+    for attr in ("REQUESTS", "ACTIONS"):
+        monkeypatch.setattr(FOLLOWUPS, attr, getattr(MIGRATION, attr))
     engine = sa.create_engine(settings.SYNC_DATABASE_URL)
     try:
         yield SimpleNamespace(engine=engine, prefix=prefix)
@@ -156,6 +181,7 @@ class TestAgainstARealDatabase:
         engine = scratch.engine
         _parents(engine)
         _run(engine, MIGRATION.upgrade)
+        _run(engine, FOLLOWUPS.upgrade)
         referred = {
             "organizations": MIGRATION.ORGANIZATIONS,
             "users": MIGRATION.USERS,

@@ -35,11 +35,9 @@ pytestmark = pytest.mark.unit
 
 #: ``(path under app/, function)`` -> why it may ignore the excusal.
 REVIEWED = {
-    ("services/training_waiver_service.py", "fetch_user_waivers"): (
-        "builds the periods; reads none"
-    ),
-    ("services/training_waiver_service.py", "fetch_org_waivers"): (
-        "builds the periods; reads none"
+    ("services/training_waiver_service.py", "_leave_and_waiver_periods"): (
+        "builds leave and waiver periods from their rows; the excusal is "
+        "added separately by the fetchers and never passes through it"
     ),
     ("services/training_waiver_service.py", "_override_period"): (
         "builds an override period; reads none"

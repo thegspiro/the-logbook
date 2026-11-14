@@ -18015,6 +18015,53 @@ export const SHOTS = [
     fullPage: false,
   },
   {
+    // Settings appears only on a connected card, and the demo cannot connect
+    // Zeffy: connecting needs a real API key. The integrations list is read
+    // from the API and only the Zeffy row is marked connected in the copy the
+    // page receives. The dialog is opened and never saved.
+    id: "16-25-zeffy-settings",
+    doc: "16-integrations.md",
+    line: 558,
+    anchor: "Zeffy settings on a connected Zeffy card, as an administrator",
+    alt: "Zeffy settings on a connected card: the API Key box reading Leave blank to keep the current key, the Webhook Signing Secret box with its note that a blank box keeps the saved secret, the webhook address, and the notice that a new key or signing secret is used from the next sync or webhook message while linked campaigns and the webhook address do not change",
+    route: "/integrations",
+    beforeNavigate: async (page) => {
+      await page.route(/\/api\/v1\/integrations(\?.*)?$/, async (route) => {
+        if (route.request().method() !== "GET") {
+          await route.continue();
+          return;
+        }
+        const response = await route.fetch();
+        const rows = await response.json();
+        const shaped = (Array.isArray(rows) ? rows : []).map((row) =>
+          row.integration_type === "zeffy"
+            ? { ...row, status: "connected", enabled: true }
+            : row,
+        );
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(shaped),
+        });
+      });
+    },
+    prepare: async (page) => {
+      await page
+        .locator('[data-testid="integration-card-zeffy"]')
+        .getByRole("button", { name: "Zeffy settings" })
+        .click({ timeout: 20_000 });
+      await page
+        .getByRole("dialog", { name: "Zeffy settings" })
+        .waitFor({ timeout: 10_000 });
+    },
+    expect: "Linked campaigns and the webhook address do not change",
+    // "No personal information" is a chip on the Claude card behind the
+    // dialog, not an empty page.
+    allowEmptyState: true,
+    viewport: { width: 1440, height: 1100 },
+    fullPage: false,
+  },
+  {
     id: "16-24-zeffy-connect",
     doc: "16-integrations.md",
     line: 552,

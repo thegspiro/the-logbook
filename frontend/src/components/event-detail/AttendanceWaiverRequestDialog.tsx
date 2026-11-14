@@ -1,5 +1,6 @@
 /**
- * The form a member fills in to ask to be excused from one training session.
+ * The form a member fills in to ask to be excused from one training session
+ * or business meeting (`workflow`).
  *
  * Built from the eligibility answer, not from the policy directly: that answer
  * carries the policy's form fields together with the cap figures and deadline
@@ -17,7 +18,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Modal } from '../Modal';
 import { ErrorSummary, FormField } from '../ux';
 import { useFieldErrors, type FieldErrors, type FieldSpecs } from '../../hooks/useFieldErrors';
-import { attendanceWaiverService } from '../../services/attendanceWaiverService';
+import { TRAINING_WAIVER_WORKFLOW, type AttendanceWaiverWorkflow } from '../../utils/attendanceWaiverWorkflows';
 import { AttendanceWaiverReasonText } from '../../constants/enums';
 import type { AttendanceWaiverEligibility, AttendanceWaiverRequest } from '../../types/attendanceWaiver';
 import { formatDateTime } from '../../utils/dateFormatting';
@@ -38,6 +39,8 @@ interface AttendanceWaiverRequestDialogProps {
   timezone: string;
   onClose: () => void;
   onSubmitted: (request: AttendanceWaiverRequest) => void;
+  /** Training sessions when omitted. */
+  workflow?: AttendanceWaiverWorkflow;
 }
 
 export const AttendanceWaiverRequestDialog: React.FC<AttendanceWaiverRequestDialogProps> = ({
@@ -46,6 +49,7 @@ export const AttendanceWaiverRequestDialog: React.FC<AttendanceWaiverRequestDial
   timezone,
   onClose,
   onSubmitted,
+  workflow = TRAINING_WAIVER_WORKFLOW,
 }) => {
   const [category, setCategory] = useState('');
   const [reason, setReason] = useState('');
@@ -59,7 +63,9 @@ export const AttendanceWaiverRequestDialog: React.FC<AttendanceWaiverRequestDial
   const showReason = eligibility.reason_text !== AttendanceWaiverReasonText.OFF;
   const reasonRequired = eligibility.reason_text === AttendanceWaiverReasonText.REQUIRED;
   const cap = useMemo(() => capSummary(eligibility), [eligibility]);
-  const attachmentMode = eligibility.attachment ?? WaiverAttachmentMode.OFF;
+  const attachmentMode = workflow.takesDocuments
+    ? (eligibility.attachment ?? WaiverAttachmentMode.OFF)
+    : WaiverAttachmentMode.OFF;
   const documentRequired = attachmentMode === WaiverAttachmentMode.REQUIRED;
   const handleDocuments = useCallback((next: WaiverAttachmentSelection) => {
     setDocuments(next);
@@ -100,8 +106,8 @@ export const AttendanceWaiverRequestDialog: React.FC<AttendanceWaiverRequestDial
       const files = attachmentMode === WaiverAttachmentMode.OFF ? [] : documents.files;
       const request =
         files.length > 0
-          ? await attendanceWaiverService.submitWithAttachments(body, files)
-          : await attendanceWaiverService.submit(body);
+          ? await workflow.service.submitWithAttachments(body, files)
+          : await workflow.service.submit(body);
       onSubmitted(request);
     } catch (err: unknown) {
       setFromApiError(err, 'Your request could not be sent. Try again.');
@@ -144,11 +150,13 @@ export const AttendanceWaiverRequestDialog: React.FC<AttendanceWaiverRequestDial
         <div id="attendance-waiver-description" className="text-theme-text-secondary space-y-2 text-sm">
           <p>
             Ask to be excused from <span className="text-theme-text-primary font-medium">{eventTitle}</span>. If it is
-            approved, this session no longer counts toward your attendance requirement. You can withdraw the request
-            while it is waiting for a decision.
+            approved, this {workflow.sessionWord} no longer counts toward {workflow.attendanceMeasure}. You can withdraw
+            the request while it is waiting for a decision.
           </p>
           {eligibility.deadline && (
-            <p>Requests for this session close {formatDateTime(eligibility.deadline, timezone)}.</p>
+            <p>
+              Requests for this {workflow.sessionWord} close {formatDateTime(eligibility.deadline, timezone)}.
+            </p>
           )}
           {cap && <p>{cap} Only approved requests count.</p>}
         </div>

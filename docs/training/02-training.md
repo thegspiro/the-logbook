@@ -2531,6 +2531,106 @@ This one page covers:
 > The rules are in `backend/app/docs/TRAINING_WAIVERS.md`, under "Session
 > Waiver Requests".
 
+### Requests nobody decides close after seven days _(2026-11-13)_
+
+A member's request to be excused that nobody has approved or denied by seven
+days after the session closes on its own. Its status becomes **Expired**, the
+session counts as missed, and the member is told in the app and by email. It
+cannot be decided after that, and the Chief's override applies only to a
+denial.
+
+- **When.** At the end of the seventh day after the session, in your
+  department's timezone, or later if your deadline would still let the member
+  ask by then (for a session that runs over several days). A request still
+  waiting on a question to the member, or on the member to confirm a moved
+  date, closes the same way.
+- **Where you see it.** A pending request shows **Closes undecided on** and
+  the date and time on the member's **My Waiver Requests** list, in the
+  approver's queue and on the request's own page. Expired requests are listed
+  with the decided ones.
+- **In the annual review** the waiver summary counts them as **expired**, on
+  their own, not as denials.
+
+### Asking a member for more information _(2026-11-13)_
+
+**Who can do this:** anyone who decides a member's request to be excused.
+
+Sometimes a request needs one more detail before you can decide it. On the
+request's page (**Attendance waiver requests**, then the request), use **Ask
+for more information**, type your question and select **Ask the member**.
+
+- The request stays **pending**. The queue shows it with a **Waiting on
+  member** badge, and its page says it is waiting on the member's answer.
+- The member is told by email and in the app that you asked, with a link to
+  My Training. **The email and the notice never contain your question**: it
+  may concern something medical, so it is shown only on the request, to the
+  member and the people who decide it.
+- The member answers under **My Waiver Requests** on **My Training** (the
+  section opens itself while a question is waiting). Everyone who decides the
+  request is then told, again without the answer itself, and the request is
+  back in their queue.
+- You may ask again after each answer, one question at a time. Every question
+  and answer stays on the request's page under **Questions and answers**, and
+  on the member's list.
+- You do not have to wait for the answer: approving or denying closes the
+  open question. So does the member withdrawing the request, or the session
+  being cancelled.
+
+### When a session you asked about is moved _(2026-11-13)_
+
+If a training session moves to a new start — its date or start time is edited,
+its series is edited from that session on, or it is postponed — a request to be
+excused from it that is **pending** or **approved** comes back to you. You get a
+notice in the app and by email, and **My Training** shows **This session moved
+to _new date_. Do you still need to be excused?**
+
+- **Confirm** if you still cannot make it. The request goes back to the
+  officers and is decided again; an approval for the old date does not carry
+  over.
+- **Withdraw** if you can make the new date.
+- If you do neither, the request closes on its own seven days after the new
+  date, and the session counts as missed.
+
+Officers cannot approve or deny the request until you confirm; their page says
+it is waiting for you. A request that was **denied** is not reopened. Confirm
+is refused if you have already checked in to the session: withdraw it instead.
+See [Moving an event that members asked to be excused from](./04-events-meetings.md#moving-an-event-that-members-asked-to-be-excused-from-2026-11-13)
+for the officers' side.
+
+### Requests from the Chief or the President _(2026-11-13)_
+
+**Who can set this up:** training officers with `training.manage`.
+
+The Chief and the President can decide any member's request to be excused
+from a training session, alongside the positions your department chose. Their
+own requests work differently:
+
+- The **Chief's** request goes to the **President**, and the **President's**
+  goes to the **Chief**. The positions chosen under **Who decides** do not
+  decide either one.
+- If that other office is empty, the request goes to the member you name as
+  the **alternate**.
+- If no alternate is named, or the named member is no longer a current member,
+  the Chief or President cannot file the request. The session page tells them
+  why: "No one can decide this request: your department has no President and
+  no alternate is named in the waiver settings. Ask an officer to name one."
+
+To name the alternate:
+
+1. Open **Training Admin > Settings & Data > Session Waivers**.
+2. Under **The Chief's and President's own requests**, choose a member in
+   **Who decides the Chief's or President's own request when the other office
+   is vacant**. Choose **No one named** to clear it.
+3. Select **Save**.
+
+Only current members (active or probationary) can be named. If the member you
+named later leaves, the settings show a warning: nobody stands in for an empty
+office until you choose someone else. Saving without a new choice clears the
+alternate.
+
+The Chief alone can still approve a request that was denied. The President
+cannot.
+
 ### Creating a Waiver
 
 1. Select the **Create Waiver** tab.
@@ -2562,6 +2662,39 @@ Overview**. It shows:
 - where each waiver came from: **Auto (LOA)** for waivers created from a leave,
   **Manual** for waivers created on their own;
 - links to the full Waivers page.
+
+### Copying Waiver Request Decisions to Positions _(2026-11-13)_
+
+**Who can do this:** training officers (`training.manage`).
+
+A department can have other officers told how each waiver request ends without
+letting them decide it. Open **Training Admin > Settings & Data > Session
+Waivers** and, under **Copy decisions to**, tick the positions to inform (for
+example the Captains), then select **Save**. The positions here are separate
+from **Who decides**: ticking a position here does not let its holders approve
+or deny anything.
+
+When a request is approved, not approved, or approved by the Chief on review,
+everyone holding a ticked position gets a notification and an email saying who
+asked, for which session and date, and the outcome. Each person gets one
+notice, however many ticked positions they hold. The member who asked and the
+officer who decided are not copied, and neither is anyone whose account is no
+longer current.
+
+- **What the copy leaves out.** The member's reason, the category they chose
+  and the decider's note are never in it. Copied officers cannot open the
+  request; the notice links to the session's event page, or to nothing if the
+  event has since been deleted.
+- **What is not copied.** A request the member withdrew, or one voided because
+  the session was cancelled or deleted, was never decided, so nobody is copied.
+- **Email.** The copy is sent under the **Training officer duties** email setting, so
+  an officer who turned that off still sees it in the app.
+- **A position that was deleted** after being ticked is listed as "no longer
+  exists" and is removed the next time you save.
+
+Business-meeting requests carry the same setting in their own policy (sent
+under **Event officer duties** email), set on **Meeting Attendance → Waiver
+settings**.
 
 ---
 

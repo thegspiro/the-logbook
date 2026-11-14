@@ -1394,6 +1394,7 @@ export const AttendanceWaiverStatus = {
   DENIED: 'denied',
   WITHDRAWN: 'withdrawn',
   VOIDED: 'voided',
+  EXPIRED: 'expired',
 } as const;
 export type AttendanceWaiverStatus = (typeof AttendanceWaiverStatus)[keyof typeof AttendanceWaiverStatus];
 
@@ -1403,6 +1404,7 @@ export const ATTENDANCE_WAIVER_STATUS_LABELS: Record<string, string> = {
   denied: 'Denied',
   withdrawn: 'Withdrawn',
   voided: 'Voided',
+  expired: 'Expired',
 };
 
 export const ATTENDANCE_WAIVER_STATUS_COLORS: Record<string, string> = {
@@ -1411,6 +1413,7 @@ export const ATTENDANCE_WAIVER_STATUS_COLORS: Record<string, string> = {
   denied: 'bg-red-500/10 text-red-800 dark:text-red-300 border-red-500/30',
   withdrawn: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
   voided: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
+  expired: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/30',
 };
 
 /** When a request must arrive by (`AttendanceWaiverPolicy.deadline`). */

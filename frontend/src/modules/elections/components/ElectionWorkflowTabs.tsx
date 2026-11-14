@@ -76,7 +76,10 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
         id: 'attendance',
         label: 'Attendance',
         icon: FileText,
-        show: canManage && !isCancelled && (isDraft || isNominations || isOpen),
+        // Kept after close, read-only (MeetingAttendance drops its controls
+        // when closed): the check-ins decided who could vote on an item that
+        // required attendance, and stay reviewable from the result (W50-79).
+        show: canManage && !isCancelled,
       },
       {
         id: 'overrides',

@@ -202,7 +202,9 @@ workflow writes them.
 The summary's value is the number of requests; beside it are `approved` (what
 counts toward the cap, a Chief's override of a denial included), `overridden`
 (the part of `approved` that came by override), `denied` (standing denials),
-`withdrawn`, `pending` and `voided`, and a `breakdown` sentence. A withdrawn
+`withdrawn`, `pending`, `voided` and `expired` (closed undecided seven days
+after the session, an absence rather than a denial; owner decision,
+2026-11-13), and a `breakdown` sentence. A withdrawn
 request and its resubmission are two requests. Each history line carries the
 session date and title, the status, the outcome in order ("denied by A, then
 approved on the Chief's override by B"), the category, the decider,

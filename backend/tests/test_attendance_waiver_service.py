@@ -665,6 +665,14 @@ class TestChiefOverride:
             )
 
     async def test_never_on_the_chiefs_own_request(self, db_session, dept):
+        # With no President, the Chief's request goes to a named alternate
+        # (owner decision, 2026-11-13); the officer is named here.
+        await set_policy(
+            db_session,
+            dept.org,
+            approver_position_ids=[dept.officer_pos],
+            chief_alternate_user_id=dept.officer.id,
+        )
         request = await _submit(db_session, dept, who=dept.chief)
         await _svc(db_session).deny(dept.org, dept.officer, request.id, "No")
         with pytest.raises(PermissionError, match="your own"):
@@ -760,6 +768,14 @@ class TestRouting:
     async def test_the_queue_is_exactly_what_may_be_decided(self, db_session, dept):
         """The queue's SQL is a projection of may_decide; they must agree for
         every member in each routing state."""
+        # With no President, the Chief's request goes to a named alternate
+        # (owner decision, 2026-11-13); without one it could not be filed.
+        await set_policy(
+            db_session,
+            dept.org,
+            approver_position_ids=[dept.officer_pos],
+            chief_alternate_user_id=dept.other.id,
+        )
         mine = await _submit(db_session, dept)
         officers = await _submit(db_session, dept, who=dept.officer)
         chiefs = await _submit(db_session, dept, who=dept.chief)
@@ -780,7 +796,12 @@ class TestRouting:
                 assert total == len(expected), name
 
         await check()
-        await set_policy(db_session, dept.org, approver_position_ids=[])
+        await set_policy(
+            db_session,
+            dept.org,
+            approver_position_ids=[],
+            chief_alternate_user_id=dept.other.id,
+        )
         await check()
         await db_session.execute(
             text("DELETE FROM user_positions WHERE position_id = :p"),

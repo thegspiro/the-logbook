@@ -89,6 +89,19 @@ shown as replacing it. The minutes screen, the PDF and the published library
 and public copies all show the correction (the public copy shows its date, not
 the reason).
 
+### List and Detail Responses
+
+`GET /elections` returns a summary row per election, for the list and its
+filters. It leaves out what only one election's page needs, so read those
+from that election's own endpoints (W50-78):
+
+- `auto_open`, `reminder_hours_before_close` and `nomination_deadline` come
+  from `GET /elections/{id}`.
+- Candidates come from `GET /elections/{id}/candidates`. The detail response
+  carries no candidate list.
+- Rollback history comes from `GET /elections/{id}/forensics`, which is
+  `elections.manage` only.
+
 ---
 
 ## Voter Eligibility
@@ -197,9 +210,19 @@ refuses it once the election is open. `NULL` means no rules, which is what
 every election created before the column existed carries.
 
 - **Attendance, count mode**: the member attended at least `min_meetings` of
-  their last `of_last_meetings` eligible meetings. A member who has had fewer
-  eligible meetings than the look-back is held to the same proportion, rounded
-  up, so 6 of 12 becomes 2 of 4 (`required_recent_meetings`).
+  their last `of_last_meetings` meetings. A member who has had fewer meetings
+  than the look-back is held to the same proportion, rounded up, so 6 of 12
+  becomes 2 of 4 (`required_recent_meetings`).
+  - **A waived meeting shortens the window** _(owner decision, 2026-11-13)_.
+    The window is the member's last `of_last_meetings` meetings after leave is
+    taken out; leave still reaches back one more. Waived meetings the member
+    missed stay in the window and are not counted, so 6 of the last 12 with
+    one waived is 6 of 11, over the same 12 meetings. The requirement is
+    capped at the meetings left. Before this, a waived meeting reached back
+    one more, as leave does. `tally_recent_attendance` and
+    `RecentAttendance.required` are the one definition; the ballot check's
+    reason names the window when a waiver shortened it ("Attended 4 of 11
+    meetings counted (the last 12, 1 waived); 6 required to vote").
 - **Attendance, percent mode**: `min_pct` of the meetings in the last
   `period_months`. This is the same calculation as the tier rule.
 - **`meeting_types`**: limits which meeting types count. `null` counts every
@@ -207,10 +230,10 @@ every election created before the column existed carries.
 - **`waiting_periods`**: per member type, whether that type may vote. See
   [Waiting Periods by Member Type](#waiting-periods-by-member-type).
 
-Both attendance modes judge the same eligible meetings as the tier rule (see
+Both attendance modes classify meetings the way the tier rule does (see
 [Voting Attendance Window](#voting-attendance-window)): meetings since the
 current stint began, up to the department's today, excluding waived meetings
-and leave.
+and leave. They differ only in the count mode's window, above.
 
 The rules are part of the universal gate (`ElectionService._universal_gate`),
 together with the tier's `voting_eligible`. That gate is used by the in-app
@@ -274,8 +297,10 @@ eligibility is evaluated live.
 A member left off the roll who opens the election in the app is told the
 rule they still fail, such as a waiting period, attendance or their tier.
 The frozen roll is named only when they now pass every rule, as a member
-waived after opening does (`check_voter_eligibility`). The emailed-ballot
-link and the secretary's roster still give the roll as the reason.
+waived after opening does (`check_voter_eligibility`). The secretary's
+eligibility roster and the ballot send's skipped list give the same reason
+for that member, through `_off_roll_reason`. The emailed-ballot link still
+gives the roll as the reason.
 
 ### Voting Attendance Window
 

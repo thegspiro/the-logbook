@@ -562,6 +562,13 @@ class ExternalShiftHoursService:
         # A rejected shift no longer counts, so its evaluation stops crediting
         # the member's program; restoring it gives the credit back.
         await self._evaluations().sync_credit_for_entry(entry.id, organization_id)
+        # Its preceptor links close too: restoring the shift must not bring a
+        # forwarded link back to life.
+        from app.services.shift_evaluation_link_service import (
+            ShiftEvaluationLinkService,
+        )
+
+        await ShiftEvaluationLinkService(self.db).revoke_open(entry.id, organization_id)
         await self.db.refresh(entry)
         return entry
 

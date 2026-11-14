@@ -24,6 +24,7 @@ opening it. That is recorded (``created_by_member``) and shown on the
 evaluation so the training officer reading it knows how it arrived.
 """
 
+import re
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -59,6 +60,9 @@ from app.utils.org_timezone import (
 
 #: The page a link opens on the frontend.
 LINK_PATH = "/shift-evaluation/"
+
+
+_TOKEN_SHAPE = re.compile(r"[A-Za-z0-9_-]{32,64}")
 
 
 def link_url(token: str) -> str:
@@ -181,6 +185,17 @@ class ShiftEvaluationLinkService:
                 "The preceptor link window for this shift has passed. A "
                 "training officer can enter the preceptor's paper form instead."
             )
+        # Serialize link-making for this shift: without the lock, two creates
+        # at once (a double tap, or the member and an officer together) each
+        # revoke before the other's insert commits, and both links stay open.
+        await self.db.execute(
+            select(ExternalShiftHours.id)
+            .where(
+                ExternalShiftHours.id == entry.id,
+                ExternalShiftHours.organization_id == org,
+            )
+            .with_for_update()
+        )
         now = _now()
         await self.db.execute(
             update(ShiftEvaluationLink)
@@ -255,6 +270,35 @@ class ShiftEvaluationLinkService:
             link.revoked_at = _now()
             await self.db.commit()
 
+    async def revoke_open(
+        self,
+        entry_id: str,
+        organization_id: UUID | str,
+        scope_key: Optional[str] = None,
+    ) -> list[ShiftEvaluationLink]:
+        """Turn off every open link on the shift (or on one evaluation of it).
+
+        Whether or not an evaluation is waiting now: a link left open on a
+        rejected shift, or on an agency switched off, would otherwise work
+        again the moment the shift was restored or the switch turned back on.
+        """
+        query = select(ShiftEvaluationLink).where(
+            ShiftEvaluationLink.organization_id == str(organization_id),
+            ShiftEvaluationLink.external_shift_id == str(entry_id),
+            ShiftEvaluationLink.revoked_at.is_(None),
+            ShiftEvaluationLink.used_at.is_(None),
+        )
+        if scope_key is not None:
+            query = query.where(ShiftEvaluationLink.scope_key == scope_key)
+        links = list((await self.db.execute(query.with_for_update())).scalars())
+        if not links:
+            return []
+        now = _now()
+        for link in links:
+            link.revoked_at = now
+        await self.db.commit()
+        return links
+
     # -- The preceptor's side ----------------------------------------------
 
     async def resolve(
@@ -267,7 +311,9 @@ class ShiftEvaluationLinkService:
         guessed token learns nothing. A used link raises LinkAlreadyUsed, so
         the preceptor who comes back is told their evaluation arrived.
         """
-        if not token or len(token) < 32 or len(token) > 64:
+        # secrets.token_urlsafe(32) is 43 base64url characters; the route no
+        # longer checks the shape, so anything else gets the same 404 here.
+        if not token or not _TOKEN_SHAPE.fullmatch(token):
             return None
         query = select(ShiftEvaluationLink).where(
             ShiftEvaluationLink.token_hash == ShiftEvaluationLink.hash_token(token)
@@ -285,7 +331,9 @@ class ShiftEvaluationLinkService:
             link.external_shift_id, link.organization_id
         )
         member = await self.db.get(User, link.member_id)
-        if entry is None or member is None:
+        # A member who has left (Pitfall #32: not a current account) is not
+        # evaluated, however long the link had left to run.
+        if entry is None or member is None or not member.is_active:
             return None
         requirements = await self.evaluations.entry_requirements(
             entry, link.organization_id

@@ -106,4 +106,34 @@ describe('ElectionsPage status filters', () => {
       expect(screen.getByRole('button', { name: /^Cancelled/ })).toBeInTheDocument();
     });
   });
+
+  // W50-76: the filter is in the URL, so a reload or a shared link keeps it.
+  it('keeps the chosen filter across a reload, from the URL', async () => {
+    mockGetElections.mockResolvedValue([
+      election('e1', 'draft', 'Bylaw Amendment Vote'),
+      election('e3', 'open', 'Line Officer Election'),
+    ]);
+    window.history.pushState({}, '', '/elections?status=open');
+
+    renderWithRouter(<ElectionsPage />);
+
+    expect(await screen.findByText('Line Officer Election')).toBeInTheDocument();
+    expect(screen.queryByText('Bylaw Amendment Vote')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^Draft/ }));
+    expect(window.location.search).toBe('?status=draft');
+    await userEvent.click(screen.getByRole('button', { name: /^All/ }));
+    expect(window.location.search).toBe('');
+    window.history.pushState({}, '', '/');
+  });
+
+  it('ignores a status in the URL that is not a real one', async () => {
+    mockGetElections.mockResolvedValue([election('e1', 'draft', 'Bylaw Amendment Vote')]);
+    window.history.pushState({}, '', '/elections?status=bogus');
+
+    renderWithRouter(<ElectionsPage />);
+
+    expect(await screen.findByText('Bylaw Amendment Vote')).toBeInTheDocument();
+    window.history.pushState({}, '', '/');
+  });
 });

@@ -4,8 +4,13 @@
  * none of them decides anything (CLAUDE.md pitfall #29).
  */
 
-import type { AttendanceWaiverActionEntry, AttendanceWaiverEligibility } from '../types/attendanceWaiver';
-import { AttendanceWaiverCapPeriod } from '../constants/enums';
+import type {
+  AttendanceWaiverActionEntry,
+  AttendanceWaiverEligibility,
+  AttendanceWaiverRequest,
+} from '../types/attendanceWaiver';
+import { AttendanceWaiverCapPeriod, AttendanceWaiverStatus } from '../constants/enums';
+import { formatDateTime } from './dateFormatting';
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
@@ -37,6 +42,44 @@ export const latestDecisionNote = (actions: readonly AttendanceWaiverActionEntry
   return null;
 };
 
+/**
+ * "Closes undecided on Saturday, November 28, 2026, 12:00 AM" for a pending
+ * request, or null. The instant is the backend's `expires_at` (seven days
+ * after the session, never before the latest deadline); this only words it.
+ */
+export const closesUndecidedText = (
+  request: Pick<AttendanceWaiverRequest, 'status' | 'expires_at'>,
+  timezone: string
+): string | null => {
+  if (request.status !== AttendanceWaiverStatus.PENDING || !request.expires_at) return null;
+  return `Closes undecided on ${formatDateTime(request.expires_at, timezone)}`;
+};
+
+/** The log entries that make up the question-and-answer exchange, oldest first. */
+const CONVERSATION_ACTIONS: ReadonlySet<string> = new Set(['info_requested', 'member_responded']);
+
+/**
+ * A decider's questions and the member's answers, in the order the backend
+ * logged them. Every round stays, so an earlier answer can still be read.
+ */
+export const waiverConversation = (actions: readonly AttendanceWaiverActionEntry[]): AttendanceWaiverActionEntry[] =>
+  actions.filter((entry) => CONVERSATION_ACTIONS.has(entry.action));
+
+/**
+ * The question waiting on the member, or null. Whether one is open is the
+ * server's `info_requested_at`; the text is the latest question in the log.
+ */
+export const openQuestion = (
+  request: Pick<AttendanceWaiverRequest, 'info_requested_at' | 'actions'>
+): AttendanceWaiverActionEntry | null => {
+  if (!request.info_requested_at) return null;
+  for (let i = request.actions.length - 1; i >= 0; i -= 1) {
+    const entry = request.actions[i];
+    if (entry?.action === 'info_requested') return entry;
+  }
+  return null;
+};
+
 export const ATTENDANCE_WAIVER_ACTION_LABELS: Record<string, string> = {
   submitted: 'Asked to be excused',
   withdrawn: 'Withdrew the request',
@@ -44,7 +87,20 @@ export const ATTENDANCE_WAIVER_ACTION_LABELS: Record<string, string> = {
   denied: 'Denied',
   chief_override: 'Approved by Chief override',
   voided: 'Voided',
+  info_requested: 'Asked for more information',
+  member_responded: 'Answered the question',
+  expired: 'Expired undecided',
+  rescheduled: 'Session rescheduled',
+  member_confirmed: 'Confirmed the new date',
 };
+
+/**
+ * Whether the session moved and the request waits on its member to confirm
+ * the new date. The server's own field, read rather than inferred: until the
+ * member confirms, nobody can decide it.
+ */
+export const awaitsReconfirmation = (request: Pick<AttendanceWaiverRequest, 'status' | 'reconfirm_requested_at'>) =>
+  request.status === AttendanceWaiverStatus.PENDING && Boolean(request.reconfirm_requested_at);
 
 /** The decision page every queue row and email button opens. */
 export const attendanceWaiverPath = (requestId: string) => `/attendance-waivers/${encodeURIComponent(requestId)}`;

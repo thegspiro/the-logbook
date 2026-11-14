@@ -110,7 +110,10 @@ const LiveTurnoutPanel: React.FC<LiveTurnoutPanelProps> = ({ electionId, electio
           <div className="mb-1 flex justify-between text-sm">
             <span className="text-theme-text-secondary">
               Quorum {quorumMet ? 'met' : 'progress'} (target{' '}
-              {election.quorum_type === 'count' ? `${election.quorum_value} voters` : `${election.quorum_value}%`})
+              {election.quorum_type === 'count'
+                ? `${election.quorum_value} ${election.quorum_value === 1 ? 'voter' : 'voters'}`
+                : `${election.quorum_value}%`}
+              )
             </span>
             <span
               className={quorumMet ? 'font-medium text-green-700 dark:text-green-400' : 'text-theme-text-secondary'}

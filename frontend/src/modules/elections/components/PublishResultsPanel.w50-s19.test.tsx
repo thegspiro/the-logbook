@@ -67,11 +67,16 @@ describe('PublishResultsPanel (S19)', () => {
     expect(mockUpdateElection).not.toHaveBeenCalled();
   });
 
-  it('describes the report as going to the officer, not to all eligible voters', () => {
+  // W50-82 (owner decision 2026-11-13): closing already mails the report to
+  // the creator and leadership, so the button offers another copy and says
+  // so, rather than reading as the only way to get it.
+  it('says the report went out at close, and offers the officer another copy', () => {
     renderWithRouter(<PublishResultsPanel electionId="e1" election={{ ...baseElection, status: 'closed' }} />);
 
-    expect(screen.getByRole('button', { name: /send report/i })).toBeInTheDocument();
-    expect(screen.getByText('Email the results report to yourself')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send me a copy/i })).toBeInTheDocument();
+    expect(
+      screen.getByText("Emailed to the election's creator and leadership when it closed. Send yourself another copy.")
+    ).toBeInTheDocument();
     expect(screen.queryByText(/all eligible voters/i)).not.toBeInTheDocument();
   });
 
@@ -79,7 +84,7 @@ describe('PublishResultsPanel (S19)', () => {
     mockSendReport.mockResolvedValue({ success: true, message: 'Election report sent to clerk@test.com' });
     renderWithRouter(<PublishResultsPanel electionId="e1" election={{ ...baseElection, status: 'closed' }} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /send report/i }));
+    await userEvent.click(screen.getByRole('button', { name: /send me a copy/i }));
 
     await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('Election report sent to clerk@test.com'));
     expect(mockSendReport).toHaveBeenCalledWith('e1');

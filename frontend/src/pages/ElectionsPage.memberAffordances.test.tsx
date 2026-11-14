@@ -47,6 +47,10 @@ function election(id: string, status: string, title: string) {
 
 describe('ElectionsPage member affordances', () => {
   beforeEach(() => {
+    // The status filter lives in ?status= (W50-76), and BrowserRouter keeps
+    // jsdom's URL between tests, so a filter clicked in one test would
+    // otherwise narrow the next one's list.
+    window.history.replaceState(null, '', '/elections');
     mockCanManage = false;
     mockGetElections.mockReset();
     mockGetElections.mockResolvedValue([]);

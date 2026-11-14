@@ -223,6 +223,7 @@ changes. The policy chooses:
 | `attachment`                | supporting documents off, optional or required (default off)            |
 | `attachment_retention_days` | days a request's documents are kept once it is closed (default 365)     |
 | `approver_position_ids`     | the positions whose holders decide                                      |
+| `chief_alternate_user_id`   | the Chief's or President's decider when the other office is vacant      |
 
 **Who may ask.** A member may ask about a training session that is not
 cancelled and is linked to a session-attendance requirement that applies to
@@ -234,10 +235,38 @@ ask again; a denied request does not.
 **Who decides.** The current holders of the chosen positions are asked. If
 that leaves nobody (no positions chosen, the positions are vacant, or the only
 holder is the member asking), the Chief is asked, and failing a Chief, every
-holder of `training.manage`. A Chief may always decide. Nobody decides their
-own request. The first decision is final, except that the Chief may approve a
-denied request, with a reason, never on their own request; the denial stays on
-record beside the override.
+holder of `training.manage`. A Chief or a President may always decide. Nobody
+decides their own request. The first decision is final, except that the Chief
+may approve a denied request, with a reason, never on their own request; the
+denial stays on record beside the override.
+
+**The Chief's and the President's own requests** _(owner decision,
+2026-11-13)_. The Chief's request is decided by the President's holders, and the
+President's by the Chief's; the chosen positions and the fallbacks do not
+apply to either. A member holding both offices is decided by any other holder
+of either. When the other office has no holder, the member named in
+`chief_alternate_user_id` decides, while they are a current (active or
+probationary) member and not the one asking. With neither, eligibility refuses
+with `refusal_code` `no_decider` ("No one can decide this request: your
+department has no President and no alternate is named in the waiver settings.
+Ask an officer to name one."), so the request cannot be filed. Saving the
+policy refuses an alternate who is not a current member of the department, and
+`GET .../policy/alternate` (the manage permission) lists the members who can
+be named and whether the stored one still qualifies, for the settings screen's
+warning. `_officer_route` is the one rule; routing, `may_decide` and the
+decider queue all read it.
+
+**Who is copied** _(2026-11-13)_. `cc_position_ids` names positions whose
+current holders are told the outcome of each final decision (approved, denied,
+the Chief's override) by an in-app notice (category `attendance_waiver_cc`).
+An email copy comes from the decided template's own CC positions instead, so
+nobody named in both is emailed twice. They are informed only: the
+notice names the member, the session, its date and the outcome, never the
+reason, category or note; it leads to `/events/{id}` while the event exists and
+nowhere after. The requester and the decider are left out, and each holder gets
+one notice. Withdrawals, voids and expiries are not decisions and are not
+copied. Saving the policy refuses a CC position outside the department (400),
+as it does an approver position.
 
 **The cap** counts approved requests, by the session's date, including denials
 the Chief overrode. It is checked when a request is approved, not when it is
@@ -285,9 +314,9 @@ using templates the department edits under Communications → Email Templates:
   decision-log entry and the recipient, which the database keeps unique.
 - No text message is sent. The in-app notifications are unchanged.
 
-The meeting templates (_Meeting Waiver Requested / Decided / Withdrawn_)
-exist so a department can word them ahead of time; the meeting workflow sends
-them once its screens are built.
+The meeting templates (_Meeting Waiver Requested / Decided / Withdrawn_) are
+sent the same way for business-meeting requests, under the event-duty and
+event-change email preferences rather than the training ones.
 
 **Supporting documents.** When the policy's `attachment` is `optional` or
 `required`, a member may file up to three documents with a request: PDF,
@@ -310,11 +339,28 @@ notification.
 
 **In the annual review.** An evaluation template can show a member's requests
 for the review period, by session date: `training.session_waivers_summary`
-(how many were made, approved, overridden, denied, withdrawn, pending and
-voided) and `training.session_waiver_history` (one line per request: session,
+(how many were made, approved, overridden, denied, withdrawn, pending,
+voided and expired) and `training.session_waiver_history` (one line per request: session,
 outcome with who decided, category). Neither shows the reason, a decider's
 note or an attachment, and neither can be scored. See
 `docs/EVALUATIONS_MODULE.md`, "Figures".
+
+**A moved session** (owner decision, 2026-11-13). When an event's start moves
+(an edit, a series edit from that event on, or a postponement), every pending
+or approved request for it, in either workflow, goes back to its member:
+`reconfirm_for_rescheduled_events` in `attendance_waiver_service.py`, called by
+`EventService` inside the move's own transaction. The request takes the new
+title, start and date, returns to pending with its decision cleared (the log
+keeps it, with a `rescheduled` entry naming both times), and waits on the
+member (`reconfirm_requested_at`); an approved meeting request's waiver comes
+off the minutes record, `present` untouched. The deciders' prompts are
+archived; the member is told in the app at once and by email after the commit.
+Nobody can approve or deny while it waits. `POST .../{id}/confirm` (the member
+only) sends it back to the deciders, unless the member has since checked in or,
+for a meeting, a leave or the Secretary now excuses them, in which case it is
+refused and the member withdraws instead. A denied request is never touched. A
+change that leaves the start alone does nothing, and a second run for one move
+writes nothing. A member who never answers is closed by the seven-day expiry.
 
 **Where it is in the app.**
 
@@ -334,18 +380,86 @@ only to a Chief.
 | ------ | -------------------------------------------------------------------- | --------------------------------------------- |
 | `GET`  | `/api/v1/training/waivers/requests/policy`                           | Any authenticated user                        |
 | `PUT`  | `/api/v1/training/waivers/requests/policy`                           | `training.manage`                             |
+| `GET`  | `/api/v1/training/waivers/requests/policy/alternate`                 | `training.manage`                             |
 | `GET`  | `/api/v1/training/waivers/requests/eligibility`                      | Any authenticated user, about themselves      |
 | `POST` | `/api/v1/training/waivers/requests`                                  | Any authenticated user, for themselves        |
 | `GET`  | `/api/v1/training/waivers/requests/mine`                             | Any authenticated user                        |
 | `GET`  | `/api/v1/training/waivers/requests`                                  | The requests the caller may decide or decided |
 | `GET`  | `/api/v1/training/waivers/requests/{id}`                             | The member, or someone who may decide         |
 | `POST` | `/api/v1/training/waivers/requests/{id}/withdraw`                    | The member, while pending                     |
+| `POST` | `/api/v1/training/waivers/requests/{id}/confirm`                     | The member, while a moved session waits       |
 | `POST` | `/api/v1/training/waivers/requests/{id}/approve`                     | Someone who may decide, while pending         |
 | `POST` | `/api/v1/training/waivers/requests/{id}/deny`                        | Someone who may decide, while pending         |
 | `POST` | `/api/v1/training/waivers/requests/{id}/override`                    | A Chief, on a denied request                  |
 | `POST` | `/api/v1/training/waivers/requests/with-attachments`                 | Any authenticated user, for themselves        |
 | `POST` | `/api/v1/training/waivers/requests/{id}/attachments`                 | The member, while pending                     |
 | `GET`  | `/api/v1/training/waivers/requests/{id}/attachments/{attachment_id}` | The member, or someone who may decide         |
+
+### Expiry seven days after the session
+
+Owner decision, 2026-11-13: a request nobody has decided by seven days after
+the session closes on its own, as **Expired**, for both workflows. Undecided
+means pending, including while it waits on a decider's question or on the
+member to confirm a moved date.
+
+**When.** The later of the end of the seventh day after the session on the
+department's calendar (its timezone, so a request for a drill on 20 November
+closes at midnight between 27 and 28 November local time) and the moment a
+`7d_after_end` deadline would close for the event, so a request can never
+close while it could still be made. Every pending request's response carries
+the instant as `expires_at`, computed by `expires_at_for` in
+`attendance_waiver_service.py`; the screens show it rather than work it out.
+
+**What happens.** The hourly `attendance_waiver_expiry` task sets the status
+to `expired`, frees the session's slot, clears an open question or
+reconfirmation, writes an `expired` step with no actor to the decision log,
+archives the deciders' prompts, tells the member in the app and by email
+("…was not decided within seven days of the session and has closed; the
+session counts as missed"), and audits `attendance_waiver_request_expired`
+with ids only. Each request is expired in its own transaction, guarded on
+the status still being pending under its lock, so a second run or a second
+worker changes nothing; the email goes after the commit, so a crash can lose
+it but never send it twice (the in-app notice is committed with the expiry).
+
+**An expired request is an absence.** Nothing excuses it: the graders and the
+meeting attendance figures read only approved requests. It can no longer be
+approved, denied or withdrawn, and the Chief's override applies only to a
+denial. The annual review counts it as `expired`, its own figure, not a
+denial. Its documents follow the retention period from the day it closed.
+
+### Asking the member for more information _(2026-11-13)_
+
+Anyone who may decide a request may ask its member a question first, while the
+request is pending, no question is already open (`info_requested_at` is NULL)
+and it is not waiting on the member to reconfirm a moved session
+(`reconfirm_requested_at` is NULL). Asking writes an `info_requested` log entry
+whose note is the question, sets `info_requested_at`, and leaves the status
+**pending**. The deciders' in-app prompts are archived, and the member gets an
+in-app notice and an email naming who asked and the session, **never the
+question**; the training notice links to My Training, where the answer form is.
+
+Only the member answers, while the question is open. Answering writes a
+`member_responded` entry whose note is the answer, clears
+`info_requested_at`, and prompts the deciders again (in-app and email, worded
+"answered your question", never the answer). Any number of rounds may follow,
+one open question at a time.
+
+Deciders may approve or deny without waiting for the answer; deciding,
+withdrawing and voiding all clear `info_requested_at`. Questions and answers
+are log notes, encrypted at rest like every note, and appear in no
+notification, email, log line or audit row (audit rows carry ids only).
+`describe` reports `can_request_info` (a decider, and the state above) and
+`can_respond` (the member, while a question is open); `GET .../mine` returns
+each request with its log so the member can read every round.
+
+| Method | Endpoint                                              | Who                                                 |
+| ------ | ----------------------------------------------------- | --------------------------------------------------- |
+| `POST` | `/api/v1/training/waivers/requests/{id}/request-info` | Someone who may decide, body `{note}`               |
+| `POST` | `/api/v1/training/waivers/requests/{id}/respond`      | The member, while a question is open, body `{note}` |
+| `POST` | `/api/v1/meetings/waiver-requests/{id}/request-info`  | As above, for a business-meeting request            |
+| `POST` | `/api/v1/meetings/waiver-requests/{id}/respond`       | As above, for a business-meeting request            |
+
+A request in the wrong state is refused with 400 and a sentence saying why.
 
 ---
 
@@ -450,7 +564,9 @@ a denial. What differs:
   marked present on the minutes record), when a leave of absence covers the
   meeting, or when the Secretary has already waived it.
 - **Routing**: the chosen positions; failing them, the Secretary; failing the
-  Secretary, every holder of `meetings.manage`. A Chief may always decide.
+  Secretary, every holder of `meetings.manage`. A Chief or a President may
+  always decide. The Chief's and the President's own requests are routed as in
+  training (to the other office, then the meeting policy's own named alternate).
 - **Approving writes the waiver** onto the meeting's minutes record: the
   `MeetingAttendee` row gets `waiver_reason` "Excused: approved request" (plus
   the category), `waiver_granted_by` the decider and `waiver_request_id` the

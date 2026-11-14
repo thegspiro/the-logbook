@@ -68,6 +68,21 @@ describe('ElectionWorkflowTabs', () => {
     } as unknown as Election;
 
     render(
+      <ElectionWorkflowTabs election={closedElection} canManage={true} activeTab="voting" onTabChange={onTabChange} />
+    );
+
+    // 'voting' (Cast Vote) only shows while voting is open; the first
+    // visible tab for a closed election is 'ballot'. Attendance was the
+    // example here until it stayed, read-only, after close (W50-79).
+    expect(onTabChange).toHaveBeenCalledWith('ballot', { replace: true });
+  });
+
+  // W50-79: a membership item's attendance rule decided who could vote, so
+  // the attendance stays reviewable from the closed election.
+  it('keeps the Attendance tab on a closed election', () => {
+    const closedElection = { ...baseElection, status: 'closed' } as unknown as Election;
+
+    render(
       <ElectionWorkflowTabs
         election={closedElection}
         canManage={true}
@@ -76,9 +91,8 @@ describe('ElectionWorkflowTabs', () => {
       />
     );
 
-    // 'attendance' only shows for draft/open elections; the first visible
-    // tab for a closed election is 'ballot'.
-    expect(onTabChange).toHaveBeenCalledWith('ballot', { replace: true });
+    expect(screen.getByRole('tab', { name: /Attendance/ })).toBeInTheDocument();
+    expect(onTabChange).not.toHaveBeenCalled();
   });
 
   // Only the selected tab is focusable, so without arrow keys a keyboard user

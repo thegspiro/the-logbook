@@ -5,16 +5,16 @@ import { renderWithRouter } from '../../test/utils';
 import type { AttendanceWaiverPolicy } from '../../types/attendanceWaiver';
 
 const mockGetPolicy = vi.fn();
+const mockPositions = vi.fn();
 const mockSavePolicy = vi.fn();
 vi.mock('../../services/attendanceWaiverService', () => ({
   attendanceWaiverService: {
     getPolicy: (...args: unknown[]) => mockGetPolicy(...args) as unknown,
     savePolicy: (...args: unknown[]) => mockSavePolicy(...args) as unknown,
+    // The panel reads positions from the waiver API now; the fixtures keep
+    // the `{ positions }` shape the compliance endpoint returned.
+    getPositions: async (...args: unknown[]) => ((await mockPositions(...args)) as { positions: unknown[] }).positions,
   },
-}));
-const mockPositions = vi.fn();
-vi.mock('../../services/trainingServices', () => ({
-  complianceConfigService: { getAvailablePositions: (...args: unknown[]) => mockPositions(...args) as unknown },
 }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
@@ -31,10 +31,15 @@ const policy = (over: Partial<AttendanceWaiverPolicy> = {}): AttendanceWaiverPol
   attachment: 'off',
   attachment_retention_days: 365,
   approver_position_ids: [],
+  cc_position_ids: [],
+  chief_alternate_user_id: null,
   ...over,
 });
 
 const save = () => screen.getByRole('button', { name: /^Save$/ });
+// The screen lists the positions twice: who decides, and who is copied.
+const deciders = () => within(screen.getByRole('group', { name: 'Positions that decide waiver requests' }));
+const copied = () => within(screen.getByRole('group', { name: 'Positions copied on waiver decisions' }));
 
 describe('SessionWaiverSettingsPanel', () => {
   beforeEach(() => {
@@ -68,7 +73,7 @@ describe('SessionWaiverSettingsPanel', () => {
     await user.click(within(screen.getByRole('group', { name: 'Supporting documents' })).getByLabelText('Optional'));
     await user.clear(screen.getByLabelText(/Keep documents for/));
     await user.type(screen.getByLabelText(/Keep documents for/), '730');
-    await user.click(screen.getByLabelText('Training Officer'));
+    await user.click(deciders().getByLabelText('Training Officer'));
     await user.click(save());
 
     expect(mockSavePolicy).toHaveBeenCalledWith({
@@ -82,6 +87,8 @@ describe('SessionWaiverSettingsPanel', () => {
       attachment: 'optional',
       attachment_retention_days: 730,
       approver_position_ids: ['pos-to'],
+      cc_position_ids: [],
+      chief_alternate_user_id: null,
     });
   });
 
@@ -173,6 +180,54 @@ describe('SessionWaiverSettingsPanel', () => {
     await user.click(save());
     expect(screen.getByText('Enter a whole number of days from 1 to 3650.', { selector: 'p' })).toBeInTheDocument();
     expect(mockSavePolicy).not.toHaveBeenCalled();
+  });
+
+  describe('copy decisions to', () => {
+    it('shows the stored copied positions', async () => {
+      mockGetPolicy.mockResolvedValue(policy({ cc_position_ids: ['pos-lt'] }));
+      renderWithRouter(<SessionWaiverSettingsPanel />);
+      expect(await screen.findByRole('heading', { name: 'Copy decisions to' })).toBeInTheDocument();
+      expect(copied().getByLabelText('Lieutenant')).toBeChecked();
+      expect(copied().getByLabelText('Training Officer')).not.toBeChecked();
+      // Copying a position does not make it a decider.
+      expect(deciders().getByLabelText('Lieutenant')).not.toBeChecked();
+    });
+
+    it('saves the copied positions apart from the deciders', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<SessionWaiverSettingsPanel />);
+      await user.click(await screen.findByLabelText(/Members may ask to be excused/));
+      await user.click(deciders().getByLabelText('Training Officer'));
+      await user.click(copied().getByLabelText('Lieutenant'));
+      await user.click(save());
+      expect(mockSavePolicy).toHaveBeenCalledWith(
+        expect.objectContaining({ approver_position_ids: ['pos-to'], cc_position_ids: ['pos-lt'] })
+      );
+    });
+
+    it('drops a copied position that no longer exists, and says so first', async () => {
+      mockGetPolicy.mockResolvedValue(policy({ cc_position_ids: ['pos-lt', 'pos-gone'] }));
+      const user = userEvent.setup();
+      renderWithRouter(<SessionWaiverSettingsPanel />);
+      expect(
+        await screen.findByText('One copied position no longer exists and is removed when you save.')
+      ).toBeInTheDocument();
+      // Nothing else changed, but the stale id is reason enough to save.
+      expect(save()).toBeEnabled();
+      await user.click(save());
+      expect(mockSavePolicy).toHaveBeenCalledWith(expect.objectContaining({ cc_position_ids: ['pos-lt'] }));
+    });
+
+    it('keeps the copied positions as they are when the list cannot load', async () => {
+      mockGetPolicy.mockResolvedValue(policy({ cc_position_ids: ['pos-lt'] }));
+      mockPositions.mockRejectedValue(new Error('403'));
+      const user = userEvent.setup();
+      renderWithRouter(<SessionWaiverSettingsPanel />);
+      expect(await screen.findByText(/so who is copied cannot be changed/)).toBeInTheDocument();
+      await user.click(screen.getByLabelText(/Members may ask to be excused/));
+      await user.click(save());
+      expect(mockSavePolicy).toHaveBeenCalledWith(expect.objectContaining({ cc_position_ids: ['pos-lt'] }));
+    });
   });
 
   it('shows the server’s refusal', async () => {

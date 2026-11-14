@@ -27,6 +27,20 @@ interface Props {
   showErrors: boolean;
 }
 
+/**
+ * One tab stop per item (WAI-ARIA radio group): the chosen option, or the
+ * first rating when nothing is chosen yet.
+ */
+function rovingTabIndex(
+  answer: ShiftEvaluationItemAnswer | undefined,
+  scale: ShiftEvaluationFormSnapshot['scale'],
+  index: number
+): boolean {
+  if (answer?.not_applicable) return false;
+  const chosen = scale.findIndex((level) => level.value === answer?.rating);
+  return index === (chosen >= 0 ? chosen : 0);
+}
+
 const ratingButtonClass = (selected: boolean, low: boolean, na: boolean) =>
   `touch:min-h-11 min-h-9 min-w-11 flex-1 border-l border-theme-surface-border px-2 text-sm font-semibold first:border-l-0 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] ${
     selected
@@ -175,9 +189,33 @@ export const ShiftEvaluationFields: React.FC<Props> = ({ form, draft, onChange, 
                     <div
                       role="radiogroup"
                       aria-label={groupLabel}
-                      className="border-theme-surface-border flex w-full overflow-hidden rounded-lg border sm:w-auto"
+                      // Wraps rather than clipping: a 7- to 10-level scale and
+                      // N/A do not fit a phone's width at 44px a button.
+                      className="border-theme-surface-border flex w-full flex-wrap rounded-lg border sm:w-auto"
+                      onKeyDown={(e) => {
+                        const options = [
+                          ...form.scale.map((level) => level.value as number | 'na'),
+                          ...(form.allow_not_applicable ? (['na'] as const) : []),
+                        ];
+                        const step =
+                          e.key === 'ArrowRight' || e.key === 'ArrowDown'
+                            ? 1
+                            : e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+                              ? -1
+                              : 0;
+                        if (step === 0 || options.length === 0) return;
+                        e.preventDefault();
+                        const radios = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]'));
+                        const from = radios.indexOf(document.activeElement as HTMLElement);
+                        const to = (Math.max(from, 0) + step + options.length) % options.length;
+                        const next = options[to];
+                        // Moving selects, as native radio buttons do.
+                        if (next === 'na') setAnswer(key, { rating: null, not_applicable: true });
+                        else if (next !== undefined) setAnswer(key, { rating: next, not_applicable: false });
+                        radios[to]?.focus();
+                      }}
                     >
-                      {form.scale.map((level) => {
+                      {form.scale.map((level, levelIndex) => {
                         const selected = answer?.rating === level.value;
                         return (
                           <button
@@ -185,6 +223,7 @@ export const ShiftEvaluationFields: React.FC<Props> = ({ form, draft, onChange, 
                             type="button"
                             role="radio"
                             aria-checked={selected}
+                            tabIndex={rovingTabIndex(answer, form.scale, levelIndex) ? 0 : -1}
                             aria-label={`${level.value} – ${level.label}`}
                             title={level.label}
                             onClick={() =>
@@ -205,6 +244,7 @@ export const ShiftEvaluationFields: React.FC<Props> = ({ form, draft, onChange, 
                           type="button"
                           role="radio"
                           aria-checked={Boolean(answer?.not_applicable)}
+                          tabIndex={answer?.not_applicable ? 0 : -1}
                           aria-label={`N/A – ${form.not_applicable_label}`}
                           title={form.not_applicable_label}
                           onClick={() => setAnswer(key, { rating: null, not_applicable: !answer?.not_applicable })}
