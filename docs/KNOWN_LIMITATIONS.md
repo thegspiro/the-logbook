@@ -795,8 +795,42 @@ Phase 3, photos and media (2026-11-13), ships with these:
 - **A batch upload is not one transaction.** Each file is its own request; if
   the browser is closed part way, the files already sent stay as drafts and
   the rest were never uploaded. The shared `batch_id` identifies the set.
-- **Documents (letters, minutes, scanned PDFs) are phase 4.** The media
-  upload refuses PDF and office files.
+- **Documents (letters, minutes, scanned PDFs) are phase 4.** ✅ Shipped
+  2026-11-14; the media upload still refuses PDF and office files, which go
+  through the documents upload instead.
+
+Phase 4, documents (2026-11-14), ships with these:
+
+- **A PDF opens in a new tab, not inside the page.** The app is served with
+  `frame-ancestors 'none'` everywhere, and loosening it for one viewer would
+  loosen it for the whole app. The document page shows the first-page preview
+  and an Open link.
+- **What "stripped" covers for a PDF.** The copy members open is rebuilt from
+  its pages: no document information or XMP metadata, no JavaScript, automatic
+  actions, form scripts, embedded files or file-attachment annotations, and the
+  JPEG images inside lose their EXIF (and GPS). Not covered: text or a stamp
+  drawn on the page, a picture's own content, and image formats other than
+  JPEG inside the PDF, which are drawn as they are. The Historian still reads
+  a document before publishing it.
+- **No OCR.** Typed and already-OCR'd PDFs are searchable by their own text; a
+  scan is found by its catalogue and transcription (owner decision,
+  2026-11-14).
+- **Long PDFs are read in part.** Search reads at most 2,000 pages and 2 MB of
+  text; the document page says when a document ran past that.
+- **Word and other office files are refused.** Converted to PDF first, so
+  members can view them and their hidden author and edit history never reach
+  anyone (owner decision 3).
+- **A password-protected PDF is refused.** It can be neither stripped, read
+  nor previewed; remove the password and upload it again. A PDF restricted only
+  by its owner (it opens without a password) is accepted, and the copy members
+  open carries no restriction.
+- **The transcription and a PDF's text are stored unencrypted**, so they can be
+  searched; research notes stay encrypted and are not searched.
+- **A catalogued document is managed in History.** The Documents module
+  downloads it but will not rename, move or delete it, and nothing is uploaded
+  or moved into the History folder from there.
+- **New dependency: pypdfium2** (PDFium bindings, 5.15.2) draws the first
+  page; pypdf was already installed.
 
 ## Medical Screening — Gaps for the Owner (2026-11-02, updated 2026-11-03)
 
@@ -10292,9 +10326,10 @@ beyond the feature.
   already submitted are kept but no longer required, new ones are required,
   and close-out waits for them. Freezing the set at close-out would need a
   stored snapshot.
-- **No-show and pending crew are asked for an evaluation.** The rule mirrors
-  the trainee-report gate (only declined and cancelled seats are left out),
-  so the two agree; excusing no-shows would mean changing both.
+- ~~**No-show and pending crew are asked for an evaluation.**~~ Resolved
+  2026-11-14 (owner decision): only Assigned and Confirmed crew need a trainee
+  report or a shift evaluation, and close-out drafts reports for them alone
+  (`WORKING_ASSIGNMENT_STATUSES`).
 - **No requirement type counts the calls an evaluation records.** Evaluated
   shifts, transports and refusals are credited; the existing Calls type is
   still fed by shift reports.

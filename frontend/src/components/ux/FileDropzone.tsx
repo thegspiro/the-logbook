@@ -117,7 +117,10 @@ export const FileDropzone: React.FC<FileDropzoneProps> = ({
             inputRef.current?.click();
           }
         }}
-        aria-label={label}
+        // Named by its contents, not aria-label: an aria-label of the first
+        // line left the size limit out of the name while it was on screen,
+        // which axe's label-content-name-mismatch fails, and a voice-control
+        // user saying what they see would not match it.
       >
         <input
           ref={inputRef}
