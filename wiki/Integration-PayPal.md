@@ -27,6 +27,9 @@ The full operator reference is
   days of payments and records any the webhook missed.
 - **Settings on a connected card.** The environment, credentials, Webhook ID
   and automatic settlement can be changed without disconnecting.
+- **The store's button can use it.** The store can send members to the
+  connected account's PayPal.Me link, so its payments are the ones
+  reconciled.
 
 ---
 
@@ -97,13 +100,15 @@ pay an order twice.
 
 Stored in the `integrations` table with `integration_type = 'paypal'`.
 
-| Field                 | Where              | Description                                        |
-| --------------------- | ------------------ | -------------------------------------------------- |
-| `environment`         | `config`           | `sandbox` (default) or `live`                      |
-| `client_id`           | `encrypted_config` | REST app Client ID. Never returned by the API      |
-| `client_secret`       | `encrypted_config` | REST app Secret. Never returned by the API         |
-| `webhook_id`          | `config`           | Required to verify deliveries                      |
-| `auto_apply_payments` | `config`           | Settle exact matches automatically (on by default) |
+| Field                 | Where              | Description                                             |
+| --------------------- | ------------------ | ------------------------------------------------------- |
+| `environment`         | `config`           | `sandbox` (default) or `live`                           |
+| `client_id`           | `encrypted_config` | REST app Client ID. Never returned by the API           |
+| `client_secret`       | `encrypted_config` | REST app Secret. Never returned by the API              |
+| `webhook_id`          | `config`           | Required to verify deliveries                           |
+| `auto_apply_payments` | `config`           | Settle exact matches automatically (on by default)      |
+| `paypal_me_url`       | `config`           | Optional. The PayPal.Me link the store's button can use |
+| `account_email`       | `config`           | Optional. The account email the store's button can use  |
 
 Payments are kept in `store_payment_events`, unique per department and
 provider on PayPal's capture ID.
@@ -119,6 +124,30 @@ provider on PayPal's capture ID.
 | No order found        | The reference had no order number                                    |
 | Needs a decision      | The amount does not match, or the order is cancelled or already paid |
 | Dismissed             | An administrator decided it was not a store payment                  |
+
+---
+
+## The Store's PayPal Button
+
+The store's **Pay** button for PayPal sends members to a PayPal.Me link. Under
+**Store → Settings → Payments**, **PayPal account members pay into** chooses
+which:
+
+- **The account entered below**: the link and email typed on the store. The
+  default, and how every store worked before 2026-11-14.
+- **The connected PayPal account**: the `paypal_me_url` and `account_email`
+  above. PayPal's API cannot report an account's PayPal.Me link, so an
+  administrator enters them on the integration.
+
+With the connected account chosen, the store's own link and email are the
+fallback whenever the integration is disconnected or has neither (owner
+decision, 2026-11-14), so a disconnect does not take the button away from
+members who owe. The choice is `store_settings.paypal_use_connected`, and
+`GET /api/v1/store/settings` reports the connected account as
+`connectedPaypal` so the screen can say what the button will do.
+
+Only the connected account's payments are reconciled. A store that sends
+members to a different PayPal account marks those orders paid by hand.
 
 ---
 

@@ -427,12 +427,13 @@ Venmo, Cash App, Zelle, cash and checks.
 
 ### Configuration
 
-| Field                             | What to enter                                                                                                                           |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **Environment**                   | **Sandbox (testing)** or **Live**. Starts on sandbox. Sandbox and live credentials do not mix                                           |
-| **Client ID** / **Client Secret** | From a REST app at [developer.paypal.com](https://developer.paypal.com) → **Apps & Credentials**. Stored securely and never shown again |
-| **Webhook ID**                    | **Required.** PayPal gives you this when you add the webhook (below). Without it, payments cannot be checked and are refused            |
-| **Settle orders automatically**   | On at first. See the matching rules below                                                                                               |
+| Field                                             | What to enter                                                                                                                                                                                  |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Environment**                                   | **Sandbox (testing)** or **Live**. Starts on sandbox. Sandbox and live credentials do not mix                                                                                                  |
+| **Client ID** / **Client Secret**                 | From a REST app at [developer.paypal.com](https://developer.paypal.com) → **Apps & Credentials**. Stored securely and never shown again                                                        |
+| **Webhook ID**                                    | **Required.** PayPal gives you this when you add the webhook (below). Without it, payments cannot be checked and are refused                                                                   |
+| **Settle orders automatically**                   | On at first. See the matching rules below                                                                                                                                                      |
+| **PayPal.Me link** / **Account email** (optional) | Where members send money when the store uses the connected account (**Store → Settings → Payments**). PayPal cannot report these, so you enter them. The link must be a paypal.me link or name |
 
 **To change any of these later**, select **Settings** on the connected PayPal
 card. The environment, Webhook ID and automatic settlement show their saved
@@ -445,7 +446,7 @@ does not change, and the new settings apply to the next payment PayPal reports.
 > refuses the change without them, because the old pair would not work in the
 > other environment and every payment would then be rejected.
 
-![PayPal settings on a connected card: Environment Live with the note that changing it needs that environment's Client ID and Client Secret, the Client ID and Client Secret boxes reading Leave blank to keep the current ID and secret, the Webhook ID filled in, Settle orders automatically ticked, and the notice that saved settings apply to the next payment PayPal reports](./images/16-26-paypal-settings.png)
+![PayPal settings on a connected card: Environment Live with the note that changing it needs that environment's Client ID and Client Secret, the Client ID and Client Secret boxes reading Leave blank to keep the current ID and secret, the Webhook ID filled in, the PayPal.Me link and account email the store's PayPal button can use, Settle orders automatically ticked, and the notice that saved settings apply to the next payment PayPal reports](./images/16-26-paypal-settings.png)
 
 **Test** checks the credentials. It gives a _warning_, not a plain success, if
 the Webhook ID is missing, because credentials alone match nothing.
@@ -527,7 +528,7 @@ each entry:
 - **Dismiss** — for money that is not a store order, such as a donation, dues
   or a refund. An applied payment cannot be dismissed.
 
-![PayPal connect dialog with environment and credential fields](./images/16-06-paypal-connect.png)
+![PayPal connect dialog with environment and credential fields, the Webhook ID and its address, and the optional PayPal.Me link and account email for the store's PayPal button](./images/16-06-paypal-connect.png)
 
 For the whole store walkthrough, see [Department Store](./18-storefront.md).
 
