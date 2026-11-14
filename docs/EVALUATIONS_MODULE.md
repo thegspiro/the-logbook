@@ -161,22 +161,25 @@ out. A member who served no full month of the period cannot be evaluated for
 it. Where another screen already computes a figure, the data service calls
 that code (pitfall #29).
 
-| Key                               | Figure                                                                 |
-| --------------------------------- | ---------------------------------------------------------------------- |
-| `training.hours`                  | hours of completed training records                                    |
-| `training.requirements_met_pct`   | share of applicable training requirements met (dashboard rules)        |
-| `training.session_attendance_pct` | sessions counting toward the member's attendance requirement, its rule |
-| `events.meeting_attendance_pct`   | business meetings attended out of those held                           |
-| `events.attended_count`           | department events checked in to                                        |
-| `shifts.hours`                    | hours on shifts worked                                                 |
-| `shifts.count`                    | shifts worked                                                          |
-| `shifts.performance_rating_avg`   | average 1–5 rating on shift completion reports                         |
-| `calls.responses`                 | calls responded to                                                     |
-| `calls.response_pct`              | calls responded to out of all calls (hidden when call tracking is off) |
-| `admin_hours.hours`               | approved administrative hours                                          |
-| `skills.tests_passed`             | skills tests passed                                                    |
-| `certifications.current`          | qualifications held at the period's end, with expiry dates             |
-| `positions.held`                  | offices and committee seats held at any time during the period         |
+| Key                                | Figure                                                                              |
+| ---------------------------------- | ----------------------------------------------------------------------------------- |
+| `training.hours`                   | hours of completed training records                                                 |
+| `training.requirements_met_pct`    | share of applicable training requirements met (dashboard rules)                     |
+| `training.session_attendance_pct`  | sessions counting toward the member's attendance requirement, its rule              |
+| `events.meeting_attendance_pct`    | business meetings attended out of those held                                        |
+| `events.attended_count`            | department events checked in to                                                     |
+| `events.attended_by_type`          | department events checked in to, one line per event type                            |
+| `shifts.hours`                     | hours on shifts worked                                                              |
+| `shifts.count`                     | shifts worked                                                                       |
+| `shifts.performance_rating_avg`    | average 1–5 rating on shift completion reports                                      |
+| `shifts.field_evaluation_averages` | average rating per field shift evaluation form, one line each (shown, never scored) |
+| `calls.responses`                  | calls responded to                                                                  |
+| `calls.response_pct`               | calls responded to out of all calls (hidden when call tracking is off)              |
+| `admin_hours.hours`                | approved administrative hours                                                       |
+| `skills.tests_passed`              | skills tests passed                                                                 |
+| `certifications.current`           | qualifications held at the period's end, with expiry dates                          |
+| `certifications.expiring_soon`     | qualifications held at period end that expire within 90 days after it               |
+| `positions.held`                   | offices and committee seats held at any time during the period                      |
 
 A figure that cannot honestly be given is reported unavailable with a note,
 never as zero or 100%.

@@ -14,6 +14,7 @@ import {
   SCORED_TOOLS,
   type EvaluationDataSource,
   type GradeBand,
+  type ScoreBand,
   type ScaleLevel,
   type TemplateDefinition,
   type TemplateItem,
@@ -21,6 +22,7 @@ import {
   type TemplateWorkflow,
   type WorkflowStep,
 } from '../types/evaluations';
+import { formatNumber } from '../../../utils/dateFormatting';
 
 const KEY_MAX = 50;
 
@@ -213,4 +215,51 @@ export function groupDataSources(sources: readonly EvaluationDataSource[]): Data
     else groups.set(label, { label, sources: [source] });
   }
   return [...groups.values()];
+}
+
+/** A stretch of values no score band covers: `[from, to)`, `to` null for "and above". */
+export interface BandGap {
+  from: number;
+  to: number | null;
+}
+
+/** The lowest and highest value each unit's figure can take. */
+const UNIT_RANGE: Record<EvaluationDataSource['unit'], { floor: number; ceiling: number | null }> = {
+  percent: { floor: 0, ceiling: 100 },
+  rating: { floor: 1, ceiling: 5 },
+  hours: { floor: 0, ceiling: null },
+  count: { floor: 0, ceiling: null },
+  list: { floor: 0, ceiling: null },
+};
+
+/**
+ * The values a scoring rule suggests no rating for. The backend accepts a
+ * rule with gaps, and a member whose figure falls in one simply gets no
+ * suggestion, with nothing saying why; the builder shows these so the gap is
+ * a choice rather than an accident. Bands are `min` inclusive and `max`
+ * exclusive, so a percentage band "90 up to 100" leaves exactly 100% out.
+ * Overlapping bands are the backend's to refuse, and leave no gap here.
+ */
+export function scoringGaps(bands: readonly ScoreBand[], unit: EvaluationDataSource['unit']): BandGap[] {
+  if (bands.length === 0) return [];
+  const { floor, ceiling } = UNIT_RANGE[unit];
+  const sorted = [...bands].sort((a, b) => a.min - b.min);
+  const gaps: BandGap[] = [];
+  let covered = floor;
+  for (const band of sorted) {
+    if (band.min > covered) gaps.push({ from: covered, to: band.min });
+    if (band.max === null) return gaps;
+    covered = Math.max(covered, band.max);
+  }
+  if (ceiling === null || covered <= ceiling) gaps.push({ from: covered, to: null });
+  return gaps;
+}
+
+/** A gap as the builder words it: "below 5", "from 10 up to 20", "100 and above". */
+export function describeGap(gap: BandGap, unit: EvaluationDataSource['unit']): string {
+  const n = (v: number) => `${formatNumber(v)}${unit === 'percent' ? '%' : ''}`;
+  if (gap.to === null) return `${n(gap.from)} and above`;
+  const { floor } = UNIT_RANGE[unit];
+  if (gap.from === floor) return `below ${n(gap.to)}`;
+  return `from ${n(gap.from)} up to ${n(gap.to)}`;
 }

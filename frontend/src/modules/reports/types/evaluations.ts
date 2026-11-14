@@ -227,6 +227,9 @@ export interface EvaluationDataSource {
   module: string;
   description: string;
   scoreable: boolean;
+  /** Why the department cannot measure this source, when it cannot. Only the
+   * builder's catalog (`GET /evaluations/data-sources`) sets it. */
+  unavailable_reason?: string | null | undefined;
 }
 
 export interface BuilderOptions {

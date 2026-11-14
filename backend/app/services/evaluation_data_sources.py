@@ -82,6 +82,14 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "Department events the member checked in to.",
     ),
     DataSource(
+        "events.attended_by_type",
+        "Events attended by type",
+        "list",
+        "events",
+        "Department events the member checked in to, counted by event type: "
+        "the same events as Events attended, one line per type.",
+    ),
+    DataSource(
         "shifts.hours",
         "Shift hours",
         "hours",
@@ -102,6 +110,17 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "scheduling",
         "Average of the 1–5 performance ratings on the member's shift "
         "completion reports.",
+    ),
+    DataSource(
+        "shifts.field_evaluation_averages",
+        "Field shift evaluation scores",
+        "list",
+        "scheduling",
+        "The member's average rating on each field shift evaluation form, over "
+        "the evaluations submitted for shifts in the period that the member "
+        "can see, with how many there were. One line per form: forms on "
+        "different scales are never averaged together, so this is shown "
+        "beside the item rather than scored.",
     ),
     DataSource(
         "calls.responses",
@@ -137,6 +156,15 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "list",
         "training",
         "Qualifications held at the end of the period, with expiration dates.",
+    ),
+    DataSource(
+        "certifications.expiring_soon",
+        "Certifications expiring soon",
+        "list",
+        "training",
+        "Qualifications held at the end of the period that expire within 90 "
+        "days after it, with their expiration dates: the same window the "
+        "member's training stats call expiring soon.",
     ),
     DataSource(
         "positions.held",
