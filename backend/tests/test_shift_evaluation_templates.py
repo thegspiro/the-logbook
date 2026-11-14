@@ -513,3 +513,65 @@ class TestConcurrentEdits:
         reloaded = await service.get_template(template.id, org.id)
         assert reloaded is not None
         assert reloaded.version == 4
+
+
+async def _skip_duplicate_check(*args, **kwargs) -> None:
+    return None
+
+
+async def _insert_competing_template(db_session, org, name: str) -> None:
+    """Another administrator's row, written after this save's check passed."""
+    await db_session.execute(
+        text(
+            "INSERT INTO shift_evaluation_templates "
+            "(id, organization_id, name, scale, header_fields, statistics, "
+            "sections, evaluated_seats) "
+            "VALUES (:id, :org, :name, '[]', '[]', '[]', '[]', '[]')"
+        ),
+        {"id": str(uuid.uuid4()), "org": org.id, "name": name},
+    )
+
+
+class TestDuplicateNameRace:
+    """Two administrators saving the same name at the same moment.
+
+    Both pass the duplicate check before either commits, so the second commit
+    meets the unique key. It must still be the duplicate-name refusal (a 400),
+    not an IntegrityError (a 500). The race is reproduced by letting the check
+    pass and writing the competing row before the save commits.
+    """
+
+    async def test_a_create_racing_another_is_refused_as_a_duplicate(
+        self, db_session, monkeypatch
+    ):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        await db_session.commit()
+        service = ShiftEvaluationTemplateService(db_session)
+        monkeypatch.setattr(service, "_refuse_duplicate_name", _skip_duplicate_check)
+        await _insert_competing_template(db_session, org, "Driver Evaluation")
+
+        with pytest.raises(ValueError, match=DUPLICATE_NAME_MESSAGE):
+            await service.create_template(org.id, _write("Driver Evaluation"), user.id)
+
+    async def test_a_rename_racing_another_is_refused_as_a_duplicate(
+        self, db_session, monkeypatch
+    ):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        template = await _template(db_session, org, user, "Engine Evaluation")
+        service = ShiftEvaluationTemplateService(db_session)
+        monkeypatch.setattr(service, "_refuse_duplicate_name", _skip_duplicate_check)
+        await _insert_competing_template(db_session, org, "Driver Evaluation")
+
+        # Read before the save: the rollback expires every loaded object.
+        template_id, org_id = template.id, org.id
+
+        with pytest.raises(ValueError, match=DUPLICATE_NAME_MESSAGE):
+            await service.update_template(
+                template_id, org_id, _write("Driver Evaluation"), user.id
+            )
+
+        reloaded = await service.get_template(template_id, org_id)
+        assert reloaded is not None
+        assert reloaded.name == "Engine Evaluation"

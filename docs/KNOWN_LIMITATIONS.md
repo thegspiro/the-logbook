@@ -10299,8 +10299,10 @@ beyond the feature.
   again.
 - **A deactivated evaluation form is still offered and required** where a
   program or the department settings still name it.
-- **Two administrators creating forms with the same name at the same moment
-  get a 500** rather than the duplicate-name 400.
+- ~~**Two administrators creating forms with the same name at the same moment
+  get a 500** rather than the duplicate-name 400.~~ Resolved 2026-11-14: a
+  create or rename whose commit meets the per-department unique key now rolls
+  back and returns the same duplicate-name 400 the up-front check gives.
 - **A preceptor-link submission that collides with an officer creating the
   same evaluation** retries once; the retry keeps the link marked used but
   loses the submitting device's address and browser from the record.
