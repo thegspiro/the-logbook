@@ -16,6 +16,7 @@ from uuid import UUID
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.utils import list_within_detail_limit
 from app.models.shift_evaluation import (
     DEFAULT_GENERAL_EVALUATION_MODE,
     DEFAULT_PRECEPTOR_LINK_DAYS,
@@ -268,9 +269,14 @@ class ShiftEvaluationTemplateService:
         if str(config.general_shift_evaluation_template_id or "") == template.id:
             users.append("the department's general evaluation setting")
         if users:
+            # Programs grow with the department; list what fits so the
+            # refusal is never long enough to be replaced by a generic error.
             raise ValueError(
-                f"'{template.name}' is still in use by {', '.join(users)}. "
-                "Choose another form there before deactivating this one."
+                list_within_detail_limit(
+                    f"'{template.name}' is still in use by ",
+                    users,
+                    ". Choose another form there before deactivating this one.",
+                )
             )
 
     async def _program_names_by_template(

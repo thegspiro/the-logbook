@@ -44,6 +44,34 @@ class TestDeactivating:
         await db_session.refresh(template)
         assert template.is_active is True
 
+    async def test_a_long_list_of_programs_still_reaches_the_officer(self, db_session):
+        # The refusal names every program using the form. Joined whole, enough
+        # of them run past the cap safe_error_detail applies, and the officer
+        # is told only "An unexpected error occurred".
+        from app.core.utils import MAX_ERROR_DETAIL_LENGTH, safe_error_detail
+
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        template = await _template(db_session, org, user)
+        for n in range(12):
+            await TrainingProgramService(db_session).create_training_program(
+                TrainingProgramCreate(
+                    name=f"Probationary Firefighter Track {n:02d}",
+                    shift_evaluation_template_id=template.id,
+                ),
+                org.id,
+                user.id,
+            )
+
+        with pytest.raises(ValueError, match="still in use by") as refused:
+            await _deactivate(db_session, template, org, user)
+
+        detail = safe_error_detail(refused.value)
+        assert len(str(refused.value)) <= MAX_ERROR_DETAIL_LENGTH
+        assert detail == str(refused.value)
+        assert "Probationary Firefighter Track 00" in detail
+        assert "more" in detail
+
     async def test_refused_while_it_is_the_general_form(self, db_session):
         org = await _org(db_session)
         user = await _user(db_session, org)
