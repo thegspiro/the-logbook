@@ -28,7 +28,10 @@ import type {
   ElectionReportResponse,
   ElectionResults,
   ElectionSettings,
+  AttendancePeriodQuery,
+  ElectionAttendance,
   ElectoratePreview,
+  MemberMeetings,
   ElectoratePreviewRequest,
   MemberVotingEligibility,
   MemberVotingEligibilityUpdate,
@@ -478,6 +481,28 @@ export const electionService = {
    */
   async castProxyVote(electionId: string, data: ProxyVoteCreate): Promise<Vote> {
     const response = await api.post<Vote>(`/elections/${electionId}/proxy-vote`, data);
+    return response.data;
+  },
+
+  /**
+   * Each active member's meeting attendance over a period, and whether they
+   * may vote in this election (its eligibility roster's answer).
+   */
+  async getElectionAttendance(electionId: string, query: AttendancePeriodQuery): Promise<ElectionAttendance> {
+    const response = await api.get<ElectionAttendance>(`/elections/${electionId}/attendance`, {
+      params: query,
+      // meeting_type repeats (?meeting_type=a&meeting_type=b), as FastAPI reads a list.
+      paramsSerializer: { indexes: null },
+    });
+    return response.data;
+  },
+
+  /** One member's meetings over a period, newest first. */
+  async getMemberMeetings(electionId: string, userId: string, query: AttendancePeriodQuery): Promise<MemberMeetings> {
+    const response = await api.get<MemberMeetings>(`/elections/${electionId}/attendance/${userId}/meetings`, {
+      params: query,
+      paramsSerializer: { indexes: null },
+    });
     return response.data;
   },
 

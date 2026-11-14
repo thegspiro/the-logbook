@@ -2267,6 +2267,62 @@ class ElectoratePreviewResponse(BaseModel):
     total: int
 
 
+class ElectionAttendanceMember(BaseModel):
+    """One member's meeting attendance over the chosen period, and whether
+    they may vote in the chosen election (its eligibility roster's answer)."""
+
+    user_id: str
+    name: str
+    member_type: Optional[str] = None
+    member_since: Optional[date] = None
+    meetings_in_period: int
+    attended: int
+    absent: int
+    excused: int
+    on_leave: int
+    attendance_pct: float
+    # None when the member is not on the election's roster at all.
+    may_vote: Optional[bool] = None
+    reason: Optional[str] = None
+
+
+class ElectionAttendanceResponse(BaseModel):
+    election_id: str
+    election_title: str
+    start: date
+    end: date
+    meeting_types: Optional[List[str]] = None
+    total_meetings: int
+    members: List[ElectionAttendanceMember]
+
+
+class MemberMeetingRecord(BaseModel):
+    """One meeting in a member's record: how it counts, and where the
+    attendance record came from (NULL for records written before that was
+    kept)."""
+
+    meeting_id: str
+    title: str
+    meeting_type: Optional[str] = None
+    meeting_date: date
+    # present, absent, excused or on_leave
+    status: str
+    checked_in_at: Optional[datetime] = None
+    recorded_by_name: Optional[str] = None
+    recorded_via: Optional[str] = None
+    waiver_reason: Optional[str] = None
+    leave_start: Optional[date] = None
+    leave_end: Optional[date] = None
+
+
+class MemberMeetingsResponse(BaseModel):
+    user_id: str
+    name: str
+    start: date
+    end: date
+    meetings: List[MemberMeetingRecord]
+
+
 class VoterRow(BaseModel):
     """One member type the per-type rules table has a row for."""
 

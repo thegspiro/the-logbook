@@ -6,25 +6,28 @@ meeting attendance percentages, waivers, and voting eligibility.
 """
 
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.meeting import Meeting, MeetingAttendee
+from app.models.meeting import AttendanceRecordedVia, Meeting, MeetingAttendee
 from app.models.user import (
     ACTIVE_ACCOUNT_STATUSES,
     MemberLeaveOfAbsence,
     Organization,
     User,
 )
+from app.services.election_defaults import _defaults_for_kind
+from app.services.election_service import ElectionService
 from app.services.member_service_history_service import MemberServiceHistoryService
 from app.services.membership_tier_service import (
     MembershipTierService,
     attendance_window,
     tally_attendance,
 )
+from app.services.voter_rules import is_attendance_reason
 from app.utils.org_scoping import assert_in_org
 from app.utils.org_timezone import scheduling_timezone, today_in
 
@@ -127,7 +130,14 @@ class AttendanceDashboardService:
                 attendance_by_user[uid] = []
             attendance_by_user[uid].append(att)
 
-        rows = []
+        gate = ElectionService(self.db)
+        regular_rules = _defaults_for_kind(
+            (org.settings or {}) if org else {}, "regular"
+        ).rules.model_dump()
+
+        rows: List[Dict[str, Any]] = []
+        voting_eligible_count = 0
+        below_threshold_count = 0
         for member in members:
             uid = str(member.id)
             records = attendance_by_user.get(uid, [])
@@ -153,22 +163,18 @@ class AttendanceDashboardService:
             member_tier_id = (
                 tier_def.get("id") if tier_def else member.membership_type or "active"
             )
-            benefits = tier_def.get("benefits", {}) if tier_def else {}
-
-            voting_eligible = benefits.get("voting_eligible", True)
-            voting_blocked_reason = None
-            if not voting_eligible:
-                voting_blocked_reason = (
-                    f"Tier '{member_tier_id}' is not eligible to vote"
-                )
-            elif benefits.get("voting_requires_meeting_attendance", False):
-                min_pct = benefits.get("voting_min_attendance_pct", 0.0)
-                if pct < min_pct:
-                    voting_eligible = False
-                    voting_blocked_reason = (
-                        f"Attendance {pct}% below minimum {min_pct}% "
-                        f"(requires {min_pct}% over {period_months} months)"
-                    )
+            # Whether the member could vote under the department's regular
+            # business meeting rules, judged by the gate the ballot send
+            # applies rather than re-derived from the tier ladder, so this
+            # column cannot disagree with a ballot (pitfall #29). Those rules
+            # carry their own look-back; the period chosen above only decides
+            # which meetings this screen counts.
+            voting_blocked_reason = await gate.voting_reason_under_rules(
+                member, org_id, regular_rules, org
+            )
+            voting_eligible = voting_blocked_reason is None
+            voting_eligible_count += int(voting_eligible)
+            below_threshold_count += int(is_attendance_reason(voting_blocked_reason))
 
             rows.append(
                 {
@@ -200,13 +206,6 @@ class AttendanceDashboardService:
             round(sum(r["attendance_pct"] for r in rows) / len(rows), 1)
             if rows
             else 0.0
-        )
-        voting_eligible_count = sum(1 for r in rows if r["voting_eligible"])
-        below_threshold_count = sum(
-            1
-            for r in rows
-            if r["voting_blocked_reason"]
-            and "Attendance" in (r["voting_blocked_reason"] or "")
         )
 
         return {
@@ -280,6 +279,8 @@ class AttendanceDashboardService:
                 waiver_reason=reason,
                 waiver_granted_by=granted_by,
                 waiver_granted_at=granted_at,
+                recorded_by=granted_by,
+                recorded_via=AttendanceRecordedVia.WAIVER,
             )
             self.db.add(attendee)
         else:

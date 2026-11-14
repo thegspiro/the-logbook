@@ -106,7 +106,7 @@ from app.models.attendance_waiver import (
     live_key_for,
 )
 from app.models.event import Event, EventRSVP, EventType
-from app.models.meeting import Meeting, MeetingAttendee
+from app.models.meeting import AttendanceRecordedVia, Meeting, MeetingAttendee
 from app.models.notification import NotificationChannel, NotificationLog
 from app.models.training import (
     TrainingRecord,
@@ -2622,6 +2622,8 @@ def _absent_waived_attendee(
         # who asked to be excused as having attended.
         present=False,
         excused=False,
+        recorded_by=str(granted_by) if granted_by else None,
+        recorded_via=AttendanceRecordedVia.WAIVER_REQUEST,
     )
     _apply_meeting_waiver(attendee, request, granted_by)
     return attendee

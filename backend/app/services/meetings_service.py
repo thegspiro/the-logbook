@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.models.document import Document
 from app.models.meeting import (
     ActionItemStatus,
+    AttendanceRecordedVia,
     Meeting,
     MeetingActionItem,
     MeetingAttendee,
@@ -178,6 +179,8 @@ class MeetingsService:
                         organization_id=organization_id,
                         meeting_id=meeting.id,
                         **att_data,
+                        recorded_by=str(created_by),
+                        recorded_via=AttendanceRecordedVia.MANUAL,
                     )
                     self.db.add(attendee)
 
@@ -464,8 +467,10 @@ class MeetingsService:
         meeting_id: UUID,
         organization_id: UUID | str,
         attendee_data: Dict[str, Any],
+        recorded_by: Optional[UUID | str] = None,
     ) -> Tuple[Optional[MeetingAttendee], Optional[str]]:
-        """Add an attendee to a meeting"""
+        """Add an attendee to a meeting, recording ``recorded_by`` as the
+        secretary who entered it."""
         try:
             meeting = await self.get_meeting_by_id(meeting_id, organization_id)
             if not meeting:
@@ -497,6 +502,8 @@ class MeetingsService:
                 organization_id=organization_id,
                 meeting_id=meeting_id,
                 **attendee_data,
+                recorded_by=str(recorded_by) if recorded_by else None,
+                recorded_via=AttendanceRecordedVia.MANUAL,
             )
             self.db.add(attendee)
             await self.db.commit()
@@ -832,8 +839,21 @@ class MeetingsService:
                     if hasattr(rsvp.status, "value")
                     else False
                 )
+                checked_in_at = rsvp.checked_in_at if checked_in else None
                 existing_attendee = attendees.get(str(rsvp.user_id))
                 if existing_attendee is not None:
+                    # The earliest check-in is the one the record keeps.
+                    if checked_in and (
+                        existing_attendee.checked_in_at is None
+                        or (
+                            checked_in_at is not None
+                            and checked_in_at < existing_attendee.checked_in_at
+                        )
+                    ):
+                        existing_attendee.checked_in_at = checked_in_at
+                        existing_attendee.recorded_via = (
+                            AttendanceRecordedVia.EVENT_CHECK_IN
+                        )
                     existing_attendee.present = existing_attendee.present or checked_in
                     existing_attendee.excused = not existing_attendee.present and (
                         existing_attendee.excused or excused
@@ -846,6 +866,13 @@ class MeetingsService:
                     user_id=rsvp.user_id,
                     present=checked_in,
                     excused=excused,
+                    checked_in_at=checked_in_at,
+                    recorded_by=str(created_by),
+                    recorded_via=(
+                        AttendanceRecordedVia.EVENT_CHECK_IN
+                        if checked_in
+                        else AttendanceRecordedVia.EVENT_RSVP
+                    ),
                 )
                 attendees[str(rsvp.user_id)] = attendee
                 self.db.add(attendee)
