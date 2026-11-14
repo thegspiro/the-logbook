@@ -1631,7 +1631,7 @@ about the old date, and may not need to be excused from the new one.
 - **A denied request stays denied.** The first decision is final.
 - Changing only the title, location, description or end time does nothing to
   the requests. Cancelling or deleting the event closes pending requests, as
-  before.
+  before, and each member is told in the app and by email.
 
 **What if Confirm is refused?** The message says why: the member already
 checked in to the event, or (for a business meeting) a leave of absence now

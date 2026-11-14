@@ -2777,13 +2777,15 @@ async def carry_over_meeting_waivers(
 
 
 @dataclass(frozen=True)
-class RescheduleNotice:
-    """The email owed to a member whose request a move sent back to them.
+class MemberNotice:
+    """An email owed to a member about their request, once the caller commits.
 
-    ``reconfirm_for_rescheduled_events`` runs inside the caller's transaction,
-    so it cannot send mail: an email about a move the caller then rolls back
-    would tell the member of something that never happened. The caller sends
-    these with ``send_reschedule_notices`` once it has committed.
+    ``reconfirm_for_rescheduled_events`` (a session moved) and
+    ``void_pending_for_events`` (a session cancelled or deleted) run inside
+    the caller's transaction, so they cannot send mail: an email about a
+    change the caller then rolls back would tell the member of something that
+    never happened. The caller sends these with ``send_member_notices`` once
+    it has committed.
     """
 
     request_id: str
@@ -2855,7 +2857,7 @@ async def _unapply_meeting_waiver(
 
 async def reconfirm_for_rescheduled_events(
     db: AsyncSession, org_id: str, event_ids: Sequence[str]
-) -> List[RescheduleNotice]:
+) -> List[MemberNotice]:
     """Send every pending or approved request for a moved session back to its
     member (owner decision, 2026-11-13).
 
@@ -2873,7 +2875,7 @@ async def reconfirm_for_rescheduled_events(
     comes off the minutes record. A denied request is not touched: the first
     decision is final. The deciders' prompts are archived, and the member gets
     an in-app notice now and an email once the caller commits: the returned
-    notices, for ``send_reschedule_notices``.
+    notices, for ``send_member_notices``.
 
     A member who never answers is not chased: the expiry task closes a request
     still pending seven days after its (new) session.
@@ -2922,7 +2924,7 @@ async def reconfirm_for_rescheduled_events(
         return []
     tz = await resolve_scheduling_timezone(db, org_id)
     now = _now()
-    notices: List[RescheduleNotice] = []
+    notices: List[MemberNotice] = []
     for request in moved:
         event = events[str(request.event_id)]
         spec = SPECS[request.workflow]
@@ -2994,7 +2996,7 @@ async def reconfirm_for_rescheduled_events(
             },
         )
         notices.append(
-            RescheduleNotice(
+            MemberNotice(
                 request_id=str(request.id),
                 workflow=request.workflow,
                 subject=subject,
@@ -3014,13 +3016,14 @@ async def reconfirm_for_rescheduled_events(
     return notices
 
 
-async def send_reschedule_notices(
-    db: AsyncSession, org_id: str, notices: Sequence[RescheduleNotice]
+async def send_member_notices(
+    db: AsyncSession, org_id: str, notices: Sequence[MemberNotice]
 ) -> None:
-    """Email the members ``reconfirm_for_rescheduled_events`` asked to confirm.
+    """Email the members a moved, cancelled or deleted session left a notice
+    for (``reconfirm_for_rescheduled_events``, ``void_pending_for_events``).
 
-    After the caller's commit, and never allowed to fail it: the move stands
-    whether or not a mail server answered.
+    After the caller's commit, and never allowed to fail it: the change
+    stands whether or not a mail server answered.
     """
     for notice in notices:
         service = AttendanceWaiverService(db, notice.workflow)
@@ -3060,20 +3063,23 @@ async def send_reschedule_notices(
 
 async def void_pending_for_events(
     db: AsyncSession, org_id: str, event_ids: Sequence[str], cause: str
-) -> int:
+) -> List[MemberNotice]:
     """Void every pending request, of either workflow, for these events.
 
     For the event's cancellation or deletion, inside the caller's
     transaction (it commits) while it holds the events exclusively. A pending
     request is about a session that will not now be held, so there is nothing
     left to decide: it is voided, which frees its slot, its deciders' prompts
-    are archived and the member is told. An approved or denied request is the
-    member's record and is kept (the row outlives the event, see the model).
-    ``cause`` is "cancelled" or "deleted", for the log and the notice.
+    are archived and the member is told: in the app now, and by email once
+    the caller commits, through the returned notices and
+    ``send_member_notices`` (CLAUDE.md pitfall #18). An approved or denied
+    request is the member's record and is kept (the row outlives the event,
+    see the model). ``cause`` is "cancelled" or "deleted", for the log and the
+    notice.
     """
     ids = [str(e) for e in event_ids if e]
     if not ids:
-        return 0
+        return []
     pending = list(
         (
             await db.execute(
@@ -3090,8 +3096,24 @@ async def void_pending_for_events(
         .scalars()
         .all()
     )
+    notices: List[MemberNotice] = []
     for request in pending:
         spec = SPECS[request.workflow]
+        subject = f"Waiver request closed — {request.event_title_snapshot}"
+        sentence = (
+            f"Your request to be excused from "
+            f'"{request.event_title_snapshot}" on '
+            f"{_day_label(request.session_date)} was closed: the "
+            f"{spec.session_noun} was {cause}."
+        )
+        notices.append(
+            MemberNotice(
+                request_id=str(request.id),
+                workflow=request.workflow,
+                subject=subject,
+                sentences=(sentence,),
+            )
+        )
         request.status = AttendanceWaiverStatus.VOIDED
         request.live_key = None
         request.info_requested_at = None
@@ -3110,13 +3132,8 @@ async def void_pending_for_events(
                 recipient_id=str(request.user_id),
                 channel=NotificationChannel.IN_APP,
                 category=MEMBER_UPDATE_CATEGORY,
-                subject=f"Waiver request closed — {request.event_title_snapshot}",
-                message=(
-                    f"Your request to be excused from "
-                    f'"{request.event_title_snapshot}" on '
-                    f"{_day_label(request.session_date)} was closed: the "
-                    f"{spec.session_noun} was {cause}."
-                ),
+                subject=subject,
+                message=sentence,
                 # Not the event: it may be about to be deleted.
                 action_url=spec.member_fallback_url,
                 notification_metadata={PROMPT_METADATA_KEY: str(request.id)},
@@ -3144,4 +3161,4 @@ async def void_pending_for_events(
                 str(request.id),
                 commit=False,
             )
-    return len(pending)
+    return notices
