@@ -10261,14 +10261,23 @@ beyond the feature.
 
 **For the owner to decide**
 
-- **The evaluations a shift calls for follow today's settings, not the
+- ~~**The evaluations a shift calls for follow today's settings, not the
   shift's.** Who needs which evaluation is worked out on every read from the
   current "one evaluation for several programs" setting and the member's
   current enrollments. Switching that setting, or enrolling a member in a
   second program, while a shift is still open re-scopes it: evaluations
   already submitted are kept but no longer required, new ones are required,
   and close-out waits for them. Freezing the set at close-out would need a
-  stored snapshot.
+  stored snapshot.~~ Resolved 2026-11-14 (owner decision: fixed when the
+  shift ends). The first read after a department shift's end time stores
+  each crew member's evaluations on the shift
+  (`shifts.evaluation_requirements`, migration `611204dcf8d1`), and later
+  reads use that set, so a setting changed or a program joined afterwards
+  neither orphans a submitted evaluation nor re-blocks close-out. The crew
+  stays live: a member taken off it is not asked for, and one added later is
+  worked out by the rules of the day and joins the stored set. Before the
+  shift ends, and on outside shifts, it is worked out live as before.
+  `tests/test_frozen_evaluation_requirements.py`.
 - **No-show and pending crew are asked for an evaluation.** The rule mirrors
   the trainee-report gate (only declined and cancelled seats are left out),
   so the two agree; excusing no-shows would mean changing both.
