@@ -7,7 +7,11 @@ from io import BytesIO
 import pytest
 from pypdf import PdfReader
 
-from app.services.evaluation_document_service import figure_detail, format_figure
+from app.services.evaluation_document_service import (
+    excluded_line,
+    figure_detail,
+    format_figure,
+)
 from app.utils.evaluation_pdf import render_evaluation_pdf
 
 pytestmark = [pytest.mark.unit]
@@ -181,6 +185,28 @@ def test_figures_read_as_the_screens_show_them(entry, unit, expected):
 )
 def test_figure_details_state_the_counts_behind_the_value(key, entry, expected):
     assert figure_detail(key, entry) == expected
+
+
+@pytest.mark.parametrize(
+    ("excluded", "expected"),
+    [
+        (
+            {"start": "2026-08-10", "end": "2026-12-31", "reason": "leave"},
+            "Leave of absence, Aug 10, 2026 – Dec 31, 2026",
+        ),
+        (
+            {"start": "2026-04-01", "end": "2026-06-30", "reason": "separation"},
+            "Not a member, Apr 1, 2026 – Jun 30, 2026",
+        ),
+        # A value that is not a date is printed as stored, not dropped.
+        (
+            {"start": "soon", "end": None, "reason": "leave"},
+            "Leave of absence, soon – —",
+        ),
+    ],
+)
+def test_left_out_ranges_print_dates_like_the_rest_of_the_page(excluded, expected):
+    assert excluded_line(excluded) == expected
 
 
 def test_detail_values_print_as_written_not_as_escape_codes():
