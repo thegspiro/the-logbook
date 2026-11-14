@@ -343,7 +343,7 @@ const SupplyExpiringPage: React.FC = () => {
                 type="button"
                 onClick={() => setDaysAhead(w)}
                 aria-pressed={daysAhead === w}
-                className={`touch:min-h-11 rounded-md px-2.5 py-1 text-sm font-medium transition-colors ${
+                className={`touch:min-h-11 touch:min-w-11 rounded-md px-2.5 py-1 text-sm font-medium transition-colors ${
                   daysAhead === w ? 'bg-red-800 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >
