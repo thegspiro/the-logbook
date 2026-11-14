@@ -78,7 +78,7 @@ import html
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from datetime import timezone as dt_timezone
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -1707,6 +1707,67 @@ class AttendanceWaiverService:
         mine = {o for o in officers if uid in (_officer_route(pool, o) or set())}
         return mine, officers
 
+    async def _decidable(self, org_id: str, pool: _DeciderPool, actor: User):
+        """The SQL condition matching the requests ``actor`` may decide, and
+        whether it can match anyone's at all.
+
+        The one definition the queue (``list_for_decider``) and the
+        navigation's count (``attention``) both filter by, so a member is never
+        offered a link to a queue that would list nothing they may decide, or
+        denied one to a queue that would (CLAUDE.md pitfall #29).
+        """
+        requesters = await self._decidable_requesters(org_id, pool, actor)
+        their_own, officers = self._decidable_officers(pool, actor)
+        if requesters is None:
+            decidable = AttendanceWaiverRequest.user_id != str(actor.id)
+            if officers:
+                decidable = and_(
+                    decidable, AttendanceWaiverRequest.user_id.not_in(list(officers))
+                )
+        elif requesters - officers:
+            decidable = AttendanceWaiverRequest.user_id.in_(list(requesters - officers))
+        else:
+            decidable = false()
+        if their_own:
+            decidable = or_(
+                decidable, AttendanceWaiverRequest.user_id.in_(list(their_own))
+            )
+        anyone = requesters is None or bool(requesters - officers) or bool(their_own)
+        return decidable, anyone
+
+    async def attention(self, organization_id: str, actor: User) -> Dict[str, Any]:
+        """Whether ``actor`` decides requests in this workflow, and how many
+        wait on them now: for the navigation's link to the queue.
+
+        ``decides`` is true while the policy is on and the routing reaches the
+        actor for anyone's request, whether by a chosen position, an office,
+        the fallback or as the named alternate, and also whenever a request is
+        waiting on them (a policy turned off leaves its pending requests to
+        decide). ``pending`` counts pending requests the actor may decide now:
+        one waiting on the member to confirm a moved session cannot be
+        decided, so it is left out.
+        """
+        org_id = str(organization_id)
+        policy = await self.get_policy(org_id)
+        pool = await self._pool(org_id, policy)
+        decidable, anyone = await self._decidable(org_id, pool, actor)
+        pending = (
+            await self.db.execute(
+                select(func.count(AttendanceWaiverRequest.id)).where(
+                    AttendanceWaiverRequest.organization_id == org_id,
+                    AttendanceWaiverRequest.workflow == self.workflow,
+                    AttendanceWaiverRequest.status == AttendanceWaiverStatus.PENDING,
+                    AttendanceWaiverRequest.reconfirm_requested_at.is_(None),
+                    decidable,
+                )
+            )
+        ).scalar_one()
+        pending = int(pending or 0)
+        return {
+            "decides": (policy.enabled and anyone) or pending > 0,
+            "pending": pending,
+        }
+
     # ------------------------------------------------------------------
     # Reads
     # ------------------------------------------------------------------
@@ -1750,22 +1811,7 @@ class AttendanceWaiverService:
         org_id = str(organization_id)
         policy = await self.get_policy(org_id)
         pool = await self._pool(org_id, policy)
-        requesters = await self._decidable_requesters(org_id, pool, actor)
-        their_own, officers = self._decidable_officers(pool, actor)
-        if requesters is None:
-            decidable = AttendanceWaiverRequest.user_id != str(actor.id)
-            if officers:
-                decidable = and_(
-                    decidable, AttendanceWaiverRequest.user_id.not_in(list(officers))
-                )
-        elif requesters - officers:
-            decidable = AttendanceWaiverRequest.user_id.in_(list(requesters - officers))
-        else:
-            decidable = false()
-        if their_own:
-            decidable = or_(
-                decidable, AttendanceWaiverRequest.user_id.in_(list(their_own))
-            )
+        decidable, _ = await self._decidable(org_id, pool, actor)
         conditions = [
             AttendanceWaiverRequest.organization_id == org_id,
             AttendanceWaiverRequest.workflow == self.workflow,
