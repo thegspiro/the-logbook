@@ -264,6 +264,11 @@ class TestWhoIsEvaluated:
         driver_enrollment = await _enroll(
             db_session, scene.org_id, scene.trainee, driver
         )
+        # Joined before the shift, as the scene's own enrollment is: one made
+        # "now" falls after the shift's date once the department's day has
+        # rolled over, and the cutoff rightly drops it.
+        driver_enrollment.enrolled_at = scene.enrollment.enrolled_at
+        await db_session.flush()
 
         reqs = await _requirements(db_session, scene)
 
@@ -289,6 +294,11 @@ class TestWhoIsEvaluated:
         driver_enrollment = await _enroll(
             db_session, scene.org_id, scene.trainee, driver
         )
+        # Joined before the shift, as the scene's own enrollment is: one made
+        # "now" falls after the shift's date once the department's day has
+        # rolled over, and the cutoff rightly drops it.
+        driver_enrollment.enrolled_at = scene.enrollment.enrolled_at
+        await db_session.flush()
 
         reqs = await _requirements(db_session, scene)
 
