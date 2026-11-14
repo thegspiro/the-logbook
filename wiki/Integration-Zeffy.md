@@ -161,5 +161,6 @@ More in
 ## See Also
 
 - [Grants & Fundraising Module](Module-Grants-Fundraising)
+- [PayPal Integration](Integration-PayPal), the store counterpart
 - [Training: Integrations → Zeffy](https://github.com/thegspiro/the-logbook/blob/main/docs/training/16-integrations.md#zeffy--fundraising-payments)
 - [Training: Grants & Fundraising → Zeffy](https://github.com/thegspiro/the-logbook/blob/main/docs/training/12-grants-fundraising.md#zeffy--online-donations-tickets-and-memberships)
