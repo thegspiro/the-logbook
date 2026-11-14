@@ -63,18 +63,18 @@ type TabId = (typeof TABS)[number]['id'];
 // reader has to tell the source apart; without it a rank badge beside the rank
 // itself announced as "Engineer, Engineer" on a page whose job is saying why.
 const SOURCE_STYLES: Record<string, { icon: React.ElementType; className: string; reason: string }> = {
-  rank: { icon: Shield, className: 'bg-violet-500/15 text-violet-700 dark:text-violet-400', reason: 'By rank' },
+  rank: { icon: Shield, className: 'bg-violet-500/15 text-violet-900 dark:text-violet-300', reason: 'By rank' },
   qualification: {
     icon: BadgeCheck,
-    className: 'bg-teal-500/15 text-teal-800 dark:text-teal-400',
+    className: 'bg-teal-500/15 text-teal-900 dark:text-teal-300',
     reason: 'By qualification',
   },
   training: {
     icon: GraduationCap,
-    className: 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-400',
+    className: 'bg-emerald-500/15 text-emerald-900 dark:text-emerald-300',
     reason: 'By completed training',
   },
-  open: { icon: Unlock, className: 'bg-sky-500/15 text-sky-700 dark:text-sky-400', reason: 'Open to everyone' },
+  open: { icon: Unlock, className: 'bg-sky-500/15 text-sky-900 dark:text-sky-300', reason: 'Open to everyone' },
 };
 
 const PositionRosterPage: React.FC = () => {
@@ -140,7 +140,7 @@ const PositionRosterPage: React.FC = () => {
         const daysLeft = source.expires_on ? calendarDaysFromToday(source.expires_on, tz) : null;
         const expiringSoon = daysLeft !== null && daysLeft <= EXPIRING_SOON_DAYS;
         const className = expiringSoon
-          ? 'bg-amber-500/15 text-amber-800 dark:text-amber-400'
+          ? 'bg-amber-500/15 text-amber-900 dark:text-amber-300'
           : (style?.className ?? '');
 
         return (
@@ -152,9 +152,7 @@ const PositionRosterPage: React.FC = () => {
             <Icon className="h-3 w-3" aria-hidden="true" />
             <span className="sr-only">{style?.reason ?? 'By rank'}: </span>
             {source.label}
-            {source.expires_on && (
-              <span className="font-normal opacity-80">· exp {formatCalendarDate(source.expires_on)}</span>
-            )}
+            {source.expires_on && <span className="font-normal">· exp {formatCalendarDate(source.expires_on)}</span>}
           </span>
         );
       })}
@@ -175,7 +173,7 @@ const PositionRosterPage: React.FC = () => {
             onClick={() => setActiveTab(tab.id)}
             className={`mobile-touch-target px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ${
               activeTab === tab.id
-                ? 'border-b-2 border-violet-600 text-violet-700 dark:text-violet-400'
+                ? 'border-b-2 border-violet-600 text-violet-900 dark:text-violet-300'
                 : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
@@ -262,7 +260,7 @@ const PositionRosterPage: React.FC = () => {
                   )}
                 </p>
                 {isDrivingPosition && uncertifiedCount > 0 && (
-                  <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-xs font-medium text-amber-800 dark:text-amber-400">
+                  <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-xs font-medium text-amber-900 dark:text-amber-300">
                     <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                     {uncertifiedCount} with no EVOC certification on file
                   </span>
@@ -276,7 +274,7 @@ const PositionRosterPage: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
                           to={`/members/${member.user_id}`}
-                          className="text-theme-text-primary hover:text-theme-accent-blue text-sm font-semibold"
+                          className="text-theme-text-primary hover:text-theme-accent-blue touch:min-h-11 touch:inline-flex touch:items-center text-sm font-semibold"
                         >
                           {member.user_name}
                         </Link>
@@ -295,13 +293,13 @@ const PositionRosterPage: React.FC = () => {
                     <div className="sm:w-72 sm:shrink-0">
                       {member.evoc_level_number !== null ? (
                         <p className="text-theme-text-secondary inline-flex items-center gap-1.5 text-xs font-medium">
-                          <Shield className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />
+                          <Shield className="h-3.5 w-3.5 text-emerald-900 dark:text-emerald-300" aria-hidden="true" />
                           EVOC {member.evoc_level_number}
                           {member.evoc_level_name ? ` · ${member.evoc_level_name}` : ''}
                         </p>
                       ) : (
                         isDrivingPosition && (
-                          <p className="inline-flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                          <p className="inline-flex items-center gap-1.5 text-xs text-amber-900 dark:text-amber-300">
                             <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
                             No EVOC certification on file
                           </p>
