@@ -6,6 +6,13 @@ vi.mock('../../hooks/useCourseLibrary', () => ({
   useCourseLibrary: () => ({ courses: [], loading: false, error: null }),
 }));
 
+const getVisibleEventTypesWithCategories = vi.fn();
+vi.mock('../../services/api', () => ({
+  eventService: {
+    getVisibleEventTypesWithCategories: (...args: unknown[]) => getVisibleEventTypesWithCategories(...args) as unknown,
+  },
+}));
+
 import { RequirementModal } from './RequirementModal';
 import type { TrainingCategory, TrainingRequirement } from '../../types/training';
 
@@ -31,6 +38,8 @@ describe('RequirementModal', () => {
 
   beforeEach(() => {
     onSave.mockReset();
+    getVisibleEventTypesWithCategories.mockReset();
+    getVisibleEventTypesWithCategories.mockResolvedValue({ membership_types: [] });
   });
 
   it('saves once when Create is pressed again while the first save is in flight', async () => {
@@ -130,6 +139,77 @@ describe('RequirementModal', () => {
     it('is not offered while the requirement applies to all members', () => {
       render(<RequirementModal requirement={existing()} categories={[]} onClose={vi.fn()} onSave={onSave} />);
       expect(screen.queryByRole('button', { name: 'Operational members' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('member categories', () => {
+    const scoped = (types: string[]) => existing({ applies_to_all: false, required_membership_types: types });
+    const departmentTiers = {
+      membership_types: [
+        { value: 'probationary', label: 'Probationary' },
+        { value: 'active', label: 'Active Member' },
+        { value: 'senior', label: 'Senior Member' },
+        { value: 'life', label: 'Life Member' },
+      ],
+    };
+
+    const saveAsEveryone = async (user: ReturnType<typeof userEvent.setup>) => {
+      await user.click(screen.getByRole('button', { name: 'Update Requirement' }));
+      await user.click(screen.getByRole('button', { name: 'Save for everyone' }));
+    };
+
+    beforeEach(() => {
+      onSave.mockResolvedValue(undefined);
+      getVisibleEventTypesWithCategories.mockResolvedValue(departmentTiers);
+    });
+
+    it("offers the department's own tiers, so senior members can be kept in while life members are left out", async () => {
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={scoped(['active', 'probationary'])}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      await user.click(await screen.findByRole('checkbox', { name: 'Senior Member' }));
+      expect(screen.getByRole('checkbox', { name: 'Life' })).not.toBeChecked();
+
+      await saveAsEveryone(user);
+      const [payload] = onSave.mock.calls[0] as [{ required_membership_types: string[] }];
+      expect([...payload.required_membership_types].sort()).toEqual(['active', 'probationary', 'senior']);
+    });
+
+    it('lists a built-in type once, under its built-in name, when a tier shares its id', async () => {
+      render(<RequirementModal requirement={scoped(['active'])} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await screen.findByRole('checkbox', { name: 'Senior Member' });
+      expect(screen.getAllByRole('checkbox', { name: 'Active' })).toHaveLength(1);
+      expect(screen.queryByRole('checkbox', { name: 'Active Member' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: 'Life Member' })).not.toBeInTheDocument();
+    });
+
+    it('still shows a saved type when the tier list cannot be loaded, so it can be unticked', async () => {
+      getVisibleEventTypesWithCategories.mockRejectedValue(new Error('offline'));
+      const user = userEvent.setup();
+      render(
+        <RequirementModal
+          requirement={scoped(['active', 'senior'])}
+          categories={[]}
+          onClose={vi.fn()}
+          onSave={onSave}
+        />
+      );
+
+      const senior = screen.getByRole('checkbox', { name: 'senior' });
+      expect(senior).toBeChecked();
+      await user.click(senior);
+
+      await saveAsEveryone(user);
+      const [payload] = onSave.mock.calls[0] as [{ required_membership_types: string[] }];
+      expect(payload.required_membership_types).toEqual(['active']);
     });
   });
 

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CallTypeRequirementPicker } from './CallTypeRequirementPicker';
 import { useDialog } from '../../hooks/useDialog';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
@@ -9,6 +9,7 @@ import { ChecklistItemsEditor } from './ChecklistItemsEditor';
 import { ChangeScopeDialog } from './ChangeScopeDialog';
 import { useCourseLibrary } from '../../hooks/useCourseLibrary';
 import { useTimezone } from '../../hooks/useTimezone';
+import { eventService } from '../../services/api';
 import { blankToNull } from '../../utils/formValues';
 import { formatCalendarDate, getTodayLocalDate } from '../../utils/dateFormatting';
 import { canSplitForNewMembers, existingMemberPolicyOf } from '../../utils/requirementGrandfathering';
@@ -40,6 +41,31 @@ const MEMBERSHIP_TYPES = [
  * is left out because prospects are not member accounts and are never graded.
  */
 const OPERATIONAL_MEMBERSHIP_TYPES: readonly string[] = ['active', 'probationary', 'life', 'retired'];
+
+interface MembershipTypeOption {
+  value: string;
+  label: string;
+}
+
+/**
+ * The built-in types followed by the department's own tiers that are not among
+ * them. A requirement grades on the member's stored `membership_type`, and a
+ * custom tier such as `senior` is stored under its own id — so a list without
+ * it scoped those members out of the requirement with no way to tick them back
+ * in. Built-in labels win on a shared id so the familiar names stay put.
+ */
+const mergeMembershipTypeOptions = (
+  builtIn: readonly MembershipTypeOption[],
+  tiers: readonly MembershipTypeOption[]
+): MembershipTypeOption[] => {
+  const merged = [...builtIn];
+  for (const tier of tiers) {
+    if (tier.value && !merged.some((option) => option.value === tier.value)) {
+      merged.push({ value: tier.value, label: tier.label || tier.value });
+    }
+  }
+  return merged;
+};
 
 /**
  * Full create/edit form for a training requirement.
@@ -130,6 +156,33 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
   // the backend ignores — that pairing is what made one-time requirements read
   // as annual.
   const isOneTime = formData.frequency === 'one_time';
+
+  const [membershipTypeOptions, setMembershipTypeOptions] = useState<MembershipTypeOption[]>([...MEMBERSHIP_TYPES]);
+  // The department's tiers come from the events endpoint because it is open to
+  // every signed-in member; the tier config endpoint needs members.manage, which
+  // a training officer editing requirements usually does not hold.
+  useEffect(() => {
+    let cancelled = false;
+    eventService
+      .getVisibleEventTypesWithCategories()
+      .then((data) => {
+        if (!cancelled && Array.isArray(data?.membership_types)) {
+          setMembershipTypeOptions(mergeMembershipTypeOptions(MEMBERSHIP_TYPES, data.membership_types));
+        }
+      })
+      .catch(() => {
+        // The built-in list stays, and a saved type it lacks is still rendered below.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  // A type the requirement already carries stays visible even when neither list
+  // names it, so an officer can still untick it.
+  const renderedMembershipTypes = mergeMembershipTypeOptions(
+    membershipTypeOptions,
+    formData.required_membership_types.map((value) => ({ value, label: value }))
+  );
 
   const allOperationalSelected = OPERATIONAL_MEMBERSHIP_TYPES.every((t) =>
     formData.required_membership_types.includes(t)
@@ -1088,7 +1141,7 @@ export const RequirementModal: React.FC<RequirementModalProps> = ({
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-2 md:grid-cols-3" role="group" aria-label="Member categories">
-                    {MEMBERSHIP_TYPES.map((memberType) => (
+                    {renderedMembershipTypes.map((memberType) => (
                       <label
                         key={memberType.value}
                         className={`flex cursor-pointer items-center space-x-3 rounded-lg border px-3 py-2 transition-colors ${

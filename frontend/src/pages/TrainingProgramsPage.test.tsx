@@ -21,6 +21,9 @@ const mockImportProgram = vi.fn();
 const mockUpdateProgram = vi.fn();
 
 vi.mock('../services/api', () => ({
+  eventService: {
+    getVisibleEventTypesWithCategories: vi.fn().mockResolvedValue({ membership_types: [] }),
+  },
   trainingProgramService: {
     getPrograms: (...args: unknown[]) => mockGetPrograms(...args) as unknown,
     getRequirementsEnhanced: (...args: unknown[]) => mockGetRequirementsEnhanced(...args) as unknown,
