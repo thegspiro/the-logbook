@@ -5,7 +5,7 @@ API endpoints for managing compliance configuration, profiles,
 and compliance report generation/retrieval.
 """
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,6 +55,48 @@ async def get_compliance_config(
         return ComplianceConfigResponse.model_validate(config)
 
 
+# Personal data (e-mail addresses): the entry says the field changed,
+# not what it holds.
+_REDACTED_FIELDS = {"report_email_recipients"}
+
+
+def _settings_snapshot(config, fields) -> dict[str, Any]:
+    """The stored value of each field about to be written, before the write."""
+    return {key: getattr(config, key, None) if config else None for key in fields}
+
+
+async def _log_config_changes(
+    db: AsyncSession, current_user, before: dict[str, Any], config, fields
+) -> None:
+    """Record which compliance settings changed, from what to what.
+
+    These settings move every member's standing at once (the thresholds, and
+    since 2026-11-02 how a month of leave reduces a target), so a department
+    needs to see who changed one and when, the way a deleted profile is
+    already recorded. Nothing is written when a save changed nothing.
+    """
+    changes: dict[str, Any] = {}
+    for key in fields:
+        old, new = before.get(key), getattr(config, key, None)
+        if old == new:
+            continue
+        if key in _REDACTED_FIELDS:
+            changes[key] = {"changed": True}
+        else:
+            changes[key] = {"from": old, "to": new}
+    if not changes:
+        return
+    await log_audit_event(
+        db=db,
+        event_type="compliance_config_updated",
+        event_category="training",
+        severity="info",
+        event_data={"changes": changes, "action": "compliance_config_updated"},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 @router.put("/config")
 async def update_compliance_config(
     data: ComplianceConfigUpdate,
@@ -68,11 +110,15 @@ async def update_compliance_config(
         # alone," while an explicit null means "clear it" (nullable columns
         # only — apply_updates rejects a null against a NOT NULL column).
         update_data = data.model_dump(exclude_unset=True)
+        before = _settings_snapshot(
+            await service.get_config(current_user.organization_id), update_data
+        )
         config = await service.create_or_update_config(
             organization_id=current_user.organization_id,
             data=update_data,
             updated_by=current_user.id,
         )
+        await _log_config_changes(db, current_user, before, config, update_data)
         await db.commit()
         return ComplianceConfigResponse.model_validate(config)
 
@@ -90,10 +136,14 @@ async def initialize_compliance_config(
         if existing:
             raise ValueError("Compliance configuration already exists")
 
+        initial = data.model_dump()
         config = await service.create_or_update_config(
             organization_id=current_user.organization_id,
-            data=data.model_dump(),
+            data=initial,
             updated_by=current_user.id,
+        )
+        await _log_config_changes(
+            db, current_user, dict.fromkeys(initial), config, initial
         )
         await db.commit()
         return ComplianceConfigResponse.model_validate(config)

@@ -41,6 +41,7 @@ import { MyAttendanceWaiverRequests } from '../components/training/MyAttendanceW
 import { TrainingPageHeader } from '../components/training/TrainingPageHeader';
 import { MyTrainingHistory } from '../components/training/MyTrainingHistory';
 import { RequirementDetailCard } from '../components/training/RequirementDetailCard';
+import { LeaveOfAbsenceSummary } from '../components/training/LeaveOfAbsenceSummary';
 import { UpcomingDueList } from '../components/training/UpcomingDueList';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { formatHours } from '../utils/hoursFormatting';
@@ -864,6 +865,7 @@ const MyTrainingPage: React.FC = () => {
               Progress while this list ignored it. */}
           {v?.show_requirement_details && data.requirements_detail && data.requirements_detail.length > 0 && (
             <Section title="Training Requirements" icon={ClipboardList}>
+              <LeaveOfAbsenceSummary leaves={data.leaves_of_absence ?? []} rule={data.leave_month_rule} />
               <div className="space-y-3">
                 {/* Outstanding (not met) first, then met */}
                 {[...data.requirements_detail]

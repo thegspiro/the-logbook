@@ -2477,6 +2477,8 @@ export interface MemberLeavePeriod {
   leave_type: string;
   start_date: string;
   end_date: string | null;
+  /** False for a leave an officer marked exempt: training requirements stay in force. */
+  excuses_training?: boolean;
 }
 
 /** `/training/module-config/members/{id}/requirements`: one member, officer's view. */
@@ -2543,6 +2545,9 @@ export interface MyTrainingHistoryPage {
 export interface MyTrainingSummary {
   visibility: MemberVisibility;
   requirements_detail?: RequirementDetail[];
+  /** Sent with `requirements_detail`: the leaves behind a reduced target. */
+  leaves_of_absence?: MemberLeavePeriod[];
+  leave_month_rule?: LeaveMonthRule;
   training_records?: Array<{
     id: string;
     course_name: string;
