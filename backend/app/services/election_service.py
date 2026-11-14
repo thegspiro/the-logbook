@@ -77,7 +77,6 @@ from app.services.email_template_service import (
     EmailTemplateService,
 )
 from app.services.email_theme import (
-    ACCENT_INDIGO,
     TABLE_STYLE,
     TD_STYLE,
     TH_STYLE,
@@ -126,6 +125,10 @@ PROXY_ANONYMITY_WARNING = (
     "This is an anonymous election, but a proxy ballot is not anonymous: "
     "your proxy holder will see how you vote, and the ballot they cast for "
     "you is stored linked to your name."
+)
+PRE_MEETING_PACKAGE_SWITCHED_OFF = (
+    "The Pre-Meeting Package email is switched off in Communications → Email "
+    "Templates. Switch it on there to send the package."
 )
 PROXY_ANONYMITY_ACK_REQUIRED = (
     "This is an anonymous election: confirm that the delegating member has "
@@ -744,6 +747,18 @@ def _require_ballot(
     if election is None or voting_token is None:
         raise RuntimeError("Token ballot lookup returned no ballot and no error")
     return election, voting_token
+
+
+def _greeting_name(user) -> str:
+    """The name an election notice greets a member by: the one they go by."""
+    for name in (
+        getattr(user, "preferred_name", None),
+        getattr(user, "first_name", None),
+        getattr(user, "full_name", None),
+    ):
+        if name and str(name).strip():
+            return str(name).strip()
+    return "there"
 
 
 class ElectionService:
@@ -4741,14 +4756,13 @@ class ElectionService:
 
         Returns the recipient and unreached counts (also audited as
         ``nominations_announced``), or None when nominations are no longer
-        open, so nothing was sent. A failure of the send itself raises, for
+        open, so nothing was sent. When the department switched the
+        Nominations Open template off, the counts are zero and carry
+        ``switched_off``, so the job reports that rather than a failure the
+        managers would be alarmed about. A failure of the send itself raises, for
         the job to record; it never undoes the phase transition, which
         committed before the job was queued.
         """
-        import html as html_mod
-
-        from app.services.email_service import EmailService, wrap_email_body
-
         election_result = await self.db.execute(
             select(Election)
             .where(Election.id == str(election_id))
@@ -4783,60 +4797,71 @@ class ElectionService:
             if m.email
         ]
         sent = 0
+        switched_off = False
         if member_emails:
-            deadline_line = ""
+            nominations_close = "When the election managers close them"
             if election.nomination_deadline:
-                deadline_local = await self._org_local_time(
+                nominations_close = await self._org_local_time(
                     organization, election.nomination_deadline
                 )
-                deadline_line = (
-                    f"<p>Nominations close automatically at "
-                    f"<strong>{deadline_local}</strong>.</p>"
-                )
-
-            title = html_mod.escape(election.title)
-            positions = ", ".join(
-                html_mod.escape(p) for p in (election.positions or [])
-            )
-            body_html = (
-                f"<p>Nominations are now open for <strong>{title}</strong>.</p>"
-                f"<p>Positions: {positions}</p>"
-                f"{deadline_line}"
-                "<p>Sign in to the intranet to nominate a member — or "
-                "yourself — from the election's Nominations tab.</p>"
-            )
-            # The election accent and a named tab, as the ballot mail has; an
-            # empty chip left a bare red band across the top (W50-80).
-            html_body = wrap_email_body(
-                organization,
-                title=f"Nominations Open: {title}",
-                body_html=body_html,
-                header_color=ACCENT_INDIGO,
-                chip="Nominations open",
+            nominations_url = (
+                f"{settings.FRONTEND_URL.rstrip('/')}"
+                f"{nominations_tab_path(election.id)}"
             )
             email_service = EmailService(organization)
-            outcomes: List[bool] = []
-            await email_service.send_email(
-                to_emails=member_emails,
-                subject=f"Nominations Open: {election.title}",
-                html_body=html_body,
-                db=self.db,
-                template_type="custom",
-                sent_by=acting_user_id,
-                results_out=outcomes,
+            # Plain values: the renderer escapes each one for the HTML body.
+            rendered = await email_service.render_notice(
+                EmailTemplateType.ELECTION_NOMINATIONS_OPEN,
+                {
+                    "election_title": election.title,
+                    "positions": ", ".join(election.positions or []),
+                    "nominations_close": nominations_close,
+                    "nominations_url": nominations_url,
+                },
+                self.db,
             )
-            sent = sum(1 for ok in outcomes if ok)
-        log = logger.info if sent == len(member_emails) else logger.warning
-        log(
-            f"Nominations-open announcement | election={election_id} "
-            f"sent={sent} unsent={len(member_emails) - sent}"
-        )
-        # This runs after nominations_opened was audited, so the delivery
-        # count is recorded as its own event rather than on that one.
-        announcement = {
-            "recipient_count": len(member_emails),
-            "unreached_count": len(member_emails) - sent,
-        }
+            if rendered is None:
+                switched_off = True
+            else:
+                subject, html_body, text_body = rendered
+                outcomes: List[bool] = []
+                await email_service.send_email(
+                    to_emails=member_emails,
+                    subject=subject,
+                    html_body=html_body,
+                    text_body=text_body,
+                    db=self.db,
+                    template_type=EmailTemplateType.ELECTION_NOMINATIONS_OPEN.value,
+                    sent_by=acting_user_id,
+                    results_out=outcomes,
+                )
+                sent = sum(1 for ok in outcomes if ok)
+        if switched_off:
+            # Switched off on purpose: nobody was meant to be emailed, so no
+            # member counts as unreached and the managers are not alarmed.
+            logger.info(
+                "Nominations-open announcement switched off | election={}",
+                election_id,
+            )
+            announcement = {
+                "recipient_count": 0,
+                "unreached_count": 0,
+                "switched_off": 1,
+            }
+        else:
+            log = logger.info if sent == len(member_emails) else logger.warning
+            log(
+                "Nominations-open announcement | election={} sent={} unsent={}",
+                election_id,
+                sent,
+                len(member_emails) - sent,
+            )
+            # This runs after nominations_opened was audited, so the delivery
+            # count is recorded as its own event rather than on that one.
+            announcement = {
+                "recipient_count": len(member_emails),
+                "unreached_count": len(member_emails) - sent,
+            }
         await self._audit(
             "nominations_announced",
             {"election_id": str(election_id), **announcement},
@@ -4855,10 +4880,6 @@ class ElectionService:
         Best-effort: a mail failure must never undo the authorization.
         """
         try:
-            import html as html_mod
-
-            from app.services.email_service import EmailService, wrap_email_body
-
             if not delegating_user.email:
                 return
             organization = (
@@ -4868,31 +4889,35 @@ class ElectionService:
             ).scalar_one_or_none()
             if not organization:
                 return
-            title = html_mod.escape(election.title)
-            holder = html_mod.escape(proxy_user.full_name or "your proxy holder")
-            warning = (
-                f"<p><strong>{html_mod.escape(PROXY_ANONYMITY_WARNING)}</strong></p>"
-                if election.anonymous_voting
-                else ""
+            warning = PROXY_ANONYMITY_WARNING if election.anonymous_voting else ""
+            email_service = EmailService(organization)
+            rendered = await email_service.render_notice(
+                EmailTemplateType.ELECTION_PROXY_AUTHORIZED,
+                {
+                    "recipient_name": _greeting_name(delegating_user),
+                    "election_title": election.title,
+                    "proxy_holder_name": proxy_user.full_name or "your proxy holder",
+                    # Built here, escaped, because a template cannot leave a
+                    # paragraph out when there is nothing to warn about.
+                    "anonymity_warning_html": (
+                        f"<p><strong>{html.escape(warning)}</strong></p>"
+                        if warning
+                        else ""
+                    ),
+                    "anonymity_warning": warning,
+                },
+                self.db,
             )
-            body_html = (
-                f"<p>{holder} has been authorized to vote on your behalf in "
-                f"<strong>{title}</strong>.</p>"
-                f"{warning}"
-                "<p>If you did not ask for this, contact your secretary "
-                "before voting opens.</p>"
-            )
-            html_body = wrap_email_body(
-                organization,
-                title=f"Proxy authorized: {title}",
-                body_html=body_html,
-            )
-            await EmailService(organization).send_email(
+            if rendered is None:
+                return
+            subject, html_body, text_body = rendered
+            await email_service.send_email(
                 to_emails=[delegating_user.email],
-                subject=f"Proxy authorized — {election.title}",
+                subject=subject,
                 html_body=html_body,
+                text_body=text_body,
                 db=self.db,
-                template_type="custom",
+                template_type=EmailTemplateType.ELECTION_PROXY_AUTHORIZED.value,
             )
         except Exception as e:
             logger.warning(
@@ -4916,10 +4941,6 @@ class ElectionService:
             election, candidate, organization_id, nominations_path
         )
         try:
-            import html as html_mod
-
-            from app.services.email_service import EmailService, wrap_email_body
-
             org_result = await self.db.execute(
                 select(Organization).where(Organization.id == str(organization_id))
             )
@@ -4937,42 +4958,35 @@ class ElectionService:
             ):
                 return
 
-            deadline_line = ""
+            respond_by = "Before nominations close"
             if election.nomination_deadline:
-                deadline_local = await self._org_local_time(
+                respond_by = await self._org_local_time(
                     organization, election.nomination_deadline
-                )
-                deadline_line = (
-                    f"<p>Please respond before nominations close at "
-                    f"<strong>{deadline_local}</strong>.</p>"
                 )
 
             nominations_url = f"{settings.FRONTEND_URL.rstrip('/')}{nominations_path}"
-            title = html_mod.escape(election.title)
-            position = html_mod.escape(candidate.position or "")
-            body_html = (
-                f"<p>You have been nominated for <strong>{position}</strong> "
-                f"in <strong>{title}</strong>.</p>"
-                "<p>Your name will only appear on the ballot if you accept. "
-                "Sign in to the intranet and open the election's Nominations "
-                "tab to accept or decline.</p>"
-                f'<p><a href="{html_mod.escape(nominations_url)}">'
-                "Review your nomination</a></p>"
-                f"{deadline_line}"
-            )
-            html_body = wrap_email_body(
-                organization,
-                title=f"You've been nominated: {position}",
-                body_html=body_html,
-            )
             email_service = EmailService(organization)
+            rendered = await email_service.render_notice(
+                EmailTemplateType.ELECTION_NOMINATED,
+                {
+                    "recipient_name": _greeting_name(nominee),
+                    "election_title": election.title,
+                    "position": candidate.position or "",
+                    "respond_by": respond_by,
+                    "nominations_url": nominations_url,
+                },
+                self.db,
+            )
+            if rendered is None:
+                return
+            subject, html_body, text_body = rendered
             await email_service.send_email(
                 to_emails=[nominee.email],
-                subject=f"You've been nominated for {candidate.position} — "
-                f"{election.title}",
+                subject=subject,
                 html_body=html_body,
+                text_body=text_body,
                 db=self.db,
-                template_type="custom",
+                template_type=EmailTemplateType.ELECTION_NOMINATED.value,
             )
         except Exception as e:
             logger.warning(
@@ -5319,10 +5333,6 @@ class ElectionService:
         Best-effort: a mail failure must not undo the acceptance.
         """
         try:
-            import html as html_mod
-
-            from app.services.email_service import EmailService, wrap_email_body
-
             organization = (
                 await self.db.execute(
                     select(Organization).where(
@@ -5346,38 +5356,42 @@ class ElectionService:
                     .where(User.organization_id == str(election.organization_id))
                 )
             ).scalar_one_or_none()
-            manager_name = html_mod.escape(
-                (manager.full_name if manager else None) or "An election manager"
-            )
-            title = html_mod.escape(election.title)
-            position = html_mod.escape(candidate.position or "")
-            withdraw = (
-                "<p>If you do not wish to stand, sign in and decline from the "
-                "election's Nominations tab before nominations close.</p>"
+            decline_instructions = (
+                "If you do not wish to stand, sign in and decline from the "
+                "election's Nominations tab before nominations close."
                 if election.status == ElectionStatus.NOMINATIONS
-                else "<p>If you do not wish to stand, contact your secretary.</p>"
+                else "If you do not wish to stand, contact your secretary."
             )
-            body_html = (
-                f"<p>{manager_name} accepted your nomination for "
-                f"<strong>{position}</strong> in <strong>{title}</strong> "
-                "on your behalf. Your name will appear on the ballot, "
-                "labelled as accepted by an election manager.</p>"
-                f"{withdraw}"
+            nominations_url = (
+                f"{settings.FRONTEND_URL.rstrip('/')}"
+                f"{nominations_tab_path(election.id)}"
             )
-            html_body = wrap_email_body(
-                organization,
-                title=f"Nomination accepted for you: {position}",
-                body_html=body_html,
+            email_service = EmailService(organization)
+            rendered = await email_service.render_notice(
+                EmailTemplateType.ELECTION_NOMINATION_ACCEPTED_FOR_YOU,
+                {
+                    "recipient_name": _greeting_name(nominee),
+                    "election_title": election.title,
+                    "position": candidate.position or "",
+                    "manager_name": (manager.full_name if manager else None)
+                    or "An election manager",
+                    "decline_instructions": decline_instructions,
+                    "nominations_url": nominations_url,
+                },
+                self.db,
             )
-            await EmailService(organization).send_email(
+            if rendered is None:
+                return
+            subject, html_body, text_body = rendered
+            await email_service.send_email(
                 to_emails=[nominee.email],
-                subject=(
-                    f"Your nomination for {candidate.position} was accepted "
-                    f"on your behalf — {election.title}"
-                ),
+                subject=subject,
                 html_body=html_body,
+                text_body=text_body,
                 db=self.db,
-                template_type="custom",
+                template_type=(
+                    EmailTemplateType.ELECTION_NOMINATION_ACCEPTED_FOR_YOU.value
+                ),
             )
         except Exception as e:
             logger.warning(
@@ -10169,6 +10183,12 @@ class ElectionService:
                 cleaned_emails.append(addr)
         if not cleaned_emails:
             return False, "No recipient email addresses provided", 0, []
+        # Checked before the PDF is built: a hand send must not go quiet when
+        # the template is off, and the secretary is told where to switch it on.
+        if await EmailTemplateService(self.db).is_switched_off(
+            str(organization_id), EmailTemplateType.PRE_MEETING_PACKAGE
+        ):
+            return False, PRE_MEETING_PACKAGE_SWITCHED_OFF, 0, []
 
         buf, error, filename = await self.build_pre_meeting_package_pdf(
             election_id, organization_id, include_full_roster
@@ -10212,39 +10232,28 @@ class ElectionService:
             message_html = f"<p style='white-space:pre-line'>{safe_message}</p><hr/>"
             message_text = f"{message.strip()}\n\n---\n\n"
 
-        variant_note = (
+        package_contents = (
             "the full voter-eligibility roster (including ineligibility " "reasons)"
             if include_full_roster
             else "the eligible-voter list"
         )
-        body_html = (
-            f"{message_html}"
-            f"<p>The pre-meeting package for "
-            f"<strong>{html.escape(election.title)}</strong> is attached "
-            f"as a PDF. It contains the meeting details, the ballot preview "
-            f"with candidates, and {variant_note}.</p>"
-            f"<p>Voting opens "
-            f"{start_local.strftime('%B %d, %Y at %I:%M %p')} and closes "
-            f"{end_local.strftime('%B %d, %Y at %I:%M %p')}.</p>"
-        )
-        body_text = (
-            f"{message_text}"
-            f"The pre-meeting package for {election.title} is attached as a "
-            f"PDF. It contains the meeting details, the ballot preview with "
-            f"candidates, and {variant_note}.\n\n"
-            f"Voting opens {start_local.strftime('%B %d, %Y at %I:%M %p')} "
-            f"and closes {end_local.strftime('%B %d, %Y at %I:%M %p')}."
-        )
-
-        from app.services.email_service import wrap_email_body
-
-        html_body = wrap_email_body(
-            organization,
-            title=f"Pre-Meeting Package: {html.escape(election.title)}",
-            body_html=body_html,
-        )
-
         email_service = EmailService(organization)
+        rendered = await email_service.render_notice(
+            EmailTemplateType.PRE_MEETING_PACKAGE,
+            {
+                "election_title": election.title,
+                "message_html": message_html,
+                "message_text": message_text,
+                "package_contents": package_contents,
+                "voting_opens": start_local.strftime("%B %d, %Y at %I:%M %p"),
+                "voting_closes": end_local.strftime("%B %d, %Y at %I:%M %p"),
+            },
+            self.db,
+        )
+        if rendered is None:
+            # Switched off between the check above and here.
+            return False, PRE_MEETING_PACKAGE_SWITCHED_OFF, 0, []
+        subject, html_body, body_text = rendered
         # Unique temp dir so the human-readable attachment filename (used as
         # the attachment name by send_email) can't collide across concurrent
         # sends of the same election
@@ -10257,12 +10266,16 @@ class ElectionService:
             outcomes: List[bool] = []
             await email_service.send_email(
                 to_emails=to_emails,
-                subject=f"Pre-Meeting Package: {election.title}",
+                subject=subject,
                 html_body=html_body,
                 text_body=body_text,
                 attachment_paths=[tmp_path],
                 db=self.db,
-                template_type="pre_meeting_package",
+                template_type=EmailTemplateType.PRE_MEETING_PACKAGE.value,
+                # The secretary chose every recipient in the send dialog. A
+                # template CC would otherwise ride on each per-address message,
+                # carrying the roster PDF to someone nobody picked.
+                apply_template_copies=False,
                 sent_by=str(sent_by),
                 results_out=outcomes,
             )

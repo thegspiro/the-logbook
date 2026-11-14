@@ -54,6 +54,14 @@ import {
   ClipboardPen,
   BellRing,
   MessageSquare,
+  Megaphone,
+  UserCheck,
+  UserCog,
+  Handshake,
+  FileStack,
+  ScrollText,
+  ListTodo,
+  ClipboardList,
 } from 'lucide-react';
 import { formatNumber } from '../../../utils/dateFormatting';
 import type { EmailTemplate } from '../types';
@@ -80,6 +88,56 @@ const TEMPLATE_TYPE_DISPLAY: Record<string, { icon: React.ElementType; label: st
   inactivity_warning: { icon: AlertTriangle, label: 'Inactivity Warning', color: 'text-yellow-500' },
   election_rollback: { icon: RotateCcw, label: 'Election Rollback', color: 'text-orange-700 dark:text-orange-600' },
   election_deleted: { icon: Trash2, label: 'Election Deleted', color: 'text-red-500' },
+  election_nominations_open: {
+    icon: Megaphone,
+    label: 'Nominations Open',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  election_nominated: {
+    icon: UserCheck,
+    label: "You've Been Nominated",
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  election_nomination_accepted_for_you: {
+    icon: UserCog,
+    label: 'Nomination Accepted for You',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  election_proxy_authorized: {
+    icon: Handshake,
+    label: 'Proxy Authorized',
+    color: 'text-amber-700 dark:text-amber-600',
+  },
+  pre_meeting_package: {
+    icon: FileStack,
+    label: 'Pre-Meeting Package',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  minutes_circulated: {
+    icon: ScrollText,
+    label: 'Minutes Ready for Review',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  minutes_action_items: {
+    icon: ListTodo,
+    label: 'Action Items Assigned',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  minutes_action_item_reminder: {
+    icon: BellRing,
+    label: 'Action Item Reminder (Minutes)',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  minutes_open_items_digest: {
+    icon: ClipboardList,
+    label: 'Open Action Items Digest',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
+  meeting_action_item_reminder: {
+    icon: BellRing,
+    label: 'Action Item Reminder (Meetings)',
+    color: 'text-indigo-700 dark:text-indigo-400',
+  },
   member_archived: { icon: Archive, label: 'Member Archived', color: 'text-theme-text-muted' },
   event_request_status: { icon: CalendarCheck, label: 'Event Request Status', color: 'text-cyan-500' },
   it_password_notification: { icon: Lock, label: 'IT Password Reset', color: 'text-blue-600' },
@@ -302,15 +360,29 @@ const TEMPLATE_CATEGORIES: { id: string; label: string; types: string[] }[] = [
   },
   {
     id: 'meetings',
-    label: 'Business Meetings',
-    types: ['meeting_waiver_requested', 'meeting_waiver_decided', 'meeting_waiver_withdrawn'],
+    label: 'Meetings & Minutes',
+    types: [
+      'minutes_circulated',
+      'minutes_action_items',
+      'minutes_action_item_reminder',
+      'minutes_open_items_digest',
+      'meeting_action_item_reminder',
+      'meeting_waiver_requested',
+      'meeting_waiver_decided',
+      'meeting_waiver_withdrawn',
+    ],
   },
   {
     id: 'elections',
     label: 'Elections & Voting',
     types: [
+      'election_nominations_open',
+      'election_nominated',
+      'election_nomination_accepted_for_you',
+      'election_proxy_authorized',
       'ballot_notification',
       'ballot_eligibility_summary',
+      'pre_meeting_package',
       'election_report',
       'election_rollback',
       'election_deleted',
