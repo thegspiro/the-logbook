@@ -150,7 +150,18 @@ const FormSection: React.FC<FormSectionProps> = ({
                   <div className="mt-2 flex items-center gap-2 rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-3 py-2">
                     <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-yellow-700 dark:text-yellow-400" />
                     <span className="text-xs text-yellow-700 dark:text-yellow-300">
-                      This form must be published before it can accept submissions. Go to Forms to edit and publish.
+                      This form must be published before it can accept submissions.{' '}
+                      {/* Forms has no per-form route to aim at, so this opens the
+                          list, as "View all forms" below does. Named for the form,
+                          since every draft carries one of these. */}
+                      <button
+                        type="button"
+                        onClick={onNavigateToForms}
+                        aria-label={`Go to Forms to edit and publish ${form.name}`}
+                        className="touch-target-phone font-semibold underline hover:no-underline"
+                      >
+                        Go to Forms to edit and publish
+                      </button>
                     </span>
                   </div>
                 </div>
