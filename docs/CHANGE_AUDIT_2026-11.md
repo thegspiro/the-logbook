@@ -5,6 +5,19 @@ section at the top of the current month's file, and a new month starts a
 new file. The plain-language handoff for each pass is in
 [`wiki/Recent-Changes-2026-11.md`](../wiki/Recent-Changes-2026-11.md).
 
+## Change audit: PayPal Settings, November 14, 2026
+
+A targeted pass for one change: a **Settings** button on a connected PayPal
+card, the PayPal counterpart of Zeffy's from November 13. `CHANGELOG.md` stays
+closed.
+
+| Change                                                                                                                                                                            | Guide | Disposition                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | --------------------------------------------------- |
+| **Settings** on a connected PayPal card: edit the environment, credentials, Webhook ID and automatic settlement without disconnecting; blank credential boxes keep the saved ones | 16    | Paragraph written; `16-26-paypal-settings` captured |
+| Switching PayPal between sandbox and live now needs that environment's Client ID and Client Secret in the same save, on Settings or a reconnect; refused with 422 otherwise       | 16    | Note written; `docs/STOREFRONT_PAYPAL.md` updated   |
+
+**Screenshots:** none queued.
+
 ## Change audit: Zeffy Settings and screenshots, November 13, 2026
 
 A targeted pass for the Zeffy follow-ups merged on 2026-11-13: the screenshots

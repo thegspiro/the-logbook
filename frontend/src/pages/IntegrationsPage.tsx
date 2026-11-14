@@ -2126,6 +2126,7 @@ const IntegrationsPage: React.FC = () => {
               </select>
               <p className="text-theme-text-muted mt-1 text-xs">
                 Sandbox and live credentials are not interchangeable &mdash; use the pair that matches this setting.
+                {editingSettings && ' Changing it needs the Client ID and Client Secret of that environment’s app.'}
               </p>
             </div>
             <div>
@@ -2137,7 +2138,7 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={paypalClientId}
                 onChange={(e) => setPaypalClientId(e.target.value)}
-                placeholder="From your PayPal REST app"
+                placeholder={editingSettings ? 'Leave blank to keep the current ID' : 'From your PayPal REST app'}
                 className={inputClass}
               />
             </div>
@@ -2150,14 +2151,19 @@ const IntegrationsPage: React.FC = () => {
                 type="password"
                 value={paypalClientSecret}
                 onChange={(e) => setPaypalClientSecret(e.target.value)}
-                placeholder="From your PayPal REST app"
+                placeholder={editingSettings ? 'Leave blank to keep the current secret' : 'From your PayPal REST app'}
                 className={inputClass}
               />
-              {/* As for Zeffy: this form opens only from Connect, and the page
-                  cannot see whether a secret is already stored. */}
+              {/* As for Zeffy: neither credential is ever sent back. Settings
+                  opens only on a connected card, and PayPal cannot connect
+                  without both, so there a pair is certainly stored. From
+                  Connect the page cannot tell a first connection from a
+                  reconnection. */}
               <p className="text-theme-text-muted mt-1 text-xs">
-                Create a REST app at developer.paypal.com under Apps &amp; Credentials. When connecting again after a
-                disconnect, leave it blank to keep the saved secret.
+                Create a REST app at developer.paypal.com under Apps &amp; Credentials.
+                {editingSettings
+                  ? ' Enter new ones only to replace them.'
+                  : ' When connecting again after a disconnect, leave it blank to keep the saved secret.'}
               </p>
             </div>
             <div>
@@ -2484,6 +2490,7 @@ const IntegrationsPage: React.FC = () => {
                       {(integration.integration_type === 'claude-mcp' ||
                         integration.integration_type === 'ical' ||
                         integration.integration_type === 'zeffy' ||
+                        integration.integration_type === 'paypal' ||
                         (isDirectory(integration.integration_type) && canChange(integration.integration_type))) && (
                         <button
                           onClick={() => {
@@ -3102,9 +3109,11 @@ const IntegrationsPage: React.FC = () => {
                                 ? 'Saved settings apply to the next member converted. Accounts already created are not changed.'
                                 : selectedIntegration.integration_type === 'ical'
                                   ? 'Saved settings apply the next time a subscribed calendar refreshes. The feed link does not change.'
-                                  : selectedIntegration.integration_type === 'zeffy'
-                                    ? 'A new key or signing secret is used from the next sync or webhook message. Linked campaigns and the webhook address do not change.'
-                                    : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
+                                  : selectedIntegration.integration_type === 'paypal'
+                                    ? 'Saved settings apply to the next payment PayPal reports. The webhook address does not change.'
+                                    : selectedIntegration.integration_type === 'zeffy'
+                                      ? 'A new key or signing secret is used from the next sync or webhook message. Linked campaigns and the webhook address do not change.'
+                                      : "Saved settings apply to the next request a client makes. The service key and members' connections are kept."
                               : activation
                                 ? 'Activating turns this feature on for your organization. You can deactivate it at any time.'
                                 : 'Connecting turns this integration on for your organization. You can disconnect it at any time.'}

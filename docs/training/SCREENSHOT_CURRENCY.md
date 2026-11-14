@@ -237,6 +237,11 @@ on a connected Zeffy card (#4268). The demo cannot connect Zeffy, so the
 shot marks the Zeffy row connected in the integrations list the page
 receives; the dialog is opened and never saved.
 
+**`16-26-paypal-settings` added 2026-11-14**, with PayPal's own **Settings**
+button. It uses the same mock (`showIntegrationConnected` in the manifest),
+with the form's example Webhook ID and the live environment prefilled, so the
+values pictured are not a real PayPal app.
+
 ## The October 16 – November 1 queues, captured 2026-11-02
 
 Every queue from the October 16 – 18 pass to the October 31 – November 1 pass

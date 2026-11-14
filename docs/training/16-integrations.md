@@ -434,6 +434,19 @@ Venmo, Cash App, Zelle, cash and checks.
 | **Webhook ID**                    | **Required.** PayPal gives you this when you add the webhook (below). Without it, payments cannot be checked and are refused            |
 | **Settle orders automatically**   | On at first. See the matching rules below                                                                                               |
 
+**To change any of these later**, select **Settings** on the connected PayPal
+card. The environment, Webhook ID and automatic settlement show their saved
+values. Leave **Client ID** and **Client Secret** blank to keep the saved ones.
+Fill them in only to replace them. PayPal stays connected, the webhook address
+does not change, and the new settings apply to the next payment PayPal reports.
+
+> **Switching between sandbox and live** needs the **Client ID** and **Client
+> Secret** of that environment's app, entered in the same save. The Logbook
+> refuses the change without them, because the old pair would not work in the
+> other environment and every payment would then be rejected.
+
+![PayPal settings on a connected card: Environment Live with the note that changing it needs that environment's Client ID and Client Secret, the Client ID and Client Secret boxes reading Leave blank to keep the current ID and secret, the Webhook ID filled in, Settle orders automatically ticked, and the notice that saved settings apply to the next payment PayPal reports](./images/16-26-paypal-settings.png)
+
 **Test** checks the credentials. It gives a _warning_, not a plain success, if
 the Webhook ID is missing, because credentials alone match nothing.
 
