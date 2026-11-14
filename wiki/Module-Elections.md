@@ -89,6 +89,19 @@ shown as replacing it. The minutes screen, the PDF and the published library
 and public copies all show the correction (the public copy shows its date, not
 the reason).
 
+### List and Detail Responses
+
+`GET /elections` returns a summary row per election, for the list and its
+filters. It leaves out what only one election's page needs, so read those
+from that election's own endpoints (W50-78):
+
+- `auto_open`, `reminder_hours_before_close` and `nomination_deadline` come
+  from `GET /elections/{id}`.
+- Candidates come from `GET /elections/{id}/candidates`. The detail response
+  carries no candidate list.
+- Rollback history comes from `GET /elections/{id}/forensics`, which is
+  `elections.manage` only.
+
 ---
 
 ## Voter Eligibility

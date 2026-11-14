@@ -85,6 +85,16 @@ describe('ballotChoices', () => {
     expect(missingWriteIn({ chief: emptyChoice() }, [item()])).toBeUndefined();
   });
 
+  // W50-76: a multi-seat race ("Select up to 2") is not an approval vote, so
+  // its confirm line read "Approved:" over two candidates the voter chose.
+  it('says Selected for a multi-seat pick and Approved only for an approval vote', () => {
+    const pool = [candidate('a', 'Board', 'Alice'), candidate('b', 'Board', 'Bob')];
+    const picked = { ...emptyChoice(), candidate_ids: ['a', 'b'] };
+    expect(choiceLabel(picked, pool, { selectionCap: 2 })).toBe('Selected: Alice, Bob');
+    expect(choiceLabel(picked, pool, { selectionCap: null })).toBe('Approved: Alice, Bob');
+    expect(choiceLabel(picked, pool)).toBe('Approved: Alice, Bob');
+  });
+
   // W50-25: no item starts on Abstain; Submit waits for a choice or an explicit Abstain.
   it('starts every item unanswered and counts Abstain, a pick, a multi-select or a ranking as answered', () => {
     expect(emptyChoice().choice).toBe('');
