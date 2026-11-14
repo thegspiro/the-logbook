@@ -10287,10 +10287,10 @@ beyond the feature.
   remarks and the narrative; calls, ratings and the rest reload empty. The
   restore logic predates evaluations, which now make leaving the report
   routine.
-- **Two evaluation credits to the same requirement at the same moment can
-  lose one.** The shared credit primitive computes the new value from an
-  unlocked read. It is shared by every credit source, so it is not changed
-  here.
+- ~~**Two evaluation credits to the same requirement at the same moment can
+  lose one.**~~ Resolved 2026-11-14: crediting and reversing lock the
+  progress row and the ledger lookup, and re-read the row rather than using
+  the session's copy (`tests/test_requirement_credit_locking.py`).
 - **Credit is not re-stated when a requirement's crediting rule changes**
   (its type, or "leave out the lowest rating"), **when an evaluation's
   combined scope shrinks**, or **when its shift is deleted, an outside entry

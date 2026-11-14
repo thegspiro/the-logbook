@@ -4170,10 +4170,16 @@ class TrainingProgramService:
         return progress, None
 
     async def _get_org_scoped_progress(
-        self, progress_id: Any, organization_id: UUID | str
+        self, progress_id: Any, organization_id: UUID | str, *, lock: bool = False
     ) -> Optional[RequirementProgress]:
-        """Fetch a requirement-progress row, scoped to the org via its program."""
-        result = await self.db.execute(
+        """Fetch a requirement-progress row, scoped to the org via its program.
+
+        ``lock``: for a read-then-write of ``progress_value`` (crediting and
+        reversing). The row is locked, and re-read rather than answered from
+        the session's copy, so two credits at once cannot both start from the
+        same value and lose one (Pitfall #27).
+        """
+        query = (
             select(RequirementProgress)
             .join(ProgramEnrollment)
             .join(TrainingProgram)
@@ -4182,6 +4188,11 @@ class TrainingProgramService:
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
+        if lock:
+            query = query.with_for_update(of=RequirementProgress).execution_options(
+                populate_existing=True
+            )
+        result = await self.db.execute(query)
         requirement_progress: Optional[RequirementProgress] = (
             result.scalar_one_or_none()
         )
@@ -4234,7 +4245,9 @@ class TrainingProgramService:
         if units is None or units < 0 or (units == 0 and not mark_completed):
             return None, None
 
-        progress = await self._get_org_scoped_progress(progress_id, organization_id)
+        progress = await self._get_org_scoped_progress(
+            progress_id, organization_id, lock=True
+        )
         if progress is None:
             return None, "Requirement progress not found"
 
@@ -4270,12 +4283,16 @@ class TrainingProgramService:
         ):
             return None, "You are not authorized to update this training progress"
 
+        # A locking read: under REPEATABLE READ a plain one answers from the
+        # transaction's snapshot and can miss a credit committed meanwhile.
         existing = await self.db.execute(
-            select(RequirementProgressCredit).where(
+            select(RequirementProgressCredit)
+            .where(
                 RequirementProgressCredit.progress_id == str(progress_id),
                 RequirementProgressCredit.source_type == source_type,
                 RequirementProgressCredit.source_id == str(source_id),
             )
+            .with_for_update()
         )
         existing_credit = existing.scalar_one_or_none()
         if existing_credit is not None:
@@ -4302,7 +4319,10 @@ class TrainingProgramService:
             )
             if revoke_error:
                 return None, revoke_error
-            progress = await self._get_org_scoped_progress(progress_id, organization_id)
+            # The reversal committed, which released the lock: take it again.
+            progress = await self._get_org_scoped_progress(
+                progress_id, organization_id, lock=True
+            )
             if progress is None:
                 return None, "Requirement progress not found"
 
@@ -4408,16 +4428,22 @@ class TrainingProgramService:
         Idempotent — reversing a credit that was never recorded is a no-op. This
         is the primitive an officer's "un-apply" action builds on.
         """
-        progress = await self._get_org_scoped_progress(progress_id, organization_id)
+        progress = await self._get_org_scoped_progress(
+            progress_id, organization_id, lock=True
+        )
         if progress is None:
             return None, "Requirement progress not found"
 
+        # Locking, like the row above: a reversal that raced another to the
+        # same credit must find it gone, not subtract its units a second time.
         credit_result = await self.db.execute(
-            select(RequirementProgressCredit).where(
+            select(RequirementProgressCredit)
+            .where(
                 RequirementProgressCredit.progress_id == str(progress_id),
                 RequirementProgressCredit.source_type == source_type,
                 RequirementProgressCredit.source_id == str(source_id),
             )
+            .with_for_update()
         )
         credit = credit_result.scalar_one_or_none()
         if credit is None:
