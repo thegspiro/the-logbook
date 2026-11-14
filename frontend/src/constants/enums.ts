@@ -822,8 +822,8 @@ export type HistoricalRecordType = (typeof HistoricalRecordType)[keyof typeof Hi
 
 /** Shift history import: a draft under review, or committed to the schedule. */
 export const HISTORY_IMPORT_STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-yellow-500/10 text-yellow-800 dark:text-yellow-400 border-yellow-500/20',
-  committed: 'bg-green-500/10 text-green-800 dark:text-green-400 border-green-500/20',
+  draft: 'bg-yellow-500/10 text-yellow-900 dark:text-yellow-300 border-yellow-500/20',
+  committed: 'bg-green-500/10 text-green-900 dark:text-green-300 border-green-500/20',
 };
 
 /**
