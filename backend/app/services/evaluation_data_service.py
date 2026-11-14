@@ -97,10 +97,10 @@ from app.utils.org_timezone import (
 #: its extras changed. A version-1 snapshot holds the old figure.
 SNAPSHOT_VERSION = 2
 
-#: Sources answered from the member's monthly shift totals.
-_SHIFT_SOURCES = frozenset(
-    {"shifts.hours", "shifts.count", "calls.responses", "calls.response_pct"}
-)
+#: Sources answered from the member's monthly shift totals over the whole
+#: coverage. ``calls.response_pct`` reads them too, but only for the days the
+#: member was expected to respond, so it loads its own.
+_SHIFT_SOURCES = frozenset({"shifts.hours", "shifts.count", "calls.responses"})
 
 #: Kinds of position an evaluation lists. ``system`` positions are the
 #: platform's own (the baseline member position, the rank mirrors) and say
@@ -200,6 +200,25 @@ class Coverage:
         return any(
             r.reason == "separation" and r.start <= day <= r.end for r in self.excluded
         )
+
+    def included(self) -> List[Tuple[date, date]]:
+        """The stretches of coverage no excluded range touches, oldest first.
+
+        Excluded ranges may overlap (a leave that runs into a gap in
+        membership, or two leaves recorded over each other), so they are
+        merged before being cut out.
+        """
+        stretches: List[Tuple[date, date]] = []
+        cursor = self.start
+        for gap in sorted(self.excluded, key=lambda r: (r.start, r.end)):
+            if gap.start > cursor:
+                stretches.append((cursor, min(gap.start - timedelta(days=1), self.end)))
+            cursor = max(cursor, gap.end + timedelta(days=1))
+            if cursor > self.end:
+                break
+        if cursor <= self.end:
+            stretches.append((cursor, self.end))
+        return stretches
 
     def as_json(self) -> Dict[str, Any]:
         return {
@@ -388,7 +407,7 @@ class EvaluationDataService:
         carries a ``note`` the evaluator and member read.
         """
         values: Dict[str, Dict[str, Any]] = {}
-        # Four sources read the same month totals; load them once.
+        # Three sources read the same month totals; load them once.
         shift_cache: Dict[str, Dict[str, float]] = {}
         waiver_cache: Dict[AttendanceWaiverWorkflow, List[_WaiverRow]] = {}
         for key in keys:
@@ -418,7 +437,9 @@ class EvaluationDataService:
                 shift_cache["totals"] = await self._shift_totals(
                     org_id, member, coverage
                 )
-            return await self._from_shifts(key, org_id, coverage, shift_cache["totals"])
+            return self._from_shifts(key, shift_cache["totals"])
+        if key == "calls.response_pct":
+            return await self._call_response(org_id, member, coverage)
         if key == "training.hours":
             return await self._training_hours(org_id, member, coverage)
         if key == "training.requirements_met_pct":
@@ -441,18 +462,15 @@ class EvaluationDataService:
             return await self._positions(org_id, member, coverage, tz)
         raise ValueError(f"No calculation for data source '{key}'")
 
-    async def _from_shifts(
-        self, key: str, org_id: str, coverage: Coverage, totals: Dict[str, float]
-    ) -> Dict[str, Any]:
+    @staticmethod
+    def _from_shifts(key: str, totals: Dict[str, float]) -> Dict[str, Any]:
         if key == "shifts.hours":
             return _value(totals["hours"], external_hours=totals["external_hours"])
         if key == "shifts.count":
             return _value(
                 int(totals["shifts"]), external_shifts=int(totals["external_shifts"])
             )
-        if key == "calls.responses":
-            return _value(int(totals["calls"]))
-        return await self._call_response(org_id, coverage, int(totals["calls"]))
+        return _value(int(totals["calls"]))
 
     # ----------------------------------------------------------- per source
 
@@ -784,7 +802,7 @@ class EvaluationDataService:
         return _value(avg)
 
     async def _call_response(
-        self, org_id: str, coverage: Coverage, calls: int
+        self, org_id: str, member: User, coverage: Coverage
     ) -> Dict[str, Any]:
         """Shift call credit against the department's call count.
 
@@ -792,18 +810,41 @@ class EvaluationDataService:
         and the department's call log), so the ratio can exceed 100%; it is
         capped and says so. With call tracking off there is no call count to
         divide by (owner decision 2026-11-01).
+
+        Unlike the call count beside it, the rate is measured only over the
+        days the member was expected to respond: calls the department ran
+        while the member was on leave, or not a member at all, would otherwise
+        count against them as calls missed. Both sides of the ratio drop those
+        days, so a call answered during a leave neither helps nor hurts.
         """
-        settings = await CallTrackingService(self.db).get_settings(org_id)
+        tracking = CallTrackingService(self.db)
+        settings = await tracking.get_settings(org_id)
         if settings.get("mode") == CallTrackingMode.OFF:
             return _unavailable("Call tracking is off for the department.")
-        total = await CallTrackingService(self.db).department_call_count(
-            org_id, coverage.start, coverage.end
-        )
+        stretches = coverage.included()
+        total = 0
+        for start, end in stretches:
+            total += await tracking.department_call_count(org_id, start, end)
         if not total:
-            return _unavailable("No department calls were logged in the period.")
+            return _unavailable(
+                "No department calls were logged while the member was "
+                "expected to respond."
+                if coverage.excluded
+                else "No department calls were logged in the period."
+            )
+        calls = 0
+        scheduling = SchedulingService(self.db)
+        for start, end in stretches:
+            months = await scheduling.get_member_month_totals(
+                member.id, org_id, start, end
+            )
+            calls += sum(int(entry.get("calls") or 0) for entry in months.values())
         raw = _pct(calls, total)
         return _value(
-            min(raw, 100.0), responses=calls, department_calls=total, capped=raw > 100.0
+            min(raw, 100.0),
+            responses=calls,
+            department_calls=total,
+            capped=raw > 100.0,
         )
 
     async def _admin_hours(

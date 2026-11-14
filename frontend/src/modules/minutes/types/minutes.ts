@@ -464,6 +464,19 @@ export interface ElectionResultSnapshot {
   quorum_detail?: string | null;
   results_by_position?: FiledPositionResult[];
   overall_results?: FiledCandidateResult[];
+  /**
+   * Where the election's voter rules departed from the department's
+   * defaults, and why. Absent on results filed before it was recorded.
+   */
+  voter_rule_exceptions?: FiledVoterRuleException[];
+}
+
+/** Backend `VoterRuleException`, as the result snapshot holds it. */
+export interface FiledVoterRuleException {
+  scope: 'election' | 'ballot_item';
+  title: string;
+  meeting_kind?: string | null;
+  reason?: string | null;
 }
 
 export interface MinutesElectionResult {

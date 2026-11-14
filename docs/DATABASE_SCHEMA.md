@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**380 tables · 6095 columns · 1270 foreign keys**
+**380 tables · 6099 columns · 1271 foreign keys**
 
 ---
 
@@ -178,7 +178,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`ballot_send_jobs`](#ballot_send_jobs) | `BallotSendJob` | 16 | One request to email ballots, run in the background. |
 | [`candidates`](#candidates) | `Candidate` | 17 | Candidate model for election candidates |
-| [`elections`](#elections) | `Election` | 57 | Election model for managing elections within an organization |
+| [`elections`](#elections) | `Election` | 58 | Election model for managing elections within an organization |
 | [`manual_ballot_attestations`](#manual_ballot_attestations) | `ManualBallotAttestation` | 5 | One officer's confirmation that a paper-tally batch matches the |
 | [`manual_ballot_batches`](#manual_ballot_batches) | `ManualBallotBatch` | 14 | One paper-tally entry — the set of manual votes sharing a batch id. |
 | [`saved_ballot_templates`](#saved_ballot_templates) | `SavedBallotTemplate` | 11 | Organization-scoped, reusable snapshot of a structured ballot. |
@@ -531,7 +531,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`meeting_action_items`](#meeting_action_items) | `MeetingActionItem` | 15 | Meeting Action Item model |
-| [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 11 | Meeting Attendee model |
+| [`meeting_attendees`](#meeting_attendees) | `MeetingAttendee` | 14 | Meeting Attendee model |
 | [`meetings`](#meetings) | `Meeting` | 21 | Meeting model |
 
 ### Member Supervisors
@@ -2553,6 +2553,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `ballot_items` | JSON | yes |  |  |  |
 | `position_eligibility` | JSON | yes |  |  |  |
 | `eligibility_rules` | JSON | yes |  |  |  |
+| `eligibility_override_reason` | TEXT | yes |  |  |  |
 | `meeting_kind` | VARCHAR(20) | no |  | `regular` |  |
 | `email_sent` | BOOL | no |  | `0` |  |
 | `email_sent_at` | DATETIME | yes |  |  |  |
@@ -8437,6 +8438,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `waiver_granted_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE RESTRICT |
 | `waiver_granted_at` | DATETIME | yes |  |  |  |
 | `waiver_request_id` | VARCHAR(36) | yes | FK, IDX |  | → `attendance_waiver_requests.id` ON DELETE SET NULL |
+| `checked_in_at` | DATETIME | yes |  |  |  |
+| `recorded_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `recorded_via` | VARCHAR(20) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 
 **Indexes**
@@ -13064,7 +13068,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (464 references)
+### → `users` (465 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -13334,6 +13338,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `mcp_service_keys` | `revoked_by` | SET NULL | yes |
 | `meeting_action_items` | `assigned_to` | RESTRICT | yes |
 | `meeting_action_items` | `created_by` | SET NULL | yes |
+| `meeting_attendees` | `recorded_by` | SET NULL | yes |
 | `meeting_attendees` | `user_id` | CASCADE | no |
 | `meeting_attendees` | `waiver_granted_by` | RESTRICT | yes |
 | `meeting_minutes` | `approved_by` | RESTRICT | yes |

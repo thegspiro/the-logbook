@@ -80,6 +80,30 @@ describe('ElectionResultsPanel', () => {
     expect(screen.queryByRole('button', { name: 'File an election result' })).not.toBeInTheDocument();
   });
 
+  it('records where the voter rules departed from the defaults, and why', async () => {
+    mockList.mockResolvedValue([
+      {
+        ...filed,
+        snapshot: {
+          ...filed.snapshot,
+          voter_rule_exceptions: [
+            { scope: 'ballot_item', title: 'Amend Article IV', meeting_kind: null, reason: 'Bylaws Article XII' },
+          ],
+        },
+      },
+    ]);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+
+    const exceptions = await screen.findByTestId('filed-voter-rule-exceptions');
+    expect(exceptions).toHaveTextContent('"Amend Article IV" had custom voter rules. Reason: Bylaws Article XII');
+  });
+
+  it('says nothing about voter rules for a result filed without them', async () => {
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+    await screen.findByRole('heading', { name: 'Officer election' });
+    expect(screen.queryByTestId('filed-voter-rule-exceptions')).not.toBeInTheDocument();
+  });
+
   it('renders nothing for a reader when no result is filed', async () => {
     mockList.mockResolvedValue([]);
     const { container } = renderWithRouter(

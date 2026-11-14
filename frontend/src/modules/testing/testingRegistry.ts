@@ -992,6 +992,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       { path: '/elections', label: 'Elections', module: 'elections' },
       { path: '/elections/:electionId', label: 'Election detail', module: 'elections' },
       { path: '/elections/settings', label: 'Election settings', permission: 'elections.manage', module: 'elections' },
+      {
+        path: '/elections/attendance',
+        label: 'Election meeting attendance',
+        permission: 'elections.manage',
+        module: 'elections',
+      },
     ],
   },
   {

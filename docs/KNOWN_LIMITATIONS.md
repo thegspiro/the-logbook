@@ -79,10 +79,12 @@ regular set until given one.
   was checked only when the member tried to vote, so a member who fell short
   received a ballot link and was then refused. As a row rule it applies
   everywhere the other rules do: the roster, the ballot send and the vote.
-- **Minutes › Attendance still reads the tier benefits** for its "Voting"
-  column, and so stops agreeing with the ballots once a secretary edits the
-  rows. Fixed by the attendance work that follows (it adds the election-aware
-  Meeting Attendance page and moves both onto `voter_rules`).
+- ~~**Minutes › Attendance still reads the tier benefits** for its "Voting"
+  column.~~ Resolved 2026-11-13: the column now asks the same gate the ballot
+  send does, under the department's regular business meeting rules
+  (`ElectionService.voting_reason_under_rules`), so it agrees with an
+  election held on those defaults. It cannot speak for an election with
+  customized rules; Elections › Meeting Attendance does, per election.
 - **A version 1 election's tier rules can no longer be edited,** because the
   tier screen dropped the fields. Its own election-wide rules still can, until
   voting opens.
@@ -90,6 +92,52 @@ regular set until given one.
   judged by the row of the status it counts as (or by no row at all, if it
   counts as none) until the secretary gives it one; the screen says so on that
   row.
+
+### Holding an election outside the defaults (2026-11-13)
+
+- **A reason is required whenever an election's rules differ from its kind's
+  defaults** (owner decision), on create and on any edit that touches the
+  rules, the kind or the reason. It is cleared when the rules match the
+  defaults again, written to the audit log
+  (`election_voter_rules_customized`), shown on the election, and carried in
+  the results the minutes file. This includes an explicit "no rules" (null),
+  which the API accepted without a reason before.
+- **A ballot item can follow another kind's rules, or rules of its own**
+  (owner decision: the bylaws carve-out is per ballot item, not per member).
+  Its own rules replace the election's — and the tier ladder's — for that item
+  only. Custom item rules need a reason; following a kind's defaults does not.
+- **In an election with such an item, a vote is judged live against the rules
+  of the item being voted on**, even for a member on the roll frozen when
+  voting opened. The roll holds everyone eligible for at least one item, so
+  being on it no longer proves eligibility for the item in hand. The cost: a
+  meeting recorded while the vote is open can change the answer for those
+  elections, which the frozen roll otherwise prevents. Elections with no such
+  item keep the frozen-roll behaviour.
+- **The create dialog's count of members who would receive a ballot** covers
+  the election's rules only, not each ballot item's own voter types, check-in
+  or carve-out rules; it says so beside the number.
+
+### Elections › Meeting Attendance (2026-11-13)
+
+`/elections/attendance` shows each member's meetings over a period the
+secretary picks (presets of 3 to 24 months, or custom dates up to five years),
+whether they may vote in the chosen election, and each member's meetings with
+how they counted and where the record came from (owner decisions: a second
+page with the same data as Minutes › Attendance; check-in time and recorded-by
+added; `elections.manage` is enough; eligibility follows the election chosen).
+
+- **The period is for reading only.** "May vote" is the election's own roster
+  answer, and its attendance rules count their own last N meetings or months,
+  whatever period the page shows. The page says so beside the tiles.
+- **Check-in time and recorded-by start now.** `meeting_attendees` gained
+  `checked_in_at`, `recorded_by` and `recorded_via`; rows written before this
+  have none, and nothing backfills them, since there is no record of who
+  entered them. Those meetings show their status with no source beside it.
+  Only an event check-in has a check-in time: a secretary's entry claims no
+  moment for one.
+- **Excused, on-leave and pre-membership meetings** are classified by the
+  same tally the ballot check uses, so a meeting held before a member's
+  current stint is left out of both the count and their list.
 
 ## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
 
@@ -10203,3 +10251,58 @@ option was taken; each is open for the owner to revisit.
 - **`idx_meeting_attendees_meeting` is now a prefix of the new unique
   `(meeting_id, user_id)` index** and could be dropped; it was left to keep
   the migration to what the feature needs.
+
+## Training — Shift Evaluations: What the 2026-11-13 Review Left Open
+
+A review of the five shift-evaluation pull requests (#3884, #3902, #3922,
+#3956, #4264) fixed the defects listed in its pull request. These were found
+and deliberately not changed, because each needs an owner ruling or reaches
+beyond the feature.
+
+**For the owner to decide**
+
+- **The evaluations a shift calls for follow today's settings, not the
+  shift's.** Who needs which evaluation is worked out on every read from the
+  current "one evaluation for several programs" setting and the member's
+  current enrollments. Switching that setting, or enrolling a member in a
+  second program, while a shift is still open re-scopes it: evaluations
+  already submitted are kept but no longer required, new ones are required,
+  and close-out waits for them. Freezing the set at close-out would need a
+  stored snapshot.
+- **No-show and pending crew are asked for an evaluation.** The rule mirrors
+  the trainee-report gate (only declined and cancelled seats are left out),
+  so the two agree; excusing no-shows would mean changing both.
+- **No requirement type counts the calls an evaluation records.** Evaluated
+  shifts, transports and refusals are credited; the existing Calls type is
+  still fed by shift reports.
+- **A department requirement of an evaluation type, linked into a program
+  with "Link existing", is not credited by evaluations.** A linked row is
+  graded by the compliance engine, which has no branch for these types and
+  falls back to matching training records by type.
+
+**Accepted for now**
+
+- **Going to an evaluation from the Shift Completion Report loses most of the
+  report's unsaved fields.** The report's draft restore keeps crew selections,
+  remarks and the narrative; calls, ratings and the rest reload empty. The
+  restore logic predates evaluations, which now make leaving the report
+  routine.
+- **Two evaluation credits to the same requirement at the same moment can
+  lose one.** The shared credit primitive computes the new value from an
+  unlocked read. It is shared by every credit source, so it is not changed
+  here.
+- **Credit is not re-stated when a requirement's crediting rule changes**
+  (its type, or "leave out the lowest rating"), **when an evaluation's
+  combined scope shrinks**, or **when its shift is deleted, an outside entry
+  moves to an agency that does not evaluate, or the member is removed from the
+  shift.** Each leaves earlier credit standing until the evaluation is saved
+  again.
+- **A deactivated evaluation form is still offered and required** where a
+  program or the department settings still name it.
+- **Two administrators creating forms with the same name at the same moment
+  get a 500** rather than the duplicate-name 400.
+- **A preceptor-link submission that collides with an officer creating the
+  same evaluation** retries once; the retry keeps the link marked used but
+  loses the submitting device's address and browser from the record.
+- **Restoring a pending outside shift approves it**, without approve's
+  pending-only check (it still needs `scheduling.manage`).

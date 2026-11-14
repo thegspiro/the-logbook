@@ -29,7 +29,7 @@ from datetime import date
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -39,6 +39,7 @@ from app.api.v1.endpoints.shift_completion import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security_middleware import check_rate_limit
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.external_shift_hours import ExternalShiftHours
 from app.models.user import User
@@ -59,6 +60,24 @@ from app.services.shift_evaluation_link_service import (
 from app.services.shift_evaluation_service import ShiftEvaluationService
 
 router = APIRouter()
+
+
+# Preceptor-link emails go to any address a member types, under the
+# department's name: without a cap, one logged shift could mail a stranger as
+# often as someone liked. Ten an hour per member covers re-sending to a
+# preceptor who missed it, several times over.
+_PRECEPTOR_EMAILS_PER_HOUR = 10
+
+
+async def _email_allowance(request: Request, user: User) -> None:
+    await check_rate_limit(
+        request,
+        max_requests=_PRECEPTOR_EMAILS_PER_HOUR,
+        window_seconds=3600,
+        lockout_seconds=0,
+        scope="preceptor_link_email",
+        account=str(user.id),
+    )
 
 
 async def _shift_for_filing(
@@ -108,6 +127,9 @@ async def list_member_shift_evaluations(
         current_user.organization_id,
         start_date=start_date,
         end_date=end_date,
+        # A training officer reads their own evaluations as a member does:
+        # no drafts, nothing still waiting on review.
+        member_view=str(member_id) == str(current_user.id),
     )
     return [await service.detail(e, current_user.organization_id) for e in evaluations]
 
@@ -124,7 +146,9 @@ async def get_shift_evaluation_roster(
     """
     service = ShiftEvaluationService(db)
     shift = await _shift_for_filing(db, current_user, shift_id, service)
-    return await service.roster(shift, current_user.organization_id)
+    return await service.roster(
+        shift, current_user.organization_id, viewer_id=str(current_user.id)
+    )
 
 
 @router.get(
@@ -152,6 +176,7 @@ async def get_shift_evaluation_form(
             scope_key,
             current_user.organization_id,
             str(template_id) if template_id else None,
+            viewer_id=str(current_user.id),
         )
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -268,7 +293,9 @@ async def get_outside_shift_evaluation_roster(
     """
     service = ShiftEvaluationService(db)
     entry = await _entry(service, entry_id, current_user.organization_id)
-    return await service.entry_roster(entry, current_user.organization_id)
+    return await service.entry_roster(
+        entry, current_user.organization_id, viewer_id=str(current_user.id)
+    )
 
 
 @router.get("/external/{entry_id}/{scope_key}", response_model=ShiftEvaluationForm)
@@ -291,6 +318,7 @@ async def get_outside_shift_evaluation_form(
             scope_key,
             current_user.organization_id,
             str(template_id) if template_id else None,
+            viewer_id=str(current_user.id),
         )
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -413,6 +441,7 @@ async def get_preceptor_link(
     status_code=201,
 )
 async def create_preceptor_link(
+    request: Request,
     entry_id: UUID,
     body: PreceptorLinkCreate,
     db: AsyncSession = Depends(get_db),
@@ -424,6 +453,8 @@ async def create_preceptor_link(
     training.manage
     """
     service, entry = await _entry_for_link(db, current_user, entry_id)
+    if body.preceptor_email:
+        await _email_allowance(request, current_user)
     try:
         link, sent = await service.create(
             entry,
@@ -446,6 +477,7 @@ async def create_preceptor_link(
 
 @router.post("/preceptor-links/{entry_id}/send", response_model=PreceptorLinkResponse)
 async def send_preceptor_link(
+    request: Request,
     entry_id: UUID,
     body: PreceptorLinkSend,
     scope_key: Optional[str] = Query(None, max_length=40),
@@ -458,6 +490,7 @@ async def send_preceptor_link(
     training.manage
     """
     service, entry = await _entry_for_link(db, current_user, entry_id)
+    await _email_allowance(request, current_user)
     org = str(current_user.organization_id)
     try:
         scope = await service.open_scope(entry, org, scope_key)
@@ -486,14 +519,12 @@ async def revoke_preceptor_link(
     training.manage
     """
     service, entry = await _entry_for_link(db, current_user, entry_id)
-    org = str(current_user.organization_id)
-    try:
-        scope = await service.open_scope(entry, org, scope_key)
-    except ValueError:
-        return
-    link = await service.active_link(entry.id, scope, org)
-    if link is not None:
-        await service.revoke(link)
+    # Every open link on the shift (or the one evaluation asked for), whether
+    # or not an evaluation is waiting now: the officer who turns a link off
+    # on a rejected shift must not see it work again when the shift returns.
+    for link in await service.revoke_open(
+        entry.id, current_user.organization_id, scope_key
+    ):
         await _link_audit(db, "shift_evaluation_link_revoked", current_user, link)
 
 
@@ -513,16 +544,15 @@ async def get_shift_evaluation(
         await service.get(evaluation_id, current_user.organization_id),
         "Shift evaluation",
     )
-    allowed = (
-        _manages_training(current_user)
-        or str(evaluation.evaluator_id) == str(current_user.id)
-        or (
-            str(evaluation.member_id) == str(current_user.id)
-            and await service.visible_to_member(
-                evaluation, current_user.organization_id
-            )
+    if str(evaluation.member_id) == str(current_user.id):
+        # About the caller: read as a member, whatever else they may hold.
+        allowed = await service.visible_to_member(
+            evaluation, current_user.organization_id
         )
-    )
+    else:
+        allowed = _manages_training(current_user) or str(
+            evaluation.evaluator_id
+        ) == str(current_user.id)
     if not allowed:
         # Same answer as a missing row: a member must not learn that an
         # evaluation exists before they may read it.

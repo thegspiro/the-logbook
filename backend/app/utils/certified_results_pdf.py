@@ -157,7 +157,7 @@ def render_certified_results_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> 
     # ── Turnout & quorum ─────────────────────────────────────────────
     turnout_rows = [
         ["Eligible voters", str(results.get("total_eligible_voters", "—"))],
-        ["Ballots cast", str(results.get("total_votes", "—"))],
+        ["Votes cast", str(results.get("total_votes", "—"))],
         [
             "Turnout",
             f"{results.get('voter_turnout_percentage', 0)}%",

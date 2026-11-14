@@ -20,7 +20,7 @@ import type {
   TemplateDefinition,
   TemplateItem,
 } from '../../types/evaluations';
-import { formatFigure, needsJustification, withAnswer } from '../../utils/evaluationRecord';
+import { figureDetail, formatFigure, needsJustification, withAnswer } from '../../utils/evaluationRecord';
 import { GradePanel } from './GradePanel';
 
 interface EvaluationFormProps {
@@ -87,6 +87,7 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
     const written = item.tool === 'narrative' || item.tool === 'goals';
     const source = item.data_block ? sourceByKey.get(item.data_block.source) : undefined;
     const figure = item.data_block && data ? data[item.data_block.source] : undefined;
+    const detail = item.data_block ? figureDetail(item.data_block.source, figure) : null;
     const suggestion = evaluator ? suggested[item.key] : undefined;
     const rating = answer?.rating ?? null;
     const exampleNeeded = rating !== null && item.require_example_for.includes(rating);
@@ -109,6 +110,7 @@ export const EvaluationForm: React.FC<EvaluationFormProps> = ({
             <p className="text-theme-text-secondary mt-1 text-sm">
               {source.label}:{' '}
               <span className="text-theme-text-primary font-medium">{formatFigure(figure, source.unit)}</span>
+              {detail && <span className="text-theme-text-secondary"> ({detail})</span>}
               {suggestion !== undefined && (
                 <span className="badge ml-2 bg-blue-500/15 text-blue-900 dark:text-blue-200">
                   Suggested: {levels.find((l) => l.value === suggestion)?.label ?? suggestion}

@@ -3,6 +3,8 @@
  *
  * Protected routes (require auth + AppLayout):
  *   /elections            — Elections list
+ *   /elections/settings   — Election Settings (elections.manage)
+ *   /elections/attendance — Meeting attendance against an election (elections.manage)
  *   /elections/:electionId — Election detail
  *
  * Public routes (no auth):
@@ -17,6 +19,7 @@ import { lazyWithRetry } from '../../utils/lazyWithRetry';
 const ElectionsPage = lazyWithRetry(() => import('../../pages/ElectionsPage'));
 const ElectionDetailPage = lazyWithRetry(() => import('../../pages/ElectionDetailPage'));
 const ElectionsSettingsPage = lazyWithRetry(() => import('../../pages/ElectionsSettingsPage'));
+const ElectionAttendancePage = lazyWithRetry(() => import('../../pages/ElectionAttendancePage'));
 const BallotVotingPage = lazyWithRetry(() => import('../../pages/BallotVotingPage'));
 
 /** Protected election routes (rendered inside AppLayout). */
@@ -38,6 +41,16 @@ export const getElectionsRoutes = () => (
         <ProtectedRoute requiredModule="elections" moduleLabel="Elections" requiredPermission="elections.manage">
           <Suspense fallback={null}>
             <ElectionsSettingsPage />
+          </Suspense>
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/elections/attendance"
+      element={
+        <ProtectedRoute requiredModule="elections" moduleLabel="Elections" requiredPermission="elections.manage">
+          <Suspense fallback={null}>
+            <ElectionAttendancePage />
           </Suspense>
         </ProtectedRoute>
       }

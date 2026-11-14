@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { ElectionEligibilityRules, ElectionSettings, EligibilityDefaults } from '../../types/election';
-import { defaultsForKind, describeEligibilityRules, rowsForRules } from './eligibilityRules';
+import { defaultsForKind, describeEligibilityRules, rowsForRules, voterRuleExceptionText } from './eligibilityRules';
 
 const typeRules: ElectionEligibilityRules = {
   version: 2,
@@ -76,5 +76,24 @@ describe('defaultsForKind', () => {
     expect(defaultsForKind(settings, 'bylaws')).toBe(bylaws);
     expect(defaultsForKind(settings, 'special')).toBe(regular);
     expect(defaultsForKind(settings, 'regular')).toBe(regular);
+  });
+});
+
+describe('voterRuleExceptionText', () => {
+  it('words each departure the minutes record', () => {
+    expect(
+      voterRuleExceptionText({
+        scope: 'election',
+        title: 'December votes',
+        meeting_kind: 'regular',
+        reason: 'Art. XII',
+      })
+    ).toBe('Custom voter rules for the election. Reason: Art. XII');
+    expect(voterRuleExceptionText({ scope: 'ballot_item', title: 'Amend Article IV', meeting_kind: 'bylaws' })).toBe(
+      '"Amend Article IV" followed the bylaws amendment rules.'
+    );
+    expect(
+      voterRuleExceptionText({ scope: 'ballot_item', title: 'Amend Article IV', meeting_kind: null, reason: 'Board' })
+    ).toBe('"Amend Article IV" had custom voter rules. Reason: Board');
   });
 });

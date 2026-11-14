@@ -7,7 +7,7 @@
  * Supports review workflow, visibility controls, and configurable rating scales.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import {
   FileText,
@@ -167,6 +167,9 @@ export const ShiftReportsTab: React.FC = () => {
   // Who on the selected shift needs a shift evaluation; null until loaded or
   // when the department has none to ask for.
   const [evaluationRoster, setEvaluationRoster] = useState<ShiftEvaluationRoster | null>(null);
+  // The shift whose roster was asked for last: a slower answer for a shift
+  // the officer has since moved off must not overwrite the current one.
+  const rosterFor = useRef<string | null>(null);
   // Department rule: only each shift's assigned officer files its reports.
   // The server enforces it; this only keeps the form from offering shifts the
   // viewer would be refused on.
@@ -357,6 +360,10 @@ export const ShiftReportsTab: React.FC = () => {
     async (shiftId: string) => {
       setLoadingCrew(true);
       setCrewLoadError(false);
+      // The previous shift's evaluation lines go at once: they link to that
+      // shift's evaluations.
+      rosterFor.current = shiftId;
+      setEvaluationRoster(null);
       try {
         // The author is left off their own crew list: a report about yourself
         // is refused server-side, and offering the checkbox would only turn it
@@ -378,9 +385,10 @@ export const ShiftReportsTab: React.FC = () => {
       // Loaded on its own so a failure here leaves the crew list working; the
       // close-out check still names any evaluation that is missing.
       try {
-        setEvaluationRoster(await shiftEvaluationService.getRoster(shiftId));
+        const roster = await shiftEvaluationService.getRoster(shiftId);
+        if (rosterFor.current === shiftId) setEvaluationRoster(roster);
       } catch {
-        setEvaluationRoster(null);
+        if (rosterFor.current === shiftId) setEvaluationRoster(null);
       }
     },
     [userId]

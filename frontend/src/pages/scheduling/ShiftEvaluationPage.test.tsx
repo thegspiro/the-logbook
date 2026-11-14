@@ -357,3 +357,177 @@ describe('ShiftEvaluationPage', () => {
     });
   });
 });
+
+describe('ShiftEvaluationPage — keeping the officer’s work', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    currentUserId = 'officer-1';
+    params = { shiftId: 'sh1', memberId: 'u2', scopeKey: 'en-1' };
+    mockGetForm.mockReset();
+    mockGetForm.mockResolvedValue(form());
+    mockGetRoster.mockReset();
+    mockGetRoster.mockResolvedValue(roster);
+    mockSave.mockReset();
+    mockSave.mockImplementation((_s: string, _m: string, _k: string, body: { submit: boolean }) =>
+      Promise.resolve({
+        id: 'ev-1',
+        status: body.submit ? 'submitted' : 'draft',
+        template: form().template,
+        template_id: 'tpl-1',
+        updated_at: '2026-10-24T11:00:00Z',
+        statistics: {},
+        header_values: {},
+        responses: {},
+        closing_comments: null,
+      })
+    );
+  });
+
+  it('autosaves while the officer keeps working, not only after a pause', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) });
+      renderWithRouter(<ShiftEvaluationPage />);
+      const transports = await screen.findByLabelText('Number of Transports');
+
+      // An edit every 10 seconds: never a 30-second pause.
+      await user.type(transports, '1');
+      await vi.advanceTimersByTimeAsync(10_000);
+      await user.type(screen.getByLabelText('Number of Refusals'), '1');
+      await vi.advanceTimersByTimeAsync(10_000);
+      await user.clear(transports);
+      await user.type(transports, '2');
+      await vi.advanceTimersByTimeAsync(12_000);
+
+      expect(mockSave).toHaveBeenCalledWith('sh1', 'u2', 'en-1', expect.objectContaining({ submit: false }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('saves the draft when the officer leaves the page', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderWithRouter(<ShiftEvaluationPage />);
+
+    await user.type(await screen.findByLabelText('Number of Transports'), '3');
+    unmount();
+
+    await waitFor(() =>
+      expect(mockSave).toHaveBeenCalledWith(
+        'sh1',
+        'u2',
+        'en-1',
+        expect.objectContaining({
+          submit: false,
+          statistics: expect.objectContaining({ transports: 3 }) as unknown,
+        })
+      )
+    );
+  });
+
+  it('still sends what was typed while a save was in flight', async () => {
+    const user = userEvent.setup();
+    let release: () => void = () => undefined;
+    mockSave.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({
+              id: 'ev-1',
+              status: 'draft',
+              template: form().template,
+              template_id: 'tpl-1',
+              updated_at: '2026-10-24T11:00:00Z',
+              statistics: {},
+              header_values: {},
+              responses: {},
+              closing_comments: null,
+            });
+        })
+    );
+    const { unmount } = renderWithRouter(<ShiftEvaluationPage />);
+
+    await user.type(await screen.findByLabelText('Number of Transports'), '3');
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+    await user.type(screen.getByLabelText('Number of Refusals'), '2');
+    release();
+    expect(await screen.findByText('Draft saved')).toBeInTheDocument();
+    unmount();
+
+    await waitFor(() =>
+      expect(mockSave).toHaveBeenLastCalledWith(
+        'sh1',
+        'u2',
+        'en-1',
+        expect.objectContaining({
+          statistics: expect.objectContaining({ transports: 3, refusals: 2 }) as unknown,
+        })
+      )
+    );
+  });
+
+  it('does not show one member’s save on the next member’s page', async () => {
+    const user = userEvent.setup();
+    let release: () => void = () => undefined;
+    mockSave.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({
+              id: 'ev-1',
+              status: 'draft',
+              template: { ...form().template, name: 'Marcus’s form' },
+              template_id: 'tpl-1',
+              updated_at: '2026-10-24T11:00:00Z',
+              statistics: {},
+              header_values: {},
+              responses: {},
+              closing_comments: null,
+            });
+        })
+    );
+    const priya = form({
+      requirement: { ...requirement, member_id: 'u3', member_name: 'Priya Natarajan', scope_key: 'en-2' },
+    });
+    const { rerender } = renderWithRouter(<ShiftEvaluationPage />);
+
+    await user.type(await screen.findByLabelText('Number of Transports'), '3');
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+    mockGetForm.mockResolvedValueOnce(priya);
+    params = { shiftId: 'sh1', memberId: 'u3', scopeKey: 'en-2' };
+    rerender(<ShiftEvaluationPage />);
+    expect(await screen.findByRole('heading', { name: 'EMT Shift Evaluation — Priya Natarajan' })).toBeInTheDocument();
+    release();
+
+    // Every save, the one in flight and the one leaving Marcus flushes, is
+    // Marcus's; none of it reaches Priya's page.
+    await waitFor(() => expect(mockSave).toHaveBeenCalled());
+    expect(mockSave.mock.calls.every((call) => call[1] === 'u2')).toBe(true);
+    expect(screen.getByRole('heading', { name: 'EMT Shift Evaluation — Priya Natarajan' })).toBeInTheDocument();
+    expect(screen.queryByText(/Marcus’s form/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the form and the answers when another form fails to open', async () => {
+    const user = userEvent.setup();
+    const twoForms = form({
+      requirement: {
+        ...requirement,
+        template_options: [
+          { id: 'tpl-1', name: 'EMT Shift Evaluation' },
+          { id: 'tpl-2', name: 'Driver Evaluation' },
+        ],
+      },
+    });
+    mockGetForm.mockReset();
+    mockGetForm.mockResolvedValueOnce(twoForms).mockRejectedValueOnce(new Error('offline'));
+    renderWithRouter(<ShiftEvaluationPage />);
+
+    await user.type(await screen.findByLabelText('Number of Transports'), '3');
+    await user.selectOptions(screen.getByLabelText('Form'), 'tpl-2');
+    await user.click(await screen.findByRole('button', { name: 'Switch form' }));
+
+    await waitFor(() => expect(mockToastError).toHaveBeenCalled());
+    expect(screen.getByLabelText('Form')).toHaveValue('tpl-1');
+    expect(screen.getByLabelText('Number of Transports')).toHaveValue('3');
+  });
+});

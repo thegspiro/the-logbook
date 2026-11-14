@@ -15,6 +15,8 @@ vi.mock('../services/api', () => ({
     getEnabledModules: vi.fn().mockResolvedValue({ configured: false, enabled_modules: [] }),
   },
   electionService: {
+    // The create dialog counts who its voter rules admit.
+    previewElectorate: vi.fn().mockResolvedValue({ eligible: 0, total: 0 }),
     getElections: (...args: unknown[]) => mockGetElections(...args) as unknown,
     getSettings: vi.fn().mockResolvedValue({ reminders_enabled: true, auto_open_enabled: true }),
   },
@@ -47,6 +49,10 @@ function election(id: string, status: string, title: string) {
 
 describe('ElectionsPage member affordances', () => {
   beforeEach(() => {
+    // The status filter lives in ?status= (W50-76), and BrowserRouter keeps
+    // jsdom's URL between tests, so a filter clicked in one test would
+    // otherwise narrow the next one's list.
+    window.history.replaceState(null, '', '/elections');
     mockCanManage = false;
     mockGetElections.mockReset();
     mockGetElections.mockResolvedValue([]);

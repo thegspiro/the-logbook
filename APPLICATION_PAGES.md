@@ -1187,11 +1187,12 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## Elections
 
-| URL                   | Page              | Permission         |
-| --------------------- | ----------------- | ------------------ |
-| `/elections`          | Elections List    | Authenticated      |
-| `/elections/:id`      | Election Detail   | Authenticated      |
-| `/elections/settings` | Election Settings | `elections.manage` |
+| URL                     | Page                        | Permission         |
+| ----------------------- | --------------------------- | ------------------ |
+| `/elections`            | Elections List              | Authenticated      |
+| `/elections/:id`        | Election Detail             | Authenticated      |
+| `/elections/settings`   | Election Settings           | `elections.manage` |
+| `/elections/attendance` | Election Meeting Attendance | `elections.manage` |
 
 > **Voiding a paper-ballot batch** used to ask for its reason with
 > `window.prompt`, which a browser may suppress — and which silently dropped any

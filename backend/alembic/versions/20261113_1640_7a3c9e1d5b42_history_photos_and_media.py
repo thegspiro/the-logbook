@@ -22,7 +22,7 @@ under ``<org>/history-media/``; take a database and uploads backup
 (``scripts/backup.sh``) before downgrading past this revision.
 
 Revision ID: 7a3c9e1d5b42
-Revises: 5e2b9c7d1a40
+Revises: 7735ee22aa76
 Create Date: 2026-11-13 16:40:00.000000
 
 """
@@ -33,7 +33,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "7a3c9e1d5b42"
-down_revision: Union[str, None] = "5e2b9c7d1a40"
+down_revision: Union[str, None] = "7735ee22aa76"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

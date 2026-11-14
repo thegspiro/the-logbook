@@ -37,7 +37,7 @@ const CandidateResultCard: React.FC<{ candidate: CandidateResult }> = ({ candida
           ? 'border-amber-500 bg-amber-500/10'
           : 'border-theme-surface-border bg-theme-surface-secondary'
     }`}
-    aria-label={`${candidate.candidate_name}: ${candidate.vote_count} votes, ${candidate.percentage}%${candidate.is_winner ? ', winner' : ''}`}
+    aria-label={`${candidate.candidate_name}: ${candidate.vote_count} ${candidate.vote_count === 1 ? 'vote' : 'votes'}, ${candidate.percentage}%${candidate.is_winner ? ', winner' : ''}`}
   >
     <div className="mb-2 flex items-center justify-between">
       <div className="flex items-center space-x-3">

@@ -6,13 +6,17 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.models.call_tracking import CallTrackingMode
 from app.schemas.evaluation import PartContent, TemplateDefinition
+from app.services.call_tracking_service import CallTrackingService
 from app.services.evaluation_data_service import (
+    EvaluationDataService,
     compute_coverage,
     first_full_month,
     sources_used,
     suggested_score,
 )
+from app.services.evaluation_data_sources import DATA_SOURCES
 from app.services.evaluation_service import (
     completeness_errors,
     form_definition,
@@ -20,6 +24,7 @@ from app.services.evaluation_service import (
     shape_errors,
     weighted_overall,
 )
+from app.services.scheduling_service import SchedulingService
 
 pytestmark = [pytest.mark.unit]
 
@@ -158,6 +163,118 @@ class TestCoverage:
         )
         assert coverage is not None
         assert coverage.end == date(2026, 9, 15)
+
+
+class TestIncludedStretches:
+    def test_overlapping_exclusions_are_cut_out_once(self):
+        leaves = [
+            SimpleNamespace(start_date=date(2026, 3, 1), end_date=date(2026, 4, 30)),
+            SimpleNamespace(start_date=date(2026, 4, 1), end_date=date(2026, 5, 31)),
+        ]
+        coverage = compute_coverage(
+            date(2026, 1, 1), date(2026, 12, 31), [(date(2020, 1, 1), None)], leaves
+        )
+        assert coverage is not None
+        assert coverage.included() == [
+            (date(2026, 1, 1), date(2026, 2, 28)),
+            (date(2026, 6, 1), date(2026, 12, 31)),
+        ]
+
+    def test_a_leave_running_to_the_end_leaves_only_the_start(self):
+        leave = SimpleNamespace(start_date=date(2026, 7, 1), end_date=None)
+        coverage = compute_coverage(
+            date(2026, 1, 1), date(2026, 12, 31), [(date(2020, 1, 1), None)], [leave]
+        )
+        assert coverage is not None
+        assert coverage.included() == [(date(2026, 1, 1), date(2026, 6, 30))]
+
+    def test_no_exclusions_is_the_whole_coverage(self):
+        coverage = compute_coverage(
+            date(2026, 1, 1), date(2026, 12, 31), [(date(2020, 1, 1), None)], []
+        )
+        assert coverage is not None
+        assert coverage.included() == [(date(2026, 1, 1), date(2026, 12, 31))]
+
+
+class TestCallResponseRate:
+    """The rate counts only the days the member was expected to respond: a
+    member on leave for half the year is not charged with every call the
+    department ran while they were away."""
+
+    @staticmethod
+    def _patch(monkeypatch, calls_by_month, member_calls_by_month):
+        def in_range(by_month, start, end):
+            return {
+                ym: n
+                for ym, n in by_month.items()
+                if (start.year, start.month) <= ym <= (end.year, end.month)
+            }
+
+        async def settings(self, org_id):
+            return {"mode": CallTrackingMode.DETAILED}
+
+        async def department(self, org_id, start, end):
+            return sum(in_range(calls_by_month, start, end).values())
+
+        async def month_totals(self, user_id, org_id, start, end):
+            return {
+                ym: {"calls": n}
+                for ym, n in in_range(member_calls_by_month, start, end).items()
+            }
+
+        monkeypatch.setattr(CallTrackingService, "get_settings", settings)
+        monkeypatch.setattr(CallTrackingService, "department_call_count", department)
+        monkeypatch.setattr(SchedulingService, "get_member_month_totals", month_totals)
+
+    async def test_calls_during_a_leave_count_on_neither_side(self, monkeypatch):
+        # 10 department calls a month; the member answered 8 a month until a
+        # leave from July, and came in for 2 calls in August anyway.
+        dept = {(2026, m): 10 for m in range(1, 13)}
+        mine = {(2026, m): 8 for m in range(1, 7)}
+        mine[(2026, 8)] = 2
+        self._patch(monkeypatch, dept, mine)
+        coverage = compute_coverage(
+            date(2026, 1, 1),
+            date(2026, 12, 31),
+            [(date(2020, 1, 1), None)],
+            [SimpleNamespace(start_date=date(2026, 7, 1), end_date=None)],
+        )
+        entry = await EvaluationDataService(None)._call_response(
+            "org", SimpleNamespace(id="m"), coverage
+        )
+        assert entry == {
+            "available": True,
+            "value": 80.0,
+            "responses": 48,
+            "department_calls": 60,
+            "capped": False,
+        }
+
+    async def test_no_calls_outside_the_exclusions_is_unavailable(self, monkeypatch):
+        self._patch(monkeypatch, {(2026, 9): 5}, {})
+        coverage = compute_coverage(
+            date(2026, 1, 1),
+            date(2026, 12, 31),
+            [(date(2020, 1, 1), None)],
+            [SimpleNamespace(start_date=date(2026, 7, 1), end_date=None)],
+        )
+        entry = await EvaluationDataService(None)._call_response(
+            "org", SimpleNamespace(id="m"), coverage
+        )
+        assert entry["available"] is False
+        assert "expected to respond" in entry["note"]
+
+
+class TestCatalogModules:
+    def test_every_business_meeting_source_is_in_one_group(self):
+        """The builder groups sources by module, so meeting attendance and the
+        meeting waiver sources must agree on it."""
+        meeting_keys = {
+            "events.meeting_attendance_pct",
+            "meetings.waivers_summary",
+            "meetings.waiver_history",
+        }
+        assert {s.module for s in DATA_SOURCES if s.key in meeting_keys} == {"meetings"}
 
 
 class TestSuggestedScore:

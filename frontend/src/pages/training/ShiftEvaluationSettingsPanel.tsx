@@ -11,9 +11,8 @@
  * hub gates on training.manage; the server accepts training.manage or
  * training.configure.
  *
- * Nothing reads these forms on a shift yet — the shift report starts using
- * them in the next release — so the panel says so rather than letting a
- * department believe a form is already being filled out (Pitfall #19).
+ * The shift report and the outside-shift list use these forms; the panel
+ * also sets how long a preceptor link stays open.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -80,6 +79,10 @@ const ShiftEvaluationSettingsPanel: React.FC = () => {
   const [templates, setTemplates] = useState<ShiftEvaluationTemplate[]>([]);
   const [settings, setSettings] = useState<ShiftEvaluationSettings | null>(null);
   const [draftSettings, setDraftSettings] = useState<ShiftEvaluationSettings | null>(null);
+  // What is typed in the link-window box, kept apart from the setting so a
+  // number can be typed over another one digit at a time; the setting follows
+  // whenever the text is a whole number from 1 to 60.
+  const [linkDaysText, setLinkDaysText] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [editor, setEditor] = useState<EditorState | null>(null);
   const [savingTemplate, setSavingTemplate] = useState(false);
@@ -350,12 +353,23 @@ const ShiftEvaluationSettingsPanel: React.FC = () => {
               min={1}
               max={60}
               className="form-input w-28"
-              value={draftSettings.shift_evaluation_link_days}
+              value={linkDaysText ?? String(draftSettings.shift_evaluation_link_days ?? '')}
               onChange={(e) => {
-                const days = Math.round(Number(e.target.value));
-                if (Number.isFinite(days)) {
+                const text = e.target.value;
+                setLinkDaysText(text);
+                const days = Number(text);
+                if (text.trim() !== '' && Number.isInteger(days) && days >= 1 && days <= 60) {
+                  setDraftSettings({ ...draftSettings, shift_evaluation_link_days: days });
+                }
+              }}
+              onBlur={() => {
+                // Leaving the box settles it: a whole number outside 1–60 goes
+                // to the nearer end, anything else back to the last valid one.
+                const days = Number(linkDaysText);
+                if (linkDaysText !== null && linkDaysText.trim() !== '' && Number.isInteger(days)) {
                   setDraftSettings({ ...draftSettings, shift_evaluation_link_days: Math.min(60, Math.max(1, days)) });
                 }
+                setLinkDaysText(null);
               }}
               aria-describedby="se-link-days-hint"
             />
