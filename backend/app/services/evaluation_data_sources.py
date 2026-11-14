@@ -104,6 +104,17 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "completion reports.",
     ),
     DataSource(
+        "shifts.field_evaluation_averages",
+        "Field shift evaluation scores",
+        "list",
+        "scheduling",
+        "The member's average rating on each field shift evaluation form, over "
+        "the evaluations submitted for shifts in the period that the member "
+        "can see, with how many there were. One line per form: forms on "
+        "different scales are never averaged together, so this is shown "
+        "beside the item rather than scored.",
+    ),
+    DataSource(
         "calls.responses",
         "Calls responded to",
         "count",

@@ -68,6 +68,7 @@ from app.services.qualification_service import (
 )
 from app.services.scheduling_service import SchedulingService
 from app.services.shift_completion_service import ShiftCompletionService
+from app.services.shift_evaluation_service import ShiftEvaluationService
 from app.services.training_compliance import (
     ComplianceGrading,
     _load_compliance_config,
@@ -452,6 +453,8 @@ class EvaluationDataService:
             return await self._events_attended(org_id, member, coverage, tz)
         if key == "shifts.performance_rating_avg":
             return await self._performance_rating(org_id, member, coverage)
+        if key == "shifts.field_evaluation_averages":
+            return await self._field_evaluation_averages(org_id, member, coverage)
         if key == "admin_hours.hours":
             return await self._admin_hours(org_id, member, coverage, tz)
         if key == "skills.tests_passed":
@@ -800,6 +803,40 @@ class EvaluationDataService:
         if avg is None:
             return _unavailable("No rated shift reports in the period.")
         return _value(avg)
+
+    async def _field_evaluation_averages(
+        self, org_id: str, member: User, coverage: Coverage
+    ) -> Dict[str, Any]:
+        """The shift-evaluation screens' own per-form averages
+        (``ShiftEvaluationService.averages_by_form``, CLAUDE.md pitfall #29),
+        over the coverage and limited to evaluations the member can see, as on
+        their own training page: the member reads this figure.
+        """
+        averages = await ShiftEvaluationService(self.db).averages_by_form(
+            member.id,
+            org_id,
+            start_date=coverage.start,
+            end_date=coverage.end,
+            member_view=True,
+        )
+        if not averages:
+            return _unavailable("No field shift evaluations in the period.")
+        return _value(
+            [
+                {
+                    "label": (
+                        f"{a['form_name']}: {a['average']:g} / {a['scale_max']} "
+                        f"({a['evaluations']} "
+                        f"{'evaluation' if a['evaluations'] == 1 else 'evaluations'})"
+                    ),
+                    "form_name": a["form_name"],
+                    "average": a["average"],
+                    "scale_max": a["scale_max"],
+                    "evaluations": a["evaluations"],
+                }
+                for a in averages
+            ]
+        )
 
     async def _call_response(
         self, org_id: str, member: User, coverage: Coverage
