@@ -91,6 +91,30 @@ regular set until given one.
   counts as none) until the secretary gives it one; the screen says so on that
   row.
 
+### Holding an election outside the defaults (2026-11-13)
+
+- **A reason is required whenever an election's rules differ from its kind's
+  defaults** (owner decision), on create and on any edit that touches the
+  rules, the kind or the reason. It is cleared when the rules match the
+  defaults again, written to the audit log
+  (`election_voter_rules_customized`), shown on the election, and carried in
+  the results the minutes file. This includes an explicit "no rules" (null),
+  which the API accepted without a reason before.
+- **A ballot item can follow another kind's rules, or rules of its own**
+  (owner decision: the bylaws carve-out is per ballot item, not per member).
+  Its own rules replace the election's — and the tier ladder's — for that item
+  only. Custom item rules need a reason; following a kind's defaults does not.
+- **In an election with such an item, a vote is judged live against the rules
+  of the item being voted on**, even for a member on the roll frozen when
+  voting opened. The roll holds everyone eligible for at least one item, so
+  being on it no longer proves eligibility for the item in hand. The cost: a
+  meeting recorded while the vote is open can change the answer for those
+  elections, which the frozen roll otherwise prevents. Elections with no such
+  item keep the frozen-roll behaviour.
+- **The create dialog's count of members who would receive a ballot** covers
+  the election's rules only, not each ballot item's own voter types, check-in
+  or carve-out rules; it says so beside the number.
+
 ## Evaluations — Waiver Data Points in the Annual Review (2026-11-11)
 
 The annual review can show a member's requests to be excused from training

@@ -58,6 +58,7 @@ from app.schemas.election import (
     ElectionStats,
     PositionResults,
     VoterEligibility,
+    VoterRuleException,
 )
 from app.services.email_policy import (
     EmailKind,
@@ -629,6 +630,77 @@ def _tier_name(user: Any, org: Any) -> str:
     return member_standing(user) or "active"
 
 
+def _voter_rule_exceptions(election: Any) -> List[VoterRuleException]:
+    """Each place this election's voter rules differ from the department's
+    defaults, with the reason given, for the results and so for the minutes
+    the results are filed in."""
+    exceptions: List[VoterRuleException] = []
+    reason = getattr(election, "eligibility_override_reason", None)
+    if reason:
+        exceptions.append(
+            VoterRuleException(
+                scope="election",
+                title=str(getattr(election, "title", "") or ""),
+                meeting_kind=getattr(election, "meeting_kind", None) or "regular",
+                reason=reason,
+            )
+        )
+    for item in getattr(election, "ballot_items", None) or []:
+        if not isinstance(item, dict):
+            continue
+        if not item.get("eligibility_rules"):
+            continue
+        exceptions.append(
+            VoterRuleException(
+                scope="ballot_item",
+                title=str(item.get("title") or item.get("id") or ""),
+                meeting_kind=item.get("eligibility_kind"),
+                reason=item.get("eligibility_override_reason"),
+            )
+        )
+    return exceptions
+
+
+def _item_rules(item: Any) -> Optional[Dict[str, Any]]:
+    """A ballot item's own voter rules, or None when it follows the
+    election's. Only a version 2 set counts: that is all the write path
+    accepts, and a malformed stored value must not silently replace the
+    election's rules with nothing."""
+    from app.services.voter_rules import is_type_rules
+
+    if not isinstance(item, dict):
+        return None
+    rules = item.get("eligibility_rules")
+    return rules if is_type_rules(rules) else None
+
+
+def _has_item_rules(election: Any) -> bool:
+    """Whether any of ``election``'s ballot items has voter rules of its own."""
+    return any(
+        _item_rules(item) is not None
+        for item in getattr(election, "ballot_items", None) or []
+    )
+
+
+def _items_for_position(election: Any, position: str) -> List[Dict[str, Any]]:
+    """The ballot items a vote on ``position`` belongs to.
+
+    A legacy item (no explicit "position") keys its candidates by title *or*
+    id -- the same aliases every other reader resolves through
+    ballot_item_candidate_positions. Matching title alone left an id-keyed
+    vote unmatched, so the item's rules were never evaluated (W50 S02).
+    """
+    return [
+        item
+        for item in getattr(election, "ballot_items", None) or []
+        if isinstance(item, dict)
+        and (
+            position in ballot_item_candidate_positions(item)
+            or item.get("title") == position
+        )
+    ]
+
+
 def _uses_type_rules(election: Any) -> bool:
     """Whether ``election`` carries version 2 (per-type) voter rules, which
     replace the membership tiers' own voting rules for it."""
@@ -1154,15 +1226,81 @@ class ElectionService:
         skipped rather than raised, because an exception here would take
         down the whole roster or ballot send rather than one rule.
         """
-        rules = getattr(election, "eligibility_rules", None)
+        return await self._rules_reason(
+            user,
+            organization_id,
+            (str(election.id), str(user.id)),
+            getattr(election, "eligibility_rules", None),
+        )
+
+    async def _rules_reason(
+        self,
+        user: "User",
+        organization_id: Any,
+        cache_key: Tuple[str, str],
+        rules: Any,
+    ) -> Optional[str]:
+        """Why ``user`` fails ``rules``, or None, read defensively and
+        cached per request under ``cache_key`` (one per election, or per
+        ballot item with rules of its own)."""
         if not isinstance(rules, dict):
             return None
-        key = (str(election.id), str(user.id))
-        if key in self._election_rule_reasons:
-            return self._election_rule_reasons[key]
+        if cache_key in self._election_rule_reasons:
+            return self._election_rule_reasons[cache_key]
         reason = await self._evaluate_election_rules(user, str(organization_id), rules)
-        self._election_rule_reasons[key] = reason
+        self._election_rule_reasons[cache_key] = reason
         return reason
+
+    async def _item_gate(
+        self,
+        user: "User",
+        election: Election,
+        organization_id: str,
+        item: Dict[str, Any],
+        election_gate: Tuple[Optional[str], bool],
+    ) -> Optional[str]:
+        """``_universal_gate``'s answer for one ballot item: the election's,
+        unless the item carries voter rules of its own, which then decide
+        alone -- they are version 2, so the tier ladder's rules do not apply
+        to the item either. A secretary override passes every item."""
+        reason, has_override = election_gate
+        if has_override:
+            return None
+        rules = _item_rules(item)
+        if rules is None:
+            return reason
+        return await self._rules_reason(
+            user,
+            organization_id,
+            (f"{election.id}:item:{item.get('id')}", str(user.id)),
+            rules,
+        )
+
+    async def _item_rules_reason_for_vote(
+        self,
+        user: "User",
+        election: Election,
+        organization_id: str,
+        position: Optional[str],
+    ) -> Optional[str]:
+        """Why ``user`` may not cast a vote on ``position`` under the rules
+        that govern it, in an election where some ballot item has rules of
+        its own; with no position, why they may vote on no item at all."""
+        gate = await self._universal_gate(user, election, organization_id)
+        if position:
+            items = _items_for_position(election, position)
+            if items:
+                return await self._item_gate(
+                    user, election, organization_id, items[0], gate
+                )
+            return gate[0]
+        annotated = await self.annotate_ballot_items_for_user(
+            user, election, organization_id
+        )
+        if any(i["eligibility"]["eligible"] for i in annotated):
+            return None
+        reasons = [i["eligibility"]["reason"] for i in annotated]
+        return next((r for r in reasons if r), gate[0])
 
     async def _evaluate_election_rules(
         self, user: "User", organization_id: str, rules: Dict[str, Any]
@@ -1286,14 +1424,17 @@ class ElectionService:
             org = org_result.scalar_one_or_none()
         # The universal gates come from the shared helper so this path can
         # never drift from the positional one.
-        gate_reason, has_override = await self._universal_gate(
-            user, election, organization_id, org
-        )
+        election_gate = await self._universal_gate(user, election, organization_id, org)
+        has_override = election_gate[1]
 
         annotated_items: List[Dict] = []
         for item in ballot_items:
             eligible = True
             reason = None
+            # The election's gate, or the item's own rules when it has them.
+            gate_reason = await self._item_gate(
+                user, election, organization_id, item, election_gate
+            )
 
             # A secretary override grants eligibility for every item
             if has_override:
@@ -1389,6 +1530,22 @@ class ElectionService:
         )
         if has_override:
             return None
+        if _has_item_rules(election):
+            # Items with rules of their own can admit a member the election's
+            # rules refuse, so the reason comes from the item decisions.
+            annotated = await self.annotate_ballot_items_for_user(
+                user, election, organization_id, org
+            )
+            if any(i["eligibility"]["eligible"] for i in annotated):
+                return None
+            reasons = list(
+                dict.fromkeys(
+                    i["eligibility"]["reason"]
+                    for i in annotated
+                    if i["eligibility"]["reason"]
+                )
+            )
+            return "; ".join(reasons) or None
         if gate_reason:
             return gate_reason
 
@@ -1797,6 +1954,28 @@ class ElectionService:
             snapshot is not None and not _has_override and str(user_id) not in snapshot
         )
 
+        # ---- A ballot item with voter rules of its own ----
+        # When any item carries its own rules (a bylaws question at a
+        # business meeting), the rules that decide this vote are that item's,
+        # not the election's, and the frozen roll -- drawn as "eligible for at
+        # least one item" -- no longer proves the member passed the rules of
+        # the item in hand. So they are judged live against the rules of the
+        # item being voted on, in place of the tier and election-wide checks
+        # below. An election with no such item is judged exactly as before.
+        has_item_rules = _has_item_rules(election)
+        if has_item_rules and not _has_override:
+            item_reason = await self._item_rules_reason_for_vote(
+                user, election, str(organization_id), position
+            )
+            if item_reason:
+                return VoterEligibility(
+                    is_eligible=False,
+                    has_voted=False,
+                    positions_voted=[],
+                    positions_remaining=[],
+                    reason=item_reason,
+                )
+
         # ---- Membership tier voting rules ----
         # Look up the member's tier in org settings and enforce voting_eligible
         # and meeting attendance requirements.
@@ -1806,7 +1985,12 @@ class ElectionService:
         )
         org = org_result.scalar_one_or_none()
         # Version 2 rules replace the tier rules, and are checked below.
-        if org and not _has_override and not _uses_type_rules(election):
+        if (
+            org
+            and not _has_override
+            and not _uses_type_rules(election)
+            and not has_item_rules
+        ):
             tier_def = _member_tier(user, org)
             if tier_def:
                 benefits = tier_benefits(tier_def)
@@ -1855,7 +2039,7 @@ class ElectionService:
         # held mid-vote take away a ballot the member's emailed link -- which
         # carries the send-time snapshot -- still honours.
         on_frozen_roll = snapshot is not None and str(user_id) in snapshot
-        if not _has_override and not on_frozen_roll:
+        if not _has_override and not on_frozen_roll and not has_item_rules:
             rules_reason = await self._election_rules_reason(
                 user, election, str(organization_id)
             )
@@ -1905,17 +2089,7 @@ class ElectionService:
 
         # Check ballot item eligibility (member class + attendance)
         if position and election.ballot_items:
-            # A legacy item (no explicit "position") keys its candidates by
-            # title *or* id — the same aliases every other reader resolves
-            # through ballot_item_candidate_positions. Matching title alone
-            # left an id-keyed vote unmatched here, so the item's voter-type
-            # and attendance rules were never evaluated (W50 S02).
-            matching_items = [
-                item
-                for item in election.ballot_items
-                if position in ballot_item_candidate_positions(item)
-                or item.get("title") == position
-            ]
+            matching_items = _items_for_position(election, position)
             for item in matching_items:
                 # Check member class / role eligibility
                 eligible_types = item.get("eligible_voter_types", ["all"])
@@ -3463,6 +3637,47 @@ class ElectionService:
 
         return total
 
+    async def preview_rules_electorate(
+        self, organization_id: UUID | str, rules: Optional[Dict[str, Any]]
+    ) -> Tuple[int, int]:
+        """``(eligible, total)``: how many of the department's active members
+        a new election carrying ``rules`` would admit today, judged by the
+        same gate the ballot send applies (``_universal_gate``), so the
+        preview a secretary sees while customizing an election cannot
+        disagree with the ballots it would then send (pitfall #29).
+
+        Ballot-item voter types and check-in are left out: they are judged
+        per item, and an election being created has no attendance yet.
+        """
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = org_result.scalar_one_or_none()
+        # A stand-in election, never added to the session: only what the
+        # gate reads. Its id is fresh so the per-request rule cache cannot
+        # hand one preview another's answers.
+        stand_in = Election(
+            id=str(uuid4()),
+            organization_id=str(organization_id),
+            eligibility_rules=rules,
+            voter_overrides=None,
+            ballot_items=None,
+        )
+        members_result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == str(organization_id))
+            .where(User.is_active)
+        )
+        members = list(members_result.scalars().all())
+        eligible = 0
+        for member in members:
+            reason, _ = await self._universal_gate(
+                member, stand_in, str(organization_id), org
+            )
+            if reason is None:
+                eligible += 1
+        return eligible, len(members)
+
     async def get_election_results(
         self,
         election_id: UUID | str,
@@ -3739,6 +3954,7 @@ class ElectionService:
             quorum_met=quorum_met,
             quorum_detail=quorum_detail,
             tie_policy=getattr(election, "tie_policy", None) or "co_winners",
+            voter_rule_exceptions=_voter_rule_exceptions(election),
         )
 
     async def _calculate_candidate_results(
@@ -6015,6 +6231,10 @@ class ElectionService:
             ballot_items=cloned_ballot_items,
             position_eligibility=copy.deepcopy(source.position_eligibility),
             eligibility_rules=copy.deepcopy(getattr(source, "eligibility_rules", None)),
+            # The reason travels with the rules it explains.
+            eligibility_override_reason=getattr(
+                source, "eligibility_override_reason", None
+            ),
             meeting_kind=getattr(source, "meeting_kind", None) or "regular",
             start_date=start_date,
             end_date=end_date,
@@ -7132,6 +7352,9 @@ class ElectionService:
             # A runoff decides the same race, so the same voters qualify.
             eligibility_rules=copy.deepcopy(
                 getattr(election, "eligibility_rules", None)
+            ),
+            eligibility_override_reason=getattr(
+                election, "eligibility_override_reason", None
             ),
             meeting_kind=getattr(election, "meeting_kind", None) or "regular",
             start_date=runoff_start,
@@ -12055,13 +12278,18 @@ class ElectionService:
             eligible_count = 0
             for item in ballot_items:
                 if has_override or not election.eligible_voters or in_eligible_list:
-                    eligible_items = await self._get_eligible_ballot_items_for_user(
+                    annotated = await self.annotate_ballot_items_for_user(
                         user,
                         election,
                         str(organization_id),
                         organization,
                     )
-                    item_ids = {i.get("id") for i in eligible_items}
+                    item_ids = {
+                        i.get("id") for i in annotated if i["eligibility"]["eligible"]
+                    }
+                    annotated_reasons = {
+                        i.get("id"): i["eligibility"]["reason"] for i in annotated
+                    }
                     for bi in ballot_items:
                         is_eligible = bi.get("id") in item_ids
                         reason = None
@@ -12077,6 +12305,10 @@ class ElectionService:
                                 )
                             elif bi.get("require_attendance") and not is_attending:
                                 reason = "Not checked in for meeting"
+                            else:
+                                # Refused by the voter rules that govern the
+                                # item: the election's, or its own.
+                                reason = annotated_reasons.get(bi.get("id"))
                         item_eligibility.append(
                             {
                                 "ballot_item_id": bi.get("id", ""),

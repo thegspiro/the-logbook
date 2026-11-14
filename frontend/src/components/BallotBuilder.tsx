@@ -38,11 +38,13 @@ import {
   X,
 } from 'lucide-react';
 import { electionService } from '../services/api';
-import { DEFAULT_ELIGIBILITY, VOTER_TYPE_OPTIONS } from '../modules/elections/eligibilityRules';
+import { DEFAULT_ELIGIBILITY, VOTER_TYPE_OPTIONS, itemRulesLabel } from '../modules/elections/eligibilityRules';
+import { BallotItemVoterRules } from '../modules/elections/components/BallotItemVoterRules';
 import type {
   Election,
   BallotItem,
   BallotTemplate,
+  ElectionEligibilityRules,
   EligibilityDefaults,
   SavedBallotTemplate,
   VictoryCondition,
@@ -130,6 +132,8 @@ interface SortableBallotCardProps {
   isLocked: boolean;
   saving: boolean;
   election: Election;
+  /** The department's regular voter rules, where custom item rules start. */
+  fallbackRules: ElectionEligibilityRules;
   onToggleExpand: (id: string) => void;
   onRequestDelete: (id: string) => void;
   onConfirmDelete: (id: string) => void;
@@ -145,6 +149,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
   isLocked,
   saving,
   election,
+  fallbackRules,
   onToggleExpand,
   onRequestDelete,
   onConfirmDelete,
@@ -293,6 +298,11 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                 Attendance Req.
               </span>
             )}
+            {itemRulesLabel(item) && (
+              <span className="bg-theme-surface-secondary text-theme-text-muted rounded-md px-2 py-0.5 text-[11px]">
+                {itemRulesLabel(item)}
+              </span>
+            )}
             {victoryLabel ? (
               <span className="rounded-md bg-green-500/10 px-2 py-0.5 text-[11px] text-green-800 dark:text-green-400">
                 {victoryLabel}
@@ -421,6 +431,18 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   Require meeting attendance
                 </label>
               </div>
+            </div>
+
+            {/* ── Voter Rules (the carve-out) ── */}
+            <div className="border-theme-surface-border mt-4 border-t pt-4">
+              <h4 className="text-theme-text-muted mb-3 text-xs font-semibold tracking-wider uppercase">Voter Rules</h4>
+              <BallotItemVoterRules
+                item={item}
+                electionRules={election.eligibility_rules}
+                fallbackRules={fallbackRules}
+                disabled={isLocked || saving}
+                onApply={(updates) => onUpdateItem(item.id, updates)}
+              />
             </div>
 
             {/* ── Approval Rules ── */}
@@ -1209,6 +1231,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
                       isLocked={isLocked}
                       saving={saving}
                       election={election}
+                      fallbackRules={eligibilityDefaults.rules}
                       onToggleExpand={handleToggleExpand}
                       onRequestDelete={handleRequestDelete}
                       onConfirmDelete={handleConfirmDelete}
