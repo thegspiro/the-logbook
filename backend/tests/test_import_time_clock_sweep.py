@@ -58,6 +58,36 @@ def _import_time_reads(path: Path) -> list[str]:
     return found
 
 
+def _clock_names(tree: ast.Module) -> set[str]:
+    """The names a module takes from its _clock(): ``NOW, X = _clock().values()``."""
+    names: set[str] = set()
+    for stmt in tree.body:
+        if not (isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Call)):
+            continue
+        func = stmt.value.func
+        if not (isinstance(func, ast.Attribute) and func.attr == "values"):
+            continue
+        for target in stmt.targets:
+            elements = target.elts if isinstance(target, ast.Tuple) else [target]
+            names.update(e.id for e in elements if isinstance(e, ast.Name))
+    return names
+
+
+def _frozen_clock_defaults(path: Path) -> list[str]:
+    """Defaults that capture a clock name: evaluated once, at definition."""
+    tree = ast.parse(path.read_text(), filename=str(path))
+    names = _clock_names(tree)
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            continue
+        defaults = node.args.defaults + [d for d in node.args.kw_defaults if d]
+        for default in defaults:
+            if {n.id for n in ast.walk(default) if isinstance(n, ast.Name)} & names:
+                found.append(f"{path.name}:{node.lineno}")
+    return found
+
+
 def test_no_test_module_reads_the_clock_at_import():
     offenders = [
         hit for path in sorted(TESTS.rglob("*.py")) for hit in _import_time_reads(path)
@@ -69,6 +99,32 @@ def test_no_test_module_reads_the_clock_at_import():
         "_clock() function registered with tests.clock_support."
         "reread_each_test: " + ", ".join(offenders)
     )
+
+
+def test_no_default_argument_freezes_a_clock_value():
+    offenders = [
+        hit
+        for path in sorted(TESTS.rglob("*.py"))
+        for hit in _frozen_clock_defaults(path)
+    ]
+    assert offenders == [], (
+        "These functions take a clock value as a parameter default, which is "
+        "evaluated once when the function is defined at import, so the "
+        "per-test refresh never reaches it. Default to None and read the "
+        "name in the body: " + ", ".join(offenders)
+    )
+
+
+def test_a_default_naming_a_clock_value_is_seen(tmp_path):
+    module = tmp_path / "test_example.py"
+    module.write_text(
+        "NOW, SOON = _clock().values()\n"
+        "def made(at=SOON):\n"
+        "    return at\n"
+        "def fine(at=None):\n"
+        "    return at or SOON\n"
+    )
+    assert _frozen_clock_defaults(module) == ["test_example.py:2"]
 
 
 def test_the_sweep_sees_each_shape_it_names():

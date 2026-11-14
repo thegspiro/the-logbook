@@ -1939,13 +1939,16 @@ _reread_clock = reread_each_test(__name__, _clock)
 ```
 
 Derive the values that depend on `NOW` inside the same `_clock()`, so they move
-with it. And build test data relative to the moment a test needs, not to "now"
+with it, and never use one as a parameter default (`def _alert(expires=SOON)`):
+a default is evaluated once, when the function is defined at import. Default to
+`None` and read the name in the body. And build test data relative to the moment a test needs, not to "now"
 plus an offset that can cross a date boundary: a record "made now" for a shift
 "14 hours ago" is a different day for part of every day.
 
 **Rule:** no test module reads the clock at module level.
 `tests/test_import_time_clock_sweep.py` fails on a new module-level
-`date.today()`, `datetime.now()` or `datetime.utcnow()` under `backend/tests/`.
+`date.today()`, `datetime.now()` or `datetime.utcnow()` under `backend/tests/`,
+and on a parameter default that names one of a module's `_clock()` values.
 
 ## Environment Variables
 
