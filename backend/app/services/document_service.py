@@ -632,7 +632,7 @@ class DocumentService:
                     else ""
                 ),
                 (
-                    f"Ballots cast: {escape(str(snapshot['total_votes']))}"
+                    f"Votes cast: {escape(str(snapshot['total_votes']))}"
                     if "total_votes" in snapshot
                     else ""
                 ),

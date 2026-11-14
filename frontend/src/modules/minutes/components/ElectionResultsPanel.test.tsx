@@ -67,11 +67,20 @@ describe('ElectionResultsPanel', () => {
     mockImportable.mockResolvedValue([]);
   });
 
+  // total_votes counts votes, one per race a ballot marked, so "ballots cast"
+  // overstated a multi-race election (W50-76, as the certified PDF reads).
+  it('labels the total as votes, in the singular for one', async () => {
+    mockList.mockResolvedValue([{ ...filed, snapshot: { ...filed.snapshot, total_votes: 1 } }]);
+    renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
+
+    expect(await screen.findByText(/12 eligible · 1 vote cast ·/)).toBeInTheDocument();
+  });
+
   it('shows the filed tally with turnout, quorum and the winner', async () => {
     renderWithRouter(<ElectionResultsPanel minutesId="m1" canFile={false} canRemoveDrafted={false} />);
 
     expect(await screen.findByRole('heading', { name: 'Officer election' })).toBeInTheDocument();
-    expect(screen.getByText(/12 eligible · 9 ballots cast · 75% turnout · Quorum met/)).toBeInTheDocument();
+    expect(screen.getByText(/12 eligible · 9 votes cast · 75% turnout · Quorum met/)).toBeInTheDocument();
     expect(screen.getByText(/Filed .* by Sam Secretary/)).toBeInTheDocument();
     const table = screen.getByRole('table', { name: 'Results for Chief' });
     expect(within(table).getByText('Winner')).toBeInTheDocument();

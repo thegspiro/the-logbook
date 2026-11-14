@@ -174,7 +174,7 @@ def _election_block(
     closed = election.get("closed_display")
     facts = [
         f"Eligible voters: {snapshot.get('total_eligible_voters', '—')}",
-        f"Ballots cast: {snapshot.get('total_votes', '—')}",
+        f"Votes cast: {snapshot.get('total_votes', '—')}",
         f"Turnout: {snapshot.get('voter_turnout_percentage', '—')}%",
     ]
     if snapshot.get("quorum_detail"):

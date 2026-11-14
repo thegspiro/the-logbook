@@ -257,7 +257,11 @@ export const ElectionResultsPanel: React.FC<ElectionResultsPanelProps> = ({
               <p className="text-theme-text-secondary mt-2 text-xs">
                 {[
                   snapshot.total_eligible_voters !== undefined ? `${snapshot.total_eligible_voters} eligible` : null,
-                  snapshot.total_votes !== undefined ? `${snapshot.total_votes} ballots cast` : null,
+                  // total_votes counts votes, one per race a ballot marked, not
+                  // ballots (W50-76, as the certified results PDF labels it).
+                  snapshot.total_votes !== undefined
+                    ? `${snapshot.total_votes} ${snapshot.total_votes === 1 ? 'vote' : 'votes'} cast`
+                    : null,
                   snapshot.voter_turnout_percentage !== undefined
                     ? `${snapshot.voter_turnout_percentage}% turnout`
                     : null,

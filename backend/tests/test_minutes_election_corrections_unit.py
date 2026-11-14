@@ -101,7 +101,7 @@ class TestThePrintedCopy:
             in (text)
         )
         assert "Reason given: Two <ballots> counted twice" in text
-        assert "Ballots cast: 9" in text
+        assert "Votes cast: 9" in text
 
     def test_the_re_runs_result_names_the_correction_it_replaces(self):
         entry = _printed(replaces_display="October 20, 2026")["election_results"][0]
