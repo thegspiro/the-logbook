@@ -192,6 +192,8 @@ matched automatically, so you mark them paid by hand.
 
 ![PayPal account members pay into, with The connected PayPal account chosen and the note that members are sent to https://paypal.me/oakvillefd and treasurer@oakvillefd.org, and that payments to it are matched to orders automatically](./images/18-07-store-paypal-account.png)
 
+![PayPal account members pay into, with The connected PayPal account chosen and the warning that PayPal is not connected on the Integrations page, so until it is, members are sent to the fallback link and email below](./images/18-08-store-paypal-fallback.png)
+
 Cash App and Zelle details are **checked when you save**. A mistyped
 `$cashtag` gives an error, rather than a button that quietly goes missing.
 

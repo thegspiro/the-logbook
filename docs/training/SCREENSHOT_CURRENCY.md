@@ -250,6 +250,9 @@ their captions rewritten. `18-07-store-paypal-account` is new: the store's
 answered as "the connected account" and that account's link and email filled
 in. `18-02-store-admin` was re-captured to check it and put back: the demo
 store does not accept PayPal, so the choice is not in its frame.
+`18-08-store-paypal-fallback` pictures the fallback warning: the same choice,
+with the settings read answered as "connected account" and no connected
+PayPal integration.
 
 ## The October 16 – November 1 queues, captured 2026-11-02
 

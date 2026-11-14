@@ -12434,6 +12434,51 @@ export const SHOTS = [
     selector: 'fieldset:has([data-testid="paypal-account-note"])',
   },
   {
+    // The fallback case: the store set to the connected account while PayPal
+    // is not connected, so the settings read reports no connected account.
+    // Answered from the real read with only those two fields changed (and
+    // PayPal accepted); nothing is saved.
+    id: "18-08-store-paypal-fallback",
+    doc: "18-storefront.md",
+    line: 199,
+    anchor:
+      "with the store set to The connected PayPal account while PayPal is not",
+    alt: "PayPal account members pay into, with The connected PayPal account chosen and the warning that PayPal is not connected on the Integrations page, so until it is, members are sent to the fallback link and email below",
+    route: "/inventory/admin/store?tab=settings",
+    beforeNavigate: async (page) => {
+      await page.route(/\/api\/v1\/store\/settings(\?.*)?$/, async (route) => {
+        if (route.request().method() !== "GET") {
+          await route.abort();
+          return;
+        }
+        const response = await route.fetch();
+        const body = await response.json();
+        const accepted = Array.isArray(body.acceptedPaymentMethods)
+          ? body.acceptedPaymentMethods
+          : [];
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            ...body,
+            acceptedPaymentMethods: accepted.includes("paypal")
+              ? accepted
+              : [...accepted, "paypal"],
+            paypalUseConnected: true,
+            connectedPaypal: null,
+          }),
+        });
+      });
+    },
+    prepare: async (page) => {
+      await page
+        .locator('[data-testid="paypal-account-note"]')
+        .waitFor({ timeout: 20_000 });
+    },
+    expect: "members are sent to the fallback link and email below",
+    selector: 'fieldset:has([data-testid="paypal-account-note"])',
+  },
+  {
     id: "18-05-store-offline-overview",
     doc: "18-storefront.md",
     line: 122,
