@@ -3,7 +3,8 @@
 Two pull requests branched from ``7735ee22aa76`` and merged on 2026-11-14,
 each tested against a main that did not yet have the other:
 
-* History phase 3 (photos and media) added ``7a3c9e1d5b42``.
+* History phase 3 (photos and media) added ``7a3c9e1d5b42``, which phase 4
+  (#4313) has since extended with ``4d8e2b6f1c93``.
 * #4295 (election and minutes emails as editable templates) added
   ``c4e81b7a2d95``.
 
@@ -15,7 +16,7 @@ applies the other on its next upgrade.
 Nothing is created here. Each parent already does its own work.
 
 Revision ID: e2b7d94c1a63
-Revises: 7a3c9e1d5b42, c4e81b7a2d95
+Revises: 4d8e2b6f1c93, c4e81b7a2d95
 Create Date: 2026-11-14 18:30:00.000000
 
 """
@@ -24,7 +25,7 @@ from typing import Sequence, Union
 
 # revision identifiers, used by Alembic.
 revision: str = "e2b7d94c1a63"
-down_revision: Union[str, None] = ("7a3c9e1d5b42", "c4e81b7a2d95")
+down_revision: Union[str, None] = ("4d8e2b6f1c93", "c4e81b7a2d95")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

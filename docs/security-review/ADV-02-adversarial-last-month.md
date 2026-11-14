@@ -63,8 +63,9 @@ rotation's own open pull request.
   and training-session reads answer a non-organizer as for a missing event.
   Tests: `tests/test_draft_event_side_paths.py`.
 
-Separately, `main` had two Alembic heads (`7a3c9e1d5b42`, `c4e81b7a2d95`), so
-`alembic upgrade head` refused to run. Merge revision `e2b7d94c1a63` joins them.
+Separately, `main` had two Alembic heads (`4d8e2b6f1c93` on the History branch,
+`c4e81b7a2d95`), so `alembic upgrade head` refused to run. Merge revision
+`e2b7d94c1a63` joins them.
 
 ## Awaiting an owner decision
 
