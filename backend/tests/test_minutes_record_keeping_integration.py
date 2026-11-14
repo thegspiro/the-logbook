@@ -28,6 +28,7 @@ from app.models.minute import (
 )
 from app.services import file_storage_service as file_storage
 from app.services import upload_scanning
+from app.services.email_service import EmailService
 from tests.minutes_support import (
     _approve,
     _client,
@@ -962,10 +963,15 @@ class TestMyActionItems:
 class TestAssignmentEmail:
     @pytest.fixture
     def mailer(self, monkeypatch):
+        # Only the send is replaced: the body is rendered from the template.
         sender = MagicMock()
         sender.send_email = AsyncMock(return_value=(1, 0))
+
+        class Recording(EmailService):
+            send_email = sender.send_email
+
         monkeypatch.setattr(
-            "app.services.minutes_notifications.EmailService", lambda: sender
+            "app.services.minutes_notifications.EmailService", Recording
         )
         return sender
 
