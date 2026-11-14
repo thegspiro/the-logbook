@@ -530,6 +530,7 @@ export interface MediaSummary {
   taken_date: string | null;
   taken_date_precision: DatePrecision;
   taken_date_circa: boolean;
+  duration_seconds: number | null;
   has_thumbnail: boolean;
   publication_level: PublicationLevel;
 }
@@ -565,6 +566,7 @@ interface MediaCatalogue {
   original_location: string | null;
   width: number | null;
   height: number | null;
+  duration_seconds: number | null;
   has_thumbnail: boolean;
   mime_type: string | null;
   publication_level: PublicationLevel;

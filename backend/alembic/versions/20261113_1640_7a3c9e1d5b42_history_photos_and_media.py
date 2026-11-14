@@ -159,6 +159,7 @@ def upgrade() -> None:
             sa.Column("original_filename", sa.String(255), nullable=False),
             sa.Column("width", sa.Integer(), nullable=True),
             sa.Column("height", sa.Integer(), nullable=True),
+            sa.Column("duration_seconds", sa.Integer(), nullable=True),
             sa.Column("batch_id", sa.String(36), nullable=True),
             sa.Column(
                 "publication_level",

@@ -183,6 +183,16 @@ class TestAgainstARealDatabase:
         _run(scratch.engine, MIGRATION.upgrade)
         assert new_tables <= _tables(scratch.engine)
 
+    def test_the_media_table_has_every_column_the_model_maps(self, scratch):
+        """The migration builds history_media; a column the model gained (the
+        recording length) and the migration lacked would fail the first
+        upload on an upgraded install."""
+        _existing_archive(scratch.engine)
+        _run(scratch.engine, MIGRATION.upgrade)
+        with scratch.engine.connect() as conn:
+            built = {c["name"] for c in sa.inspect(conn).get_columns(MIGRATION.MEDIA)}
+        assert {c.name for c in HistoryMedia.__table__.columns} == built
+
     def test_deleting_an_item_takes_what_hangs_off_it(self, scratch):
         _existing_archive(scratch.engine)
         _run(scratch.engine, MIGRATION.upgrade)

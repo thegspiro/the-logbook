@@ -263,6 +263,7 @@ class HistoryMediaService:
             "taken_date": item.taken_date,
             "taken_date_precision": item.taken_date_precision,
             "taken_date_circa": item.taken_date_circa,
+            "duration_seconds": item.duration_seconds,
             "has_thumbnail": self.file_of(item, MediaFileRole.THUMBNAIL) is not None,
             "publication_level": item.publication_level,
         }
@@ -286,18 +287,14 @@ class HistoryMediaService:
             "original_location": item.original_location,
             "width": item.width,
             "height": item.height,
+            "duration_seconds": item.duration_seconds,
             "has_thumbnail": self.file_of(item, MediaFileRole.THUMBNAIL) is not None,
             "mime_type": self._viewing_mime(item),
             "publication_level": item.publication_level,
         }
 
     def _viewing_mime(self, item: HistoryMedia) -> Optional[str]:
-        role = (
-            MediaFileRole.DISPLAY
-            if item.kind == MediaKind.PHOTO
-            else MediaFileRole.ORIGINAL
-        )
-        stored = self.file_of(item, role)
+        stored = self.file_of(item, MediaFileRole.DISPLAY)
         return stored.mime_type if stored else None
 
     def member_view(self, viewer: Viewer, item: HistoryMedia) -> dict[str, Any]:
@@ -553,9 +550,13 @@ class HistoryMediaService:
         rules = media_files.rules_for(filename)
         if rules is None:
             raise ValueError(
-                "This file type is not accepted. Photos: JPEG, PNG, WebP or TIFF; "
+                "This file type is not accepted. Photos: JPEG, PNG or WebP; "
                 "audio: MP3, M4A, WAV or FLAC; video: MP4 or WebM"
             )
+        # Checked before anything is stored: without ffmpeg a recording could
+        # only be kept unstripped, and members must never be given that.
+        if rules is media_files.AV_RULES and not media_files.ffmpeg_available():
+            raise media_files.MediaToolMissing()
         values = _clean(values)
         source_id = await self._validated_source_id(
             organization_id, values.pop("source_id", None)
@@ -589,33 +590,53 @@ class HistoryMediaService:
                     sha256=stored.sha256,
                 )
             ]
-            width = height = None
+            width = height = duration = None
+            # (role, bytes, extension, MIME type) of each copy readers get.
+            derived: list[tuple[MediaFileRole, bytes, str, str]] = []
             if kind == MediaKind.PHOTO:
                 copies = await asyncio.to_thread(media_files.make_photo_copies, content)
                 width, height = copies.width, copies.height
-                for role, data in (
-                    (MediaFileRole.DISPLAY, copies.display),
-                    (MediaFileRole.THUMBNAIL, copies.thumbnail),
-                ):
-                    path = await file_storage.write_file(
-                        organization_id,
-                        AREA,
-                        media_id,
-                        f"{uuid.uuid4().hex}.webp",
-                        data,
-                        db=self.db,
+                derived = [
+                    (MediaFileRole.DISPLAY, copies.display, ".webp", "image/webp"),
+                    (MediaFileRole.THUMBNAIL, copies.thumbnail, ".webp", "image/webp"),
+                ]
+            else:
+                av = await asyncio.to_thread(
+                    media_files.make_av_copies, content, stored.extension, kind
+                )
+                width, height, duration = av.width, av.height, av.duration_seconds
+                derived = [
+                    (
+                        MediaFileRole.DISPLAY,
+                        av.cleaned,
+                        stored.extension,
+                        stored.mime_type,
                     )
-                    written.append(path)
-                    files.append(
-                        HistoryMediaFile(
-                            media_id=media_id,
-                            role=role,
-                            file_path=path,
-                            mime_type="image/webp",
-                            size_bytes=len(data),
-                            sha256=hashlib.sha256(data).hexdigest(),
-                        )
+                ]
+                if av.poster is not None:
+                    derived.append(
+                        (MediaFileRole.THUMBNAIL, av.poster, ".webp", "image/webp")
                     )
+            for role, data, extension, mime_type in derived:
+                path = await file_storage.write_file(
+                    organization_id,
+                    AREA,
+                    media_id,
+                    f"{uuid.uuid4().hex}{extension}",
+                    data,
+                    db=self.db,
+                )
+                written.append(path)
+                files.append(
+                    HistoryMediaFile(
+                        media_id=media_id,
+                        role=role,
+                        file_path=path,
+                        mime_type=mime_type,
+                        size_bytes=len(data),
+                        sha256=hashlib.sha256(data).hexdigest(),
+                    )
+                )
             item = HistoryMedia(
                 id=media_id,
                 organization_id=str(organization_id),
@@ -624,6 +645,7 @@ class HistoryMediaService:
                 original_filename=stored.original_name[:255],
                 width=width,
                 height=height,
+                duration_seconds=duration,
                 batch_id=batch_id,
                 source_id=source_id,
                 created_by=str(actor.id),

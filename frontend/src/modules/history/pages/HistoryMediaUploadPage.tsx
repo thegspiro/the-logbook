@@ -6,14 +6,14 @@
  * 60 MB per request, and one refused file (wrong type, too large, unreadable)
  * must not stop the rest. Every file becomes a draft.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { AlertTriangle, CheckCircle2, Loader2, Upload, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, Upload, XCircle } from 'lucide-react';
 import { Breadcrumbs } from '../../../components/ux/Breadcrumbs';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { MediaCatalogueFields } from '../components/MediaCatalogueFields';
 import { EMPTY_CATALOGUE, catalogueForCreate, type CatalogueForm } from '../utils/mediaCatalogue';
-import { AV_EXTENSIONS, MAX_FILES, PHOTO_EXTENSIONS, extensionOf, precheck } from '../utils/mediaUpload';
+import { AV_EXTENSIONS, MAX_FILES, PHOTO_EXTENSIONS, precheck } from '../utils/mediaUpload';
 import { PersonTagPicker, type PickedPerson } from '../components/PersonTagPicker';
 import { historyMediaService } from '../services/api';
 import type { HistorySource } from '../types';
@@ -91,7 +91,6 @@ export const HistoryMediaUploadPage: React.FC = () => {
 
   const waiting = queue.filter((q) => q.state === 'waiting').length;
   const done = queue.filter((q) => q.state === 'done').length;
-  const hasAv = useMemo(() => queue.some((q) => AV_EXTENSIONS.includes(extensionOf(q.file.name))), [queue]);
 
   return (
     <div className="mx-auto max-w-4xl p-4 sm:p-6">
@@ -112,9 +111,10 @@ export const HistoryMediaUploadPage: React.FC = () => {
           Files
         </h2>
         <p className="text-theme-text-secondary mb-3 text-sm">
-          Up to {MAX_FILES} at a time. Photos: JPEG, PNG, WebP or TIFF, up to 20 MB. Audio: MP3, M4A, WAV or FLAC;
-          video: MP4 or WebM, up to 55 MB. The original is kept exactly as uploaded and only the Historian can download
-          it; a photo is shown to everyone else with its location and camera data removed.
+          Up to {MAX_FILES} at a time. Photos: JPEG, PNG or WebP, up to 20 MB (convert TIFF scans to JPEG or PNG first).
+          Audio: MP3, M4A, WAV or FLAC; video: MP4 or WebM, up to 55 MB. The original is kept exactly as uploaded and
+          only the Historian can download it; everyone else gets a copy with its location, camera and recording-device
+          details removed.
         </p>
         <input
           type="file"
@@ -128,13 +128,6 @@ export const HistoryMediaUploadPage: React.FC = () => {
         {tooMany && (
           <p role="alert" className="alert-warning mt-2 rounded-md p-2 text-sm">
             Only the first {MAX_FILES} files were added. Upload the rest as another batch.
-          </p>
-        )}
-        {hasAv && (
-          <p className="alert-warning mt-2 flex items-start gap-2 rounded-md p-2 text-sm">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            Audio and video are shown to members exactly as uploaded. A recording made on a phone can carry the place it
-            was made; check before publishing one.
           </p>
         )}
         {queue.length > 0 && (

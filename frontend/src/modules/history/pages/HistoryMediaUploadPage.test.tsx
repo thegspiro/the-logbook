@@ -58,10 +58,13 @@ describe('HistoryMediaUploadPage', () => {
     expect(firstCall?.[2]).toBe(secondCall?.[2]);
   });
 
-  it('warns that audio and video are shown as uploaded', async () => {
+  it('marks a TIFF scan as not accepted and does not send it', async () => {
+    const user = userEvent.setup({ applyAccept: false });
     renderPage();
-    await userEvent.upload(screen.getByLabelText('Choose files'), new File(['a'], 'interview.mp3'));
-    expect(screen.getByText(/shown to members exactly as uploaded/)).toBeInTheDocument();
+    await user.upload(screen.getByLabelText('Choose files'), new File(['a'], 'scan.tif', { type: 'image/tiff' }));
+    const queue = screen.getByRole('list', { name: 'Upload queue' });
+    expect(within(queue).getByText('Not an accepted type')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upload 0 files' })).toBeDisabled();
   });
 
   it('takes at most 25 files', async () => {

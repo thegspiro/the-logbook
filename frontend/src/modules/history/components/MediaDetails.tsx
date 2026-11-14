@@ -1,7 +1,8 @@
 /**
  * A photo, recording or video and its catalogue, as anyone allowed to read it
- * sees it. A photo is always the server's stripped viewing copy; audio and
- * video play from the server, which answers range requests so they can seek.
+ * sees it. Everything shown is the server's stripped copy, never the original:
+ * a photo's WebP viewing copy, or a recording with its tags removed, played
+ * from the server, which answers range requests so it can seek.
  * The research notes and the original file are not part of this — a member's
  * payload does not carry them at all.
  */
@@ -10,7 +11,7 @@ import { Link } from 'react-router';
 import { FileAudio, FileVideo, Image as ImageIcon } from 'lucide-react';
 import { mediaFileUrl } from '../services/api';
 import type { MediaKind, MediaSummary, MediaView } from '../types';
-import { formatPartialDate } from '../utils/historyFormat';
+import { formatDuration, formatPartialDate } from '../utils/historyFormat';
 
 export const MediaPlayer: React.FC<{ item: MediaView }> = ({ item }) => {
   const src = mediaFileUrl(item.id, 'view');
@@ -51,10 +52,12 @@ const KIND_ICON: Record<MediaKind, React.ComponentType<{ className?: string }>> 
   video: FileVideo,
 };
 
-/** One tile in a gallery: the thumbnail of a photo, an icon for the rest. */
+/** One tile in a gallery: a photo's thumbnail or a video's poster frame, an
+ * icon otherwise, and a recording's length. */
 export const MediaTile: React.FC<{ item: MediaSummary }> = ({ item }) => {
   const Icon = KIND_ICON[item.kind];
   const when = formatPartialDate(item.taken_date, item.taken_date_precision, item.taken_date_circa);
+  const length = formatDuration(item.duration_seconds);
   return (
     <Link
       to={`/history/media/${item.id}`}
@@ -69,7 +72,9 @@ export const MediaTile: React.FC<{ item: MediaSummary }> = ({ item }) => {
       </div>
       <div className="p-2">
         <p className="text-theme-text-primary line-clamp-2 text-sm font-medium">{item.title}</p>
-        {when && <p className="text-theme-text-secondary text-xs">{when}</p>}
+        {(when || length) && (
+          <p className="text-theme-text-secondary text-xs">{[when, length].filter(Boolean).join(' · ')}</p>
+        )}
       </div>
     </Link>
   );
@@ -79,6 +84,7 @@ export const MediaDetails: React.FC<{ item: MediaView }> = ({ item }) => {
   const when = formatPartialDate(item.taken_date, item.taken_date_precision, item.taken_date_circa);
   const rows: [string, string | null][] = [
     ['Date', when || null],
+    ['Length', formatDuration(item.duration_seconds) || null],
     ['Place', item.place],
     ['Photographer or creator', item.creator],
     ['Source or donor', item.source_name],

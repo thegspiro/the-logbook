@@ -191,6 +191,7 @@ describe('HistoryPersonPage', () => {
         taken_date: '1962-01-01',
         taken_date_precision: 'year',
         taken_date_circa: false,
+        duration_seconds: null,
         has_thumbnail: true,
         publication_level: 'members',
       },

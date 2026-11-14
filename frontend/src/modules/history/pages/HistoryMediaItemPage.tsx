@@ -105,11 +105,6 @@ export const HistoryMediaItemPage: React.FC = () => {
           .join(', ')}.`
       );
     }
-    if (full.kind !== 'photo') {
-      warnings.push(
-        'This recording is shown exactly as uploaded. One made on a phone can carry the place it was made.'
-      );
-    }
     if (warnings.length > 0) {
       const ok = await confirm({
         title: level === 'public' ? 'Publish to the public' : 'Publish to members',
@@ -262,12 +257,6 @@ export const HistoryMediaItemPage: React.FC = () => {
               <h2 id="media-publish-heading" className="text-theme-text-primary font-semibold">
                 Publication
               </h2>
-              {full.kind !== 'photo' && (
-                <p className="alert-warning flex items-start gap-2 rounded-md p-2 text-xs">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                  Shown to members exactly as uploaded, including anything the recording device stored in the file.
-                </p>
-              )}
               {latest && <ClearanceSteps request={latest} />}
               {latest?.can_decide && (
                 <Link to={`/history/clearance/${latest.id}`} className="btn-info btn-sm inline-block rounded-md">

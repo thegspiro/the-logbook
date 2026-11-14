@@ -41,6 +41,7 @@ const catalogue = {
   original_location: null,
   width: 1600,
   height: 1200,
+  duration_seconds: null,
   has_thumbnail: true,
   mime_type: 'image/webp',
   publication_level: 'draft' as const,
@@ -135,13 +136,24 @@ describe('HistoryMediaItemPage', () => {
     expect(screen.getByRole('button', { name: 'Submit for public clearance' })).toBeInTheDocument();
   });
 
-  it('plays a recording and says it is shown as uploaded', async () => {
-    mockGetMedia.mockResolvedValue(fullView({ kind: 'audio', mime_type: 'audio/mpeg', tags: [] }));
+  it('plays the stripped copy of a recording and shows its length', async () => {
+    mockGetMedia.mockResolvedValue(
+      fullView({ kind: 'audio', mime_type: 'audio/mpeg', duration_seconds: 754, tags: [] })
+    );
     renderPage();
     expect(await screen.findByLabelText('Engine 3 at the parade')).toHaveAttribute(
       'src',
       '/api/v1/history/media/m1/view'
     );
-    expect(screen.getByText(/Shown to members exactly as uploaded/)).toBeInTheDocument();
+    expect(screen.getByText('12:34')).toBeInTheDocument();
+  });
+
+  it('publishes a recording with no one tagged without asking', async () => {
+    mockGetMedia.mockResolvedValue(fullView({ kind: 'video', mime_type: 'video/mp4', tags: [] }));
+    mockPublish.mockResolvedValue({ item: fullView(), consent_warnings: [] });
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Publish to members' }));
+    expect(mockPublish).toHaveBeenCalledWith('m1', 'members');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

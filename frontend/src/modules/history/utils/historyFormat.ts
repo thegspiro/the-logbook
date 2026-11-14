@@ -29,6 +29,17 @@ export const formatPartialDate = (
 };
 
 /** "1951–1972", from one service period. */
+/** A recording's length as m:ss, or h:mm:ss from an hour up. */
+export const formatDuration = (seconds: number | null | undefined): string => {
+  // A payload from before the field existed carries no length at all.
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) return '';
+  const whole = Math.round(seconds);
+  const h = Math.floor(whole / 3600);
+  const m = Math.floor((whole % 3600) / 60);
+  const s = String(whole % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+};
+
 export const formatPeriod = (period: {
   start_date: string | null;
   start_precision: DatePrecision;

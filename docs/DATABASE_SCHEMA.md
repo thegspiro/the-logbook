@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**380 tables · 6094 columns · 1270 foreign keys**
+**380 tables · 6095 columns · 1270 foreign keys**
 
 ---
 
@@ -371,7 +371,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`history_import_rows`](#history_import_rows) | `HistoryImportRow` | 12 | One line of an uploaded file, with the Historian's decision about it. |
 | [`history_import_title_mappings`](#history_import_title_mappings) | `HistoryImportTitleMapping` | 9 | A department's remembered answer for one title text an import met. |
 | [`history_imports`](#history_imports) | `HistoryImport` | 14 | One uploaded roster file, from draft through commit. |
-| [`history_media`](#history_media) | `HistoryMedia` | 30 | A photo, audio recording or video in the archive, with its catalogue. |
+| [`history_media`](#history_media) | `HistoryMedia` | 31 | A photo, audio recording or video in the archive, with its catalogue. |
 | [`history_media_files`](#history_media_files) | `HistoryMediaFile` | 8 | One stored file of a media item: its original, viewing copy or |
 | [`history_media_tags`](#history_media_tags) | `HistoryMediaTag` | 4 | A person shown or heard in a media item. |
 | [`history_record_redirects`](#history_record_redirects) | `HistoryRecordRedirect` | 7 | Where a merged-away record's address now leads. |
@@ -6072,6 +6072,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `original_filename` | VARCHAR(255) | no |  |  |  |
 | `width` | INTEGER | yes |  |  |  |
 | `height` | INTEGER | yes |  |  |  |
+| `duration_seconds` | INTEGER | yes |  |  |  |
 | `batch_id` | VARCHAR(36) | yes |  |  |  |
 | `publication_level` | ENUM(`draft`, `members`, `public`) | no |  | `'draft'` |  |
 | `published_at` | DATETIME | yes |  |  |  |

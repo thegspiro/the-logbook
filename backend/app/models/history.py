@@ -942,6 +942,8 @@ class HistoryMedia(Base):
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     height: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    #: Length of an audio or video item in whole seconds, read by ffprobe.
+    duration_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     #: Groups the files of one batch upload. No foreign key: a batch has no
     #: record of its own.
     batch_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)

@@ -711,16 +711,30 @@ an erasure request, a public-website question or a large upload knows it.
 
 Phase 3, photos and media (2026-11-13), ships with these:
 
-- **Audio and video are shown to members exactly as uploaded (owner
-  decision).** There is no ffmpeg in the image, so a recording has no
-  re-encoded copy with its metadata removed, and no poster frame (it shows a
-  generic icon). A recording made on a phone can carry the place it was made.
-  The upload page, the item page and the publish confirmation say so; the
-  Historian checks before publishing. Photos are different: members and the
-  public only ever get a re-encoded copy with EXIF and GPS removed.
+- **TIFF is refused (owner decision).** It is refused everywhere else on the
+  platform as a complex format with a history of decoder vulnerabilities, and
+  the archive follows suit: a Historian converts a TIFF scan to JPEG or PNG
+  before uploading it, and the archival TIFF itself is kept outside the app.
+- **ffmpeg is part of the backend image (owner decision).** It makes the
+  image larger on every platform (Docker, Unraid, the ARM build); it is
+  installed without Debian's recommended extras to keep that down. It strips
+  audio and video for members — the streams are copied, not re-encoded, so
+  quality is unchanged and the members' copy roughly doubles each
+  recording's storage — and makes a video's poster frame and the length shown
+  in the gallery.
+- **A host without ffmpeg refuses audio and video (owner decision).** A
+  bare Linux or cloud install that runs the backend outside the image must
+  install the `ffmpeg` package (which provides `ffprobe`) for audio and video
+  uploads; until then they are refused with a message naming the package,
+  never stored unstripped. Photos are unaffected.
+- **Stripping covers tags and side tracks, not the sound or picture
+  itself.** Location, device and title tags, chapters, subtitles, data
+  tracks (where some cameras keep GPS) and embedded cover art are removed. A
+  place spoken aloud or visible in the frame is not, nor anything a codec
+  hides inside the encoded stream; the Historian still listens and watches
+  before publishing.
 - **The original is downloadable by `history.manage` only.** It is kept
-  byte for byte, including a TIFF master, which has no in-browser view of its
-  own — members see its WebP copy.
+  byte for byte; everyone else gets the stripped copy.
 - **A photo-use consent warning never blocks.** A tagged person who declined
   photo use, or never answered, is named on the item page and in a
   confirmation before publishing; the Historian may publish anyway. A past

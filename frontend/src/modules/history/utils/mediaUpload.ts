@@ -5,7 +5,9 @@
 
 export const MAX_FILES = 25;
 const MB = 1024 * 1024;
-export const PHOTO_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp', '.tif', '.tiff'];
+// TIFF is refused, as everywhere else on the platform: scans are converted to
+// JPEG or PNG before upload (owner decision).
+export const PHOTO_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.webp'];
 export const AV_EXTENSIONS = ['.mp3', '.m4a', '.wav', '.flac', '.mp4', '.webm'];
 
 export const extensionOf = (name: string): string => {

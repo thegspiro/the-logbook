@@ -589,9 +589,10 @@ class _MediaCatalogue(BaseModel):
     original_location: Optional[str]
     width: Optional[int]
     height: Optional[int]
+    duration_seconds: Optional[int]
     has_thumbnail: bool
     #: The type of what ``/view`` returns: the WebP viewing copy of a photo,
-    #: or the audio/video file itself.
+    #: or the stripped copy of a recording (same container as the original).
     mime_type: Optional[str]
     publication_level: PublicationLevel
 
@@ -636,6 +637,7 @@ class MediaSummary(BaseModel):
     taken_date: Optional[date]
     taken_date_precision: DatePrecision
     taken_date_circa: bool
+    duration_seconds: Optional[int]
     has_thumbnail: bool
     publication_level: PublicationLevel
 

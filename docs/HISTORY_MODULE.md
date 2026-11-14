@@ -180,25 +180,37 @@ description or date, or to who is tagged, is always substantial.
 `<org>/history-media/<media id>/`, encrypted at rest like every other upload
 and malware-scanned before it is written (`store_media_upload`):
 
-| Role        | Photo                                                    | Audio or video |
-| ----------- | -------------------------------------------------------- | -------------- |
-| `original`  | the upload, byte for byte (SHA-256 recorded)             | the upload     |
-| `display`   | WebP, longest side 2048 px, rotated upright, no EXIF/GPS | —              |
-| `thumbnail` | WebP, longest side 400 px, same stripping                | —              |
+| Role        | Photo                                                    | Audio or video                                                   |
+| ----------- | -------------------------------------------------------- | ---------------------------------------------------------------- |
+| `original`  | the upload, byte for byte (SHA-256 recorded)             | the upload, byte for byte                                        |
+| `display`   | WebP, longest side 2048 px, rotated upright, no EXIF/GPS | same container, streams copied, every tag and data track dropped |
+| `thumbnail` | WebP, longest side 400 px, same stripping                | a video's poster frame (WebP, 400 px); none for audio            |
 
-Photos are JPEG, PNG, WebP or TIFF up to 20 MB and 25 megapixels; a
-multi-page TIFF shows its first page. Audio is MP3, M4A, WAV or FLAC and video
-MP4 or WebM, up to 55 MB, under the 60 MB proxy limit. The type is read from
-the bytes (libmagic) and must agree with the extension. A photo Pillow cannot
-open is refused rather than stored without copies.
+Photos are JPEG, PNG or WebP up to 20 MB and 25 megapixels. TIFF is refused,
+as everywhere else on the platform; scans are converted to JPEG or PNG first.
+Audio is MP3, M4A, WAV or FLAC and video MP4 or WebM, up to 55 MB, under the
+60 MB proxy limit. The type is read from the bytes (libmagic) and must agree
+with the extension. A photo Pillow cannot open, or a recording ffmpeg cannot
+read, is refused rather than stored without copies.
+
+**Recordings and ffmpeg.** `history_media_files.make_av_copies` runs ffmpeg and
+ffprobe (installed in `backend/Dockerfile`) on the scanned upload in a private
+temporary directory. The members' copy is a stream copy (`-c copy`, no
+re-encoding) with `-map_metadata -1`, chapters, subtitles and data tracks
+dropped, so a phone's recording location, device name and title tags do not
+reach readers; an audio file keeps only its sound, so an MP3's embedded cover
+picture goes too. ffprobe gives the length (`duration_seconds`) and a video's
+size; a video's poster frame is taken about a second in. Every call names the
+input's demuxer and allows only the `file` protocol, so a file shaped like a
+playlist cannot point ffmpeg at anything else on the server. On a host without
+ffmpeg, an audio or video upload is refused with 503 before anything is
+scanned or written; photos are unaffected.
 
 **Who gets which file.** Everyone who may read the item gets the display copy
-(`/view`) and thumbnail. Only `history.manage` downloads the original
-(`/original`, as an attachment). Audio and video have no derived copy (no
-ffmpeg in the image), so `/view` is the original — members hear and see it as
-uploaded, with whatever the recording device stored in it, and the upload and
-item pages say so. `/view` honours a single `Range` (206 / 416), so a long
-recording seeks without downloading the whole file.
+(`/view`) and thumbnail. `/view` is never the original. Only `history.manage`
+downloads the original (`/original`, as an attachment). `/view` honours a
+single `Range` (206 / 416), so a long recording seeks without downloading the
+whole file.
 
 **Tags** point at past-member records only. Each tag shows the Historian that
 person's photo-use answer from the consent records — granted, declined, not

@@ -12,6 +12,7 @@ Audit entries carry ids, never captions, file names or people's names.
 """
 
 import json
+import os
 from typing import Optional
 
 from fastapi import (
@@ -228,8 +229,10 @@ async def upload_media(
                 batch_id=batch_id,
                 actor=current_user,
             )
-        except media_files.UnreadableImage as exc:
+        except media_files.UnreadableMedia as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except media_files.MediaToolMissing as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
     try:
         await db.commit()
     except BaseException:
@@ -289,7 +292,7 @@ async def _serve(
     name = (
         item.original_filename or item.id
         if role == MediaFileRole.ORIGINAL
-        else f"{item.id}-{role.value}.webp"
+        else f"{item.id}-{role.value}{os.path.splitext(stored.file_path)[1].lower()}"
     )
     response = await file_storage.file_range_response(
         ref,
@@ -313,7 +316,8 @@ async def media_thumbnail(
     current_user: User = Depends(get_current_user),
 ):
     """
-    A photo's 400 px thumbnail, with its location and camera data stripped.
+    A 400 px WebP thumbnail with no metadata: of a photo, or a video's
+    poster frame.
 
     **Authentication required**
     """
@@ -329,21 +333,13 @@ async def media_view_file(
 ):
     """
     What a reader sees or hears: a photo's viewing copy (2048 px WebP, turned
-    upright, location and camera data stripped), or the audio or video file
-    itself. Answers ``Range`` requests, so a player can seek.
+    upright, location and camera data stripped), or a recording's copy with
+    every tag and data track removed. Never the original. Answers ``Range``
+    requests, so a player can seek.
 
     **Authentication required**
     """
-    viewer = Viewer.of(current_user)
-    item = ensure_found(
-        await HistoryMediaService(db).get_readable_media(viewer, media_id), _ITEM
-    )
-    role = (
-        MediaFileRole.DISPLAY
-        if item.kind == MediaKind.PHOTO
-        else MediaFileRole.ORIGINAL
-    )
-    return await _serve(db, request, current_user, media_id, role)
+    return await _serve(db, request, current_user, media_id, MediaFileRole.DISPLAY)
 
 
 @router.get("/media/{media_id}/original")

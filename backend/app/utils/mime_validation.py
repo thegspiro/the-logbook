@@ -48,7 +48,6 @@ _EXTENSIONS_FOR_MIME: dict[str, frozenset[str]] = {
     "image/svg+xml": frozenset({".svg"}),
     # History photos and media. Only the History media upload allows these
     # types, so listing them here opens nothing anywhere else.
-    "image/tiff": frozenset({".tif", ".tiff"}),
     "audio/mpeg": frozenset({".mp3"}),
     "audio/x-m4a": frozenset({".m4a"}),
     "audio/mp4": frozenset({".m4a"}),

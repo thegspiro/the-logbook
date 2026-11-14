@@ -9,7 +9,8 @@ and nothing reaching across departments.
 
 import io
 import os
-import wave
+import subprocess
+import tempfile
 from datetime import date
 
 import pytest
@@ -30,6 +31,7 @@ from app.models.history import (
     PublicationLevel,
 )
 from app.services import file_storage_service
+from app.services import history_media_files as media_files
 from app.services.history_clearance_service import HistoryClearanceService
 from app.services.history_collection_service import (
     HistoryAlbumService,
@@ -54,14 +56,39 @@ def _jpeg() -> bytes:
     return out.getvalue()
 
 
+def _ffmpeg_made(extension: str, *options: str) -> bytes:
+    with tempfile.TemporaryDirectory() as workdir:
+        target = os.path.join(workdir, f"made{extension}")
+        subprocess.run(
+            ["ffmpeg", "-nostdin", "-v", "error", *options, target],
+            check=True,
+            timeout=60,
+        )
+        with open(target, "rb") as handle:
+            return handle.read()
+
+
 def _wav() -> bytes:
-    out = io.BytesIO()
-    with wave.open(out, "wb") as audio:
-        audio.setnchannels(1)
-        audio.setsampwidth(2)
-        audio.setframerate(8000)
-        audio.writeframes(bytes(range(256)) * 100)
-    return out.getvalue()
+    """Two seconds of sound, titled the way a recorder app titles it."""
+    return _ffmpeg_made(
+        ".wav",
+        *("-f", "lavfi", "-i", "sine=frequency=440:sample_rate=8000"),
+        *("-t", "2", "-metadata", "title=Interview at 12 Elm Street"),
+    )
+
+
+def _mp4() -> bytes:
+    return _ffmpeg_made(
+        ".mp4",
+        *("-f", "lavfi", "-i", "testsrc=size=160x120:rate=10"),
+        *("-f", "lavfi", "-i", "sine=frequency=440"),
+        *("-t", "3", "-c:v", "libx264", "-c:a", "aac"),
+        *("-metadata", "location=+40.7128-074.0060/"),
+    )
+
+
+async def _stored(service, item, role) -> bytes:
+    return await file_storage_service.read_bytes(service.file_of(item, role).file_path)
 
 
 class _Dept:
@@ -166,10 +193,82 @@ class TestUpload:
             with open(path, "rb") as handle:
                 assert b"CameraMaker" not in handle.read()
 
-    async def test_audio_keeps_its_file_and_has_no_copies(self, db_session, dept):
-        item = await _upload(db_session, dept, _wav(), "interview.wav")
+    async def test_audio_is_kept_as_uploaded_and_shown_stripped(self, db_session, dept):
+        content = _wav()
+        assert b"Elm Street" in content
+        item = await _upload(db_session, dept, content, "interview.wav")
+        service = HistoryMediaService(db_session)
         assert item.kind == MediaKind.AUDIO
-        assert {f.role for f in item.files} == {MediaFileRole.ORIGINAL}
+        assert item.duration_seconds == 2
+        assert {f.role for f in item.files} == {
+            MediaFileRole.ORIGINAL,
+            MediaFileRole.DISPLAY,
+        }
+        assert await _stored(service, item, MediaFileRole.ORIGINAL) == content
+        shown = await _stored(service, item, MediaFileRole.DISPLAY)
+        assert b"Elm Street" not in shown
+        assert service.file_of(item, MediaFileRole.DISPLAY).mime_type.startswith(
+            "audio/"
+        )
+
+    async def test_video_is_shown_stripped_with_a_poster(self, db_session, dept):
+        content = _mp4()
+        item = await _upload(db_session, dept, content, "parade.mp4")
+        service = HistoryMediaService(db_session)
+        assert item.kind == MediaKind.VIDEO
+        assert (item.width, item.height, item.duration_seconds) == (160, 120, 3)
+        assert b"40.7128" not in await _stored(service, item, MediaFileRole.DISPLAY)
+        poster = Image.open(
+            io.BytesIO(await _stored(service, item, MediaFileRole.THUMBNAIL))
+        )
+        assert poster.format == "WEBP"
+        assert service.summary(item)["has_thumbnail"] is True
+
+    async def test_without_ffmpeg_a_recording_is_refused_and_nothing_stored(
+        self, db_session, dept, uploads, monkeypatch
+    ):
+        content = _wav()
+        stored = []
+        real_store = file_storage_service.FileStorageService.store_bytes
+
+        async def spy(self, *args, **kwargs):
+            stored.append(kwargs.get("original_name"))
+            return await real_store(self, *args, **kwargs)
+
+        monkeypatch.setattr(file_storage_service.FileStorageService, "store_bytes", spy)
+        monkeypatch.setattr(media_files.shutil, "which", lambda name: None)
+        with pytest.raises(media_files.MediaToolMissing):
+            await _upload(db_session, dept, content, "interview.wav")
+        # Refused before the scan and the write, not cleaned up after them.
+        assert stored == []
+        assert _files_on_disk(uploads) == []
+        # Photos do not need it.
+        assert (await _upload(db_session, dept)).kind == MediaKind.PHOTO
+
+    async def test_the_endpoint_answers_503_without_ffmpeg(
+        self, db_session, dept, monkeypatch
+    ):
+        from starlette.datastructures import UploadFile
+
+        monkeypatch.setattr(media_files.shutil, "which", lambda name: None)
+        upload = UploadFile(io.BytesIO(_wav()), filename="interview.wav")
+        with pytest.raises(HTTPException) as caught:
+            await endpoint.upload_media(
+                file=upload,
+                catalogue="{}",
+                batch_id=None,
+                db=db_session,
+                current_user=dept.historian,
+            )
+        assert caught.value.status_code == 503
+        assert "ffmpeg" in caught.value.detail
+
+    async def test_a_tiff_is_refused(self, db_session, dept, uploads):
+        out = io.BytesIO()
+        Image.new("RGB", (16, 16)).save(out, "TIFF")
+        with pytest.raises(ValueError, match="not accepted"):
+            await _upload(db_session, dept, out.getvalue(), "scan.tif")
+        assert _files_on_disk(uploads) == []
 
     async def test_a_name_the_archive_does_not_accept_is_refused(
         self, db_session, dept, uploads
@@ -262,10 +361,16 @@ class TestWhoSeesWhat:
         )
 
 
+async def _recording(db_session, dept):
+    """An uploaded recording, and the bytes ``/view`` serves for it."""
+    item = await _upload(db_session, dept, _wav(), "interview.wav")
+    service = HistoryMediaService(db_session)
+    return item, await _stored(service, item, MediaFileRole.DISPLAY)
+
+
 class TestServingFiles:
     async def test_a_range_is_answered_with_the_requested_bytes(self, db_session, dept):
-        content = _wav()
-        item = await _upload(db_session, dept, content, "interview.wav")
+        item, content = await _recording(db_session, dept)
         response = await endpoint.media_view_file(
             media_id=item.id,
             request=_request("bytes=10-19"),
@@ -278,8 +383,7 @@ class TestServingFiles:
         assert await _body(response) == content[10:20]
 
     async def test_a_range_past_the_end_is_refused(self, db_session, dept):
-        content = _wav()
-        item = await _upload(db_session, dept, content, "interview.wav")
+        item, content = await _recording(db_session, dept)
         response = await endpoint.media_view_file(
             media_id=item.id,
             request=_request(f"bytes={len(content)}-"),
@@ -290,8 +394,7 @@ class TestServingFiles:
         assert response.headers["content-range"] == f"bytes */{len(content)}"
 
     async def test_without_a_range_the_whole_file_is_sent(self, db_session, dept):
-        content = _wav()
-        item = await _upload(db_session, dept, content, "interview.wav")
+        item, content = await _recording(db_session, dept)
         response = await endpoint.media_view_file(
             media_id=item.id,
             request=_request(),
@@ -300,6 +403,21 @@ class TestServingFiles:
         )
         assert response.status_code == 200
         assert await _body(response) == content
+
+    async def test_a_recordings_view_is_never_the_original(self, db_session, dept):
+        original = _wav()
+        item = await _upload(db_session, dept, original, "interview.wav")
+        response = await endpoint.media_view_file(
+            media_id=item.id,
+            request=_request(),
+            db=db_session,
+            current_user=dept.historian,
+        )
+        body = await _body(response)
+        assert body != original
+        assert b"Elm Street" not in body
+        assert response.headers["content-type"].startswith("audio/")
+        assert "interview" not in response.headers.get("content-disposition", "")
 
     async def test_a_photos_view_is_the_stripped_copy(self, db_session, dept):
         item = await _upload(db_session, dept)
