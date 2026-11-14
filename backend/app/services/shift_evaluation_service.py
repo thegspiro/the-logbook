@@ -124,6 +124,7 @@ _CREDITED_TYPES = (
     RequirementType.EVALUATED_SHIFTS,
     RequirementType.TRANSPORTS,
     RequirementType.REFUSALS,
+    RequirementType.EVALUATED_CALLS,
 )
 # A progress row in one of these states takes no new credit: an officer
 # signed it off, or the requirement was set aside for the member. A COMPLETED
@@ -160,6 +161,8 @@ def credit_units(evaluation: ShiftEvaluation, requirement: Any) -> float:
         return float(statistics.get("transports") or 0)
     if rtype == RequirementType.REFUSALS:
         return float(statistics.get("refusals") or 0)
+    if rtype == RequirementType.EVALUATED_CALLS:
+        return float(statistics.get("calls") or 0)
     if rtype != RequirementType.EVALUATED_SHIFTS:
         return 0.0
     if requirement.evaluation_excludes_lowest_rating:

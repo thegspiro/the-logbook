@@ -475,6 +475,40 @@ describe('RequirementModal', () => {
       );
     });
 
+    it('creates an evaluated calls requirement with its target in required_calls', async () => {
+      onSave.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Evaluated field calls');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'Evaluated Calls');
+      await user.type(screen.getByLabelText(/Required evaluated calls/), '25');
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requirement_type: 'evaluated_calls',
+          required_calls: 25,
+          required_call_types: [],
+          required_transports: null,
+          evaluation_excludes_lowest_rating: false,
+        }),
+        false,
+        undefined
+      );
+    });
+
+    it('will not create an evaluated calls requirement without a count', async () => {
+      const user = userEvent.setup();
+      render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);
+
+      await user.type(screen.getByLabelText(/^Name/), 'Evaluated field calls');
+      await user.selectOptions(screen.getByLabelText(/^Requirement Type/), 'evaluated_calls');
+      await user.click(screen.getByRole('button', { name: 'Create Requirement' }));
+
+      expect(onSave).not.toHaveBeenCalled();
+    });
+
     it('will not create a transports requirement without a count', async () => {
       const user = userEvent.setup();
       render(<RequirementModal requirement={null} categories={[]} onClose={vi.fn()} onSave={onSave} />);

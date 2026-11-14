@@ -10272,9 +10272,16 @@ beyond the feature.
 - **No-show and pending crew are asked for an evaluation.** The rule mirrors
   the trainee-report gate (only declined and cancelled seats are left out),
   so the two agree; excusing no-shows would mean changing both.
-- **No requirement type counts the calls an evaluation records.** Evaluated
+- ~~**No requirement type counts the calls an evaluation records.** Evaluated
   shifts, transports and refusals are credited; the existing Calls type is
-  still fed by shift reports.
+  still fed by shift reports.~~ **✅ Resolved 2026-11-14 (owner decision):
+  a new Evaluated Calls type.** An `evaluated_calls` requirement counts the
+  calls each submitted evaluation records, against `required_calls`, the way
+  Transports counts the evaluation's transports and only once the member can
+  see the evaluation. The Calls type is unchanged and still fed by shift
+  reports, so no call is counted by both. Migration `9d044fc1d81b` widens the
+  `requirement_type` ENUM; its downgrade turns requirements of the new type
+  into checklists.
 - **A department requirement of an evaluation type, linked into a program
   with "Link existing", is not credited by evaluations.** A linked row is
   graded by the compliance engine, which has no branch for these types and

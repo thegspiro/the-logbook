@@ -155,11 +155,14 @@ def prerequisite_refusal(missing_names: Sequence[str]) -> str:
 
 # Requirement types credited only by submitted shift evaluations, and the
 # column each one's target lives in. An evaluated-shift count reuses
-# required_shifts, as the form beside it does.
+# required_shifts, as the form beside it does, and an evaluated-call count
+# reuses required_calls: a number of calls either way, and the CALLS grading
+# that reads that column checks the type before it does.
 EVALUATION_REQUIREMENT_TARGETS = {
     RequirementType.EVALUATED_SHIFTS: "required_shifts",
     RequirementType.TRANSPORTS: "required_transports",
     RequirementType.REFUSALS: "required_refusals",
+    RequirementType.EVALUATED_CALLS: "required_calls",
 }
 
 
@@ -4057,8 +4060,9 @@ class TrainingProgramService:
                         user_waivers,
                         str(requirement.id),
                         period_months=get_rolling_period_months(requirement),
-                        # Evaluated shifts, transports and refusals are counts,
-                        # prorated like shifts and calls: never part of one.
+                        # Evaluated shifts and calls, transports and refusals
+                        # are counts, prorated like shifts and calls: never
+                        # part of one.
                         whole_units=True,
                     )
                     if user_waivers
