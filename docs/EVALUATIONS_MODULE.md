@@ -168,6 +168,7 @@ that code (pitfall #29).
 | `training.session_attendance_pct`  | sessions counting toward the member's attendance requirement, its rule              |
 | `events.meeting_attendance_pct`    | business meetings attended out of those held                                        |
 | `events.attended_count`            | department events checked in to                                                     |
+| `events.attended_by_type`          | department events checked in to, one line per event type                            |
 | `shifts.hours`                     | hours on shifts worked                                                              |
 | `shifts.count`                     | shifts worked                                                                       |
 | `shifts.performance_rating_avg`    | average 1–5 rating on shift completion reports                                      |

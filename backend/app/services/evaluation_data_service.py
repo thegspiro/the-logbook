@@ -41,7 +41,7 @@ from app.models.attendance_waiver import (
     AttendanceWaiverWorkflow,
 )
 from app.models.call_tracking import CallTrackingMode
-from app.models.event import Event, EventRSVP
+from app.models.event import Event, EventRSVP, EventType
 from app.models.meeting import Meeting, MeetingAttendee, MeetingType
 from app.models.member_position_term import MemberPositionTerm
 from app.models.skills_testing import SkillTest, SkillTestResult, SkillTestStatus
@@ -55,6 +55,7 @@ from app.models.user import (
 from app.schemas.evaluation import TemplateDefinition
 from app.services.admin_hours_service import AdminHoursService
 from app.services.call_tracking_service import CallTrackingService
+from app.services.community_engagement_service import event_type_label
 from app.services.evaluation_data_sources import DATA_SOURCES, DATA_SOURCES_BY_KEY
 from app.services.member_service_history_service import (
     MemberServiceHistoryService,
@@ -454,6 +455,8 @@ class EvaluationDataService:
             return await self._meeting_attendance(org_id, member, coverage)
         if key == "events.attended_count":
             return await self._events_attended(org_id, member, coverage, tz)
+        if key == "events.attended_by_type":
+            return await self._events_attended_by_type(org_id, member, coverage, tz)
         if key == "shifts.performance_rating_avg":
             return await self._performance_rating(org_id, member, coverage)
         if key == "shifts.field_evaluation_averages":
@@ -750,13 +753,16 @@ class EvaluationDataService:
             return _unavailable("No business meetings were held in the period.")
         return _value(tally.pct, attended=len(tally.attended), held=len(tally.eligible))
 
-    async def _events_attended(
+    async def _attended_events(
         self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
-    ) -> Dict[str, Any]:
+    ) -> List[Tuple[str, Any]]:
+        """``(event_id, event_type)`` for each department event the member
+        checked in to within coverage. Shared by both event sources so the
+        counts by type always add up to the total."""
         start_utc, end_utc = local_range_utc(coverage.start, coverage.end, tz)
         events = (
             await self.db.execute(
-                select(Event.id, Event.start_datetime).where(
+                select(Event.id, Event.start_datetime, Event.event_type).where(
                     Event.organization_id == org_id,
                     Event.is_cancelled.is_(False),
                     Event.start_datetime >= start_utc,
@@ -764,11 +770,44 @@ class EvaluationDataService:
                 )
             )
         ).all()
-        in_coverage = [
-            eid for eid, at in events if not coverage.excludes(local_date(at, tz))
-        ]
+        in_coverage = {
+            eid: kind
+            for eid, at, kind in events
+            if not coverage.excludes(local_date(at, tz))
+        }
+        attended = await self._attended_event_ids(org_id, member.id, in_coverage)
+        return [(eid, in_coverage[eid]) for eid in attended]
+
+    async def _events_attended(
+        self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
+    ) -> Dict[str, Any]:
+        return _value(len(await self._attended_events(org_id, member, coverage, tz)))
+
+    async def _events_attended_by_type(
+        self, org_id: str, member: User, coverage: Coverage, tz: ZoneInfo
+    ) -> Dict[str, Any]:
+        """Attended events counted by type, in the order the types are
+        declared, naming each as the community engagement report does. Types
+        with nothing attended are left out."""
+        counts: Dict[str, int] = {}
+        for _eid, kind in await self._attended_events(org_id, member, coverage, tz):
+            key = str(getattr(kind, "value", kind) or EventType.OTHER.value)
+            counts[key] = counts.get(key, 0) + 1
+        order = {t.value: i for i, t in enumerate(EventType)}
         return _value(
-            len(await self._attended_event_ids(org_id, member.id, in_coverage))
+            [
+                {
+                    "label": (
+                        f"{event_type_label(kind)}: {n} "
+                        f"{'event' if n == 1 else 'events'}"
+                    ),
+                    "event_type": kind,
+                    "attended": n,
+                }
+                for kind, n in sorted(
+                    counts.items(), key=lambda kv: order.get(kv[0], len(order))
+                )
+            ]
         )
 
     async def _shift_totals(

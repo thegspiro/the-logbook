@@ -82,6 +82,14 @@ DATA_SOURCES: tuple[DataSource, ...] = (
         "Department events the member checked in to.",
     ),
     DataSource(
+        "events.attended_by_type",
+        "Events attended by type",
+        "list",
+        "events",
+        "Department events the member checked in to, counted by event type: "
+        "the same events as Events attended, one line per type.",
+    ),
+    DataSource(
         "shifts.hours",
         "Shift hours",
         "hours",

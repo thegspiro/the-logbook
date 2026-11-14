@@ -114,7 +114,9 @@ def _as_utc(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
-def _event_type_label(value: object) -> str:
+def event_type_label(value: object) -> str:
+    """An event type as people read it. Also used by the evaluation data
+    source ``events.attended_by_type``, so both name a type alike."""
     raw = str(getattr(value, "value", value) or "other")
     return _EVENT_TYPE_LABELS.get(raw, raw.replace("_", " ").title())
 
@@ -227,7 +229,7 @@ class CommunityEngagementService:
                 type_label = outreach_type_label(org, req.outreach_type)
                 org_name = req.organization_name or req.contact_name
             else:
-                type_label = _event_type_label(event.event_type)
+                type_label = event_type_label(event.event_type)
                 org_name = None
             expected = req.audience_size if req is not None else None
             rows.append(
