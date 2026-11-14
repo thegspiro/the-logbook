@@ -264,6 +264,11 @@ class TestWhoIsEvaluated:
         driver_enrollment = await _enroll(
             db_session, scene.org_id, scene.trainee, driver
         )
+        # Joined before the shift, like the scene's own enrollment: a shift
+        # counts only toward programs joined by its date, and "now" is the
+        # day after the shift's date for the first 14 hours of every UTC day.
+        driver_enrollment.enrolled_at = datetime.now(timezone.utc) - timedelta(days=30)
+        await db_session.flush()
 
         reqs = await _requirements(db_session, scene)
 
@@ -289,6 +294,11 @@ class TestWhoIsEvaluated:
         driver_enrollment = await _enroll(
             db_session, scene.org_id, scene.trainee, driver
         )
+        # Joined before the shift, like the scene's own enrollment: a shift
+        # counts only toward programs joined by its date, and "now" is the
+        # day after the shift's date for the first 14 hours of every UTC day.
+        driver_enrollment.enrolled_at = datetime.now(timezone.utc) - timedelta(days=30)
+        await db_session.flush()
 
         reqs = await _requirements(db_session, scene)
 
