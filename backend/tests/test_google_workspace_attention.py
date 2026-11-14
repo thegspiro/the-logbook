@@ -5,6 +5,7 @@ import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -34,11 +35,21 @@ from app.services.integration_services.google_workspace_service import (
     GoogleWorkspaceError,
 )
 from app.utils.org_timezone import org_today
+from tests.clock_support import reread_each_test
 
 DOMAIN = "firedept.org"
-NOW = datetime.now(timezone.utc)
-LONG_AGO = NOW - timedelta(days=2)
-RECENTLY = NOW - timedelta(minutes=30)
+
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    long_ago = now - timedelta(days=2)
+    recently = now - timedelta(minutes=30)
+    return {"NOW": now, "LONG_AGO": long_ago, "RECENTLY": recently}
+
+
+NOW, LONG_AGO, RECENTLY = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _hex() -> str:

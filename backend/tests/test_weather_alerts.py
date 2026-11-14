@@ -9,6 +9,7 @@ import json
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -18,10 +19,19 @@ from app.models.integration import Integration, WeatherAlert
 from app.models.notification import NotificationLog
 from app.models.user import Organization
 from app.services import weather_alert_service as weather
+from tests.clock_support import reread_each_test
 
 pytestmark = [pytest.mark.integration]
 
-SOON = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat()
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    soon = (datetime.now(timezone.utc) + timedelta(hours=3)).isoformat()
+    return {"SOON": soon}
+
+
+(SOON,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _alert(

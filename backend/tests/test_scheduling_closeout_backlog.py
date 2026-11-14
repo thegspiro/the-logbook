@@ -14,16 +14,26 @@ where the officer with a real backlog reads it.
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import pytest
 
 from app.models.training import Shift, ShiftStatus
 from app.models.user import Organization
 from app.services.scheduling_service import SchedulingService
+from tests.clock_support import reread_each_test
 
 pytestmark = pytest.mark.integration
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 async def _org(db_session, *, settings: dict | None = None) -> Organization:

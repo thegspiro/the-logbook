@@ -8,6 +8,7 @@ rather than add a ``ballot_item_id`` column.
 """
 
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -17,10 +18,19 @@ from app.schemas.election import (
     ElectionUpdate,
     SavedBallotTemplateCreate,
 )
+from tests.clock_support import reread_each_test
 
 pytestmark = pytest.mark.unit
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _item(item_id: str, title: str, position=None) -> dict:

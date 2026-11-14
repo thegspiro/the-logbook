@@ -9,6 +9,7 @@ a filter that counts somebody who left, a supersede check that isn't there.
 
 import uuid
 from datetime import date, datetime, time, timedelta, timezone
+from typing import Any
 
 import pytest
 from sqlalchemy import select
@@ -30,6 +31,7 @@ from app.services.admin_hub_service import (
     AdminHubService,
 )
 from app.services.medical_screening_service import MedicalScreeningService
+from tests.clock_support import reread_each_test
 
 pytestmark = [pytest.mark.integration]
 
@@ -211,7 +213,14 @@ async def _queue(db_session, org, user, module_key: str = "members") -> dict:
 #: Every department here is on UTC, so the resolvers' "today" is this one.
 #: date.today() would be the host's, which differs across the dateline for
 #: part of the day and would make the day-count assertions flake in CI.
-TODAY = datetime.now(timezone.utc).date()
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    today = datetime.now(timezone.utc).date()
+    return {"TODAY": today}
+
+
+(TODAY,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 @pytest.fixture(autouse=True)

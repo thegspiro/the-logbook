@@ -8,6 +8,7 @@ refresh finds it, and the answer is an ordinary "sign in again".
 
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,8 +21,17 @@ from app.services.auth_service import (
     session_end_reason,
     session_ends_at,
 )
+from tests.clock_support import reread_each_test
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _session(idle_minutes=1, age_hours=1, now=None, **extra):

@@ -13,6 +13,7 @@ daily notice or by their first request after expiry.
 import uuid
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -31,8 +32,17 @@ from app.utils.password_expiry import (
     is_past_grace,
     password_change_deadline,
 )
+from tests.clock_support import reread_each_test
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 MAX_AGE = settings.HIPAA_MAXIMUM_PASSWORD_AGE_DAYS
 GRACE = settings.HIPAA_PASSWORD_EXPIRY_GRACE_DAYS
 

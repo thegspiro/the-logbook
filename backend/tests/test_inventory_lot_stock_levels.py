@@ -10,12 +10,14 @@ Mocked sessions — no DB — so they run in the sandbox.
 """
 
 from datetime import date, timedelta
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from app.models.inventory import InventoryLot
 from app.services.inventory_service import InventoryService
+from tests.clock_support import reread_each_test
 
 
 @pytest.fixture(autouse=True)
@@ -28,8 +30,15 @@ def _department_today(monkeypatch):
     )
 
 
-YESTERDAY = date.today() - timedelta(days=1)
-NEXT_YEAR = date.today() + timedelta(days=365)
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    yesterday = date.today() - timedelta(days=1)
+    next_year = date.today() + timedelta(days=365)
+    return {"YESTERDAY": yesterday, "NEXT_YEAR": next_year}
+
+
+YESTERDAY, NEXT_YEAR = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 @pytest.fixture

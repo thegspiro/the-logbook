@@ -9,6 +9,7 @@ import ast
 import os
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,10 +21,19 @@ from app.core.config import settings
 from app.core.error_codes import ErrorCode
 from app.services import mfa_policy
 from app.services.auth_service import AuthService
+from tests.clock_support import reread_each_test
 
 pytestmark = pytest.mark.real_stepup
 
-NOW = datetime.now(timezone.utc)
+
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    now = datetime.now(timezone.utc)
+    return {"NOW": now}
+
+
+(NOW,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _now() -> datetime:

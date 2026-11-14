@@ -11,6 +11,7 @@ matching, and the closed-request guard. DB mocked; no MySQL.
 
 from datetime import date, timedelta
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -23,6 +24,7 @@ from app.services.driver_exception_service import (
     DriverExceptionService,
 )
 from app.services.separation_of_duties import SeparationOfDutiesError
+from tests.clock_support import reread_each_test
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +37,14 @@ def _department_today(monkeypatch):
     )
 
 
-TODAY = date.today()
+def _clock() -> dict[str, Any]:
+    """Read as each test starts (tests/clock_support.py), not at import."""
+    today = date.today()
+    return {"TODAY": today}
+
+
+(TODAY,) = _clock().values()
+_reread_clock = reread_each_test(__name__, _clock)
 
 
 def _one(obj):
