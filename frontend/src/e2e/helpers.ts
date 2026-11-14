@@ -2078,6 +2078,376 @@ const apparatusInventory = (request: Request, empty: boolean) => {
   };
 };
 
+// Scheduling administration. Five screens under /scheduling/admin sat in the
+// route inventory as exempt: Templates read "Templates (0)", Patterns and
+// History Import drew their empty states, and Platoons and Positions threw into
+// the ErrorBoundary on the catch-all's `{}` — `overview.groups.map` and
+// `roster.members.length` respectively. Snake-cased, as schemas/scheduling.py
+// and schemas/shift_history_import.py serialize (no alias generator). Seats are
+// the canonical stored shape `normalize_stored_positions` writes (Pitfall #20).
+const schedulingDay = (offset: number) => {
+  const d = new Date(Date.now() + offset * 86_400_000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const seat = (position: string, required = true) => ({ position, required, allow_administrative_members: false });
+
+const SCHEDULING_STAMP = {
+  organization_id: 'org-1',
+  created_at: '2026-01-02T15:00:00Z',
+  updated_at: '2026-10-30T18:20:00Z',
+  created_by: 'e2e-user-id',
+};
+
+const SHIFT_TEMPLATES = [
+  {
+    id: 'e2e-tpl-day',
+    name: 'Day Shift',
+    description: 'Station 1 day crew. Truck checks at 07:30, training block after lunch.',
+    start_time_of_day: '07:00',
+    end_time_of_day: '19:00',
+    duration_hours: 12,
+    color: '#b45309',
+    positions: [seat('officer'), seat('driver'), seat('firefighter'), seat('firefighter', false)],
+    min_staffing: 3,
+    category: 'standard',
+    apparatus_type: null,
+    apparatus_id: null,
+    is_default: true,
+    is_active: true,
+    open_to_all_members: false,
+    equipment_check_template_ids: [],
+    ...SCHEDULING_STAMP,
+  },
+  {
+    id: 'e2e-tpl-night',
+    name: 'Night Shift',
+    description: null,
+    start_time_of_day: '19:00',
+    end_time_of_day: '07:00',
+    duration_hours: 12,
+    color: '#4338ca',
+    positions: [seat('officer'), seat('driver'), seat('firefighter')],
+    min_staffing: 3,
+    category: 'standard',
+    apparatus_type: null,
+    apparatus_id: null,
+    is_default: false,
+    is_active: true,
+    open_to_all_members: false,
+    equipment_check_template_ids: [],
+    ...SCHEDULING_STAMP,
+  },
+  {
+    // Deliberately long: the card title is the one string on this screen that
+    // has to wrap on a 320px phone rather than truncate.
+    id: 'e2e-tpl-24',
+    name: '24-Hour Engine Company Platoon Rotation',
+    description: 'One platoon on Engine 1 for a full tour, 07:00 to 07:00.',
+    start_time_of_day: '07:00',
+    end_time_of_day: '07:00',
+    duration_hours: 24,
+    color: '#991b1b',
+    positions: [seat('officer'), seat('driver'), seat('firefighter'), seat('firefighter'), seat('ems', false)],
+    min_staffing: 4,
+    category: 'specialty',
+    apparatus_type: 'engine',
+    apparatus_id: 'e2e-app-e1',
+    is_default: false,
+    is_active: true,
+    open_to_all_members: false,
+    equipment_check_template_ids: [],
+    ...SCHEDULING_STAMP,
+  },
+];
+
+// One running platoon rotation and one paused Kelly, so both the Active and
+// Paused states and both detail layouts (days on/off, cycle strip) render.
+const SHIFT_PATTERNS = [
+  {
+    id: 'e2e-pat-2448',
+    name: 'A/B/C 24/48 Rotation',
+    description: 'Each platoon works 24 hours on, then 48 off.',
+    pattern_type: 'platoon',
+    template_id: 'e2e-tpl-24',
+    rotation_days: 3,
+    days_on: 1,
+    days_off: 2,
+    schedule_config: { platoons: ['A', 'B', 'C'] },
+    start_date: '2026-01-05',
+    end_date: null,
+    assigned_members: null,
+    is_active: true,
+    inactive_templates: [],
+    ...SCHEDULING_STAMP,
+  },
+  {
+    id: 'e2e-pat-kelly',
+    name: 'Kelly Schedule',
+    description: '24 on, 24 off, 24 on, 24 off, 24 on, then four days off.',
+    pattern_type: 'platoon',
+    template_id: 'e2e-tpl-24',
+    rotation_days: 9,
+    days_on: null,
+    days_off: null,
+    schedule_config: { cycle_pattern: ['on', 'off', 'on', 'off', 'on', 'off', 'off', 'off', 'off'] },
+    start_date: '2026-03-02',
+    end_date: '2026-12-31',
+    assigned_members: null,
+    is_active: false,
+    inactive_templates: [],
+    ...SCHEDULING_STAMP,
+  },
+];
+
+// A draft still under review, with a long export filename, and one committed
+// with its counts — the two statuses `ShiftHistoryImportStatus` has.
+const HISTORY_IMPORTS = [
+  {
+    id: 'e2e-hist-draft',
+    status: 'draft',
+    source_filename: 'Legacy CAD export Jan-Jun 2024 (Stations 1-3).csv',
+    timezone: 'America/Chicago',
+    row_count: 2314,
+    created_by: 'e2e-user-id',
+    committed_by: null,
+    created_at: '2026-11-10T14:05:00Z',
+    committed_at: null,
+    summary: null,
+    source_system: null,
+    historical_import_id: null,
+  },
+  {
+    id: 'e2e-hist-2023',
+    status: 'committed',
+    source_filename: 'Station1_ShiftLog_2023.xlsx',
+    timezone: 'America/Chicago',
+    row_count: 1846,
+    created_by: 'e2e-user-id',
+    committed_by: 'e2e-user-id',
+    created_at: '2026-10-21T16:40:00Z',
+    committed_at: '2026-10-22T13:12:00Z',
+    summary: {
+      shifts_created: 702,
+      shifts_updated: 28,
+      attendance_created: 1790,
+      external_hours_created: 12,
+      members_created: 9,
+      agencies_created: 2,
+      external_units_created: 3,
+      duplicates_skipped: 31,
+      rows_skipped: 4,
+      rows_excluded: 9,
+    },
+    source_system: null,
+    historical_import_id: null,
+  },
+];
+
+// `rank` is the member's rank code, which the page passes through
+// `formatRank`; `/operational-ranks?**` serves no ladder, so it renders the
+// code with underscores spaced out.
+const PLATOON_GROUPS = [
+  {
+    platoon: 'A',
+    member_count: 3,
+    members: [
+      { user_id: 'e2e-mem-smith', user_name: 'Morgan Smith', rank: 'captain' },
+      { user_id: 'e2e-user-id', user_name: 'Alex Tester', rank: 'engineer' },
+      { user_id: 'e2e-mem-lee', user_name: 'Jordan Lee', rank: 'firefighter' },
+    ],
+  },
+  {
+    platoon: 'B',
+    member_count: 3,
+    members: [
+      { user_id: 'e2e-mem-ortiz', user_name: 'Dana Ortiz', rank: 'lieutenant' },
+      { user_id: 'e2e-mem-montgomery', user_name: 'Christopher Montgomery-Vasquez-Whitfield', rank: 'engineer' },
+      { user_id: 'e2e-mem-nguyen', user_name: 'Linh Nguyen', rank: 'firefighter' },
+    ],
+  },
+  {
+    platoon: 'C',
+    member_count: 2,
+    members: [
+      { user_id: 'e2e-mem-okafor', user_name: 'Chidi Okafor', rank: 'lieutenant' },
+      { user_id: 'e2e-mem-whitaker', user_name: 'Sam Whitaker', rank: 'firefighter' },
+    ],
+  },
+  {
+    platoon: null,
+    member_count: 1,
+    members: [{ user_id: 'e2e-mem-reyes', user_name: 'Pat Reyes', rank: 'assistant_chief' }],
+  },
+];
+
+// Who is cleared to drive, and on what. Two certified operators (one whose
+// qualification lapses inside the 60-day window, so the amber badge renders),
+// one cleared only by completed training with no EVOC card on file, and a
+// probationary member cleared by rank alone with no card either — the gap this
+// screen exists to show. Built per request so the roster names the position it was asked for.
+const positionRoster = (request: Request, empty: boolean) => ({
+  position: new URL(request.url()).searchParams.get('position') ?? 'driver',
+  excluded_membership_types: ['administrative'],
+  is_open_position: false,
+  members: empty
+    ? []
+    : [
+        {
+          user_id: 'e2e-mem-ortiz',
+          user_name: 'Dana Ortiz',
+          rank: 'lieutenant',
+          rank_display_name: 'Lieutenant',
+          membership_type: 'active',
+          platoon: 'B',
+          sources: [
+            { type: 'rank', label: 'Lieutenant', expires_on: null },
+            { type: 'qualification', label: 'EVOC Level 2', expires_on: schedulingDay(300) },
+          ],
+          evoc_level_number: 2,
+          evoc_level_name: 'Emergency Vehicle Operator',
+          apparatus_cleared: [
+            { apparatus_id: 'e2e-app-e1', unit_number: 'Engine 1', certification_expiration: schedulingDay(300) },
+            { apparatus_id: 'e2e-app-m2', unit_number: 'Medic 2', certification_expiration: null },
+          ],
+        },
+        {
+          user_id: 'e2e-mem-montgomery',
+          user_name: 'Christopher Montgomery-Vasquez-Whitfield',
+          rank: 'engineer',
+          rank_display_name: 'Engineer',
+          membership_type: 'active',
+          platoon: 'B',
+          sources: [
+            { type: 'rank', label: 'Engineer', expires_on: null },
+            { type: 'qualification', label: 'Driver/Operator - Pumper', expires_on: schedulingDay(21) },
+          ],
+          evoc_level_number: 3,
+          evoc_level_name: 'Apparatus Operator',
+          apparatus_cleared: [
+            { apparatus_id: 'e2e-app-e1', unit_number: 'Engine 1', certification_expiration: schedulingDay(21) },
+          ],
+        },
+        {
+          user_id: 'e2e-mem-whitaker',
+          user_name: 'Sam Whitaker',
+          rank: 'firefighter',
+          rank_display_name: 'Firefighter',
+          membership_type: 'active',
+          platoon: 'C',
+          sources: [{ type: 'training', label: 'Driver Training Program', expires_on: null }],
+          evoc_level_number: null,
+          evoc_level_name: null,
+          apparatus_cleared: [],
+        },
+        {
+          user_id: 'e2e-mem-lee',
+          user_name: 'Jordan Lee',
+          rank: 'firefighter',
+          rank_display_name: 'Firefighter',
+          membership_type: 'probationary',
+          platoon: 'A',
+          sources: [{ type: 'rank', label: 'Firefighter', expires_on: null }],
+          evoc_level_number: null,
+          evoc_level_name: null,
+          apparatus_cleared: [],
+        },
+      ],
+});
+
+/**
+ * A shift running now that the signed-in member holds a seat on, for
+ * /scheduling/checkin?shift=e2e-shift-checkin. Started an hour ago so the
+ * backend's window reads open and the page draws its Check In button rather
+ * than the closed-window reason. Dated relative to the run, as `myShifts` is.
+ */
+const CHECKIN_SHIFT_ID = 'e2e-shift-checkin';
+
+const checkinShift = () => {
+  const start = new Date(Date.now() - 3_600_000);
+  const end = new Date(start.getTime() + 12 * 3_600_000);
+  const day = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(
+    start.getDate()
+  ).padStart(2, '0')}`;
+  return {
+    id: CHECKIN_SHIFT_ID,
+    organization_id: 'org-1',
+    shift_date: day,
+    start_time: start.toISOString(),
+    end_time: end.toISOString(),
+    apparatus_id: 'e2e-app-e1',
+    apparatus_name: 'Pierce Enforcer Pumper',
+    apparatus_unit_number: 'Engine 1',
+    apparatus_type: 'engine',
+    platoon: 'A',
+    positions: [seat('officer'), seat('driver'), seat('firefighter'), seat('firefighter')],
+    apparatus_positions: null,
+    min_staffing: 3,
+    template_id: 'e2e-tpl-day',
+    late_signup_until: null,
+    station_id: null,
+    shift_officer_id: 'e2e-mem-smith',
+    shift_officer_name: SHIFT_OFFICER,
+    color: '#b45309',
+    notes: null,
+    activities: null,
+    is_outreach: false,
+    outreach_roles: [],
+    duty_type: 'in_station',
+    attendee_count: 0,
+    roster: [
+      {
+        assignment_id: 'e2e-asg-smith',
+        user_id: 'e2e-mem-smith',
+        user_name: 'Morgan Smith',
+        position: 'officer',
+        outreach_role: null,
+        outreach_role_label: null,
+        status: 'confirmed',
+        is_training: false,
+      },
+      {
+        assignment_id: 'e2e-asg-tester',
+        user_id: TEST_USER.id,
+        user_name: `${TEST_USER.first_name} ${TEST_USER.last_name}`,
+        position: 'driver',
+        outreach_role: null,
+        outreach_role_label: null,
+        status: 'confirmed',
+        is_training: false,
+      },
+      {
+        assignment_id: 'e2e-asg-lee',
+        user_id: 'e2e-mem-lee',
+        user_name: 'Jordan Lee',
+        position: 'firefighter',
+        outreach_role: null,
+        outreach_role_label: null,
+        status: 'confirmed',
+        is_training: false,
+      },
+    ],
+    call_count: 0,
+    total_hours: null,
+    is_finalized: false,
+    finalized_at: null,
+    finalized_by: null,
+    status: 'scheduled',
+    cancelled_at: null,
+    cancelled_by: null,
+    cancellation_reason: null,
+    created_at: start.toISOString(),
+    updated_at: start.toISOString(),
+    created_by: 'e2e-user-id',
+    attendees: [],
+    platoon_roster: [],
+    checkin_open: true,
+    checkin_closed_reason: null,
+    signup_open: true,
+    signup_closed_reason: null,
+  };
+};
+
 /**
  * Route glob → response body. Ordered least to most specific; `mockApi`
  * registers them in order and Playwright matches the last registration first,
@@ -2831,6 +3201,26 @@ const routes = ({
     '**/api/v1/scheduling/reports/member-hours**',
     () => ({ members: [], period_start: '2026-08-01', period_end: '2026-08-20', total_members: 0 }),
   ],
+  // Only the administration screens ask with `active_only=false`; the shift
+  // board's store asks with `true` and keeps the catch-all's empty list, so
+  // /scheduling still measures what it was ratcheted against.
+  ['**/api/v1/scheduling/templates?active_only=false', () => (empty ? [] : SHIFT_TEMPLATES)],
+  ['**/api/v1/scheduling/patterns?active_only=false', () => (empty ? [] : SHIFT_PATTERNS)],
+  // Exact, so `/history-import/:id` — which table-fit-scheduling.spec.ts routes
+  // itself — and `/history-import/template` stay where they were.
+  ['**/api/v1/scheduling/history-import', () => ({ imports: empty ? [] : HISTORY_IMPORTS })],
+  [
+    '**/api/v1/scheduling/platoons/overview',
+    () => ({ platoons_enabled: platoonsEnabled, groups: empty ? [] : PLATOON_GROUPS }),
+  ],
+  ['**/api/v1/scheduling/eligibility/roster?**', (request) => positionRoster(request, empty)],
+  // The check-in screen. `/pre-shift-work/active` answers null for a member
+  // with no session running; the catch-all's `{}` is truthy, so the page took
+  // it for a running session and drew the pre-shift card instead of Check In.
+  ['**/api/v1/scheduling/pre-shift-work/active', () => null],
+  [`**/api/v1/scheduling/shifts/${CHECKIN_SHIFT_ID}`, () => checkinShift()],
+  // Not checked in yet: the endpoint answers 200 with a null body.
+  [`**/api/v1/scheduling/shifts/${CHECKIN_SHIFT_ID}/my-attendance`, () => null],
   ['**/api/v1/ranks**', () => []],
   // The admin banner in the app shell maps over this list; none is the state
   // of a scanned installation.

@@ -167,6 +167,12 @@ const AAA_CONTRAST_BUDGET: Record<string, number> = {
   // short of 7:1 by a hair, like the shared alert-warning token above.
   '/inventory/admin/categories': 7,
   '/inventory/admin/checklists/supply': 3,
+  // Measured the first time the scheduling fixtures put templates on it: the
+  // optional-seat chips ("EMT (opt)") and the inactive filter, all
+  // `text-theme-text-muted` on `bg-theme-surface-hover` (6.91:1) — the same
+  // shared token as the two inventory entries above. The required-seat and
+  // status badges beside them were raised to AAA in the same change.
+  '/scheduling/admin/planning/templates': 4,
   '/elections': 3,
   // One node: the `alert-warning` heading that tells an officer this ladder
   // decides who votes. `--alert-warning-title` is amber-800 on amber-50 and
